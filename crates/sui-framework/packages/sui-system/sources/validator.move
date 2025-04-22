@@ -452,6 +452,24 @@ public(package) fun process_pending_stakes_and_withdraws(self: &mut Validator, c
     // assert!(stake_amount(self) == self.next_epoch_stake, EInvalidStakeAmount);
 }
 
+/// Calculate the rewards for an amount with value `staked_principal`, staked in the validator's
+/// staking pool between `activation_epoch` and `withdraw_epoch`.
+public(package) fun calculate_rewards(
+    self: &Validator,
+    staked_principal: u64,
+    activation_epoch: u64,
+    withdraw_epoch: u64,
+): u64 {
+    let shares = self
+        .pool_token_exchange_rate_at_epoch(activation_epoch)
+        .get_token_amount(staked_principal);
+    let sui_amount = self.pool_token_exchange_rate_at_epoch(withdraw_epoch).get_sui_amount(shares);
+
+    if (sui_amount >= staked_principal) {
+        sui_amount - staked_principal
+    } else 0
+}
+
 /// Returns true if the validator is preactive.
 public fun is_preactive(self: &Validator): bool {
     self.staking_pool.is_preactive()

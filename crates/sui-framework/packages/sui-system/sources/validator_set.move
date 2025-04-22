@@ -1049,6 +1049,19 @@ public(package) fun calculate_total_stakes(validators: &vector<Validator>): u64 
     stake
 }
 
+/// Calculate the rewards for an amount with value `staked_principal`, staked in the pool with
+/// the given `node_id` between `activation_epoch` and `withdraw_epoch`.
+public(package) fun calculate_rewards(
+    self: &ValidatorSet,
+    pool_id: ID,
+    staked_principal: u64,
+    activation_epoch: u64,
+    withdraw_epoch: u64,
+): u64 {
+    let v_addr = self.staking_pool_mappings[pool_id];
+    self.get_active_validator_ref(v_addr).calculate_rewards(staked_principal, activation_epoch, withdraw_epoch)
+}
+
 /// Process the pending stake changes for each validator.
 fun adjust_stake_and_gas_price(validators: &mut vector<Validator>) {
     validators.do_mut!(|v| v.adjust_stake_and_gas_price())
