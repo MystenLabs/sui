@@ -38,6 +38,7 @@ async fn main() -> Result<()> {
     let metrics = AnalyticsMetrics::new(&registry);
 
     let remote_store_url = config.remote_store_url.clone();
+    let remote_store_options = config.remote_store_options.clone();
     let batch_size = config.batch_size;
     let data_limit = config.data_limit;
 
@@ -75,7 +76,7 @@ async fn main() -> Result<()> {
     let executor_progress = executor.run(
         tempfile::tempdir()?.into_path(),
         Some(remote_store_url),
-        vec![],
+        remote_store_options,
         reader_options,
         exit_receiver,
     );
