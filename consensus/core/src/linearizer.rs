@@ -201,7 +201,7 @@ impl Linearizer {
         let mut buffer = vec![leader_block];
         let mut to_commit = Vec::new();
 
-        // The new logic will perform the recursion without stopping at the highest round round that has been committed per authority. Instead it will
+        // The new logic will perform the recursion without stopping at the highest round that has been committed per authority. Instead it will
         // allow to commit blocks that are lower than the highest committed round for an authority but higher than gc_round.
         if context.protocol_config.consensus_linearize_subdag_v2() {
             assert!(
