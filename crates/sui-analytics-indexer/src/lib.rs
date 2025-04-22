@@ -133,9 +133,12 @@ pub struct JobConfig {
     /// Maximum number of checkpoints to queue in memory.
     #[serde(default = "default_data_limit")]
     pub data_limit: usize,
-    /// Remote object store path prefix to use while writing
+    /// Remote store URL.
     #[serde(default = "default_remote_store_url")]
     pub remote_store_url: String,
+    /// Remote object store options
+    #[serde(default)]
+    pub remote_store_options: Vec<(String, String)>,
     /// Directory to contain the package cache for pipelines
     #[serde(default = "default_package_cache_path")]
     pub package_cache_path: PathBuf,
