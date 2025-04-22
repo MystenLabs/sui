@@ -78,7 +78,7 @@ impl<S: Serialize + ParquetSchema + 'static> Worker for AnalyticsProcessor<S> {
             || (state.last_commit_instant.elapsed().as_secs()
                 > self.task_context.config.time_interval_s)
             || (state.num_checkpoint_iterations % CHECK_FILE_SIZE_ITERATION_CYCLE == 0
-                && state.writer.file_size()?.unwrap_or(0)
+                && state.writer.estimate_file_size()?.unwrap_or(0)
                     > self.task_context.config.max_file_size_mb * 1024 * 1024);
         if cut_new_files {
             self.cut(&mut state).await?;

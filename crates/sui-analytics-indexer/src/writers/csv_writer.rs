@@ -113,7 +113,7 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for CSVWriter {
         Ok(())
     }
 
-    fn file_size(&self) -> Result<Option<u64>> {
+    fn estimate_file_size(&self) -> Result<Option<u64>> {
         let file_path = self.file_path(self.epoch, self.checkpoint_range.clone())?;
         let len = fs::metadata(file_path)?.len();
         Ok(Some(len))
