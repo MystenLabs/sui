@@ -8008,6 +8008,8 @@ dependencies = [
  "codespan-reporting",
  "derive-where",
  "futures",
+ "move-command-line-common",
+ "regex",
  "serde",
  "serde_spanned",
  "thiserror 1.0.69",
