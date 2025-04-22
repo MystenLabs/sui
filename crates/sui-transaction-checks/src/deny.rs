@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
-use sui_config::transaction_deny_config::TransactionDenyConfig;
+use sui_config::{
+    dynamic_transaction_signing_checks::DynamicCheckRunnerError,
+    transaction_deny_config::TransactionDenyConfig,
+};
 use sui_types::{
     base_types::ObjectRef,
     error::{SuiError, SuiResult, UserInputError},
@@ -10,6 +13,7 @@ use sui_types::{
     storage::BackingPackageStore,
     transaction::{Command, InputObjectKind, TransactionData, TransactionDataAPI},
 };
+use tracing::{error, warn};
 macro_rules! deny_if_true {
     ($cond:expr, $msg:expr) => {
         if ($cond) {
@@ -42,7 +46,63 @@ pub fn check_transaction_for_signing(
 
     check_receiving_objects(filter_config, receiving_objects)?;
 
+    // NB: Only performed at signing time.
+    dynamic_transaction_checks(
+        filter_config,
+        tx_data,
+        tx_signatures,
+        input_object_kinds,
+        receiving_objects,
+    )?;
+
     Ok(())
+}
+
+fn dynamic_transaction_checks(
+    filter_config: &TransactionDenyConfig,
+    tx_data: &TransactionData,
+    tx_signatures: &[GenericSignature],
+    input_object_kinds: &[InputObjectKind],
+    receiving_objects: &[ObjectRef],
+) -> SuiResult {
+    let Some(dynamic_check) = filter_config.dynamic_transaction_checks() else {
+        return Ok(());
+    };
+    match dynamic_check.run_predicate(
+        tx_data,
+        tx_signatures,
+        input_object_kinds,
+        receiving_objects,
+    ) {
+        // Predicate passed
+        Ok(()) => Ok(()),
+        // Predicate failed
+        Err(DynamicCheckRunnerError::CheckFailure) => {
+            warn!(
+                "Dynamic transaction predicate rejected transaction: {:?}",
+                tx_data.digest()
+            );
+            Err(SuiError::UserInputError {
+                error: UserInputError::TransactionDenied {
+                    error: "Dynamic transaction predicate failed".to_string(),
+                },
+            })
+        }
+        // Non-predicate failure, so be conservative and deny the transaction.
+        Err(e) => {
+            error!(
+                "Dynamic transaction predicate failed with error: {:?} on transaction: {}. \
+                 Rejecting transaction.",
+                e,
+                tx_data.digest()
+            );
+            Err(SuiError::UserInputError {
+                error: UserInputError::TransactionDenied {
+                    error: e.to_string(),
+                },
+            })
+        }
+    }
 }
 
 fn check_receiving_objects(
