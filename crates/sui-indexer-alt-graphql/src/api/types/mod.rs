@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub(crate) mod addressable;
+pub(crate) mod move_package;
 pub(crate) mod object;
 pub(crate) mod object_change;
 pub(crate) mod service_config;
