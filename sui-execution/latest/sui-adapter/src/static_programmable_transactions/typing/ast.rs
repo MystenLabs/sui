@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::static_programmable_transactions::loading::ast as L;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt};
 use sui_types::{base_types::ObjectID, transaction::CallArg};
 
 pub struct Transaction {
@@ -43,7 +43,7 @@ pub struct MoveCall {
     pub arguments: Vec<Argument>,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Location {
     GasCoin,
     Input(u16),
@@ -55,4 +55,16 @@ pub enum Argument {
     Copy(Location),
     Borrow(/* mut */ bool, Location),
     Read(Location),
+}
+
+impl fmt::Display for Location {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Location::GasCoin => write!(f, "GasCoin"),
+            Location::Input(idx) => write!(f, "Input({idx})"),
+            Location::Result(result_idx, nested_idx) => {
+                write!(f, "Result({result_idx}, {nested_idx})")
+            }
+        }
+    }
 }

@@ -8041,6 +8041,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-regex-borrow-graph"
+version = "0.0.1"
+dependencies = [
+ "itertools 0.13.0",
+ "move-binary-format",
+ "move-core-types",
+]
+
+[[package]]
 name = "move-stdlib"
 version = "0.1.1"
 dependencies = [
@@ -12832,6 +12841,7 @@ dependencies = [
  "move-bytecode-verifier",
  "move-bytecode-verifier-meter",
  "move-core-types",
+ "move-regex-borrow-graph",
  "move-trace-format",
  "move-vm-config",
  "move-vm-profiler",
