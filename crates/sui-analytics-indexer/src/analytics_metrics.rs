@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(dead_code)]
 use prometheus::{
-    register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry, IntCounterVec,
-    IntGaugeVec, Registry,
+    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
+    register_int_gauge_vec_with_registry, HistogramVec, IntCounterVec, IntGaugeVec, Registry,
 };
 
 #[derive(Clone)]
@@ -13,6 +13,7 @@ pub struct AnalyticsMetrics {
     pub max_checkpoint_on_store: IntGaugeVec,
     pub total_too_large_to_deserialize: IntCounterVec,
     pub file_size: IntGaugeVec,
+    pub package_fetch_latency: HistogramVec,
 }
 
 impl AnalyticsMetrics {
@@ -50,6 +51,13 @@ impl AnalyticsMetrics {
                 "file_size_bytes",
                 "Size of generated files in bytes.",
                 &["data_type"],
+                registry,
+            )
+            .unwrap(),
+            package_fetch_latency: register_histogram_vec_with_registry!(
+                "package_fetch_latency_seconds",
+                "Latency of HTTP calls to fetch package data in seconds.",
+                &["source"],
                 registry,
             )
             .unwrap(),

@@ -7,6 +7,7 @@ use move_core_types::account_address::AccountAddress;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Instant;
 use sui_package_resolver::{
     error::Error as PackageResolverError, Package, PackageStore, PackageStoreWithLruCache, Result,
 };
@@ -18,6 +19,8 @@ use sui_types::object::Object;
 use thiserror::Error;
 #[cfg(not(test))]
 use tokio::sync::RwLock;
+
+use crate::analytics_metrics::AnalyticsMetrics;
 use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::DBMapUtils;
 use typed_store::{Map, TypedStoreError};
@@ -75,15 +78,17 @@ pub struct LocalDBPackageStore {
     fallback_client: Client,
     #[cfg(not(test))]
     original_id_cache: Arc<RwLock<HashMap<AccountAddress, ObjectID>>>,
+    metrics: AnalyticsMetrics,
 }
 
 impl LocalDBPackageStore {
-    pub fn new(path: &Path, rest_url: &str) -> Self {
+    pub fn new(path: &Path, rest_url: &str, metrics: AnalyticsMetrics) -> Self {
         Self {
             package_store_tables: PackageStoreTables::new(path),
             fallback_client: Client::new(rest_url).unwrap(),
             #[cfg(not(test))]
             original_id_cache: Arc::new(RwLock::new(HashMap::new())),
+            metrics,
         }
     }
 
@@ -104,11 +109,17 @@ impl LocalDBPackageStore {
         {
             object
         } else {
-            let object = self
+            let start_time = Instant::now();
+            let result = self
                 .fallback_client
                 .get_object(ObjectID::from(id))
-                .await
-                .map_err(|_| PackageResolverError::PackageNotFound(id))?;
+                .await;
+            
+            // Record the latency of the HTTP call
+            let elapsed = start_time.elapsed().as_secs_f64();
+            self.metrics.package_fetch_latency.with_label_values(&["fallback_client"]).observe(elapsed);
+            
+            let object = result.map_err(|_| PackageResolverError::PackageNotFound(id))?;
             self.update(&object)?;
             object
         };
