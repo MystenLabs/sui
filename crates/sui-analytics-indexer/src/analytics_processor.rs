@@ -171,6 +171,27 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
                 state.current_epoch,
                 state.current_checkpoint_range.clone(),
             );
+
+            // Get the file path and check its size
+            let object_path = file_metadata.file_path();
+            let file_path = path_to_filesystem(
+                self.task_context.checkpoint_dir_path().to_path_buf(),
+                &object_path,
+            )?;
+
+            // Only try to get the file size if the file exists
+            if file_path.exists() {
+                if let Ok(metadata) = fs::metadata(&file_path) {
+                    let file_size = metadata.len();
+                    // Record the file size metric
+                    self.task_context
+                        .metrics
+                        .file_size
+                        .with_label_values(&[self.name()])
+                        .set(file_size as i64);
+                }
+            }
+
             self.sender.send(file_metadata).await?;
             tokio::task::yield_now().await;
         }
