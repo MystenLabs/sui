@@ -17,6 +17,8 @@ pub struct AnalyticsMetrics {
     pub package_cache_gets: IntCounterVec,
     pub package_cache_hits: IntCounterVec,
     pub checkpoint_processing_time: HistogramVec,
+    pub checkpoints_processed: IntCounterVec,
+    pub checkpoint_processing_failures: IntCounterVec,
 }
 
 impl AnalyticsMetrics {
@@ -81,6 +83,20 @@ impl AnalyticsMetrics {
             checkpoint_processing_time: register_histogram_vec_with_registry!(
                 "checkpoint_processing_time_seconds",
                 "Time taken to process a checkpoint in seconds",
+                &["data_type"],
+                registry
+            )
+            .unwrap(),
+            checkpoints_processed: register_int_counter_vec_with_registry!(
+                "checkpoints_processed_total",
+                "Total number of checkpoints processed (including both successes and failures)",
+                &["data_type"],
+                registry
+            )
+            .unwrap(),
+            checkpoint_processing_failures: register_int_counter_vec_with_registry!(
+                "checkpoint_processing_failures_total",
+                "Total number of checkpoint processing failures",
                 &["data_type"],
                 registry
             )
