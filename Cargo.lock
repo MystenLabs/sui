@@ -13053,6 +13053,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
+ "tonic 0.13.0",
  "tracing",
  "typed-store",
  "url",
