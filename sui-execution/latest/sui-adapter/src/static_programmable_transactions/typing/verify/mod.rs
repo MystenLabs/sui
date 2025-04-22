@@ -10,8 +10,8 @@ pub mod memory_safety;
 pub mod move_functions;
 
 pub fn transaction(env: &env::Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
-    input_arguments::verify(env, &ast)?;
-    move_functions::verify(env, &ast)?;
-    memory_safety::verify(env, &ast)?;
+    input_arguments::verify(env, ast)?;
+    move_functions::verify(env, ast)?;
+    memory_safety::verify(env, ast)?;
     Ok(())
 }
