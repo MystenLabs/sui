@@ -65,11 +65,8 @@ pub use handle::SuiNodeHandle;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
 use mysten_network::server::ServerBuilder;
 use mysten_service::server_timing::server_timing_middleware;
-use sui_archival::reader::ArchiveReaderBalancer;
-use sui_archival::writer::ArchiveWriter;
 use sui_config::node::{DBCheckpointConfig, RunWithRange};
 use sui_config::node_config_metrics::NodeConfigMetrics;
-use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -129,7 +126,6 @@ use sui_storage::{
     key_value_store::{FallbackTransactionKVStore, TransactionKeyValueStore},
     key_value_store_metrics::KeyValueStoreMetrics,
 };
-use sui_storage::{FileCompression, StorageFormat};
 use sui_types::base_types::{AuthorityName, EpochId};
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
@@ -266,8 +262,6 @@ pub struct SuiNode {
 
     #[cfg(msim)]
     sim_state: SimState,
-
-    _state_archive_handle: Option<broadcast::Sender<()>>,
 
     _state_snapshot_uploader_handle: Option<broadcast::Sender<()>>,
     // Channel to allow signaling upstream to shutdown sui-node
@@ -654,8 +648,6 @@ impl SuiNode {
         // Create network
         // TODO only configure validators as seed/preferred peers for validators and not for
         // fullnodes once we've had a chance to re-work fullnode configuration generation.
-        let archive_readers =
-            ArchiveReaderBalancer::new(config.archive_reader_config(), &prometheus_registry)?;
         let (trusted_peer_change_tx, trusted_peer_change_rx) = watch::channel(Default::default());
         let (randomness_tx, randomness_rx) = mpsc::channel(
             config
@@ -676,7 +668,6 @@ impl SuiNode {
             state_sync_store.clone(),
             chain_identifier,
             trusted_peer_change_rx,
-            archive_readers.clone(),
             randomness_tx,
             &prometheus_registry,
         )?;
@@ -689,12 +680,6 @@ impl SuiNode {
             epoch_store.epoch_start_state(),
         )
         .expect("Initial trusted peers must be set");
-
-        info!("start state archival");
-        // Start archiving local state to remote store
-        let state_archive_handle =
-            Self::start_state_archival(&config, &prometheus_registry, state_sync_store.clone())
-                .await?;
 
         info!("start snapshot upload");
         // Start uploading state snapshot to remote store
@@ -749,7 +734,6 @@ impl SuiNode {
             genesis.objects(),
             &db_checkpoint_config,
             config.clone(),
-            archive_readers,
             validator_tx_finalizer,
             chain_identifier,
             pruner_db,
@@ -909,7 +893,6 @@ impl SuiNode {
             #[cfg(msim)]
             sim_state: Default::default(),
 
-            _state_archive_handle: state_archive_handle,
             _state_snapshot_uploader_handle: state_snapshot_handle,
             shutdown_channel_tx: shutdown_channel,
 
@@ -978,33 +961,6 @@ impl SuiNode {
     pub async fn close_epoch_for_testing(&self) -> SuiResult {
         let epoch_store = self.state.epoch_store_for_testing();
         self.close_epoch(&epoch_store).await
-    }
-
-    async fn start_state_archival(
-        config: &NodeConfig,
-        prometheus_registry: &Registry,
-        state_sync_store: RocksDbStore,
-    ) -> Result<Option<tokio::sync::broadcast::Sender<()>>> {
-        if let Some(remote_store_config) = &config.state_archive_write_config.object_store_config {
-            let local_store_config = ObjectStoreConfig {
-                object_store: Some(ObjectStoreType::File),
-                directory: Some(config.archive_path()),
-                ..Default::default()
-            };
-            let archive_writer = ArchiveWriter::new(
-                local_store_config,
-                remote_store_config.clone(),
-                FileCompression::Zstd,
-                StorageFormat::Blob,
-                Duration::from_secs(600),
-                256 * 1024 * 1024,
-                prometheus_registry,
-            )
-            .await?;
-            Ok(Some(archive_writer.start(state_sync_store).await?))
-        } else {
-            Ok(None)
-        }
     }
 
     fn start_state_snapshot(
@@ -1094,14 +1050,13 @@ impl SuiNode {
         state_sync_store: RocksDbStore,
         chain_identifier: ChainIdentifier,
         trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>,
-        archive_readers: ArchiveReaderBalancer,
         randomness_tx: mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
         prometheus_registry: &Registry,
     ) -> Result<P2pComponents> {
         let (state_sync, state_sync_server) = state_sync::Builder::new()
             .config(config.p2p_config.state_sync.clone().unwrap_or_default())
             .store(state_sync_store)
-            .archive_readers(archive_readers)
+            .archive_config(config.archive_reader_config())
             .with_metrics(prometheus_registry)
             .build();
 

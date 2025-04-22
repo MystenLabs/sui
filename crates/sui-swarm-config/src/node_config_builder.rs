@@ -12,7 +12,7 @@ use sui_config::node::{
     AuthorityKeyPairWithPath, AuthorityOverloadConfig, AuthorityStorePruningConfig,
     CheckpointExecutorConfig, DBCheckpointConfig, ExecutionCacheConfig,
     ExecutionTimeObserverConfig, ExpensiveSafetyCheckConfig, Genesis, KeyPairWithPath,
-    StateArchiveConfig, StateSnapshotConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT,
+    StateSnapshotConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT,
 };
 use sui_config::node::{default_zklogin_oauth_providers, RunWithRange};
 use sui_config::p2p::{P2pConfig, SeedPeer, StateSyncConfig};
@@ -227,7 +227,6 @@ impl ValidatorConfigBuilder {
             transaction_deny_config: Default::default(),
             certificate_deny_config: Default::default(),
             state_debug_dump_config: Default::default(),
-            state_archive_write_config: StateArchiveConfig::default(),
             state_archive_read_config: vec![],
             state_snapshot_write_config: StateSnapshotConfig::default(),
             indexer_max_subscriptions: Default::default(),
@@ -535,7 +534,6 @@ impl FullnodeConfigBuilder {
             transaction_deny_config: Default::default(),
             certificate_deny_config: Default::default(),
             state_debug_dump_config: Default::default(),
-            state_archive_write_config: StateArchiveConfig::default(),
             state_archive_read_config: vec![],
             state_snapshot_write_config: StateSnapshotConfig::default(),
             indexer_max_subscriptions: Default::default(),

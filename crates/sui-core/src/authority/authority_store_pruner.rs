@@ -19,7 +19,6 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::{Mutex, Weak};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{sync::Arc, time::Duration};
-use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_types::base_types::SequenceNumber;
 use sui_types::committee::EpochId;
@@ -358,22 +357,16 @@ impl AuthorityStorePruner {
         pruner_db: Option<&Arc<AuthorityPrunerTables>>,
         config: AuthorityStorePruningConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
-        archive_readers: ArchiveReaderBalancer,
         epoch_duration_ms: u64,
     ) -> anyhow::Result<()> {
         let _scope = monitored_scope("PruneCheckpointsForEligibleEpochs");
         let pruned_checkpoint_number = checkpoint_store
             .get_highest_pruned_checkpoint_seq_number()?
             .unwrap_or(0);
-        let (last_executed_checkpoint, epoch_id) = checkpoint_store
+        let (mut max_eligible_checkpoint, epoch_id) = checkpoint_store
             .get_highest_executed_checkpoint()?
             .map(|c| (*c.sequence_number(), c.epoch))
             .unwrap_or_default();
-        let latest_archived_checkpoint = archive_readers
-            .get_archive_watermark()
-            .await?
-            .unwrap_or(u64::MAX);
-        let mut max_eligible_checkpoint = min(latest_archived_checkpoint, last_executed_checkpoint);
         if config.num_epochs_to_retain != u64::MAX {
             max_eligible_checkpoint = min(
                 max_eligible_checkpoint,
@@ -663,7 +656,6 @@ impl AuthorityStorePruner {
         jsonrpc_index: Option<Arc<IndexStore>>,
         pruner_db: Option<Arc<AuthorityPrunerTables>>,
         metrics: Arc<AuthorityStorePruningMetrics>,
-        archive_readers: ArchiveReaderBalancer,
     ) -> Sender<()> {
         let (sender, mut recv) = tokio::sync::oneshot::channel();
         debug!(
@@ -730,7 +722,7 @@ impl AuthorityStorePruner {
                         }
                     },
                     _ = checkpoints_prune_interval.tick(), if !matches!(config.num_epochs_to_retain_for_checkpoints(), None | Some(u64::MAX) | Some(0)) => {
-                        if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), pruner_db.as_ref(), config.clone(), metrics.clone(), archive_readers.clone(), epoch_duration_ms).await {
+                        if let Err(err) = Self::prune_checkpoints_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), pruner_db.as_ref(), config.clone(), metrics.clone(), epoch_duration_ms).await {
                             error!("Failed to prune checkpoints: {:?}", err);
                         }
                     },
@@ -755,7 +747,6 @@ impl AuthorityStorePruner {
         is_validator: bool,
         epoch_duration_ms: u64,
         registry: &Registry,
-        archive_readers: ArchiveReaderBalancer,
         pruner_db: Option<Arc<AuthorityPrunerTables>>,
     ) -> Self {
         if pruning_config.num_epochs_to_retain > 0 && pruning_config.num_epochs_to_retain < u64::MAX
@@ -778,7 +769,6 @@ impl AuthorityStorePruner {
                 jsonrpc_index,
                 pruner_db,
                 AuthorityStorePruningMetrics::new(registry),
-                archive_readers,
             ),
         }
     }

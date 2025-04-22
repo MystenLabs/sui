@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::base_types::ObjectRef;
+use crate::base_types::{ExecutionData, ObjectRef};
 use crate::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use crate::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents};
 use crate::object::Object;
@@ -166,6 +166,13 @@ impl CheckpointTransaction {
                     .find(|o| o.id() == id && o.version() == version)
                     .expect("created objects should show up in output objects")
             })
+    }
+
+    pub fn execution_data(&self) -> ExecutionData {
+        ExecutionData {
+            transaction: self.transaction.clone(),
+            effects: self.effects.clone(),
+        }
     }
 }
 

@@ -64,9 +64,6 @@ validator_configs:
       zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-write-config:
-      concurrency: 0
-      use-for-pruning-watermark: false
     state-archive-read-config: []
     state-snapshot-write-config:
       concurrency: 0
@@ -224,9 +221,6 @@ validator_configs:
       zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-write-config:
-      concurrency: 0
-      use-for-pruning-watermark: false
     state-archive-read-config: []
     state-snapshot-write-config:
       concurrency: 0
@@ -384,9 +378,6 @@ validator_configs:
       zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-write-config:
-      concurrency: 0
-      use-for-pruning-watermark: false
     state-archive-read-config: []
     state-snapshot-write-config:
       concurrency: 0
@@ -544,9 +535,6 @@ validator_configs:
       zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-write-config:
-      concurrency: 0
-      use-for-pruning-watermark: false
     state-archive-read-config: []
     state-snapshot-write-config:
       concurrency: 0
@@ -704,9 +692,6 @@ validator_configs:
       zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-write-config:
-      concurrency: 0
-      use-for-pruning-watermark: false
     state-archive-read-config: []
     state-snapshot-write-config:
       concurrency: 0
@@ -864,9 +849,6 @@ validator_configs:
       zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-write-config:
-      concurrency: 0
-      use-for-pruning-watermark: false
     state-archive-read-config: []
     state-snapshot-write-config:
       concurrency: 0
@@ -1024,9 +1006,6 @@ validator_configs:
       zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-write-config:
-      concurrency: 0
-      use-for-pruning-watermark: false
     state-archive-read-config: []
     state-snapshot-write-config:
       concurrency: 0
