@@ -55,6 +55,7 @@ pub(crate) struct ParquetWriter {
     epoch: EpochId,
     checkpoint_range: Range<u64>,
     builders: Vec<ColumnBuilder>,
+    row_count: usize,
 }
 
 impl ParquetWriter {
@@ -69,6 +70,7 @@ impl ParquetWriter {
             epoch: 0,
             checkpoint_range: start_checkpoint_seq_num..u64::MAX,
             builders: vec![],
+            row_count: 0,
         })
     }
 
@@ -98,6 +100,8 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
         if rows.is_empty() {
             return Ok(());
         }
+        
+        self.row_count += rows.len();
 
         //  Lazily sample the first row to infer the schema and decide which concrete builder to instantiate.
         if self.builders.is_empty() {
@@ -175,6 +179,7 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
         self.epoch = epoch_num;
         self.checkpoint_range = start_checkpoint_seq_num..u64::MAX;
         self.builders.clear();
+        self.row_count = 0;
         Ok(())
     }
 
@@ -183,5 +188,9 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
         // and only flushes records after serializing and compressing them
         // when flush is invoked
         Ok(None)
+    }
+
+    fn rows(&self) -> Result<usize> {
+        Ok(self.row_count)
     }
 }
