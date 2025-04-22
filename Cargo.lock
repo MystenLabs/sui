@@ -7575,7 +7575,7 @@ dependencies = [
 [[package]]
 name = "minibytes"
 version = "0.1.0"
-source = "git+https://github.com/andll/tidehunter.git?rev=dd686f055375aa8fa2145618301bdfd5170a2a6b#dd686f055375aa8fa2145618301bdfd5170a2a6b"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=662433953ab9a50abb1ca965c902152627926589#662433953ab9a50abb1ca965c902152627926589"
 dependencies = [
  "bytes",
  "memmap2 0.7.1",
@@ -12551,6 +12551,9 @@ name = "smallvec"
 version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "smawk"
@@ -16989,7 +16992,7 @@ dependencies = [
 [[package]]
 name = "tidehunter"
 version = "0.1.0"
-source = "git+https://github.com/andll/tidehunter.git?rev=dd686f055375aa8fa2145618301bdfd5170a2a6b#dd686f055375aa8fa2145618301bdfd5170a2a6b"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=662433953ab9a50abb1ca965c902152627926589#662433953ab9a50abb1ca965c902152627926589"
 dependencies = [
  "bincode",
  "bloom",
@@ -17003,7 +17006,6 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "smallvec",
- "tokio",
 ]
 
 [[package]]

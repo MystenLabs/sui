@@ -51,7 +51,7 @@ impl AuthorityPerpetualTablesOptions {
 
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
 #[derive(DBMapUtils)]
-// #[tidehunter]
+#[tidehunter]
 pub struct AuthorityPerpetualTables {
     /// This is a map between the object (ID, version) and the latest state of the object, namely the
     /// state that is needed to process new transactions.

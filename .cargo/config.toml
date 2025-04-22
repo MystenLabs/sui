@@ -30,3 +30,6 @@ move-clippy = [
 
 [build]
 rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes"]
+
+[net]
+git-fetch-with-cli = true

@@ -35,7 +35,7 @@ itertools.workspace = true
 mysten-common.workspace = true
 mysten-metrics.workspace = true
 [target.'cfg(not(windows))'.dependencies]
-tidehunter = {git = "https://github.com/andll/tidehunter.git", rev = "dd686f055375aa8fa2145618301bdfd5170a2a6b", version = "0.1.0", optional = true}
+tidehunter = {git = "https://github.com/mystenlabs/tidehunter.git", rev = "662433953ab9a50abb1ca965c902152627926589", version = "0.1.0", optional = true}
 
 [dev-dependencies]
 tempfile.workspace = true
@@ -51,3 +51,4 @@ msim.workspace = true
 
 [features]
 tide_hunter = ["tidehunter"]
+default = ["tide_hunter"]
