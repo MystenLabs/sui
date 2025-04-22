@@ -1549,6 +1549,19 @@ impl SuiNode {
         }))
     }
 
+    /// Re-executes pending consensus certificates, which may not have been committed to disk
+    /// before the node restarted. This is necessary for the following reasons:
+    ///
+    /// 1. For any transaction for which we returned signed effects to a client, we must ensure
+    ///    that we have re-executed the transaction before we begin accepting grpc requests.
+    ///    Otherwise we would appear to have forgotten about the transaction.
+    /// 2. While this is running, we are concurrently waiting for all previously built checkpoints
+    ///    to be rebuilt. Since there may be dependencies in either direction (from checkpointed
+    ///    consensus transactions to pending consensus transactions, or vice versa), we must
+    ///    re-execute pending consensus transactions to ensure that both processes can complete.
+    /// 3. Also note that for any pending consensus transactions for which we wrote a signed effects
+    ///    digest to disk, we must re-execute using that digest as the expected effects digest,
+    ///    to ensure that we cannot arrive at different effects than what we previously signed.
     async fn reexecute_pending_consensus_certs(
         epoch_store: &Arc<AuthorityPerEpochStore>,
         state: &Arc<AuthorityState>,
