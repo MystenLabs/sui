@@ -3,7 +3,6 @@
 
 use crate::{AnalyticsWriter, FileFormat, FileType, ParquetSchema, ParquetValue};
 use anyhow::{anyhow, Result};
-use arrow::util::bit_util::ceil;
 use arrow_array::{
     builder::{ArrayBuilder, BooleanBuilder, GenericStringBuilder, Int64Builder, UInt64Builder},
     ArrayRef, RecordBatch,
@@ -36,26 +35,6 @@ impl ColumnBuilder {
             Self::I64(b) => b,
             Self::Bool(b) => b,
             Self::Str(b) => b,
-        }
-    }
-
-    fn size_bytes(&self) -> usize {
-        match self {
-            Self::U64(b) => b.len() * std::mem::size_of::<u64>(),
-            Self::I64(b) => b.len() * std::mem::size_of::<i64>(),
-            Self::Bool(b) => {
-                // Boolean columns always store a data bitmap (1 bit per value),
-                // packed into bytes. If any nulls are appended, a second bitmap
-                // (the "validity" or null-bitmap) is also allocated.
-                //
-                // `b.len()` counts values; we round up to get the number of bytes.
-                // `validity_slice()` returns None if no nulls were seen yet,
-                // avoiding over-counting when the column is fully non-null.
-                let data_bytes = ceil(b.len(), 8);
-                let null_bytes = b.validity_slice().map_or(0, |buf| buf.len());
-                data_bytes + null_bytes
-            }
-            Self::Str(b) => b.values_slice().len(),
         }
     }
 
@@ -199,128 +178,10 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
         Ok(())
     }
 
-    /// Give the caller a rough idea of "how big is the batch in memory?"
-    fn estimate_file_size(&self) -> Result<Option<u64>> {
-        if self.builders.is_empty() {
-            return Ok(Some(0));
-        }
-
-        let bytes: u64 = self.builders.iter().map(|b| b.size_bytes() as u64).sum();
-        Ok(Some(bytes))
-    }
-}
-
-#[cfg(test)]
-mod size_estimate_tests {
-    use super::*;
-    use serde::Serialize;
-    use std::fs;
-    use std::path::Path;
-    use tempfile::tempdir;
-
-    // ─────────────────────────────────────────────────────────────
-    // 1.  A minimal row type that exercises every ColumnBuilder:
-    //     * u64, i64, bool, string
-    // ─────────────────────────────────────────────────────────────
-    #[derive(Serialize)]
-    struct Row {
-        u: u64,
-        i: i64,
-        b: bool,
-        s: String,
-    }
-
-    impl ParquetSchema for Row {
-        fn schema() -> Vec<String> {
-            vec![
-                "u".to_string(),
-                "i".to_string(),
-                "b".to_string(),
-                "s".to_string(),
-            ]
-        }
-        fn get_column(&self, idx: usize) -> ParquetValue {
-            use ParquetValue::*;
-            match idx {
-                0 => U64(self.u),
-                1 => I64(self.i),
-                2 => Bool(self.b),
-                3 => Str(self.s.clone()),
-                _ => unreachable!(),
-            }
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────────
-    // 2.  The actual test
-    // ─────────────────────────────────────────────────────────────
-    #[tokio::test]
-    async fn parquet_size_estimate_reasonable() -> anyhow::Result<()> {
-        // temp dir for output files
-        let dir = tempdir()?;
-        let mut writer = ParquetWriter::new(
-            dir.path(),
-            FileType::Transaction, // using a valid FileType variant
-            0,
-        )?;
-
-        // build 10_000 rows (~ 1 MiB uncompressed)
-        let rows: Vec<Row> = (0..10_000)
-            .map(|i| Row {
-                u: i as u64,
-                i: i as i64 * -1,
-                b: i % 2 == 0,
-                s: format!("string-{}", i),
-            })
-            .collect();
-
-        <ParquetWriter as AnalyticsWriter<Row>>::write(&mut writer, &rows)?;
-        let estimate = <ParquetWriter as AnalyticsWriter<Row>>::estimate_file_size(&writer)?
-            .expect("size estimate");
-
-        // flush to disk
-        <ParquetWriter as AnalyticsWriter<Row>>::flush(&mut writer, 0)?;
-
-        let file_bytes = parquet_bytes(dir.path())?;
-
-        println!("file_bytes: {}, estimate: {}", file_bytes, estimate);
-
-        // ─────────────────────────────────────────────────────────
-        // Assertions
-        // ─────────────────────────────────────────────────────────
-        assert!(
-            estimate > 0,
-            "in‑memory estimate should be > 0 (got {estimate})"
-        );
-        assert!(
-            file_bytes > 0,
-            "Parquet file should be > 0 bytes (got {file_bytes})"
-        );
-        // the writer's estimate should upper‑bound the compressed size
-        assert!(
-            estimate >= file_bytes,
-            "estimate ({estimate}) should be ≥ on‑disk bytes ({file_bytes})"
-        );
-        // …but not be absurdly high (nop nibble: ≥ 50 %)
-        assert!(
-            file_bytes * 2 >= estimate,
-            "estimate ({estimate}) is > 2× file bytes ({file_bytes}); likely mis‑counted"
-        );
-
-        Ok(())
-    }
-
-    fn parquet_bytes(root: &Path) -> std::io::Result<u64> {
-        let mut bytes = 0;
-        for entry in fs::read_dir(root)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_dir() {
-                bytes += parquet_bytes(&path)?; // recurse
-            } else if path.extension().and_then(|s| s.to_str()) == Some("parquet") {
-                bytes += path.metadata()?.len();
-            }
-        }
-        Ok(bytes)
+    fn file_size(&self) -> Result<Option<u64>> {
+        // parquet writer doesn't write records in a temp staging file
+        // and only flushes records after serializing and compressing them
+        // when flush is invoked
+        Ok(None)
     }
 }
