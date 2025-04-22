@@ -45,6 +45,33 @@ interface IObject {
 }
 
 
+type MovePackage implements IAddressable & IObject {
+	"""
+	The MovePackage's ID.
+	"""
+	address: SuiAddress!
+	"""
+	The version of this package that this content comes from.
+	"""
+	version: UInt53!
+	"""
+	32-byte hash that identifies the package's contents, encoded in Base58.
+	"""
+	digest: String!
+	"""
+	The Base64-encoded BCS serialization of this package, as an `Object`.
+	"""
+	objectBcs: Base64
+	"""
+	The Base64-encoded BCS serialization of this package, as a `MovePackage`.
+	"""
+	packageBcs: Base64
+	"""
+	The transaction that created this version of the object.
+	"""
+	previousTransaction: Transaction
+}
+
 """
 An Object on Sui is either a typed value (a Move Object) or a Package (modules containing functions and types).
 
@@ -63,6 +90,10 @@ type Object implements IAddressable & IObject {
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
 	digest: String!
+	"""
+	Attempts to convert the object into a MovePackage.
+	"""
+	asMovePackage: MovePackage
 	"""
 	The Base64-encoded BCS serialization of this object, as an `Object`.
 	"""

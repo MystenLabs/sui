@@ -6,7 +6,7 @@ use sui_types::base_types::SuiAddress as NativeSuiAddress;
 
 use crate::api::scalars::sui_address::SuiAddress;
 
-use super::object::Object;
+use super::{move_package::MovePackage, object::Object};
 
 /// Interface implemented by GraphQL types representing entities that are identified by an address.
 ///
@@ -15,6 +15,7 @@ use super::object::Object;
 #[graphql(name = "IAddressable", field(name = "address", ty = "SuiAddress"))]
 pub(crate) enum IAddressable {
     Addressable(Addressable),
+    MovePackage(MovePackage),
     Object(Object),
 }
 
