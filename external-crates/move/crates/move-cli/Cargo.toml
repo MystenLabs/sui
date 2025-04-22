@@ -20,6 +20,7 @@ similar.workspace = true
 tempfile.workspace = true
 toml_edit.workspace = true
 walkdir.workspace = true
+serde_json.workspace = true
 
 move-bytecode-source-map.workspace = true
 move-bytecode-verifier.workspace = true
