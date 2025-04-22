@@ -1962,7 +1962,7 @@ impl AuthorityState {
                 } => {
                     let module = move_location.module.to_canonical_string(true);
                     let (error_code, line) = match ErrorBitset::from_u64(*code) {
-                        Some(c) => (c.error_code().and_then(|c| Some(c as u64)), c.line_number()),
+                        Some(c) => (c.error_code().map(|c| c as u64), c.line_number()),
                         None => (Some(*code), None),
                     };
                     Some(Abort {
