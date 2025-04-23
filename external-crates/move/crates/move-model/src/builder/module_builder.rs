@@ -11,15 +11,11 @@ use move_binary_format::{
     CompiledModule,
 };
 use move_bytecode_source_map::source_map::SourceMap;
-use move_compiler::{
-    expansion::ast as EA,
-    parser::ast as PA,
-    shared::{unique_map::UniqueMap, Name, TName},
-};
+use move_compiler::{expansion::ast as EA, parser::ast as PA, shared::Name};
 use move_ir_types::ast::ConstantName;
 
 use crate::{
-    ast::{Attribute, AttributeValue, ModuleName, QualifiedSymbol, Value},
+    ast::{Attribute, ModuleName, QualifiedSymbol},
     builder::{
         exp_translator::ExpTranslator,
         model_builder::{ConstEntry, DatatypeData, ModelBuilder},
@@ -30,7 +26,6 @@ use crate::{
     },
     project_1st,
     symbol::{Symbol, SymbolPool},
-    ty::Type,
 };
 
 #[derive(Debug)]
@@ -83,8 +78,9 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
     ) {
         self.decl_ana(&module_def, &compiled_module, &source_map);
         self.def_ana(&module_def);
-        let attrs = self.translate_attributes(&module_def.attributes);
-        self.populate_env_from_result(loc, attrs, compiled_module, source_map);
+        // FIXME: Attributes are no longer supported in the move model after the changes.
+        // let attrs = vec![];
+        self.populate_env_from_result(loc, vec![], compiled_module, source_map);
     }
 }
 
@@ -140,111 +136,6 @@ impl ModuleBuilder<'_, '_> {
     }
 }
 
-// # Attribute Analysis
-
-impl ModuleBuilder<'_, '_> {
-    pub fn translate_attributes<T: TName>(
-        &mut self,
-        attrs: &UniqueMap<T, EA::Attribute>,
-    ) -> Vec<Attribute> {
-        attrs
-            .iter()
-            .map(|(_, _, attr)| self.translate_attribute(attr))
-            .collect()
-    }
-
-    pub fn translate_attribute(&mut self, attr: &EA::Attribute) -> Attribute {
-        let node_id = self
-            .parent
-            .env
-            .new_node(self.parent.to_loc(&attr.loc), Type::Tuple(vec![]));
-        match &attr.value {
-            EA::Attribute_::Name(n) => {
-                let sym = self.symbol_pool().make(n.value.as_str());
-                Attribute::Apply(node_id, sym, vec![])
-            }
-            EA::Attribute_::Parameterized(n, vs) => {
-                let sym = self.symbol_pool().make(n.value.as_str());
-                Attribute::Apply(node_id, sym, self.translate_attributes(vs))
-            }
-            EA::Attribute_::Assigned(n, v) => {
-                let value_node_id = self
-                    .parent
-                    .env
-                    .new_node(self.parent.to_loc(&v.loc), Type::Tuple(vec![]));
-                let v = match &v.value {
-                    EA::AttributeValue_::Value(val) => {
-                        let val =
-                            if let Some((val, _)) = ExpTranslator::new(self).translate_value(val) {
-                                val
-                            } else {
-                                // Error reported
-                                Value::Bool(false)
-                            };
-                        AttributeValue::Value(value_node_id, val)
-                    }
-                    EA::AttributeValue_::Address(a) => {
-                        let val = move_ir_types::location::sp(v.loc, EA::Value_::Address(*a));
-                        let val = if let Some((val, _)) =
-                            ExpTranslator::new(self).translate_value(&val)
-                        {
-                            val
-                        } else {
-                            // Error reported
-                            Value::Bool(false)
-                        };
-                        AttributeValue::Value(value_node_id, val)
-                    }
-                    EA::AttributeValue_::Module(mident) => {
-                        let addr_bytes = self.parent.resolve_address(
-                            &self.parent.to_loc(&mident.loc),
-                            &mident.value.address,
-                        );
-                        let module_name = ModuleName::from_address_bytes_and_name(
-                            addr_bytes,
-                            self.symbol_pool()
-                                .make(mident.value.module.0.value.as_str()),
-                        );
-                        // TODO support module attributes more than via empty string
-                        AttributeValue::Name(
-                            value_node_id,
-                            Some(module_name),
-                            self.symbol_pool().make(""),
-                        )
-                    }
-                    EA::AttributeValue_::ModuleAccess(macc) => match macc.value {
-                        EA::ModuleAccess_::Name(n) => AttributeValue::Name(
-                            value_node_id,
-                            None,
-                            self.symbol_pool().make(n.value.as_str()),
-                        ),
-                        EA::ModuleAccess_::ModuleAccess(mident, n) => {
-                            let addr_bytes = self.parent.resolve_address(
-                                &self.parent.to_loc(&macc.loc),
-                                &mident.value.address,
-                            );
-                            let module_name = ModuleName::from_address_bytes_and_name(
-                                addr_bytes,
-                                self.symbol_pool()
-                                    .make(mident.value.module.0.value.as_str()),
-                            );
-                            AttributeValue::Name(
-                                value_node_id,
-                                Some(module_name),
-                                self.symbol_pool().make(n.value.as_str()),
-                            )
-                        }
-                        EA::ModuleAccess_::Variant(..) => {
-                            panic!("Variants are not supported by move model.")
-                        }
-                    },
-                };
-                Attribute::Assign(node_id, self.symbol_pool().make(n.value.as_str()), v)
-            }
-        }
-    }
-}
-
 // # Declaration Analysis
 
 impl ModuleBuilder<'_, '_> {
@@ -287,7 +178,7 @@ impl ModuleBuilder<'_, '_> {
         let move_value =
             Constant::deserialize_constant(&compiled_module.constant_pool()[*const_idx as usize])
                 .unwrap();
-        let attributes = self.translate_attributes(&def.attributes);
+        let attributes = vec![];
         let mut et = ExpTranslator::new(self);
         let loc = et.to_loc(&def.loc);
         let ty = et.translate_type(&def.signature);
@@ -306,7 +197,7 @@ impl ModuleBuilder<'_, '_> {
     fn decl_ana_struct(&mut self, name: &PA::DatatypeName, def: &EA::StructDefinition) {
         let qsym = self.qualified_by_module_from_name(&name.0);
         let struct_id = DatatypeId::new(qsym.symbol);
-        let attrs = self.translate_attributes(&def.attributes);
+        let attrs = vec![];
         let mut et = ExpTranslator::new(self);
         let type_params =
             et.analyze_and_add_type_params(def.type_parameters.iter().map(|param| &param.name));
@@ -324,7 +215,7 @@ impl ModuleBuilder<'_, '_> {
     fn decl_ana_enum(&mut self, name: &PA::DatatypeName, def: &EA::EnumDefinition) {
         let qsym = self.qualified_by_module_from_name(&name.0);
         let struct_id = DatatypeId::new(qsym.symbol);
-        let attrs = self.translate_attributes(&def.attributes);
+        let attrs = vec![];
         let mut et = ExpTranslator::new(self);
         let type_params =
             et.analyze_and_add_type_params(def.type_parameters.iter().map(|param| &param.name));
@@ -341,7 +232,7 @@ impl ModuleBuilder<'_, '_> {
 
     fn decl_ana_fun(&mut self, name: &PA::FunctionName, def: &EA::Function) {
         let qsym = self.qualified_by_module_from_name(&name.0);
-        let attrs = self.translate_attributes(&def.attributes);
+        let attrs = vec![];
         let mut et = ExpTranslator::new(self);
         et.enter_scope();
         let type_params = et.analyze_and_add_type_params(

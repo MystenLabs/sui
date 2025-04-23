@@ -330,6 +330,7 @@ impl ExpTranslator<'_, '_, '_> {
 // # Expression Translation
 
 impl ExpTranslator<'_, '_, '_> {
+    #[allow(dead_code)]
     pub fn translate_value(&mut self, v: &EA::Value) -> Option<(Value, Type)> {
         let loc = self.to_loc(&v.loc);
         match &v.value {

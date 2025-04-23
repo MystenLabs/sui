@@ -10,8 +10,11 @@ use crate::{
         MACRO_MODIFIER, NATIVE_MODIFIER,
     },
     shared::{
-        ast_debug::*, known_attributes::KnownAttribute, unique_map::UniqueMap,
-        unique_set::UniqueSet, *,
+        ast_debug::*,
+        known_attributes::{AttributeKind, KnownAttribute},
+        unique_map::UniqueMap,
+        unique_set::UniqueSet,
+        *,
     },
 };
 use move_ir_types::location::*;
@@ -70,33 +73,7 @@ pub struct UseFuns {
 // Attributes
 //**************************************************************************************************
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AttributeValue_ {
-    Value(Value),
-    Address(Address),
-    Module(ModuleIdent),
-    ModuleAccess(ModuleAccess),
-}
-pub type AttributeValue = Spanned<AttributeValue_>;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Attribute_ {
-    Name(Name),
-    Assigned(Name, Box<AttributeValue>),
-    Parameterized(Name, InnerAttributes),
-}
-pub type Attribute = Spanned<Attribute_>;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum AttributeName_ {
-    Unknown(Symbol),
-    Known(KnownAttribute),
-}
-
-pub type AttributeName = Spanned<AttributeName_>;
-
-pub type InnerAttributes = UniqueMap<AttributeName, Attribute>;
-pub type Attributes = UniqueMap<Spanned<KnownAttribute>, Attribute>;
+pub type Attributes = UniqueMap<AttributeKind, Spanned<KnownAttribute>>;
 
 //**************************************************************************************************
 // Modules
@@ -505,44 +482,6 @@ impl TName for ModuleIdent {
     }
 }
 
-impl TName for AttributeName {
-    type Key = AttributeName_;
-    type Loc = Loc;
-
-    fn drop_loc(self) -> (Self::Loc, Self::Key) {
-        let sp!(loc, n_) = self;
-        (loc, n_)
-    }
-
-    fn add_loc(loc: Self::Loc, name_: Self::Key) -> Self {
-        sp(loc, name_)
-    }
-
-    fn borrow(&self) -> (&Self::Loc, &Self::Key) {
-        let sp!(loc, n_) = self;
-        (loc, n_)
-    }
-}
-
-impl TName for Spanned<KnownAttribute> {
-    type Key = KnownAttribute;
-    type Loc = Loc;
-
-    fn drop_loc(self) -> (Self::Loc, Self::Key) {
-        let sp!(loc, n_) = self;
-        (loc, n_)
-    }
-
-    fn add_loc(loc: Self::Loc, name_: Self::Key) -> Self {
-        sp(loc, name_)
-    }
-
-    fn borrow(&self) -> (&Self::Loc, &Self::Key) {
-        let sp!(loc, n_) = self;
-        (loc, n_)
-    }
-}
-
 impl fmt::Debug for Address {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self)
@@ -597,21 +536,11 @@ impl Hash for Address {
 // impls
 //**************************************************************************************************
 
-impl Attribute_ {
-    pub fn attribute_name(&self) -> &Name {
-        match self {
-            Attribute_::Name(nm)
-            | Attribute_::Assigned(nm, _)
-            | Attribute_::Parameterized(nm, _) => nm,
-        }
-    }
-}
-
 impl Attributes {
     pub fn is_test_or_test_only(&self) -> bool {
-        self.contains_key_(&known_attributes::TestingAttribute::TestOnly.into())
-            || self.contains_key_(&known_attributes::TestingAttribute::RandTest.into())
-            || self.contains_key_(&known_attributes::TestingAttribute::Test.into())
+        self.contains_key_(&known_attributes::AttributeKind_::TestOnly)
+            || self.contains_key_(&known_attributes::AttributeKind_::RandTest)
+            || self.contains_key_(&known_attributes::AttributeKind_::Test)
     }
 }
 
@@ -903,15 +832,6 @@ impl fmt::Display for Address {
     }
 }
 
-impl fmt::Display for AttributeName_ {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        match self {
-            AttributeName_::Unknown(sym) => write!(f, "{}", sym),
-            AttributeName_::Known(known) => write!(f, "{}", known.name()),
-        }
-    }
-}
-
 impl fmt::Display for ModuleIdent_ {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}::{}", self.address, &self.module)
@@ -1050,50 +970,6 @@ impl AstDebug for UseFuns {
         for (_, _, use_fun) in implicit {
             use_fun.ast_debug(w);
         }
-    }
-}
-
-impl AstDebug for AttributeValue_ {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        match self {
-            AttributeValue_::Value(v) => v.ast_debug(w),
-            AttributeValue_::Module(m) => w.write(format!("{m}")),
-            AttributeValue_::ModuleAccess(n) => n.ast_debug(w),
-            AttributeValue_::Address(a) => w.write(format!("{a}")),
-        }
-    }
-}
-
-impl AstDebug for Attribute_ {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        match self {
-            Attribute_::Name(n) => w.write(format!("{}", n)),
-            Attribute_::Assigned(n, v) => {
-                w.write(format!("{}", n));
-                w.write(" = ");
-                v.ast_debug(w);
-            }
-            Attribute_::Parameterized(n, inners) => {
-                w.write(format!("{}", n));
-                w.write("(");
-                w.list(inners, ", ", |w, (_, _, inner)| {
-                    inner.ast_debug(w);
-                    false
-                });
-                w.write(")");
-            }
-        }
-    }
-}
-
-impl AstDebug for InnerAttributes {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        w.write("#[");
-        w.list(self, ", ", |w, (_, _, attr)| {
-            attr.ast_debug(w);
-            false
-        });
-        w.write("]");
     }
 }
 

@@ -13,10 +13,13 @@ use crate::{
 use indexmap::IndexMap;
 use move_binary_format::file_format;
 use move_compiler::{
-    expansion::ast as E, naming::ast as N, parser::ast as P, parser::ast::DocComment,
-    shared::program_info::FunctionInfo,
+    expansion::ast as E,
+    naming::ast as N,
+    parser::ast as P,
+    parser::ast::DocComment,
+    shared::{known_attributes as KA, program_info::FunctionInfo},
 };
-use move_core_types::account_address::AccountAddress;
+use move_core_types::{account_address::AccountAddress, vm_status::StatusCode};
 use move_symbol_pool::Symbol;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -54,6 +57,8 @@ pub struct Module {
 pub type Attributes = Vec<Attribute>;
 
 #[derive(Serialize, Deserialize)]
+// TODO(cswords): This should mirror the KnownAttribute structure to save consumers of this from
+// from needing to parse attributes a second time.
 pub enum Attribute {
     Name(Symbol),
     Assigned(Symbol, String),
@@ -768,28 +773,177 @@ fn doc_comment(doc: &DocComment) -> Option<String> {
 }
 
 fn attributes(attributes: &E::Attributes) -> Vec<Attribute> {
-    attributes.iter().map(|(_, _, a)| attribute(a)).collect()
+    attributes
+        .iter()
+        .map(|(_, _, a)| attribute(&a.value))
+        .collect()
 }
 
-fn attribute(attr: &E::Attribute) -> Attribute {
-    match &attr.value {
-        E::Attribute_::Name(name) => Attribute::Name(name.value),
-        E::Attribute_::Assigned(name, value) => {
-            Attribute::Assigned(name.value, attribute_value(value))
+fn ext_attribute(entry: &KA::ExternalAttributeEntry) -> Attribute {
+    use KA::ExternalAttributeEntry_ as EAE;
+    use KA::ExternalAttributeValue_ as EAV;
+    match &entry.value {
+        EAE::Name(n) => Attribute::Name(n.value),
+        EAE::Assigned(n, boxed_val) => {
+            let s = match &boxed_val.value {
+                EAV::Value(v) => attribute_assigned_value(v),
+                EAV::Address(a) => attribute_address(a),
+                EAV::Module(m) => attribute_module_ident(m),
+                EAV::ModuleAccess(ma) => attrribute_module_access(ma),
+            };
+            Attribute::Assigned(n.value, s)
         }
-        E::Attribute_::Parameterized(name, attrs) => Attribute::Parameterized(
-            name.value,
-            attrs.iter().map(|(_, _, a)| attribute(a)).collect(),
-        ),
+        EAE::Parameterized(n, nested) => {
+            let inner: Attributes = nested.iter().map(|(_, _, e)| ext_attribute(e)).collect();
+            Attribute::Parameterized(n.value, inner)
+        }
     }
 }
 
-fn attribute_value(value: &E::AttributeValue) -> String {
-    match &value.value {
-        E::AttributeValue_::Value(v) => attribute_assigned_value(v),
-        E::AttributeValue_::Address(a) => attribute_address(a),
-        E::AttributeValue_::Module(m) => attribute_module_ident(m),
-        E::AttributeValue_::ModuleAccess(ma) => attrribute_module_access(ma),
+fn attribute(k: &KA::KnownAttribute) -> Attribute {
+    match k {
+        // --- name-only ---
+        KA::KnownAttribute::BytecodeInstruction(_) => {
+            Attribute::Name(KA::BytecodeInstructionAttribute::BYTECODE_INSTRUCTION.into())
+        }
+        KA::KnownAttribute::Testing(KA::TestingAttribute::Test) => {
+            Attribute::Name(KA::TestingAttribute::TEST.into())
+        }
+        KA::KnownAttribute::Testing(KA::TestingAttribute::TestOnly) => {
+            Attribute::Name(KA::TestingAttribute::TEST_ONLY.into())
+        }
+        KA::KnownAttribute::Testing(KA::TestingAttribute::RandTest) => {
+            Attribute::Name(KA::TestingAttribute::RAND_TEST.into())
+        }
+        KA::KnownAttribute::Verification(KA::VerificationAttribute::VerifyOnly) => {
+            Attribute::Name(KA::VerificationAttribute::VERIFY_ONLY.into())
+        }
+
+        // --- assigned or name ---
+        KA::KnownAttribute::Deprecation(dep) => {
+            if let Some(note) = &dep.note {
+                let s = String::from_utf8_lossy(note).into_owned();
+                Attribute::Parameterized(
+                    KA::DeprecationAttribute::DEPRECATED.into(),
+                    vec![Attribute::Assigned(
+                        KA::DeprecationAttribute::NOTE.into(),
+                        s,
+                    )],
+                )
+            } else {
+                Attribute::Name(KA::DeprecationAttribute::DEPRECATED.into())
+            }
+        }
+        KA::KnownAttribute::Error(err) => {
+            if let Some(code) = err.code {
+                Attribute::Parameterized(
+                    KA::ErrorAttribute::ERROR.into(),
+                    vec![Attribute::Assigned(
+                        KA::ErrorAttribute::CODE.into(),
+                        format!("{}", code),
+                    )],
+                )
+            } else {
+                Attribute::Name(KA::ErrorAttribute::ERROR.into())
+            }
+        }
+
+        // --- single-argument parameterized ---
+        KA::KnownAttribute::DefinesPrimitive(dp) => {
+            let inner = vec![Attribute::Name(dp.name.value)];
+            Attribute::Parameterized(KA::DefinesPrimitiveAttribute::DEFINES_PRIM.into(), inner)
+        }
+        KA::KnownAttribute::Syntax(sx) => {
+            let inner = vec![Attribute::Name(sx.kind.value)];
+            Attribute::Parameterized(KA::SyntaxAttribute::SYNTAX.into(), inner)
+        }
+
+        // --- diagnostics ---
+        KA::KnownAttribute::Diagnostic(diag_attr) => match diag_attr {
+            KA::DiagnosticAttribute::Allow { allow_set } => {
+                let mut inner = Vec::new();
+                for (prefix_opt, name) in allow_set {
+                    if let Some(pref) = prefix_opt {
+                        let grp = vec![Attribute::Name(name.value)];
+                        inner.push(Attribute::Parameterized(pref.value, grp));
+                    } else {
+                        inner.push(Attribute::Name(name.value));
+                    }
+                }
+                Attribute::Parameterized(KA::DiagnosticAttribute::ALLOW.into(), inner)
+            }
+            KA::DiagnosticAttribute::LintAllow { allow_set } => {
+                let inner = allow_set
+                    .iter()
+                    .map(|name| Attribute::Name(name.value))
+                    .collect();
+                Attribute::Parameterized(KA::DiagnosticAttribute::LINT_ALLOW.into(), inner)
+            }
+        },
+
+        // --- expected_failure ---
+        KA::KnownAttribute::Testing(KA::TestingAttribute::ExpectedFailure(ef)) => {
+            let mut inner = Vec::new();
+            match &**ef {
+                KA::ExpectedFailure::Expected => {
+                    Attribute::Name(KA::TestingAttribute::EXPECTED_FAILURE.into())
+                }
+                KA::ExpectedFailure::ExpectedWithCodeDEPRECATED(code) => {
+                    inner.push(Attribute::Assigned(
+                        KA::TestingAttribute::ABORT_CODE_NAME.into(),
+                        code.to_string(),
+                    ));
+                    Attribute::Parameterized(KA::TestingAttribute::EXPECTED_FAILURE.into(), inner)
+                }
+                KA::ExpectedFailure::ExpectedWithError {
+                    status_code,
+                    minor_code,
+                    location,
+                } => {
+                    let status_code = match status_code {
+                        StatusCode::OUT_OF_GAS => KA::TestingAttribute::OUT_OF_GAS_NAME.to_owned(),
+                        StatusCode::VECTOR_OPERATION_ERROR => {
+                            KA::TestingAttribute::VECTOR_ERROR_NAME.to_owned()
+                        }
+                        StatusCode::ARITHMETIC_ERROR => {
+                            KA::TestingAttribute::ARITHMETIC_ERROR_NAME.to_owned()
+                        }
+                        other => format!("{}", *other as u64),
+                    };
+                    inner.push(Attribute::Assigned(
+                        KA::TestingAttribute::MAJOR_STATUS_NAME.into(),
+                        status_code,
+                    ));
+                    if let Some(sp!(_, mc)) = minor_code {
+                        let s = match mc {
+                            KA::MinorCode_::Value(v) => format!("{}", v),
+                            KA::MinorCode_::Constant(mident, name) => {
+                                format!("{}::{}", mident, name)
+                            }
+                        };
+                        inner.push(Attribute::Assigned(
+                            KA::TestingAttribute::MINOR_STATUS_NAME.into(),
+                            s,
+                        ));
+                    }
+                    inner.push(Attribute::Assigned(
+                        KA::TestingAttribute::ERROR_LOCATION.into(),
+                        attribute_module_ident(location),
+                    ));
+                    Attribute::Parameterized(KA::TestingAttribute::EXPECTED_FAILURE.into(), inner)
+                }
+            }
+        }
+
+        // --- external ---
+        KA::KnownAttribute::External(ext) => {
+            let inner = ext
+                .attrs
+                .iter()
+                .map(|(_, _, entry)| ext_attribute(entry))
+                .collect();
+            Attribute::Parameterized(KA::ExternalAttribute::EXTERNAL.into(), inner)
+        }
     }
 }
 

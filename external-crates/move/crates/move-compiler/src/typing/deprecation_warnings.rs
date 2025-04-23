@@ -7,15 +7,15 @@ use crate::{
     expansion::ast::{self as E, ModuleIdent},
     ice,
     shared::{
-        known_attributes::{AttributePosition, DeprecationAttribute, KnownAttribute},
+        known_attributes::{
+            AttributeKind_, AttributePosition, DeprecationAttribute, KnownAttribute,
+        },
         program_info::NamingProgramInfo,
         CompilationEnv, Name,
     },
 };
 use move_ir_types::location::Loc;
 use std::collections::HashMap;
-
-const NOTE_STR: &str = "note";
 
 #[derive(Debug, Clone)]
 pub struct Deprecation {
@@ -174,80 +174,23 @@ fn deprecations(
     source_location: Loc,
     mident: ModuleIdent,
 ) -> Option<Deprecation> {
-    let deprecations: Vec<_> = attrs
-        .iter()
-        .filter(|(_, v, _)| matches!(v, KnownAttribute::Deprecation(_)))
-        .collect();
-
-    if deprecations.is_empty() {
+    let Some(deprecation) = attrs.get_(&AttributeKind_::Deprecation) else {
         return None;
-    }
-
-    if deprecations.len() != 1 {
+    };
+    let KnownAttribute::Deprecation(DeprecationAttribute { note }) = &deprecation.value else {
         reporter.add_diag(ice!((
             source_location,
-            "ICE: verified that there is at least one deprecation attribute above, \
-            and expansion should have failed if there were multiple deprecation attributes."
+            "Expected deprecation attribute based on kind"
         )));
         return None;
-    }
-
-    let (loc, _, attr) = deprecations
-        .last()
-        .expect("Verified deprecations is not empty above");
-
-    let make_invalid_deprecation_diag = || {
-        let mut diag = diag!(
-            Attributes::InvalidUsage,
-            (
-                *loc,
-                format!("Invalid '{}' attribute", DeprecationAttribute.name())
-            )
-        );
-        let note = format!(
-            "Deprecation attributes must be written as `#[{0}]` or `#[{0}(note = b\"message\")]`",
-            DeprecationAttribute.name()
-        );
-        diag.add_note(note);
-        reporter.add_diag(diag);
-        None
     };
-
-    match &attr.value {
-        E::Attribute_::Name(_) => Some(Deprecation {
-            source_location,
-            location: attr_position,
-            deprecation_note: None,
-            module_ident: mident,
-        }),
-        E::Attribute_::Parameterized(_, assigns) if assigns.len() == 1 => {
-            let param = assigns.key_cloned_iter().next().unwrap().1;
-            match param {
-                sp!(_, E::Attribute_::Assigned(sp!(_, name), attr_val))
-                    if name.as_str() == NOTE_STR
-                        && matches!(
-                            &attr_val.value,
-                            E::AttributeValue_::Value(sp!(_, E::Value_::Bytearray(_)))
-                        ) =>
-                {
-                    let E::AttributeValue_::Value(sp!(_, E::Value_::Bytearray(b))) =
-                        &attr_val.value
-                    else {
-                        unreachable!()
-                    };
-                    let msg = std::str::from_utf8(b).unwrap().to_string();
-                    Some(Deprecation {
-                        source_location,
-                        location: attr_position,
-                        deprecation_note: Some(msg),
-                        module_ident: mident,
-                    })
-                }
-                _ => make_invalid_deprecation_diag(),
-            }
-        }
-        E::Attribute_::Assigned(_, _) | E::Attribute_::Parameterized(_, _) => {
-            make_invalid_deprecation_diag()
-        }
-    }
+    let deprecation_note = note
+        .as_ref()
+        .map(|note| std::str::from_utf8(note).unwrap().to_string());
+    Some(Deprecation {
+        source_location,
+        location: attr_position,
+        deprecation_note,
+        module_ident: mident,
+    })
 }

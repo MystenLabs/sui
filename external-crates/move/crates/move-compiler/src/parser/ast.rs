@@ -14,7 +14,7 @@ use crate::{
 use move_command_line_common::files::FileHash;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use std::{fmt, hash::Hash};
+use std::{collections::BTreeSet, fmt, hash::Hash};
 
 macro_rules! new_name {
     ($n:ident) => {
@@ -165,18 +165,69 @@ pub struct UseDecl {
 //**************************************************************************************************
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(clippy::large_enum_variant)]
 pub enum AttributeValue_ {
     Value(Value),
     ModuleAccess(NameAccessChain),
 }
+
 pub type AttributeValue = Spanned<AttributeValue_>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Attribute_ {
+pub enum ParsedAttribute_ {
     Name(Name),
     Assigned(Name, Box<AttributeValue>),
-    Parameterized(Name, Attributes),
+    Parameterized(Name, Spanned<Vec<ParsedAttribute>>),
 }
+
+pub type ParsedAttribute = Spanned<ParsedAttribute_>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExpectedFailureKind_ {
+    Empty,
+    Name(Name),
+    MajorStatus(Value),
+    AbortCode(AttributeValue),
+}
+
+pub type ExpectedFailureKind = Spanned<ExpectedFailureKind_>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(clippy::large_enum_variant)]
+pub enum Attribute_ {
+    BytecodeInstruction,
+    DefinesPrimitive(Name),
+    Deprecation {
+        note: Option<Symbol>,
+    },
+    Error {
+        code: Option<Value>,
+    },
+    External {
+        attrs: Spanned<Vec<ParsedAttribute>>,
+    },
+    Syntax {
+        kind: Name,
+    },
+    VerifyOnly,
+    // -- diagnostic attributes ------------------
+    Allow {
+        allow_set: BTreeSet<(Option<Name>, Name)>,
+    },
+    LintAllow {
+        allow_set: BTreeSet<Name>,
+    },
+    // -- testing attributes  --------------------
+    Test,
+    TestOnly,
+    ExpectedFailure {
+        failure_kind: Box<ExpectedFailureKind>,
+        minor_status: Option<AttributeValue>,
+        location: Option<NameAccessChain>,
+    },
+    RandomTest,
+}
+
 pub type Attribute = Spanned<Attribute_>;
 
 pub type Attributes = Spanned<Vec<Attribute>>;
@@ -784,12 +835,49 @@ impl fmt::Debug for LeadingNameAccess_ {
 // Impl
 //**************************************************************************************************
 
-impl Attribute_ {
-    pub fn attribute_name(&self) -> &Name {
+impl ParsedAttribute_ {
+    pub fn loc_str(&self) -> Spanned<&str> {
         match self {
-            Attribute_::Name(nm)
-            | Attribute_::Assigned(nm, _)
-            | Attribute_::Parameterized(nm, _) => nm,
+            ParsedAttribute_::Name(name)
+            | ParsedAttribute_::Assigned(name, _)
+            | ParsedAttribute_::Parameterized(name, _) => sp(name.loc, name.value.as_ref()),
+        }
+    }
+
+    pub fn as_name(&self) -> &Name {
+        match self {
+            ParsedAttribute_::Name(name)
+            | ParsedAttribute_::Assigned(name, _)
+            | ParsedAttribute_::Parameterized(name, _) => name,
+        }
+    }
+
+    pub fn into_name(self) -> Name {
+        match self {
+            ParsedAttribute_::Name(name)
+            | ParsedAttribute_::Assigned(name, _)
+            | ParsedAttribute_::Parameterized(name, _) => name,
+        }
+    }
+}
+
+impl Attribute_ {
+    pub fn attribute_name(&self) -> &'static str {
+        use crate::shared::known_attributes::AttributeKind_ as AK;
+        match self {
+            Attribute_::BytecodeInstruction => AK::BytecodeInstruction.name(),
+            Attribute_::DefinesPrimitive(..) => AK::DefinesPrimitive.name(),
+            Attribute_::Deprecation { .. } => AK::Deprecation.name(),
+            Attribute_::Error { .. } => AK::Error.name(),
+            Attribute_::External { .. } => AK::External.name(),
+            Attribute_::Syntax { .. } => AK::Syntax.name(),
+            Attribute_::VerifyOnly => AK::VerifyOnly.name(),
+            Attribute_::Allow { .. } => AK::Allow.name(),
+            Attribute_::LintAllow { .. } => AK::LintAllow.name(),
+            Attribute_::Test => AK::Test.name(),
+            Attribute_::TestOnly => AK::TestOnly.name(),
+            Attribute_::ExpectedFailure { .. } => AK::ExpectedFailure.name(),
+            Attribute_::RandomTest => AK::RandTest.name(),
         }
     }
 }
@@ -1362,6 +1450,18 @@ impl fmt::Display for Type_ {
     }
 }
 
+impl fmt::Display for Value_ {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Value_::Address(sp!(_, addr)) => write!(f, "{addr}"),
+            Value_::Num(symbol) => write!(f, "{}", symbol.as_ref()),
+            Value_::Bool(value) => write!(f, "{value}"),
+            Value_::HexString(symbol) => write!(f, "{}", symbol.as_ref()),
+            Value_::ByteString(symbol) => write!(f, "{}", symbol.as_ref()),
+        }
+    }
+}
+
 //**************************************************************************************************
 // Debug
 //**************************************************************************************************
@@ -1474,23 +1574,153 @@ impl AstDebug for AttributeValue_ {
     }
 }
 
-impl AstDebug for Attribute_ {
+impl AstDebug for ExpectedFailureKind_ {
     fn ast_debug(&self, w: &mut AstWriter) {
+        use ExpectedFailureKind_ as K;
         match self {
-            Attribute_::Name(n) => w.write(format!("{}", n)),
-            Attribute_::Assigned(n, v) => {
-                w.write(format!("{}", n));
-                w.write(" = ");
+            K::Empty => {
+                // nothing
+            }
+            K::Name(n) => {
+                w.write(n.value.as_str());
+            }
+            K::MajorStatus(v) => {
+                w.write("major_status=");
                 v.ast_debug(w);
             }
-            Attribute_::Parameterized(n, inners) => {
-                w.write(format!("{}", n));
+            K::AbortCode(av) => {
+                w.write("abort_code=");
+                av.ast_debug(w);
+            }
+        }
+    }
+}
+
+impl AstDebug for ParsedAttribute_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        use ParsedAttribute_ as P;
+        match self {
+            // #[name]
+            P::Name(n) => {
+                w.write(n.value.as_str());
+            }
+            // #[name = value]
+            P::Assigned(name, boxed_val) => {
+                w.write(name.value.as_str());
+                w.write(" = ");
+                boxed_val.value.ast_debug(w);
+            }
+            // #[name(inner1, inner2, …)]
+            P::Parameterized(name, sp!(_, args)) => {
+                w.write(name.value.as_str());
                 w.write("(");
-                w.list(&inners.value, ", ", |w, inner| {
-                    inner.ast_debug(w);
-                    false
+                w.comma(args, |w, arg| {
+                    arg.ast_debug(w);
                 });
                 w.write(")");
+            }
+        }
+    }
+}
+
+impl AstDebug for Attribute_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        use Attribute_ as A;
+        match self {
+            A::BytecodeInstruction => {
+                w.write("bytecode_instruction");
+            }
+            A::DefinesPrimitive(name) => {
+                w.write("defines_prim(");
+                w.write(name.value.as_str());
+                w.write(")");
+            }
+            A::Deprecation { note } => {
+                w.write("deprecation");
+                if let Some(sym) = note {
+                    w.write("(note=");
+                    w.write(sym.as_str());
+                    w.write(")");
+                }
+            }
+            A::Error { code } => {
+                w.write("error");
+                if let Some(val) = code {
+                    w.write("(code=");
+                    val.ast_debug(w);
+                    w.write(")");
+                }
+            }
+            A::External { attrs } => {
+                w.write("external(");
+                // attrs: Spanned<Vec<ParsedAttribute>>
+                w.comma(&attrs.value, |w, parsed| {
+                    parsed.ast_debug(w);
+                });
+                w.write(")");
+            }
+            A::Syntax { kind } => {
+                w.write("syntax(");
+                w.write(kind.value.as_str());
+                w.write(")");
+            }
+            A::VerifyOnly => {
+                w.write("verify_only");
+            }
+            A::Allow { allow_set } => {
+                w.write("allow(");
+                let mut first = true;
+                for (prefix, name) in allow_set {
+                    if !first {
+                        w.write(",");
+                    }
+                    first = false;
+                    if let Some(pref) = prefix {
+                        w.write(pref.value.as_str());
+                        w.write("(");
+                        w.write(name.value.as_str());
+                        w.write(")");
+                    } else {
+                        w.write(name.value.as_str());
+                    }
+                }
+                w.write(")");
+            }
+            A::LintAllow { allow_set } => {
+                w.write("lint_allow(");
+                w.comma(allow_set, |w, name| {
+                    w.write(name.value.as_str());
+                });
+                w.write(")");
+            }
+            A::Test => {
+                w.write("test");
+            }
+            A::TestOnly => {
+                w.write("test_only");
+            }
+            A::ExpectedFailure {
+                failure_kind,
+                minor_status,
+                location,
+            } => {
+                w.write("expected_failure(");
+                // first the kind
+                failure_kind.value.ast_debug(w);
+                // then optional minor_status
+                if let Some(ms) = minor_status {
+                    w.write(",minor_status=");
+                    ms.ast_debug(w);
+                }
+                // then optional location
+                if let Some(loc) = location {
+                    w.write(",location=");
+                    loc.ast_debug(w);
+                }
+                w.write(")");
+            }
+            A::RandomTest => {
+                w.write("rand_test");
             }
         }
     }

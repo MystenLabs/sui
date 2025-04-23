@@ -1,12 +1,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
-
 use crate::{
     diag,
     editions::FeatureGate,
-    expansion::ast::{Attribute, Attribute_, ModuleIdent},
+    expansion::ast::ModuleIdent,
+    ice,
     naming::{
         ast::{
             self as N, SyntaxMethod, SyntaxMethodKind, SyntaxMethodKind_, SyntaxMethods, TypeName,
@@ -14,7 +13,7 @@ use crate::{
         translate::Context,
     },
     parser::ast::FunctionName,
-    shared::known_attributes::SyntaxAttribute,
+    shared::known_attributes::{AttributeKind_, KnownAttribute, SyntaxAttribute},
 };
 use move_ir_types::location::*;
 
@@ -39,30 +38,36 @@ pub(super) fn resolve_syntax_attributes(
     function_name: &FunctionName,
     function: &N::Function,
 ) -> Option<()> {
-    let attr = function.attributes.get_(&SyntaxAttribute::Syntax.into())?;
-    let attr_loc = attr.loc;
+    let attr = function.attributes.get_(&AttributeKind_::Syntax)?;
+    let sp!(attr_loc, attr_value) = attr;
 
-    let syntax_method_prekinds = resolve_syntax_method_prekind(context, attr)?;
+    let KnownAttribute::Syntax(SyntaxAttribute { kind }) = attr_value else {
+        context.add_diag(ice!((
+            *attr_loc,
+            "Expected 'syntax' attributed based on kind"
+        )));
+        return None;
+    };
+    let Some(prekind) = attr_param_from_str(kind.loc, kind.value.as_str()) else {
+        let msg = format!("Invalid syntax method identifier '{}'", kind);
+        context.add_diag(diag!(Declarations::InvalidAttribute, (kind.loc, msg)));
+        return None;
+    };
 
     if !context.check_feature(
         context.current_package,
         FeatureGate::SyntaxMethods,
-        attr_loc,
+        *attr_loc,
     ) {
         return None;
     }
 
-    let param_ty = get_first_type(context, &attr_loc, &function.signature)?;
-    let Some(type_name) = determine_subject_type_name(context, module_name, &attr_loc, &param_ty)
+    let param_ty = get_first_type(context, attr_loc, &function.signature)?;
+    let Some(type_name) = determine_subject_type_name(context, module_name, attr_loc, &param_ty)
     else {
         assert!(context.env.has_errors());
         return None;
     };
-
-    if syntax_method_prekinds.is_empty() {
-        assert!(context.env.has_errors());
-        return None;
-    }
 
     // For loops may need to change this, but for now we disallow this.
     if let Some(macro_loc) = function.macro_ {
@@ -70,7 +75,7 @@ pub(super) fn resolve_syntax_attributes(
         let fn_msg = "This function is a macro";
         context.add_diag(diag!(
             Declarations::InvalidSyntaxMethod,
-            (attr_loc, msg),
+            (*attr_loc, msg),
             (macro_loc, fn_msg)
         ));
         return None;
@@ -78,34 +83,32 @@ pub(super) fn resolve_syntax_attributes(
 
     let method_entry = syntax_methods.entry(type_name).or_default();
 
-    for prekind in syntax_method_prekinds {
-        let Some(kind) = determine_valid_kind(context, prekind, &param_ty) else {
-            assert!(context.env.has_errors());
-            continue;
-        };
-        if !valid_return_type(
-            context,
-            &kind,
-            param_ty.loc,
-            &function.signature.return_type,
-        ) {
-            assert!(context.env.has_errors());
-            continue;
-        } else {
-            let new_syntax_method = SyntaxMethod {
-                loc: function_name.0.loc,
-                visibility: function.visibility,
-                kind,
-                tname: type_name,
-                target_function: (*module_name, *function_name),
-            };
-            let method_opt: &mut Option<Box<SyntaxMethod>> = method_entry.lookup_kind_entry(&kind);
-            if let Some(previous) = method_opt {
-                prev_syntax_defn_error(context, previous, kind, &type_name)
-            } else {
-                *method_opt = Some(Box::new(new_syntax_method));
-            }
-        }
+    let Some(kind) = determine_valid_kind(context, prekind, &param_ty) else {
+        assert!(context.env.has_errors());
+        return None;
+    };
+    if !valid_return_type(
+        context,
+        &kind,
+        param_ty.loc,
+        &function.signature.return_type,
+    ) {
+        assert!(context.env.has_errors());
+        return None;
+    }
+
+    let new_syntax_method = SyntaxMethod {
+        loc: function_name.0.loc,
+        visibility: function.visibility,
+        kind,
+        tname: type_name,
+        target_function: (*module_name, *function_name),
+    };
+    let method_opt: &mut Option<Box<SyntaxMethod>> = method_entry.lookup_kind_entry(&kind);
+    if let Some(previous) = method_opt {
+        prev_syntax_defn_error(context, previous, kind, &type_name)
+    } else {
+        *method_opt = Some(Box::new(new_syntax_method));
     }
     Some(())
 }
@@ -142,64 +145,6 @@ fn attr_param_from_str(loc: Loc, name_str: &str) -> Option<SyntaxMethodPrekind> 
         SyntaxAttribute::INDEX => Some(sp(loc, SyntaxMethodPrekind_::Index)),
         SyntaxAttribute::ASSIGN => Some(sp(loc, SyntaxMethodPrekind_::Assign)),
         _ => None,
-    }
-}
-
-/// Resolve the mapping for a function + syntax attribute into a SyntaxMethodKind.
-fn resolve_syntax_method_prekind(
-    context: &Context,
-    sp!(loc, attr_): &Attribute,
-) -> Option<BTreeSet<SyntaxMethodPrekind>> {
-    match attr_ {
-        Attribute_::Name(_) | Attribute_::Assigned(_, _) => {
-            let msg = format!(
-                "Expected a parameter list of syntax method usage forms, e.g., '{}({})'",
-                SyntaxAttribute::SYNTAX,
-                SyntaxAttribute::INDEX
-            );
-            context.add_diag(diag!(Declarations::InvalidAttribute, (*loc, msg)));
-            None
-        }
-        Attribute_::Parameterized(_, inner) => {
-            let mut kinds = BTreeSet::new();
-            for (loc, _, sp!(argloc, arg)) in inner.iter() {
-                match arg {
-                    Attribute_::Name(name) => {
-                        if let Some(kind) = attr_param_from_str(*argloc, name.value.as_str()) {
-                            if let Some(prev_kind) = kinds.replace(kind) {
-                                let msg = "Repeated syntax method identifier".to_string();
-                                let prev = "Initially defined here".to_string();
-                                context.add_diag(diag!(
-                                    Declarations::InvalidAttribute,
-                                    (loc, msg),
-                                    (prev_kind.loc, prev)
-                                ));
-                            }
-                        } else {
-                            let msg = format!("Invalid syntax method identifier '{}'", name);
-                            context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
-                        }
-                    }
-                    Attribute_::Assigned(n, _) => {
-                        let msg = format!(
-                            "Expected a standalone syntax method identifier, e.g., '{}({})'",
-                            SyntaxAttribute::SYNTAX,
-                            n
-                        );
-                        context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
-                    }
-                    Attribute_::Parameterized(n, _) => {
-                        let msg = format!(
-                            "Expected a standalone syntax method identifier, e.g., '{}({})'",
-                            SyntaxAttribute::SYNTAX,
-                            n
-                        );
-                        context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
-                    }
-                }
-            }
-            Some(kinds)
-        }
     }
 }
 

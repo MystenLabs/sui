@@ -91,7 +91,7 @@ pub fn write_module_to_string(
         members.push(format!("    {}", DISCLAIMER));
     }
     for fdef in externally_visible_funs {
-        members.push(format!(" #[{}]", NATIVE_INTERFACE));
+        // members.push(format!(" #[{}]", NATIVE_INTERFACE));
         members.push(write_function_def(&mut context, fdef));
     }
     if has_externally_visible_funs {

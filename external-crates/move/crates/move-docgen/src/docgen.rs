@@ -962,7 +962,7 @@ impl<'env> Docgen<'env> {
         let info = const_env.info();
         let is_error_const = info
             .attributes
-            .contains_key_(&known_attributes::ErrorAttribute.into());
+            .contains_key_(&known_attributes::AttributeKind_::Error);
         let rendered_value = match (is_error_const, info.value.get().unwrap()) {
             (true, MoveValue::Vector(values))
                 if values

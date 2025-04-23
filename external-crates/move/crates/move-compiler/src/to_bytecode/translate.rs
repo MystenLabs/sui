@@ -18,7 +18,7 @@ use crate::{
         Ability, Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName,
         ModuleName, TargetKind, UnaryOp, UnaryOp_, VariantName,
     },
-    shared::{unique_map::UniqueMap, *},
+    shared::{known_attributes::AttributeKind_, unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
 use move_binary_format::file_format as F;
@@ -517,7 +517,7 @@ fn constant(
         signature,
         value,
     } = c;
-    let is_error_constant = attributes.contains_key_(&known_attributes::ErrorAttribute.into());
+    let is_error_constant = attributes.contains_key_(&AttributeKind_::Error);
     let name = context.constant_definition_name(m, n);
     let signature = base_type(context, signature);
     let value = value.unwrap();

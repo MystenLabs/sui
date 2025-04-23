@@ -13,7 +13,10 @@ use crate::{
         ast::{self as P, DocComment, NamePath, PathEntry},
         filter::{filter_program, FilterContext},
     },
-    shared::{known_attributes, CompilationEnv},
+    shared::{
+        known_attributes::{self, AttributeKind_},
+        CompilationEnv,
+    },
 };
 
 use std::sync::Arc;
@@ -62,22 +65,22 @@ impl FilterContext for Context<'_> {
     }
 
     // A module member should be removed if:
-    // * It is annotated as a test function (test_only, test, random_test, abort) and test mode is not set; or
+    // * It is annotated as a test function (test_only, test, random_test, abort) and test mode is
+    //   not set; or
     // * If it is a library and is annotated as #[test]
     fn should_remove_by_attributes(&mut self, attrs: &[P::Attributes]) -> bool {
-        use known_attributes::TestingAttribute;
-        let flattened_attrs: Vec<_> = attrs.iter().flat_map(test_attributes).collect();
-        let is_test_only = flattened_attrs.iter().any(|attr| {
+        let flattened_attrs: Vec<_> = attrs.iter().flat_map(test_attribute_kinds).collect();
+        let has_test_attr = flattened_attrs.iter().any(|attr| {
             matches!(
                 attr.1,
-                TestingAttribute::Test | TestingAttribute::TestOnly | TestingAttribute::RandTest
+                AttributeKind_::Test | AttributeKind_::TestOnly | AttributeKind_::RandTest
             )
         });
-        is_test_only && !self.env.flags().keep_testing_functions()
+        has_test_attr && !self.env.flags().keep_testing_functions()
             || (!self.is_source_def
-                && flattened_attrs.iter().any(|attr| {
-                    matches!(attr.1, TestingAttribute::Test | TestingAttribute::RandTest)
-                }))
+                && flattened_attrs
+                    .iter()
+                    .any(|attr| matches!(attr.1, AttributeKind_::Test | AttributeKind_::RandTest)))
     }
 }
 
@@ -107,7 +110,7 @@ pub fn program(
     filter_program(&mut context, prog)
 }
 
-fn has_unit_test_module(prog: &P::Program) -> bool {
+fn has_stdlib_unit_test_module(prog: &P::Program) -> bool {
     prog.lib_definitions
         .iter()
         .chain(prog.source_definitions.iter())
@@ -134,9 +137,8 @@ fn check_has_unit_test_module(
     pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: &P::Program,
 ) -> bool {
-    let has_unit_test_module = has_unit_test_module(prog)
-        || pre_compiled_lib.is_some_and(|p| has_unit_test_module(&p.parser));
-
+    let has_unit_test_module = has_stdlib_unit_test_module(prog)
+        || pre_compiled_lib.is_some_and(|p| has_stdlib_unit_test_module(&p.parser));
     if !has_unit_test_module && compilation_env.flags().is_testing() {
         if let Some(P::PackageDefinition { def, .. }) = prog
             .source_definitions
@@ -232,23 +234,26 @@ fn create_test_poison(mloc: Loc) -> P::ModuleMember {
     })
 }
 
-fn test_attributes(attrs: &P::Attributes) -> Vec<(Loc, known_attributes::TestingAttribute)> {
-    use known_attributes::KnownAttribute;
+fn test_attribute_kinds(attrs: &P::Attributes) -> Vec<(Loc, known_attributes::AttributeKind_)> {
     attrs
         .value
         .iter()
-        .filter_map(
-            |attr| match KnownAttribute::resolve(attr.value.attribute_name().value)? {
-                KnownAttribute::Testing(test_attr) => Some((attr.loc, test_attr)),
-                KnownAttribute::Verification(_)
-                | KnownAttribute::Native(_)
-                | KnownAttribute::Diagnostic(_)
-                | KnownAttribute::DefinesPrimitive(_)
-                | KnownAttribute::External(_)
-                | KnownAttribute::Syntax(_)
-                | KnownAttribute::Error(_)
-                | KnownAttribute::Deprecation(_) => None,
-            },
-        )
+        .filter_map(|attr| match attr.value {
+            P::Attribute_::VerifyOnly
+            | P::Attribute_::BytecodeInstruction
+            | P::Attribute_::DefinesPrimitive(..)
+            | P::Attribute_::Deprecation { .. }
+            | P::Attribute_::Error { .. }
+            | P::Attribute_::External { .. }
+            | P::Attribute_::Syntax { .. }
+            | P::Attribute_::Allow { .. }
+            | P::Attribute_::LintAllow { .. } => None,
+            P::Attribute_::Test => Some((attr.loc, known_attributes::AttributeKind_::Test)),
+            P::Attribute_::TestOnly => Some((attr.loc, known_attributes::AttributeKind_::TestOnly)),
+            P::Attribute_::RandomTest => {
+                Some((attr.loc, known_attributes::AttributeKind_::RandTest))
+            }
+            P::Attribute_::ExpectedFailure { .. } => None,
+        })
         .collect()
 }
