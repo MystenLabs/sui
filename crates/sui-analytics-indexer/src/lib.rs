@@ -115,6 +115,10 @@ fn default_max_file_size_mb() -> u64 {
     100
 }
 
+fn default_max_row_count() -> usize {
+    100000
+}
+
 fn default_time_interval_s() -> u64 {
     600
 }
@@ -225,6 +229,9 @@ pub struct TaskConfig {
     /// Maximum file size in mb before uploading to the datastore.
     #[serde(default = "default_max_file_size_mb")]
     pub max_file_size_mb: u64,
+    /// Maximum number of rows before uploading to the datastore.
+    #[serde(default = "default_max_row_count")]
+    pub max_row_count: usize,
     /// Checkpoint sequence number to start the download from
     pub starting_checkpoint_seq_num: Option<u64>,
     /// Time to process in seconds before uploding to the datastore.

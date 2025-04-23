@@ -1,22 +1,52 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{AnalyticsWriter, FileFormat, FileType};
-use crate::{ParquetSchema, ParquetValue};
+use crate::{AnalyticsWriter, FileFormat, FileType, ParquetSchema, ParquetValue};
 use anyhow::{anyhow, Result};
-use arrow_array::{ArrayRef, BooleanArray, Int64Array, RecordBatch, StringArray, UInt64Array};
+use arrow_array::{
+    builder::{ArrayBuilder, BooleanBuilder, GenericStringBuilder, Int64Builder, UInt64Builder},
+    ArrayRef, RecordBatch,
+};
 use serde::Serialize;
-use std::fs::File;
-use std::fs::{create_dir_all, remove_file};
+use std::fs::{create_dir_all, remove_file, File};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use sui_storage::object_store::util::path_to_filesystem;
 use sui_types::base_types::EpochId;
 
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
 use parquet::file::properties::WriterProperties;
-use sui_storage::object_store::util::path_to_filesystem;
+
+type StrBuilder = GenericStringBuilder<i32>;
+
+enum ColumnBuilder {
+    U64(UInt64Builder),
+    I64(Int64Builder),
+    Bool(BooleanBuilder),
+    Str(StrBuilder),
+}
+
+impl ColumnBuilder {
+    fn as_any_builder(&mut self) -> &mut dyn ArrayBuilder {
+        match self {
+            Self::U64(b) => b,
+            Self::I64(b) => b,
+            Self::Bool(b) => b,
+            Self::Str(b) => b,
+        }
+    }
+
+    fn finish(self) -> ArrayRef {
+        match self {
+            Self::U64(mut b) => Arc::new(b.finish()),
+            Self::I64(mut b) => Arc::new(b.finish()),
+            Self::Bool(mut b) => Arc::new(b.finish()),
+            Self::Str(mut b) => Arc::new(b.finish()),
+        }
+    }
+}
 
 // Save table entries to parquet files.
 pub(crate) struct ParquetWriter {
@@ -24,7 +54,8 @@ pub(crate) struct ParquetWriter {
     file_type: FileType,
     epoch: EpochId,
     checkpoint_range: Range<u64>,
-    data: Vec<Vec<ParquetValue>>,
+    builders: Vec<ColumnBuilder>,
+    row_count: usize,
 }
 
 impl ParquetWriter {
@@ -33,13 +64,13 @@ impl ParquetWriter {
         file_type: FileType,
         start_checkpoint_seq_num: u64,
     ) -> Result<Self> {
-        let checkpoint_range = start_checkpoint_seq_num..u64::MAX;
         Ok(Self {
             root_dir_path: root_dir_path.to_path_buf(),
             file_type,
             epoch: 0,
-            checkpoint_range,
-            data: vec![],
+            checkpoint_range: start_checkpoint_seq_num..u64::MAX,
+            builders: vec![],
+            row_count: 0,
         })
     }
 
@@ -60,72 +91,95 @@ impl ParquetWriter {
     }
 }
 
-macro_rules! convert_to_arrow_array {
-    ($column:ident, $target_vector:ident, $($variant:path => $types:ty),*) => {
-        match &$column[0] {
-            $(
-                $variant(_) => {
-                    let array = <$types>::from(
-                        $column
-                            .into_iter()
-                            .flat_map(|value| match value {
-                                $variant(value) => Some(value),
-                                _ => None,
-                            })
-                            .collect::<Vec<_>>(),
-                    );
-                    $target_vector.push(Arc::new(array) as ArrayRef);
-                }
-            )*
-        }
-    };
-}
-
 impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
     fn file_format(&self) -> Result<FileFormat> {
         Ok(FileFormat::PARQUET)
     }
 
     fn write(&mut self, rows: &[S]) -> Result<()> {
-        for row in rows {
+        if rows.is_empty() {
+            return Ok(());
+        }
+
+        self.row_count += rows.len();
+
+        //  Lazily sample the first row to infer the schema and decide which concrete builder to instantiate.
+        if self.builders.is_empty() {
             for col_idx in 0..S::schema().len() {
-                if col_idx == self.data.len() {
-                    self.data.push(vec![]);
-                }
-                self.data[col_idx].push(row.get_column(col_idx));
+                let value = rows[0].get_column(col_idx);
+                self.builders.push(match value {
+                    ParquetValue::U64(_) | ParquetValue::OptionU64(_) => {
+                        ColumnBuilder::U64(UInt64Builder::new())
+                    }
+                    ParquetValue::I64(_) => ColumnBuilder::I64(Int64Builder::new()),
+                    ParquetValue::Bool(_) => ColumnBuilder::Bool(BooleanBuilder::new()),
+                    ParquetValue::Str(_) | ParquetValue::OptionStr(_) => {
+                        ColumnBuilder::Str(StrBuilder::new())
+                    }
+                });
             }
         }
+
+        for row in rows {
+            for (col_idx, value) in (0..S::schema().len()).map(|i| (i, row.get_column(i))) {
+                match (&mut self.builders[col_idx], value) {
+                    (ColumnBuilder::U64(b), ParquetValue::U64(v)) => b.append_value(v),
+                    (ColumnBuilder::I64(b), ParquetValue::I64(v)) => b.append_value(v),
+                    (ColumnBuilder::Bool(b), ParquetValue::Bool(v)) => b.append_value(v),
+                    (ColumnBuilder::Str(b), ParquetValue::Str(v)) => b.append_value(&v),
+
+                    (ColumnBuilder::U64(b), ParquetValue::OptionU64(opt)) => match opt {
+                        Some(v) => b.append_value(v),
+                        None => b.append_null(),
+                    },
+                    (ColumnBuilder::Str(b), ParquetValue::OptionStr(opt)) => match opt {
+                        Some(v) => b.append_value(&v),
+                        None => b.append_null(),
+                    },
+
+                    _ => return Err(anyhow!("type mismatch on column {}", col_idx)),
+                }
+            }
+        }
+
         Ok(())
     }
 
     fn flush(&mut self, end_checkpoint_seq_num: u64) -> Result<bool> {
-        if self.data.is_empty() {
+        // Nothing to flush if builders aren't initialized or are empty
+        if self.builders.is_empty()
+            || self
+                .builders
+                .iter_mut()
+                .all(|b| b.as_any_builder().is_empty())
+        {
             return Ok(false);
         }
-        self.checkpoint_range.end = end_checkpoint_seq_num;
-        let mut batch_data = vec![];
-        for column in std::mem::take(&mut self.data) {
-            convert_to_arrow_array!(column, batch_data,
-                ParquetValue::U64 => UInt64Array, ParquetValue::Str => StringArray, ParquetValue::OptionU64 => UInt64Array, ParquetValue::OptionStr => StringArray, ParquetValue::Bool => BooleanArray, ParquetValue::I64 => Int64Array
-            );
-        }
-        let batch = RecordBatch::try_from_iter(S::schema().iter().zip(batch_data.into_iter()))?;
 
-        let properties = WriterProperties::builder()
+        self.checkpoint_range.end = end_checkpoint_seq_num;
+
+        // Turn builders into Arrow arrays.
+        let arrays: Vec<ArrayRef> = std::mem::take(&mut self.builders)
+            .into_iter()
+            .map(|b| b.finish())
+            .collect();
+
+        let batch = RecordBatch::try_from_iter(S::schema().iter().zip(arrays))?;
+
+        let propertiess = WriterProperties::builder()
             .set_compression(Compression::SNAPPY)
             .build();
-
-        let mut writer = ArrowWriter::try_new(self.file()?, batch.schema(), Some(properties))?;
+        let mut writer = ArrowWriter::try_new(self.file()?, batch.schema(), Some(propertiess))?;
         writer.write(&batch)?;
         writer.close()?;
         Ok(true)
     }
 
     fn reset(&mut self, epoch_num: EpochId, start_checkpoint_seq_num: u64) -> Result<()> {
-        self.checkpoint_range.start = start_checkpoint_seq_num;
-        self.checkpoint_range.end = u64::MAX;
         self.epoch = epoch_num;
-        self.data = vec![];
+        self.checkpoint_range = start_checkpoint_seq_num..u64::MAX;
+        self.builders.clear();
+        self.row_count = 0;
         Ok(())
     }
 
@@ -134,5 +188,9 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
         // and only flushes records after serializing and compressing them
         // when flush is invoked
         Ok(None)
+    }
+
+    fn rows(&self) -> Result<usize> {
+        Ok(self.row_count)
     }
 }
