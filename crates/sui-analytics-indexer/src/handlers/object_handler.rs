@@ -113,7 +113,7 @@ impl Worker for ObjectHandler {
 
                 // ───── 2. Append results in order ────────────────────────────────
                 // Wait for our turn.
-                let _ = start_sem.acquire().await?;
+                let _permit = start_sem.acquire().await?;
 
                 {
                     let mut shared_state = handler.state.lock().await;
