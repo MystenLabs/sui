@@ -138,7 +138,7 @@ fn command(
                     &function.signature.parameters[0..n - 1]
                 }
             };
-            let args = arguments(env, context, 0, arg_locs, parameter_tys)?;
+            let args = arguments(env, context, 0, arg_locs, parameter_tys.iter().cloned())?;
             let result = function.signature.return_.clone();
             (
                 T::Command::MoveCall(Box::new(T::MoveCall {
@@ -155,30 +155,53 @@ fn command(
                 let abilities = ty.abilities();
                 Ok(abilities.has_copy() && abilities.has_key())
             })?;
-            let address = argument(env, context, objects.len(), address_loc, &Type::Address)?;
+            let address = argument(env, context, objects.len(), address_loc, Type::Address)?;
             (T::Command::TransferObjects(objects, address), vec![])
         }
         L::Command::SplitCoins(lcoin, lamounts) => {
             let coin_loc = one_location(context, 0, lcoin)?;
             let amount_locs = locations(context, 1, lamounts)?;
-            let (coin_type, coin) = coin_mut_ref_argument(env, context, 0, coin_loc)?;
-            let amounts = arguments(env, context, 1, amount_locs, std::iter::repeat(&Type::U64))?;
+            let coin = coin_mut_ref_argument(env, context, 0, coin_loc)?;
+            let coin_type = match &coin.1 {
+                Type::Reference(true, ty) => (**ty).clone(),
+                _ => invariant_violation!("coin must be a mutable reference"),
+            };
+            let amounts = arguments(
+                env,
+                context,
+                1,
+                amount_locs,
+                std::iter::repeat_with(|| Type::U64),
+            )?;
             let result = vec![coin_type.clone(); amounts.len()];
-            (
-                T::Command::SplitCoins(coin_type.clone(), coin, amounts),
-                result,
-            )
+            (T::Command::SplitCoins(coin_type, coin, amounts), result)
         }
         L::Command::MergeCoins(ltarget, lcoins) => {
             let target_loc = one_location(context, 0, ltarget)?;
             let coin_locs = locations(context, 1, lcoins)?;
-            let (coin_type, target) = coin_mut_ref_argument(env, context, 0, target_loc)?;
-            let coins = arguments(env, context, 1, coin_locs, std::iter::repeat(&coin_type))?;
+            let target = coin_mut_ref_argument(env, context, 0, target_loc)?;
+            let coin_type = match &target.1 {
+                Type::Reference(true, ty) => (**ty).clone(),
+                _ => invariant_violation!("target must be a mutable reference"),
+            };
+            let coins = arguments(
+                env,
+                context,
+                1,
+                coin_locs,
+                std::iter::repeat_with(|| coin_type.clone()),
+            )?;
             (T::Command::MergeCoins(coin_type, target, coins), vec![])
         }
         L::Command::MakeMoveVec(Some(ty), lelems) => {
             let elem_locs = locations(context, 0, lelems)?;
-            let elems = arguments(env, context, 0, elem_locs, std::iter::repeat(&ty))?;
+            let elems = arguments(
+                env,
+                context,
+                0,
+                elem_locs,
+                std::iter::repeat_with(|| ty.clone()),
+            )?;
             (
                 T::Command::MakeMoveVec(ty.clone(), elems),
                 vec![env.vector_type(ty)?],
@@ -203,7 +226,13 @@ fn command(
                 ));
             };
             let elems_loc = locations(context, 1, lelems)?;
-            let elems = arguments(env, context, 1, elems_loc, std::iter::repeat(&first_ty))?;
+            let elems = arguments(
+                env,
+                context,
+                1,
+                elems_loc,
+                std::iter::repeat_with(|| first_ty.clone()),
+            )?;
             (
                 T::Command::MakeMoveVec(first_ty.clone(), elems),
                 vec![env.vector_type(first_ty)?],
@@ -213,7 +242,7 @@ fn command(
         L::Command::Upgrade(items, object_ids, object_id, la) => {
             let location = one_location(context, 0, la)?;
             let expected_ty = env.upgrade_ticket_type()?;
-            let a = argument(env, context, 0, location, &expected_ty)?;
+            let a = argument(env, context, 0, location, expected_ty)?;
             let res = env.upgrade_receipt_type()?;
             (
                 T::Command::Upgrade(items, object_ids, object_id, a),
@@ -305,7 +334,7 @@ fn arguments<'a>(
     context: &mut Context,
     start_idx: usize,
     locations: Vec<T::Location>,
-    expected_tys: impl IntoIterator<Item = &'a Type>,
+    expected_tys: impl IntoIterator<Item = Type>,
 ) -> Result<Vec<T::Argument>, ExecutionError> {
     locations
         .into_iter()
@@ -322,10 +351,11 @@ fn argument(
     context: &mut Context,
     command_arg_idx: usize,
     location: T::Location,
-    expected_ty: &Type,
+    expected_ty: Type,
 ) -> Result<T::Argument, ExecutionError> {
-    argument_(env, context, command_arg_idx, location, expected_ty)
-        .map_err(|e| e.into_execution_error(command_arg_idx))
+    let arg_ = argument_(env, context, command_arg_idx, location, &expected_ty)
+        .map_err(|e| e.into_execution_error(command_arg_idx))?;
+    Ok((arg_, expected_ty))
 }
 
 fn argument_(
@@ -334,7 +364,7 @@ fn argument_(
     command_arg_idx: usize,
     location: T::Location,
     expected_ty: &Type,
-) -> Result<T::Argument, EitherError> {
+) -> Result<T::Argument_, EitherError> {
     let command_and_arg_idx = (context.current_command, command_arg_idx as u16);
     let actual_ty = context.location_type(env, location)?;
     Ok(match (actual_ty, expected_ty) {
@@ -345,7 +375,7 @@ fn argument_(
             debug_assert!(!a_is_mut || *b_is_mut);
             debug_assert!(expected_ty.abilities().has_copy());
             check_type(command_and_arg_idx, LocationType::Fixed(*a), b)?;
-            T::Argument::Copy(location)
+            T::Argument_::Copy(location)
         }
         (LocationType::Fixed(Type::Reference(_, a)), b) => {
             check_type(command_and_arg_idx, LocationType::Fixed(*a), b)?;
@@ -353,7 +383,7 @@ fn argument_(
                 // TODO this should be a different error for missing copy
                 return Err(CommandArgumentError::TypeMismatch.into());
             }
-            T::Argument::Read(location)
+            T::Argument_::Read(location)
         }
 
         // Non reference location types
@@ -364,14 +394,14 @@ fn argument_(
                 actual_ty,
                 inner,
             )?;
-            T::Argument::Borrow(/* mut */ false, location)
+            T::Argument_::Borrow(/* mut */ false, location)
         }
         (actual_ty, _) => {
             check_type(command_and_arg_idx, actual_ty, expected_ty)?;
             if expected_ty.abilities().has_copy() {
-                T::Argument::Copy(location)
+                T::Argument_::Copy(location)
             } else {
-                T::Argument::Move(location)
+                T::Argument_::Move(location)
             }
         }
     })
@@ -449,8 +479,8 @@ fn constrained_argument_<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     location: T::Location,
     is_valid: &mut P,
 ) -> Result<T::Argument, EitherError> {
-    if constrained_type(env, context, location, is_valid)?.is_some() {
-        Ok(T::Argument::Move(location))
+    if let Some(ty) = constrained_type(env, context, location, is_valid)? {
+        Ok((T::Argument_::Move(location), ty))
     } else {
         Err(CommandArgumentError::TypeMismatch.into())
     }
@@ -473,7 +503,7 @@ fn coin_mut_ref_argument(
     context: &mut Context,
     command_arg_idx: usize,
     location: T::Location,
-) -> Result<(Type, T::Argument), ExecutionError> {
+) -> Result<T::Argument, ExecutionError> {
     coin_mut_ref_argument_(env, context, location)
         .map_err(|e| e.into_execution_error(command_arg_idx))
 }
@@ -482,17 +512,20 @@ fn coin_mut_ref_argument_(
     env: &Env,
     context: &mut Context,
     location: T::Location,
-) -> Result<(Type, T::Argument), EitherError> {
+) -> Result<T::Argument, EitherError> {
     let actual_ty = context.location_type(env, location)?;
 
     Ok(match &actual_ty {
         LocationType::Fixed(Type::Reference(is_mut, ty)) if *is_mut => {
-            let ty = check_coin_type(ty)?;
-            (ty, T::Argument::Copy(location))
+            check_coin_type(ty)?;
+            (
+                T::Argument_::Copy(location),
+                Type::Reference(*is_mut, ty.clone()),
+            )
         }
         LocationType::Fixed(ty) => {
-            let ty = check_coin_type(ty)?;
-            (ty, T::Argument::Borrow(/* mut */ true, location))
+            check_coin_type(ty)?;
+            (T::Argument_::Borrow(/* mut */ true, location), ty.clone())
         }
         LocationType::Bytes(_, _) => {
             // TODO we do not currently bytes in any mode as that would require additional type
@@ -502,14 +535,14 @@ fn coin_mut_ref_argument_(
     })
 }
 
-fn check_coin_type(ty: &Type) -> Result<Type, EitherError> {
+fn check_coin_type(ty: &Type) -> Result<(), EitherError> {
     let Type::Datatype(dt) = ty else {
         return Err(CommandArgumentError::TypeMismatch.into());
     };
     let resolved = dt.qualified_ident();
     let is_coin = resolved == RESOLVED_COIN_STRUCT;
     if is_coin {
-        Ok(ty.clone())
+        Ok(())
     } else {
         Err(CommandArgumentError::TypeMismatch.into())
     }

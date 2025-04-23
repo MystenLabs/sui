@@ -27,7 +27,6 @@ pub enum InputType {
     ),
     Fixed(Type),
 }
-pub type ArgumentTypes = Vec<Type>;
 pub type ResultType = Vec<Type>;
 
 pub enum Command {
@@ -56,8 +55,10 @@ pub enum Location {
     Result(u16, u16),
 }
 
+pub type Argument = (Argument_, Type);
+
 #[derive(Copy, Clone)]
-pub enum Argument {
+pub enum Argument_ {
     Move(Location),
     Copy(Location),
     Borrow(/* mut */ bool, Location),
