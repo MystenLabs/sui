@@ -9,7 +9,7 @@ use crate::static_programmable_transactions::{
 };
 use move_regex_borrow_graph::references::Ref;
 use sui_types::{
-    error::{command_argument_error, ExecutionError},
+    error::{command_argument_error, ExecutionError, ExecutionErrorKind},
     execution_status::CommandArgumentError,
 };
 
@@ -189,35 +189,37 @@ pub fn verify(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
     let mut context = Context::new(inputs)?;
     for (i, (c, _t)) in commands.iter().enumerate() {
         let result = command(&mut context, c).map_err(|e| e.with_command_index(i))?;
-        debug_assert_eq!(result.len(), _t.len());
+        assert_invariant!(result.len() == _t.len(), "result length mismatch");
         context.results.push(result.into_iter().map(Some).collect());
     }
 
-    // "expensive" invariants to run only in debug mode
-    #[cfg(debug_assertions)]
-    {
-        let Context {
-            gas_coin,
-            inputs,
-            results,
-            ..
-        } = &mut context;
-        let gas_coin = gas_coin.take();
-        let inputs = std::mem::take(inputs);
-        let results = std::mem::take(results);
-        consume_value_opt(&mut context, gas_coin).unwrap();
-        for vopt in inputs {
-            consume_value_opt(&mut context, vopt).unwrap();
-        }
-        for vopt in results {
-            for v in vopt {
-                consume_value_opt(&mut context, v).unwrap();
-            }
-        }
-        assert!(context.borrowed_by(context.local_root).unwrap().is_empty());
-        context.graph.release(context.local_root).unwrap();
-        assert_eq!(context.graph.abstract_size(), 0);
+    let Context {
+        gas_coin,
+        inputs,
+        results,
+        ..
+    } = &mut context;
+    let gas_coin = gas_coin.take();
+    let inputs = std::mem::take(inputs);
+    let results = std::mem::take(results);
+    consume_value_opt(&mut context, gas_coin)?;
+    for vopt in inputs {
+        consume_value_opt(&mut context, vopt)?;
     }
+    assert_invariant!(commands.len() == results.len(), "command length mismatch");
+    for (i, (result, (_, tys))) in results.into_iter().zip(commands).enumerate() {
+        assert_invariant!(result.len() == tys.len(), "result length mismatch");
+        for (j, (vopt, ty)) in result.into_iter().zip(tys).enumerate() {
+            drop_value_opt(&mut context, (i, j), vopt, ty).unwrap();
+        }
+    }
+
+    assert_invariant!(
+        context.borrowed_by(context.local_root)?.is_empty(),
+        "reference to local root not released"
+    );
+    context.release(context.local_root)?;
+    assert_invariant!(context.graph.abstract_size() == 0, "reference not released");
 
     Ok(())
 }
@@ -281,26 +283,50 @@ fn consume_values(context: &mut Context, values: Vec<Value>) -> Result<(), Execu
     Ok(())
 }
 
+fn consume_value_opt(context: &mut Context, value: Option<Value>) -> Result<(), ExecutionError> {
+    match value {
+        Some(v) => consume_value(context, v),
+        None => Ok(()),
+    }
+}
+
 fn consume_value(context: &mut Context, value: Value) -> Result<(), ExecutionError> {
     match value {
         Value::NonRef => Ok(()),
         Value::Ref(r) => {
-            debug_assert!(
-                false,
-                "consume value should not be used for reference values"
-            );
             context.release(r)?;
             Ok(())
         }
     }
 }
 
-#[allow(unused)]
-fn consume_value_opt(context: &mut Context, value: Option<Value>) -> Result<(), ExecutionError> {
+fn drop_value_opt(
+    context: &mut Context,
+    idx: (usize, usize),
+    value: Option<Value>,
+    ty: &Type,
+) -> Result<(), ExecutionError> {
     match value {
-        Some(v) => consume_value(context, v),
+        Some(v) => drop_value(context, idx, v, ty),
         None => Ok(()),
     }
+}
+
+fn drop_value(
+    context: &mut Context,
+    (i, j): (usize, usize),
+    value: Value,
+    ty: &Type,
+) -> Result<(), ExecutionError> {
+    if !ty.abilities().has_drop() {
+        return Err(ExecutionErrorKind::UnusedValueWithoutDrop {
+            result_idx: i as u16,
+            secondary_idx: j as u16,
+        }
+        .into());
+    }
+    consume_value(context, value)?;
+    Ok(())
 }
 
 fn arguments(
