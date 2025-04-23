@@ -9,7 +9,7 @@ error[E02015]: invalid attribute
   ┌─ tests/move_check/unit_test/other_failures_invalid_assignment.move:9:24
   │
 9 │     #[expected_failure(vector_error=0, location=std::vector)]
-  │                        ^^^^^^^^^^^^ Attribute 'vector_error' does not support assignment. Expected a name, e.g. 'vector_error'
+  │                        ^^^^^^^^^^^^ Attribute 'vector_error' does not support assignment. Expected 'vector_error' with no arguments
 
 error[E10003]: invalid attribute value
    ┌─ tests/move_check/unit_test/other_failures_invalid_assignment.move:13:51
@@ -23,13 +23,13 @@ error[E02015]: invalid attribute
    ┌─ tests/move_check/unit_test/other_failures_invalid_assignment.move:17:24
    │
 17 │     #[expected_failure(arithmetic_error=@0, location=n)]
-   │                        ^^^^^^^^^^^^^^^^ Attribute 'arithmetic_error' does not support assignment. Expected a name, e.g. 'arithmetic_error'
+   │                        ^^^^^^^^^^^^^^^^ Attribute 'arithmetic_error' does not support assignment. Expected 'arithmetic_error' with no arguments
 
 error[E02015]: invalid attribute
    ┌─ tests/move_check/unit_test/other_failures_invalid_assignment.move:21:24
    │
 21 │     #[expected_failure(out_of_gas=bool, location=Self)]
-   │                        ^^^^^^^^^^ Attribute 'out_of_gas' does not support assignment. Expected a name, e.g. 'out_of_gas'
+   │                        ^^^^^^^^^^ Attribute 'out_of_gas' does not support assignment. Expected 'out_of_gas' with no arguments
 
 error[E10003]: invalid attribute value
    ┌─ tests/move_check/unit_test/other_failures_invalid_assignment.move:25:37

@@ -567,6 +567,7 @@ fn parse_expected_failure_arguments(
     // error later;
     let mut any_failure_kind = false;
     let mut has_errors = false;
+    let mut invalid_subfield = false;
 
     macro_rules! check_failure_kind_unset {
         ($arg_loc:expr) => {
@@ -602,10 +603,12 @@ fn parse_expected_failure_arguments(
                 if let Some((prev_loc, _)) = minor_status {
                     context.add_diag(duplicate_field_error(attr.value.as_name(), &prev_loc));
                     has_errors = true;
+                    invalid_subfield = true;
                     continue;
                 };
                 let Some((_name, value)) = expect_assigned_attr(context, attr) else {
                     has_errors = true;
+                    invalid_subfield = true;
                     continue;
                 };
                 minor_status = Some((arg_loc, value));
@@ -614,21 +617,30 @@ fn parse_expected_failure_arguments(
                 if let Some((prev_loc, _)) = err_location {
                     context.add_diag(duplicate_field_error(attr.value.as_name(), &prev_loc));
                     has_errors = true;
+                    invalid_subfield = true;
                     continue;
                 }
                 let Some((name, value)) = expect_assigned_attr(context, attr) else {
                     has_errors = true;
+                    invalid_subfield = true;
                     continue;
                 };
                 let AttributeValue_::ModuleAccess(access) = value.value else {
-                    context.add_diag(invalid_field_error(&name, "a module name"));
+                    context.add_diag(invalid_field_error(&name, "a module identifier"));
                     has_errors = true;
+                    invalid_subfield = true;
                     continue;
                 };
                 err_location = Some((arg_loc, access));
             }
             _ => unreachable!(),
         }
+    }
+
+    // If we had an invalid subfield, skip this attribute altogether -- we do not want to report
+    // subsequent errors.
+    if invalid_subfield {
+        return (None, None, None)
     }
 
     if !any_failure_kind && !has_errors {
@@ -660,7 +672,7 @@ fn parse_expected_failure_kind(
                 Declarations::InvalidAttribute,
                 (
                     name.loc,
-                    &make_attribute_format_error(&attr.value, &format!("a name, e.g. '{name}'"))
+                    &make_attribute_format_error(&attr.value, &format!("'{name}' with no arguments"))
                 )
             ));
         }
@@ -676,7 +688,7 @@ fn parse_expected_failure_kind(
                     name.loc,
                     &make_attribute_format_error(
                         &attr.value,
-                        &format!("an assignment, e.g. '{name} = <value>'")
+                        &format!("'{name} = <value>'")
                     )
                 )
             ));
@@ -844,7 +856,7 @@ where
 fn expected_assignment_error(attr: &ParsedAttribute, field: &Name) -> Diagnostic {
     let msg = make_attribute_format_error(
         &attr.value,
-        &format!("an assignment, e.g. '{} = <value>'", field),
+        &format!("'{} = <value>'", field),
     );
     diag!(Declarations::InvalidAttribute, (attr.loc, msg))
 }
