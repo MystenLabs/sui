@@ -41,6 +41,7 @@ async fn main() -> Result<()> {
     let remote_store_options = config.remote_store_options.clone();
     let batch_size = config.batch_size;
     let data_limit = config.data_limit;
+    let timeout_secs = config.remote_store_timeout_secs;
 
     let processors = config.create_checkpoint_processors(metrics).await?;
 
@@ -69,6 +70,7 @@ async fn main() -> Result<()> {
     let reader_options = ReaderOptions {
         batch_size,
         data_limit,
+        timeout_secs,
         ..Default::default()
     };
 
