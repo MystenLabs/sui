@@ -3,10 +3,12 @@
 
 use anyhow::Result;
 use move_core_types::annotated_value::MoveValue;
+use std::sync::Arc;
 use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 
 use sui_data_ingestion_core::Worker;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Semaphore};
+use tokio::task::JoinHandle;
 
 use crate::handlers::AnalyticsHandler;
 use crate::package_store::{LocalDBPackageStore, PackageCache};
@@ -19,8 +21,9 @@ use sui_types::effects::TransactionEvents;
 use sui_types::event::Event;
 use sui_types::full_checkpoint_content::CheckpointData;
 
+#[derive(Clone)]
 pub struct EventHandler {
-    state: Mutex<State>,
+    state: Arc<Mutex<State>>,
 }
 
 struct State {
@@ -39,29 +42,100 @@ impl Worker for EventHandler {
             transactions: checkpoint_transactions,
             ..
         } = checkpoint_data;
-        let mut state = self.state.lock().await;
-        for checkpoint_transaction in checkpoint_transactions {
-            for object in checkpoint_transaction.output_objects.iter() {
-                state.package_store.update(object)?;
-            }
-            if let Some(events) = &checkpoint_transaction.events {
-                self.process_events(
-                    checkpoint_summary.epoch,
-                    checkpoint_summary.sequence_number,
-                    checkpoint_transaction.transaction.digest(),
-                    checkpoint_summary.timestamp_ms,
-                    events,
-                    &mut state,
-                )
-                .await?;
-            }
-            if checkpoint_summary.end_of_epoch_data.is_some() {
-                state
-                    .resolver
-                    .package_store()
-                    .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
-            }
+
+        // ──────────────────────────────────────────────────────────────────────────
+        // Build a Semaphore chain so we can push results to `state.events` in the
+        // same order as `checkpoint_transactions`, while allowing *everything*
+        // else to run in parallel.
+        // ──────────────────────────────────────────────────────────────────────────
+        let txn_count = checkpoint_transactions.len();
+        let semaphores: Vec<_> = (0..txn_count)
+            .map(|i| {
+                if i == 0 {
+                    Arc::new(Semaphore::new(1)) // first txn proceeds immediately
+                } else {
+                    Arc::new(Semaphore::new(0))
+                }
+            })
+            .collect();
+
+        let mut handles: Vec<JoinHandle<Result<()>>> = Vec::with_capacity(txn_count);
+
+        for (idx, checkpoint_transaction) in checkpoint_transactions.iter().cloned().enumerate() {
+            let handler = self.clone();
+            let start_sem = semaphores[idx].clone();
+            let next_sem = semaphores.get(idx + 1).cloned();
+
+            // Snapshot any data we need from the summary (Copy types, cheap).
+            let epoch = checkpoint_summary.epoch;
+            let checkpoint_seq = checkpoint_summary.sequence_number;
+            let timestamp_ms = checkpoint_summary.timestamp_ms;
+            let end_of_epoch = checkpoint_summary.end_of_epoch_data.is_some();
+
+            let handle = tokio::spawn(async move {
+                // ───── 1. Heavy work off‑mutex ───────────────────────────────────
+                // Clone the package store so we can mutate it freely in parallel.
+                let package_store = {
+                    let guard = handler.state.lock().await;
+                    guard.package_store.clone()
+                };
+
+                let mut local_state = State {
+                    events: Vec::new(),
+                    package_store: package_store.clone(),
+                    resolver: Resolver::new(PackageCache::new(package_store)),
+                };
+
+                // Update local package store
+                for object in checkpoint_transaction.output_objects.iter() {
+                    local_state.package_store.update(object)?;
+                }
+
+                if let Some(events) = &checkpoint_transaction.events {
+                    handler
+                        .process_events(
+                            epoch,
+                            checkpoint_seq,
+                            checkpoint_transaction.transaction.digest(),
+                            timestamp_ms,
+                            events,
+                            &mut local_state,
+                        )
+                        .await?;
+                }
+
+                // ───── 2. Append results in order ────────────────────────────────
+                // Wait for our turn.
+                let _permit = start_sem.acquire().await?;
+
+                {
+                    let mut shared_state = handler.state.lock().await;
+                    shared_state.events.extend(local_state.events.into_iter());
+
+                    if end_of_epoch {
+                        shared_state
+                            .resolver
+                            .package_store()
+                            .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
+                    }
+                }
+
+                // Signal the next task.
+                if let Some(next) = next_sem {
+                    next.add_permits(1);
+                }
+
+                Ok(())
+            });
+
+            handles.push(handle);
         }
+
+        // Propagate any error.
+        for h in handles {
+            h.await??;
+        }
+
         Ok(())
     }
 }
@@ -90,7 +164,7 @@ impl EventHandler {
             resolver: Resolver::new(PackageCache::new(package_store)),
         };
         Self {
-            state: Mutex::new(state),
+            state: Arc::new(Mutex::new(state)),
         }
     }
     async fn process_events(

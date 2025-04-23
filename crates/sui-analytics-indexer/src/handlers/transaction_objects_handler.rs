@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
+use std::sync::Arc;
 use sui_data_ingestion_core::Worker;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Semaphore};
+use tokio::task::JoinHandle;
 
 use sui_types::base_types::ObjectID;
 use sui_types::effects::TransactionEffects;
@@ -14,8 +16,9 @@ use crate::handlers::{AnalyticsHandler, InputObjectTracker, ObjectStatusTracker}
 use crate::tables::TransactionObjectEntry;
 use crate::FileType;
 
+#[derive(Clone)]
 pub struct TransactionObjectsHandler {
-    state: Mutex<State>,
+    state: Arc<Mutex<State>>,
 }
 
 struct State {
@@ -32,17 +35,77 @@ impl Worker for TransactionObjectsHandler {
             transactions: checkpoint_transactions,
             ..
         } = checkpoint_data;
-        let mut state = self.state.lock().await;
-        for checkpoint_transaction in checkpoint_transactions {
-            self.process_transaction(
-                checkpoint_summary.epoch,
-                checkpoint_summary.sequence_number,
-                checkpoint_summary.timestamp_ms,
-                checkpoint_transaction,
-                &checkpoint_transaction.effects,
-                &mut state,
-            );
+
+        // ──────────────────────────────────────────────────────────────────────────
+        // Build a Semaphore chain so we can push results to `state.transaction_objects` in the
+        // same order as `checkpoint_transactions`, while allowing *everything*
+        // else to run in parallel.
+        // ──────────────────────────────────────────────────────────────────────────
+        let txn_count = checkpoint_transactions.len();
+        let semaphores: Vec<_> = (0..txn_count)
+            .map(|i| {
+                if i == 0 {
+                    Arc::new(Semaphore::new(1)) // first txn proceeds immediately
+                } else {
+                    Arc::new(Semaphore::new(0))
+                }
+            })
+            .collect();
+
+        let mut handles: Vec<JoinHandle<Result<()>>> = Vec::with_capacity(txn_count);
+
+        for (idx, checkpoint_transaction) in checkpoint_transactions.iter().cloned().enumerate() {
+            let handler = self.clone();
+            let start_sem = semaphores[idx].clone();
+            let next_sem = semaphores.get(idx + 1).cloned();
+
+            // Snapshot any data we need from the summary (Copy types, cheap).
+            let epoch = checkpoint_summary.epoch;
+            let checkpoint_seq = checkpoint_summary.sequence_number;
+            let timestamp_ms = checkpoint_summary.timestamp_ms;
+
+            let handle = tokio::spawn(async move {
+                // ───── 1. Heavy work off‑mutex ───────────────────────────────────
+                let mut local_state = State {
+                    transaction_objects: Vec::new(),
+                };
+
+                handler.process_transaction(
+                    epoch,
+                    checkpoint_seq,
+                    timestamp_ms,
+                    &checkpoint_transaction,
+                    &checkpoint_transaction.effects,
+                    &mut local_state,
+                );
+
+                // ───── 2. Append results in order ────────────────────────────────
+                // Wait for our turn.
+                let _permit = start_sem.acquire().await?;
+
+                {
+                    let mut shared_state = handler.state.lock().await;
+                    shared_state
+                        .transaction_objects
+                        .extend(local_state.transaction_objects.into_iter());
+                }
+
+                // Signal the next task.
+                if let Some(next) = next_sem {
+                    next.add_permits(1);
+                }
+
+                Ok(())
+            });
+
+            handles.push(handle);
         }
+
+        // Propagate any error.
+        for h in handles {
+            h.await??;
+        }
+
         Ok(())
     }
 }
@@ -66,9 +129,9 @@ impl AnalyticsHandler<TransactionObjectEntry> for TransactionObjectsHandler {
 impl TransactionObjectsHandler {
     pub fn new() -> Self {
         TransactionObjectsHandler {
-            state: Mutex::new(State {
+            state: Arc::new(Mutex::new(State {
                 transaction_objects: vec![],
-            }),
+            })),
         }
     }
     fn process_transaction(

@@ -3,12 +3,14 @@
 
 use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use anyhow::Result;
 use sui_data_ingestion_core::Worker;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointContents;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Semaphore};
+use tokio::task::JoinHandle;
 use tracing::error;
 
 use sui_types::effects::TransactionEffects;
@@ -20,8 +22,9 @@ use crate::handlers::AnalyticsHandler;
 use crate::tables::TransactionEntry;
 use crate::FileType;
 
+#[derive(Clone)]
 pub struct TransactionHandler {
-    pub(crate) state: Mutex<State>,
+    pub(crate) state: Arc<Mutex<State>>,
 }
 
 pub(crate) struct State {
@@ -40,18 +43,79 @@ impl Worker for TransactionHandler {
             ..
         } = checkpoint_data;
         let transaction_positions = compute_transaction_positions(checkpoint_contents);
-        let mut state = self.state.lock().await;
-        for checkpoint_transaction in checkpoint_transactions {
-            self.process_transaction(
-                checkpoint_summary.epoch,
-                checkpoint_summary.sequence_number,
-                checkpoint_summary.timestamp_ms,
-                checkpoint_transaction,
-                &checkpoint_transaction.effects,
-                &transaction_positions,
-                &mut state,
-            )?;
+
+        // ──────────────────────────────────────────────────────────────────────────
+        // Build a Semaphore chain so we can push results to `state.transactions` in the
+        // same order as `checkpoint_transactions`, while allowing *everything*
+        // else to run in parallel.
+        // ──────────────────────────────────────────────────────────────────────────
+        let txn_count = checkpoint_transactions.len();
+        let semaphores: Vec<_> = (0..txn_count)
+            .map(|i| {
+                if i == 0 {
+                    Arc::new(Semaphore::new(1)) // first txn proceeds immediately
+                } else {
+                    Arc::new(Semaphore::new(0))
+                }
+            })
+            .collect();
+
+        let mut handles: Vec<JoinHandle<Result<()>>> = Vec::with_capacity(txn_count);
+
+        for (idx, checkpoint_transaction) in checkpoint_transactions.iter().cloned().enumerate() {
+            let handler = self.clone();
+            let start_sem = semaphores[idx].clone();
+            let next_sem = semaphores.get(idx + 1).cloned();
+            let positions = transaction_positions.clone();
+
+            // Snapshot any data we need from the summary (Copy types, cheap).
+            let epoch = checkpoint_summary.epoch;
+            let checkpoint_seq = checkpoint_summary.sequence_number;
+            let timestamp_ms = checkpoint_summary.timestamp_ms;
+
+            let handle = tokio::spawn(async move {
+                // ───── 1. Heavy work off‑mutex ───────────────────────────────────
+                let mut local_state = State {
+                    transactions: Vec::new(),
+                };
+
+                handler.process_transaction(
+                    epoch,
+                    checkpoint_seq,
+                    timestamp_ms,
+                    &checkpoint_transaction,
+                    &checkpoint_transaction.effects,
+                    &positions,
+                    &mut local_state,
+                )?;
+
+                // ───── 2. Append results in order ────────────────────────────────
+                // Wait for our turn.
+                let _permit = start_sem.acquire().await?;
+
+                {
+                    let mut shared_state = handler.state.lock().await;
+                    shared_state
+                        .transactions
+                        .extend(local_state.transactions.into_iter());
+                }
+
+                // Signal the next task.
+                if let Some(next) = next_sem {
+                    next.add_permits(1);
+                }
+
+                Ok(())
+            });
+
+            handles.push(handle);
         }
+
+        // Propagate any error.
+        for h in handles {
+            h.await??;
+        }
+
         Ok(())
     }
 }
@@ -74,9 +138,9 @@ impl AnalyticsHandler<TransactionEntry> for TransactionHandler {
 
 impl TransactionHandler {
     pub fn new() -> Self {
-        let state = Mutex::new(State {
+        let state = Arc::new(Mutex::new(State {
             transactions: vec![],
-        });
+        }));
         TransactionHandler { state }
     }
     fn process_transaction(
