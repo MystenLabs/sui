@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use anyhow::Result;
 use move_core_types::annotated_value::MoveValue;
 use sui_types::SYSTEM_PACKAGE_ADDRESSES;
@@ -9,11 +11,10 @@ use sui_data_ingestion_core::Worker;
 use tokio::sync::Mutex;
 
 use crate::handlers::AnalyticsHandler;
-use crate::package_store::{LocalDBPackageStore, PackageCache};
+use crate::package_store::PackageCache;
 use crate::tables::EventEntry;
 use crate::FileType;
 use sui_json_rpc_types::type_and_fields_from_move_event_data;
-use sui_package_resolver::Resolver;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEvents;
 use sui_types::event::Event;
@@ -21,12 +22,11 @@ use sui_types::full_checkpoint_content::CheckpointData;
 
 pub struct EventHandler {
     state: Mutex<State>,
+    package_cache: Arc<PackageCache>,
 }
 
 struct State {
     events: Vec<EventEntry>,
-    package_store: LocalDBPackageStore,
-    resolver: Resolver<PackageCache>,
 }
 
 #[async_trait::async_trait]
@@ -42,7 +42,7 @@ impl Worker for EventHandler {
         let mut state = self.state.lock().await;
         for checkpoint_transaction in checkpoint_transactions {
             for object in checkpoint_transaction.output_objects.iter() {
-                state.package_store.update(object)?;
+                self.package_cache.update(object)?;
             }
             if let Some(events) = &checkpoint_transaction.events {
                 self.process_events(
@@ -56,7 +56,7 @@ impl Worker for EventHandler {
                 .await?;
             }
             if checkpoint_summary.end_of_epoch_data.is_some() {
-                state
+                self.package_cache
                     .resolver
                     .package_store()
                     .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
@@ -83,14 +83,11 @@ impl AnalyticsHandler<EventEntry> for EventHandler {
 }
 
 impl EventHandler {
-    pub fn new(package_store: LocalDBPackageStore) -> Self {
-        let state = State {
-            events: vec![],
-            package_store: package_store.clone(),
-            resolver: Resolver::new(PackageCache::new(package_store)),
-        };
+    pub fn new(package_cache: Arc<PackageCache>) -> Self {
+        let state = State { events: vec![] };
         Self {
             state: Mutex::new(state),
+            package_cache,
         }
     }
     async fn process_events(
@@ -110,7 +107,8 @@ impl EventHandler {
                 type_,
                 contents,
             } = event;
-            let layout = state
+            let layout = self
+                .package_cache
                 .resolver
                 .type_layout(move_core_types::language_storage::TypeTag::Struct(
                     Box::new(type_.clone()),
