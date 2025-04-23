@@ -140,7 +140,8 @@ pub struct JobConfig {
     /// Remote store URL.
     #[serde(default = "default_remote_store_url")]
     pub remote_store_url: String,
-    /// Remote object store options
+    /// These are key-value config pairs that are defined in the object_store crate
+    /// https://docs.rs/object_store/latest/object_store/gcp/enum.GoogleConfigKey.html
     #[serde(default)]
     pub remote_store_options: Vec<(String, String)>,
     /// Remote store timeout
