@@ -4,7 +4,7 @@
 
 //! Types and methods for external dependencies (of the form `{ r.<res> = data }`).
 
-use std::{collections::BTreeMap, fmt::Debug, path::Path};
+use std::{collections::BTreeMap, fmt::Debug, iter::once, path::Path};
 
 use anyhow::bail;
 use futures::future::try_join_all;
@@ -23,7 +23,7 @@ use crate::{
     package::{EnvironmentName, PackageName},
 };
 
-use super::external_protocol::{Query, QueryID, QueryResult, Request};
+use super::external_protocol::{Query, QueryID, QueryResult, Request, Response};
 
 use super::{pin, DependencySet, ManifestDependencyInfo, PinnedDependencyInfo};
 
@@ -113,24 +113,46 @@ async fn resolve_single<F: MoveFlavor>(
     dep_data: DependencySet<toml::Value>,
     envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
 ) -> PackageResult<DependencySet<ManifestDependencyInfo<F>>> {
-    // TODO: method is too long
+    let request = create_request::<F>(&dep_data, envs);
+
+    // invoke the resolver
+    let response = request.execute(&resolver).await?;
+
+    // build the result
+    process_response(&resolver, &dep_data, envs, response)
+
+    // TODO: regression tests for situation where the keys returned by the resolver are different!
+}
+
+/// Generate a unique identifier corresponding to [env] and [pkg]
+fn query_id(env: &Option<EnvironmentName>, pkg: &PackageName) -> String {
+    format!("({env:?}, {pkg})")
+}
+
+/// Generate a request for all environments in [envs] and all dependencies in [deps]. The request
+/// contains one query for each `(env, dep)` pair where `env` is a key in [envs] (or [None]), and
+/// `dep` is a dependency in [deps]. The key for the query is formed by [query_id].
+fn create_request<F: MoveFlavor>(
+    deps: &DependencySet<toml::Value>,
+    envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
+) -> Request {
     let mut request = Request::new(F::name());
 
     // request default resolution
-    let mut default_reqs: BTreeMap<QueryID, Query> = dep_data
+    let mut default_reqs: BTreeMap<QueryID, Query> = deps
         .default_deps()
         .iter()
-        .map(|(pkg_name, data)| query::<F>(None, pkg_name.clone(), data.clone()))
+        .map(|(pkg_name, data)| create_query::<F>(None, pkg_name.clone(), data.clone()))
         .collect();
     request.queries.append(&mut default_reqs);
 
     // request env-specific resolutions
     for (env_name, env_id) in envs {
-        let mut env_reqs = dep_data
+        let mut env_reqs = deps
             .deps_for_env(env_name)
             .into_iter()
             .map(|(pkg_name, data)| {
-                query::<F>(
+                create_query::<F>(
                     Some((env_name.clone(), env_id.clone())),
                     pkg_name,
                     data.clone(),
@@ -140,62 +162,11 @@ async fn resolve_single<F: MoveFlavor>(
         request.queries.append(&mut env_reqs);
     }
 
-    // invoke the resolver
-    let mut response = request.execute(&resolver).await?;
-
-    // build the result
-    let resolved: Result<DependencySet<ManifestDependencyInfo<F>>, _> = dep_data
-        .into_iter()
-        .map(|(env, pkg_name, _)| {
-            let query_id = query_id(&env, &pkg_name);
-            let result = response
-                .responses
-                .remove(&query_id)
-                .expect("Request::execute returns the same keys as its input");
-            let resolved = match result {
-                QueryResult::Error { error } => Err(ResolverError::resolver_failed(
-                    resolver.clone(),
-                    pkg_name,
-                    env,
-                    error,
-                )),
-                QueryResult::Success { warnings, resolved } => {
-                    // TODO: use diagnostics here
-                    for warning in warnings {
-                        warn!("{resolver}: {warning}");
-                    }
-
-                    if let Ok(result) = ManifestDependencyInfo::<F>::deserialize(resolved) {
-                        Ok((env, pkg_name, result))
-                    } else {
-                        Err(ResolverError::bad_resolver(
-                            &resolver,
-                            "incorrectly formatted dependency",
-                        ))
-                    }
-                }
-            };
-
-            if let Ok((_, pkg_name, ManifestDependencyInfo::External { .. })) = resolved {
-                return Err(ResolverError::bad_resolver(
-                    &resolver,
-                    "resolvers must return resolved dependencies",
-                ));
-            }
-            resolved
-        })
-        .collect();
-
-    Ok(resolved?)
-}
-
-/// Generate a unique identifier corresponding to [env] and [pkg]
-fn query_id(env: &Option<EnvironmentName>, pkg: &PackageName) -> String {
-    format!("({env:?}, {pkg})")
+    request
 }
 
 /// Output a query for [data] in environment [env]; [pkg] is used to generate the query name
-fn query<F: MoveFlavor>(
+fn create_query<F: MoveFlavor>(
     env: Option<(EnvironmentName, F::EnvironmentID)>,
     pkg: PackageName,
     data: toml::Value,
@@ -209,4 +180,62 @@ fn query<F: MoveFlavor>(
             environment_id: env_id.map(|it| it.to_string()),
         },
     )
+}
+
+/// Generate a dependency set `r` containing all of the dependencies from [response]. It should be
+/// the case that for each environment `e` in [envs] (or [None]) and each dependency `d` in [deps]
+/// that `e.deps_for_env(e)` returns the reponse from [response] for the key `(e, d)` (as a
+/// precondition, [response] should contain all of these keys)
+fn process_response<F: MoveFlavor>(
+    resolver: &ResolverName,
+    deps: &DependencySet<toml::Value>,
+    envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
+    response: Response,
+) -> PackageResult<DependencySet<ManifestDependencyInfo<F>>> {
+    let mut result: DependencySet<ManifestDependencyInfo<F>> = DependencySet::new();
+
+    for env in once(None).chain(envs.iter().map(|(env_name, _)| Some(env_name))) {
+        for (pkg_name, _) in deps.deps_for(env) {
+            result.insert(
+                env.cloned(),
+                pkg_name.clone(),
+                extract_query_result(resolver, &response, env.cloned(), pkg_name.clone())?,
+            );
+        }
+    }
+
+    Ok(result)
+}
+
+/// Extract the query result corresponding to ([env], [pkg_name]) from [response] and decode it as a
+/// [ManifestDependencyInfo]. [resolver] is used for error handling and logging.
+fn extract_query_result<F: MoveFlavor>(
+    resolver: &ResolverName,
+    response: &Response,
+    env: Option<EnvironmentName>,
+    pkg_name: PackageName,
+) -> Result<ManifestDependencyInfo<F>, ResolverError> {
+    let result = response
+        .responses
+        .get(&query_id(&None, &pkg_name))
+        .expect("response has all keys");
+
+    match result {
+        QueryResult::Error { error } => Err(ResolverError::resolver_failed(
+            resolver.clone(),
+            pkg_name,
+            env,
+            error.clone(),
+        )),
+        QueryResult::Success { warnings, resolved } => {
+            // TODO: use diagnostics here
+            for warning in warnings {
+                warn!("{resolver}: {warning}");
+            }
+
+            ManifestDependencyInfo::<F>::deserialize(resolved.clone()).map_err(|_| {
+                ResolverError::bad_resolver(resolver, "incorrectly formatted dependency")
+            })
+        }
+    }
 }
