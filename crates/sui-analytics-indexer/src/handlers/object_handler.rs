@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use anyhow::Result;
 use sui_data_ingestion_core::Worker;
 use sui_types::{TypeTag, SYSTEM_PACKAGE_ADDRESSES};
 use tokio::sync::Mutex;
 
 use sui_json_rpc_types::SuiMoveStruct;
-use sui_package_resolver::Resolver;
 use sui_types::base_types::ObjectID;
 use sui_types::effects::TransactionEffects;
 use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
@@ -19,7 +20,7 @@ use crate::handlers::{
 };
 use crate::AnalyticsMetrics;
 
-use crate::package_store::{LocalDBPackageStore, PackageCache};
+use crate::package_store::PackageCache;
 use crate::tables::{ObjectEntry, ObjectStatus};
 use crate::FileType;
 
@@ -27,12 +28,11 @@ pub struct ObjectHandler {
     state: Mutex<State>,
     package_filter: Option<ObjectID>,
     metrics: AnalyticsMetrics,
+    package_cache: Arc<PackageCache>,
 }
 
 struct State {
     objects: Vec<ObjectEntry>,
-    package_store: LocalDBPackageStore,
-    resolver: Resolver<PackageCache>,
 }
 
 #[async_trait::async_trait]
@@ -48,7 +48,7 @@ impl Worker for ObjectHandler {
         let mut state = self.state.lock().await;
         for checkpoint_transaction in checkpoint_transactions {
             for object in checkpoint_transaction.output_objects.iter() {
-                state.package_store.update(object)?;
+                self.package_cache.update(object)?;
             }
             self.process_transaction(
                 checkpoint_summary.epoch,
@@ -60,7 +60,7 @@ impl Worker for ObjectHandler {
             )
             .await?;
             if checkpoint_summary.end_of_epoch_data.is_some() {
-                state
+                self.package_cache
                     .resolver
                     .package_store()
                     .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
@@ -88,21 +88,18 @@ impl AnalyticsHandler<ObjectEntry> for ObjectHandler {
 
 impl ObjectHandler {
     pub fn new(
-        package_store: LocalDBPackageStore,
+        package_cache: Arc<PackageCache>,
         package_filter: &Option<String>,
         metrics: AnalyticsMetrics,
     ) -> Self {
-        let state = State {
-            objects: vec![],
-            package_store: package_store.clone(),
-            resolver: Resolver::new(PackageCache::new(package_store)),
-        };
+        let state = State { objects: vec![] };
         Self {
             state: Mutex::new(state),
             package_filter: package_filter
                 .clone()
                 .map(|x| ObjectID::from_hex_literal(&x).unwrap()),
             metrics,
+            package_cache,
         }
     }
     async fn process_transaction(
@@ -158,7 +155,6 @@ impl ObjectHandler {
         &self,
         type_tag: &TypeTag,
         original_package_id: ObjectID,
-        state: &mut State,
     ) -> Result<bool> {
         use std::collections::BTreeSet;
         use tokio::task::JoinSet;
@@ -182,8 +178,8 @@ impl ObjectHandler {
         let mut original_ids = JoinSet::new();
 
         for id in package_ids {
-            let package_store = state.package_store.clone();
-            original_ids.spawn(async move { package_store.get_original_package_id(id).await });
+            let package_cache = self.package_cache.clone();
+            original_ids.spawn(async move { package_cache.get_original_package_id(id).await });
         }
 
         // Check if any resolved ID matches our target
@@ -215,7 +211,7 @@ impl ObjectHandler {
             .struct_tag()
             .and_then(|tag| object.data.try_as_move().map(|mo| (tag, mo.contents())))
         {
-            match get_move_struct(&tag, contents, &state.resolver).await {
+            match get_move_struct(&tag, contents, &self.package_cache.resolver).await {
                 Ok(move_struct) => Some(move_struct),
                 Err(err)
                     if err
@@ -255,14 +251,14 @@ impl ObjectHandler {
 
         let is_match = if let Some(package_id) = self.package_filter {
             if let Some(object_type) = object_type {
-                let original_package_id = state
-                    .package_store
+                let original_package_id = self
+                    .package_cache
                     .get_original_package_id(package_id.into())
                     .await?;
 
                 // Check if any type parameter matches the package filter
                 let type_tag: TypeTag = object_type.clone().into();
-                self.check_type_hierarchy(&type_tag, original_package_id, state)
+                self.check_type_hierarchy(&type_tag, original_package_id)
                     .await?
             } else {
                 false
@@ -338,18 +334,13 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let registry = Registry::new();
         let metrics = AnalyticsMetrics::new(&registry);
-        let package_store = LocalDBPackageStore::new(temp_dir.path(), "http://localhost:9000");
-        let handler = ObjectHandler::new(package_store, &Some("0xabc".to_string()), metrics);
-        let mut state = handler.state.lock().await;
+        let package_cache = Arc::new(PackageCache::new(temp_dir.path(), "http://localhost:9000"));
+        let handler = ObjectHandler::new(package_cache, &Some("0xabc".to_string()), metrics);
 
         // 1. Direct match
         let type_tag = create_struct_tag("0xabc", "module", "Type", vec![]);
         assert!(handler
-            .check_type_hierarchy(
-                &type_tag,
-                ObjectID::from_hex_literal("0xabc").unwrap(),
-                &mut state
-            )
+            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap(),)
             .await
             .unwrap());
 
@@ -357,11 +348,7 @@ mod tests {
         let inner_type = create_struct_tag("0xabc", "module", "Inner", vec![]);
         let type_tag = create_struct_tag("0xcde", "module", "Type", vec![inner_type]);
         assert!(handler
-            .check_type_hierarchy(
-                &type_tag,
-                ObjectID::from_hex_literal("0xabc").unwrap(),
-                &mut state
-            )
+            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap(),)
             .await
             .unwrap());
 
@@ -370,33 +357,21 @@ mod tests {
         let vector_type = TypeTag::Vector(Box::new(inner_type));
         let type_tag = create_struct_tag("0xcde", "module", "Type", vec![vector_type]);
         assert!(handler
-            .check_type_hierarchy(
-                &type_tag,
-                ObjectID::from_hex_literal("0xabc").unwrap(),
-                &mut state
-            )
+            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap(),)
             .await
             .unwrap());
 
         // 4. No match
         let type_tag = create_struct_tag("0xcde", "module", "Type", vec![]);
         assert!(!handler
-            .check_type_hierarchy(
-                &type_tag,
-                ObjectID::from_hex_literal("0xabc").unwrap(),
-                &mut state
-            )
+            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap(),)
             .await
             .unwrap());
 
         // 5. Primitive type
         let type_tag = TypeTag::U64;
         assert!(!handler
-            .check_type_hierarchy(
-                &type_tag,
-                ObjectID::from_hex_literal("0xabc").unwrap(),
-                &mut state
-            )
+            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap(),)
             .await
             .unwrap());
     }
