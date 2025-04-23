@@ -2122,6 +2122,7 @@ dependencies = [
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
+ "serde_json",
  "serde_yaml",
  "similar",
  "tempfile",
