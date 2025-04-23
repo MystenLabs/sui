@@ -7,7 +7,7 @@ use anyhow::Result;
 use diesel::sql_query;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db,
+    db::{Connection, Db},
     pipeline::{concurrent::Handler, Processor},
     types::{base_types::ObjectID, full_checkpoint_content::CheckpointData, object::Object},
     FieldCount,
@@ -15,6 +15,8 @@ use sui_indexer_alt_framework::{
 use sui_indexer_alt_schema::{objects::StoredObjInfo, schema::obj_info};
 
 use crate::consistent_pruning::{PruningInfo, PruningLookupTable};
+
+use super::checkpoint_input_objects;
 
 #[derive(Default)]
 pub(crate) struct ObjInfo {
@@ -38,7 +40,7 @@ impl Processor for ObjInfo {
     // TODO: Add tests for this function and the pruner.
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
-        let checkpoint_input_objects = checkpoint.checkpoint_input_objects();
+        let checkpoint_input_objects = checkpoint_input_objects(checkpoint)?;
         let latest_live_output_objects = checkpoint
             .latest_live_output_objects()
             .into_iter()
@@ -93,9 +95,11 @@ impl Processor for ObjInfo {
 
 #[async_trait::async_trait]
 impl Handler for ObjInfo {
+    type Store = Db;
+
     const PRUNING_REQUIRES_PROCESSED_VALUES: bool = true;
 
-    async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
+    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         let stored = values
             .iter()
             .map(|v| v.try_into())
@@ -108,11 +112,11 @@ impl Handler for ObjInfo {
     }
 
     // TODO: Add tests for this function.
-    async fn prune(
+    async fn prune<'a>(
         &self,
         from: u64,
         to_exclusive: u64,
-        conn: &mut db::Connection<'_>,
+        conn: &mut Connection<'a>,
     ) -> Result<usize> {
         use sui_indexer_alt_schema::schema::obj_info::dsl;
 
@@ -194,6 +198,7 @@ impl TryInto<StoredObjInfo> for &ProcessedObjInfo {
 #[cfg(test)]
 mod tests {
     use sui_indexer_alt_framework::{
+        db,
         types::{
             base_types::{dbg_addr, SequenceNumber},
             object::{Authenticator, Owner},
@@ -248,7 +253,7 @@ mod tests {
 
         builder = builder
             .start_transaction(0)
-            .mutate_object(0)
+            .mutate_owned_object(0)
             .finish_transaction();
         let checkpoint2 = builder.build_checkpoint();
         let result = obj_info.process(&Arc::new(checkpoint2)).unwrap();
@@ -670,5 +675,36 @@ mod tests {
 
         // Now we can prune checkpoint 2, as well as 3.
         obj_info.prune(2, 4, &mut conn).await.unwrap();
+    }
+
+    /// In our processing logic, we consider objects that appear as input to the checkpoint but not
+    /// in the output as wrapped or deleted. This emits a tombstone row. Meanwhile, the remote store
+    /// containing `CheckpointData` used to include unchanged shared objects in the `input_objects`
+    /// of a `CheckpointTransaction`. Because these read-only shared objects were not modified, they
+    ///were not included in `output_objects`. But that means within our pipeline, these object
+    /// states were incorrectly treated as deleted, and thus every transaction read emitted a
+    /// tombstone row. This test validates that unless an object appears as an input object from
+    /// `tx.effects.object_changes`, we do not consider it within our pipeline.
+    ///
+    /// Use the checkpoint builder to create a shared object. Then, remove this from the checkpoint,
+    /// and replace it with a transaction that takes the shared object as read-only.
+    #[tokio::test]
+    async fn test_process_unchanged_shared_object() {
+        let obj_info = ObjInfo::default();
+        let mut builder = TestCheckpointDataBuilder::new(0)
+            .start_transaction(0)
+            .create_shared_object(1)
+            .finish_transaction();
+
+        builder.build_checkpoint();
+
+        builder = builder
+            .start_transaction(0)
+            .read_shared_object(1)
+            .finish_transaction();
+
+        let checkpoint = builder.build_checkpoint();
+        let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
+        assert!(result.is_empty());
     }
 }

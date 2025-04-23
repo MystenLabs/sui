@@ -1,0 +1,15 @@
+# A package with an empty module and the same address as other
+# test packages for testing that package name is printed directly
+# in presence of multiple packages having the same address.
+[package]
+name = "SamePkgAddr"
+version = "0.0.1"
+edition = "2024.beta"
+
+[dependencies]
+MoveStdlib = { local = "../../../move-stdlib/" }
+
+
+[addresses]
+SamePkgAddr = "0xCAFE"
+std = "0x1"

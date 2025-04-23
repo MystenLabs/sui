@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeSet, HashMap},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use async_graphql::dataloader::Loader;
 use diesel::{ExpressionMethods, QueryDsl};
@@ -44,7 +41,7 @@ impl Loader<DisplayKey> for PgReader {
         let types = keys
             .iter()
             .map(|d| bcs::to_bytes(&d.0))
-            .collect::<Result<BTreeSet<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()?;
 
         let displays: Vec<StoredDisplay> = conn
             .results(d::sum_displays.filter(d::object_type.eq_any(types.clone())))

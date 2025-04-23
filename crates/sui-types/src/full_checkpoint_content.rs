@@ -1,17 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 
-use crate::base_types::{ObjectID, ObjectRef};
-use crate::effects::{
-    IDOperation, ObjectIn, ObjectOut, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
-};
+use crate::base_types::ObjectRef;
+use crate::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use crate::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents};
 use crate::object::Object;
-use crate::storage::BackingPackageStore;
-use crate::transaction::Transaction;
-use itertools::Either;
+use crate::storage::error::Error as StorageError;
+use crate::storage::{BackingPackageStore, EpochInfo};
+use crate::sui_system_state::get_sui_system_state;
+use crate::sui_system_state::SuiSystemStateTrait;
+use crate::transaction::{Transaction, TransactionDataAPI, TransactionKind};
 use serde::{Deserialize, Serialize};
 use tap::Pipe;
 
@@ -51,32 +51,52 @@ impl CheckpointData {
         eventually_removed_object_refs.into_values().collect()
     }
 
-    /// Returns all objects that are used as input to the transactions in the checkpoint,
-    /// and already exist prior to the checkpoint.
-    pub fn checkpoint_input_objects(&self) -> BTreeMap<ObjectID, &Object> {
-        let mut output_objects_seen = HashSet::new();
-        let mut checkpoint_input_objects = BTreeMap::new();
-        for tx in self.transactions.iter() {
-            for obj in tx.input_objects.iter() {
-                let id = obj.id();
-                if output_objects_seen.contains(&id) || checkpoint_input_objects.contains_key(&id) {
-                    continue;
-                }
-                checkpoint_input_objects.insert(id, obj);
-            }
-            for obj in tx.output_objects.iter() {
-                output_objects_seen.insert(obj.id());
-            }
-        }
-        checkpoint_input_objects
-    }
-
     pub fn all_objects(&self) -> Vec<&Object> {
         self.transactions
             .iter()
             .flat_map(|tx| &tx.input_objects)
             .chain(self.transactions.iter().flat_map(|tx| &tx.output_objects))
             .collect()
+    }
+
+    pub fn epoch_info(&self) -> Result<Option<EpochInfo>, StorageError> {
+        if self.checkpoint_summary.end_of_epoch_data.is_none()
+            && self.checkpoint_summary.sequence_number != 0
+        {
+            return Ok(None);
+        }
+        let (start_checkpoint, transaction) = if self.checkpoint_summary.sequence_number == 0 {
+            (0, &self.transactions[0])
+        } else {
+            let Some(transaction) = self.transactions.iter().find(|tx| {
+                matches!(
+                    tx.transaction.intent_message().value.kind(),
+                    TransactionKind::ChangeEpoch(_) | TransactionKind::EndOfEpochTransaction(_)
+                )
+            }) else {
+                return Err(StorageError::custom(format!(
+                    "Failed to get end of epoch transaction in checkpoint {} with EndOfEpochData",
+                    self.checkpoint_summary.sequence_number,
+                )));
+            };
+            (self.checkpoint_summary.sequence_number + 1, transaction)
+        };
+        let system_state =
+            get_sui_system_state(&transaction.output_objects.as_slice()).map_err(|e| {
+                StorageError::custom(format!(
+                    "Failed to find system state object output from end of epoch transaction: {e}"
+                ))
+            })?;
+        Ok(Some(EpochInfo {
+            epoch: system_state.epoch(),
+            protocol_version: Some(system_state.protocol_version()),
+            start_timestamp_ms: Some(system_state.epoch_start_timestamp_ms()),
+            end_timestamp_ms: None,
+            start_checkpoint: Some(start_checkpoint),
+            end_checkpoint: None,
+            reference_gas_price: Some(system_state.reference_gas_price()),
+            system_state: Some(system_state),
+        }))
     }
 }
 
@@ -97,56 +117,17 @@ pub struct CheckpointTransaction {
 impl CheckpointTransaction {
     // provide an iterator over all deleted or wrapped objects in this transaction
     pub fn removed_objects_pre_version(&self) -> impl Iterator<Item = &Object> {
-        // Iterator over id and versions for all deleted or wrapped objects
-        match &self.effects {
-            TransactionEffects::V1(v1) => Either::Left(
-                // Effects v1 has deleted and wrapped objects versions as the "new" version, not the
-                // old one that was actually removed. So we need to take these and then look them
-                // up in the `modified_at_versions`.
-                // No need to chain unwrapped_then_deleted because these objects must have been wrapped
-                // before the transaction, hence they will not be in modified_at_versions / input_objects.
-                v1.deleted().iter().chain(v1.wrapped()).map(|(id, _, _)| {
-                    // lookup the old version for mutated objects
-                    let (_, old_version) = v1
-                        .modified_at_versions()
-                        .iter()
-                        .find(|(oid, _old_version)| oid == id)
-                        .expect("deleted/wrapped object must have entry in 'modified_at_versions'");
-                    (id, old_version)
-                }),
-            ),
-            TransactionEffects::V2(v2) => {
-                Either::Right(v2.changed_objects().iter().filter_map(|(id, change)| {
-                    match (
-                        &change.input_state,
-                        &change.output_state,
-                        &change.id_operation,
-                    ) {
-                        // Deleted Objects
-                        (
-                            ObjectIn::Exist(((version, _d), _o)),
-                            ObjectOut::NotExist,
-                            IDOperation::Deleted,
-                        ) => Some((id, version)),
-
-                        // Wrapped Objects
-                        (
-                            ObjectIn::Exist(((version, _), _)),
-                            ObjectOut::NotExist,
-                            IDOperation::None,
-                        ) => Some((id, version)),
-                        _ => None,
-                    }
-                }))
-            }
-        }
-        // Use id and version to lookup in input Objects
-        .map(|(id, version)| {
-            self.input_objects
-                .iter()
-                .find(|o| &o.id() == id && &o.version() == version)
-                .expect("all removed objects should show up in input objects")
-        })
+        // Since each object ID can only show up once in the input_objects, we can just use the
+        // ids of deleted and wrapped objects to lookup the object in the input_objects.
+        self.effects
+            .all_removed_objects()
+            .into_iter() // Use id and version to lookup in input Objects
+            .map(|((id, _, _), _)| {
+                self.input_objects
+                    .iter()
+                    .find(|o| o.id() == id)
+                    .expect("all removed objects should show up in input objects")
+            })
     }
 
     pub fn removed_object_refs_post_version(&self) -> impl Iterator<Item = ObjectRef> {
@@ -157,117 +138,34 @@ impl CheckpointTransaction {
     }
 
     pub fn changed_objects(&self) -> impl Iterator<Item = (&Object, Option<&Object>)> {
-        // Iterator over ((ObjectId, new version), Option<old version>)
-        match &self.effects {
-            TransactionEffects::V1(v1) => Either::Left(
-                v1.created()
+        self.effects
+            .all_changed_objects()
+            .into_iter()
+            .map(|((id, _, _), ..)| {
+                let object = self
+                    .output_objects
                     .iter()
-                    .chain(v1.unwrapped())
-                    .map(|((id, version, _), _)| ((id, version), None))
-                    .chain(v1.mutated().iter().map(|((id, version, _), _)| {
-                        // lookup the old version for mutated objects
-                        let (_, old_version) = v1
-                            .modified_at_versions()
-                            .iter()
-                            .find(|(oid, _old_version)| oid == id)
-                            .expect("mutated object must have entry in modified_at_versions");
+                    .find(|o| o.id() == id)
+                    .expect("changed objects should show up in output objects");
 
-                        ((id, version), Some(old_version))
-                    })),
-            ),
-            TransactionEffects::V2(v2) => {
-                Either::Right(v2.changed_objects().iter().filter_map(|(id, change)| {
-                    match (
-                        &change.input_state,
-                        &change.output_state,
-                        &change.id_operation,
-                    ) {
-                        // Created Objects
-                        (ObjectIn::NotExist, ObjectOut::ObjectWrite(_), IDOperation::Created) => {
-                            Some(((id, &v2.lamport_version), None))
-                        }
-                        (
-                            ObjectIn::NotExist,
-                            ObjectOut::PackageWrite((version, _)),
-                            IDOperation::Created,
-                        ) => Some(((id, version), None)),
+                let old_object = self.input_objects.iter().find(|o| o.id() == id);
 
-                        // Unwrapped Objects
-                        (ObjectIn::NotExist, ObjectOut::ObjectWrite(_), IDOperation::None) => {
-                            Some(((id, &v2.lamport_version), None))
-                        }
-
-                        // Mutated Objects
-                        (ObjectIn::Exist(((old_version, _), _)), ObjectOut::ObjectWrite(_), _) => {
-                            Some(((id, &v2.lamport_version), Some(old_version)))
-                        }
-                        (
-                            ObjectIn::Exist(((old_version, _), _)),
-                            ObjectOut::PackageWrite((version, _)),
-                            _,
-                        ) => Some(((id, version), Some(old_version))),
-
-                        _ => None,
-                    }
-                }))
-            }
-        }
-        // Lookup Objects in output Objects as well as old versions for mutated objects
-        .map(|((id, version), old_version)| {
-            let object = self
-                .output_objects
-                .iter()
-                .find(|o| &o.id() == id && &o.version() == version)
-                .expect("changed objects should show up in output objects");
-
-            let old_object = old_version.map(|old_version| {
-                self.input_objects
-                    .iter()
-                    .find(|o| &o.id() == id && &o.version() == old_version)
-                    .expect("mutated objects should have a previous version in input objects")
-            });
-
-            (object, old_object)
-        })
+                (object, old_object)
+            })
     }
 
     pub fn created_objects(&self) -> impl Iterator<Item = &Object> {
         // Iterator over (ObjectId, version) for created objects
-        match &self.effects {
-            TransactionEffects::V1(v1) => Either::Left(
-                v1.created()
+        self.effects
+            .created()
+            .into_iter()
+            // Lookup Objects in output Objects as well as old versions for mutated objects
+            .map(|((id, version, _), _)| {
+                self.output_objects
                     .iter()
-                    .map(|((id, version, _), _)| (id, version)),
-            ),
-            TransactionEffects::V2(v2) => {
-                Either::Right(v2.changed_objects().iter().filter_map(|(id, change)| {
-                    match (
-                        &change.input_state,
-                        &change.output_state,
-                        &change.id_operation,
-                    ) {
-                        // Created Objects
-                        (ObjectIn::NotExist, ObjectOut::ObjectWrite(_), IDOperation::Created) => {
-                            Some((id, &v2.lamport_version))
-                        }
-                        (
-                            ObjectIn::NotExist,
-                            ObjectOut::PackageWrite((version, _)),
-                            IDOperation::Created,
-                        ) => Some((id, version)),
-
-                        _ => None,
-                    }
-                }))
-            }
-        }
-        // Lookup Objects in output Objects as well as old versions for mutated objects
-        .map(|(id, version)| {
-            self.output_objects
-                .iter()
-                .find(|o| &o.id() == id && &o.version() == version)
-                .expect("created objects should show up in output objects")
-        })
+                    .find(|o| o.id() == id && o.version() == version)
+                    .expect("created objects should show up in output objects")
+            })
     }
 }
 

@@ -24,15 +24,6 @@ title: Module `deepbook::math`
 ## Constants
 
 
-<a name="deepbook_math_EUnderflow"></a>
-
-
-
-<pre><code><b>const</b> <a href="../deepbook/math.md#deepbook_math_EUnderflow">EUnderflow</a>: u64 = 1;
-</code></pre>
-
-
-
 <a name="deepbook_math_FLOAT_SCALING"></a>
 
 scaling setting for float
@@ -48,6 +39,15 @@ scaling setting for float
 
 
 <pre><code><b>const</b> <a href="../deepbook/math.md#deepbook_math_FLOAT_SCALING_U128">FLOAT_SCALING_U128</a>: u128 = 1000000000;
+</code></pre>
+
+
+
+<a name="deepbook_math_EUnderflow"></a>
+
+
+
+<pre><code><b>const</b> <a href="../deepbook/math.md#deepbook_math_EUnderflow">EUnderflow</a>: u64 = 1;
 </code></pre>
 
 

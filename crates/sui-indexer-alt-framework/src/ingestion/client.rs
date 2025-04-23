@@ -5,13 +5,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::ingestion::local_client::LocalIngestionClient;
-use crate::ingestion::remote_client::RemoteIngestionClient;
-use crate::ingestion::Error as IngestionError;
-use crate::ingestion::Result as IngestionResult;
-use crate::metrics::CheckpointLagMetricReporter;
-use crate::metrics::IndexerMetrics;
-use crate::types::full_checkpoint_content::CheckpointData;
 use backoff::backoff::Constant;
 use backoff::Error as BE;
 use backoff::ExponentialBackoff;
@@ -22,6 +15,14 @@ use tokio_util::bytes::Bytes;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 use url::Url;
+
+use crate::ingestion::local_client::LocalIngestionClient;
+use crate::ingestion::remote_client::RemoteIngestionClient;
+use crate::ingestion::Error as IngestionError;
+use crate::ingestion::Result as IngestionResult;
+use crate::metrics::CheckpointLagMetricReporter;
+use crate::metrics::IndexerMetrics;
+use crate::types::full_checkpoint_content::CheckpointData;
 
 /// Wait at most this long between retries for transient errors.
 const MAX_TRANSIENT_RETRY_INTERVAL: Duration = Duration::from_secs(60);

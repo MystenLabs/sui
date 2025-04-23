@@ -71,7 +71,6 @@ title: Module `bridge::bridge`
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
 <b>use</b> <a href="../sui/object_bag.md#sui_object_bag">sui::object_bag</a>;
 <b>use</b> <a href="../sui/package.md#sui_package">sui::package</a>;
-<b>use</b> <a href="../sui/pay.md#sui_pay">sui::pay</a>;
 <b>use</b> <a href="../sui/priority_queue.md#sui_priority_queue">sui::priority_queue</a>;
 <b>use</b> <a href="../sui/sui.md#sui_sui">sui::sui</a>;
 <b>use</b> <a href="../sui/table.md#sui_table">sui::table</a>;
@@ -447,209 +446,20 @@ title: Module `bridge::bridge`
 ## Constants
 
 
-<a name="bridge_bridge_CURRENT_VERSION"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_CURRENT_VERSION">CURRENT_VERSION</a>: u64 = 1;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EBridgeAlreadyPaused"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EBridgeAlreadyPaused">EBridgeAlreadyPaused</a>: u64 = 13;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EBridgeNotPaused"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EBridgeNotPaused">EBridgeNotPaused</a>: u64 = 14;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EBridgeUnavailable"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EBridgeUnavailable">EBridgeUnavailable</a>: u64 = 8;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EInvalidBridgeRoute"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EInvalidBridgeRoute">EInvalidBridgeRoute</a>: u64 = 16;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EInvalidEvmAddress"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EInvalidEvmAddress">EInvalidEvmAddress</a>: u64 = 18;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EInvariantSuiInitializedTokenTransferShouldNotBeClaimed"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EInvariantSuiInitializedTokenTransferShouldNotBeClaimed">EInvariantSuiInitializedTokenTransferShouldNotBeClaimed</a>: u64 = 10;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EMalformedMessageError"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EMalformedMessageError">EMalformedMessageError</a>: u64 = 2;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EMessageNotFoundInRecords"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EMessageNotFoundInRecords">EMessageNotFoundInRecords</a>: u64 = 11;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EMustBeTokenMessage"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EMustBeTokenMessage">EMustBeTokenMessage</a>: u64 = 17;
-</code></pre>
-
-
-
-<a name="bridge_bridge_ENotSystemAddress"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_ENotSystemAddress">ENotSystemAddress</a>: u64 = 5;
-</code></pre>
-
-
-
-<a name="bridge_bridge_ETokenAlreadyClaimedOrHitLimit"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_ETokenAlreadyClaimedOrHitLimit">ETokenAlreadyClaimedOrHitLimit</a>: u64 = 15;
-</code></pre>
-
-
-
-<a name="bridge_bridge_ETokenValueIsZero"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_ETokenValueIsZero">ETokenValueIsZero</a>: u64 = 19;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EUnauthorisedClaim"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnauthorisedClaim">EUnauthorisedClaim</a>: u64 = 1;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EUnexpectedChainID"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedChainID">EUnexpectedChainID</a>: u64 = 4;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EUnexpectedMessageType"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedMessageType">EUnexpectedMessageType</a>: u64 = 0;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EUnexpectedMessageVersion"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedMessageVersion">EUnexpectedMessageVersion</a>: u64 = 12;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EUnexpectedOperation"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedOperation">EUnexpectedOperation</a>: u64 = 9;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EUnexpectedSeqNum"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedSeqNum">EUnexpectedSeqNum</a>: u64 = 6;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EUnexpectedTokenType"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedTokenType">EUnexpectedTokenType</a>: u64 = 3;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EVM_ADDRESS_LENGTH"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EVM_ADDRESS_LENGTH">EVM_ADDRESS_LENGTH</a>: u64 = 20;
-</code></pre>
-
-
-
-<a name="bridge_bridge_EWrongInnerVersion"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EWrongInnerVersion">EWrongInnerVersion</a>: u64 = 7;
-</code></pre>
-
-
-
 <a name="bridge_bridge_MESSAGE_VERSION"></a>
 
 
 
 <pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_MESSAGE_VERSION">MESSAGE_VERSION</a>: u8 = 1;
+</code></pre>
+
+
+
+<a name="bridge_bridge_TRANSFER_STATUS_PENDING"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_TRANSFER_STATUS_PENDING">TRANSFER_STATUS_PENDING</a>: u8 = 0;
 </code></pre>
 
 
@@ -681,11 +491,200 @@ title: Module `bridge::bridge`
 
 
 
-<a name="bridge_bridge_TRANSFER_STATUS_PENDING"></a>
+<a name="bridge_bridge_EVM_ADDRESS_LENGTH"></a>
 
 
 
-<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_TRANSFER_STATUS_PENDING">TRANSFER_STATUS_PENDING</a>: u8 = 0;
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EVM_ADDRESS_LENGTH">EVM_ADDRESS_LENGTH</a>: u64 = 20;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EUnexpectedMessageType"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedMessageType">EUnexpectedMessageType</a>: u64 = 0;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EUnauthorisedClaim"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnauthorisedClaim">EUnauthorisedClaim</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EMalformedMessageError"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EMalformedMessageError">EMalformedMessageError</a>: u64 = 2;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EUnexpectedTokenType"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedTokenType">EUnexpectedTokenType</a>: u64 = 3;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EUnexpectedChainID"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedChainID">EUnexpectedChainID</a>: u64 = 4;
+</code></pre>
+
+
+
+<a name="bridge_bridge_ENotSystemAddress"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_ENotSystemAddress">ENotSystemAddress</a>: u64 = 5;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EUnexpectedSeqNum"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedSeqNum">EUnexpectedSeqNum</a>: u64 = 6;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EWrongInnerVersion"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EWrongInnerVersion">EWrongInnerVersion</a>: u64 = 7;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EBridgeUnavailable"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EBridgeUnavailable">EBridgeUnavailable</a>: u64 = 8;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EUnexpectedOperation"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedOperation">EUnexpectedOperation</a>: u64 = 9;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EInvariantSuiInitializedTokenTransferShouldNotBeClaimed"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EInvariantSuiInitializedTokenTransferShouldNotBeClaimed">EInvariantSuiInitializedTokenTransferShouldNotBeClaimed</a>: u64 = 10;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EMessageNotFoundInRecords"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EMessageNotFoundInRecords">EMessageNotFoundInRecords</a>: u64 = 11;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EUnexpectedMessageVersion"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EUnexpectedMessageVersion">EUnexpectedMessageVersion</a>: u64 = 12;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EBridgeAlreadyPaused"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EBridgeAlreadyPaused">EBridgeAlreadyPaused</a>: u64 = 13;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EBridgeNotPaused"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EBridgeNotPaused">EBridgeNotPaused</a>: u64 = 14;
+</code></pre>
+
+
+
+<a name="bridge_bridge_ETokenAlreadyClaimedOrHitLimit"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_ETokenAlreadyClaimedOrHitLimit">ETokenAlreadyClaimedOrHitLimit</a>: u64 = 15;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EInvalidBridgeRoute"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EInvalidBridgeRoute">EInvalidBridgeRoute</a>: u64 = 16;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EMustBeTokenMessage"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EMustBeTokenMessage">EMustBeTokenMessage</a>: u64 = 17;
+</code></pre>
+
+
+
+<a name="bridge_bridge_EInvalidEvmAddress"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_EInvalidEvmAddress">EInvalidEvmAddress</a>: u64 = 18;
+</code></pre>
+
+
+
+<a name="bridge_bridge_ETokenValueIsZero"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_ETokenValueIsZero">ETokenValueIsZero</a>: u64 = 19;
+</code></pre>
+
+
+
+<a name="bridge_bridge_CURRENT_VERSION"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/bridge.md#bridge_bridge_CURRENT_VERSION">CURRENT_VERSION</a>: u64 = 1;
 </code></pre>
 
 

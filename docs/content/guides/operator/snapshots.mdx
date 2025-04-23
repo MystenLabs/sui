@@ -42,19 +42,18 @@ Because these snapshots do not contain indexes, they are most immediately useful
 To restore from a RocksDB snapshot, follow these steps:
 
 1. Download the snapshot for the epoch you want to restore to your local disk. There is one snapshot per epoch in s3 bucket.
-1. Place the snapshot into the directory that the `db-config` value points to in your fullnode.yaml file. For example, if the `db-config` value points to `/opt/sui/db/authorities_db/full_node_db` and you want to restore from epoch 10, then copy the snapshot to the directory with this command:
+1. Place the snapshot into the directory that the `db-path` value points to in your fullnode.yaml file. For example, if the `db-path` value points to `/opt/sui/db/authorities_db/full_node_db` and you want to restore from epoch 10, then copy the snapshot to the directory with this command:
 
    You can use the aws cli (provided you have credentials to associate with the download):
    `aws s3 cp s3://<BUCKET_NAME>/epoch_10 /opt/sui/db/authorities_db/full_node_db/live --recursive --request-payer`.
    
-   An alternative is to use `sui-tool` to copy the files:
+   An alternative is to use `sui-tool` to copy the files. The following example command is for reading from a snapshot bucket that you host:
    ```
    sui-tool download-db-snapshot --latest \
        --network <NETWORK> --snapshot-bucket <BUCKET-NAME> \
        --snapshot-bucket-type <TYPE> --path <PATH-TO-NODE-DB> \
        --num-parallel-downloads 25 \
-       --skip-indexes \
-       --no-sign-request
+       --skip-indexes
    ```
    - `--epoch`: The epoch that you want to download. Mysten Labs hosted buckets will only keep the last 90 epochs, you can check the most recent epoch on sui explorers like [suivision](https://suivision.xyz/) or [suiscan](https://suiscan.xyz/).
    - `--latest`: Rather than explicitly passing a epoch via `--epoch`, you can pass the `--latest` flag, which will automatically select the latest snapshot`

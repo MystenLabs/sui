@@ -72,7 +72,7 @@ fn verify_module_impl<'env>(
     Ok(())
 }
 
-fn verify_function<'env>(
+pub fn verify_function<'env>(
     verifier_config: &VerifierConfig,
     index: FunctionDefinitionIndex,
     function_definition: &'env FunctionDefinition,

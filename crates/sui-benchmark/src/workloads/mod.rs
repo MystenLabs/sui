@@ -10,10 +10,12 @@ pub mod randomized_transaction;
 pub mod randomness;
 pub mod shared_counter;
 pub mod shared_object_deletion;
+pub mod slow;
 pub mod transfer_object;
 pub mod workload;
 pub mod workload_configuration;
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::drivers::Interval;
@@ -55,4 +57,12 @@ pub struct GasCoinConfig {
     pub address: SuiAddress,
     // recipient account key pair (useful for signing txns)
     pub keypair: Arc<AccountKeyPair>,
+}
+
+pub fn benchmark_move_base_dir() -> PathBuf {
+    if let Ok(dir) = std::env::var("BENCHMARK_MOVE_BASE_DIR") {
+        PathBuf::from(dir)
+    } else {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    }
 }

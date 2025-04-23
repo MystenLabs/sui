@@ -329,7 +329,11 @@ async fn test_upgrade_package_happy_path() {
         .unwrap();
     let config = ProtocolConfig::get_for_max_version_UNSAFE();
     let binary_config = to_binary_config(&config);
-    let normalized_modules = package.move_package().normalize(&binary_config).unwrap();
+    let pool = &mut move_binary_format::normalized::RcPool::new();
+    let normalized_modules = package
+        .move_package()
+        .normalize(pool, &binary_config, /* include code */ true)
+        .unwrap();
     assert!(normalized_modules.contains_key("new_module"));
     assert!(normalized_modules["new_module"]
         .functions
@@ -1238,10 +1242,10 @@ async fn test_upgraded_types_in_one_txn() {
     let e1_type = StructTag::from_str(&format!("{package_v2}::base::BModEvent")).unwrap();
     let e2_type = StructTag::from_str(&format!("{package_v3}::base::CModEvent")).unwrap();
 
-    let event_digest = effects.events_digest().unwrap();
+    let _event_digest = effects.events_digest().unwrap();
     let mut events = runner
         .authority_state
-        .get_transaction_events(event_digest)
+        .get_transaction_events(effects.transaction_digest())
         .unwrap()
         .data;
     events.sort_by(|a, b| a.type_.name.as_str().cmp(b.type_.name.as_str()));

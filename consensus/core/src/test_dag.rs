@@ -35,7 +35,7 @@ pub(crate) fn build_dag(
             );
             start
         }
-        None => genesis_blocks(context.clone())
+        None => genesis_blocks(context.as_ref())
             .iter()
             .map(|x| x.reference())
             .collect::<Vec<_>>(),

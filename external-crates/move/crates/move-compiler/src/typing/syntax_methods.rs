@@ -34,7 +34,7 @@ pub fn validate_syntax_methods(
                 if !validate_index_syntax_methods(context, index_defn, index_mut_defn) {
                     // If we didn't validate they wre comptaible, we remove the mut one to avoid more
                     // typing issues later.
-                    assert!(context.env.has_errors());
+                    assert!(context.env().has_errors());
                     *index_mut = None;
                 }
             }
@@ -173,7 +173,6 @@ fn validate_index_syntax_methods(
         index_fn,
         Some(mut_tparam_types),
     );
-    context.current_module = None;
 
     let index_params = index_ty.params.iter().map(|(_, t1)| t1);
     let mut_params = mut_finfo.signature.parameters.iter().map(|(_, _, ty)| ty);

@@ -95,7 +95,7 @@ mod checked {
         let shared_object_refs = input_objects.filter_shared_objects();
         let receiving_objects = transaction_kind.receiving_objects();
         let mut transaction_dependencies = input_objects.transaction_dependencies();
-        let contains_deleted_input = input_objects.contains_deleted_objects();
+        let contains_deleted_input = input_objects.contains_consensus_stream_ended_objects();
         let cancelled_objects = input_objects.get_cancelled_objects();
 
         let mut temporary_store = TemporaryStore::new(
@@ -116,7 +116,9 @@ mod checked {
             epoch_timestamp_ms,
             // Those values are unused in execution versions before 3 (or latest)
             1,
+            1_000_000,
             None,
+            protocol_config,
         );
 
         let is_epoch_change = transaction_kind.is_end_of_epoch_tx();

@@ -35,8 +35,7 @@ pub struct Db {
     pool: Pool<AsyncPgConnection>,
 }
 
-pub type ManagedConnection = AsyncPgConnection;
-pub type Connection<'p> = PooledConnection<'p, ManagedConnection>;
+pub type Connection<'p> = PooledConnection<'p, AsyncPgConnection>;
 
 impl DbArgs {
     pub fn connection_timeout(&self) -> Duration {

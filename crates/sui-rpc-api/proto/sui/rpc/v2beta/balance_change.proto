@@ -1,0 +1,18 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta;
+
+// The delta, or change, in balance for an address for a particular `Coin` type.
+message BalanceChange {
+  // The account address that is affected by this balance change event.
+  optional string address = 1;
+
+  // The `Coin` type of this balance change event.
+  optional string coin_type = 2;
+
+  // The amount or change in balance.
+  optional string amount = 3;
+}

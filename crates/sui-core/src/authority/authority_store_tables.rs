@@ -8,7 +8,7 @@ use std::path::Path;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
-use sui_types::effects::TransactionEffects;
+use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::storage::{FullObjectKey, MarkerValue};
 use tracing::error;
 use typed_store::metrics::SamplingInterval;
@@ -16,7 +16,7 @@ use typed_store::rocks::{
     default_db_options, read_size_from_env, DBBatch, DBMap, DBMapTableConfigMap, DBOptions,
     MetricConf,
 };
-use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
+use typed_store::traits::Map;
 
 use crate::authority::authority_store_pruner::ObjectsCompactionFilter;
 use crate::authority::authority_store_types::{
@@ -24,7 +24,7 @@ use crate::authority::authority_store_types::{
 };
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use typed_store::rocksdb::compaction_filter::Decision;
-use typed_store::DBMapUtils;
+use typed_store::{DBMapUtils, DbIterator};
 
 const ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE: &str = "OBJECTS_BLOCK_CACHE_MB";
 pub(crate) const ENV_VAR_LOCKS_BLOCK_CACHE_SIZE: &str = "LOCKS_BLOCK_CACHE_MB";
@@ -51,6 +51,7 @@ impl AuthorityPerpetualTablesOptions {
 
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
 #[derive(DBMapUtils)]
+// #[tidehunter]
 pub struct AuthorityPerpetualTables {
     /// This is a map between the object (ID, version) and the latest state of the object, namely the
     /// state that is needed to process new transactions.
@@ -99,6 +100,9 @@ pub struct AuthorityPerpetualTables {
     // TODO: Figure out what to do with this table in the long run.
     // Also we need a pruning policy for this table. We can prune this table along with tx/effects.
     pub(crate) events: DBMap<(TransactionEventsDigest, usize), Event>,
+
+    // Events keyed by the digest of the transaction that produced them.
+    pub(crate) events_2: DBMap<TransactionDigest, TransactionEvents>,
 
     /// DEPRECATED in favor of the table of the same name in authority_per_epoch_store.
     /// Please do not add new accessors/callsites.
@@ -163,6 +167,7 @@ impl AuthorityPerpetualTables {
         parent_path.join("perpetual")
     }
 
+    #[cfg(any(not(feature = "tide_hunter"), feature = "rocksdb"))]
     pub fn open(
         parent_path: &Path,
         db_options_override: Option<AuthorityPerpetualTablesOptions>,
@@ -192,12 +197,175 @@ impl AuthorityPerpetualTables {
                 events_table_config(db_options.clone()),
             ),
         ]));
+
         Self::open_tables_read_write(
             Self::path(parent_path),
             MetricConf::new("perpetual")
                 .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
             Some(db_options.options),
             Some(table_options),
+        )
+    }
+
+    #[cfg(all(
+        not(target_os = "windows"),
+        feature = "tide_hunter",
+        not(feature = "rocksdb")
+    ))]
+    pub fn open(parent_path: &Path, _: Option<AuthorityPerpetualTablesOptions>) -> Self {
+        use typed_store::tidehunter_util::{
+            default_cells_per_mutex, Bytes, KeySpaceConfig, ThConfig, WalPosition,
+        };
+        const MUTEXES: usize = 1024;
+        const VALUE_CACHE_SIZE: usize = 20_000;
+
+        let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
+        let objects_compactor = |index: &mut BTreeMap<Bytes, WalPosition>| {
+            let mut retain = HashSet::new();
+            let mut previous: Option<&[u8]> = None;
+            const OID_SIZE: usize = 32;
+            for (key, _) in index.iter().rev() {
+                if let Some(prev) = previous {
+                    if prev == &key[..OID_SIZE] {
+                        continue;
+                    }
+                }
+                previous = Some(&key[..OID_SIZE]);
+                retain.insert(key.clone());
+            }
+            index.retain(|k, _| retain.contains(k));
+        };
+        let mut digest_prefix = vec![0; 8];
+        digest_prefix[7] = 32;
+
+        let configs = vec![
+            (
+                "objects".to_string(),
+                ThConfig::new_with_config(
+                    32 + 8,
+                    MUTEXES,
+                    default_cells_per_mutex() * 4,
+                    KeySpaceConfig::new().with_compactor(Box::new(objects_compactor)),
+                ),
+            ),
+            (
+                "owned_object_transaction_locks".to_string(),
+                ThConfig::new_with_config(
+                    32 + 8 + 32 + 8,
+                    MUTEXES,
+                    default_cells_per_mutex() * 4,
+                    bloom_config.clone(),
+                ),
+            ),
+            (
+                "transactions".to_string(),
+                ThConfig::new_with_rm_prefix(
+                    32,
+                    MUTEXES,
+                    default_cells_per_mutex(),
+                    KeySpaceConfig::new()
+                        .with_key_reduction(0..16)
+                        .with_value_cache_size(VALUE_CACHE_SIZE),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "effects".to_string(),
+                ThConfig::new_with_rm_prefix(
+                    32,
+                    MUTEXES,
+                    default_cells_per_mutex(),
+                    bloom_config
+                        .clone()
+                        .with_key_reduction(0..16)
+                        .with_value_cache_size(VALUE_CACHE_SIZE),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "executed_effects".to_string(),
+                ThConfig::new_with_rm_prefix(
+                    32,
+                    MUTEXES,
+                    default_cells_per_mutex(),
+                    bloom_config
+                        .clone()
+                        .with_key_reduction(0..16)
+                        .with_value_cache_size(VALUE_CACHE_SIZE),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "events".to_string(),
+                ThConfig::new_with_rm_prefix(
+                    32 + 8,
+                    MUTEXES,
+                    default_cells_per_mutex(),
+                    KeySpaceConfig::default(),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "events_2".to_string(),
+                ThConfig::new_with_rm_prefix(
+                    32 + 8,
+                    MUTEXES,
+                    default_cells_per_mutex(),
+                    KeySpaceConfig::default(),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "executed_transactions_to_checkpoint".to_string(),
+                ThConfig::new_with_rm_prefix(
+                    32,
+                    MUTEXES,
+                    default_cells_per_mutex(),
+                    KeySpaceConfig::default(),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "root_state_hash_by_epoch".to_string(),
+                ThConfig::new(8, 1, 1),
+            ),
+            (
+                "epoch_start_configuration".to_string(),
+                ThConfig::new(0, 1, 1),
+            ),
+            ("pruned_checkpoint".to_string(), ThConfig::new(0, 1, 1)),
+            (
+                "expected_network_sui_amount".to_string(),
+                ThConfig::new(0, 1, 1),
+            ),
+            (
+                "expected_storage_fund_imbalance".to_string(),
+                ThConfig::new(0, 1, 1),
+            ),
+            (
+                "object_per_epoch_marker_table".to_string(),
+                ThConfig::new_with_config(
+                    32 + 8 + 8,
+                    MUTEXES,
+                    default_cells_per_mutex(),
+                    KeySpaceConfig::new_with_key_offset(8),
+                ),
+            ),
+            (
+                "object_per_epoch_marker_table_v2".to_string(),
+                ThConfig::new_with_config(
+                    32 + 8 + 8,
+                    MUTEXES,
+                    default_cells_per_mutex(),
+                    KeySpaceConfig::new_with_key_offset(8),
+                ),
+            ),
+        ];
+        Self::open_tables_read_write(
+            Self::path(parent_path),
+            MetricConf::new("perpetual")
+                .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
+            configs.into_iter().collect(),
         )
     }
 
@@ -350,8 +518,10 @@ impl AuthorityPerpetualTables {
         Ok(())
     }
 
-    pub fn get_highest_pruned_checkpoint(&self) -> SuiResult<CheckpointSequenceNumber> {
-        Ok(self.pruned_checkpoint.get(&())?.unwrap_or_default())
+    pub fn get_highest_pruned_checkpoint(
+        &self,
+    ) -> Result<Option<CheckpointSequenceNumber>, TypedStoreError> {
+        self.pruned_checkpoint.get(&())
     }
 
     pub fn set_highest_pruned_checkpoint(
@@ -415,12 +585,12 @@ impl AuthorityPerpetualTables {
     }
 
     pub fn database_is_empty(&self) -> SuiResult<bool> {
-        Ok(self.objects.unbounded_iter().next().is_none())
+        Ok(self.objects.safe_iter().next().is_none())
     }
 
     pub fn iter_live_object_set(&self, include_wrapped_object: bool) -> LiveSetIter<'_> {
         LiveSetIter {
-            iter: self.objects.unbounded_iter(),
+            iter: Box::new(self.objects.safe_iter()),
             tables: self,
             prev: None,
             include_wrapped_object,
@@ -437,7 +607,7 @@ impl AuthorityPerpetualTables {
         let upper_bound = upper_bound.as_ref().map(ObjectKey::max_for_id);
 
         LiveSetIter {
-            iter: self.objects.iter_with_bounds(lower_bound, upper_bound),
+            iter: Box::new(self.objects.safe_iter_with_bounds(lower_bound, upper_bound)),
             tables: self,
             prev: None,
             include_wrapped_object,
@@ -447,24 +617,6 @@ impl AuthorityPerpetualTables {
     pub fn checkpoint_db(&self, path: &Path) -> SuiResult {
         // This checkpoints the entire db and not just objects table
         self.objects.checkpoint_db(path).map_err(Into::into)
-    }
-
-    pub fn reset_db_for_execution_since_genesis(&self) -> SuiResult {
-        // TODO: Add new tables that get added to the db automatically
-        self.objects.unsafe_clear()?;
-        self.live_owned_object_markers.unsafe_clear()?;
-        self.executed_effects.unsafe_clear()?;
-        self.events.unsafe_clear()?;
-        self.executed_transactions_to_checkpoint.unsafe_clear()?;
-        self.root_state_hash_by_epoch.unsafe_clear()?;
-        self.epoch_start_configuration.unsafe_clear()?;
-        self.pruned_checkpoint.unsafe_clear()?;
-        self.expected_network_sui_amount.unsafe_clear()?;
-        self.expected_storage_fund_imbalance.unsafe_clear()?;
-        self.object_per_epoch_marker_table.unsafe_clear()?;
-        self.object_per_epoch_marker_table_v2.unsafe_clear()?;
-        self.objects.rocksdb.flush()?;
-        Ok(())
     }
 
     pub fn get_root_state_hash(
@@ -540,8 +692,7 @@ impl ObjectStore for AuthorityPerpetualTables {
 }
 
 pub struct LiveSetIter<'a> {
-    iter:
-        <DBMap<ObjectKey, StoreObjectWrapper> as Map<'a, ObjectKey, StoreObjectWrapper>>::Iterator,
+    iter: DbIterator<'a, (ObjectKey, StoreObjectWrapper)>,
     tables: &'a AuthorityPerpetualTables,
     prev: Option<(ObjectKey, StoreObjectWrapper)>,
     /// Whether a wrapped object is considered as a live object.
@@ -615,7 +766,7 @@ impl Iterator for LiveSetIter<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if let Some((next_key, next_value)) = self.iter.next() {
+            if let Some(Ok((next_key, next_value))) = self.iter.next() {
                 let prev = self.prev.take();
                 self.prev = Some((next_key, next_value));
 

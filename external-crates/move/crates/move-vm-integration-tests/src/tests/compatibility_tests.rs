@@ -9,10 +9,14 @@ use move_binary_format::{
 };
 use move_ir_to_bytecode::{compiler::compile_module, parser::parse_module};
 
-fn compile(prog: &str) -> normalized::Module {
+fn compile(prog: &str) -> normalized::Module<normalized::RcIdentifier> {
     let prog = parse_module(prog).unwrap();
     let (compiled_module, _) = compile_module(prog, vec![]).unwrap();
-    normalized::Module::new(&compiled_module)
+    normalized::Module::new(
+        &mut normalized::RcPool::new(),
+        &compiled_module,
+        /* include code */ true,
+    )
 }
 
 // Things to test for enum upgrades

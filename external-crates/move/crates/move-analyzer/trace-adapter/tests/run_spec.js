@@ -20,14 +20,14 @@ const UB = process.env['UB'];
  * takes DAP runtime as argument and returns a string representing
  * test result
  */
-global.run_spec = function (dirname, action) {
+global.run_spec = function(dirname, action) {
     const test_dir = path.basename(dirname);
     describe(test_dir, () => {
         it(test_dir, () => {
             const rt = new runtime.Runtime();
             // assume that the test is always in the `test` function
             // of the `m` module
-            const traceInfo = test_dir +  '::' + 'm::test';
+            const traceInfo = test_dir + '::' + 'm::test';
             return rt.start(path.join(dirname, 'sources', `m.move`), traceInfo, true).then(() => {
                 handleTestResult(dirname, action, rt);
             });
@@ -36,13 +36,13 @@ global.run_spec = function (dirname, action) {
     });
 };
 
-global.run_spec_replay = function (dirname, action) {
+global.run_spec_replay = function(dirname, action) {
     const test_dir = path.basename(dirname);
     describe(test_dir, () => {
         it(test_dir, () => {
             const rt = new runtime.Runtime();
             const traceInfo = ''; // unused when trace comes from replay tool
-            return rt.start(path.join(dirname, 'trace.json'), traceInfo, true).then(() => {
+            return rt.start(path.join(dirname, 'trace.json.zst'), traceInfo, true).then(() => {
                 handleTestResult(dirname, action, rt);
             });
         });

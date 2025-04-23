@@ -9,11 +9,11 @@ import { AstPath, Doc, doc } from 'prettier';
 export const NODE_TYPE = 'call_expression';
 
 export default function (path: AstPath<Node>): treeFn | null {
-	if (path.node.type === NODE_TYPE) {
-		return printCallExpression;
-	}
+    if (path.node.type === NODE_TYPE) {
+        return printCallExpression;
+    }
 
-	return null;
+    return null;
 }
 
 /**
@@ -24,5 +24,5 @@ export default function (path: AstPath<Node>): treeFn | null {
  * - `arg_list`
  */
 function printCallExpression(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
-	return path.map(print, 'nonFormattingChildren');
+    return path.map(print, 'nonFormattingChildren');
 }

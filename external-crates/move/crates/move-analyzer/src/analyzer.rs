@@ -6,12 +6,14 @@ use anyhow::Result;
 use crossbeam::channel::{bounded, select};
 use lsp_server::{Connection, Message, Notification, Request, Response};
 use lsp_types::{
-    notification::Notification as _, request::Request as _, CompletionOptions, Diagnostic,
-    HoverProviderCapability, InlayHintOptions, InlayHintServerCapabilities, OneOf, SaveOptions,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
-    TypeDefinitionProviderCapability, WorkDoneProgressOptions,
+    notification::Notification as _, request::Request as _, CodeActionKind, CodeActionOptions,
+    CodeActionProviderCapability, CompletionOptions, Diagnostic, HoverProviderCapability,
+    InlayHintOptions, InlayHintServerCapabilities, OneOf, SaveOptions, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TextDocumentSyncOptions, TypeDefinitionProviderCapability,
+    WorkDoneProgressOptions,
 };
 use move_compiler::linters::LintLevel;
+use move_package::source_package::parsed_manifest::Dependencies;
 use std::{
     collections::BTreeMap,
     path::PathBuf,
@@ -19,7 +21,7 @@ use std::{
 };
 
 use crate::{
-    completions::on_completion_request, context::Context, inlay_hints, symbols,
+    code_action, completions::on_completion_request, context::Context, inlay_hints, symbols,
     vfs::on_text_document_sync_notification,
 };
 use url::Url;
@@ -30,7 +32,7 @@ const LINT_DEFAULT: &str = "default";
 const LINT_ALL: &str = "all";
 
 #[allow(deprecated)]
-pub fn run() {
+pub fn run(implicit_deps: Dependencies) {
     // stdio is used to communicate Language Server Protocol requests and responses.
     // stderr is used for logging (and, when Visual Studio Code is used to communicate with this
     // server, it captures this output in a dedicated "output channel").
@@ -107,6 +109,13 @@ pub fn run() {
                 resolve_provider: None,
             },
         ))),
+        code_action_provider: Some(CodeActionProviderCapability::Options(CodeActionOptions {
+            code_action_kinds: Some(vec![CodeActionKind::QUICKFIX]),
+            work_done_progress_options: WorkDoneProgressOptions {
+                work_done_progress: None,
+            },
+            resolve_provider: None,
+        })),
         ..Default::default()
     })
     .expect("could not serialize server capabilities");
@@ -139,6 +148,7 @@ pub fn run() {
         pkg_deps.clone(),
         diag_sender,
         lint,
+        implicit_deps.clone(),
     );
 
     // If initialization information from the client contains a path to the directory being
@@ -156,6 +166,7 @@ pub fn run() {
                 None,
                 lint,
                 None,
+                implicit_deps.clone(),
             ) {
                 let mut old_symbols_map = symbols_map.lock().unwrap();
                 old_symbols_map.insert(p, new_symbols);
@@ -166,6 +177,12 @@ pub fn run() {
     let context = Context {
         connection,
         symbols: symbols_map.clone(),
+        auto_imports: initialize_params
+            .initialization_options
+            .as_ref()
+            .and_then(|init_options| init_options.get("autoImports"))
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or_default(),
         inlay_type_hints: initialize_params
             .initialization_options
             .as_ref()
@@ -180,6 +197,10 @@ pub fn run() {
             .unwrap_or_default(),
     };
 
+    eprintln!(
+        "auto imports during auto-completion enabled: {}",
+        context.auto_imports
+    );
     eprintln!("inlay type hints enabled: {}", context.inlay_type_hints);
     eprintln!("inlay param hints enabled: {}", context.inlay_param_hints);
 
@@ -246,7 +267,7 @@ pub fn run() {
                         // a chance of completing pending requests (but should not accept new requests
                         // either which is handled inside on_requst) - instead it quits after receiving
                         // the exit notification from the client, which is handled below
-                        shutdown_req_received = on_request(&context, &request, ide_files_root.clone(), pkg_deps.clone(), shutdown_req_received);
+                        shutdown_req_received = on_request(&context, &request, ide_files_root.clone(), pkg_deps.clone(), shutdown_req_received, implicit_deps.clone());
                     }
                     Ok(Message::Response(response)) => on_response(&context, &response),
                     Ok(Message::Notification(notification)) => {
@@ -281,6 +302,7 @@ fn on_request(
     ide_files_root: VfsPath,
     pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, symbols::PrecomputedPkgInfo>>>,
     shutdown_request_received: bool,
+    implicit_deps: Dependencies,
 ) -> bool {
     if shutdown_request_received {
         let response = lsp_server::Response::new_err(
@@ -298,9 +320,13 @@ fn on_request(
         return true;
     }
     match request.method.as_str() {
-        lsp_types::request::Completion::METHOD => {
-            on_completion_request(context, request, ide_files_root.clone(), pkg_dependencies)
-        }
+        lsp_types::request::Completion::METHOD => on_completion_request(
+            context,
+            request,
+            ide_files_root.clone(),
+            pkg_dependencies,
+            implicit_deps,
+        ),
         lsp_types::request::GotoDefinition::METHOD => {
             symbols::on_go_to_def_request(context, request);
         }
@@ -318,6 +344,15 @@ fn on_request(
         }
         lsp_types::request::InlayHintRequest::METHOD => {
             inlay_hints::on_inlay_hint_request(context, request);
+        }
+        lsp_types::request::CodeActionRequest::METHOD => {
+            code_action::on_code_action_request(
+                context,
+                request,
+                ide_files_root.clone(),
+                pkg_dependencies,
+                implicit_deps,
+            );
         }
         lsp_types::request::Shutdown::METHOD => {
             eprintln!("Shutdown request received");

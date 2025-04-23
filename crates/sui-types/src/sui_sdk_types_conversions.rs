@@ -85,6 +85,8 @@ bcs_convert_impl!(
 bcs_convert_impl!(crate::signature::GenericSignature, UserSignature);
 bcs_convert_impl!(crate::effects::TransactionEvents, TransactionEvents);
 bcs_convert_impl!(crate::transaction::Command, Command);
+bcs_convert_impl!(crate::transaction::TransactionKind, TransactionKind);
+bcs_convert_impl!(crate::move_package::MovePackage, MovePackage);
 
 impl<const T: bool> From<crate::crypto::AuthorityQuorumSignInfo<T>>
     for ValidatorAggregatedSignature
@@ -428,9 +430,13 @@ impl From<UnchangedSharedKind> for crate::effects::UnchangedSharedKind {
             UnchangedSharedKind::ReadOnlyRoot { version, digest } => {
                 Self::ReadOnlyRoot((version.into(), digest.into()))
             }
-            UnchangedSharedKind::MutateDeleted { version } => Self::MutateDeleted(version.into()),
-            UnchangedSharedKind::ReadDeleted { version } => Self::ReadDeleted(version.into()),
-            UnchangedSharedKind::Cancelled { version } => Self::Cancelled(version.into()),
+            UnchangedSharedKind::MutateDeleted { version } => {
+                Self::MutateConsensusStreamEnded(version.into())
+            }
+            UnchangedSharedKind::ReadDeleted { version } => {
+                Self::ReadConsensusStreamEnded(version.into())
+            }
+            UnchangedSharedKind::Canceled { version } => Self::Cancelled(version.into()),
             UnchangedSharedKind::PerEpochConfig => Self::PerEpochConfig,
         }
     }
@@ -445,13 +451,17 @@ impl From<crate::effects::UnchangedSharedKind> for UnchangedSharedKind {
                     digest: digest.into(),
                 }
             }
-            crate::effects::UnchangedSharedKind::MutateDeleted(version) => Self::MutateDeleted {
-                version: version.into(),
-            },
-            crate::effects::UnchangedSharedKind::ReadDeleted(version) => Self::ReadDeleted {
-                version: version.into(),
-            },
-            crate::effects::UnchangedSharedKind::Cancelled(version) => Self::Cancelled {
+            crate::effects::UnchangedSharedKind::MutateConsensusStreamEnded(version) => {
+                Self::MutateDeleted {
+                    version: version.into(),
+                }
+            }
+            crate::effects::UnchangedSharedKind::ReadConsensusStreamEnded(version) => {
+                Self::ReadDeleted {
+                    version: version.into(),
+                }
+            }
+            crate::effects::UnchangedSharedKind::Cancelled(version) => Self::Canceled {
                 version: version.into(),
             },
             crate::effects::UnchangedSharedKind::PerEpochConfig => Self::PerEpochConfig,

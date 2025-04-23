@@ -1,2 +1,2 @@
-test -t 1 --trace-execution new_traces
-> diff -qr new_traces saved_traces
+test -t 1 --trace-execution
+> diff -qr traces saved_traces

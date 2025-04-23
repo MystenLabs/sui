@@ -220,8 +220,15 @@ async fn run() -> Result<(), Box<dyn Error>> {
         info!("Found {} logs for method: {}", count, method);
     }
 
-    // Write logs to file in ascending timestamp order
-    let file = File::create("sampled_read_requests.jsonl")?;
+    let output_dir = env::var("OUTPUT_DIR").unwrap_or_else(|_| ".".to_string());
+    let output_file = format!("{}/sampled_read_requests.jsonl", output_dir);
+    if let Some(parent) = std::path::Path::new(&output_file).parent() {
+        if !parent.exists() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
+
+    let file = File::create(&output_file)?;
     let mut writer = BufWriter::new(file);
     for entry in asc_log_entries {
         let line = format!(
@@ -232,6 +239,6 @@ async fn run() -> Result<(), Box<dyn Error>> {
         writer.write_all(b"\n")?;
     }
     writer.flush()?;
-    info!("Done! Wrote grouped logs to sampled_read_requests.jsonl");
+    info!("Done! Wrote grouped logs to {}", output_file);
     Ok(())
 }

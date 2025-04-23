@@ -8,8 +8,6 @@ use sui_types::Identifier;
 
 use sui_types::event::EventID;
 use typed_store::rocks::{DBMap, MetricConf};
-use typed_store::traits::TableSummary;
-use typed_store::traits::TypedStoreDebug;
 use typed_store::DBMapUtils;
 use typed_store::Map;
 
@@ -107,7 +105,10 @@ impl BridgeOrchestratorTables {
     }
 
     pub fn get_all_pending_actions(&self) -> HashMap<BridgeActionDigest, BridgeAction> {
-        self.pending_actions.unbounded_iter().collect()
+        self.pending_actions
+            .safe_iter()
+            .collect::<Result<HashMap<_, _>, _>>()
+            .expect("failed to get all pending actions")
     }
 
     pub fn get_sui_event_cursors(

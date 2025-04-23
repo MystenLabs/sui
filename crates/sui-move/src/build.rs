@@ -5,9 +5,9 @@ use crate::manage_package::resolve_lock_file_path;
 use clap::Parser;
 use move_cli::base;
 use move_package::BuildConfig as MoveBuildConfig;
-use serde_json::json;
 use std::{fs, path::Path};
-use sui_move_build::{check_invalid_dependencies, check_unpublished_dependencies, BuildConfig};
+use sui_move_build::{implicit_deps, BuildConfig};
+use sui_package_management::system_package_versions::latest_system_packages;
 
 const LAYOUTS_DIR: &str = "layouts";
 const STRUCT_LAYOUTS_FILENAME: &str = "struct_layouts.yaml";
@@ -22,6 +22,7 @@ pub struct Build {
     /// Whether we are printing in base64.
     #[clap(long, global = true)]
     pub dump_bytecode_as_base64: bool,
+    /// [Mainly for testing, not recommended for production]
     /// Don't specialize the package to the active chain when dumping bytecode as Base64. This
     /// allows building to proceed without a network connection or active environment, but it
     /// will not be able to automatically determine the addresses of its dependencies.
@@ -52,8 +53,6 @@ impl Build {
         Self::execute_internal(
             &rerooted_path,
             build_config,
-            self.with_unpublished_dependencies,
-            self.dump_bytecode_as_base64,
             self.generate_struct_layouts,
             self.chain_id.clone(),
         )
@@ -61,35 +60,18 @@ impl Build {
 
     pub fn execute_internal(
         rerooted_path: &Path,
-        config: MoveBuildConfig,
-        with_unpublished_deps: bool,
-        dump_bytecode_as_base64: bool,
+        mut config: MoveBuildConfig,
         generate_struct_layouts: bool,
         chain_id: Option<String>,
     ) -> anyhow::Result<()> {
-        let mut pkg = BuildConfig {
+        config.implicit_dependencies = implicit_deps(latest_system_packages());
+        let pkg = BuildConfig {
             config,
             run_bytecode_verifier: true,
             print_diags_to_stderr: true,
             chain_id,
         }
         .build(rerooted_path)?;
-        if dump_bytecode_as_base64 {
-            check_invalid_dependencies(&pkg.dependency_ids.invalid)?;
-            if !with_unpublished_deps {
-                check_unpublished_dependencies(&pkg.dependency_ids.unpublished)?;
-            }
-
-            pkg.tree_shake(with_unpublished_deps)?;
-            println!(
-                "{}",
-                json!({
-                    "modules": pkg.get_package_base64(with_unpublished_deps),
-                    "dependencies": pkg.get_dependency_storage_package_ids(),
-                    "digest": pkg.get_package_digest(with_unpublished_deps),
-                })
-            )
-        }
 
         if generate_struct_layouts {
             let layout_str = serde_yaml::to_string(&pkg.generate_struct_layouts()).unwrap();

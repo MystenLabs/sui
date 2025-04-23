@@ -47,7 +47,7 @@ const ELenOutOfRange: u64 = 2;
 /// A helper struct that saves resources on operations. For better
 /// vector performance, it stores reversed bytes of the BCS and
 /// enables use of `vector::pop_back`.
-public struct BCS has store, copy, drop {
+public struct BCS has copy, drop, store {
     bytes: vector<u8>,
 }
 
@@ -245,8 +245,7 @@ public fun peel_enum_tag(bcs: &mut BCS): u32 {
 /// functionality of peeling the inner value.
 public macro fun peel_option<$T>($bcs: &mut BCS, $peel: |&mut BCS| -> $T): Option<$T> {
     let bcs = $bcs;
-    if (bcs.peel_bool()) option::some($peel(bcs))
-    else option::none()
+    if (bcs.peel_bool()) option::some($peel(bcs)) else option::none()
 }
 
 /// Peel `Option<address>` from serialized bytes.

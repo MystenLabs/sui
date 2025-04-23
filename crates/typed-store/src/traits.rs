@@ -3,7 +3,9 @@
 use crate::TypedStoreError;
 use serde::{de::DeserializeOwned, Serialize};
 use std::ops::RangeBounds;
-use std::{borrow::Borrow, collections::BTreeMap, error::Error};
+use std::{borrow::Borrow, error::Error};
+
+pub type DbIterator<'a, T> = Box<dyn Iterator<Item = Result<T, TypedStoreError>> + 'a>;
 
 pub trait Map<'a, K, V>
 where
@@ -11,8 +13,6 @@ where
     V: Serialize + DeserializeOwned,
 {
     type Error: Error;
-    type Iterator: Iterator<Item = (K, V)>;
-    type SafeIterator: Iterator<Item = Result<(K, V), TypedStoreError>>;
 
     /// Returns true if the map contains a value for the specified key.
     fn contains_key(&self, key: &K) -> Result<bool, Self::Error>;
@@ -39,39 +39,24 @@ where
     /// Removes the entry for the given key from the map.
     fn remove(&self, key: &K) -> Result<(), Self::Error>;
 
-    /// Removes every key-value pair from the map.
-    fn unsafe_clear(&self) -> Result<(), Self::Error>;
-
     /// Uses delete range on the entire key range
     fn schedule_delete_all(&self) -> Result<(), TypedStoreError>;
 
     /// Returns true if the map is empty, otherwise false.
     fn is_empty(&self) -> bool;
 
-    /// Returns an unbounded iterator visiting each key-value pair in the map.
-    /// This is potentially unsafe as it can perform a full table scan
-    fn unbounded_iter(&'a self) -> Self::Iterator;
-
-    /// Returns an iterator visiting each key-value pair within the specified bounds in the map.
-    fn iter_with_bounds(&'a self, lower_bound: Option<K>, upper_bound: Option<K>)
-        -> Self::Iterator;
-
-    /// Similar to `iter_with_bounds` but allows specifying inclusivity/exclusivity of ranges explicitly.
-    /// TODO: find better name
-    fn range_iter(&'a self, range: impl RangeBounds<K>) -> Self::Iterator;
-
     /// Same as `iter` but performs status check.
-    fn safe_iter(&'a self) -> Self::SafeIterator;
+    fn safe_iter(&'a self) -> DbIterator<'a, (K, V)>;
 
     // Same as `iter_with_bounds` but performs status check.
     fn safe_iter_with_bounds(
         &'a self,
         lower_bound: Option<K>,
         upper_bound: Option<K>,
-    ) -> Self::SafeIterator;
+    ) -> DbIterator<'a, (K, V)>;
 
     // Same as `range_iter` but performs status check.
-    fn safe_range_iter(&'a self, range: impl RangeBounds<K>) -> Self::SafeIterator;
+    fn safe_range_iter(&'a self, range: impl RangeBounds<K>) -> DbIterator<'a, (K, V)>;
 
     /// Returns a vector of values corresponding to the keys provided, non-atomically.
     fn multi_get<J>(&self, keys: impl IntoIterator<Item = J>) -> Result<Vec<Option<V>>, Self::Error>
@@ -114,26 +99,4 @@ pub struct TableSummary {
     pub value_bytes_total: usize,
     pub key_hist: hdrhistogram::Histogram<u64>,
     pub value_hist: hdrhistogram::Histogram<u64>,
-}
-
-pub trait TypedStoreDebug {
-    /// Dump a DB table with pagination
-    fn dump_table(
-        &self,
-        table_name: String,
-        page_size: u16,
-        page_number: usize,
-    ) -> eyre::Result<BTreeMap<String, String>>;
-
-    /// Get the name of the DB. This is simply the name of the struct
-    fn primary_db_name(&self) -> String;
-
-    /// Get a map of table names to key-value types
-    fn describe_all_tables(&self) -> BTreeMap<String, (String, String)>;
-
-    /// Count the entries in the table
-    fn count_table_keys(&self, table_name: String) -> eyre::Result<usize>;
-
-    /// Return table summary of the input table
-    fn table_summary(&self, table_name: String) -> eyre::Result<TableSummary>;
 }

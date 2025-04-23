@@ -40,7 +40,7 @@ The following package IDs and addresses are reserved for the Sui Bridge.
 | --- | --- |
 | Sui Bridge package on Sui | [`0xb`](https://suiscan.xyz/mainnet/object/0x000000000000000000000000000000000000000000000000000000000000000b/txs) |
 | Sui Bridge object on Sui | [`0x9`](https://suiscan.xyz/mainnet/object/0x0000000000000000000000000000000000000000000000000000000000000009) |
-| Sui Bridge contract on Etheruem Mainnet | [`0xda3bD1fE1973470312db04551B65f401Bc8a92fD`](https://etherscan.io/address/0xda3bd1fe1973470312db04551b65f401bc8a92fd) |
+| Sui Bridge contract on Ethereum Mainnet | [`0xda3bD1fE1973470312db04551B65f401Bc8a92fD`](https://etherscan.io/address/0xda3bd1fe1973470312db04551b65f401bc8a92fd) |
 | ETH on Sui | [`0xd0e89b2af5e4910726fbcd8b8dd37bb79b29e5f83f7491bca830e94f7f226d29::eth::ETH`](https://suiscan.xyz/mainnet/coin/0xd0e89b2af5e4910726fbcd8b8dd37bb79b29e5f83f7491bca830e94f7f226d29::eth::ETH/txs) |
 | ETH on Ethereum | Native Ether |
 | WETH on Ethereum | [`0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2`](https://etherscan.io/address/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2) |
@@ -69,13 +69,13 @@ The limit applies globally and varies per direction. For example, the amount mig
 
 The limit also impacts the maximal amount of single transfer. In one bridge transfer, you cannot move assets worth more than the limit. The bridge frontend might apply stricter restrictions to protect user assets.
 
-The limit per route is governed by the validator committee through voting.
+The limit per route is governed by the validator committee through voting. The limit value is captured in the `approved-governance-actions` attribute of Bridge node configurations, which is announced in the [mn-validator-announcements channel](https://discord.com/channels/916379725201563759/1093852827627040768) on Discord when it updates.
 
-The global limit is currently $8 million from Ethereum to Sui and $5 million from Sui to Etheruem every 24 hours.
+The global limit is currently &dollar;16 million from Ethereum to Sui and &dollar;7 million from Sui to Etheruem every 24 hours.
 
 ### Asset price
 
-Sui Bridge v1 uses static pricing to calculate limits. The price for ETH is configured at $2,600.00. Namely, bridging one ETH consumes $2,600 USD in limit calculation.
+Sui Bridge v1 uses static pricing to calculate limits. The price for ETH is configured at &dollar;2,600.00. Namely, bridging one ETH consumes &dollar;2,600 USD in limit calculation.
 
 The validator committee governs the pricing through voting. It works together with the global limiter to protect user funds.
 

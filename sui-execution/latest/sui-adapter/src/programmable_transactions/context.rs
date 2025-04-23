@@ -5,14 +5,14 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
-    use std::collections::BTreeSet;
     use std::{
         borrow::Borrow,
-        collections::{BTreeMap, HashMap},
+        cell::RefCell,
+        collections::{BTreeMap, BTreeSet, HashMap},
+        rc::Rc,
         sync::Arc,
     };
 
-    use crate::adapter::new_native_extensions;
     use crate::error::convert_vm_error;
     use crate::execution_mode::ExecutionMode;
     use crate::execution_value::{CommandKind, ObjectContents, TryFromValue, Value};
@@ -21,11 +21,13 @@ mod checked {
         UsageKind,
     };
     use crate::gas_charger::GasCharger;
+    use crate::gas_meter::SuiGasMeter;
     use crate::programmable_transactions::linkage_view::LinkageView;
     use crate::type_resolver::TypeTagResolver;
+    use crate::{adapter::new_native_extensions, execution_value::SizeBound};
     use move_binary_format::{
         errors::{Location, PartialVMError, PartialVMResult, VMError, VMResult},
-        file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
+        file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
         CompiledModule,
     };
     use move_core_types::resolver::ModuleResolver;
@@ -43,11 +45,11 @@ mod checked {
     };
     use move_vm_types::data_store::DataStore;
     use move_vm_types::loaded_data::runtime_types::Type;
+    use mysten_common::debug_fatal;
     use sui_move_natives::object_runtime::{
         self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
     };
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::execution::ExecutionResults;
     use sui_types::storage::{DenyListResult, PackageObject};
     use sui_types::{
         balance::Balance,
@@ -63,6 +65,7 @@ mod checked {
         transaction::{Argument, CallArg, ObjectArg},
     };
     use sui_types::{error::command_argument_error, execution_status::CommandArgumentError};
+    use sui_types::{execution::ExecutionResults, object::Authenticator};
     use tracing::instrument;
 
     /// Maintains all runtime state specific to programmable transactions
@@ -80,7 +83,7 @@ mod checked {
         pub state_view: &'state dyn ExecutionState,
         /// A shared transaction context, contains transaction digest information and manages the
         /// creation of new object IDs
-        pub tx_context: &'a mut TxContext,
+        pub tx_context: Rc<RefCell<TxContext>>,
         /// The gas charger used for metering
         pub gas_charger: &'a mut GasCharger,
         /// Additional transfers not from the Move runtime
@@ -100,7 +103,7 @@ mod checked {
         results: Vec<Vec<ResultValue>>,
         /// Map of arguments that are currently borrowed in this command, true if the borrow is mutable
         /// This gets cleared out when new results are pushed, i.e. the end of a command
-        borrowed: HashMap<Argument, /* mut */ bool>,
+        borrowed: HashMap<Arg, /* mut */ bool>,
     }
 
     /// A write for an object that was generated outside of the Move ObjectRuntime
@@ -115,6 +118,22 @@ mod checked {
         bytes: Vec<u8>,
     }
 
+    #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+    pub struct Arg(Arg_);
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+    enum Arg_ {
+        V1(Argument),
+        V2(NormalizedArg),
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+    enum NormalizedArg {
+        GasCoin,
+        Input(u16),
+        Result(u16, u16),
+    }
+
     impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
         #[instrument(name = "ExecutionContext::new", level = "trace", skip_all)]
         pub fn new(
@@ -122,7 +141,7 @@ mod checked {
             metrics: Arc<LimitsMetrics>,
             vm: &'vm MoveVM,
             state_view: &'state dyn ExecutionState,
-            tx_context: &'a mut TxContext,
+            tx_context: Rc<RefCell<TxContext>>,
             gas_charger: &'a mut GasCharger,
             inputs: Vec<CallArg>,
         ) -> Result<Self, ExecutionError>
@@ -190,7 +209,7 @@ mod checked {
                 !gas_charger.is_unmetered(),
                 protocol_config,
                 metrics.clone(),
-                tx_context.epoch(),
+                tx_context.clone(),
             );
 
             // Set the profiler if in CLI
@@ -198,14 +217,15 @@ mod checked {
             move_vm_profiler::tracing_feature_enabled! {
                 use move_vm_profiler::GasProfiler;
                 use move_vm_types::gas::GasMeter;
+                use crate::gas_meter::SuiGasMeter;
 
-                let tx_digest = tx_context.digest();
-                let remaining_gas: u64 =
-                    move_vm_types::gas::GasMeter::remaining_gas(gas_charger.move_gas_status())
+                let ref_context: &RefCell<TxContext> = tx_context.borrow();
+                let tx_digest = ref_context.borrow().digest();
+                let remaining_gas: u64 = move_vm_types::gas::GasMeter::remaining_gas(&SuiGasMeter(
+                    gas_charger.move_gas_status_mut(),
+                ))
                         .into();
-                gas_charger
-                    .move_gas_status_mut()
-                    .set_profiler(GasProfiler::init(
+                SuiGasMeter(gas_charger.move_gas_status_mut()).set_profiler(GasProfiler::init(
                         &vm.config().profiler_config,
                         format!("{}", tx_digest),
                         remaining_gas,
@@ -231,25 +251,27 @@ mod checked {
             })
         }
 
-        pub fn object_runtime(&mut self) -> &ObjectRuntime {
-            self.native_extensions.get()
+        pub fn object_runtime(&self) -> Result<&ObjectRuntime, ExecutionError> {
+            self.native_extensions
+                .get::<ObjectRuntime>()
+                .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))
         }
 
         /// Create a new ID and update the state
         pub fn fresh_id(&mut self) -> Result<ObjectID, ExecutionError> {
-            let object_id = self.tx_context.fresh_id();
-            let object_runtime: &mut ObjectRuntime = self.native_extensions.get_mut();
-            object_runtime
-                .new_id(object_id)
+            let object_id = self.tx_context.borrow_mut().fresh_id();
+            self.native_extensions
+                .get_mut()
+                .and_then(|object_runtime: &mut ObjectRuntime| object_runtime.new_id(object_id))
                 .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))?;
             Ok(object_id)
         }
 
         /// Delete an ID and update the state
         pub fn delete_id(&mut self, object_id: ObjectID) -> Result<(), ExecutionError> {
-            let object_runtime: &mut ObjectRuntime = self.native_extensions.get_mut();
-            object_runtime
-                .delete_id(object_id)
+            self.native_extensions
+                .get_mut()
+                .and_then(|object_runtime: &mut ObjectRuntime| object_runtime.delete_id(object_id))
                 .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))
         }
 
@@ -293,6 +315,13 @@ mod checked {
             )
         }
 
+        pub fn get_type_abilities(&self, t: &Type) -> Result<AbilitySet, ExecutionError> {
+            self.vm
+                .get_runtime()
+                .get_type_abilities(t)
+                .map_err(|e| self.convert_vm_error(e))
+        }
+
         /// Takes the user events from the runtime and tags them with the Move module of the function
         /// that was invoked for the command
         pub fn take_user_events(
@@ -301,8 +330,11 @@ mod checked {
             function: FunctionDefinitionIndex,
             last_offset: CodeOffset,
         ) -> Result<(), ExecutionError> {
-            let object_runtime: &mut ObjectRuntime = self.native_extensions.get_mut();
-            let events = object_runtime.take_user_events();
+            let events = self
+                .native_extensions
+                .get_mut()
+                .map(|object_runtime: &mut ObjectRuntime| object_runtime.take_user_events())
+                .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))?;
             let num_events = self.user_events.len() + events.len();
             let max_events = self.protocol_config.max_num_event_emit();
             if num_events as u64 > max_events {
@@ -329,6 +361,90 @@ mod checked {
             Ok(())
         }
 
+        /// Takes an iterator of arguments and flattens a Result into a NestedResult if there
+        /// is more than one result.
+        /// However, it is currently gated to 1 result, so this function is in place for future
+        /// changes. This is currently blocked by more invasive work needed to update argument idx
+        /// in errors
+        pub fn splat_args<Items: IntoIterator<Item = Argument>>(
+            &self,
+            start_idx: usize,
+            args: Items,
+        ) -> Result<Vec<Arg>, ExecutionError>
+        where
+            Items::IntoIter: ExactSizeIterator,
+        {
+            if !self.protocol_config.normalize_ptb_arguments() {
+                Ok(args.into_iter().map(|arg| Arg(Arg_::V1(arg))).collect())
+            } else {
+                let args = args.into_iter();
+                let _args_len = args.len();
+                let mut res = vec![];
+                for (arg_idx, arg) in args.enumerate() {
+                    self.splat_arg(&mut res, arg)
+                        .map_err(|e| e.into_execution_error(start_idx + arg_idx))?;
+                }
+                debug_assert_eq!(res.len(), _args_len);
+                Ok(res)
+            }
+        }
+
+        fn splat_arg(&self, res: &mut Vec<Arg>, arg: Argument) -> Result<(), EitherError> {
+            match arg {
+                Argument::GasCoin => res.push(Arg(Arg_::V2(NormalizedArg::GasCoin))),
+                Argument::Input(i) => {
+                    if i as usize >= self.inputs.len() {
+                        return Err(CommandArgumentError::IndexOutOfBounds { idx: i }.into());
+                    }
+                    res.push(Arg(Arg_::V2(NormalizedArg::Input(i))))
+                }
+                Argument::NestedResult(i, j) => {
+                    let Some(command_result) = self.results.get(i as usize) else {
+                        return Err(CommandArgumentError::IndexOutOfBounds { idx: i }.into());
+                    };
+                    if j as usize >= command_result.len() {
+                        return Err(CommandArgumentError::SecondaryIndexOutOfBounds {
+                            result_idx: i,
+                            secondary_idx: j,
+                        }
+                        .into());
+                    };
+                    res.push(Arg(Arg_::V2(NormalizedArg::Result(i, j))))
+                }
+                Argument::Result(i) => {
+                    let Some(result) = self.results.get(i as usize) else {
+                        return Err(CommandArgumentError::IndexOutOfBounds { idx: i }.into());
+                    };
+                    let Ok(len): Result<u16, _> = result.len().try_into() else {
+                        invariant_violation!("Result of length greater than u16::MAX");
+                    };
+                    if len != 1 {
+                        // TODO protocol config to allow splatting of args
+                        return Err(
+                            CommandArgumentError::InvalidResultArity { result_idx: i }.into()
+                        );
+                    }
+                    res.extend((0..len).map(|j| Arg(Arg_::V2(NormalizedArg::Result(i, j)))))
+                }
+            }
+            Ok(())
+        }
+
+        pub fn one_arg(
+            &self,
+            command_arg_idx: usize,
+            arg: Argument,
+        ) -> Result<Arg, ExecutionError> {
+            let args = self.splat_args(command_arg_idx, vec![arg])?;
+            let Ok([arg]): Result<[Arg; 1], _> = args.try_into() else {
+                return Err(command_argument_error(
+                    CommandArgumentError::InvalidArgumentArity,
+                    command_arg_idx,
+                ));
+            };
+            Ok(arg)
+        }
+
         /// Get the argument value. Cloning the value if it is copyable, and setting its value to None
         /// if it is not (making it unavailable).
         /// Errors if out of bounds, if the argument is borrowed, if it is unavailable (already taken),
@@ -337,23 +453,23 @@ mod checked {
             &mut self,
             command_kind: CommandKind<'_>,
             arg_idx: usize,
-            arg: Argument,
+            arg: Arg,
         ) -> Result<V, ExecutionError> {
             self.by_value_arg_(command_kind, arg)
-                .map_err(|e| command_argument_error(e, arg_idx))
+                .map_err(|e| e.into_execution_error(arg_idx))
         }
         fn by_value_arg_<V: TryFromValue>(
             &mut self,
             command_kind: CommandKind<'_>,
-            arg: Argument,
-        ) -> Result<V, CommandArgumentError> {
+            arg: Arg,
+        ) -> Result<V, EitherError> {
             let shared_obj_deletion_enabled = self.protocol_config.shared_object_deletion();
             let is_borrowed = self.arg_is_borrowed(&arg);
             let (input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::ByValue)?;
             let is_copyable = if let Some(val) = val_opt {
                 val.is_copyable()
             } else {
-                return Err(CommandArgumentError::InvalidValueUsage);
+                return Err(CommandArgumentError::InvalidValueUsage.into());
             };
             // If it was taken, we catch this above.
             // If it was not copyable and was borrowed, error as it creates a dangling reference in
@@ -361,13 +477,11 @@ mod checked {
             // We allow copyable values to be copied out even if borrowed, as we do not care about
             // referential transparency at this level.
             if !is_copyable && is_borrowed {
-                return Err(CommandArgumentError::InvalidValueUsage);
+                return Err(CommandArgumentError::InvalidValueUsage.into());
             }
             // Gas coin cannot be taken by value, except in TransferObjects
-            if matches!(arg, Argument::GasCoin)
-                && !matches!(command_kind, CommandKind::TransferObjects)
-            {
-                return Err(CommandArgumentError::InvalidGasCoinUsage);
+            if arg.is_gas_coin() && !matches!(command_kind, CommandKind::TransferObjects) {
+                return Err(CommandArgumentError::InvalidGasCoinUsage.into());
             }
             // Immutable objects cannot be taken by value
             if matches!(
@@ -377,7 +491,7 @@ mod checked {
                     ..
                 })
             ) {
-                return Err(CommandArgumentError::InvalidObjectByValue);
+                return Err(CommandArgumentError::InvalidObjectByValue.into());
             }
             if (
                 // this check can be removed after shared_object_deletion feature flag is removed
@@ -389,7 +503,7 @@ mod checked {
                     })
                 ) && !shared_obj_deletion_enabled
             ) {
-                return Err(CommandArgumentError::InvalidObjectByValue);
+                return Err(CommandArgumentError::InvalidObjectByValue.into());
             }
 
             // Any input object taken by value must be mutable
@@ -400,7 +514,7 @@ mod checked {
                     ..
                 })
             ) {
-                return Err(CommandArgumentError::InvalidObjectByValue);
+                return Err(CommandArgumentError::InvalidObjectByValue.into());
             }
 
             let val = if is_copyable {
@@ -408,7 +522,7 @@ mod checked {
             } else {
                 val_opt.take().unwrap()
             };
-            V::try_from_value(val)
+            Ok(V::try_from_value(val)?)
         }
 
         /// Mimic a mutable borrow by taking the argument value, setting its value to None,
@@ -419,18 +533,15 @@ mod checked {
         pub fn borrow_arg_mut<V: TryFromValue>(
             &mut self,
             arg_idx: usize,
-            arg: Argument,
+            arg: Arg,
         ) -> Result<V, ExecutionError> {
             self.borrow_arg_mut_(arg)
-                .map_err(|e| command_argument_error(e, arg_idx))
+                .map_err(|e| e.into_execution_error(arg_idx))
         }
-        fn borrow_arg_mut_<V: TryFromValue>(
-            &mut self,
-            arg: Argument,
-        ) -> Result<V, CommandArgumentError> {
+        fn borrow_arg_mut_<V: TryFromValue>(&mut self, arg: Arg) -> Result<V, EitherError> {
             // mutable borrowing requires unique usage
             if self.arg_is_borrowed(&arg) {
-                return Err(CommandArgumentError::InvalidValueUsage);
+                return Err(CommandArgumentError::InvalidValueUsage.into());
             }
             self.borrowed.insert(arg, /* is_mut */ true);
             let (input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::BorrowMut)?;
@@ -438,14 +549,14 @@ mod checked {
                 val.is_copyable()
             } else {
                 // error if taken
-                return Err(CommandArgumentError::InvalidValueUsage);
+                return Err(CommandArgumentError::InvalidValueUsage.into());
             };
             if let Some(InputObjectMetadata::InputObject {
                 is_mutable_input: false,
                 ..
             }) = input_metadata_opt
             {
-                return Err(CommandArgumentError::InvalidObjectByMutRef);
+                return Err(CommandArgumentError::InvalidObjectByMutRef.into());
             }
             // if it is copyable, don't take it as we allow for the value to be copied even if
             // mutably borrowed
@@ -454,7 +565,7 @@ mod checked {
             } else {
                 val_opt.take().unwrap()
             };
-            V::try_from_value(val)
+            Ok(V::try_from_value(val)?)
         }
 
         /// Mimics an immutable borrow by cloning the argument value without setting its value to None
@@ -463,48 +574,48 @@ mod checked {
         pub fn borrow_arg<V: TryFromValue>(
             &mut self,
             arg_idx: usize,
-            arg: Argument,
+            arg: Arg,
             type_: &Type,
         ) -> Result<V, ExecutionError> {
             self.borrow_arg_(arg, type_)
-                .map_err(|e| command_argument_error(e, arg_idx))
+                .map_err(|e| e.into_execution_error(arg_idx))
         }
         fn borrow_arg_<V: TryFromValue>(
             &mut self,
-            arg: Argument,
+            arg: Arg,
             arg_type: &Type,
-        ) -> Result<V, CommandArgumentError> {
+        ) -> Result<V, EitherError> {
             // immutable borrowing requires the value was not mutably borrowed.
             // If it was copied, that is okay.
             // If it was taken/moved, we will find out below
             if self.arg_is_mut_borrowed(&arg) {
-                return Err(CommandArgumentError::InvalidValueUsage);
+                return Err(CommandArgumentError::InvalidValueUsage.into());
             }
             self.borrowed.insert(arg, /* is_mut */ false);
             let (_input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::BorrowImm)?;
             if val_opt.is_none() {
-                return Err(CommandArgumentError::InvalidValueUsage);
+                return Err(CommandArgumentError::InvalidValueUsage.into());
             }
 
             // We eagerly reify receiving argument types at the first usage of them.
             if let &mut Some(Value::Receiving(_, _, ref mut recv_arg_type @ None)) = val_opt {
                 let Type::Reference(inner) = arg_type else {
-                    return Err(CommandArgumentError::InvalidValueUsage);
+                    return Err(CommandArgumentError::InvalidValueUsage.into());
                 };
                 *recv_arg_type = Some(*(*inner).clone());
             }
 
-            V::try_from_value(val_opt.as_ref().unwrap().clone())
+            Ok(V::try_from_value(val_opt.as_ref().unwrap().clone())?)
         }
 
         /// Restore an argument after being mutably borrowed
         pub fn restore_arg<Mode: ExecutionMode>(
             &mut self,
             updates: &mut Mode::ArgumentUpdates,
-            arg: Argument,
+            arg: Arg,
             value: Value,
         ) -> Result<(), ExecutionError> {
-            Mode::add_argument_update(self, updates, arg, &value)?;
+            Mode::add_argument_update(self, updates, arg.into(), &value)?;
             let was_mut_opt = self.borrowed.remove(&arg);
             assert_invariant!(
                 was_mut_opt.is_some() && was_mut_opt.unwrap(),
@@ -610,11 +721,13 @@ mod checked {
                 state_view,
                 ..
             } = self;
-            let tx_digest = tx_context.digest();
+            let ref_context: &RefCell<TxContext> = tx_context.borrow();
+            let tx_digest = ref_context.borrow().digest();
             let gas_id_opt = gas.object_metadata.as_ref().map(|info| info.id());
             let mut loaded_runtime_objects = BTreeMap::new();
             let mut additional_writes = BTreeMap::new();
             let mut by_value_shared_objects = BTreeSet::new();
+            let mut authenticator_objects = BTreeMap::new();
             for input in inputs.into_iter().chain(std::iter::once(gas)) {
                 let InputValue {
                     object_metadata:
@@ -641,6 +754,8 @@ mod checked {
                     add_additional_write(&mut additional_writes, owner, object_value)?;
                 } else if owner.is_shared() {
                     by_value_shared_objects.insert(id);
+                } else if owner.authenticator().is_some() {
+                    authenticator_objects.insert(id, owner.clone());
                 }
             }
             // check for unused values
@@ -704,7 +819,14 @@ mod checked {
                 refund_max_gas_budget(&mut additional_writes, gas_charger, gas_id)?;
             }
 
-            let object_runtime: ObjectRuntime = native_extensions.remove();
+            let object_runtime: ObjectRuntime = native_extensions.remove().map_err(|e| {
+                convert_vm_error(
+                    e.finish(Location::Undefined),
+                    vm,
+                    &linkage_view,
+                    protocol_config.resolve_abort_locations_to_package_id(),
+                )
+            })?;
 
             let RuntimeResults {
                 writes,
@@ -828,6 +950,35 @@ mod checked {
                 }
             }
 
+            // Before finishing, enforce restrictions on transfer and deletion for objects configured
+            // with authenticators.
+            for (id, original_owner) in authenticator_objects {
+                let authenticator = original_owner.authenticator().expect("verified before adding to `authenticator_objects` that these have authenticators");
+
+                match authenticator {
+                    Authenticator::SingleOwner(owner) => {
+                        // Already verified in pre-execution checks that tx sender is the object owner.
+                        // SingleOwner is allowed to do anything with the object.
+                        if ref_context.borrow().sender() != *owner {
+                            debug_fatal!("transaction with a singly owned input object where the tx sender is not the owner should never be executed");
+                            return Err(ExecutionError::new(
+                                ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                                Some(
+                                    format!("Shared object operation on {} not allowed: \
+                                             transaction with singly owned input object must be sent by the owner", id).into(),
+                                ),
+                            ));
+                        }
+                    } // Future authenticators with fewer permissions should be checked here. For
+                      // example, transfers and wraps can be detected by comparing `original_owner`
+                      // with:
+                      // let new_owner = written_objects.get(&id).map(|obj| obj.owner);
+                      //
+                      // Deletions can be detected with:
+                      // let deleted = deleted_object_ids.contains(&id);
+                }
+            }
+
             if protocol_config.enable_coin_deny_list_v2() {
                 let DenyListResult {
                     result,
@@ -843,7 +994,7 @@ mod checked {
                     Event::new(
                         module_id.address(),
                         module_id.name(),
-                        tx_context.sender(),
+                        ref_context.borrow().sender(),
                         tag,
                         contents,
                     )
@@ -895,28 +1046,51 @@ mod checked {
         }
 
         /// Returns true if the value at the argument's location is borrowed, mutably or immutably
-        fn arg_is_borrowed(&self, arg: &Argument) -> bool {
+        fn arg_is_borrowed(&self, arg: &Arg) -> bool {
             self.borrowed.contains_key(arg)
         }
 
         /// Returns true if the value at the argument's location is mutably borrowed
-        fn arg_is_mut_borrowed(&self, arg: &Argument) -> bool {
+        fn arg_is_mut_borrowed(&self, arg: &Arg) -> bool {
             matches!(self.borrowed.get(arg), Some(/* mut */ true))
         }
 
         /// Internal helper to borrow the value for an argument and update the most recent usage
         fn borrow_mut(
             &mut self,
-            arg: Argument,
+            arg: Arg,
             usage: UsageKind,
-        ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), CommandArgumentError>
-        {
+        ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), EitherError> {
             self.borrow_mut_impl(arg, Some(usage))
         }
 
         /// Internal helper to borrow the value for an argument
         /// Updates the most recent usage if specified
         fn borrow_mut_impl(
+            &mut self,
+            arg: Arg,
+            update_last_usage: Option<UsageKind>,
+        ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), EitherError> {
+            match arg.0 {
+                Arg_::V1(arg) => {
+                    assert_invariant!(
+                        !self.protocol_config.normalize_ptb_arguments(),
+                        "Should not be using v1 args with normalized args"
+                    );
+                    Ok(self.borrow_mut_impl_v1(arg, update_last_usage)?)
+                }
+                Arg_::V2(arg) => {
+                    assert_invariant!(
+                        self.protocol_config.normalize_ptb_arguments(),
+                        "Should be using only v2 args with normalized args"
+                    );
+                    Ok(self.borrow_mut_impl_v2(arg, update_last_usage)?)
+                }
+            }
+        }
+
+        // v1 of borrow_mut_impl
+        fn borrow_mut_impl_v1(
             &mut self,
             arg: Argument,
             update_last_usage: Option<UsageKind>,
@@ -958,6 +1132,37 @@ mod checked {
             Ok((metadata, &mut result_value.value))
         }
 
+        // v2 of borrow_mut_impl
+        fn borrow_mut_impl_v2(
+            &mut self,
+            arg: NormalizedArg,
+            update_last_usage: Option<UsageKind>,
+        ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), ExecutionError> {
+            let (metadata, result_value) = match arg {
+                NormalizedArg::GasCoin => (self.gas.object_metadata.as_ref(), &mut self.gas.inner),
+                NormalizedArg::Input(i) => {
+                    let input_value = self
+                        .inputs
+                        .get_mut(i as usize)
+                        .ok_or_else(|| make_invariant_violation!("bounds already checked"))?;
+                    (input_value.object_metadata.as_ref(), &mut input_value.inner)
+                }
+                NormalizedArg::Result(i, j) => {
+                    let result_value = self
+                        .results
+                        .get_mut(i as usize)
+                        .ok_or_else(|| make_invariant_violation!("bounds already checked"))?
+                        .get_mut(j as usize)
+                        .ok_or_else(|| make_invariant_violation!("bounds already checked"))?;
+                    (None, result_value)
+                }
+            };
+            if let Some(usage) = update_last_usage {
+                result_value.last_usage_kind = Some(usage);
+            }
+            Ok((metadata, &mut result_value.value))
+        }
+
         pub(crate) fn execute_function_bypass_visibility(
             &mut self,
             module: &ModuleId,
@@ -974,7 +1179,7 @@ mod checked {
                 ty_args,
                 args,
                 &mut data_store,
-                gas_status,
+                &mut SuiGasMeter(gas_status),
                 &mut self.native_extensions,
                 tracer.as_mut(),
             )
@@ -1026,8 +1231,47 @@ mod checked {
                 modules,
                 sender,
                 &mut data_store,
-                self.gas_charger.move_gas_status_mut(),
+                &mut SuiGasMeter(self.gas_charger.move_gas_status_mut()),
             )
+        }
+
+        pub fn size_bound_raw(&self, bound: u64) -> SizeBound {
+            if self.protocol_config.max_ptb_value_size_v2() {
+                SizeBound::Raw(bound)
+            } else {
+                SizeBound::Object(bound)
+            }
+        }
+
+        pub fn size_bound_vector_elem(&self, bound: u64) -> SizeBound {
+            if self.protocol_config.max_ptb_value_size_v2() {
+                SizeBound::VectorElem(bound)
+            } else {
+                SizeBound::Object(bound)
+            }
+        }
+    }
+
+    impl Arg {
+        fn is_gas_coin(&self) -> bool {
+            // kept as two separate matches for exhaustiveness
+            match self {
+                Arg(Arg_::V1(a)) => matches!(a, Argument::GasCoin),
+                Arg(Arg_::V2(n)) => matches!(n, NormalizedArg::GasCoin),
+            }
+        }
+    }
+
+    impl From<Arg> for Argument {
+        fn from(arg: Arg) -> Self {
+            match arg.0 {
+                Arg_::V1(a) => a,
+                Arg_::V2(normalized) => match normalized {
+                    NormalizedArg::GasCoin => Argument::GasCoin,
+                    NormalizedArg::Input(i) => Argument::Input(i),
+                    NormalizedArg::Result(i, j) => Argument::NestedResult(i, j),
+                },
+            }
         }
     }
 
@@ -1285,7 +1529,7 @@ mod checked {
                     )
                 })?;
             let mut bytes = vec![];
-            obj_value.write_bcs_bytes(&mut bytes);
+            obj_value.write_bcs_bytes(&mut bytes, None)?;
             match get_all_uids(&fully_annotated_layout, &bytes) {
                 Err(e) => {
                     invariant_violation!("Unable to retrieve UIDs for object. Got error: {e}")
@@ -1548,6 +1792,32 @@ mod checked {
             // we cannot panic here because during execution and publishing this is
             // currently called from the publish flow in the Move runtime
             Ok(())
+        }
+    }
+
+    enum EitherError {
+        CommandArgument(CommandArgumentError),
+        Execution(ExecutionError),
+    }
+
+    impl From<ExecutionError> for EitherError {
+        fn from(e: ExecutionError) -> Self {
+            EitherError::Execution(e)
+        }
+    }
+
+    impl From<CommandArgumentError> for EitherError {
+        fn from(e: CommandArgumentError) -> Self {
+            EitherError::CommandArgument(e)
+        }
+    }
+
+    impl EitherError {
+        fn into_execution_error(self, command_index: usize) -> ExecutionError {
+            match self {
+                EitherError::CommandArgument(e) => command_argument_error(e, command_index),
+                EitherError::Execution(e) => e,
+            }
         }
     }
 }

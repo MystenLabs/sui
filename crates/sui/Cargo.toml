@@ -74,6 +74,7 @@ sui-replay.workspace = true
 sui-transaction-builder.workspace = true
 move-binary-format.workspace = true
 move-bytecode-source-map.workspace = true
+mysten-common.workspace = true
 test-cluster.workspace = true
 
 fastcrypto.workspace = true
@@ -98,6 +99,8 @@ move-vm-profiler.workspace = true
 move-vm-config.workspace = true
 move-ir-types.workspace = true
 move-command-line-common.workspace = true
+move-cli.workspace = true
+move-symbol-pool.workspace = true
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl.workspace = true
@@ -141,4 +144,5 @@ harness = false
 tracing = [
     "sui-types/tracing",
     "sui-execution/tracing",
+    "sui-move/tracing",
 ]

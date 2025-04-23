@@ -1580,6 +1580,16 @@ impl VMValueCast<Vec<u64>> for Value {
     }
 }
 
+impl VMValueCast<Vec<AccountAddress>> for Value {
+    fn cast(self) -> PartialVMResult<Vec<AccountAddress>> {
+        match self.0 {
+            ValueImpl::Container(Container::VecAddress(r)) => take_unique_ownership(r),
+            v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                .with_message(format!("cannot cast {:?} to vector<AccountAddress>", v,))),
+        }
+    }
+}
+
 impl VMValueCast<Vec<Value>> for Value {
     fn cast(self) -> PartialVMResult<Vec<Value>> {
         match self.0 {
@@ -4115,6 +4125,24 @@ pub mod prop {
                 .collect::<Vec<_>>()
                 .prop_map(move |vals| Value::struct_(Struct::pack(vals)))
                 .boxed(),
+
+            L::Enum(enum_layout) => {
+                let enum_layouts = (**enum_layout)
+                    .clone()
+                    .0
+                    .into_iter()
+                    .enumerate()
+                    .collect::<Vec<_>>();
+                proptest::sample::select(enum_layouts)
+                    .prop_flat_map(move |(tag, layout)| {
+                        layout
+                            .iter()
+                            .map(value_strategy_with_layout)
+                            .collect::<Vec<_>>()
+                            .prop_map(move |v| Value::variant(Variant::pack(tag as u16, v)))
+                    })
+                    .boxed()
+            }
         }
     }
 
@@ -4137,7 +4165,7 @@ pub mod prop {
             prop_oneof![
                 1 => inner.clone().prop_map(|layout| L::Vector(Box::new(layout))),
                 1 => vec(inner, 0..1).prop_map(|f_layouts| {
-                     L::Struct(MoveStructLayout::new(f_layouts))}),
+                     L::Struct(Box::new(MoveStructLayout::new(f_layouts)))}),
             ]
         })
     }

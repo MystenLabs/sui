@@ -291,7 +291,7 @@ pub enum BuiltinTypeName_ {
 }
 pub type BuiltinTypeName = Spanned<BuiltinTypeName_>;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 #[allow(clippy::large_enum_variant)]
 pub enum TypeName_ {
     // exp-list/tuple type
@@ -396,6 +396,12 @@ pub struct Lambda {
     pub return_label: BlockLabel,
     pub use_fun_color: Color,
     pub body: Box<Exp>,
+    // Collected during macro expansion. These additional annotations can come from `Annotate` or
+    // more subtly by passing a lambda from one macro to another.
+    // Conceptually we could handle this by eta-expanding the lambda
+    // invocation, so that `$f` becomes `|...|$f(...)`, but due to the limited nature here, just
+    // collecting the annotations is easier
+    pub extra_annotations: Vec<Spanned<(Vec<Type>, Type)>>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -775,7 +781,7 @@ impl TypeName_ {
     pub fn single_type(&self) -> Option<TypeName_> {
         match self {
             TypeName_::Multiple(_) => None,
-            TypeName_::Builtin(_) | TypeName_::ModuleType(_, _) => Some(self.clone()),
+            TypeName_::Builtin(_) | TypeName_::ModuleType(_, _) => Some(*self),
         }
     }
 
@@ -1840,22 +1846,40 @@ impl AstDebug for Exp_ {
 
 impl AstDebug for Lambda {
     fn ast_debug(&self, w: &mut AstWriter) {
+        struct LambdaAnnot<'a>(&'a (Vec<Type>, Type));
+        impl AstDebug for LambdaAnnot<'_> {
+            fn ast_debug(&self, w: &mut AstWriter) {
+                let (args, result) = &self.0;
+                w.write("|");
+                w.comma(args, |w, ty| ty.ast_debug(w));
+                w.write("|");
+                result.ast_debug(w);
+            }
+        }
+
         let Lambda {
             parameters: sp!(_, bs),
             return_type,
             return_label,
             use_fun_color,
             body: e,
+            extra_annotations,
         } = self;
         return_label.ast_debug(w);
         w.write(": ");
-        bs.ast_debug(w);
-        if let Some(ty) = return_type {
-            w.write(" -> ");
-            ty.ast_debug(w);
+        let mut display: Box<dyn FnOnce(&mut AstWriter)> = Box::new(|w: &mut AstWriter| {
+            bs.ast_debug(w);
+            if let Some(ty) = return_type {
+                w.write(" -> ");
+                ty.ast_debug(w);
+            }
+            w.write(format!("use_funs#{}", use_fun_color));
+            e.ast_debug(w);
+        });
+        for sp!(_, annot) in extra_annotations {
+            display = Box::new(|w: &mut AstWriter| w.annotate(display, &LambdaAnnot(annot)));
         }
-        w.write(format!("use_funs#{}", use_fun_color));
-        e.ast_debug(w);
+        display(w)
     }
 }
 

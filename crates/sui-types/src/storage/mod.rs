@@ -11,9 +11,12 @@ use crate::base_types::{
     ConsensusObjectSequenceKey, FullObjectID, FullObjectRef, TransactionDigest, VersionNumber,
 };
 use crate::committee::EpochId;
+use crate::effects::{TransactionEffects, TransactionEffectsAPI};
 use crate::error::{ExecutionError, SuiError};
 use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
+use crate::message_envelope::Message;
 use crate::move_package::MovePackage;
+use crate::storage::error::Error as StorageError;
 use crate::transaction::{SenderSignedData, TransactionDataAPI};
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
@@ -24,13 +27,15 @@ use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
 pub use object_store_trait::ObjectStore;
-pub use read_store::AccountOwnedObjectInfo;
 pub use read_store::CoinInfo;
 pub use read_store::DynamicFieldIndexInfo;
 pub use read_store::DynamicFieldKey;
+pub use read_store::EpochInfo;
+pub use read_store::OwnedObjectInfo;
 pub use read_store::ReadStore;
 pub use read_store::RpcIndexes;
 pub use read_store::RpcStateReader;
+pub use read_store::TransactionInfo;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 pub use shared_in_memory_store::SharedInMemoryStore;
@@ -114,12 +119,13 @@ pub enum MarkerValue {
     /// An object was received at the given version in the transaction and is no longer able
     /// to be received at that version in subequent transactions.
     Received,
-    /// An owned object was deleted (or wrapped) at the given version, and is no longer able to be
-    /// accessed or used in subsequent transactions.
-    OwnedDeleted,
-    /// A shared object was deleted by the transaction and is no longer able to be accessed or
-    /// used in subsequent transactions.
-    SharedDeleted(TransactionDigest),
+    /// A fastpath object was deleted, wrapped, or transferred to consensus at the given
+    /// version, and is no longer able to be accessed or used in subsequent transactions via
+    /// fastpath unless/until it is returned to fastpath.
+    FastpathStreamEnded,
+    /// A consensus object was deleted or removed from consensus by the transaction and is no longer
+    /// able to be accessed or used in subsequent transactions with the same initial shared version.
+    ConsensusStreamEnded(TransactionDigest),
 }
 
 /// DeleteKind together with the old sequence number prior to the deletion, if available.
@@ -189,8 +195,6 @@ pub trait ChildObjectResolver {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<Option<Object>>;
 }
 
@@ -430,8 +434,6 @@ impl<S: ChildObjectResolver> ChildObjectResolver for std::sync::Arc<S> {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<Option<Object>> {
         ChildObjectResolver::get_object_received_at_version(
             self.as_ref(),
@@ -439,7 +441,6 @@ impl<S: ChildObjectResolver> ChildObjectResolver for std::sync::Arc<S> {
             receiving_object_id,
             receive_object_at_version,
             epoch_id,
-            use_object_per_epoch_marker_table_v2,
         )
     }
 }
@@ -459,8 +460,6 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &S {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<Option<Object>> {
         ChildObjectResolver::get_object_received_at_version(
             *self,
@@ -468,7 +467,6 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &S {
             receiving_object_id,
             receive_object_at_version,
             epoch_id,
-            use_object_per_epoch_marker_table_v2,
         )
     }
 }
@@ -488,8 +486,6 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<Option<Object>> {
         ChildObjectResolver::get_object_received_at_version(
             *self,
@@ -497,7 +493,6 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
             receiving_object_id,
             receive_object_at_version,
             epoch_id,
-            use_object_per_epoch_marker_table_v2,
         )
     }
 }
@@ -585,18 +580,6 @@ impl FullObjectKey {
         match self {
             FullObjectKey::Fastpath(object_key) => object_key.1,
             FullObjectKey::Consensus(consensus_object_key) => consensus_object_key.1,
-        }
-    }
-
-    // Returns the equivalent ObjectKey for this FullObjectKey, discarding any initial
-    // shared version information, if present.
-    // TODO: Delete this function once marker table migration is complete.
-    pub fn into_object_key(self) -> ObjectKey {
-        match self {
-            FullObjectKey::Fastpath(object_key) => object_key,
-            FullObjectKey::Consensus(consensus_object_key) => {
-                ObjectKey(consensus_object_key.0 .0, consensus_object_key.1)
-            }
         }
     }
 }
@@ -687,4 +670,60 @@ where
     fn as_object_store(&self) -> &dyn ObjectStore {
         self
     }
+}
+
+pub fn get_transaction_input_objects(
+    object_store: &dyn ObjectStore,
+    effects: &TransactionEffects,
+) -> Result<Vec<Object>, StorageError> {
+    let input_object_keys = effects
+        .modified_at_versions()
+        .into_iter()
+        .map(|(object_id, version)| ObjectKey(object_id, version))
+        .collect::<Vec<_>>();
+
+    let input_objects = object_store
+        .multi_get_objects_by_key(&input_object_keys)
+        .into_iter()
+        .enumerate()
+        .map(|(idx, maybe_object)| {
+            maybe_object.ok_or_else(|| {
+                StorageError::custom(format!(
+                    "missing input object key {:?} from tx {} effects {}",
+                    input_object_keys[idx],
+                    effects.transaction_digest(),
+                    effects.digest()
+                ))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(input_objects)
+}
+
+pub fn get_transaction_output_objects(
+    object_store: &dyn ObjectStore,
+    effects: &TransactionEffects,
+) -> Result<Vec<Object>, StorageError> {
+    let output_object_keys = effects
+        .all_changed_objects()
+        .into_iter()
+        .map(|(object_ref, _owner, _kind)| ObjectKey::from(object_ref))
+        .collect::<Vec<_>>();
+
+    let output_objects = object_store
+        .multi_get_objects_by_key(&output_object_keys)
+        .into_iter()
+        .enumerate()
+        .map(|(idx, maybe_object)| {
+            maybe_object.ok_or_else(|| {
+                StorageError::custom(format!(
+                    "missing output object key {:?} from tx {} effects {}",
+                    output_object_keys[idx],
+                    effects.transaction_digest(),
+                    effects.digest()
+                ))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(output_objects)
 }

@@ -89,15 +89,28 @@ pub(crate) struct TransactionEntry {
     pub(crate) storage_rebate: u64,
     pub(crate) non_refundable_storage_fee: u64,
     pub(crate) gas_price: u64,
-    // raw transaction bytes
-    // pub(crate) raw_transaction: Vec<u8>,
-    // We represent them in base64 encoding so they work with the csv.
-    // TODO: review and possibly move back to Vec<u8>
+    // Deprecated. Left in place for backwards compatibility with SZNS BigQuery Infra.
     pub(crate) raw_transaction: String,
     pub(crate) has_zklogin_sig: bool,
     pub(crate) has_upgraded_multisig: bool,
     pub(crate) transaction_json: Option<String>,
     pub(crate) effects_json: Option<String>,
+    pub(crate) transaction_position: u64,
+    pub(crate) events_digest: Option<String>,
+    pub(crate) transaction_data_bcs_length: u64,
+    pub(crate) effects_bcs_length: u64,
+    pub(crate) events_bcs_length: u64,
+    pub(crate) signatures_bcs_length: u64,
+}
+
+// Raw Transaction bytes (used by security team).
+#[derive(Serialize, Clone, SerializeParquet)]
+pub(crate) struct TransactionBCSEntry {
+    pub(crate) transaction_digest: String,
+    pub(crate) checkpoint: u64,
+    pub(crate) epoch: u64,
+    pub(crate) timestamp_ms: u64,
+    pub(crate) bcs: String,
 }
 
 // Event information.
@@ -116,12 +129,10 @@ pub(crate) struct EventEntry {
     pub(crate) package: String,
     pub(crate) module: String,
     pub(crate) event_type: String,
-    // raw event bytes
-    // pub(crate) bcs: Vec<u8>,
-    // We represent them in base64 encoding so they work with the csv.
-    // TODO: review and possibly move back to Vec<u8>
+    // Left in place for backwards compatibility with SZNS BigQuery Infra.
     pub(crate) bcs: String,
     pub(crate) event_json: String,
+    pub(crate) bcs_length: u64,
 }
 
 // Used in the transaction object table to identify the type of input object.
@@ -171,17 +182,13 @@ pub(crate) struct ObjectEntry {
     pub(crate) previous_transaction: String,
     pub(crate) has_public_transfer: bool,
     pub(crate) storage_rebate: Option<u64>,
-    // raw object bytes
-    // pub(crate) bcs: Vec<u8>,
-    // We represent them in base64 encoding so they work with the csv.
-    // TODO: review and possibly move back to Vec<u8>
-    pub(crate) bcs: Option<String>,
-
+    // Left in place for backwards compatibility with SZNS BigQuery Infra.
+    pub(crate) bcs: String,
     pub(crate) coin_type: Option<String>,
     pub(crate) coin_balance: Option<u64>,
-
     pub(crate) struct_tag: Option<String>,
     pub(crate) object_json: Option<String>,
+    pub(crate) bcs_length: u64,
 }
 
 // Objects used and manipulated in a transaction.
@@ -225,15 +232,13 @@ pub(crate) struct MovePackageEntry {
     pub(crate) checkpoint: u64,
     pub(crate) epoch: u64,
     pub(crate) timestamp_ms: u64,
-    // raw package bytes
-    // pub(crate) bcs: Vec<u8>,
-    // We represent them in base64 encoding so they work with the csv.
-    // TODO: review and possibly move back to Vec<u8>
+    // Left in place for backwards compatibility with SZNS BigQuery Infra.
     pub(crate) bcs: String,
     // txn publishing the package
     pub(crate) transaction_digest: String,
     pub(crate) package_version: Option<u64>,
     pub(crate) original_package_id: Option<String>,
+    pub(crate) bcs_length: u64,
 }
 
 #[derive(Serialize, Clone, SerializeParquet)]

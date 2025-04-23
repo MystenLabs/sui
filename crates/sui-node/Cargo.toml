@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 anemo.workspace = true
 anemo-tower.workspace = true
+antithesis_sdk.workspace = true
 arc-swap.workspace = true
 axum.workspace = true
 anyhow.workspace = true
@@ -59,6 +60,7 @@ fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true
 move-vm-profiler.workspace = true
 sui-http.workspace = true
+sui-metrics-push-client.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator.workspace = true

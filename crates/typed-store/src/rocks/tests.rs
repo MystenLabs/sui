@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::reopen;
-use crate::rocks::iter::Iter;
-use crate::rocks::safe_iter::{SafeIter, SafeRevIter};
 use rstest::rstest;
 
 fn temp_dir() -> std::path::PathBuf {
@@ -12,44 +10,19 @@ fn temp_dir() -> std::path::PathBuf {
         .into_path()
 }
 
-// A wrapper that holds different type of iterators for testing purpose. We use it to get same
-// typed key value paris from the database in parameterized tests, while varying different types
-// of underlying Iterator.
-enum TestIteratorWrapper<'a, K, V> {
-    Iter(Iter<'a, K, V>),
-    SafeIter(SafeIter<'a, K, V>),
-}
-
-// Implement Iterator for TestIteratorWrapper that returns the same type result for different types of Iterator.
-// For non-safe Iterator, it returns the key value pair. For SafeIterator, it consumes the result (assuming no error),
-// and return they key value pairs.
-impl<K: DeserializeOwned, V: DeserializeOwned> Iterator for TestIteratorWrapper<'_, K, V> {
-    type Item = (K, V);
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            TestIteratorWrapper::Iter(iter) => iter.next(),
-            TestIteratorWrapper::SafeIter(iter) => iter.next().map(|result| result.unwrap()),
-        }
-    }
-}
-
-// Creates an Iterator based on `use_safe_iter` on `db`.
-fn get_iter<K, V>(db: &DBMap<K, V>, use_safe_iter: bool) -> TestIteratorWrapper<'_, K, V>
+fn get_iter<K, V>(db: &DBMap<K, V>) -> impl Iterator<Item = (K, V)> + use<'_, K, V>
 where
     K: Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
 {
-    match use_safe_iter {
-        true => TestIteratorWrapper::SafeIter(db.safe_iter()),
-        false => TestIteratorWrapper::Iter(db.unbounded_iter()),
-    }
+    db.safe_iter().map(|item| item.unwrap())
 }
 
 fn get_reverse_iter<K, V>(
     db: &DBMap<K, V>,
     lower_bound: Option<K>,
     upper_bound: Option<K>,
-) -> SafeRevIter<'_, K, V>
+) -> impl Iterator<Item = Result<(K, V), TypedStoreError>> + use<'_, K, V>
 where
     K: Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
@@ -58,37 +31,28 @@ where
         .unwrap()
 }
 
-// Creates an range bounded Iterator based on `use_safe_iter` on `db`.
 fn get_iter_with_bounds<K, V>(
     db: &DBMap<K, V>,
     lower_bound: Option<K>,
     upper_bound: Option<K>,
-    use_safe_iter: bool,
-) -> TestIteratorWrapper<'_, K, V>
+) -> impl Iterator<Item = (K, V)> + use<'_, K, V>
 where
     K: Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
 {
-    match use_safe_iter {
-        true => TestIteratorWrapper::SafeIter(db.safe_iter_with_bounds(lower_bound, upper_bound)),
-        false => TestIteratorWrapper::Iter(db.iter_with_bounds(lower_bound, upper_bound)),
-    }
+    db.safe_iter_with_bounds(lower_bound, upper_bound)
+        .map(|item| item.unwrap())
 }
 
-// Creates an range Iterator based on `use_safe_iter` on `db`.
-fn get_range_iter<K, V>(
-    db: &DBMap<K, V>,
-    range: impl RangeBounds<K>,
-    use_safe_iter: bool,
-) -> TestIteratorWrapper<'_, K, V>
+fn get_range_iter<'a, K, V>(
+    db: &'a DBMap<K, V>,
+    range: impl RangeBounds<K> + 'a,
+) -> impl Iterator<Item = (K, V)> + 'a
 where
     K: Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
 {
-    match use_safe_iter {
-        true => TestIteratorWrapper::SafeIter(db.safe_range_iter(range)),
-        false => TestIteratorWrapper::Iter(db.range_iter(range)),
-    }
+    db.safe_range_iter(range).map(|item| item.unwrap())
 }
 
 #[tokio::test]
@@ -104,7 +68,7 @@ async fn test_reopen() {
             .expect("Failed to insert");
         db
     };
-    let db = DBMap::<u32, String>::reopen(&arc.rocksdb, None, &ReadWriteOptions::default(), false)
+    let db = DBMap::<u32, String>::reopen(&arc.db, None, &ReadWriteOptions::default(), false)
         .expect("Failed to re-open storage");
     assert!(db
         .contains_key(&123456789)
@@ -116,11 +80,14 @@ async fn test_reopen_macro() {
     const FIRST_CF: &str = "First_CF";
     const SECOND_CF: &str = "Second_CF";
 
-    let rocks = open_cf(
+    let rocks = open_cf_opts(
         temp_dir(),
         None,
         MetricConf::default(),
-        &[FIRST_CF, SECOND_CF],
+        &[
+            (FIRST_CF, rocksdb::Options::default()),
+            (SECOND_CF, rocksdb::Options::default()),
+        ],
     )
     .unwrap();
 
@@ -137,13 +104,6 @@ async fn test_reopen_macro() {
 }
 
 #[tokio::test]
-async fn test_wrong_reopen() {
-    let rocks = open_rocksdb(temp_dir(), &["foo", "bar", "baz"]);
-    let db = DBMap::<u8, u8>::reopen(&rocks, Some("quux"), &ReadWriteOptions::default(), false);
-    assert!(db.is_err());
-}
-
-#[tokio::test]
 async fn test_contains_key() {
     let db = open_map(temp_dir(), None);
 
@@ -155,6 +115,20 @@ async fn test_contains_key() {
     assert!(!db
         .contains_key(&000000000)
         .expect("Failed to call contains key"));
+}
+
+#[tokio::test]
+async fn test_safe_drop_db() {
+    let root_path = temp_dir();
+
+    let tmp_path = root_path.join("test-0");
+    {
+        let db: DBMap<i32, String> = open_map(tmp_path.clone(), Some("table-0"));
+        db.insert(&777, &"123".to_string()).unwrap();
+    }
+    safe_drop_db(tmp_path, Duration::from_secs(30))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -216,9 +190,8 @@ async fn test_multi_get() {
     assert_eq!(result[2], None);
 }
 
-#[rstest]
 #[tokio::test]
-async fn test_skip(#[values(true, false)] use_safe_iter: bool) {
+async fn test_skip() {
     let db = open_map(temp_dir(), None);
 
     db.insert(&123, &"123".to_string())
@@ -229,16 +202,13 @@ async fn test_skip(#[values(true, false)] use_safe_iter: bool) {
         .expect("Failed to insert");
 
     // Skip all smaller
-    let key_vals: Vec<_> = get_iter_with_bounds(&db, Some(456), None, use_safe_iter).collect();
+    let key_vals: Vec<_> = get_iter_with_bounds(&db, Some(456), None).collect();
     assert_eq!(key_vals.len(), 2);
     assert_eq!(key_vals[0], (456, "456".to_string()));
     assert_eq!(key_vals[1], (789, "789".to_string()));
 
     // Skip to the end
-    assert_eq!(
-        get_iter_with_bounds(&db, Some(999), None, use_safe_iter).count(),
-        0
-    );
+    assert_eq!(get_iter_with_bounds(&db, Some(999), None).count(), 0);
 
     // Skip to last
     assert_eq!(
@@ -247,14 +217,8 @@ async fn test_skip(#[values(true, false)] use_safe_iter: bool) {
     );
 
     // Skip to successor of first value
-    assert_eq!(
-        get_iter_with_bounds(&db, Some(000), None, use_safe_iter).count(),
-        3
-    );
-    assert_eq!(
-        get_iter_with_bounds(&db, Some(000), None, use_safe_iter).count(),
-        3
-    );
+    assert_eq!(get_iter_with_bounds(&db, Some(000), None).count(), 3);
+    assert_eq!(get_iter_with_bounds(&db, Some(000), None).count(), 3);
 }
 
 #[tokio::test]
@@ -291,25 +255,23 @@ async fn test_remove() {
     assert!(db.get(&123456789).expect("Failed to get").is_none());
 }
 
-#[rstest]
 #[tokio::test]
-async fn test_iter(#[values(true, false)] use_safe_iter: bool) {
+async fn test_iter() {
     let db = open_map(temp_dir(), None);
     db.insert(&123456789, &"123456789".to_string())
         .expect("Failed to insert");
     db.insert(&987654321, &"987654321".to_string())
         .expect("Failed to insert");
 
-    let mut iter = get_iter(&db, use_safe_iter);
+    let mut iter = get_iter(&db);
 
     assert_eq!(Some((123456789, "123456789".to_string())), iter.next());
     assert_eq!(Some((987654321, "987654321".to_string())), iter.next());
     assert_eq!(None, iter.next());
 }
 
-#[rstest]
 #[tokio::test]
-async fn test_iter_reverse(#[values(true, false)] use_safe_iter: bool) {
+async fn test_iter_reverse() {
     let db = open_map(temp_dir(), None);
 
     db.insert(&1, &"1".to_string()).expect("Failed to insert");
@@ -322,7 +284,7 @@ async fn test_iter_reverse(#[values(true, false)] use_safe_iter: bool) {
     assert_eq!(Some(Ok((1, "1".to_string()))), iter.next());
     assert_eq!(None, iter.next());
 
-    let mut iter = get_iter_with_bounds(&db, Some(1), None, use_safe_iter);
+    let mut iter = get_iter_with_bounds(&db, Some(1), None);
     assert_eq!(Some((1, "1".to_string())), iter.next());
     assert_eq!(Some((2, "2".to_string())), iter.next());
 }
@@ -416,14 +378,7 @@ async fn test_insert_batch_across_different_db() {
 
 #[tokio::test]
 async fn test_delete_batch() {
-    let db = DBMap::<i32, String>::open(
-        temp_dir(),
-        MetricConf::default(),
-        None,
-        None,
-        &ReadWriteOptions::default(),
-    )
-    .expect("Failed to open storage");
+    let db = open_map::<_, u32, String>(temp_dir(), None);
 
     let keys_vals = (1..100).map(|i| (i, i.to_string()));
     let mut batch = db.batch();
@@ -439,21 +394,21 @@ async fn test_delete_batch() {
 
     batch.write().expect("Failed to execute batch");
 
-    for (k, _) in get_iter(&db, true) {
+    for (k, _) in get_iter(&db) {
         assert_eq!(k % 2, 0);
     }
 }
 
 #[tokio::test]
 async fn test_delete_range() {
-    let db: DBMap<i32, String> = DBMap::open(
-        temp_dir(),
-        MetricConf::default(),
+    let options = ReadWriteOptions::default().set_ignore_range_deletions(false);
+    let db: DBMap<i32, String> = DBMap::reopen(
+        &open_rocksdb(temp_dir(), &[rocksdb::DEFAULT_COLUMN_FAMILY_NAME]),
         None,
-        None,
-        &ReadWriteOptions::default().set_ignore_range_deletions(false),
+        &options,
+        false,
     )
-    .expect("Failed to open storage");
+    .unwrap();
 
     // Note that the last element is (100, "100".to_owned()) here
     let keys_vals = (0..101).map(|i| (i, i.to_string()));
@@ -480,43 +435,7 @@ async fn test_delete_range() {
 }
 
 #[tokio::test]
-async fn test_clear() {
-    let db = DBMap::<i32, String>::open(
-        temp_dir(),
-        MetricConf::default(),
-        None,
-        Some("table"),
-        &ReadWriteOptions::default(),
-    )
-    .expect("Failed to open storage");
-    // Test clear of empty map
-    let _ = db.unsafe_clear();
-
-    let keys_vals = (0..101).map(|i| (i, i.to_string()));
-    let mut insert_batch = db.batch();
-    insert_batch
-        .insert_batch(&db, keys_vals)
-        .expect("Failed to batch insert");
-
-    insert_batch.write().expect("Failed to execute batch");
-
-    // Check we have multiple entries
-    assert!(db.safe_iter().count() > 1);
-    let _ = db.unsafe_clear();
-    assert_eq!(db.safe_iter().count(), 0);
-    // Clear again to ensure safety when clearing empty map
-    let _ = db.unsafe_clear();
-    assert_eq!(db.safe_iter().count(), 0);
-    // Clear with one item
-    let _ = db.insert(&1, &"e".to_string());
-    assert_eq!(db.safe_iter().count(), 1);
-    let _ = db.unsafe_clear();
-    assert_eq!(db.safe_iter().count(), 0);
-}
-
-#[rstest]
-#[tokio::test]
-async fn test_iter_with_bounds(#[values(true, false)] use_safe_iter: bool) {
+async fn test_iter_with_bounds() {
     let db = open_map(temp_dir(), None);
 
     // Add [1, 50) and (50, 100) in the db
@@ -527,7 +446,7 @@ async fn test_iter_with_bounds(#[values(true, false)] use_safe_iter: bool) {
     }
 
     // Tests basic bounded scan.
-    let db_iter = get_iter_with_bounds(&db, Some(20), Some(90), use_safe_iter);
+    let db_iter = get_iter_with_bounds(&db, Some(20), Some(90));
     assert_eq!(
         (20..50)
             .chain(51..90)
@@ -537,7 +456,7 @@ async fn test_iter_with_bounds(#[values(true, false)] use_safe_iter: bool) {
     );
 
     // Don't specify upper bound.
-    let db_iter = get_iter_with_bounds(&db, Some(20), None, use_safe_iter);
+    let db_iter = get_iter_with_bounds(&db, Some(20), None);
     assert_eq!(
         (20..50)
             .chain(51..100)
@@ -547,7 +466,7 @@ async fn test_iter_with_bounds(#[values(true, false)] use_safe_iter: bool) {
     );
 
     // Don't specify lower bound.
-    let db_iter = get_iter_with_bounds(&db, None, Some(90), use_safe_iter);
+    let db_iter = get_iter_with_bounds(&db, None, Some(90));
     assert_eq!(
         (1..50)
             .chain(51..90)
@@ -557,7 +476,7 @@ async fn test_iter_with_bounds(#[values(true, false)] use_safe_iter: bool) {
     );
 
     // Don't specify any bounds.
-    let db_iter = get_iter_with_bounds(&db, None, None, use_safe_iter);
+    let db_iter = get_iter_with_bounds(&db, None, None);
     assert_eq!(
         (1..50)
             .chain(51..100)
@@ -567,11 +486,11 @@ async fn test_iter_with_bounds(#[values(true, false)] use_safe_iter: bool) {
     );
 
     // Specify a bound outside of dataset.
-    let db_iter = db.iter_with_bounds(Some(200), Some(300));
+    let db_iter = db.safe_iter_with_bounds(Some(200), Some(300));
     assert!(db_iter.collect::<Vec<_>>().is_empty());
 
     // Skip to first key in the bound (bound is [1, 50))
-    let db_iter = get_iter_with_bounds(&db, Some(1), Some(50), use_safe_iter);
+    let db_iter = get_iter_with_bounds(&db, Some(1), Some(50));
     assert_eq!(
         (1..50).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
         db_iter.collect::<Vec<_>>()
@@ -580,7 +499,7 @@ async fn test_iter_with_bounds(#[values(true, false)] use_safe_iter: bool) {
 
 #[rstest]
 #[tokio::test]
-async fn test_range_iter(#[values(true, false)] use_safe_iter: bool) {
+async fn test_range_iter() {
     let db = open_map(temp_dir(), None);
 
     // Add [1, 50) and (50, 100) in the db
@@ -591,28 +510,28 @@ async fn test_range_iter(#[values(true, false)] use_safe_iter: bool) {
     }
 
     // Tests basic range iterating with inclusive end.
-    let db_iter = get_range_iter(&db, 10..=20, use_safe_iter);
+    let db_iter = get_range_iter(&db, 10..=20);
     assert_eq!(
         (10..21).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
         db_iter.collect::<Vec<_>>()
     );
 
     // Tests range with min start and exclusive end.
-    let db_iter = get_range_iter(&db, ..20, use_safe_iter);
+    let db_iter = get_range_iter(&db, ..20);
     assert_eq!(
         (1..20).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
         db_iter.collect::<Vec<_>>()
     );
 
     // Tests range with max end.
-    let db_iter = get_range_iter(&db, 60.., use_safe_iter);
+    let db_iter = get_range_iter(&db, 60..);
     assert_eq!(
         (60..100).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
         db_iter.collect::<Vec<_>>()
     );
 
     // Skip to first key in the bound (bound is [1, 49))
-    let db_iter = get_range_iter(&db, 1..49, use_safe_iter);
+    let db_iter = get_range_iter(&db, 1..49);
     assert_eq!(
         (1..49).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
         db_iter.collect::<Vec<_>>()
@@ -621,18 +540,8 @@ async fn test_range_iter(#[values(true, false)] use_safe_iter: bool) {
 
 #[tokio::test]
 async fn test_is_empty() {
-    let db = DBMap::<i32, String>::open(
-        temp_dir(),
-        MetricConf::default(),
-        None,
-        Some("table"),
-        &ReadWriteOptions::default(),
-    )
-    .expect("Failed to open storage");
-
+    let db: DBMap<i32, String> = open_map(temp_dir(), Some("table"));
     // Test empty map is truly empty
-    assert!(db.is_empty());
-    let _ = db.unsafe_clear();
     assert!(db.is_empty());
 
     let keys_vals = (0..101).map(|i| (i, i.to_string()));
@@ -646,11 +555,6 @@ async fn test_is_empty() {
     // Check we have multiple entries and not empty
     assert!(db.safe_iter().count() > 1);
     assert!(!db.is_empty());
-
-    // Clear again to ensure empty works after clearing
-    let _ = db.unsafe_clear();
-    assert_eq!(db.safe_iter().count(), 0);
-    assert!(db.is_empty());
 }
 
 #[tokio::test]
@@ -680,7 +584,7 @@ async fn test_checkpoint() {
     db.multi_insert(keys_vals.clone())
         .expect("Failed to multi-insert");
     let checkpointed_path = path_prefix.join("checkpointed_db");
-    db.rocksdb
+    db.db
         .checkpoint(&checkpointed_path)
         .expect("Failed to create db checkpoint");
     // Create more kv pairs
@@ -739,14 +643,7 @@ async fn open_as_secondary_test() {
     let primary_path = temp_dir();
 
     // Init a DB
-    let primary_db = DBMap::<i32, String>::open(
-        primary_path.clone(),
-        MetricConf::default(),
-        None,
-        Some("table"),
-        &ReadWriteOptions::default(),
-    )
-    .expect("Failed to open storage");
+    let primary_db: DBMap<i32, String> = open_map(primary_path.clone(), Some("table"));
     // Create kv pairs
     let keys_vals = (0..101).map(|i| (i, i.to_string()));
 
@@ -756,11 +653,11 @@ async fn open_as_secondary_test() {
 
     let opt = rocksdb::Options::default();
     let secondary_store = open_cf_opts_secondary(
-        primary_path,
+        primary_path.clone(),
         None,
         None,
         MetricConf::default(),
-        &[("table", opt)],
+        &[("table", opt.clone())],
     )
     .unwrap();
     let secondary_db = DBMap::<i32, String>::reopen(
@@ -791,16 +688,26 @@ async fn open_as_secondary_test() {
 }
 
 fn open_map<P: AsRef<Path>, K, V>(path: P, opt_cf: Option<&str>) -> DBMap<K, V> {
-    DBMap::<K, V>::open(
-        path,
-        MetricConf::default(),
-        None,
+    let cf_key = opt_cf.unwrap_or(rocksdb::DEFAULT_COLUMN_FAMILY_NAME);
+    DBMap::<K, V>::reopen(
+        &open_rocksdb(path, &[cf_key]),
         opt_cf,
         &ReadWriteOptions::default(),
+        false,
     )
     .expect("failed to open rocksdb")
 }
 
-fn open_rocksdb<P: AsRef<Path>>(path: P, opt_cfs: &[&str]) -> Arc<RocksDB> {
-    open_cf(path, None, MetricConf::default(), opt_cfs).expect("failed to open rocksdb")
+fn open_rocksdb<P: AsRef<Path>>(path: P, opt_cfs: &[&str]) -> Arc<Database> {
+    let opts = rocksdb::Options::default();
+    open_cf_opts(
+        path,
+        None,
+        MetricConf::default(),
+        &opt_cfs
+            .iter()
+            .map(|cf| (*cf, opts.clone()))
+            .collect::<Vec<_>>(),
+    )
+    .expect("failed to open rocksdb")
 }

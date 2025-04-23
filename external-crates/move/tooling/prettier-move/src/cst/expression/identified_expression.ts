@@ -10,11 +10,11 @@ const {} = doc.builders;
 export const NODE_TYPE = 'identified_expression';
 
 export default function (path: AstPath<Node>): treeFn | null {
-	if (path.node.type === NODE_TYPE) {
-		return printIdentifiedExpression;
-	}
+    if (path.node.type === NODE_TYPE) {
+        return printIdentifiedExpression;
+    }
 
-	return null;
+    return null;
 }
 
 /**
@@ -22,9 +22,9 @@ export default function (path: AstPath<Node>): treeFn | null {
  * Also known as `label` in the grammar or `labeled_expression`.
  */
 function printIdentifiedExpression(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
-	return [
-		path.call(print, 'nonFormattingChildren', 0), // identifier
-		' ',
-		path.call(print, 'nonFormattingChildren', 1), // expression
-	];
+    return [
+        path.call(print, 'nonFormattingChildren', 0), // identifier
+        ' ',
+        path.call(print, 'nonFormattingChildren', 1), // expression
+    ];
 }

@@ -6,13 +6,13 @@ use diesel::{ExpressionMethods, QueryDsl};
 use futures::future::OptionFuture;
 use sui_indexer_alt_schema::schema::watermarks;
 use sui_name_service::{Domain, NameRecord, NameServiceError};
-use sui_types::base_types::SuiAddress;
+use sui_types::{base_types::SuiAddress, dynamic_field::Field};
 use tokio::join;
 
 use crate::{
     context::Context,
     data::objects::load_live,
-    error::{invalid_params, RpcError},
+    error::{invalid_params, InternalContext, RpcError},
 };
 
 use super::Error;
@@ -88,6 +88,45 @@ pub(super) async fn resolved_address(
         Err(invalid_params(E::NameService(
             NameServiceError::NameExpired,
         )))
+    }
+}
+
+/// Attempt to to translate the given `address` to its SuiNS name, as long as the reverse mapping
+/// exists, and the forward mapping points to the address.
+pub(super) async fn resolved_name(
+    ctx: &Context,
+    address: SuiAddress,
+) -> Result<Option<String>, RpcError<Error>> {
+    let config = &ctx.config().name_service;
+
+    let reverse_record_id = config.reverse_record_field_id(address.as_ref());
+    let Some(reverse_record_object) = load_live(ctx, reverse_record_id)
+        .await
+        .context("Failed to fetch reverse record")?
+    else {
+        return Ok(None);
+    };
+
+    let reverse_record: Field<SuiAddress, Domain> = bcs::from_bytes(
+        reverse_record_object
+            .data
+            .try_as_move()
+            .context("Reverse record not a Move object")?
+            .contents(),
+    )
+    .context("Failed to deserialize reverse record")?;
+
+    // Before returning the domain, check that it is still valid. If forward resolution fails with
+    // a user error, it means the reverse record is no longer valid. Internal errors are unexpected
+    // and should be propagated.
+    //
+    // There is strong on-chain enforcement that the forward and reverse mappings are consistent
+    // with each other, so we don't need to check the forward mapping, if we find one.
+    let domain = reverse_record.value.to_string();
+    match resolved_address(ctx, &domain).await {
+        Ok(Some(_)) => Ok(Some(domain)),
+        Ok(None) | Err(RpcError::InvalidParams(_)) => Ok(None),
+        Err(e) => Err(e).internal_context("Failed to resolve address"),
     }
 }
 

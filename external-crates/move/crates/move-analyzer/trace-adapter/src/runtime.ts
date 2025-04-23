@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { EventEmitter } from 'events';
-import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import toml from 'toml';
 import {
+    createFileInfo,
     IFileInfo,
     ILocalInfo,
-    ISourceMap,
-    readAllSourceMaps
-} from './source_map_utils';
+    IDebugInfo,
+    readAllDebugInfos
+} from './debug_info_utils';
 import {
     TraceEffectKind,
     TraceEvent,
@@ -19,7 +19,7 @@ import {
     TraceInstructionKind,
     readTrace,
 } from './trace_utils';
-import { JSON_FILE_EXT } from './utils';
+import { TRACE_FILE_EXT } from './utils';
 
 /**
  * File extension for Move source files.
@@ -130,7 +130,7 @@ interface IRuntimeStackFrame {
     /**
     *  Path to the disassembled bytecode file containing currently executing instruction.
     */
-    bcodeFilePath: undefined | string;
+    bcodeFilePath?: string;
     /**
      *  File hash of the source file containing currently executing instruction.
      */
@@ -138,7 +138,7 @@ interface IRuntimeStackFrame {
     /**
      *  File hash of the disassembled bytecode file containing currently executing instruction.
      */
-    bcodeFileHash: undefined | string;
+    bcodeFileHash?: string;
     /**
      * Current line in the source file corresponding to currently viewed instruction.
      */
@@ -146,7 +146,7 @@ interface IRuntimeStackFrame {
     /**
      * Current line in the disassembled bytecode file corresponding to currently viewed instruction.
      */
-    bcodeLine: undefined | number; // 1-based
+    bcodeLine?: number; // 1-based
     /**
      *  Local variable types by variable frame index.
      */
@@ -165,20 +165,20 @@ interface IRuntimeStackFrame {
      * Line in the source file of the last call instruction that was processed in this frame.
      * It's needed to make sure that step/next into/over call works correctly.
      */
-    lastCallInstructionSrcLine: number | undefined;
+    lastCallInstructionSrcLine?: number;
     /**
      * Line in the disassembled bytecode file of the last call instruction that was processed in this frame.
      * It's needed to make sure that step/next into/over call works correctly.
      */
-    lastCallInstructionBcodeLine: number | undefined;
+    lastCallInstructionBcodeLine?: number;
     /**
-     * Lines that are not present in the source map.
+     * Lines that are not present in the debug info.
      */
     optimizedSrcLines: number[];
     /**
      * Lines that are not present in the bytecode map.
      */
-    optimizedBcodeLines: undefined | number[];
+    optimizedBcodeLines?: number[];
     /**
      * Disassembly mode has been triggered (we have both
      * source and disassembly mode available for this frame).
@@ -296,33 +296,33 @@ export class Runtime extends EventEmitter {
      */
     public async start(openedFilePath: string, traceInfo: string, stopOnEntry: boolean): Promise<void> {
         const openedFileExt = path.extname(openedFilePath);
-        const openedFileBaseName = path.basename(openedFilePath, openedFileExt);
-        let sourceMapsModMap = new Map<string, ISourceMap>();
-        let bcodeMapsModMap = new Map<string, ISourceMap>();
+        const openedFileBaseName = path.basename(openedFilePath, TRACE_FILE_EXT);
+        let srcDebugInfosModMap = new Map<string, IDebugInfo>();
+        let bcodeDebugInfosModMap = new Map<string, IDebugInfo>();
         let disassemblyView = false;
         let traceFilePath = ''; // updated in both conditional branches
-        if (openedFileExt === JSON_FILE_EXT && openedFileBaseName === REPLAY_TRACE_FILE_NAME) {
+        if (openedFilePath.endsWith(TRACE_FILE_EXT) && openedFileBaseName === REPLAY_TRACE_FILE_NAME) {
             // replay tool trace
             const replayRoot = path.dirname(openedFilePath);
             const bytecodeDir = path.join(replayRoot, 'bytecode');
             hashToFileMap(bytecodeDir, this.filesMap, BCODE_FILE_EXT);
-            bcodeMapsModMap = readAllSourceMaps(bytecodeDir, this.filesMap, true);
+            bcodeDebugInfosModMap = readAllDebugInfos(bytecodeDir, this.filesMap, true);
             const sourceDir = path.join(replayRoot, 'source');
             if (fs.existsSync(sourceDir)) {
                 const sourceFilesMap = new Map<string, IFileInfo>();
                 hashToFileMap(sourceDir, sourceFilesMap, MOVE_FILE_EXT);
-                // We are getting files and source maps from the source directory
+                // We are getting files and debug infos from the source directory
                 // which is populated by the user. One way to do it would be to copy
                 // `build` directory of package to the source directory, which would
-                // contain all the required sources and source maps. However, this
+                // contain all the required sources and debug infos. However, this
                 // build directory may also contain disassembled bytecode files and
-                // their corresponding source maps, which need to be filtered out.
+                // their corresponding debug infos, which need to be filtered out.
                 // This is accomplished by passing `mustHaveSourceFile` as `false`.
                 // and sourceFilesMap that contain only Move source files - this way,
                 // since disassembled bytecode files are not present in sourceFilesMap,
-                // source maps for disassembled bytecode will be excluded.
-                sourceMapsModMap =
-                    readAllSourceMaps(sourceDir, sourceFilesMap, /* mustHaveSourceFile */ false);
+                // debug infos for disassembled bytecode will be excluded.
+                srcDebugInfosModMap =
+                    readAllDebugInfos(sourceDir, sourceFilesMap, /* mustHaveSourceFile */ false);
                 sourceFilesMap.forEach((fileInfo, fileHash) => {
                     this.filesMap.set(fileHash, fileInfo);
                 });
@@ -343,12 +343,10 @@ export class Runtime extends EventEmitter {
                 throw Error(`Cannot find package name in manifest file: ${manifest_path}`);
             }
 
-            if (openedFileExt !== MOVE_FILE_EXT
-                && openedFileExt !== BCODE_FILE_EXT
-                && openedFileExt !== JSON_FILE_EXT) {
+            if (!openedFilePath.endsWith(MOVE_FILE_EXT) &&
+                !openedFilePath.endsWith(TRACE_FILE_EXT)) {
                 throw new Error(`File extension: ${openedFileExt} is not supported by trace debugger`);
             }
-            disassemblyView = openedFileExt === BCODE_FILE_EXT;
 
             // create file maps for all files in the `sources` directory, including both package source
             // files and source files for dependencies
@@ -356,40 +354,47 @@ export class Runtime extends EventEmitter {
             // update with files from the actual "sources" directory rather than from the "build" directory
             hashToFileMap(path.join(pkgRoot, 'sources'), this.filesMap, MOVE_FILE_EXT);
 
-            // create source maps for all modules in the `build` directory
-            sourceMapsModMap = readAllSourceMaps(path.join(pkgRoot, 'build', pkg_name, 'source_maps'), this.filesMap, true);
+            // create debug infos for all modules in the `build` directory
+            const srcSourceMapDir = path.join(pkgRoot, 'build', pkg_name, 'source_maps');
+            const srcDbgInfoDir = fs.existsSync(srcSourceMapDir)
+                ? srcSourceMapDir
+                : path.join(pkgRoot, 'build', pkg_name, 'debug_info');
+
+            srcDebugInfosModMap = readAllDebugInfos(srcDbgInfoDir, this.filesMap, true);
 
             // reconstruct trace file path from trace info
-            traceFilePath = path.join(pkgRoot, 'traces', traceInfo.replace(/:/g, '_') + JSON_FILE_EXT);
+            traceFilePath = path.join(pkgRoot, 'traces', traceInfo.replace(/:/g, '_') + TRACE_FILE_EXT);
 
             const disassemblyDir = path.join(pkgRoot, 'build', pkg_name, 'disassembly');
             if (fs.existsSync(disassemblyDir)) {
                 // create file maps for all bytecode files in the `disassembly` directory
                 hashToFileMap(disassemblyDir, this.filesMap, BCODE_FILE_EXT);
                 // created bytecode maps for disassembled bytecode files
-                bcodeMapsModMap = readAllSourceMaps(disassemblyDir, this.filesMap, true);
+                bcodeDebugInfosModMap = readAllDebugInfos(disassemblyDir, this.filesMap, true);
             }
+        }
+        Array.from(srcDebugInfosModMap.entries()).forEach((entry) => {
+            const [mod, bcodeMap] = entry;
+        });
 
+        // create a mapping from source file hash to its corresponding debug info
+        const srcDebugInfosHashMap = new Map<string, IDebugInfo>;
+        for (const [_, info] of srcDebugInfosModMap) {
+            srcDebugInfosHashMap.set(info.fileHash, info);
         }
 
-        // create a mapping from file hash to its corresponding source map
-        const sourceMapsHashMap = new Map<string, ISourceMap>;
-        for (const [_, sourceMap] of sourceMapsModMap) {
-            sourceMapsHashMap.set(sourceMap.fileHash, sourceMap);
-        }
-
-        // if we are missing source maps (and thus source files), but have bytecode maps
+        // if we are missing source debug infos (and thus source files), but have bytecode debug infos
         // (and thus disassembled bytecode files), we will only be able to show disassembly,
         // which becomes the default (source) view
-        Array.from(bcodeMapsModMap.entries()).forEach((entry) => {
+        Array.from(bcodeDebugInfosModMap.entries()).forEach((entry) => {
             const [mod, bcodeMap] = entry;
-            if (!sourceMapsModMap.has(mod)) {
-                sourceMapsModMap.set(mod, bcodeMap);
-                bcodeMapsModMap.delete(mod);
+            if (!srcDebugInfosModMap.has(mod)) {
+                srcDebugInfosModMap.set(mod, bcodeMap);
+                bcodeDebugInfosModMap.delete(mod);
             }
         });
 
-        this.trace = readTrace(traceFilePath, sourceMapsHashMap, sourceMapsModMap, bcodeMapsModMap, this.filesMap);
+        this.trace = await readTrace(traceFilePath, srcDebugInfosHashMap, srcDebugInfosModMap, bcodeDebugInfosModMap, this.filesMap);
 
         // start trace viewing session with the first trace event
         this.eventIndex = 0;
@@ -963,8 +968,8 @@ export class Runtime extends EventEmitter {
      * @param bcodeFileHash hash of the disassembled bytecode file containing the function.
      * @param localsTypes types of local variables in the frame.
      * @param localsInfo information about local variables in the frame.
-     * @param optimizedSrcLines lines that are not present in the source map.
-     * @param optimizedBcodeLines lines that are not present in the bytecode map.
+     * @param optimizedSrcLines lines that are not present in the source debug info.
+     * @param optimizedBcodeLines lines that are not present in the bytecode debug info.
      * @returns new frame.
      * @throws Error with a descriptive error message if frame cannot be constructed.
      */
@@ -1264,11 +1269,7 @@ function hashToFileMap(
             if (stats.isDirectory()) {
                 processDirectory(filePath);
             } else if (path.extname(f) === extension) {
-                const content = fs.readFileSync(filePath, 'utf8');
-                const numFileHash = computeFileHash(content);
-                const lines = content.split('\n');
-                const fileInfo = { path: filePath, content, lines };
-                const fileHash = Buffer.from(numFileHash).toString('base64');
+                const [fileHash, fileInfo] = createFileInfo(filePath);
                 filesMap.set(fileHash, fileInfo);
             }
         }
@@ -1386,14 +1387,4 @@ function getPkgNameFromManifest(pkgRoot: string): string | undefined {
     const parsedManifest = toml.parse(manifest);
     const packageName = parsedManifest.package.name;
     return packageName;
-}
-
-/**
- * Computes the SHA-256 hash of a file's contents.
- *
- * @param fileContents contents of the file.
- */
-function computeFileHash(fileContents: string): Uint8Array {
-    const hash = crypto.createHash('sha256').update(fileContents).digest();
-    return new Uint8Array(hash);
 }

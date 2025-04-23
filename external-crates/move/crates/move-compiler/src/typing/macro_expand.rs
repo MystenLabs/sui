@@ -20,15 +20,15 @@ use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-type LambdaMap = BTreeMap<Var_, (N::Lambda, Vec<Type>, Type)>;
+type LambdaMap = BTreeMap<Var_, (N::Lambda, Loc, Vec<Type>, Type)>;
 type ArgMap = BTreeMap<Var_, (N::Exp, Type)>;
 struct ParamInfo {
     argument: Option<EvalStrategy<Loc, Loc>>,
     used: bool,
 }
 
-struct Context<'a, 'b> {
-    core: &'a mut core::Context<'b>,
+struct Context<'context, 'outer, 'env> {
+    core: &'context mut core::Context<'outer, 'env>,
     // used for removing unbound params
     all_params: BTreeMap<Var_, ParamInfo>,
     // used for expanding lambda calls in VarCall
@@ -88,7 +88,7 @@ pub(crate) fn call(
         ) {
             Ok(res) => res,
             Err(None) => {
-                assert!(context.env.has_errors());
+                assert!(context.env().has_errors());
                 return None;
             }
             Err(Some(diag)) => {
@@ -99,7 +99,7 @@ pub(crate) fn call(
     context.set_max_variable_color(max_color);
 
     if macro_type_params.len() != type_args.len() || macro_params.len() != args.len() {
-        assert!(context.env.has_errors());
+        assert!(context.env().has_errors());
         return None;
     }
     // tparam subst
@@ -135,11 +135,11 @@ pub(crate) fn call(
             Arg::ByName((e, ty)) => (EvalStrategy::ByName(e.loc), ty.clone()),
         };
         let unfolded = core::unfold_type(&context.subst, arg_ty);
-        if let sp!(_, Type_::Fun(param_tys, result_ty)) = unfolded {
+        if let sp!(tfunloc, Type_::Fun(param_tys, result_ty)) = unfolded {
             let arg_exp = match arg {
                 Arg::ByValue(_) => {
                     assert!(
-                        context.env.has_errors(),
+                        context.env().has_errors(),
                         "ICE lambda args should never be by value"
                     );
                     continue;
@@ -147,7 +147,15 @@ pub(crate) fn call(
                 Arg::ByName((e, _)) => e,
             };
             if let Some(v) = param {
-                bind_lambda(context, &mut lambdas, v, arg_exp, param_tys, *result_ty)?
+                bind_lambda(
+                    context,
+                    &mut lambdas,
+                    v,
+                    arg_exp,
+                    tfunloc,
+                    param_tys,
+                    *result_ty,
+                )?
             }
         } else {
             match arg {
@@ -275,12 +283,13 @@ fn bind_lambda(
     lambdas: &mut LambdaMap,
     param: Var_,
     arg: N::Exp,
+    tfunloc: Loc,
     param_ty: Vec<Type>,
     result_ty: Type,
 ) -> Option<()> {
     match arg.value {
         N::Exp_::Lambda(lambda) => {
-            lambdas.insert(param, (lambda, param_ty, result_ty));
+            lambdas.insert(param, (lambda, tfunloc, param_ty, result_ty));
             Some(())
         }
         _ => {
@@ -661,6 +670,7 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
             return_label,
             use_fun_color,
             body,
+            extra_annotations: _,
         }) => {
             ctx.add_block_label(*return_label);
             for (lvs, _) in &*parameters {
@@ -721,7 +731,7 @@ fn recolor_pat(ctx: &mut Recolor, sp!(_, p_): &mut N::MatchPattern) {
 // subst args
 //**************************************************************************************************
 
-impl Context<'_, '_> {
+impl Context<'_, '_, '_> {
     fn mark_used(&mut self, v: &Var_) {
         self.all_params.get_mut(v).unwrap().used = true;
     }
@@ -791,7 +801,7 @@ fn lvalue(context: &mut Context, sp!(_, lv_): &mut N::LValue) {
         } => {
             if context.all_params.contains_key(v_) {
                 assert!(
-                    context.core.env.has_errors(),
+                    context.core.env().has_errors(),
                     "ICE cannot assign to macro parameter"
                 );
                 *lv_ = N::LValue_::Ignore
@@ -860,7 +870,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                     valid_binders.retain(|(_, sp!(_, var_))| {
                         if context.all_params.contains_key(var_) {
                             assert!(
-                                context.core.env.has_errors(),
+                                context.core.env().has_errors(),
                                 "ICE cannot use macro parameter in pattern"
                             );
                             false
@@ -969,8 +979,12 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
         ///////
         N::Exp_::Var(sp!(_, v_)) if context.lambdas.contains_key(v_) => {
             context.mark_used(v_);
-            let (lambda, _, _) = context.lambdas.get(v_).unwrap();
-            *e_ = N::Exp_::Lambda(lambda.clone());
+            let (lambda, tfunloc, args, ret) = context.lambdas.get(v_).unwrap();
+            let mut lambda = lambda.clone();
+            lambda
+                .extra_annotations
+                .push(sp(*tfunloc, (args.clone(), ret.clone())));
+            *e_ = N::Exp_::Lambda(lambda);
         }
         N::Exp_::VarCall(sp!(_, v_), sp!(argloc, es)) if context.lambdas.contains_key(v_) => {
             context.mark_used(v_);
@@ -983,10 +997,24 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                     return_label,
                     use_fun_color,
                     body: mut lambda_body,
+                    extra_annotations,
                 },
+                tfunloc,
                 param_tys,
                 result_ty,
             ) = context.lambdas.get(v_).unwrap().clone();
+            let (mut extra_param_tys, mut extra_result_tys): (Vec<_>, Vec<_>) = extra_annotations
+                .into_iter()
+                .map(|sp!(loc, (ps, r))| (sp(loc, ps), r))
+                .unzip();
+            let mut all_param_tys = {
+                extra_param_tys.push(sp(tfunloc, param_tys));
+                extra_param_tys
+            };
+            let all_result_ty = {
+                extra_result_tys.push(result_ty);
+                extra_result_tys
+            };
             // recolor in case the lambda is used more than once
             let next_color = context.core.next_variable_color();
             let reloc_clever_errors = None;
@@ -1010,14 +1038,40 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             context.core.set_max_variable_color(recolor.max_color());
             // check arity before expanding
             let argloc = *argloc;
-            core::check_call_arity(
-                context.core,
-                *eloc,
-                || format!("Invalid lambda call of '{}'", v_.name),
-                param_tys.len(),
-                argloc,
-                es.len(),
-            );
+            for sp!(annot_loc, annot) in &all_param_tys {
+                core::check_call_arity(
+                    context.core,
+                    *eloc,
+                    || format!("Invalid lambda call of '{}'", v_.name),
+                    Some(*annot_loc),
+                    annot.len(),
+                    argloc,
+                    es.len(),
+                );
+            }
+
+            let all_param_tys_annot = {
+                // we have a vector of annotations of all parameters, we will split these
+                // into the individual annotations for each parameter.
+                // If there is a length mismatch, we will have an error already but there
+                // might be some strange edge cases to fix
+                let num_params = all_param_tys
+                    .iter()
+                    .map(|sp!(_, tys)| tys.len())
+                    .max()
+                    .unwrap();
+                let mut annots = (0..num_params)
+                    .map(|_| {
+                        all_param_tys
+                            .iter_mut()
+                            .filter_map(|sp!(_, tys)| tys.pop())
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>();
+                annots.reverse();
+                assert!(all_param_tys.iter().all(|sp!(_, tys)| tys.is_empty()));
+                annots
+            };
             // expand the call, replacing with a dummy value to take the args by value
             let N::Exp_::VarCall(_, sp!(_, args)) =
                 std::mem::replace(e_, /* dummy */ N::Exp_::UnresolvedError)
@@ -1025,7 +1079,9 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                 unreachable!()
             };
             let body_loc = lambda_body.loc;
-            let annot_body = Box::new(sp(body_loc, N::Exp_::Annotate(lambda_body, result_ty)));
+            let annot_body = all_result_ty.into_iter().fold(lambda_body, |body, ty| {
+                Box::new(sp(body_loc, N::Exp_::Annotate(body, ty)))
+            });
             let labeled_seq = VecDeque::from([sp(body_loc, N::SequenceItem_::Seq(annot_body))]);
             let labeled_body_ = N::Exp_::Block(N::Block {
                 name: Some(return_label),
@@ -1043,11 +1099,13 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             let mut result: VecDeque<_> = lambda_params
                 .into_iter()
                 .zip(args)
-                .zip(param_tys)
-                .map(|(((lvs, _lv_ty_opt), arg), param_ty)| {
-                    let param_loc = param_ty.loc;
+                .zip(all_param_tys_annot)
+                .map(|(((lvs, _lv_ty_opt), arg), param_ty_annots)| {
                     let arg = Box::new(arg);
-                    let annot_arg = Box::new(sp(param_loc, N::Exp_::Annotate(arg, param_ty)));
+                    let param_loc = param_ty_annots.last().unwrap().loc;
+                    let annot_arg = param_ty_annots.into_iter().fold(arg, |arg, param_ty| {
+                        Box::new(sp(param_ty.loc, N::Exp_::Annotate(arg, param_ty)))
+                    });
                     sp(param_loc, N::SequenceItem_::Bind(lvs, annot_arg))
                 })
                 .collect();
@@ -1058,7 +1116,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                 from_macro_argument: None,
                 seq: (N::UseFuns::new(context.macro_color), result),
             });
-            if context.core.env.ide_mode() {
+            if context.core.env().ide_mode() {
                 context
                     .core
                     .add_ide_annotation(*eloc, IDEAnnotation::ExpandedLambda);
@@ -1119,7 +1177,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                 assert!(!context.lambdas.contains_key(v_));
                 assert!(!context.by_name_args.contains_key(v_));
                 assert!(
-                    context.core.env.has_errors(),
+                    context.core.env().has_errors(),
                     "ICE unbound param should have already resulted in an error"
                 );
                 *e_ = N::Exp_::UnresolvedError;
@@ -1135,7 +1193,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                 assert!(!context.lambdas.contains_key(v_));
                 assert!(!context.by_name_args.contains_key(v_));
                 assert!(
-                    context.core.env.has_errors(),
+                    context.core.env().has_errors(),
                     "ICE unbound param should have already resulted in an error"
                 );
                 *e_ = N::Exp_::UnresolvedError;
@@ -1199,7 +1257,7 @@ fn pat(context: &mut Context, sp!(_, p_): &mut N::MatchPattern) {
         MP::Binder(_mut, var, _) => {
             if context.all_params.contains_key(&var.value) {
                 assert!(
-                    context.core.env.has_errors(),
+                    context.core.env().has_errors(),
                     "ICE cannot use macro parameter in pattern"
                 );
                 *p_ = MP::ErrorPat;
@@ -1212,7 +1270,7 @@ fn pat(context: &mut Context, sp!(_, p_): &mut N::MatchPattern) {
         MP::At(var, _unused_var, inner) => {
             if context.all_params.contains_key(&var.value) {
                 assert!(
-                    context.core.env.has_errors(),
+                    context.core.env().has_errors(),
                     "ICE cannot use macro parameter in pattern"
                 );
             }

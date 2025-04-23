@@ -1,6 +1,6 @@
 # Methods
 
-As a syntactic convience, some functions in Move can be called as "methods" on a value. This is done
+As a syntactic convenience, some functions in Move can be called as "methods" on a value. This is done
 by using the `.` operator to call the function, where the value on the left-hand side of the `.` is
 the first argument to the function (sometimes called the receiver). The type of that value
 statically determines which function is called. This is an important difference from some other
@@ -32,7 +32,7 @@ coin.value();
 When a method is called, the compiler will statically determine which function is called based on
 the type of the receiver (the argument on the left-hand side of the `.`). The compiler maintains a
 mapping from type and method name to the module and function name that should be called. This
-mapping is created fom the `use fun` aliases that are currently in scope, and from the appropriate
+mapping is created from the `use fun` aliases that are currently in scope, and from the appropriate
 functions in the receiver type's defining module. In all cases, the receiver type is the first
 argument to the function, whether by-value or by-reference.
 

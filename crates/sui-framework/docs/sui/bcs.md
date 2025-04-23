@@ -117,12 +117,12 @@ enables use of <code>vector::pop_back</code>.
 ## Constants
 
 
-<a name="sui_bcs_ELenOutOfRange"></a>
+<a name="sui_bcs_EOutOfRange"></a>
 
-For when ULEB byte is out of range (or not found).
+For when bytes length is less than required for deserialization.
 
 
-<pre><code><b>const</b> <a href="../sui/bcs.md#sui_bcs_ELenOutOfRange">ELenOutOfRange</a>: u64 = 2;
+<pre><code><b>const</b> <a href="../sui/bcs.md#sui_bcs_EOutOfRange">EOutOfRange</a>: u64 = 0;
 </code></pre>
 
 
@@ -137,12 +137,12 @@ For when the boolean value different than <code>0</code> or <code>1</code>.
 
 
 
-<a name="sui_bcs_EOutOfRange"></a>
+<a name="sui_bcs_ELenOutOfRange"></a>
 
-For when bytes length is less than required for deserialization.
+For when ULEB byte is out of range (or not found).
 
 
-<pre><code><b>const</b> <a href="../sui/bcs.md#sui_bcs_EOutOfRange">EOutOfRange</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui/bcs.md#sui_bcs_ELenOutOfRange">ELenOutOfRange</a>: u64 = 2;
 </code></pre>
 
 
@@ -828,8 +828,7 @@ functionality of peeling the inner value.
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_option">peel_option</a>&lt;$T&gt;($<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>, $peel: |&<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>| -&gt; $T): Option&lt;$T&gt; {
     <b>let</b> <a href="../sui/bcs.md#sui_bcs">bcs</a> = $<a href="../sui/bcs.md#sui_bcs">bcs</a>;
-    <b>if</b> (<a href="../sui/bcs.md#sui_bcs">bcs</a>.<a href="../sui/bcs.md#sui_bcs_peel_bool">peel_bool</a>()) option::some($peel(<a href="../sui/bcs.md#sui_bcs">bcs</a>))
-    <b>else</b> option::none()
+    <b>if</b> (<a href="../sui/bcs.md#sui_bcs">bcs</a>.<a href="../sui/bcs.md#sui_bcs_peel_bool">peel_bool</a>()) option::some($peel(<a href="../sui/bcs.md#sui_bcs">bcs</a>)) <b>else</b> option::none()
 }
 </code></pre>
 

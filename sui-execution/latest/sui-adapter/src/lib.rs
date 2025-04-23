@@ -10,6 +10,7 @@ pub mod execution_engine;
 pub mod execution_mode;
 pub mod execution_value;
 pub mod gas_charger;
+pub mod gas_meter;
 pub mod programmable_transactions;
 pub mod temporary_store;
 pub mod type_layout_resolver;

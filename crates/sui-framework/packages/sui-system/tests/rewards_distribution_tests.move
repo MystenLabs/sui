@@ -4,10 +4,10 @@
 #[test_only]
 module sui_system::rewards_distribution_tests;
 
+use sui::address;
 use sui::balance;
 use sui::test_scenario::{Self, Scenario};
-use sui_system::sui_system::SuiSystemState;
-use sui_system::validator_cap::UnverifiedValidatorOperationCap;
+use sui::test_utils::assert_eq;
 use sui_system::governance_test_utils::{
     advance_epoch,
     advance_epoch_with_reward_amounts,
@@ -18,10 +18,11 @@ use sui_system::governance_test_utils::{
     create_validator_for_testing,
     create_sui_system_state_for_testing,
     stake_with,
-    total_sui_balance, unstake
+    total_sui_balance,
+    unstake
 };
-use sui::test_utils::assert_eq;
-use sui::address;
+use sui_system::sui_system::SuiSystemState;
+use sui_system::validator_cap::UnverifiedValidatorOperationCap;
 
 const VALIDATOR_ADDR_1: address = @0x1;
 const VALIDATOR_ADDR_2: address = @0x2;
@@ -48,7 +49,7 @@ fun test_validator_rewards() {
     assert_validator_total_stake_amounts(
         validator_addrs(),
         vector[125 * MIST_PER_SUI, 225 * MIST_PER_SUI, 325 * MIST_PER_SUI, 425 * MIST_PER_SUI],
-        scenario
+        scenario,
     );
 
     stake_with(VALIDATOR_ADDR_2, VALIDATOR_ADDR_2, 720, scenario);
@@ -60,7 +61,7 @@ fun test_validator_rewards() {
     assert_validator_total_stake_amounts(
         validator_addrs(),
         vector[150 * MIST_PER_SUI, 970 * MIST_PER_SUI, 350 * MIST_PER_SUI, 450 * MIST_PER_SUI],
-        scenario
+        scenario,
     );
     scenario_val.end();
 }
@@ -75,7 +76,16 @@ fun test_stake_subsidy() {
     advance_epoch(scenario);
 
     advance_epoch_with_reward_amounts(0, 100, scenario);
-    assert_validator_total_stake_amounts(validator_addrs(), vector[100_000_025 * MIST_PER_SUI, 200_000_025 * MIST_PER_SUI, 300_000_025 * MIST_PER_SUI, 400_000_025 * MIST_PER_SUI], scenario);
+    assert_validator_total_stake_amounts(
+        validator_addrs(),
+        vector[
+            100_000_025 * MIST_PER_SUI,
+            200_000_025 * MIST_PER_SUI,
+            300_000_025 * MIST_PER_SUI,
+            400_000_025 * MIST_PER_SUI,
+        ],
+        scenario,
+    );
     scenario_val.end();
 }
 
@@ -89,19 +99,35 @@ fun test_stake_rewards() {
     stake_with(STAKER_ADDR_2, VALIDATOR_ADDR_2, 100, scenario);
     advance_epoch(scenario);
 
-    assert_validator_total_stake_amounts(validator_addrs(), vector[300 * MIST_PER_SUI, 300 * MIST_PER_SUI, 300 * MIST_PER_SUI, 400 * MIST_PER_SUI], scenario);
-    assert_validator_self_stake_amounts(validator_addrs(), vector[100 * MIST_PER_SUI, 200 * MIST_PER_SUI, 300 * MIST_PER_SUI, 400 * MIST_PER_SUI], scenario);
+    assert_validator_total_stake_amounts(
+        validator_addrs(),
+        vector[300 * MIST_PER_SUI, 300 * MIST_PER_SUI, 300 * MIST_PER_SUI, 400 * MIST_PER_SUI],
+        scenario,
+    );
+    assert_validator_self_stake_amounts(
+        validator_addrs(),
+        vector[100 * MIST_PER_SUI, 200 * MIST_PER_SUI, 300 * MIST_PER_SUI, 400 * MIST_PER_SUI],
+        scenario,
+    );
 
     // Each pool gets 30 SUI.
     advance_epoch_with_reward_amounts(0, 120, scenario);
-    assert_validator_self_stake_amounts(validator_addrs(), vector[110 * MIST_PER_SUI, 220 * MIST_PER_SUI, 330 * MIST_PER_SUI, 430 * MIST_PER_SUI], scenario);
+    assert_validator_self_stake_amounts(
+        validator_addrs(),
+        vector[110 * MIST_PER_SUI, 220 * MIST_PER_SUI, 330 * MIST_PER_SUI, 430 * MIST_PER_SUI],
+        scenario,
+    );
     unstake(STAKER_ADDR_1, 0, scenario);
     stake_with(STAKER_ADDR_2, VALIDATOR_ADDR_1, 600, scenario);
     // Each pool gets 30 SUI.
     advance_epoch_with_reward_amounts(0, 120, scenario);
     // staker 1 receives only 20 SUI of rewards, not 40 since we are using pre-epoch exchange rate.
     assert_eq(total_sui_balance(STAKER_ADDR_1, scenario), 220 * MIST_PER_SUI);
-    assert_validator_self_stake_amounts(validator_addrs(), vector[140 * MIST_PER_SUI, 240 * MIST_PER_SUI, 360 * MIST_PER_SUI, 460 * MIST_PER_SUI], scenario);
+    assert_validator_self_stake_amounts(
+        validator_addrs(),
+        vector[140 * MIST_PER_SUI, 240 * MIST_PER_SUI, 360 * MIST_PER_SUI, 460 * MIST_PER_SUI],
+        scenario,
+    );
     unstake(STAKER_ADDR_2, 0, scenario);
     assert_eq(total_sui_balance(STAKER_ADDR_2, scenario), 120 * MIST_PER_SUI); // 20 SUI of rewards received
 
@@ -158,21 +184,41 @@ fun test_validator_commission() {
     advance_epoch_with_reward_amounts(0, 120, scenario);
     // V1: 230, V2: 330, V3: 330, V4: 430
     // 2 SUI, or 20 % of staker_2's rewards, goes to validator_2
-    assert_validator_non_self_stake_amounts(validator_addrs(), vector[115 * MIST_PER_SUI, 108 * MIST_PER_SUI, 0, 0], scenario);
-    assert_validator_self_stake_amounts(validator_addrs(), vector[115 * MIST_PER_SUI, 222 * MIST_PER_SUI, 330 * MIST_PER_SUI, 430 * MIST_PER_SUI], scenario);
+    assert_validator_non_self_stake_amounts(
+        validator_addrs(),
+        vector[115 * MIST_PER_SUI, 108 * MIST_PER_SUI, 0, 0],
+        scenario,
+    );
+    assert_validator_self_stake_amounts(
+        validator_addrs(),
+        vector[115 * MIST_PER_SUI, 222 * MIST_PER_SUI, 330 * MIST_PER_SUI, 430 * MIST_PER_SUI],
+        scenario,
+    );
 
     set_commission_rate_and_advance_epoch(VALIDATOR_ADDR_1, 1000, scenario); // 10% commission
 
     advance_epoch_with_reward_amounts(0, 240, scenario);
-    assert_validator_total_stake_amounts(validator_addrs(), vector[290 * MIST_PER_SUI, 390 * MIST_PER_SUI, 390 * MIST_PER_SUI, 490 * MIST_PER_SUI], scenario);
+    assert_validator_total_stake_amounts(
+        validator_addrs(),
+        vector[290 * MIST_PER_SUI, 390 * MIST_PER_SUI, 390 * MIST_PER_SUI, 490 * MIST_PER_SUI],
+        scenario,
+    );
 
     // Staker 1 rewards in the recent distribution is 0.9 x 30 = 27 SUI
     // Validator 1 rewards in the recent distribution is 60 - 27 = 33 SUI
 
     // Staker 2 amounts for 0.8 * 60 * (108 / 330) + 108 = 123.709 SUI
     // Validator 2 amounts for 390 - 123.709 = 266.291 SUI
-    assert_validator_non_self_stake_amounts(validator_addrs(), vector[142 * MIST_PER_SUI, 123709090909, 0, 0], scenario);
-    assert_validator_self_stake_amounts(validator_addrs(), vector[148 * MIST_PER_SUI, 266290909091, 390 * MIST_PER_SUI, 490 * MIST_PER_SUI], scenario);
+    assert_validator_non_self_stake_amounts(
+        validator_addrs(),
+        vector[142 * MIST_PER_SUI, 123709090909, 0, 0],
+        scenario,
+    );
+    assert_validator_self_stake_amounts(
+        validator_addrs(),
+        vector[148 * MIST_PER_SUI, 266290909091, 390 * MIST_PER_SUI, 490 * MIST_PER_SUI],
+        scenario,
+    );
 
     scenario_val.end();
 }
@@ -201,7 +247,10 @@ fun test_rewards_slashing() {
     // 3600 SUI of total rewards, 50% threshold and 10% reward slashing.
     // So validator_2 is the only one whose rewards should get slashed.
     advance_epoch_with_reward_amounts_and_slashing_rates(
-        0, 3600, 1000, scenario
+        0,
+        3600,
+        1000,
+        scenario,
     );
 
     // Without reward slashing, the validator's stakes should be [100+450, 200+600, 300+900, 400+900]
@@ -209,7 +258,11 @@ fun test_rewards_slashing() {
     // Since 60 SUI, or 10% of validator_2's rewards (600) are slashed, she only has 800 - 60 = 740 now.
     // There are in total 90 SUI of rewards slashed (60 from the validator, and 30 from her staker)
     // so the unslashed validators each get their share of additional rewards, which is 30.
-    assert_validator_self_stake_amounts(validator_addrs(), vector[565 * MIST_PER_SUI, 740 * MIST_PER_SUI, 1230 * MIST_PER_SUI, 1330 * MIST_PER_SUI], scenario);
+    assert_validator_self_stake_amounts(
+        validator_addrs(),
+        vector[565 * MIST_PER_SUI, 740 * MIST_PER_SUI, 1230 * MIST_PER_SUI, 1330 * MIST_PER_SUI],
+        scenario,
+    );
 
     // Unstake so we can check the stake rewards as well.
     unstake(STAKER_ADDR_1, 0, scenario);
@@ -239,18 +292,29 @@ fun test_entire_rewards_slashing() {
     report_validator(VALIDATOR_ADDR_3, VALIDATOR_ADDR_2, scenario);
     report_validator(VALIDATOR_ADDR_4, VALIDATOR_ADDR_2, scenario);
 
-
     // 3600 SUI of total rewards, 100% reward slashing.
     // So validator_2 is the only one whose rewards should get slashed.
     advance_epoch_with_reward_amounts_and_slashing_rates(
-        0, 3600, 10_000, scenario
+        0,
+        3600,
+        10_000,
+        scenario,
     );
 
     // Without reward slashing, the validator's stakes should be [100+450, 200+600, 300+900, 400+900]
     // after the last epoch advancement.
     // The entire rewards of validator 2's staking pool are slashed, which is 900 SUI.
     // so the unslashed validators each get their share of additional rewards, which is 300.
-    assert_validator_self_stake_amounts(validator_addrs(), vector[(550 + 150) * MIST_PER_SUI, 200 * MIST_PER_SUI, (1200 + 300) * MIST_PER_SUI, (1300 + 300) * MIST_PER_SUI], scenario);
+    assert_validator_self_stake_amounts(
+        validator_addrs(),
+        vector[
+            (550 + 150) * MIST_PER_SUI,
+            200 * MIST_PER_SUI,
+            (1200 + 300) * MIST_PER_SUI,
+            (1300 + 300) * MIST_PER_SUI,
+        ],
+        scenario,
+    );
 
     // Unstake so we can check the stake rewards as well.
     unstake(STAKER_ADDR_1, 0, scenario);
@@ -284,7 +348,10 @@ fun test_rewards_slashing_with_storage_fund() {
     // 1000 SUI of storage rewards, 1500 SUI of computation rewards, 50% slashing threshold
     // and 20% slashing rate
     advance_epoch_with_reward_amounts_and_slashing_rates(
-        1000, 1500, 2000, scenario
+        1000,
+        1500,
+        2000,
+        scenario,
     );
 
     // Each unslashed validator staking pool gets 300 SUI of computation rewards + 75 SUI of storage fund rewards +
@@ -292,7 +359,11 @@ fun test_rewards_slashing_with_storage_fund() {
     // storage fund reward, so in total it gets 400 SUI of rewards.
     // Validator 3 has a delegator with her so she gets 320 * 3/4 + 75 + 5 = 320 SUI of rewards.
     // Validator 4's should get 300 * 4/5 * (1 - 20%) = 192 in computation rewards and 75 * (1 - 20%) = 60 in storage rewards.
-    assert_validator_self_stake_amounts(validator_addrs(), vector[500 * MIST_PER_SUI, 600 * MIST_PER_SUI, 620 * MIST_PER_SUI, 652 * MIST_PER_SUI], scenario);
+    assert_validator_self_stake_amounts(
+        validator_addrs(),
+        vector[500 * MIST_PER_SUI, 600 * MIST_PER_SUI, 620 * MIST_PER_SUI, 652 * MIST_PER_SUI],
+        scenario,
+    );
 
     // Unstake so we can check the stake rewards as well.
     unstake(STAKER_ADDR_1, 0, scenario);
@@ -328,11 +399,18 @@ fun test_everyone_slashed() {
     report_validator(VALIDATOR_ADDR_4, VALIDATOR_ADDR_1, scenario);
 
     advance_epoch_with_reward_amounts_and_slashing_rates(
-        1000, 3000, 10_000, scenario
+        1000,
+        3000,
+        10_000,
+        scenario,
     );
 
     // All validators should have 0 rewards added so their stake stays the same.
-    assert_validator_self_stake_amounts(validator_addrs(), vector[100 * MIST_PER_SUI, 200 * MIST_PER_SUI, 300 * MIST_PER_SUI, 400 * MIST_PER_SUI], scenario);
+    assert_validator_self_stake_amounts(
+        validator_addrs(),
+        vector[100 * MIST_PER_SUI, 200 * MIST_PER_SUI, 300 * MIST_PER_SUI, 400 * MIST_PER_SUI],
+        scenario,
+    );
 
     scenario.next_tx(@0x0);
     // Storage fund balance should increase by 4000 SUI.
@@ -420,7 +498,11 @@ fun test_uncapped_rewards() {
     // Create a set of 20 validators, each with 481 + i * 2 SUI of stake.
     // The stake total sums up to be 481 + 483 + ... + 517 + 519 = 1000 SUI.
     while (i < num_validators) {
-        let validator = create_validator_for_testing(address::from_u256(i as u256), (481 + i * 2), ctx);
+        let validator = create_validator_for_testing(
+            address::from_u256(i as u256),
+            (481 + i * 2),
+            ctx,
+        );
         validators.push_back(validator);
         i = i + 1;
     };
@@ -472,11 +554,15 @@ fun set_up_sui_system_state_with_big_amounts() {
     scenario_val.end();
 }
 
-fun validator_addrs() : vector<address> {
+fun validator_addrs(): vector<address> {
     vector[VALIDATOR_ADDR_1, VALIDATOR_ADDR_2, VALIDATOR_ADDR_3, VALIDATOR_ADDR_4]
 }
 
-fun set_commission_rate_and_advance_epoch(addr: address, commission_rate: u64, scenario: &mut Scenario) {
+fun set_commission_rate_and_advance_epoch(
+    addr: address,
+    commission_rate: u64,
+    scenario: &mut Scenario,
+) {
     scenario.next_tx(addr);
     let mut system_state = scenario.take_shared<SuiSystemState>();
     let ctx = scenario.ctx();
@@ -525,7 +611,18 @@ fun test_stake_subsidy_with_safe_mode_epoch_562_to_563() {
     // perform advance epoch
     sui_system
         .inner_mut_for_testing()
-        .advance_epoch(start_epoch + 1, 65, balance::zero(), balance::zero(), 0, 0, 0, 0, epoch_start_time, ctx)
+        .advance_epoch(
+            start_epoch + 1,
+            65,
+            balance::zero(),
+            balance::zero(),
+            0,
+            0,
+            0,
+            0,
+            epoch_start_time,
+            ctx,
+        )
         .destroy_for_testing(); // balance returned from `advance_epoch`
     ctx.increment_epoch_number();
 
@@ -536,7 +633,18 @@ fun test_stake_subsidy_with_safe_mode_epoch_562_to_563() {
     // ensure that next epoch change only distributes one epoch's worth
     sui_system
         .inner_mut_for_testing()
-        .advance_epoch(start_epoch + 2, 65, balance::zero(), balance::zero(), 0, 0, 0, 0, epoch_start_time + epoch_duration, ctx)
+        .advance_epoch(
+            start_epoch + 2,
+            65,
+            balance::zero(),
+            balance::zero(),
+            0,
+            0,
+            0,
+            0,
+            epoch_start_time + epoch_duration,
+            ctx,
+        )
         .destroy_for_testing(); // balance returned from `advance_epoch`
     ctx.increment_epoch_number();
 
@@ -573,7 +681,18 @@ fun test_stake_subsidy_with_safe_mode_epoch_563_to_564() {
     // perform advance epoch
     sui_system
         .inner_mut_for_testing()
-        .advance_epoch(start_epoch + 1, 65, balance::zero(), balance::zero(), 0, 0, 0, 0, epoch_start_time, ctx)
+        .advance_epoch(
+            start_epoch + 1,
+            65,
+            balance::zero(),
+            balance::zero(),
+            0,
+            0,
+            0,
+            0,
+            epoch_start_time,
+            ctx,
+        )
         .destroy_for_testing(); // balance returned from `advance_epoch`
     ctx.increment_epoch_number();
 
@@ -584,7 +703,18 @@ fun test_stake_subsidy_with_safe_mode_epoch_563_to_564() {
     // ensure that next epoch change only distributes one epoch's worth
     sui_system
         .inner_mut_for_testing()
-        .advance_epoch(start_epoch + 2, 65, balance::zero(), balance::zero(), 0, 0, 0, 0, epoch_start_time + epoch_duration, ctx)
+        .advance_epoch(
+            start_epoch + 2,
+            65,
+            balance::zero(),
+            balance::zero(),
+            0,
+            0,
+            0,
+            0,
+            epoch_start_time + epoch_duration,
+            ctx,
+        )
         .destroy_for_testing(); // balance returned from `advance_epoch`
     ctx.increment_epoch_number();
 

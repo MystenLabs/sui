@@ -42,7 +42,7 @@ pub fn read_setting_impl(
         config_read_setting_impl_cost_per_byte,
     } = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .config_read_setting_impl_cost_params
         .clone();
 
@@ -83,7 +83,7 @@ pub fn read_setting_impl(
             E_BCS_SERIALIZATION_FAILURE,
         ));
     };
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
 
     let read_value_opt = consistent_value_before_current_epoch(
         object_runtime,

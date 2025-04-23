@@ -4,13 +4,14 @@ expression: parameters
 ---
 leader_timeout:
   secs: 0
-  nanos: 250000000
+  nanos: 200000000
 min_round_delay:
   secs: 0
   nanos: 50000000
 max_forward_time_drift:
   secs: 0
   nanos: 500000000
+max_blocks_per_sync: 32
 max_blocks_per_fetch: 1000
 sync_last_known_own_block_timeout:
   secs: 5

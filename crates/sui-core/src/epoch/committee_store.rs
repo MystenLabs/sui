@@ -10,7 +10,6 @@ use sui_types::committee::{Committee, EpochId};
 use sui_types::error::{SuiError, SuiResult};
 use typed_store::rocks::{default_db_options, DBMap, DBOptions, MetricConf};
 use typed_store::rocksdb::Options;
-use typed_store::traits::{TableSummary, TypedStoreDebug};
 
 use typed_store::DBMapUtils;
 use typed_store::Map;
@@ -46,7 +45,10 @@ impl CommitteeStore {
             tables,
             cache: RwLock::new(HashMap::new()),
         };
-        if store.database_is_empty() {
+        if store
+            .database_is_empty()
+            .expect("CommitteeStore initialization failed")
+        {
             store
                 .init_genesis_committee(genesis_committee.clone())
                 .expect("Init genesis committee data must not fail");
@@ -126,7 +128,13 @@ impl CommitteeStore {
             .map_err(Into::into)
     }
 
-    fn database_is_empty(&self) -> bool {
-        self.tables.committee_map.unbounded_iter().next().is_none()
+    fn database_is_empty(&self) -> SuiResult<bool> {
+        Ok(self
+            .tables
+            .committee_map
+            .safe_iter()
+            .next()
+            .transpose()?
+            .is_none())
     }
 }

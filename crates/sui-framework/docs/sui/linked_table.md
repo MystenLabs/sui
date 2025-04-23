@@ -131,20 +131,20 @@ removal
 ## Constants
 
 
-<a name="sui_linked_table_ETableIsEmpty"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui/linked_table.md#sui_linked_table_ETableIsEmpty">ETableIsEmpty</a>: u64 = 1;
-</code></pre>
-
-
-
 <a name="sui_linked_table_ETableNotEmpty"></a>
 
 
 
 <pre><code><b>const</b> <a href="../sui/linked_table.md#sui_linked_table_ETableNotEmpty">ETableNotEmpty</a>: u64 = 0;
+</code></pre>
+
+
+
+<a name="sui_linked_table_ETableIsEmpty"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui/linked_table.md#sui_linked_table_ETableIsEmpty">ETableIsEmpty</a>: u64 = 1;
 </code></pre>
 
 

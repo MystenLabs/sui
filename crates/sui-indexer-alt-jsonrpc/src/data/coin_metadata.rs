@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeSet, HashMap},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use async_graphql::dataloader::Loader;
 use diesel::{BoolExpressionMethods, ExpressionMethods, JoinOnDsl, QueryDsl};
@@ -61,7 +58,7 @@ impl Loader<CoinMetadataKey> for PgReader {
                 let params: Vec<TypeTag> = vec![tag.clone().into()];
                 bcs::to_bytes(&params)
             })
-            .collect::<Result<BTreeSet<_>, _>>()
+            .collect::<Result<Vec<_>, _>>()
             .map_err(|e| Arc::new(Error::Serde(e.into())))?;
 
         let query = candidates

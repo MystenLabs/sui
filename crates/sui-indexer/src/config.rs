@@ -207,11 +207,6 @@ pub enum Command {
         pruning_options: PruningOptions,
         #[command(flatten)]
         upload_options: UploadOptions,
-        /// If true, the indexer will run in MVR mode. It will only index data to
-        /// `objects_snapshot`, `objects_history`, `packages`, `checkpoints`, and `epochs` to
-        /// support MVR queries.
-        #[clap(long, default_value_t = false)]
-        mvr_mode: bool,
     },
     JsonRpcService(JsonRpcConfig),
     ResetDatabase {

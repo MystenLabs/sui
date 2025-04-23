@@ -9,7 +9,8 @@ The quickest way to install Sui is using the binaries delivered with every relea
 
 Sui supports the following operating systems:
 
-- Linux - Ubuntu version 20.04 (Bionic Beaver) or later
+- Linux - Ubuntu version 22.04 (Jammy Jellyfish) or later
+    - The [`sui-node` binary from AWS](#aws-sui-node) supports only version 22.04
 - macOS - macOS Monterey or later
 - Microsoft Windows - Windows 10 and 11
 
@@ -136,6 +137,19 @@ $ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch te
 ```
 
 The `tracing` feature is important as it adds Move test coverage and debugger support in the Sui CLI. Unless it is enabled you will not be able to use these two features.
+
+## Install `sui-node` for Ubuntu from AWS {#aws-sui-node}
+
+The `sui-node` binaries for Ubuntu 22.04 are available for download from AWS. You can use either the commit sha or version tag in the URL to retrieve the specific version of Sui you want. Use one of these values to construct the AWS download URL.
+
+The URL is in the form `https://sui-releases.s3-accelerate.amazonaws.com/<SHA-OR-TAG>/sui-node`, where you replace `<SHA-OR-TAG>` with the proper value. For example, the URL is `https://sui-releases.s3-accelerate.amazonaws.com/00544a588bb71c395d49d91f756e8bfe96067eca/sui-node` to download the release with the relevant commit sha. If you visit the URL using a browser, the binary downloads automatically.
+
+After downloading, open a console to the file's location and change its permission to `755`. 
+```sh
+$ chmod 755 sui-node
+```
+
+Add the file's location to your PATH variable if it's directory is not already included. Follow the steps in [Sui Full Node Configuration](../../operator/sui-full-node) to complete the setup.
 
 ## Build from source
 

@@ -10,9 +10,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    db::Db,
     metrics::{CheckpointLagMetricReporter, IndexerMetrics},
     pipeline::{Break, CommitterConfig, WatermarkPart},
+    store::Store,
     task::TrySpawnStreamExt,
 };
 
@@ -39,7 +39,7 @@ pub(super) fn committer<H: Handler + 'static>(
     skip_watermark: bool,
     rx: mpsc::Receiver<BatchedRows<H>>,
     tx: mpsc::Sender<Vec<WatermarkPart>>,
-    db: Db,
+    db: H::Store,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {

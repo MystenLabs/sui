@@ -10,13 +10,14 @@ use move_binary_format::{
     file_format::{ConstantPoolIndex, SignatureIndex},
 };
 use move_core_types::{
-    account_address::AccountAddress,
-    annotated_value::{MoveTypeLayout, MoveValue},
-    language_storage::TypeTag,
+    account_address::AccountAddress, annotated_value::MoveTypeLayout, language_storage::TypeTag,
 };
-use move_trace_format::format::{
-    DataLoad, Effect as EF, Location, MoveTraceBuilder, Read, RefType, TraceIndex, TraceValue,
-    TypeTagWithRefs, Write,
+use move_trace_format::{
+    format::{
+        DataLoad, Effect as EF, Location, MoveTraceBuilder, Read, RefType, TraceIndex, TraceValue,
+        TypeTagWithRefs, Write,
+    },
+    value::SerializableMoveValue,
 };
 use move_vm_types::{loaded_data::runtime_types::Type, values::Value};
 use smallvec::SmallVec;
@@ -357,7 +358,7 @@ impl VMTracer<'_> {
         loc: &RuntimeLocation,
         frame: Option<&Frame>,
         interpreter: &Interpreter,
-    ) -> Option<MoveValue> {
+    ) -> Option<SerializableMoveValue> {
         Some(match loc {
             RuntimeLocation::Local(fidx, loc_idx) => {
                 let local_ty = self
@@ -379,6 +380,7 @@ impl VMTracer<'_> {
                             .copy_loc(*loc_idx)
                             .ok()?
                             .as_annotated_move_value_for_tracing_only(&local_ty.layout?)?
+                            .into()
                     }
                     ReferenceType::Empty { .. } => {
                         panic!("We tried to access a local that was not initialized")
@@ -396,7 +398,9 @@ impl VMTracer<'_> {
                     }
                     None => {
                         let value = interpreter.operand_stack.value.get(*stack_idx)?;
-                        value.as_annotated_move_value_for_tracing_only(&ty.layout)?
+                        value
+                            .as_annotated_move_value_for_tracing_only(&ty.layout)?
+                            .into()
                     }
                 }
             }
@@ -412,6 +416,38 @@ impl VMTracer<'_> {
             .expect("Link context always set by this point")
     }
 
+    /// Load global data into the tracer state returning back the `TraceValue` and the `TraceIndex`
+    /// of the load (suitable for use in global locations).
+    fn emit_data_load(
+        &mut self,
+        value: SerializableMoveValue,
+        ref_type: &RefType,
+    ) -> (TraceIndex, TraceValue) {
+        // We treat any references coming out of a native as global reference.
+        // This generally works fine as long as you don't have a native function returning a
+        // mutable reference within a mutable reference passed-in.
+        let id = self.trace.current_trace_offset();
+
+        let location = RuntimeLocation::Global(id);
+
+        self.trace.effect(EF::DataLoad(DataLoad {
+            ref_type: ref_type.clone(),
+            location: location.as_trace_location(),
+            snapshot: value.clone(),
+        }));
+        let trace_value = match ref_type {
+            RefType::Imm => TraceValue::ImmRef {
+                location: location.as_trace_location(),
+                snapshot: Box::new(value),
+            },
+            RefType::Mut => TraceValue::MutRef {
+                location: location.as_trace_location(),
+                snapshot: Box::new(value),
+            },
+        };
+        (id, trace_value)
+    }
+
     /// Load data returned by a native function into the tracer state.
     /// We also emit a data load event for the data loaded from the native function.
     fn load_data(
@@ -425,31 +461,10 @@ impl VMTracer<'_> {
         let Some(ref_type) = reftype else {
             return None;
         };
+        let (trace_index, trace_value) = self.emit_data_load(value.into(), ref_type);
 
-        // We treat any references coming out of a native as global reference.
-        // This generally works fine as long as you don't have a native function returning a
-        // mutable reference within a mutable reference passed-in.
-        let id = self.trace.current_trace_offset();
-
-        let location = RuntimeLocation::Global(id);
-
-        self.trace.effect(EF::DataLoad(DataLoad {
-            ref_type: ref_type.clone(),
-            location: location.as_trace_location(),
-            snapshot: value.clone(),
-        }));
-        let trace_value = match &ref_type {
-            RefType::Imm => TraceValue::ImmRef {
-                location: location.as_trace_location(),
-                snapshot: Box::new(value),
-            },
-            RefType::Mut => TraceValue::MutRef {
-                location: location.as_trace_location(),
-                snapshot: Box::new(value),
-            },
-        };
-        self.loaded_data.insert(id, trace_value);
-        Some((ref_type.clone(), location))
+        self.loaded_data.insert(trace_index, trace_value);
+        Some((ref_type.clone(), RuntimeLocation::Global(trace_index)))
     }
 
     /// Handle (and load) any data returned by a native function.
@@ -496,14 +511,25 @@ impl VMTracer<'_> {
 
         assert!(function_type_info.local_types.len() == function.local_count());
 
-        let call_args: Vec<_> = args
+        let call_args: Vec<(_, _)> = args
             .iter()
             .zip(function_type_info.local_types.iter().cloned())
             .map(|(value, tag_with_layout_info_opt)| {
                 let (layout, ref_type) = tag_with_layout_info_opt.layout;
                 let move_value = value.as_annotated_move_value_for_tracing_only(&layout?)?;
-                assert!(ref_type.is_none());
-                Some(TraceValue::RuntimeValue { value: move_value })
+                match ref_type {
+                    Some(ref_type) => {
+                        let (id, trace_value) = self.emit_data_load(move_value.into(), &ref_type);
+                        self.loaded_data.insert(id, trace_value.clone());
+                        Some((trace_value, Some(id)))
+                    }
+                    None => Some((
+                        TraceValue::RuntimeValue {
+                            value: move_value.into(),
+                        },
+                        None,
+                    )),
+                }
             })
             .collect::<Option<_>>()?;
 
@@ -511,14 +537,22 @@ impl VMTracer<'_> {
             .local_types
             .iter()
             .cloned()
-            .map(|tag_with_layout_info_opt| {
+            .enumerate()
+            .map(|(i, tag_with_layout_info_opt)| {
                 let (layout, ref_type) = tag_with_layout_info_opt.layout;
                 LocalType {
                     layout,
                     ref_type: ref_type
-                        .map(|r_type| match r_type {
-                            RefType::Imm => ReferenceType::Empty { ref_type: r_type },
-                            RefType::Mut => ReferenceType::Empty { ref_type: r_type },
+                        .map(|r_type| {
+                            if let Some(location) = call_args.get(i).and_then(|(_, id)| *id) {
+                                let location = RuntimeLocation::Global(location);
+                                ReferenceType::Filled {
+                                    ref_type: r_type,
+                                    location,
+                                }
+                            } else {
+                                ReferenceType::Empty { ref_type: r_type }
+                            }
                         })
                         .unwrap_or(ReferenceType::Value),
                 }
@@ -541,7 +575,10 @@ impl VMTracer<'_> {
             function.index(),
             function.name().to_string(),
             function.module_id().clone(),
-            call_args,
+            call_args
+                .into_iter()
+                .map(|(trace_value, _)| trace_value)
+                .collect(),
             function_type_info.ty_args,
             function_type_info
                 .return_types
@@ -559,7 +596,11 @@ impl VMTracer<'_> {
         Some(())
     }
 
-    fn close_initial_frame_(&mut self, return_values: &[Value], remaining_gas: u64) -> Option<()> {
+    fn close_initial_native_frame_(
+        &mut self,
+        return_values: &[Value],
+        remaining_gas: u64,
+    ) -> Option<()> {
         let current_frame_return_tys = self.current_frame()?.return_types.clone();
         let return_values: Vec<_> = return_values
             .iter()
@@ -567,8 +608,16 @@ impl VMTracer<'_> {
             .map(|(value, tag_with_layout_info_opt)| {
                 let (layout, ref_type) = tag_with_layout_info_opt.layout;
                 let move_value = value.as_annotated_move_value_for_tracing_only(&layout?)?;
-                assert!(ref_type.is_none());
-                Some(TraceValue::RuntimeValue { value: move_value })
+                match ref_type {
+                    Some(ref_type) => {
+                        let (id, trace_value) = self.emit_data_load(move_value.into(), &ref_type);
+                        self.loaded_data.insert(id, trace_value.clone());
+                        Some(trace_value)
+                    }
+                    None => Some(TraceValue::RuntimeValue {
+                        value: move_value.into(),
+                    }),
+                }
             })
             .collect::<Option<_>>()?;
         self.trace.close_frame(
@@ -1293,7 +1342,7 @@ impl VMTracer<'_> {
                     panic!("Expected vector, got {:?}", ref_ty.layout,);
                 };
                 let EF::Pop(TraceValue::RuntimeValue {
-                    value: MoveValue::U64(i),
+                    value: SerializableMoveValue::U64(i),
                 }) = &self.effects[0]
                 else {
                     unreachable!();
@@ -1554,7 +1603,7 @@ impl<'a> VMTracer<'a> {
         self.emit_trace_error_if_err(opt.is_none());
     }
 
-    pub(crate) fn close_initial_frame(
+    pub(crate) fn close_initial_native_frame(
         &mut self,
         return_values: &VMResult<SmallVec<[Value; 1]>>,
         remaining_gas: u64,
@@ -1567,7 +1616,7 @@ impl<'a> VMTracer<'a> {
                 return;
             }
         };
-        let opt = self.close_initial_frame_(return_values, remaining_gas);
+        let opt = self.close_initial_native_frame_(return_values, remaining_gas);
         self.emit_trace_error_if_err(opt.is_none());
     }
 

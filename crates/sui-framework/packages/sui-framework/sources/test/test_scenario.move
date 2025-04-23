@@ -148,6 +148,15 @@ public fun later_epoch(
     next_epoch(scenario, sender)
 }
 
+/// Advance the scenario to a future `epoch`. Will abort if the `epoch` is in the past.
+public fun skip_to_epoch(scenario: &mut Scenario, epoch: u64) {
+    assert!(epoch >= scenario.ctx.epoch());
+    (epoch - scenario.ctx.epoch()).do!(|_| {
+        scenario.ctx.increment_epoch_number();
+        end_transaction()
+    })
+}
+
 /// Ends the test scenario
 /// Returns the results from the final transaction
 /// Will abort if shared or immutable objects were deleted, transferred, or wrapped.
