@@ -12,7 +12,7 @@ COPY crates crates
 COPY sui-execution sui-execution
 COPY external-crates external-crates
 
-RUN cargo build --profile ${PROFILE} --bin sui-analytics-indexer 
+RUN cargo build --profile ${PROFILE} --bin sui-analytics-indexer
 
 FROM debian:12-slim as deploy
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libjemalloc-dev
