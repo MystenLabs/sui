@@ -1,0 +1,22 @@
+# Tests output when external resolver returns different results for different networks
+
+[package]
+name = "example"
+edition = "2024.beta"
+license = "Apache-2.0"
+authors = ["Move Team"]
+
+[environments]
+mainnet = "35834a8a"
+
+[dependencies.mock.r.mock-resolver]
+stdout = """
+[responses."(None, mock)"]
+resolved = { local = "default resolution" }
+warnings = []
+
+[responses."(Some(\\\"mainnet\\\"), mock)"]
+resolved = { local = "mainnet resolution" }
+warnings = []
+"""
+stderr = "stderr output"

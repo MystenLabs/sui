@@ -120,8 +120,6 @@ async fn resolve_single<F: MoveFlavor>(
 
     // build the result
     process_response(&resolver, &dep_data, envs, response)
-
-    // TODO: regression tests for situation where the keys returned by the resolver are different!
 }
 
 /// Generate a unique identifier corresponding to [env] and [pkg]
