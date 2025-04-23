@@ -640,7 +640,7 @@ fn parse_expected_failure_arguments(
     // If we had an invalid subfield, skip this attribute altogether -- we do not want to report
     // subsequent errors.
     if invalid_subfield {
-        return (None, None, None)
+        return (None, None, None);
     }
 
     if !any_failure_kind && !has_errors {
@@ -672,7 +672,10 @@ fn parse_expected_failure_kind(
                 Declarations::InvalidAttribute,
                 (
                     name.loc,
-                    &make_attribute_format_error(&attr.value, &format!("'{name}' with no arguments"))
+                    &make_attribute_format_error(
+                        &attr.value,
+                        &format!("'{name}' with no arguments")
+                    )
                 )
             ));
         }
@@ -686,10 +689,7 @@ fn parse_expected_failure_kind(
                 Declarations::InvalidAttribute,
                 (
                     name.loc,
-                    &make_attribute_format_error(
-                        &attr.value,
-                        &format!("'{name} = <value>'")
-                    )
+                    &make_attribute_format_error(&attr.value, &format!("'{name} = <value>'"))
                 )
             ));
             return None;
@@ -854,10 +854,7 @@ where
 }
 
 fn expected_assignment_error(attr: &ParsedAttribute, field: &Name) -> Diagnostic {
-    let msg = make_attribute_format_error(
-        &attr.value,
-        &format!("'{} = <value>'", field),
-    );
+    let msg = make_attribute_format_error(&attr.value, &format!("'{} = <value>'", field));
     diag!(Declarations::InvalidAttribute, (attr.loc, msg))
 }
 
