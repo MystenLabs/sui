@@ -28,7 +28,7 @@ use sui_sdk::types::{
 };
 use sui_sdk::wallet_context::WalletContext;
 
-const GAS_BUDGET: u64 = 10000000;
+const GAS_BUDGET: u64 = 10_000_000;
 const NUM_RETRIES: u8 = 2;
 
 pub struct LocalFaucet {

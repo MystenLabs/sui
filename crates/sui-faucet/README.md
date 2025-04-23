@@ -23,7 +23,7 @@ The faucet will respond with a JSON object containing the following fields:
 ```json
 {
  "status":"Success",
- "coin_sent": {
+ "coins_sent": {
    "amount":5500000000,
    "id":"0xac8b8afbc9074465bf799d0f590e17176b7a05514b9434b338e38f49be14d574",
    "transferTxDigest":"DSHGocWx57BtYDE5Xv4AefeRBBMizPb3LTqRMegx14Ym"
@@ -39,7 +39,7 @@ In case of error, the response will contain the following fields:
      "ErrorType": "message"
 	 }
  },
- "coin_sent": null
+ "coins_sent": null
 }
 ```
 
