@@ -210,11 +210,9 @@ pub fn verify(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
     for vopt in inputs {
         consume_value_opt(&mut context, vopt)?;
     }
-    assert_invariant!(commands.len() == results.len(), "command length mismatch");
-    for (i, (result, (_, tys))) in results.into_iter().zip(commands).enumerate() {
-        assert_invariant!(result.len() == tys.len(), "result length mismatch");
-        for (j, (vopt, ty)) in result.into_iter().zip(tys).enumerate() {
-            drop_value_opt(&mut context, (i, j), vopt, ty).unwrap();
+    for result in results {
+        for vopt in result {
+            consume_value_opt(&mut context, vopt)?;
         }
     }
 
@@ -345,11 +343,11 @@ fn arguments(
 }
 
 fn argument(context: &mut Context, idx: usize, x: &T::Argument) -> Result<Value, ExecutionError> {
-    match x {
-        T::Argument::Move(location) => move_value(context, idx, *location),
-        T::Argument::Copy(location) => copy_value(context, idx, *location),
-        T::Argument::Borrow(is_mut, location) => borrow_location(context, idx, *is_mut, *location),
-        T::Argument::Read(location) => read_ref(context, idx, *location),
+    match &x.0 {
+        T::Argument_::Move(location) => move_value(context, idx, *location),
+        T::Argument_::Copy(location) => copy_value(context, idx, *location),
+        T::Argument_::Borrow(is_mut, location) => borrow_location(context, idx, *is_mut, *location),
+        T::Argument_::Read(location) => read_ref(context, idx, *location),
     }
 }
 

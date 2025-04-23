@@ -6,7 +6,7 @@ use crate::{
     programmable_transactions::context::EitherError,
     static_programmable_transactions::loading::ast::{self as L, InputArg, ObjectArg, Type},
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use sui_types::{
     base_types::TxContextKind,
     coin::RESOLVED_COIN_STRUCT,
@@ -115,7 +115,8 @@ pub fn transaction(env: &Env, lt: L::Transaction) -> Result<T::Transaction, Exec
         .collect::<Result<Vec<_>, _>>()?;
     let inputs = context.finish();
     let mut ast = T::Transaction { inputs, commands };
-    scope_references(&mut ast)?;
+    // mark the last usage of references as Move instead of Copy
+    scope_references::transaction(&mut ast);
     Ok(ast)
 }
 
@@ -553,31 +554,61 @@ fn check_coin_type(ty: &Type) -> Result<(), EitherError> {
 //**************************************************************************************************
 
 mod scope_references {
-    use crate::static_programmable_transactions::{
-        env::Env,
-        typing::ast::{self as T, Type},
-    };
+    use crate::static_programmable_transactions::typing::ast::{self as T, Type};
     use std::collections::BTreeSet;
-    use sui_types::{error::ExecutionError, gas_coin};
 
     /// To mimic proper scoping of references, the last usage of a reference is made a Move instead
     /// of a Copy.
-    pub fn transaction(env: &Env, ast: &mut T::Transaction) -> Result<(), ExecutionError> {
+    pub fn transaction(ast: &mut T::Transaction) {
         let mut used: BTreeSet<(u16, u16)> = BTreeSet::new();
-        for (c, _tys) in ast.commands.iter().rev() {
+        for (c, _tys) in ast.commands.iter_mut().rev() {
             command(&mut used, c);
         }
-        Ok(())
     }
 
-    fn command(used: &mut BTreeSet<(u16, u16)>, command: &T::Command) {
+    fn command(used: &mut BTreeSet<(u16, u16)>, command: &mut T::Command) {
         match command {
-            T::Command::MoveCall(mc) => {}
-            _ => {}
+            T::Command::MoveCall(mc) => arguments(used, &mut mc.arguments),
+            T::Command::TransferObjects(objects, recipient) => {
+                argument(used, recipient);
+                arguments(used, objects);
+            }
+            T::Command::SplitCoins(_, coin, amounts) => {
+                arguments(used, amounts);
+                argument(used, coin);
+            }
+            T::Command::MergeCoins(_, target, coins) => {
+                arguments(used, coins);
+                argument(used, target);
+            }
+            T::Command::MakeMoveVec(_, xs) => arguments(used, xs),
+            T::Command::Publish(_, _) => (),
+            T::Command::Upgrade(_, _, _, x) => argument(used, x),
         }
     }
 
-    fn argument(used: &mut BTreeSet<(u16, u16)>, arg: &T::Argument) -> Result<(), ExecutionError> {
-        match arg {}
+    fn arguments(used: &mut BTreeSet<(u16, u16)>, args: &mut [T::Argument]) {
+        for arg in args.iter_mut().rev() {
+            argument(used, arg)
+        }
+    }
+
+    fn argument(used: &mut BTreeSet<(u16, u16)>, (arg_, ty): &mut T::Argument) {
+        match (&arg_, ty) {
+            (T::Argument_::Move(T::Location::Result(i, j)), Type::Reference(_, _)) => {
+                debug_assert!(false, "No reference should be moved at this point");
+                used.insert((*i, *j));
+            }
+            (T::Argument_::Copy(T::Location::Result(i, j)), Type::Reference(_, _)) => {
+                // we are at the last usage of a reference result if it was not yet added to the set
+                let last_usage = used.insert((*i, *j));
+                if last_usage {
+                    // if it was the last usage, we need to change the Copy to a Move
+                    let loc = T::Location::Result(*i, *j);
+                    *arg_ = T::Argument_::Move(loc);
+                }
+            }
+            _ => (),
+        }
     }
 }

@@ -45,8 +45,8 @@ impl Context {
 
     // check if dirty, and mark it as fixed if mutably borrowing a pure input
     fn is_dirty(&mut self, arg: &T::Argument) -> bool {
-        match arg {
-            T::Argument::Borrow(/* mut */ true, T::Location::Input(i)) => {
+        match &arg.0 {
+            T::Argument_::Borrow(/* mut */ true, T::Location::Input(i)) => {
                 match &mut self.inputs[*i as usize] {
                     input @ IsDirty::NotFixed => {
                         *input = IsDirty::Fixed { is_dirty: false };
@@ -55,10 +55,10 @@ impl Context {
                     IsDirty::Fixed { is_dirty } => *is_dirty,
                 }
             }
-            T::Argument::Move(location)
-            | T::Argument::Copy(location)
-            | T::Argument::Borrow(_, location)
-            | T::Argument::Read(location) => self.is_loc_dirty(location),
+            T::Argument_::Move(location)
+            | T::Argument_::Copy(location)
+            | T::Argument_::Borrow(_, location)
+            | T::Argument_::Read(location) => self.is_loc_dirty(location),
         }
     }
 
@@ -71,11 +71,11 @@ impl Context {
     }
 
     fn mark_dirty(&mut self, arg: &T::Argument) {
-        match arg {
-            T::Argument::Move(location)
-            | T::Argument::Copy(location)
-            | T::Argument::Borrow(_, location)
-            | T::Argument::Read(location) => self.mark_loc_dirty(location),
+        match &arg.0 {
+            T::Argument_::Move(location)
+            | T::Argument_::Copy(location)
+            | T::Argument_::Borrow(_, location)
+            | T::Argument_::Read(location) => self.mark_loc_dirty(location),
         }
     }
 
