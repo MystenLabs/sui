@@ -184,6 +184,10 @@ impl Context {
     }
 }
 
+/// Checks the following
+/// - Values are not used after being moved
+/// - Reference safety is upheld (no dangling references)
+/// - No results without `drop` are unused (all unused non-input values have `drop`)
 pub fn verify(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
     let T::Transaction { inputs, commands } = txn;
     let mut context = Context::new(inputs)?;

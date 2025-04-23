@@ -6,7 +6,7 @@ use crate::{
     programmable_transactions::context::EitherError,
     static_programmable_transactions::loading::ast::{self as L, InputArg, ObjectArg, Type},
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use sui_types::{
     base_types::TxContextKind,
     coin::RESOLVED_COIN_STRUCT,
@@ -115,7 +115,7 @@ pub fn transaction(env: &Env, lt: L::Transaction) -> Result<T::Transaction, Exec
         .collect::<Result<Vec<_>, _>>()?;
     let inputs = context.finish();
     let mut ast = T::Transaction { inputs, commands };
-    todo!("'optimize' last usage of references");
+    scope_references(&mut ast)?;
     Ok(ast)
 }
 
@@ -512,5 +512,39 @@ fn check_coin_type(ty: &Type) -> Result<Type, EitherError> {
         Ok(ty.clone())
     } else {
         Err(CommandArgumentError::TypeMismatch.into())
+    }
+}
+
+//**************************************************************************************************
+// Reference scoping
+//**************************************************************************************************
+
+mod scope_references {
+    use crate::static_programmable_transactions::{
+        env::Env,
+        typing::ast::{self as T, Type},
+    };
+    use std::collections::BTreeSet;
+    use sui_types::{error::ExecutionError, gas_coin};
+
+    /// To mimic proper scoping of references, the last usage of a reference is made a Move instead
+    /// of a Copy.
+    pub fn transaction(env: &Env, ast: &mut T::Transaction) -> Result<(), ExecutionError> {
+        let mut used: BTreeSet<(u16, u16)> = BTreeSet::new();
+        for (c, _tys) in ast.commands.iter().rev() {
+            command(&mut used, c);
+        }
+        Ok(())
+    }
+
+    fn command(used: &mut BTreeSet<(u16, u16)>, command: &T::Command) {
+        match command {
+            T::Command::MoveCall(mc) => {}
+            _ => {}
+        }
+    }
+
+    fn argument(used: &mut BTreeSet<(u16, u16)>, arg: &T::Argument) -> Result<(), ExecutionError> {
+        match arg {}
     }
 }
