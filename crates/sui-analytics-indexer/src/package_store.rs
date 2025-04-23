@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
+use sui_package_resolver::Resolver;
 use sui_package_resolver::{
     error::Error as PackageResolverError, Package, PackageStore, PackageStoreWithLruCache, Result,
 };
@@ -83,7 +84,7 @@ pub struct LocalDBPackageStore {
 }
 
 impl LocalDBPackageStore {
-    pub fn new(path: &Path, rest_url: &str, metrics: AnalyticsMetrics) -> Self {
+    fn new(path: &Path, rest_url: &str, metrics: AnalyticsMetrics) -> Self {
         Self {
             package_store_tables: PackageStoreTables::new(path),
             fallback_client: Client::new(rest_url).unwrap(),
@@ -93,7 +94,7 @@ impl LocalDBPackageStore {
         }
     }
 
-    pub fn update(&self, object: &Object) -> Result<()> {
+    fn update(&self, object: &Object) -> Result<()> {
         let Some(_package) = object.data.try_as_package() else {
             return Ok(());
         };
@@ -101,7 +102,7 @@ impl LocalDBPackageStore {
         Ok(())
     }
 
-    pub async fn get(&self, id: AccountAddress) -> Result<Object> {
+    async fn get(&self, id: AccountAddress) -> Result<Object> {
         self.metrics.package_cache_gets.with_label_values(&[]).inc();
 
         let object = if let Some(object) = self
@@ -134,7 +135,7 @@ impl LocalDBPackageStore {
 
     /// Gets the original package id for the given package id.
     #[cfg(not(test))]
-    pub async fn get_original_package_id(&self, id: AccountAddress) -> Result<ObjectID> {
+    async fn get_original_package_id(&self, id: AccountAddress) -> Result<ObjectID> {
         if let Some(&original_id) = self.original_id_cache.read().await.get(&id) {
             return Ok(original_id);
         }
@@ -152,7 +153,7 @@ impl LocalDBPackageStore {
     }
 
     #[cfg(test)]
-    pub async fn get_original_package_id(&self, id: AccountAddress) -> Result<ObjectID> {
+    async fn get_original_package_id(&self, id: AccountAddress) -> Result<ObjectID> {
         Ok(id.into())
     }
 }
@@ -165,4 +166,25 @@ impl PackageStore for LocalDBPackageStore {
     }
 }
 
-pub(crate) type PackageCache = PackageStoreWithLruCache<LocalDBPackageStore>;
+pub struct PackageCache {
+    package_store: LocalDBPackageStore,
+    pub resolver: Resolver<PackageStoreWithLruCache<LocalDBPackageStore>>,
+}
+
+impl PackageCache {
+    pub fn new(path: &Path, rest_url: &str, metrics: AnalyticsMetrics) -> Self {
+        let package_store = LocalDBPackageStore::new(path, rest_url, metrics);
+        Self {
+            package_store: package_store.clone(),
+            resolver: Resolver::new(PackageStoreWithLruCache::new(package_store)),
+        }
+    }
+
+    pub fn update(&self, object: &Object) -> Result<()> {
+        self.package_store.update(object)
+    }
+
+    pub async fn get_original_package_id(&self, id: AccountAddress) -> Result<ObjectID> {
+        self.package_store.get_original_package_id(id).await
+    }
+}
