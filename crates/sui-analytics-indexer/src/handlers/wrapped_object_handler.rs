@@ -3,30 +3,29 @@
 
 use anyhow::Result;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use sui_data_ingestion_core::Worker;
 use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 use tokio::sync::Mutex;
 
-use sui_package_resolver::Resolver;
 use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 use sui_types::object::Object;
 
 use crate::handlers::{get_move_struct, parse_struct, AnalyticsHandler};
 use crate::AnalyticsMetrics;
 
-use crate::package_store::{LocalDBPackageStore, PackageCache};
+use crate::package_store::PackageCache;
 use crate::tables::WrappedObjectEntry;
 use crate::FileType;
 
 pub struct WrappedObjectHandler {
     state: Mutex<State>,
     metrics: AnalyticsMetrics,
+    package_cache: Arc<PackageCache>,
 }
 
 struct State {
     wrapped_objects: Vec<WrappedObjectEntry>,
-    package_store: LocalDBPackageStore,
-    resolver: Resolver<PackageCache>,
 }
 
 #[async_trait::async_trait]
@@ -42,7 +41,7 @@ impl Worker for WrappedObjectHandler {
         let mut state = self.state.lock().await;
         for checkpoint_transaction in checkpoint_transactions {
             for object in checkpoint_transaction.output_objects.iter() {
-                state.package_store.update(object)?;
+                self.package_cache.update(object)?;
             }
             self.process_transaction(
                 checkpoint_summary.epoch,
@@ -53,7 +52,7 @@ impl Worker for WrappedObjectHandler {
             )
             .await?;
             if checkpoint_summary.end_of_epoch_data.is_some() {
-                state
+                self.package_cache
                     .resolver
                     .package_store()
                     .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
@@ -80,13 +79,15 @@ impl AnalyticsHandler<WrappedObjectEntry> for WrappedObjectHandler {
 }
 
 impl WrappedObjectHandler {
-    pub fn new(package_store: LocalDBPackageStore, metrics: AnalyticsMetrics) -> Self {
+    pub fn new(package_cache: Arc<PackageCache>, metrics: AnalyticsMetrics) -> Self {
         let state = Mutex::new(State {
             wrapped_objects: vec![],
-            package_store: package_store.clone(),
-            resolver: Resolver::new(PackageCache::new(package_store)),
         });
-        WrappedObjectHandler { state, metrics }
+        WrappedObjectHandler {
+            state,
+            metrics,
+            package_cache,
+        }
     }
     async fn process_transaction(
         &self,
@@ -115,7 +116,7 @@ impl WrappedObjectHandler {
             .struct_tag()
             .and_then(|tag| object.data.try_as_move().map(|mo| (tag, mo.contents())))
         {
-            match get_move_struct(&tag, contents, &state.resolver).await {
+            match get_move_struct(&tag, contents, &self.package_cache.resolver).await {
                 Ok(move_struct) => Some(move_struct),
                 Err(err)
                     if err
