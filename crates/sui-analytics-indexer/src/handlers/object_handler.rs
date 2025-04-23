@@ -38,7 +38,7 @@ pub struct ObjectHandler {
 struct State {
     objects: Vec<ObjectEntry>,
     package_store: LocalDBPackageStore,
-    resolver: Resolver<PackageCache>,
+    resolver: Arc<Resolver<PackageCache>>,
 }
 
 #[async_trait::async_trait]
@@ -69,6 +69,11 @@ impl Worker for ObjectHandler {
             .collect();
 
         let mut handles: Vec<JoinHandle<Result<()>>> = Vec::with_capacity(txn_count);
+        // Clone the package store so we can mutate it freely in parallel.
+        let (package_store, resolver) = {
+            let guard = self.state.lock().await;
+            (guard.package_store.clone(), guard.resolver.clone())
+        };
 
         for (idx, checkpoint_transaction) in checkpoint_transactions.iter().cloned().enumerate() {
             let handler = self.clone();
@@ -80,19 +85,16 @@ impl Worker for ObjectHandler {
             let checkpoint_seq = checkpoint_summary.sequence_number;
             let timestamp_ms = checkpoint_summary.timestamp_ms;
             let end_of_epoch = checkpoint_summary.end_of_epoch_data.is_some();
+            let package_store = package_store.clone();
+            let resolver = resolver.clone();
 
             let handle = tokio::spawn(async move {
                 // ───── 1. Heavy work off‑mutex ───────────────────────────────────
-                // Clone the package store so we can mutate it freely in parallel.
-                let package_store = {
-                    let guard = handler.state.lock().await;
-                    guard.package_store.clone()
-                };
 
                 let mut local_state = State {
                     objects: Vec::new(),
                     package_store: package_store.clone(),
-                    resolver: Resolver::new(PackageCache::new(package_store)),
+                    resolver: resolver.clone(),
                 };
 
                 // Update local package store & compute ObjectEntry rows.
@@ -172,7 +174,7 @@ impl ObjectHandler {
         let state = State {
             objects: vec![],
             package_store: package_store.clone(),
-            resolver: Resolver::new(PackageCache::new(package_store)),
+            resolver: Arc::new(Resolver::new(PackageCache::new(package_store))),
         };
         Self {
             state: Arc::new(Mutex::new(state)),
