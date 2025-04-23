@@ -31,17 +31,10 @@ const TX_RECEIVING_OBJECTS_NAME: &str = "tx_receiving_objects";
 /// program in directly so this is not important but may appear in error messages.
 const STAR_INPUT_FILE_NAME: &str = "dummy.star";
 
-/// Max depth of recursion for converting JSON to Starlark. If we are unable to perform this
-/// conversion we will conservatively assume that it would not have passed the predicate and return
-/// false.
-const MAX_DEPTH: u64 = 124;
-
 #[derive(Debug, thiserror::Error)]
 pub enum DynamicCheckRunnerError {
     #[error("Failed to serialize transaction data to JSON: {0}")]
     JSONSerializationError(String),
-    #[error("Failed to parse Starlark program value -- max value depth of {0} reached")]
-    MaxDepth(u64),
     #[error("Failed to parse Starlark program value -- unsupported number type {0}")]
     UnsupportedNumberFormat(String),
     #[error(
@@ -141,10 +134,10 @@ impl DynamicCheckRunnerContext {
         let heap = Heap::new();
         let env = Module::new();
 
-        let tx_data_value = Self::json_to_starlark(tx_data, &heap, 0)?;
-        let tx_signers_value = Self::json_to_starlark(tx_signatures, &heap, 0)?;
-        let tx_input_object_kinds_value = Self::json_to_starlark(tx_input_object_kinds, &heap, 0)?;
-        let tx_receiving_objects_value = Self::json_to_starlark(tx_receiving_objects, &heap, 0)?;
+        let tx_data_value = Self::json_to_starlark(tx_data, &heap)?;
+        let tx_signers_value = Self::json_to_starlark(tx_signatures, &heap)?;
+        let tx_input_object_kinds_value = Self::json_to_starlark(tx_input_object_kinds, &heap)?;
+        let tx_receiving_objects_value = Self::json_to_starlark(tx_receiving_objects, &heap)?;
 
         env.set(TX_DATA_NAME, tx_data_value);
         env.set(TX_SIGNERS_NAME, tx_signers_value);
@@ -168,11 +161,7 @@ impl DynamicCheckRunnerContext {
     fn json_to_starlark<'v>(
         value: &JsonValue,
         heap: &'v Heap,
-        depth: u64,
     ) -> Result<Value<'v>, DynamicCheckRunnerError> {
-        if depth >= MAX_DEPTH {
-            return Err(DynamicCheckRunnerError::MaxDepth(depth));
-        }
         Ok(match value {
             JsonValue::Null => Value::new_none(),
             JsonValue::Bool(b) => Value::new_bool(*b),
@@ -189,7 +178,7 @@ impl DynamicCheckRunnerContext {
             JsonValue::Array(arr) => {
                 let list: Vec<_> = arr
                     .iter()
-                    .map(|v| Self::json_to_starlark(v, heap, depth + 1))
+                    .map(|v| Self::json_to_starlark(v, heap))
                     .collect::<Result<_, _>>()?;
                 list.alloc_value(heap)
             }
@@ -198,7 +187,7 @@ impl DynamicCheckRunnerContext {
                     .iter()
                     .map(|(k, v)| {
                         let key = heap.alloc(k.as_str());
-                        let val = Self::json_to_starlark(v, heap, depth + 1)?;
+                        let val = Self::json_to_starlark(v, heap)?;
                         Ok((key, val))
                     })
                     .collect::<Result<_, _>>()?;
