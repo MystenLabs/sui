@@ -20,4 +20,6 @@ pub trait AnalyticsWriter<S: Serialize + ParquetSchema>: Send + Sync + 'static {
     fn reset(&mut self, epoch_num: EpochId, start_checkpoint_seq_num: u64) -> Result<()>;
     /// Approx size in bytes of the current staging file if available
     fn file_size(&self) -> Result<Option<u64>>;
+    /// Number of rows accumulated since last flush
+    fn rows(&self) -> Result<usize>;
 }
