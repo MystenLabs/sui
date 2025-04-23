@@ -160,7 +160,10 @@ impl AnalyticsHandler<EventEntry> for EventHandler {
 }
 
 impl EventHandler {
-    pub fn new(package_store: LocalDBPackageStore, resolver: Arc<Resolver<PackageCache>>) -> Self {
+    pub fn new(package_store: LocalDBPackageStore, resolver: Option<Arc<Resolver<PackageCache>>>) -> Self {
+        let resolver = resolver.unwrap_or_else(|| {
+            Arc::new(Resolver::new(PackageCache::new(package_store.clone())))
+        });
         let state = State {
             events: vec![],
             package_store: package_store.clone(),

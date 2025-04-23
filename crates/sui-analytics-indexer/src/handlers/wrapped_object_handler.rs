@@ -159,7 +159,11 @@ impl AnalyticsHandler<WrappedObjectEntry> for WrappedObjectHandler {
 }
 
 impl WrappedObjectHandler {
-    pub fn new(package_store: LocalDBPackageStore, metrics: AnalyticsMetrics, resolver: Arc<Resolver<PackageCache>>) -> Self {
+    pub fn new(package_store: LocalDBPackageStore, metrics: AnalyticsMetrics, resolver: Option<Arc<Resolver<PackageCache>>>) -> Self {
+        let resolver = resolver.unwrap_or_else(|| {
+            Arc::new(Resolver::new(PackageCache::new(package_store.clone())))
+        });
+        
         let state = Arc::new(Mutex::new(State {
             wrapped_objects: vec![],
             package_store: package_store.clone(),

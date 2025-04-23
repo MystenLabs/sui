@@ -15,7 +15,8 @@ use handlers::transaction_bcs_handler::TransactionBCSHandler;
 use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
 use object_store::path::Path;
-use package_store::LocalDBPackageStore;
+use package_store::{LocalDBPackageStore, PackageCache};
+use sui_package_resolver::Resolver;
 use serde::{Deserialize, Serialize};
 use snowflake_api::{QueryResult, SnowflakeApi};
 use strum_macros::EnumIter;
@@ -305,7 +306,7 @@ impl TaskContext {
                 let package_store = self.package_store.clone();
                 self.create_processor_for_handler(Box::new(EventHandler::new(
                     package_store,
-                    shared_resolver.clone()
+                    Some(shared_resolver.clone())
                 )))
                     .await
             }
@@ -335,7 +336,7 @@ impl TaskContext {
                 self.create_processor_for_handler(Box::new(WrappedObjectHandler::new(
                     package_store,
                     metrics,
-                    shared_resolver.clone()
+                    Some(shared_resolver.clone())
                 )))
                 .await
             }

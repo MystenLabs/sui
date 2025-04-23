@@ -12,6 +12,7 @@ use sui_types::{TypeTag, SYSTEM_PACKAGE_ADDRESSES};
 use tap::tap::TapFallible;
 use tokio::sync::Mutex;
 use tracing::warn;
+use std::sync::Arc;
 
 use sui_indexer::types::owner_to_owner_info;
 use sui_json_rpc_types::SuiMoveValue;

@@ -6,6 +6,8 @@ use sui_data_ingestion_core::Worker;
 use sui_types::{TypeTag, SYSTEM_PACKAGE_ADDRESSES};
 use tokio::sync::{Mutex, Semaphore};
 
+use std::sync::Arc;
+
 use sui_json_rpc_types::SuiMoveStruct;
 use sui_package_resolver::Resolver;
 use sui_types::base_types::ObjectID;
