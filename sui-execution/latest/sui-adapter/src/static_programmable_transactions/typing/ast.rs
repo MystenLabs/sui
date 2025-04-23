@@ -3,16 +3,20 @@
 
 use crate::static_programmable_transactions::loading::ast as L;
 use std::{collections::BTreeMap, fmt};
-use sui_types::{base_types::ObjectID, transaction::CallArg};
+use sui_types::base_types::ObjectID;
 
 pub struct Transaction {
     pub inputs: Inputs,
     pub commands: Commands,
 }
 
-pub type Inputs = Vec<(CallArg, InputType)>;
+pub type Inputs = Vec<(InputArg, InputType)>;
 
 pub type Commands = Vec<(Command, ResultType)>;
+
+pub type InputArg = L::InputArg;
+
+pub type ObjectArg = L::ObjectArg;
 
 pub type Type = L::Type;
 

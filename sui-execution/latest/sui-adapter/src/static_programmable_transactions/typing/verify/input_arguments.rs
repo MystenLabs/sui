@@ -3,14 +3,16 @@
 
 use crate::programmable_transactions::execution::{bcs_argument_validate, PrimitiveArgumentLayout};
 
-use crate::static_programmable_transactions::{env::Env, loading::ast::Type, typing::ast as T};
-use sui_types::gas_coin;
+use crate::static_programmable_transactions::{
+    env::Env,
+    loading::ast::Type,
+    typing::ast::{self as T, InputArg, ObjectArg},
+};
 use sui_types::{
     base_types::{RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
     error::{command_argument_error, ExecutionError, ExecutionErrorKind},
     execution_status::CommandArgumentError,
     id::RESOLVED_SUI_ID,
-    transaction::{CallArg, ObjectArg},
     transfer::RESOLVED_RECEIVING_STRUCT,
 };
 
@@ -24,8 +26,27 @@ struct Context {
 }
 
 impl Context {
-    fn new(env: &Env, inputs: &T::Inputs) -> Self {
-        let inputs = inputs.iter().map(|(arg, _)| *arg).collect();
+    fn new(inputs: &T::Inputs) -> Self {
+        let inputs = inputs
+            .iter()
+            .map(|(arg, _)| {
+                Some(match arg {
+                    InputArg::Pure(_) | InputArg::Object(ObjectArg::Receiving(_)) => return None,
+                    InputArg::Object(ObjectArg::ImmObject(_)) => ObjectUsage {
+                        allow_by_value: false,
+                        allow_by_mut_ref: false,
+                    },
+                    InputArg::Object(ObjectArg::OwnedObject(_)) => ObjectUsage {
+                        allow_by_value: true,
+                        allow_by_mut_ref: true,
+                    },
+                    InputArg::Object(ObjectArg::SharedObject { mutable, .. }) => ObjectUsage {
+                        allow_by_value: *mutable,
+                        allow_by_mut_ref: *mutable,
+                    },
+                })
+            })
+            .collect();
         Self { inputs }
     }
 }
@@ -35,7 +56,7 @@ impl Context {
 ///    permissible
 /// 2. That any `Object` arguments are used validly. This means mutable references are taken only
 ///    on mutable objects. And that the gas coin is only taken by value in transfer objects
-pub fn verify(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
+pub fn verify(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
     let T::Transaction { inputs, commands } = txn;
     for (arg, ty) in inputs {
         match ty {
@@ -48,7 +69,7 @@ pub fn verify(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
             T::InputType::Fixed(_) => (),
         }
     }
-    let context = &mut Context::new(env, inputs);
+    let context = &mut Context::new(inputs);
     for (i, (c, _t)) in commands.iter().enumerate() {
         command(context, c).map_err(|e| e.with_command_index(i))?;
     }
@@ -61,13 +82,15 @@ pub fn verify(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
 
 fn check_constraint(
     command_arg_idx: u16,
-    arg: &CallArg,
+    arg: &InputArg,
     constraint: &Type,
 ) -> Result<(), ExecutionError> {
     match arg {
-        CallArg::Pure(bytes) => check_pure_bytes(command_arg_idx, bytes, constraint),
-        CallArg::Object(ObjectArg::Receiving(_)) => check_receiving(command_arg_idx, constraint),
-        CallArg::Object(ObjectArg::ImmOrOwnedObject(_) | ObjectArg::SharedObject { .. }) => {
+        InputArg::Pure(bytes) => check_pure_bytes(command_arg_idx, bytes, constraint),
+        InputArg::Object(ObjectArg::Receiving(_)) => check_receiving(command_arg_idx, constraint),
+        InputArg::Object(
+            ObjectArg::ImmObject(_) | ObjectArg::OwnedObject(_) | ObjectArg::SharedObject { .. },
+        ) => {
             invariant_violation!("Object inputs should be Fixed")
         }
     }

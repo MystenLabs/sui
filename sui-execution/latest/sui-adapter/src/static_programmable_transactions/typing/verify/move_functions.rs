@@ -3,12 +3,12 @@
 
 use crate::programmable_transactions::execution::check_private_generics;
 
+use crate::static_programmable_transactions::typing::ast::InputArg;
 use crate::static_programmable_transactions::{env::Env, loading::ast::Type, typing::ast as T};
 use move_binary_format::{file_format::Visibility, CompiledModule};
 use sui_types::{
     error::{command_argument_error, ExecutionError, ExecutionErrorKind},
     execution_status::CommandArgumentError,
-    transaction::CallArg,
 };
 
 struct Context {
@@ -32,8 +32,8 @@ impl Context {
         let inputs = inputs
             .iter()
             .map(|(arg, _)| match arg {
-                CallArg::Pure(_) => IsDirty::NotFixed,
-                CallArg::Object(_) => IsDirty::Fixed { is_dirty: false },
+                InputArg::Pure(_) => IsDirty::NotFixed,
+                InputArg::Object(_) => IsDirty::Fixed { is_dirty: false },
             })
             .collect();
         Self {

@@ -5,6 +5,7 @@ use crate::static_programmable_transactions::{env::Env, loading::ast as L};
 use move_core_types::language_storage::StructTag;
 use sui_types::{
     error::ExecutionError,
+    object::Owner,
     transaction::{self as P, CallArg, ObjectArg},
 };
 
@@ -24,21 +25,51 @@ pub fn transaction(
     Ok(L::Transaction { inputs, commands })
 }
 
-fn input(env: &Env, arg: CallArg) -> Result<(CallArg, L::InputType), ExecutionError> {
-    let ty = match &arg {
-        CallArg::Pure(_) | CallArg::Object(ObjectArg::Receiving(_)) => L::InputType::Bytes,
-        CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))
-        | CallArg::Object(ObjectArg::SharedObject { id, .. }) => {
+fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), ExecutionError> {
+    Ok(match arg {
+        CallArg::Pure(bytes) => (L::InputArg::Pure(bytes), L::InputType::Bytes),
+        CallArg::Object(ObjectArg::Receiving(oref)) => (
+            L::InputArg::Object(L::ObjectArg::Receiving(oref)),
+            L::InputType::Bytes,
+        ),
+        CallArg::Object(ObjectArg::ImmOrOwnedObject(oref)) => {
+            let id = &oref.0;
             let obj = env.read_object(id)?;
             let Some(ty) = obj.type_() else {
                 invariant_violation!("Object {:?} has does not have a Move type", id);
             };
             let tag: StructTag = ty.clone().into();
             let ty = env.load_type_from_struct(&tag)?;
-            L::InputType::Fixed(ty)
+            let arg = match obj.owner {
+                Owner::AddressOwner(_) => L::ObjectArg::OwnedObject(oref),
+                Owner::Immutable => L::ObjectArg::ImmObject(oref),
+                Owner::ObjectOwner(_) | Owner::Shared { .. } | Owner::ConsensusV2 { .. } => {
+                    invariant_violation!("Unepected owner for ImmOrOwnedObject: {:?}", obj.owner);
+                }
+            };
+            (L::InputArg::Object(arg), L::InputType::Fixed(ty))
         }
-    };
-    Ok((arg, ty))
+        CallArg::Object(ObjectArg::SharedObject {
+            id,
+            initial_shared_version,
+            mutable,
+        }) => {
+            let obj = env.read_object(&id)?;
+            let Some(ty) = obj.type_() else {
+                invariant_violation!("Object {:?} has does not have a Move type", id);
+            };
+            let tag: StructTag = ty.clone().into();
+            let ty = env.load_type_from_struct(&tag)?;
+            (
+                L::InputArg::Object(L::ObjectArg::SharedObject {
+                    id,
+                    initial_shared_version,
+                    mutable,
+                }),
+                L::InputType::Fixed(ty),
+            )
+        }
+    })
 }
 
 fn command(env: &Env, command: P::Command) -> Result<L::Command, ExecutionError> {

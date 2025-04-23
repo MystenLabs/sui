@@ -4,7 +4,7 @@
 use super::{ast as T, env::Env};
 use crate::{
     programmable_transactions::context::EitherError,
-    static_programmable_transactions::loading::ast::{self as L, Type},
+    static_programmable_transactions::loading::ast::{self as L, InputArg, ObjectArg, Type},
 };
 use std::collections::BTreeMap;
 use sui_types::{
@@ -12,13 +12,12 @@ use sui_types::{
     coin::RESOLVED_COIN_STRUCT,
     error::{command_argument_error, ExecutionError},
     execution_status::CommandArgumentError,
-    transaction::{CallArg, ObjectArg},
 };
 
 struct Context {
     current_command: u16,
     gathered_input_types: BTreeMap<u16, BTreeMap<Type, (u16, u16)>>,
-    inputs: Vec<(CallArg, InputType)>,
+    inputs: Vec<(InputArg, InputType)>,
     results: Vec<T::ResultType>,
 }
 
@@ -61,7 +60,7 @@ impl Context {
         context
     }
 
-    fn finish(self) -> Vec<(CallArg, T::InputType)> {
+    fn finish(self) -> Vec<(InputArg, T::InputType)> {
         let Self {
             mut gathered_input_types,
             inputs,
@@ -71,7 +70,7 @@ impl Context {
             .into_iter()
             .enumerate()
             .map(|(i, (arg, ty))| match (&arg, ty) {
-                (CallArg::Pure(_) | CallArg::Object(ObjectArg::Receiving(_)), _) => {
+                (InputArg::Pure(_) | InputArg::Object(ObjectArg::Receiving(_)), _) => {
                     let tys = gathered_input_types.remove(&(i as u16)).unwrap_or_default();
                     (arg, T::InputType::Bytes(tys))
                 }

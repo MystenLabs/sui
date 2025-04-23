@@ -8,8 +8,7 @@ use move_core_types::{
     account_address::AccountAddress, identifier::IdentStr, language_storage::ModuleId,
 };
 use sui_types::{
-    base_types::{ObjectID, TxContextKind, RESOLVED_TX_CONTEXT},
-    transaction::CallArg,
+    base_types::{ObjectID, ObjectRef, SequenceNumber, TxContextKind, RESOLVED_TX_CONTEXT},
     Identifier,
 };
 
@@ -22,9 +21,25 @@ pub struct Transaction {
     pub commands: Commands,
 }
 
-pub type Inputs = Vec<(CallArg, InputType)>;
+pub type Inputs = Vec<(InputArg, InputType)>;
 
 pub type Commands = Vec<Command>;
+
+pub enum InputArg {
+    Pure(Vec<u8>),
+    Object(ObjectArg),
+}
+
+pub enum ObjectArg {
+    ImmObject(ObjectRef),
+    OwnedObject(ObjectRef),
+    SharedObject {
+        id: ObjectID,
+        initial_shared_version: SequenceNumber,
+        mutable: bool,
+    },
+    Receiving(ObjectRef),
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Type {
