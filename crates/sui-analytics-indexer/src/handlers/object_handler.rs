@@ -170,11 +170,16 @@ impl ObjectHandler {
         package_store: LocalDBPackageStore,
         package_filter: &Option<String>,
         metrics: AnalyticsMetrics,
+        resolver: Option<Arc<Resolver<PackageCache>>>,
     ) -> Self {
+        let resolver = resolver.unwrap_or_else(|| {
+            Arc::new(Resolver::new(PackageCache::new(package_store.clone())))
+        });
+        
         let state = State {
             objects: vec![],
             package_store: package_store.clone(),
-            resolver: Arc::new(Resolver::new(PackageCache::new(package_store))),
+            resolver,
         };
         Self {
             state: Arc::new(Mutex::new(state)),
@@ -429,7 +434,12 @@ mod tests {
         let metrics = AnalyticsMetrics::new(&registry);
         let package_store =
             LocalDBPackageStore::new(temp_dir.path(), "http://localhost:9000", metrics.clone());
-        let handler = ObjectHandler::new(package_store, &Some("0xabc".to_string()), metrics);
+        let handler = ObjectHandler::new(
+            package_store, 
+            &Some("0xabc".to_string()), 
+            metrics,
+            None,
+        );
         let mut state = handler.state.lock().await;
 
         // 1. Direct match

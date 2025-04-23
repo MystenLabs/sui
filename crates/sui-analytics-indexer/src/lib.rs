@@ -21,6 +21,8 @@ use snowflake_api::{QueryResult, SnowflakeApi};
 use strum_macros::EnumIter;
 use tempfile::TempDir;
 use tracing::info;
+use sui_package_resolver::Resolver;
+use crate::package_store::PackageCache;
 
 use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_data_ingestion_core::Worker;
@@ -271,6 +273,9 @@ impl TaskContext {
     }
 
     pub async fn create_analytics_processor(self) -> Result<Processor> {
+        // Create a shared Resolver that will be used by all handlers
+        let shared_resolver = Arc::new(Resolver::new(PackageCache::new(self.package_store.clone())));
+        
         match &self.config.file_type {
             FileType::Checkpoint => {
                 self.create_processor_for_handler(Box::new(CheckpointHandler::new()))
@@ -284,6 +289,7 @@ impl TaskContext {
                     package_store,
                     &package_id_filter,
                     metrics,
+                    Some(shared_resolver.clone()),
                 )))
                 .await
             }
@@ -297,7 +303,10 @@ impl TaskContext {
             }
             FileType::Event => {
                 let package_store = self.package_store.clone();
-                self.create_processor_for_handler(Box::new(EventHandler::new(package_store)))
+                self.create_processor_for_handler(Box::new(EventHandler::new(
+                    package_store,
+                    shared_resolver.clone()
+                )))
                     .await
             }
             FileType::TransactionObjects => {
@@ -314,7 +323,10 @@ impl TaskContext {
             }
             FileType::DynamicField => {
                 let package_store = self.package_store.clone();
-                self.create_processor_for_handler(Box::new(DynamicFieldHandler::new(package_store)))
+                self.create_processor_for_handler(Box::new(DynamicFieldHandler::new(
+                    package_store,
+                    Some(shared_resolver.clone()),
+                )))
                     .await
             }
             FileType::WrappedObject => {
@@ -323,6 +335,7 @@ impl TaskContext {
                 self.create_processor_for_handler(Box::new(WrappedObjectHandler::new(
                     package_store,
                     metrics,
+                    shared_resolver.clone()
                 )))
                 .await
             }

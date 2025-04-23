@@ -4,6 +4,7 @@
 use anyhow::Result;
 use fastcrypto::encoding::{Base64, Encoding};
 use std::collections::HashMap;
+use std::sync::Arc;
 use sui_data_ingestion_core::Worker;
 use sui_indexer::errors::IndexerError;
 use sui_types::object::bounded_visitor::BoundedVisitor;
@@ -33,7 +34,7 @@ pub struct DynamicFieldHandler {
 struct State {
     dynamic_fields: Vec<DynamicFieldEntry>,
     package_store: LocalDBPackageStore,
-    resolver: Resolver<PackageCache>,
+    resolver: Arc<Resolver<PackageCache>>,
 }
 
 #[async_trait::async_trait]
@@ -89,11 +90,15 @@ impl AnalyticsHandler<DynamicFieldEntry> for DynamicFieldHandler {
 }
 
 impl DynamicFieldHandler {
-    pub fn new(package_store: LocalDBPackageStore) -> Self {
+    pub fn new(package_store: LocalDBPackageStore, resolver: Option<Arc<Resolver<PackageCache>>>) -> Self {
+        let resolver = resolver.unwrap_or_else(|| {
+            Arc::new(Resolver::new(PackageCache::new(package_store.clone())))
+        });
+        
         let state = State {
             dynamic_fields: vec![],
             package_store: package_store.clone(),
-            resolver: Resolver::new(PackageCache::new(package_store)),
+            resolver,
         };
         Self {
             state: Mutex::new(state),

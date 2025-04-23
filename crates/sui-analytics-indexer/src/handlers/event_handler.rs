@@ -29,7 +29,7 @@ pub struct EventHandler {
 struct State {
     events: Vec<EventEntry>,
     package_store: LocalDBPackageStore,
-    resolver: Resolver<PackageCache>,
+    resolver: Arc<Resolver<PackageCache>>,
 }
 
 #[async_trait::async_trait]
@@ -61,6 +61,12 @@ impl Worker for EventHandler {
 
         let mut handles: Vec<JoinHandle<Result<()>>> = Vec::with_capacity(txn_count);
 
+        // Clone the package store so we can mutate it freely in parallel.
+        let (package_store, resolver) = {
+            let guard = self.state.lock().await;
+            (guard.package_store.clone(), guard.resolver.clone())
+        };
+
         for (idx, checkpoint_transaction) in checkpoint_transactions.iter().cloned().enumerate() {
             let handler = self.clone();
             let start_sem = semaphores[idx].clone();
@@ -71,19 +77,16 @@ impl Worker for EventHandler {
             let checkpoint_seq = checkpoint_summary.sequence_number;
             let timestamp_ms = checkpoint_summary.timestamp_ms;
             let end_of_epoch = checkpoint_summary.end_of_epoch_data.is_some();
+            let package_store = package_store.clone();
+            let resolver = resolver.clone();
 
             let handle = tokio::spawn(async move {
                 // ───── 1. Heavy work off‑mutex ───────────────────────────────────
-                // Clone the package store so we can mutate it freely in parallel.
-                let package_store = {
-                    let guard = handler.state.lock().await;
-                    guard.package_store.clone()
-                };
 
                 let mut local_state = State {
                     events: Vec::new(),
                     package_store: package_store.clone(),
-                    resolver: Resolver::new(PackageCache::new(package_store)),
+                    resolver: resolver.clone(),
                 };
 
                 // Update local package store
@@ -157,11 +160,11 @@ impl AnalyticsHandler<EventEntry> for EventHandler {
 }
 
 impl EventHandler {
-    pub fn new(package_store: LocalDBPackageStore) -> Self {
+    pub fn new(package_store: LocalDBPackageStore, resolver: Arc<Resolver<PackageCache>>) -> Self {
         let state = State {
             events: vec![],
             package_store: package_store.clone(),
-            resolver: Resolver::new(PackageCache::new(package_store)),
+            resolver,
         };
         Self {
             state: Arc::new(Mutex::new(state)),
