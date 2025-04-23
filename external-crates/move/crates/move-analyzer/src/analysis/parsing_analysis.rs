@@ -17,10 +17,7 @@ use std::collections::BTreeMap;
 
 use move_compiler::{
     parser::ast as P,
-    shared::{
-        files::MappedFiles, Identifier, Name, NamedAddressMap,
-        NamedAddressMaps,
-    },
+    shared::{files::MappedFiles, Identifier, Name, NamedAddressMap, NamedAddressMaps},
 };
 use move_ir_types::location::*;
 

@@ -11,11 +11,7 @@ use move_binary_format::{
     CompiledModule,
 };
 use move_bytecode_source_map::source_map::SourceMap;
-use move_compiler::{
-    expansion::ast as EA,
-    parser::ast as PA,
-    shared::Name,
-};
+use move_compiler::{expansion::ast as EA, parser::ast as PA, shared::Name};
 use move_ir_types::ast::ConstantName;
 
 use crate::{

@@ -822,7 +822,7 @@ fn attribute(k: &KA::KnownAttribute) -> Attribute {
         // --- assigned or name ---
         KA::KnownAttribute::Deprecation(dep) => {
             if let Some(note) = &dep.note {
-                let s = String::from_utf8_lossy(&note).into_owned();
+                let s = String::from_utf8_lossy(note).into_owned();
                 Attribute::Parameterized(
                     KA::DeprecationAttribute::DEPRECATED.into(),
                     vec![Attribute::Assigned(
@@ -874,7 +874,7 @@ fn attribute(k: &KA::KnownAttribute) -> Attribute {
             }
             KA::DiagnosticAttribute::LintAllow { allow_set } => {
                 let inner = allow_set
-                    .into_iter()
+                    .iter()
                     .map(|name| Attribute::Name(name.value))
                     .collect();
                 Attribute::Parameterized(KA::DiagnosticAttribute::LINT_ALLOW.into(), inner)
