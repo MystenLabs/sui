@@ -1,6 +1,6 @@
 #[allow(unused)]
 /// This is a doc comment on a module
-module 0x42::a;
+module summary_pkg::a;
 
 /// This is a doc comment on a struct
 public struct X {
