@@ -95,6 +95,10 @@ fn default_remote_store_url() -> String {
     "https://checkpoints.mainnet.sui.io".to_string()
 }
 
+fn default_remote_store_timeout_secs() -> u64 {
+    5
+}
+
 fn default_package_cache_path() -> PathBuf {
     PathBuf::from("/opt/sui/db/package_cache")
 }
@@ -139,6 +143,9 @@ pub struct JobConfig {
     /// Remote object store options
     #[serde(default)]
     pub remote_store_options: Vec<(String, String)>,
+    /// Remote store timeout
+    #[serde(default = "default_remote_store_timeout_secs")]
+    pub remote_store_timeout_secs: u64,
     /// Directory to contain the package cache for pipelines
     #[serde(default = "default_package_cache_path")]
     pub package_cache_path: PathBuf,
