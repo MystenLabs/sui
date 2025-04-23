@@ -79,7 +79,8 @@ impl<S: Serialize + ParquetSchema + 'static> Worker for AnalyticsProcessor<S> {
                 > self.task_context.config.time_interval_s)
             || (state.num_checkpoint_iterations % CHECK_FILE_SIZE_ITERATION_CYCLE == 0
                 && state.writer.file_size()?.unwrap_or(0)
-                    > self.task_context.config.max_file_size_mb * 1024 * 1024);
+                    > self.task_context.config.max_file_size_mb * 1024 * 1024)
+            || (state.writer.rows()? >= self.task_context.config.max_row_count);
         if cut_new_files {
             self.cut(&mut state).await?;
             self.reset(&mut state)?;
@@ -170,9 +171,31 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
                 state.current_epoch,
                 state.current_checkpoint_range.clone(),
             );
+
+            self.emit_file_size_metric(&file_metadata)?;
+
             self.sender.send(file_metadata).await?;
             tokio::task::yield_now().await;
         }
+        Ok(())
+    }
+
+    fn emit_file_size_metric(&self, file_metadata: &FileMetadata) -> Result<()> {
+        let object_path = file_metadata.file_path();
+        let file_path = path_to_filesystem(
+            self.task_context.checkpoint_dir_path().to_path_buf(),
+            &object_path,
+        )?;
+        if file_path.exists() {
+            if let Ok(metadata) = fs::metadata(&file_path) {
+                let file_size = metadata.len();
+                self.task_context
+                    .metrics
+                    .file_size_bytes
+                    .with_label_values(&[self.name()])
+                    .observe(file_size as f64);
+            }
+        };
         Ok(())
     }
 
