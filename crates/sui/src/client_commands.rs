@@ -1508,7 +1508,7 @@ impl SuiClientCommands {
                 {
                     Ok(addr) => *addr,
                     Err(_) => SuiAddress::from_str(&alias_or_address)
-                        .map_err(|e| anyhow!("Invalid value: {}", e))?,
+                        .map_err(|e| anyhow!("Invalid address or alias: {}", e))?,
                 };
 
                 context.config.keystore.remove_key(address)?;
