@@ -15,7 +15,7 @@ use handlers::transaction_bcs_handler::TransactionBCSHandler;
 use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
 use object_store::path::Path;
-use package_store::LocalDBPackageStore;
+use package_store::PackageCache;
 use serde::{Deserialize, Serialize};
 use snowflake_api::{QueryResult, SnowflakeApi};
 use strum_macros::EnumIter;
@@ -174,7 +174,7 @@ impl JobConfig {
         self,
         metrics: AnalyticsMetrics,
     ) -> Result<Vec<Processor>> {
-        let package_store = LocalDBPackageStore::new(&self.package_cache_path, &self.rest_url);
+        let package_cache = Arc::new(PackageCache::new(&self.package_cache_path, &self.rest_url));
         let job_config = Arc::new(self);
         let mut processors = Vec::with_capacity(job_config.task_configs.len());
         let mut task_names = HashSet::new();
@@ -195,7 +195,7 @@ impl JobConfig {
                 config: task_config,
                 checkpoint_dir: Arc::new(temp_dir),
                 metrics: metrics.clone(),
-                package_store: package_store.clone(),
+                package_cache: package_cache.clone(),
             };
 
             processors.push(task_context.create_analytics_processor().await?);
@@ -258,7 +258,7 @@ pub struct TaskContext {
     pub job_config: Arc<JobConfig>,
     pub checkpoint_dir: Arc<TempDir>,
     pub metrics: AnalyticsMetrics,
-    pub package_store: LocalDBPackageStore,
+    pub package_cache: Arc<PackageCache>,
 }
 
 impl TaskContext {
@@ -278,10 +278,10 @@ impl TaskContext {
             }
             FileType::Object => {
                 let package_id_filter = self.config.package_id_filter.clone();
-                let package_store = self.package_store.clone();
+                let package_cache = self.package_cache.clone();
                 let metrics = self.metrics.clone();
                 self.create_processor_for_handler(Box::new(ObjectHandler::new(
-                    package_store,
+                    package_cache,
                     &package_id_filter,
                     metrics,
                 )))
@@ -296,8 +296,8 @@ impl TaskContext {
                     .await
             }
             FileType::Event => {
-                let package_store = self.package_store.clone();
-                self.create_processor_for_handler(Box::new(EventHandler::new(package_store)))
+                let package_cache = self.package_cache.clone();
+                self.create_processor_for_handler(Box::new(EventHandler::new(package_cache)))
                     .await
             }
             FileType::TransactionObjects => {
@@ -313,15 +313,15 @@ impl TaskContext {
                     .await
             }
             FileType::DynamicField => {
-                let package_store = self.package_store.clone();
-                self.create_processor_for_handler(Box::new(DynamicFieldHandler::new(package_store)))
+                let package_cache = self.package_cache.clone();
+                self.create_processor_for_handler(Box::new(DynamicFieldHandler::new(package_cache)))
                     .await
             }
             FileType::WrappedObject => {
-                let package_store = self.package_store.clone();
+                let package_cache = self.package_cache.clone();
                 let metrics = self.metrics.clone();
                 self.create_processor_for_handler(Box::new(WrappedObjectHandler::new(
-                    package_store,
+                    package_cache,
                     metrics,
                 )))
                 .await
