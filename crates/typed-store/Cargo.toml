@@ -20,7 +20,7 @@ once_cell.workspace = true
 tap.workspace = true
 prometheus.workspace = true
 hdrhistogram.workspace = true
-rocksdb = { version = "0.21.0", default-features = false, features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"] }
+rocksdb = { version = "0.22.0", default-features = false, features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"] }
 serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }
