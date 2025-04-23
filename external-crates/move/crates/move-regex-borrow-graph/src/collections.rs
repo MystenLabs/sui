@@ -53,7 +53,12 @@ impl<Loc, Lbl> Path<Loc, Lbl> {
     where
         Lbl: Eq,
     {
-        self.is_dot_star() || self.labels.first().is_some_and(|l| l == lbl)
+        self.is_dot_star() || self.first_label().is_some_and(|l| l == lbl)
+    }
+
+    /// First label in the path, if any
+    pub fn first_label(&self) -> Option<&Lbl> {
+        self.labels.first()
     }
 
     /// A path with no labels and ends with dot-star

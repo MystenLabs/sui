@@ -9,9 +9,10 @@ pub mod input_arguments;
 pub mod memory_safety;
 pub mod move_functions;
 
-pub fn transaction(env: &env::Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
-    input_arguments::verify(env, ast)?;
-    move_functions::verify(env, ast)?;
-    memory_safety::verify(env, ast)?;
+pub fn transaction(env: &env::Env, ast: &mut T::Transaction) -> Result<(), ExecutionError> {
+    input_arguments::verify(env, &ast)?;
+    move_functions::verify(env, &ast)?;
+    let borrow_states = memory_safety::verify(env, &ast)?;
+
     Ok(())
 }

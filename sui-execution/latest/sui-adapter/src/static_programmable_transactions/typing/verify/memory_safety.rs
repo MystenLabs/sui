@@ -7,7 +7,7 @@ use crate::static_programmable_transactions::{
     env::Env,
     typing::ast::{self as T, Type},
 };
-use move_regex_borrow_graph::references::Ref;
+use move_regex_borrow_graph::{collections::Path, references::Ref};
 use sui_types::{
     error::{command_argument_error, ExecutionError, ExecutionErrorKind},
     execution_status::CommandArgumentError,
@@ -15,6 +15,8 @@ use sui_types::{
 
 type Graph = move_regex_borrow_graph::collections::Graph<(), T::Location>;
 type Paths = move_regex_borrow_graph::collections::Paths<(), T::Location>;
+
+pub type Borrowed = BTreeSet<T::Location>;
 
 enum Value {
     Ref(Ref),
@@ -53,8 +55,9 @@ impl Value {
 }
 
 impl Context {
-    fn new(inputs: &T::Inputs) -> Result<Self, ExecutionError> {
-        let inputs = inputs
+    fn new(ast: &T::Transaction) -> Result<Self, ExecutionError> {
+        let inputs = ast
+            .inputs
             .iter()
             .map(|(_, ty)| {
                 Some(match ty {
@@ -75,7 +78,7 @@ impl Context {
             local_root,
             gas_coin: Some(Value::NonRef),
             inputs,
-            results: vec![],
+            results: Vec::with_capacity(ast.commands.len()),
         })
     }
 
@@ -93,6 +96,22 @@ impl Context {
 
     fn borrowed_by(&self, r: Ref) -> Result<BTreeMap<Ref, Paths>, ExecutionError> {
         self.graph.borrowed_by(r).map_err(graph_err)
+    }
+
+    fn borrowed_locations(&self) -> Result<Borrowed, ExecutionError> {
+        let borrowed_by = self.borrowed_by(self.local_root)?;
+        let mut borrowed = Borrowed::new();
+        for (_, paths) in borrowed_by {
+            for path in paths {
+                let Some(loc) = path.first_label() else {
+                    invariant_violation!(
+                        "local root should never be borrowed by epsilon or dot star"
+                    );
+                };
+                borrowed.insert(*loc);
+            }
+        }
+        Ok(borrowed)
     }
 
     fn release(&mut self, r: Ref) -> Result<(), ExecutionError> {
@@ -187,11 +206,13 @@ impl Context {
 /// Checks the following
 /// - Values are not used after being moved
 /// - Reference safety is upheld (no dangling references)
-/// - No results without `drop` are unused (all unused non-input values have `drop`)
-pub fn verify(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
-    let T::Transaction { inputs, commands } = txn;
-    let mut context = Context::new(inputs)?;
+/// Returns the borrowed locations before each command
+pub fn verify(_env: &Env, ast: &T::Transaction) -> Result<Vec<Borrowed>, ExecutionError> {
+    let mut context = Context::new(ast)?;
+    let commands = &ast.commands;
+    let mut borrowed = Vec::with_capacity(commands.len());
     for (i, (c, _t)) in commands.iter().enumerate() {
+        borrowed.push(context.borrowed_locations()?);
         let result = command(&mut context, c).map_err(|e| e.with_command_index(i))?;
         assert_invariant!(result.len() == _t.len(), "result length mismatch");
         context.results.push(result.into_iter().map(Some).collect());
@@ -223,7 +244,7 @@ pub fn verify(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
     context.release(context.local_root)?;
     assert_invariant!(context.graph.abstract_size() == 0, "reference not released");
 
-    Ok(())
+    Ok(borrowed)
 }
 
 fn command(context: &mut Context, command: &T::Command) -> Result<Vec<Value>, ExecutionError> {
