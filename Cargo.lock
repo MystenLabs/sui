@@ -2344,9 +2344,9 @@ dependencies = [
 
 [[package]]
 name = "bytes-varint"
-version = "1.0.3"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54c1820c7c366b9d26c47143e1604454105a59969aade54e4f695d96acc8332f"
+checksum = "2e95ba58c659da9789048773ebecf5bd17fe7d3858b10f693bb579912f0d55ed"
 dependencies = [
  "bytes",
 ]
@@ -17560,7 +17560,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
