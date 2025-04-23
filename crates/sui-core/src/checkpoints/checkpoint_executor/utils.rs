@@ -416,22 +416,6 @@ impl PipelineHandle {
     }
 }
 
-/// Catch errors in which the PipelineHandle is dropped early.
-/// Cannot use this check in the simulator because it drops tasks to simulate killing nodes.
-#[cfg(not(msim))]
-impl Drop for PipelineHandle {
-    fn drop(&mut self) {
-        if !std::thread::panicking() {
-            // TODO: Add comments explain why this guarantee holds.
-            assert_eq!(
-                self.cur_stage,
-                PipelineStage::End,
-                "PipelineHandle dropped without reaching end of pipeline"
-            );
-        }
-    }
-}
-
 /// A collection of watches for each stage. These are the synchronization points
 /// for the pipeline.
 pub(super) struct PipelineStages {
