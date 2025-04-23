@@ -3,11 +3,17 @@ title: Multisig Authentication
 description: Guide on how to create a multisig transaction and then submit it against a local network using the Sui CLI.
 ---
 
+Multi-signature (multisig) authentication is a way of approving transactions using multiple private keys for authorization. Multisig authentication provides additional security and options that allow teams or joint accounts to share control of on-chain assets. 
+
+To demonstrate multisig on Sui, this topic guides you through a couple of different scenarios. The first example shows how to create a multisig account and then process transactions with that account. The next example runs through creating a multisig account in preparation for a token launch on Sui.
+
+## Multisig transaction example
+
 The following steps demonstrate how to create a multisig transaction and then submit it against a network using the [Sui CLI](/references/cli.mdx). A transaction can be the transfer of an object, the publish or upgrade of a package, the payment of SUI, and so on.
 
 To learn more about how to create multisig addresses and create multisig transactions using the TypeScript SDK, see the [SDK documentation](https://sdk.mystenlabs.com/typescript/cryptography/multisig) for details.
 
-## Prerequisites
+### Prerequisites
 
 This topic assumes you are somewhat familiar with the Sui CLI, specifically the `sui client` and `sui keytool` commands. Consequently, a command might be introduced without any context. If you are unsure about the details of a referenced command, see the Sui CLI documentation for more information.
 
@@ -15,11 +21,11 @@ You need an existing address on the network you are working on to receive an obj
 
 The topic also assumes that your active environment is Testnet (`sui client active-env`). You can perform these steps on Devnet or a local network as well, but you must adjust the instructions appropriately.
 
-## Executing multisig transactions
+### Executing multisig transactions
 
 To demonstrate multisig, this topic guides you through setting up and executing a multisig transaction using the Sui CLI.
 
-### Create addresses with different schemes
+#### Create addresses with different schemes
 
 To begin, create three addresses that will act as the signers for the transaction you perform later in the instruction. Use the `sui client new-address` command to generate a Sui address and public key for three supported key schemes.
 
@@ -154,7 +160,7 @@ The response resembles the following:
 ╰─────────────────┴─────────────────────────────────────────────────────────╯
 ```
 
-### Add SUI to the multisig address
+#### Add SUI to the multisig address
 
 Before getting SUI, set a `MULTISIG` shell variable to the multisig address provided at the top of the previous response (substituting the actual address for `<MULTISIG-ADDRESS>`).
 
@@ -174,7 +180,7 @@ Use the `sui client gas` command to verify the address now has at least two SUI.
 $ sui client gas $MULTISIG
 ```
 
-### Transfer SUI to your active address
+#### Transfer SUI to your active address
 
 It's now time to transfer an object from the multisig address. For simplicity, this example uses one of the coins your multisig address owns as the transfer object. Copy the object ID for one of the address' coins and use it to set a shell variable value.
 
@@ -239,7 +245,7 @@ $ SIG_1=<SIGNATURE-HASH-ED25519>
 $ SIG_2=<SIGNATURE-HASH-SECP256K1>
 ```
 
-### Combine individual signatures into a multisig
+#### Combine individual signatures into a multisig
 
 As mentioned, the multisig must be composed of enough individual signatures such that the sum of the participating signer weights is greater than the `threshold` value. Use the `sui keytool multi-sig-combine-partial-sig` command to combine the ed25519 signature (`weight: 1`) and the secp256k1 (`weight: 2`). To complete the command, you must provide all public keys, their weights, and the threshold that defined the multisig address.
 
@@ -257,7 +263,7 @@ If successful, the console responds with a message similar to the following.
 ╰────────────────────┴──────────────────────────────╯
 ```
 
-### Execute the transaction
+#### Execute the transaction
 
 Use `sui client execute-signed-tx` to execute the multisig transaction. Set a shell variable equal to the `multisigSerialized` value you receive from the previous response, then use it to build the `execute-signed-tx` command.
 
@@ -886,3 +892,4 @@ $ sui client transfer --to <SUI-ADDRESS> --object-id <OBJECT-ID> --gas-budget <G
 - [Multisig Typescript SDK](https://sdk.mystenlabs.com/typescript/cryptography/multisig): How to create multisig addresses and sign transactions using the Sui SDK.
 - [SDK documentation](https://sdk.mystenlabs.com/typescript/cryptography/multisig): See the Sui TypeScript SDK documentation to learn how to use the library with multisig transactions.
 - [Sui CLI](../../../references/cli.mdx): Interact with the Sui network, its features, and the Move programming language from a command line.
+- [Token Launches on Sui](../../../concepts/tokenomics/token-launches.mdx): 
