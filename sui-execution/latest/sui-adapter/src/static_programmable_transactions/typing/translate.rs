@@ -115,7 +115,9 @@ pub fn transaction(env: &Env, lt: L::Transaction) -> Result<T::Transaction, Exec
         })
         .collect::<Result<Vec<_>, _>>()?;
     let inputs = context.finish();
-    Ok(T::Transaction { inputs, commands })
+    let mut ast = T::Transaction { inputs, commands };
+    todo!("'optimize' last usage of references");
+    Ok(ast)
 }
 
 fn command(

@@ -187,8 +187,8 @@ impl Context {
 pub fn verify(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
     let T::Transaction { inputs, commands } = txn;
     let mut context = Context::new(inputs)?;
-    for (c, _t) in commands {
-        let result = command(&mut context, c)?;
+    for (i, (c, _t)) in commands.iter().enumerate() {
+        let result = command(&mut context, c).map_err(|e| e.with_command_index(i))?;
         debug_assert_eq!(result.len(), _t.len());
         context.results.push(result.into_iter().map(Some).collect());
     }
