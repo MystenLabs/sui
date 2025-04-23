@@ -393,6 +393,493 @@ Transaction Digest: 7mBWUxT6HUVDa8bii3PZJc7nhWqefTLNTsGbHYnx7ZA4
 ```
 </details>
 
+## Multisig setup guide for a token launch {#multisig-token-launch}
+
+This guide walks you through creating a custom coin ($MYCOIN) to launch on Sui. The primary goals of the launch include deploying the coin on Sui Mainnet, managing the treasury through a multisig account, distributing it to defined shareholders, and integrating it with Sui wallet and an explorer.
+
+### Prerequisites
+
+You need to have Sui installed. See [Install Sui](../getting-started/sui-install.mdx) if you don't already have it.
+
+You need some SUI (~10) for gas fees.
+
+Publish modules: Follow the setup instructions to publish your modules.
+
+### Create Sui account {#create-account}
+
+Use the `sui client` command to generate Sui addresses and keys:
+
+```sh
+$ sui client new-address ed25519
+```
+
+:::tip
+
+You can also create and use a key using AWS KMS. Follow the steps to create a key using KMS key, select `Asymmetric` as the key type and `ECC_SECG_P256K1` for the key spec.
+https://docs.aws.amazon.com/kms/latest/developerguide/asymm-create-key.html#create-asymmetric-keys-console
+
+:::
+
+### Get keys from Sui keystore {#get-keys}
+
+List the signatures using:
+
+```sh
+$ sui keytool list --json
+```
+
+The response resembles the following, but displays actual addresses, keys, and peer IDs:
+
+```json
+[
+  {
+    "alias": "elegant-sphene",
+    "suiAddress": "<SUI-ADDRESS-1>",
+    "publicBase64Key": "<PUBLIC-KEY-1>",
+    "keyScheme": "ed25519",
+    "flag": 0,
+    "peerId": "<PEER-ID-1>"
+  },
+  {
+    "alias": "inspiring-topaz",
+    "suiAddress": "<SUI-ADDRESS-2>",
+    "publicBase64Key": "<PUBLIC-KEY-2>",
+    "keyScheme": "ed25519",
+    "flag": 0,
+    "peerId": "<PEER-ID-2>"
+  },
+  {
+    "alias": "amazing-emerald",
+    "suiAddress": "<SUI-ADDRESS-3>",
+    "publicBase64Key": "<PUBLIC-KEY-3>",
+    "keyScheme": "ed25519",
+    "flag": 0,
+    "peerId": "<PEER-ID-3>"
+  }
+]
+```
+
+:::info
+
+Get a public key from AWS KMS. Execute the [`runGetPublicKey` function](https://gist.github.com/1-4200/3fbd79da289a54d3687326c61823e689#file-kms-sigining-ts-L264) from the linked script to get a public key in the format of Sui.
+
+Do not forget to declare the necessary AWS-related [environment variables](https://gist.github.com/1-4200/3fbd79da289a54d3687326c61823e689#file-kms-sigining-ts-L17-L21) to run the script.
+
+:::
+
+### Create and set multisig address {#create-multisig}
+
+To create a multisig address, input a list of public keys to use for the multisig address and a list of their corresponding weights and the threshold (replacing `<VARIABLES>` with actual values).
+
+:::info
+
+A setup of two out of three signers is typically considered secure. However, to strengthen security measures, diversify the types of signers involved. Including additional types such as a cloud signer, such as AWS KMS, can provide enhanced protection, especially for long-term usage. Solely relying on hot wallet keys for multisig might introduce security risks.
+
+:::
+
+Use `sui keytool` to generate a multisig address:
+
+```sh
+$ sui keytool multi-sig-address --pks <PUBLIC-KEY-ED25519> <PUBLIC-KEY-ED25519> <PUBLIC-KEY-ED25519> --weights 1 1 1 --threshold 2 --json
+```
+
+The JSON response resembles the following:
+
+```json
+{
+  "multisigAddress": "<MULTISIG-ADDRESS>",
+  "multisig": [
+    {
+      "address": "<SUI-ADDRESS-1>",
+      "publicBase64Key": "<PUBLIC-KEY-1>",
+      "weight": 1
+    },
+    {
+      "address": "<SUI-ADDRESS-2>",
+      "publicBase64Key": "<PUBLIC-KEY-2>",
+      "weight": 1
+    },
+    {
+      "address": "<SUI-ADDRESS-3>",
+      "publicBase64Key": "<PUBLIC-KEY-3>",
+      "weight": 1
+    }
+  ]
+}
+```
+
+Set the multisig address as the active address:
+
+```sh
+$ sui client switch --address <MULTISIG-ADDRESS>
+```
+
+### Transfer SUI to multisig address {#transfer-sui}
+
+Transfer some SUI for gas fees to the multisig address. Use the `sui client gas` command to make sure the multisig address has the amount you transferred.
+
+```sh
+$ sui client gas --json
+```
+
+The response resembles the following (with the expected amount of SUI):
+
+```json
+[
+  {
+    "gasCoinId": "0xa8e...8be",
+    "mistBalance": 4000000000,
+    "suiBalance": "4.00"
+  }
+]
+```
+
+### Serialize publish transaction for publishing your modules {#serialize-publish}
+
+Navigate to the repository directory
+
+```sh
+$ cd <path-to-repo>
+```
+
+and serialize the publish transaction
+
+```sh
+$ sui client publish --serialize-unsigned-transaction
+```
+
+The response resembles the following:
+
+```sh
+UPDATING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING <your_project_name>
+Successfully verified dependencies on-chain against source.
+<TX-BYTES>
+```
+
+### Sign the transaction {#sign-transaction}
+
+Use `sui keytool` to sign the transaction with `≥k` keys:
+
+```sh
+$ sui keytool sign --address <SUI-ADDRESS-1> --data <TX_BYTES> --json
+```
+```sh
+$ sui keytool sign --address <SUI-ADDRESS-2> --data <TX_BYTES> --json
+```
+
+:::info
+
+Sign the transaction with AWS KMS key. If you want to include addresses generated by AWS KMS in your multisig, create a signature using the [kms-signing script](https://gist.github.com/1-4200/3fbd79da289a54d3687326c61823e689#file-kms-sigining-ts-L263) on `runSignTxBytes`.
+
+Do not forget to declare the necessary [environment variables](https://gist.github.com/1-4200/3fbd79da289a54d3687326c61823e689#file-kms-sigining-ts-L17-L23) (AWS-related, TX_BYTES) to run the script.
+
+:::
+
+### Combine signatures {#combine-signatures}
+
+Combine the signatures using `sui keytool`:
+
+```sh
+$ sui keytool multi-sig-combine-partial-sig --pks <PUBLIC-KEY-1> <PUBLIC-KEY-2> <PUBLIC-KEY-3> --weights 1 1 1 --threshold 2 --sigs <SIGNATURE-1> <SIGNATURE-2>
+```
+
+You need only the signatures of the participating signers whose sum of weights `≥k`. You must provide all public keys and their weights, and the threshold that defined the multisig address.
+
+### Execute the transaction {#execute-transaction}
+
+Execute the transaction using the combined signature:
+
+```sh
+$ sui client execute-signed-tx --tx-bytes <TX_BYTES> --signatures <SERIALIZED-MULTISIG> --json
+```
+<details>
+<summary>
+Example output of the `execute-signed-tx` command.
+</summary>
+```json
+{
+  "digest": "LyCucbaARVLcCL8EPb27Bk5zWAjghdqAc5jVaeEmSSU",
+  "transaction": {
+    "data": {
+      "messageVersion": "v1",
+      "transaction": {
+        "kind": "ProgrammableTransaction",
+        "inputs": [
+          {
+            "type": "pure",
+            "valueType": "address",
+            "value": "0x51b53d828382b39c820694f4c601d1f413e68b1d963e735aef6637fe270d4d68"
+          }
+        ],
+        "transactions": [
+          {
+            "Publish": [
+              "0x0000000000000000000000000000000000000000000000000000000000000001",
+              "0x0000000000000000000000000000000000000000000000000000000000000002"
+            ]
+          },
+          {
+            "TransferObjects": [
+              [
+                {
+                  "Result": 0
+                }
+              ],
+              {
+                "Input": 0
+              }
+            ]
+          }
+        ]
+      },
+      "sender": "0x51b53d828382b39c820694f4c601d1f413e68b1d963e735aef6637fe270d4d68",
+      "gasData": {
+        "payment": [
+          {
+            "objectId": "0x0610d6a78501b689300e5d1fc785667f729edd75675ed0b5f9391cee9152aded",
+            "version": 2,
+            "digest": "ZZrGvm4qqhs11w5iARTqmxvEwyvg6d12dSC2Ew1CY5y"
+          }
+        ],
+        "owner": "0x51b53d828382b39c820694f4c601d1f413e68b1d963e735aef6637fe270d4d68",
+        "price": "1000",
+        "budget": "21980400"
+      }
+    },
+    "txSignatures": [
+      "AIPLM4AVdyMChc5iThoOd37T3LR6u7XLQQuqx2HZcIcwIWvPZaCwDDWxOO87l+xt0e4wxS9cKW+ZGY1gwKm9hwGgoGXnNiF3adQSrq4+y8KWkCWmum6jpYnGZvYQ4FB8Vg=="
+    ]
+  },
+  "effects": {
+    "messageVersion": "v1",
+    "status": {
+      "status": "success"
+    },
+    "executedEpoch": "1",
+    "gasUsed": {
+      "computationCost": "1000000",
+      "storageCost": "19980400",
+      "storageRebate": "978120",
+      "nonRefundableStorageFee": "9880"
+    },
+    "modifiedAtVersions": [
+      {
+        "objectId": "0x0610d6a78501b689300e5d1fc785667f729edd75675ed0b5f9391cee9152aded",
+        "sequenceNumber": "2"
+      }
+    ],
+    "transactionDigest": "LyCucbaARVLcCL8EPb27Bk5zWAjghdqAc5jVaeEmSSU",
+    "created": [
+      {
+        "owner": "Immutable",
+        "reference": {
+          "objectId": "0x00e0ebe33cd95b7084acc08c56e3b93df2f2f847545b83eb5cd00e638eb0b800",
+          "version": 1,
+          "digest": "21WwdEYAUapR4UmPF3A8wWaqnsmXBUfLmMxb6ehzu83u"
+        }
+      },
+      {
+        "owner": "Immutable",
+        "reference": {
+          "objectId": "0x2ce11233569304f64f96c3dbf8a1aeb99a0d2d420f0a84092166ac5d50d6087f",
+          "version": 3,
+          "digest": "CKFPxn81q8GxQsaQq3T5LNWtE6enQQ1mmwdLRUe2ntrw"
+        }
+      },
+      {
+        "owner": "Immutable",
+        "reference": {
+          "objectId": "0x6b0feae03901037f3db1f18b694b5d18197e74906579823b9958cbdbf6f87278",
+          "version": 3,
+          "digest": "2UpNB69ZBqR9GsQJqfz4jyc5yx9FEvTFsLMEiHK4kJFi"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x51b53d828382b39c820694f4c601d1f413e68b1d963e735aef6637fe270d4d68"
+        },
+        "reference": {
+          "objectId": "0x6fbd871137808ba4ea610fa302fa0943c83f67a8f5a6b0468ff3288303392c57",
+          "version": 3,
+          "digest": "fdBKCwEEqxk5MwjsVpZ4SwYMkV6ehTEtXjGHbikKYsF"
+        }
+      },
+      {
+        "owner": "Immutable",
+        "reference": {
+          "objectId": "0x737cad1d42af9a3ce80d737b1eca05faa8f040667ce63c7b8b785beb8eee0cc9",
+          "version": 3,
+          "digest": "CMStx1LeqCBRsajPx4v4fp7FSDW4NMYsk1jnx1nuQXEj"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x51b53d828382b39c820694f4c601d1f413e68b1d963e735aef6637fe270d4d68"
+        },
+        "reference": {
+          "objectId": "0xdc3a30681099a3121adb4d6a6a1ab0901872bccf040b699acb8fa5b3897bc3f6",
+          "version": 3,
+          "digest": "GxkGYWT6GvZapMm8phePSTYiAENwfqzcdbUMNjTJbabS"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x51b53d828382b39c820694f4c601d1f413e68b1d963e735aef6637fe270d4d68"
+        },
+        "reference": {
+          "objectId": "0xf7c9802c55fccd299b68d201f68d3c7165fe0040d30aa6b01f889ce024f132f4",
+          "version": 3,
+          "digest": "AN9tG1omyRPaKEtsPh3S9iwnThWFuvMgsXsp9oZsGqXK"
+        }
+      }
+    ],
+    "mutated": [
+      {
+        "owner": {
+          "AddressOwner": "0x51b53d828382b39c820694f4c601d1f413e68b1d963e735aef6637fe270d4d68"
+        },
+        "reference": {
+          "objectId": "0x0610d6a78501b689300e5d1fc785667f729edd75675ed0b5f9391cee9152aded",
+          "version": 3,
+          "digest": "AyA5SNDgF9J1YabEzhFsgEcFbUpNReWs6G7GfR7z9kuZ"
+        }
+      }
+    ],
+    "gasObject": {
+      "owner": {
+        "AddressOwner": "0x51b53d828382b39c820694f4c601d1f413e68b1d963e735aef6637fe270d4d68"
+      },
+      "reference": {
+        "objectId": "0x0610d6a78501b689300e5d1fc785667f729edd75675ed0b5f9391cee9152aded",
+        "version": 3,
+        "digest": "AyA5SNDgF9J1YabEzhFsgEcFbUpNReWs6G7GfR7z9kuZ"
+      }
+    },
+    "dependencies": [
+      "43xRGMCLDNyNxfCCRwyTd5A9d1JEXMqgjR73rSdxP5pp",
+      "9YFcEEL2UYQpC8jujNzT2Y4cskrbSpTn9VZftEv5xFa9"
+    ]
+  },
+  "events": [],
+  "objectChanges": [
+    {
+      "type": "mutated",
+      "sender": "0x51b53d828382b39c820694f4c601d1f413e68b1d963e735aef6637fe270d4d68",
+      "owner": {
+        "AddressOwner": "0x51b53d828382b39c820694f4c601d1f413e68b1d963e735aef6637fe270d4d68"
+      },
+      "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
+      "objectId": "0x0610d6a78501b689300e5d1fc785667f729edd75675ed0b5f9391cee9152aded",
+      "version": "3",
+      "previousVersion": "2",
+      "digest": "AyA5SNDgF9J1YabEzhFsgEcFbUpNReWs6G7GfR7z9kuZ"
+    },
+    {
+      "type": "published",
+      "packageId": "0x00e0ebe33cd95b7084acc08c56e3b93df2f2f847545b83eb5cd00e638eb0b800",
+      "version": "1",
+      "digest": "21WwdEYAUapR4UmPF3A8wWaqnsmXBUfLmMxb6ehzu83u",
+      "modules": [
+        "e4c"
+      ]
+    },
+    {
+      "type": "created",
+      "sender": "0x51b53d828382b39c820694f4c601d1f413e68b1d963e735aef6637fe270d4d68",
+      "owner": "Immutable",
+      "objectType": "0x2::coin::CoinMetadata<0x00e0ebe33cd95b7084acc08c56e3b93df2f2f847545b83eb5cd00e638eb0b800::e4c::E4C>",
+      "objectId": "0x2ce11233569304f64f96c3dbf8a1aeb99a0d2d420f0a84092166ac5d50d6087f",
+      "version": "3",
+      "digest": "CKFPxn81q8GxQsaQq3T5LNWtE6enQQ1mmwdLRUe2ntrw"
+    },
+    {
+      "type": "created",
+      "sender": "0x51b53d828382b39c820694f4c601d1f413e68b1d963e735aef6637fe270d4d68",
+      "owner": "Immutable",
+      "objectType": "0x2::coin::RegulatedCoinMetadata<0x00e0ebe33cd95b7084acc08c56e3b93df2f2f847545b83eb5cd00e638eb0b800::e4c::E4C>",
+      "objectId": "0x6b0feae03901037f3db1f18b694b5d18197e74906579823b9958cbdbf6f87278",
+      "version": "3",
+      "digest": "2UpNB69ZBqR9GsQJqfz4jyc5yx9FEvTFsLMEiHK4kJFi"
+    },
+    {
+      "type": "created",
+      "sender": "0x51b53d828382b39c820694f4c601d1f413e68b1d963e735aef6637fe270d4d68",
+      "owner": {
+        "AddressOwner": "0x51b53d828382b39c820694f4c601d1f413e68b1d963e735aef6637fe270d4d68"
+      },
+      "objectType": "0x2::coin::DenyCap<0x00e0ebe33cd95b7084acc08c56e3b93df2f2f847545b83eb5cd00e638eb0b800::e4c::E4C>",
+      "objectId": "0x6fbd871137808ba4ea610fa302fa0943c83f67a8f5a6b0468ff3288303392c57",
+      "version": "3",
+      "digest": "fdBKCwEEqxk5MwjsVpZ4SwYMkV6ehTEtXjGHbikKYsF"
+    },
+    {
+      "type": "created",
+      "sender": "0x51b53d828382b39c820694f4c601d1f413e68b1d963e735aef6637fe270d4d68",
+      "owner": "Immutable",
+      "objectType": "0x00e0ebe33cd95b7084acc08c56e3b93df2f2f847545b83eb5cd00e638eb0b800::e4c::E4CTotalSupply",
+      "objectId": "0x737cad1d42af9a3ce80d737b1eca05faa8f040667ce63c7b8b785beb8eee0cc9",
+      "version": "3",
+      "digest": "CMStx1LeqCBRsajPx4v4fp7FSDW4NMYsk1jnx1nuQXEj"
+    },
+    {
+      "type": "created",
+      "sender": "0x51b53d828382b39c820694f4c601d1f413e68b1d963e735aef6637fe270d4d68",
+      "owner": {
+        "AddressOwner": "0x51b53d828382b39c820694f4c601d1f413e68b1d963e735aef6637fe270d4d68"
+      },
+      "objectType": "0x2::coin::Coin<0x00e0ebe33cd95b7084acc08c56e3b93df2f2f847545b83eb5cd00e638eb0b800::e4c::E4C>",
+      "objectId": "0xdc3a30681099a3121adb4d6a6a1ab0901872bccf040b699acb8fa5b3897bc3f6",
+      "version": "3",
+      "digest": "GxkGYWT6GvZapMm8phePSTYiAENwfqzcdbUMNjTJbabS"
+    },
+    {
+      "type": "created",
+      "sender": "0x51b53d828382b39c820694f4c601d1f413e68b1d963e735aef6637fe270d4d68",
+      "owner": {
+        "AddressOwner": "0x51b53d828382b39c820694f4c601d1f413e68b1d963e735aef6637fe270d4d68"
+      },
+      "objectType": "0x2::package::UpgradeCap",
+      "objectId": "0xf7c9802c55fccd299b68d201f68d3c7165fe0040d30aa6b01f889ce024f132f4",
+      "version": "3",
+      "digest": "AN9tG1omyRPaKEtsPh3S9iwnThWFuvMgsXsp9oZsGqXK"
+    }
+  ],
+  "balanceChanges": [
+    {
+      "owner": {
+        "AddressOwner": "0x51b53d828382b39c820694f4c601d1f413e68b1d963e735aef6637fe270d4d68"
+      },
+      "coinType": "0x2::sui::SUI",
+      "amount": "-20002280"
+    },
+    {
+      "owner": {
+        "AddressOwner": "0x51b53d828382b39c820694f4c601d1f413e68b1d963e735aef6637fe270d4d68"
+      },
+      "coinType": "0x00e0ebe33cd95b7084acc08c56e3b93df2f2f847545b83eb5cd00e638eb0b800::e4c::E4C",
+      "amount": "100000000000"
+    }
+  ],
+  "confirmedLocalExecution": true
+}
+```
+</details>
+ 
+## Coin distribution
+
+Distribute $MYCOIN from the multisig address to shareholders and CEXs as needed.
+
+### Serialize transactions
+
+Serialize any transaction like the `transfer` transaction and follow the same process from [the sign transaction step](#sign-transaction). This section demonstrates how to use an object that belongs to a multisig address and serialize a transfer to be signed. The `tx_bytes` value can be any serialized transaction data where the sender is the multisig address. Use the `--serialize-unsigned-transaction` flag for supported commands in `sui client -h` (`publish`, `upgrade`, `call`, `transfer`, `transfer-sui`, `pay`, `pay-all-sui`, `pay-sui`, `split`, `merge-coin`) to output the Base64 encoded transaction bytes.
+
+```sh
+$ sui client transfer --to <SUI-ADDRESS> --object-id <OBJECT-ID> --gas-budget <GAS-AMOUNT> --serialize-unsigned-transaction
+```
+
 ## Related links
 
 - [Multisig](../../../concepts/cryptography/transaction-auth/multisig.mdx): Definition of multisig transactions on the Sui network and how to use it with CLI.

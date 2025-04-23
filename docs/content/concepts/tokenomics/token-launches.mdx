@@ -1,0 +1,85 @@
+---
+title: Token Launches on Sui
+description: Following best practices when launching a token on Sui...
+---
+
+Following best practices when launching tokens on Sui can help  best practices for launching new tokens on Sui. The Multisig Authentication guide includes an example of using a [multisig account to support the launch of a token on Sui](../../guides/developer/cryptography/multisig.mdx#multisig-token-launch).
+
+## Token launch best practices
+
+There are some steps you can take during the initial phase of your token project that can help ensure a smooth launch.
+
+- Use a burner wallet to perform the initial publishing and minting. The burner wallet is an address used specifically to perform this task.
+- Transfer all minted tokens, remaining `UpgradeCap`s, and so on, to the treasury (which can just be a multisig address).
+- Alternatively, prepare the multisig account first and do the publishing directly with it, as this guide shows.
+- Execute other transactions through multisig address so that the origin for these transfers is the multisig address, not the burner wallet.
+
+When you mint your tokens, you need to consider how best to manage your `UpgradeCap` and `TreasuryCap` capabilities. These capabilities allow the bearer to manipulate and manage your token supply. 
+
+**For tokens with a fixed supply:**
+  - Mint the entire supply at the token generation event (TGE).
+  - Wrap the `TreasuryCap` and make it unusable for certain actions (like minting) to ensure integrity.
+
+**For tokens with a dynamic supply:**
+  - Evaluate the need for minting based on the specific tokenomics. 
+  - Wrap the `TreasuryCap` to make it usable on certain actions under pre-defined conditions.
+
+**For all tokens:**
+  - Burn the token `UpgradeCap` to ensure package integrity and transparency.
+  - It's advisable to implement tokenomics and staking in its own package, so your team can keep the `UpgradeCap` for that package.
+  - Use a multisig solution to handle the `TreasuryCap` and `UpgradeCap`. For security, consider structuring the multisig setup using one of the following options:
+        1. Multisig (3 of 5) for `UpgradeCap`
+            - 1 AWS/Cloud KMS
+            - 2 Ledger
+            - 1 Yubikey
+            - 1 zkLogin address
+        2. Multisig (4 of 6) - treasury / admin cap holder
+            - 1 GCP KMS
+            - 1 AWS KMS
+            - 2 Ledger
+            - 1 Hot wallet
+            - 1 Yubikey
+    - Implement a quorum with external voters, like auditors or your project's community, to control upgrades. You can see an example of a [Sui quorum on GitHub](https://github.com/MystenLabs/apps/tree/main/upgrade_policy/quorum_upgrade).
+
+### Token distribution and management
+
+Manage minted tokens securely, through multisig accounts or other multisig wallet solutions like [MSafe](https://sui.m-safe.io/?msafe) or [StreamFlow](https://app.streamflow.finance/dashboard). 
+
+For vesting schedules, consider using treasury management services like [MPay](https://pay.m-safe.io/).
+
+With some planning, you can maximize the liquidity of your token on centralized exchanges (CEXs). How easily your token can be bought or sold on CEXs without causing big price swings is vital for successful token launches. 
+- Develop a market making strategy to keep trading smooth. 
+- Allocate a percentage of your tokens for liquidity. 
+- Pair listings that you believe will have the highest impact and target CEXs that have high impact, regional strength, or both.
+- Monitor spread, volume, and depth, rebalancing liquidity across exchanges when necessary.
+
+### Coin metadata
+
+You typically create coin metadata at publish. The `CoinMetadata` needs to be shared or frozen so that the coin can register to different protocols. If the `CoinMetadata` is to be frozen, make sure the `image_url` is served from a domain owned and controlled by the publisher.
+
+## Go-to checklist for coin launch
+
+Follow this checklist for your coin launch to help ensure a smooth and successful launch of a coin on Sui blockchain.
+
+### Coin deployment and distribution
+
+<p><input type="checkbox"/> Set up a local Sui deployment environment</p>
+<p><input type="checkbox"/> Determine how to manage accounts that will hold coin-related key objects</p>
+<p><input type="checkbox"/> Get a certain amount of SUI coins to pay for the gas needed to deploy</p>
+<p><input type="checkbox"/> Prepare a reliable RPC gateway for transaction execution and querying</p>
+<p><input type="checkbox"/> Implement the coin distribution logic (fair launch, presale, airdrop, etc.)</p>
+<p><input type="checkbox"/> Prepare the token distribution plan and whitelists (if applicable)</p>
+<p><input type="checkbox"/> Set up a token sale platform or distribution mechanism (if applicable)</p>
+
+### Integration and listing
+
+<p><input type="checkbox"/> Integrate the coin with popular Sui-based wallets so it's listed as a recognized coin</p>
+<p><input type="checkbox"/> Apply for recognition on popular explorers as an approved coin</p>
+<p><input type="checkbox"/> Apply for listing on decentralized exchanges (DEXs)</p>
+<p><input type="checkbox"/> Explore CEX listings</p>
+
+## Related links
+
+- [Multisig Authentication](../cryptography/multisig.mdx): Guide on how to create a multisig transaction and then submit it against a local network using the Sui CLI.
+- [Publish a Package](../first-app/publish.mdx): Beginner guide on publishing packages on Sui.
+- [Tokenomics](../../../concepts/tokenomics.mdx): The tokenomics that govern SUI.
