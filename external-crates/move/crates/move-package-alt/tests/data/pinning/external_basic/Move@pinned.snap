@@ -1,6 +1,14 @@
 ---
 source: crates/move-package-alt/tests/pinning_tests.rs
 ---
-mock = { local = "." }
-mock2 = { local = ".." }
-overrides = { mainnet = { mock = { local = "." }, mock2 = { local = ".." } } }
+[mock]
+local = "."
+
+[mock2]
+local = ".."
+
+[overrides.mainnet.mock]
+local = "."
+
+[overrides.mainnet.mock2]
+local = ".."
