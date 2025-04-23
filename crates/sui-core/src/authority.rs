@@ -5607,6 +5607,13 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
             .get_object_by_key(&object_id, version))
     }
 
+    #[instrument(skip_all)]
+    async fn multi_get_objects(&self, object_keys: &[ObjectKey]) -> SuiResult<Vec<Option<Object>>> {
+        Ok(self
+            .get_object_cache_reader()
+            .multi_get_objects_by_key(object_keys))
+    }
+
     #[instrument(skip(self))]
     async fn multi_get_transaction_checkpoint(
         &self,

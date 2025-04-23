@@ -199,6 +199,13 @@ impl TransactionKeyValueStoreTrait for MockTxStore {
         Ok(self.objects.get(&ObjectKey(object_id, version)).cloned())
     }
 
+    async fn multi_get_objects(&self, object_keys: &[ObjectKey]) -> SuiResult<Vec<Option<Object>>> {
+        Ok(object_keys
+            .iter()
+            .map(|key| self.objects.get(key).cloned())
+            .collect())
+    }
+
     async fn multi_get_transaction_checkpoint(
         &self,
         digests: &[TransactionDigest],
@@ -542,7 +549,7 @@ fn test_key_to_path_and_back() {
         key
     );
 
-    let key = Key::ObjectKey(ObjectID::random(), SequenceNumber::from_u64(42));
+    let key = Key::ObjectKey(ObjectKey(ObjectID::random(), SequenceNumber::from_u64(42)));
     let path_elts = key.to_path_elements();
     assert_eq!(
         path_elements_to_key(path_elts.0.as_str(), path_elts.1).unwrap(),
