@@ -308,7 +308,7 @@ impl AuthorityPerpetualTables {
             (
                 "events_2".to_string(),
                 ThConfig::new_with_rm_prefix(
-                    32 + 8,
+                    32,
                     MUTEXES,
                     default_cells_per_mutex(),
                     KeySpaceConfig::default(),
