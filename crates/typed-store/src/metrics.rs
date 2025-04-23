@@ -965,6 +965,7 @@ pub struct DBMetrics {
     pub cf_metrics: ColumnFamilyMetrics,
     pub read_perf_ctx_metrics: ReadPerfContextMetrics,
     pub write_perf_ctx_metrics: WritePerfContextMetrics,
+    pub registry: Registry,
 }
 
 static ONCE: OnceCell<Arc<DBMetrics>> = OnceCell::new();
@@ -976,6 +977,7 @@ impl DBMetrics {
             cf_metrics: ColumnFamilyMetrics::new(registry),
             read_perf_ctx_metrics: ReadPerfContextMetrics::new(registry),
             write_perf_ctx_metrics: WritePerfContextMetrics::new(registry),
+            registry: registry.clone(),
         }
     }
     pub fn init(registry: &Registry) -> &'static Arc<DBMetrics> {
