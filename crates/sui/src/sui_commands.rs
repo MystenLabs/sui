@@ -34,7 +34,7 @@ use sui_config::{
 use sui_config::{
     SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME,
 };
-use sui_faucet::{create_wallet_context, start_faucet, AppState, FaucetConfig, SimpleFaucet};
+use sui_faucet::{create_wallet_context, start_faucet, AppState, FaucetConfig, LocalFaucet};
 use sui_indexer::test_utils::{
     start_indexer_jsonrpc_for_testing, start_indexer_writer_for_testing,
 };
@@ -66,9 +66,8 @@ use sui_types::crypto::{SignatureScheme, SuiKeyPair, ToFromBytes};
 use tracing;
 use tracing::info;
 
-const CONCURRENCY_LIMIT: usize = 30;
 const DEFAULT_EPOCH_DURATION_MS: u64 = 60_000;
-const DEFAULT_FAUCET_NUM_COINS: usize = 5; // 5 coins per request was the default in sui-test-validator
+
 const DEFAULT_FAUCET_MIST_AMOUNT: u64 = 200_000_000_000; // 200 SUI
 const DEFAULT_FAUCET_PORT: u16 = 9123;
 
@@ -379,7 +378,6 @@ impl SuiCommand {
                 config_dir,
                 force_regenesis,
                 with_faucet,
-
                 indexer_feature_args,
                 fullnode_rpc_port,
                 data_ingestion_dir,
@@ -927,12 +925,10 @@ async fn start(
         let config = FaucetConfig {
             host_ip,
             port: faucet_address.port(),
-            num_coins: DEFAULT_FAUCET_NUM_COINS,
             amount: DEFAULT_FAUCET_MIST_AMOUNT,
             ..Default::default()
         };
 
-        let prometheus_registry = prometheus::Registry::new();
         if force_regenesis {
             let kp = swarm.config_mut().account_keys.swap_remove(0);
             let keystore_path = config_dir.join(SUI_KEYSTORE_FILENAME);
@@ -954,22 +950,19 @@ async fn start(
             .save()
             .unwrap();
         }
-        let faucet_wal = config_dir.join("faucet.wal");
-        let simple_faucet = SimpleFaucet::new(
-            create_wallet_context(config.wallet_client_timeout_secs, config_dir)?,
-            &prometheus_registry,
-            faucet_wal.as_path(),
+
+        let local_faucet = LocalFaucet::new(
+            create_wallet_context(config.wallet_client_timeout_secs, config_dir.clone())?,
             config.clone(),
         )
-        .await
-        .unwrap();
+        .await?;
 
         let app_state = Arc::new(AppState {
-            faucet: simple_faucet,
+            faucet: local_faucet,
             config,
         });
 
-        start_faucet(app_state, CONCURRENCY_LIMIT, &prometheus_registry).await?;
+        start_faucet(app_state).await?;
     }
 
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(3));

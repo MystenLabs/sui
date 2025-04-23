@@ -226,7 +226,7 @@ dependencies = [
  "anemo-tower",
  "bytes",
  "clap",
- "dashmap 5.5.3",
+ "dashmap",
  "rand 0.8.5",
  "tokio",
  "tower 0.4.13",
@@ -240,9 +240,9 @@ source = "git+https://github.com/mystenlabs/anemo.git?rev=9c52c3c7946532163a7912
 dependencies = [
  "anemo",
  "bytes",
- "dashmap 5.5.3",
+ "dashmap",
  "futures",
- "governor 0.6.0",
+ "governor",
  "nonzero_ext",
  "pin-project-lite",
  "tokio",
@@ -2862,7 +2862,7 @@ dependencies = [
  "bytes",
  "cfg-if",
  "consensus-config",
- "dashmap 5.5.3",
+ "dashmap",
  "enum_dispatch",
  "fastcrypto",
  "futures",
@@ -3575,20 +3575,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "978747c1d849a7d2ee5e8adc0159961c48fb7e5db2f06af6723b80123bb53856"
 dependencies = [
  "cfg-if",
- "hashbrown 0.14.5",
- "lock_api",
- "once_cell",
- "parking_lot_core 0.9.9",
-]
-
-[[package]]
-name = "dashmap"
-version = "6.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
-dependencies = [
- "cfg-if",
- "crossbeam-utils",
  "hashbrown 0.14.5",
  "lock_api",
  "once_cell",
@@ -5083,16 +5069,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "forwarded-header-value"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8835f84f38484cc86f110a805655697908257fb9a7af005234060891557198e9"
-dependencies = [
- "nonempty 0.7.0",
- "thiserror 1.0.69",
-]
-
-[[package]]
 name = "fragile"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5366,11 +5342,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73fea8450eea4bac3940448fb7ae50d91f034f941199fcd9d909a5a07aa455f0"
 dependencies = [
  "cfg-if",
- "js-sys",
  "libc",
  "r-efi",
  "wasi 0.14.2+wasi-0.2.4",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -5461,38 +5435,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "821239e5672ff23e2a7060901fa622950bbd80b649cdaadd78d1c1767ed14eb4"
 dependencies = [
  "cfg-if",
- "dashmap 5.5.3",
+ "dashmap",
  "futures",
  "futures-timer",
  "no-std-compat",
  "nonzero_ext",
  "parking_lot 0.12.3",
- "quanta 0.11.1",
+ "quanta",
  "rand 0.8.5",
  "smallvec",
-]
-
-[[package]]
-name = "governor"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be93b4ec2e4710b04d9264c0c7350cdd62a8c20e5e4ac732552ebb8f0debe8eb"
-dependencies = [
- "cfg-if",
- "dashmap 6.1.0",
- "futures-sink",
- "futures-timer",
- "futures-util",
- "getrandom 0.3.2",
- "no-std-compat",
- "nonzero_ext",
- "parking_lot 0.12.3",
- "portable-atomic 1.11.0",
- "quanta 0.12.5",
- "rand 0.9.0",
- "smallvec",
- "spinning_top",
- "web-time",
 ]
 
 [[package]]
@@ -6347,7 +6298,7 @@ checksum = "4295cbb7573c16d310e99e713cf9e75101eb190ab31fccd35f2d2691b4352b19"
 dependencies = [
  "console",
  "number_prefix",
- "portable-atomic 0.3.19",
+ "portable-atomic",
  "unicode-width 0.1.11",
 ]
 
@@ -8494,7 +8445,7 @@ version = "0.7.0"
 dependencies = [
  "async-trait",
  "axum 0.8.3",
- "dashmap 5.5.3",
+ "dashmap",
  "futures",
  "once_cell",
  "parking_lot 0.12.3",
@@ -8705,12 +8656,6 @@ checksum = "ae01545c9c7fc4486ab7debaf2aad7003ac19431791868fb2e8066df97fad2f8"
 dependencies = [
  "memchr",
 ]
-
-[[package]]
-name = "nonempty"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9e591e719385e6ebaeb5ce5d3887f7d5676fceca6411d1925ccc95745f3d6f7"
 
 [[package]]
 name = "nonempty"
@@ -9911,12 +9856,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26f6a7b87c2e435a3241addceeeff740ff8b7e76b74c13bf9acb17fa454ea00b"
 
 [[package]]
-name = "portable-atomic"
-version = "1.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "350e9b48cbc6b0e028b0473b114454c6316e57336ee184ceab6e53f72c178b3e"
-
-[[package]]
 name = "postgres-protocol"
 version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10428,22 +10367,7 @@ dependencies = [
  "libc",
  "mach2",
  "once_cell",
- "raw-cpuid 10.6.0",
- "wasi 0.11.0+wasi-snapshot-preview1",
- "web-sys",
- "winapi",
-]
-
-[[package]]
-name = "quanta"
-version = "0.12.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bd1fe6824cea6538803de3ff1bc0cf3949024db3d43c9643024bfb33a807c0e"
-dependencies = [
- "crossbeam-utils",
- "libc",
- "once_cell",
- "raw-cpuid 11.5.0",
+ "raw-cpuid",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "web-sys",
  "winapi",
@@ -10706,15 +10630,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6823ea29436221176fe662da99998ad3b4db2c7f31e7b6f5fe43adccd6320bb"
 dependencies = [
  "bitflags 1.3.2",
-]
-
-[[package]]
-name = "raw-cpuid"
-version = "11.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6df7ab838ed27997ba19a4664507e6f82b41fe6e20be42929332156e5e85146"
-dependencies = [
- "bitflags 2.6.0",
 ]
 
 [[package]]
@@ -12478,15 +12393,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 
 [[package]]
-name = "spinning_top"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d96d2d1d716fb500937168cc09353ffdc7a012be8475ac7308e1bdf0e3923300"
-dependencies = [
- "lock_api",
-]
-
-[[package]]
 name = "spki"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13331,7 +13237,7 @@ dependencies = [
  "consensus-core",
  "count-min-sketch",
  "criterion",
- "dashmap 5.5.3",
+ "dashmap",
  "diffy",
  "either",
  "enum_dispatch",
@@ -13342,7 +13248,7 @@ dependencies = [
  "fastcrypto-zkp",
  "fs_extra",
  "futures",
- "governor 0.6.0",
+ "governor",
  "im",
  "itertools 0.13.0",
  "lru 0.10.0",
@@ -13357,7 +13263,7 @@ dependencies = [
  "mysten-common",
  "mysten-metrics",
  "mysten-network",
- "nonempty 0.9.0",
+ "nonempty",
  "nonzero_ext",
  "num-bigint 0.4.4",
  "num_cpus",
@@ -13701,44 +13607,26 @@ name = "sui-faucet"
 version = "1.48.0"
 dependencies = [
  "anyhow",
- "async-recursion",
  "async-trait",
  "axum 0.8.3",
  "axum-extra 0.10.1",
  "bin-version",
  "clap",
- "dashmap 5.5.3",
- "eyre",
- "futures",
  "http 1.1.0",
- "mysten-metrics",
- "mysten-network",
- "once_cell",
- "parking_lot 0.12.3",
- "prometheus",
  "reqwest 0.12.9",
- "scopeguard",
  "serde",
  "serde_json",
  "shared-crypto",
  "sui-config",
- "sui-json-rpc-types",
  "sui-keys",
  "sui-sdk",
- "sui-types",
- "tap",
- "telemetry-subscribers",
- "tempfile",
  "test-cluster",
  "thiserror 1.0.69",
  "tokio",
  "tonic 0.13.0",
  "tower 0.5.2",
  "tower-http",
- "tower_governor",
  "tracing",
- "ttl_cache",
- "typed-store",
  "uuid 1.2.2",
  "wiremock",
 ]
@@ -14026,7 +13914,7 @@ dependencies = [
  "chrono",
  "clap",
  "csv",
- "dashmap 5.5.3",
+ "dashmap",
  "diesel",
  "diesel-async",
  "diesel_migrations",
@@ -14095,7 +13983,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "clap",
- "dashmap 5.5.3",
+ "dashmap",
  "diesel",
  "diesel-async",
  "diesel_migrations",
@@ -14797,12 +14685,12 @@ dependencies = [
  "arc-swap",
  "bcs",
  "bytes",
- "dashmap 5.5.3",
+ "dashmap",
  "ed25519-consensus",
  "fastcrypto",
  "fastcrypto-tbls",
  "futures",
- "governor 0.6.0",
+ "governor",
  "mysten-common",
  "mysten-metrics",
  "mysten-network",
@@ -15294,7 +15182,7 @@ dependencies = [
  "bb8-postgres",
  "chrono",
  "clap",
- "dashmap 5.5.3",
+ "dashmap",
  "futures",
  "parking_lot 0.12.3",
  "phf",
@@ -15317,7 +15205,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "clap",
- "dashmap 5.5.3",
+ "dashmap",
  "dirs 4.0.0",
  "futures",
  "itertools 0.13.0",
@@ -15951,7 +15839,7 @@ dependencies = [
  "move-vm-test-utils",
  "mysten-metrics",
  "mysten-network",
- "nonempty 0.9.0",
+ "nonempty",
  "num-bigint 0.4.4",
  "num-traits",
  "num_enum 0.6.1",
@@ -17290,22 +17178,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
 
 [[package]]
-name = "tower_governor"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84e6672c7510df74859726427edea641674dad1aeeb30057b87335b1ba23b843"
-dependencies = [
- "axum 0.8.3",
- "forwarded-header-value",
- "governor 0.8.1",
- "http 1.1.0",
- "pin-project",
- "thiserror 2.0.9",
- "tower 0.5.2",
- "tracing",
-]
-
-[[package]]
 name = "tracing"
 version = "0.1.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -17488,15 +17360,6 @@ name = "try-lock"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3528ecfd12c466c6f163363caf2d02a71161dd5e1cc6ae7b34207ea2d42d81ed"
-
-[[package]]
-name = "ttl_cache"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4189890526f0168710b6ee65ceaedf1460c48a14318ceec933cb26baa492096a"
-dependencies = [
- "linked-hash-map",
-]
 
 [[package]]
 name = "tungstenite"
