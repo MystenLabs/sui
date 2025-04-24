@@ -5,7 +5,6 @@ use crate::static_programmable_transactions::{env, loading::ast as L};
 use sui_types::error::ExecutionError;
 
 pub mod ast;
-pub mod optimize;
 pub mod translate;
 pub mod verify;
 

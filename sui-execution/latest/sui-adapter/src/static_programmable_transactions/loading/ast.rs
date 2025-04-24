@@ -54,7 +54,7 @@ pub enum Type {
     Signer,
     Vector(Rc<Vector>),
     Datatype(Rc<Datatype>),
-    Reference(/* is mut */ bool, Box<Type>),
+    Reference(/* is mut */ bool, Rc<Type>),
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]

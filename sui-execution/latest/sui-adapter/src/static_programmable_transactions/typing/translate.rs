@@ -330,7 +330,7 @@ where
     Ok(res)
 }
 
-fn arguments<'a>(
+fn arguments(
     env: &Env,
     context: &mut Context,
     start_idx: usize,
@@ -375,11 +375,11 @@ fn argument_(
         {
             debug_assert!(!a_is_mut || *b_is_mut);
             debug_assert!(expected_ty.abilities().has_copy());
-            check_type(command_and_arg_idx, LocationType::Fixed(*a), b)?;
+            check_type(command_and_arg_idx, LocationType::Fixed((*a).clone()), b)?;
             T::Argument_::new_copy(location)
         }
         (LocationType::Fixed(Type::Reference(_, a)), b) => {
-            check_type(command_and_arg_idx, LocationType::Fixed(*a), b)?;
+            check_type(command_and_arg_idx, LocationType::Fixed((*a).clone()), b)?;
             if !b.abilities().has_copy() {
                 // TODO this should be a different error for missing copy
                 return Err(CommandArgumentError::TypeMismatch.into());

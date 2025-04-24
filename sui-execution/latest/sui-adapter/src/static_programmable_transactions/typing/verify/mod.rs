@@ -11,9 +11,9 @@ pub mod memory_safety;
 pub mod move_functions;
 
 pub fn transaction(env: &env::Env, ast: &mut T::Transaction) -> Result<(), ExecutionError> {
-    input_arguments::verify(env, &ast)?;
-    move_functions::verify(env, &ast)?;
-    memory_safety::verify(env, &ast)?;
+    input_arguments::verify(env, &*ast)?;
+    move_functions::verify(env, &*ast)?;
+    memory_safety::verify(env, &*ast)?;
     drop_safety::refine_and_verify(env, ast)?;
     Ok(())
 }

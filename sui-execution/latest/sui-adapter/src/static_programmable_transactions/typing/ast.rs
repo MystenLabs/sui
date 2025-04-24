@@ -2,11 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::static_programmable_transactions::loading::ast as L;
-use std::{
-    cell::{OnceCell, RefCell},
-    collections::BTreeMap,
-    fmt,
-};
+use std::{cell::OnceCell, collections::BTreeMap, fmt};
 use sui_types::base_types::ObjectID;
 
 //**************************************************************************************************

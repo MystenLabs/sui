@@ -9,7 +9,7 @@ use sui_types::error::ExecutionError;
 /// - No results without `drop` are unused (all unused non-input values have `drop`)
 pub fn refine_and_verify(env: &Env, ast: &mut T::Transaction) -> Result<(), ExecutionError> {
     refine::transaction(ast);
-    verify::transaction(env, &ast)?;
+    verify::transaction(env, ast)?;
     todo!()
 }
 

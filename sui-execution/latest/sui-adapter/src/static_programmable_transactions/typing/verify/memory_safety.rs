@@ -12,7 +12,7 @@ use crate::static_programmable_transactions::{
 };
 use move_regex_borrow_graph::references::Ref;
 use sui_types::{
-    error::{command_argument_error, ExecutionError, ExecutionErrorKind},
+    error::{command_argument_error, ExecutionError},
     execution_status::CommandArgumentError,
 };
 
@@ -201,7 +201,6 @@ impl Context {
 /// Checks the following
 /// - Values are not used after being moved
 /// - Reference safety is upheld (no dangling references)
-/// Returns the borrowed locations before each command
 pub fn verify(_env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
     let mut context = Context::new(ast)?;
     let commands = &ast.commands;
