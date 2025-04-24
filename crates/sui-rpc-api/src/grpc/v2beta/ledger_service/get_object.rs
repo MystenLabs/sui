@@ -130,7 +130,7 @@ fn get_object_impl(
                 Some((layout, s.contents()))
             })
             .and_then(|(layout, contents)| {
-                sui_types::proto_value::ProtoVisitor::default()
+                sui_types::proto_value::ProtoVisitor::new(service.config.max_json_move_value_size())
                     .deserialize_value(contents, &layout)
                     .map_err(|e| tracing::debug!("unable to convert to JSON: {e}"))
                     .ok()
