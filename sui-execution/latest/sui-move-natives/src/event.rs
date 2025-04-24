@@ -158,6 +158,6 @@ pub fn get_events_by_type(
         .collect::<Vec<_>>();
     Ok(NativeResult::ok(
         legacy_test_cost(),
-        smallvec![Value::vector_for_testing_only(matched_events)],
+        smallvec![Value::vector_value(matched_events)],
     ))
 }

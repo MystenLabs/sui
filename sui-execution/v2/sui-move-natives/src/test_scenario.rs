@@ -299,7 +299,7 @@ pub fn ids_for_address(
         .and_then(|inv| inv.get(&specified_ty))
         .map(|s| s.iter().map(|id| pack_id(*id)).collect::<Vec<Value>>())
         .unwrap_or_default();
-    let ids_vector = Value::vector_for_testing_only(ids);
+    let ids_vector = Value::vector_value(ids);
     Ok(NativeResult::ok(legacy_test_cost(), smallvec![ids_vector]))
 }
 
@@ -571,11 +571,11 @@ fn pack_id(a: impl Into<AccountAddress>) -> Value {
 }
 
 fn pack_ids(items: impl IntoIterator<Item = impl Into<AccountAddress>>) -> Value {
-    Value::vector_for_testing_only(items.into_iter().map(pack_id))
+    Value::vector_value(items.into_iter().map(pack_id))
 }
 
 fn pack_vec_map(items: impl IntoIterator<Item = (Value, Value)>) -> Value {
-    Value::struct_(values::Struct::pack(vec![Value::vector_for_testing_only(
+    Value::struct_(values::Struct::pack(vec![Value::vector_value(
         items
             .into_iter()
             .map(|(k, v)| Value::struct_(values::Struct::pack(vec![k, v]))),
@@ -632,9 +632,7 @@ fn pack_option(opt: Option<Value>) -> Value {
         Some(v) => vec![v],
         None => vec![],
     };
-    Value::struct_(values::Struct::pack(vec![Value::vector_for_testing_only(
-        item,
-    )]))
+    Value::struct_(values::Struct::pack(vec![Value::vector_value(item)]))
 }
 
 fn find_all_wrapped_objects<'a, 'i>(

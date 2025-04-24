@@ -148,5 +148,5 @@ fn to_indexed_struct(pcrs: Vec<Vec<u8>>) -> PartialVMResult<Value> {
             Value::vector_u8(pcr.to_vec()),
         ])));
     }
-    Ok(Value::vector_for_testing_only(indexed_struct))
+    Ok(Value::vector_value(indexed_struct))
 }

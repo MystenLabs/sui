@@ -1424,7 +1424,7 @@ impl Value {
     }
 
     // REVIEW: This API can break
-    pub fn vector_for_testing_only(it: impl IntoIterator<Item = Value>) -> Self {
+    pub fn vector_value(it: impl IntoIterator<Item = Value>) -> Self {
         Self(ValueImpl::Container(Container::Vec(Rc::new(RefCell::new(
             it.into_iter().map(|v| v.0).collect(),
         )))))
