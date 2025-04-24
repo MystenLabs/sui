@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    cell::OnceCell,
+    collections::{BTreeMap, BTreeSet},
+};
 
 use crate::static_programmable_transactions::{
     env::Env,
@@ -15,8 +18,6 @@ use sui_types::{
 
 type Graph = move_regex_borrow_graph::collections::Graph<(), T::Location>;
 type Paths = move_regex_borrow_graph::collections::Paths<(), T::Location>;
-
-pub type Borrowed = BTreeSet<T::Location>;
 
 enum Value {
     Ref(Ref),
@@ -98,20 +99,13 @@ impl Context {
         self.graph.borrowed_by(r).map_err(graph_err)
     }
 
-    fn borrowed_locations(&self) -> Result<Borrowed, ExecutionError> {
+    /// Used for checking if a location is borrowed, primarily for recording this information on
+    /// a specific Copy instance
+    fn is_location_borrowed(&self, l: T::Location) -> Result<bool, ExecutionError> {
         let borrowed_by = self.borrowed_by(self.local_root)?;
-        let mut borrowed = Borrowed::new();
-        for (_, paths) in borrowed_by {
-            for path in paths {
-                let Some(loc) = path.first_label() else {
-                    invariant_violation!(
-                        "local root should never be borrowed by epsilon or dot star"
-                    );
-                };
-                borrowed.insert(*loc);
-            }
-        }
-        Ok(borrowed)
+        Ok(borrowed_by
+            .iter()
+            .any(|(_, paths)| paths.iter().any(|path| path.starts_with(&l))))
     }
 
     fn release(&mut self, r: Ref) -> Result<(), ExecutionError> {
@@ -207,12 +201,10 @@ impl Context {
 /// - Values are not used after being moved
 /// - Reference safety is upheld (no dangling references)
 /// Returns the borrowed locations before each command
-pub fn verify(_env: &Env, ast: &T::Transaction) -> Result<Vec<Borrowed>, ExecutionError> {
+pub fn verify(_env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
     let mut context = Context::new(ast)?;
     let commands = &ast.commands;
-    let mut borrowed = Vec::with_capacity(commands.len());
     for (i, (c, _t)) in commands.iter().enumerate() {
-        borrowed.push(context.borrowed_locations()?);
         let result = command(&mut context, c).map_err(|e| e.with_command_index(i))?;
         assert_invariant!(result.len() == _t.len(), "result length mismatch");
         context.results.push(result.into_iter().map(Some).collect());
@@ -244,7 +236,7 @@ pub fn verify(_env: &Env, ast: &T::Transaction) -> Result<Vec<Borrowed>, Executi
     context.release(context.local_root)?;
     assert_invariant!(context.graph.abstract_size() == 0, "reference not released");
 
-    Ok(borrowed)
+    Ok(())
 }
 
 fn command(context: &mut Context, command: &T::Command) -> Result<Vec<Value>, ExecutionError> {
@@ -365,10 +357,12 @@ fn arguments(
 
 fn argument(context: &mut Context, idx: usize, x: &T::Argument) -> Result<Value, ExecutionError> {
     match &x.0 {
-        T::Argument_::Move(location) => move_value(context, idx, *location),
-        T::Argument_::Copy(location) => copy_value(context, idx, *location),
+        T::Argument_::Use(T::Usage::Move(location)) => move_value(context, idx, *location),
+        T::Argument_::Use(T::Usage::Copy { location, borrowed }) => {
+            copy_value(context, idx, *location, borrowed)
+        }
         T::Argument_::Borrow(is_mut, location) => borrow_location(context, idx, *is_mut, *location),
-        T::Argument_::Read(location) => read_ref(context, idx, *location),
+        T::Argument_::Read(usage) => read_ref(context, idx, usage),
     }
 }
 
@@ -390,7 +384,13 @@ fn copy_value(
     context: &mut Context,
     arg_idx: usize,
     l: T::Location,
+    borrowed: &OnceCell<bool>,
 ) -> Result<Value, ExecutionError> {
+    let is_borrowed = context.is_location_borrowed(l)?;
+    borrowed
+        .set(is_borrowed)
+        .map_err(|_| make_invariant_violation!("Copy's borrowed marker should not yet be set"))?;
+
     let Some(value) = context.location(l) else {
         // TODO more specific error
         return Err(command_argument_error(
@@ -430,23 +430,16 @@ fn borrow_location(
     Ok(Value::Ref(new_r))
 }
 
-fn read_ref(
-    context: &mut Context,
-    arg_idx: usize,
-    l: T::Location,
-) -> Result<Value, ExecutionError> {
-    let Some(value) = context.location(l) else {
-        // TODO more specific error
-        return Err(command_argument_error(
-            CommandArgumentError::InvalidValueUsage,
-            arg_idx,
-        ));
+fn read_ref(context: &mut Context, arg_idx: usize, u: &T::Usage) -> Result<Value, ExecutionError> {
+    let value = match u {
+        T::Usage::Move(l) => move_value(context, arg_idx, *l)?,
+        T::Usage::Copy { location, borrowed } => copy_value(context, arg_idx, *location, borrowed)?,
     };
-
     assert_invariant!(
         value.is_ref(),
         "type checking should guarantee ReadRef is used on only references"
     );
+    consume_value(context, value)?;
     Ok(Value::NonRef)
 }
 

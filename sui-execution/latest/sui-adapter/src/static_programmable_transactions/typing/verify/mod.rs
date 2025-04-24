@@ -13,7 +13,7 @@ pub mod move_functions;
 pub fn transaction(env: &env::Env, ast: &mut T::Transaction) -> Result<(), ExecutionError> {
     input_arguments::verify(env, &ast)?;
     move_functions::verify(env, &ast)?;
-    let borrow_states = memory_safety::verify(env, &ast)?;
-    drop_safety::refine_and_verify(env, borrow_states, ast)?;
+    memory_safety::verify(env, &ast)?;
+    drop_safety::refine_and_verify(env, ast)?;
     Ok(())
 }

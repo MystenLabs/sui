@@ -55,40 +55,32 @@ impl Context {
                     IsDirty::Fixed { is_dirty } => *is_dirty,
                 }
             }
-            T::Argument_::Move(location)
-            | T::Argument_::Copy(location)
-            | T::Argument_::Borrow(_, location)
-            | T::Argument_::Read(location) => self.is_loc_dirty(location),
+            _ => self.is_loc_dirty(arg.0.location()),
         }
     }
 
-    fn is_loc_dirty(&self, location: &T::Location) -> bool {
+    fn is_loc_dirty(&self, location: T::Location) -> bool {
         match location {
             T::Location::GasCoin => self.gas_coin.is_dirty(),
-            T::Location::Input(i) => self.inputs[*i as usize].is_dirty(),
-            T::Location::Result(i, j) => self.results[*i as usize][*j as usize].is_dirty(),
+            T::Location::Input(i) => self.inputs[i as usize].is_dirty(),
+            T::Location::Result(i, j) => self.results[i as usize][j as usize].is_dirty(),
         }
     }
 
     fn mark_dirty(&mut self, arg: &T::Argument) {
-        match &arg.0 {
-            T::Argument_::Move(location)
-            | T::Argument_::Copy(location)
-            | T::Argument_::Borrow(_, location)
-            | T::Argument_::Read(location) => self.mark_loc_dirty(location),
-        }
+        self.mark_loc_dirty(arg.0.location())
     }
 
-    fn mark_loc_dirty(&mut self, location: &T::Location) {
+    fn mark_loc_dirty(&mut self, location: T::Location) {
         match location {
             T::Location::GasCoin => self.gas_coin = IsDirty::Fixed { is_dirty: true },
-            T::Location::Input(i) => match &mut self.inputs[*i as usize] {
+            T::Location::Input(i) => match &mut self.inputs[i as usize] {
                 // if it needs to be dirtied, it will first be marked as fixed
                 IsDirty::NotFixed => (),
                 IsDirty::Fixed { is_dirty } => *is_dirty = true,
             },
             T::Location::Result(i, j) => {
-                self.results[*i as usize][*j as usize] = IsDirty::Fixed { is_dirty: true }
+                self.results[i as usize][j as usize] = IsDirty::Fixed { is_dirty: true }
             }
         }
     }

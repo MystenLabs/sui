@@ -376,7 +376,7 @@ fn argument_(
             debug_assert!(!a_is_mut || *b_is_mut);
             debug_assert!(expected_ty.abilities().has_copy());
             check_type(command_and_arg_idx, LocationType::Fixed(*a), b)?;
-            T::Argument_::Copy(location)
+            T::Argument_::new_copy(location)
         }
         (LocationType::Fixed(Type::Reference(_, a)), b) => {
             check_type(command_and_arg_idx, LocationType::Fixed(*a), b)?;
@@ -384,7 +384,7 @@ fn argument_(
                 // TODO this should be a different error for missing copy
                 return Err(CommandArgumentError::TypeMismatch.into());
             }
-            T::Argument_::Read(location)
+            T::Argument_::Read(T::Usage::new_copy(location))
         }
 
         // Non reference location types
@@ -399,11 +399,11 @@ fn argument_(
         }
         (actual_ty, _) => {
             check_type(command_and_arg_idx, actual_ty, expected_ty)?;
-            if expected_ty.abilities().has_copy() {
-                T::Argument_::Copy(location)
+            T::Argument_::Use(if expected_ty.abilities().has_copy() {
+                T::Usage::new_copy(location)
             } else {
-                T::Argument_::Move(location)
-            }
+                T::Usage::new_move(location)
+            })
         }
     })
 }
@@ -481,7 +481,7 @@ fn constrained_argument_<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     is_valid: &mut P,
 ) -> Result<T::Argument, EitherError> {
     if let Some(ty) = constrained_type(env, context, location, is_valid)? {
-        Ok((T::Argument_::Move(location), ty))
+        Ok((T::Argument_::Use(T::Usage::Move(location)), ty))
     } else {
         Err(CommandArgumentError::TypeMismatch.into())
     }
@@ -520,7 +520,7 @@ fn coin_mut_ref_argument_(
         LocationType::Fixed(Type::Reference(is_mut, ty)) if *is_mut => {
             check_coin_type(ty)?;
             (
-                T::Argument_::Copy(location),
+                T::Argument_::new_copy(location),
                 Type::Reference(*is_mut, ty.clone()),
             )
         }
@@ -594,18 +594,28 @@ mod scope_references {
     }
 
     fn argument(used: &mut BTreeSet<(u16, u16)>, (arg_, ty): &mut T::Argument) {
-        match (&arg_, ty) {
-            (T::Argument_::Move(T::Location::Result(i, j)), Type::Reference(_, _)) => {
+        let usage = match arg_ {
+            T::Argument_::Use(u) | T::Argument_::Read(u) => u,
+            T::Argument_::Borrow(_, _) => return,
+        };
+        match (&usage, ty) {
+            (T::Usage::Move(T::Location::Result(i, j)), Type::Reference(_, _)) => {
                 debug_assert!(false, "No reference should be moved at this point");
                 used.insert((*i, *j));
             }
-            (T::Argument_::Copy(T::Location::Result(i, j)), Type::Reference(_, _)) => {
+            (
+                T::Usage::Copy {
+                    location: T::Location::Result(i, j),
+                    ..
+                },
+                Type::Reference(_, _),
+            ) => {
                 // we are at the last usage of a reference result if it was not yet added to the set
                 let last_usage = used.insert((*i, *j));
                 if last_usage {
                     // if it was the last usage, we need to change the Copy to a Move
                     let loc = T::Location::Result(*i, *j);
-                    *arg_ = T::Argument_::Move(loc);
+                    *usage = T::Usage::Move(loc);
                 }
             }
             _ => (),

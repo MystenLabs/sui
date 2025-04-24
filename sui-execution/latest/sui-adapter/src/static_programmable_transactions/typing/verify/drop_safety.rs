@@ -1,21 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::static_programmable_transactions::{
-    env::Env,
-    typing::{ast as T, verify::memory_safety::Borrowed},
-};
+use crate::static_programmable_transactions::{env::Env, typing::ast as T};
 use sui_types::error::ExecutionError;
 
 /// Refines usage of values so that the last `Copy` of a value is a `Move` if it is not borrowed
 /// After, it verifies the following
 /// - No results without `drop` are unused (all unused non-input values have `drop`)
-pub fn refine_and_verify(
-    env: &Env,
-    borrow_states: Vec<Borrowed>,
-    ast: &mut T::Transaction,
-) -> Result<(), ExecutionError> {
-    // refine::transaction(env, borrow_states, ast)?;
+pub fn refine_and_verify(env: &Env, ast: &mut T::Transaction) -> Result<(), ExecutionError> {
+    // refine::transaction(env, ast)?;
     // verify::transaction(env, &ast)?;
     todo!()
 }

@@ -237,8 +237,10 @@ fn check_obj_usage(
 ) -> Result<(), ExecutionError> {
     match &arg.0 {
         T::Argument_::Borrow(true, l) => check_obj_by_mut_ref(context, arg_idx, l),
-        T::Argument_::Move(l) => check_by_value_ref(context, arg_idx, l),
-        T::Argument_::Borrow(false, _) | T::Argument_::Copy(_) | T::Argument_::Read(_) => Ok(()),
+        T::Argument_::Use(T::Usage::Move(l)) => check_by_value_ref(context, arg_idx, l),
+        T::Argument_::Borrow(false, _)
+        | T::Argument_::Use(T::Usage::Copy { .. })
+        | T::Argument_::Read(_) => Ok(()),
     }
 }
 
@@ -302,8 +304,10 @@ fn check_gas_by_values(start: usize, arguments: &[T::Argument]) -> Result<(), Ex
 
 fn check_gas_by_value(arg_idx: usize, arg: &T::Argument) -> Result<(), ExecutionError> {
     match &arg.0 {
-        T::Argument_::Move(l) => check_gas_by_value_loc(arg_idx, l),
-        T::Argument_::Borrow(_, _) | T::Argument_::Copy(_) | T::Argument_::Read(_) => Ok(()),
+        T::Argument_::Use(T::Usage::Move(l)) => check_gas_by_value_loc(arg_idx, l),
+        T::Argument_::Borrow(_, _)
+        | T::Argument_::Use(T::Usage::Copy { .. })
+        | T::Argument_::Read(_) => Ok(()),
     }
 }
 
