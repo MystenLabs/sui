@@ -2196,8 +2196,10 @@ impl AuthorityPerEpochStore {
         keys: impl Iterator<Item = SequencedConsensusTransactionKey>,
     ) -> SuiResult<Vec<bool>> {
         let keys = keys.collect::<Vec<_>>();
-
-        let consensus_quarantine = self.consensus_quarantine.read();
+        let consensus_quarantine = {
+            let _guard = monitored_scope("check_consensus_messages_processed::get_read_lock");
+            self.consensus_quarantine.read()
+        };
         let tables = self.tables()?;
 
         Ok(do_fallback_lookup(
@@ -2210,6 +2212,8 @@ impl AuthorityPerEpochStore {
                 }
             },
             |keys| {
+                let _guard =
+                    monitored_scope("check_consensus_messages_processed::multi_contains_keys");
                 tables
                     .consensus_message_processed
                     .multi_contains_keys(keys)
