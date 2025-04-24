@@ -64,7 +64,20 @@ impl TestContext {
             panic!("Failed to get coins from faucet: {e}");
         }
 
-        let coin_info = faucet_response.coins_sent.unwrap_or_default();
+        let mut coin_info = faucet_response.coins_sent.unwrap_or_default();
+
+        if coin_info.is_empty() {
+            info!("Trying the old faucet route");
+            let faucet_response = self.faucet.request_sui_coins_old(addr).await;
+            if let RequestStatus::Failure(e) = faucet_response.status {
+                panic!("Failed to get coins from faucet: {e}");
+            }
+
+            coin_info = match faucet_response.coin_sent {
+                Some(c) => vec![c],
+                None => vec![],
+            };
+        }
 
         let digests = coin_info
             .iter()

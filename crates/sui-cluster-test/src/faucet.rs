@@ -4,15 +4,22 @@
 use super::cluster::{new_wallet_context_from_cluster, Cluster};
 use async_trait::async_trait;
 use fastcrypto::encoding::{Encoding, Hex};
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
 use std::sync::Arc;
-use sui_faucet::{FaucetConfig, FaucetResponse, LocalFaucet, RequestStatus};
+use sui_faucet::{CoinInfo, FaucetConfig, FaucetResponse, LocalFaucet, RequestStatus};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::KeypairTraits;
 use tracing::{debug, info, info_span, Instrument};
 
 pub struct FaucetClientFactory;
+
+#[derive(Deserialize, Debug)]
+pub struct FaucetResponseOld {
+    pub status: RequestStatus,
+    pub coin_sent: Option<CoinInfo>,
+}
 
 impl FaucetClientFactory {
     pub async fn new_from_cluster(
@@ -44,6 +51,7 @@ impl FaucetClientFactory {
 #[async_trait]
 pub trait FaucetClient {
     async fn request_sui_coins(&self, request_address: SuiAddress) -> FaucetResponse;
+    async fn request_sui_coins_old(&self, request_address: SuiAddress) -> FaucetResponseOld;
 }
 
 /// Client for a remote faucet that is accessible by POST requests
@@ -91,6 +99,36 @@ impl FaucetClient for RemoteFaucetClient {
 
         faucet_response
     }
+
+    async fn request_sui_coins_old(&self, request_address: SuiAddress) -> FaucetResponseOld {
+        let gas_url = format!("{}/v2/gas", self.remote_url);
+        debug!("Getting coin from remote faucet {}", gas_url);
+        let data = HashMap::from([("recipient", Hex::encode(request_address))]);
+        let map = HashMap::from([("FixedAmountRequest", data)]);
+
+        let auth_header = match env::var("FAUCET_AUTH_HEADER") {
+            Ok(val) => val,
+            _ => "".to_string(),
+        };
+
+        let response = reqwest::Client::new()
+            .post(&gas_url)
+            .header("Authorization", auth_header)
+            .json(&map)
+            .send()
+            .await
+            .unwrap_or_else(|e| panic!("Failed to talk to remote faucet {:?}: {:?}", gas_url, e));
+        let full_bytes = response.bytes().await.unwrap();
+        let faucet_response: FaucetResponseOld = serde_json::from_slice(&full_bytes)
+            .map_err(|e| anyhow::anyhow!("json deser failed with bytes {:?}: {e}", full_bytes))
+            .unwrap();
+
+        if let RequestStatus::Failure(error) = &faucet_response.status {
+            panic!("Failed to get gas tokens with error: {}", error)
+        };
+
+        faucet_response
+    }
 }
 
 /// A local faucet that holds some coins since genesis
@@ -116,6 +154,19 @@ impl FaucetClient for LocalFaucetClient {
         FaucetResponse {
             status: RequestStatus::Success,
             coins_sent: Some(coins),
+        }
+    }
+
+    async fn request_sui_coins_old(&self, request_address: SuiAddress) -> FaucetResponseOld {
+        let coins = self
+            .simple_faucet
+            .local_request_execute_tx(request_address)
+            .await
+            .unwrap_or_else(|err| panic!("Failed to get gas tokens with error: {}", err));
+
+        FaucetResponseOld {
+            status: RequestStatus::Success,
+            coin_sent: coins.first().cloned(),
         }
     }
 }
