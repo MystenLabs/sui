@@ -208,9 +208,10 @@ impl Database {
     {
         match (&self.storage, cf) {
             (Storage::Rocks(db), ColumnFamily::Rocks(_)) => {
+                let keys_vec: Vec<K> = keys.into_iter().collect();
                 let res = db.underlying.batched_multi_get_cf_opt(
                     &cf.rocks_cf(db),
-                    keys,
+                    keys_vec.iter(),
                     /* sorted_input */ false,
                     readopts,
                 );
