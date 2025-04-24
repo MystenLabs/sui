@@ -19,6 +19,7 @@ use sui_types::{
 type Graph = move_regex_borrow_graph::collections::Graph<(), T::Location>;
 type Paths = move_regex_borrow_graph::collections::Paths<(), T::Location>;
 
+#[must_use]
 enum Value {
     Ref(Ref),
     NonRef,
@@ -315,35 +316,6 @@ fn consume_value(context: &mut Context, value: Value) -> Result<(), ExecutionErr
     }
 }
 
-fn drop_value_opt(
-    context: &mut Context,
-    idx: (usize, usize),
-    value: Option<Value>,
-    ty: &Type,
-) -> Result<(), ExecutionError> {
-    match value {
-        Some(v) => drop_value(context, idx, v, ty),
-        None => Ok(()),
-    }
-}
-
-fn drop_value(
-    context: &mut Context,
-    (i, j): (usize, usize),
-    value: Value,
-    ty: &Type,
-) -> Result<(), ExecutionError> {
-    if !ty.abilities().has_drop() {
-        return Err(ExecutionErrorKind::UnusedValueWithoutDrop {
-            result_idx: i as u16,
-            secondary_idx: j as u16,
-        }
-        .into());
-    }
-    consume_value(context, value)?;
-    Ok(())
-}
-
 fn arguments(
     context: &mut Context,
     start: usize,
@@ -415,6 +387,7 @@ fn borrow_location(
     is_mut: bool,
     l: T::Location,
 ) -> Result<Value, ExecutionError> {
+    // check that the location has a value
     let Some(value) = context.location(l) else {
         // TODO more specific error
         return Err(command_argument_error(

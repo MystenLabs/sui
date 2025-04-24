@@ -8,95 +8,259 @@ use sui_types::error::ExecutionError;
 /// After, it verifies the following
 /// - No results without `drop` are unused (all unused non-input values have `drop`)
 pub fn refine_and_verify(env: &Env, ast: &mut T::Transaction) -> Result<(), ExecutionError> {
-    // refine::transaction(env, ast)?;
-    // verify::transaction(env, &ast)?;
+    refine::transaction(ast);
+    verify::transaction(env, &ast)?;
     todo!()
 }
 
-// mod refine {
-//     use crate::static_programmable_transactions::{
-//         env::Env,
-//         typing::{
-//             ast::{self as T, Type},
-//             verify::memory_safety::Borrowed as BorrowedState,
-//         },
-//     };
-//     use std::collections::BTreeSet;
+mod refine {
+    use crate::static_programmable_transactions::typing::ast::{self as T};
+    use std::collections::BTreeSet;
 
-//     struct Borrowed<'a> {
-//         command_state: &'a BorrowedState,
-//         arguments_acc: BorrowedState,
-//     }
+    /// After memory safety, we can switch the last usage of a `Copy` to a `Move` if it is not
+    /// borrowed at the time of the last usage.
+    pub fn transaction(ast: &mut T::Transaction) {
+        let mut used: BTreeSet<T::Location> = BTreeSet::new();
+        for (c, _tys) in ast.commands.iter_mut().rev() {
+            command(&mut used, c);
+        }
+    }
 
-//     impl<'a> Borrowed<'a> {
-//         fn is_borrowed(&self, loc: &T::Location) -> bool {
-//             self.command_state.contains(loc) || self.arguments_acc.contains(loc)
-//         }
-//     }
+    fn command(used: &mut BTreeSet<T::Location>, command: &mut T::Command) {
+        match command {
+            T::Command::MoveCall(mc) => arguments(used, &mut mc.arguments),
+            T::Command::TransferObjects(objects, recipient) => {
+                argument(used, recipient);
+                arguments(used, objects);
+            }
+            T::Command::SplitCoins(_, coin, amounts) => {
+                arguments(used, amounts);
+                argument(used, coin);
+            }
+            T::Command::MergeCoins(_, target, coins) => {
+                arguments(used, coins);
+                argument(used, target);
+            }
+            T::Command::MakeMoveVec(_, xs) => arguments(used, xs),
+            T::Command::Publish(_, _) => (),
+            T::Command::Upgrade(_, _, _, x) => argument(used, x),
+        }
+    }
 
-//     fn command(
-//         used: &mut BTreeSet<(u16, u16)>,
-//         borrowed: &BorrowedState,
-//         command: &mut T::Command,
-//     ) {
-//         let args = match command {
-//             T::Command::MoveCall(mc) => argument_states(borrowed, mc.arguments.iter_mut()),
-//             T::Command::TransferObjects(objects, recipient) => argument_states(
-//                 borrowed,
-//                 objects.iter_mut().chain(std::iter::once(recipient)),
-//             ),
-//             T::Command::SplitCoins(_, coin, amounts) => {
-//                 argument_states(borrowed, std::iter::once(coin).chain(amounts))
-//             }
-//             T::Command::MergeCoins(_, target, coins) => {
-//                 argument_states(borrowed, std::iter::once(target).chain(coins))
-//             }
-//             T::Command::MakeMoveVec(_, xs) => argument_states(borrowed, xs),
-//             T::Command::Publish(_, _) => vec![],
-//             T::Command::Upgrade(_, _, _, x) => argument_states(borrowed, std::iter::once(x)),
-//         };
-//         arguments(used, args)
-//     }
+    fn arguments(used: &mut BTreeSet<T::Location>, args: &mut [T::Argument]) {
+        for arg in args.iter_mut().rev() {
+            argument(used, arg)
+        }
+    }
 
-//     fn argument_states<'state, 'arg>(
-//         borrowed: &'state BorrowedState,
-//         args: impl IntoIterator<Item = &'arg mut T::Argument>,
-//     ) -> Vec<(Borrowed<'state>, &'arg mut T::Argument)> {
-//         let mut acc = BorrowedState::new();
-//         args.into_iter()
-//             .map(|arg| {
-//                 let mut arguments_acc = acc.clone();
-//                 let borrowed = Borrowed {
-//                     command_state: borrowed,
-//                     arguments_acc: borrowed.clone(),
-//                 };
-//                 (borrowed, arg)
-//             })
-//             .collect()
-//     }
+    fn argument(used: &mut BTreeSet<T::Location>, arg: &mut T::Argument) {
+        let usage = match &mut arg.0 {
+            T::Argument_::Use(u) | T::Argument_::Read(u) => u,
+            T::Argument_::Borrow(_, _) => return,
+        };
+        match &usage {
+            T::Usage::Move(loc) => {
+                used.insert(*loc);
+            }
+            T::Usage::Copy { location, borrowed } => {
+                // we are at the last usage of a reference result if it was not yet added to the set
+                let location = *location;
+                let last_usage = used.insert(location);
+                if last_usage && !borrowed.get().unwrap() {
+                    // if it was the last usage, we need to change the Copy to a Move
+                    *usage = T::Usage::Move(location);
+                }
+            }
+        }
+    }
+}
 
-//     fn arguments(used: &mut BTreeSet<(u16, u16)>, args: Vec<(Borrowed, &mut T::Argument)>) {
-//         for (borrowed, arg) in args.into_iter().rev() {
-//             argument(used, borrowed, arg)
-//         }
-//     }
+mod verify {
+    use crate::static_programmable_transactions::{
+        env::Env,
+        typing::ast::{self as T, Type},
+    };
+    use sui_types::error::{ExecutionError, ExecutionErrorKind};
 
-//     fn argument(used: &mut BTreeSet<(u16, u16)>, borrowed: Borrowed, (arg_, ty): &mut T::Argument) {
-//         match &arg_ {
-//             T::Argument_::Move(T::Location::Result(i, j)) => {
-//                 used.insert((*i, *j));
-//             }
-//             T::Argument_::Copy(T::Location::Result(i, j)) => {
-//                 // we are at the last usage of a reference result if it was not yet added to the set
-//                 let last_usage = used.insert((*i, *j));
-//                 let loc = T::Location::Result(*i, *j);
-//                 if last_usage && !borrowed.is_borrowed(&loc) {
-//                     // if it was the last usage and is not borrowed,
-//                     // we need to change the Copy to a Move
-//                     *arg_ = T::Argument_::Move(loc);
-//                 }
-//             }
-//             _ => (),
-//         }
-//     }
-// }
+    #[must_use]
+    struct Value;
+
+    struct Context {
+        gas_coin: Option<Value>,
+        inputs: Vec<Option<Value>>,
+        results: Vec<Vec<Option<Value>>>,
+    }
+
+    impl Context {
+        fn new(ast: &T::Transaction) -> Result<Self, ExecutionError> {
+            let inputs = ast.inputs.iter().map(|_| Some(Value)).collect();
+            Ok(Self {
+                gas_coin: Some(Value),
+                inputs,
+                results: Vec::with_capacity(ast.commands.len()),
+            })
+        }
+
+        fn location(&mut self, l: T::Location) -> &mut Option<Value> {
+            match l {
+                T::Location::GasCoin => &mut self.gas_coin,
+                T::Location::Input(i) => &mut self.inputs[i as usize],
+                T::Location::Result(i, j) => &mut self.results[i as usize][j as usize],
+            }
+        }
+    }
+
+    /// Checks the following
+    /// - All unused result values have `drop`
+    pub fn transaction(_env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
+        let mut context = Context::new(ast)?;
+        let commands = &ast.commands;
+        for (i, (c, _t)) in commands.iter().enumerate() {
+            let result = command(&mut context, c).map_err(|e| e.with_command_index(i))?;
+            assert_invariant!(result.len() == _t.len(), "result length mismatch");
+            context.results.push(result.into_iter().map(Some).collect());
+        }
+
+        let Context {
+            gas_coin,
+            inputs,
+            results,
+        } = context;
+        consume_value_opt(gas_coin);
+        // TODO do we want to check inputs in the dev inspect case?
+        consume_value_opts(inputs);
+        assert_invariant!(results.len() == commands.len(), "result length mismatch");
+        for (i, (result, (_, tys))) in results.into_iter().zip(&ast.commands).enumerate() {
+            assert_invariant!(result.len() == tys.len(), "result length mismatch");
+            for (j, (vopt, ty)) in result.into_iter().zip(tys).enumerate() {
+                drop_value_opt((i, j), vopt, ty)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn command(context: &mut Context, command: &T::Command) -> Result<Vec<Value>, ExecutionError> {
+        Ok(match command {
+            T::Command::MoveCall(mc) => {
+                let T::MoveCall {
+                    function,
+                    arguments: args,
+                } = &**mc;
+                let return_ = &function.signature.return_;
+                let arg_values = arguments(context, args)?;
+                consume_values(arg_values);
+                (0..return_.len()).map(|_| Value).collect()
+            }
+            T::Command::TransferObjects(objects, recipient) => {
+                let object_values = arguments(context, objects)?;
+                let recipient_value = argument(context, recipient)?;
+                consume_values(object_values);
+                consume_value(recipient_value);
+                vec![]
+            }
+            T::Command::SplitCoins(_, coin, amounts) => {
+                let coin_value = argument(context, coin)?;
+                let amount_values = arguments(context, amounts)?;
+                consume_values(amount_values);
+                consume_value(coin_value);
+                (0..amounts.len()).map(|_| Value).collect()
+            }
+            T::Command::MergeCoins(_, target, coins) => {
+                let target_value = argument(context, target)?;
+                let coin_values = arguments(context, coins)?;
+                consume_values(coin_values);
+                consume_value(target_value);
+                vec![Value]
+            }
+            T::Command::MakeMoveVec(_, xs) => {
+                let vs = arguments(context, xs)?;
+                consume_values(vs);
+                vec![Value]
+            }
+            T::Command::Publish(_, _) => {
+                vec![]
+            }
+            T::Command::Upgrade(_, _, _, x) => {
+                let v = argument(context, x)?;
+                consume_value(v);
+                vec![]
+            }
+        })
+    }
+
+    fn consume_values(_: Vec<Value>) {}
+
+    fn consume_value(_: Value) {}
+
+    fn consume_value_opts(_: Vec<Option<Value>>) {}
+
+    fn consume_value_opt(_: Option<Value>) {}
+
+    fn drop_value_opt(
+        idx: (usize, usize),
+        value: Option<Value>,
+        ty: &Type,
+    ) -> Result<(), ExecutionError> {
+        match value {
+            Some(v) => drop_value(idx, v, ty),
+            None => Ok(()),
+        }
+    }
+
+    fn drop_value((i, j): (usize, usize), value: Value, ty: &Type) -> Result<(), ExecutionError> {
+        if !ty.abilities().has_drop() {
+            return Err(ExecutionErrorKind::UnusedValueWithoutDrop {
+                result_idx: i as u16,
+                secondary_idx: j as u16,
+            }
+            .into());
+        }
+        consume_value(value);
+        Ok(())
+    }
+
+    fn arguments(context: &mut Context, xs: &[T::Argument]) -> Result<Vec<Value>, ExecutionError> {
+        xs.iter().map(|x| argument(context, x)).collect()
+    }
+
+    fn argument(context: &mut Context, x: &T::Argument) -> Result<Value, ExecutionError> {
+        match &x.0 {
+            T::Argument_::Use(T::Usage::Move(location)) => move_value(context, *location),
+            T::Argument_::Use(T::Usage::Copy { location, .. }) => copy_value(context, *location),
+            T::Argument_::Borrow(_, location) => borrow_location(context, *location),
+            T::Argument_::Read(usage) => read_ref(context, usage),
+        }
+    }
+
+    fn move_value(context: &mut Context, l: T::Location) -> Result<Value, ExecutionError> {
+        let Some(value) = context.location(l).take() else {
+            invariant_violation!("memory safety should have failed")
+        };
+        Ok(value)
+    }
+
+    fn copy_value(context: &mut Context, l: T::Location) -> Result<Value, ExecutionError> {
+        assert_invariant!(
+            context.location(l).is_some(),
+            "memory safety should have failed"
+        );
+        Ok(Value)
+    }
+
+    fn borrow_location(context: &mut Context, l: T::Location) -> Result<Value, ExecutionError> {
+        assert_invariant!(
+            context.location(l).is_some(),
+            "memory safety should have failed"
+        );
+        Ok(Value)
+    }
+
+    fn read_ref(context: &mut Context, u: &T::Usage) -> Result<Value, ExecutionError> {
+        let value = match u {
+            T::Usage::Move(l) => move_value(context, *l)?,
+            T::Usage::Copy { location, .. } => copy_value(context, *location)?,
+        };
+        consume_value(value);
+        Ok(Value)
+    }
+}
