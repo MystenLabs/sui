@@ -26,10 +26,11 @@ const TX_DATA_NAME: &str = "tx_data";
 const TX_SIGNERS_NAME: &str = "tx_signers";
 const TX_INPUT_OBJECTS_NAME: &str = "tx_input_objects";
 const TX_RECEIVING_OBJECTS_NAME: &str = "tx_receiving_objects";
+const TX_DIGEST_NAME: &str = "tx_digest";
 
 /// The dummy name of the Starlark file being executed. We will just be passing the string of the
 /// program in directly so this is not important but may appear in error messages.
-const STAR_INPUT_FILE_NAME: &str = "dummy.star";
+const STAR_INPUT_FILE_NAME: &str = "dynamic_transaction_signing_checks.star";
 
 #[derive(Debug, thiserror::Error)]
 pub enum DynamicCheckRunnerError {
@@ -68,6 +69,8 @@ const DIALECT: Dialect = Dialect {
     // NB: Allow for top level statements to be used (e.g., top-level `for`, `if`, etc.)
     enable_top_level_stmt: true,
     enable_f_strings: false,
+    // NB: We explicitly fully initalize the struct to prevent any future changes to the dialect
+    // without us noticing and deciding whether or not the new feature should be enabled.
     _non_exhaustive: (),
 };
 
@@ -116,11 +119,15 @@ impl DynamicCheckRunnerContext {
             .map_err(|e| DynamicCheckRunnerError::JSONSerializationError(e.to_string()))?;
         let receiving_objects_json = serde_json::to_value(receiving_objects)
             .map_err(|e| DynamicCheckRunnerError::JSONSerializationError(e.to_string()))?;
+        let digest_json = serde_json::to_value(tx_data.digest())
+            .map_err(|e| DynamicCheckRunnerError::JSONSerializationError(e.to_string()))?;
+
         self.run_starlark_predicate(
             &tx_data_json,
             &tx_signatures_json,
             &input_object_kinds_json,
             &receiving_objects_json,
+            &digest_json,
         )
     }
 
@@ -130,6 +137,7 @@ impl DynamicCheckRunnerContext {
         tx_signatures: &JsonValue,
         tx_input_object_kinds: &JsonValue,
         tx_receiving_objects: &JsonValue,
+        tx_digest: &JsonValue,
     ) -> Result<(), DynamicCheckRunnerError> {
         let heap = Heap::new();
         let env = Module::new();
@@ -138,11 +146,13 @@ impl DynamicCheckRunnerContext {
         let tx_signers_value = Self::json_to_starlark(tx_signatures, &heap)?;
         let tx_input_object_kinds_value = Self::json_to_starlark(tx_input_object_kinds, &heap)?;
         let tx_receiving_objects_value = Self::json_to_starlark(tx_receiving_objects, &heap)?;
+        let tx_digest_value = Self::json_to_starlark(tx_digest, &heap)?;
 
         env.set(TX_DATA_NAME, tx_data_value);
         env.set(TX_SIGNERS_NAME, tx_signers_value);
         env.set(TX_INPUT_OBJECTS_NAME, tx_input_object_kinds_value);
         env.set(TX_RECEIVING_OBJECTS_NAME, tx_receiving_objects_value);
+        env.set(TX_DIGEST_NAME, tx_digest_value);
 
         let mut evaluator = Evaluator::new(&env);
         let output_value = evaluator
