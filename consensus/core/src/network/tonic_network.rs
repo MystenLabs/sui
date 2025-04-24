@@ -157,6 +157,7 @@ impl NetworkClient for TonicClient {
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
         highest_accepted_rounds: Vec<Round>,
+        breadth_first: bool,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
         let mut client = self.get_client(peer, timeout).await?;
@@ -172,6 +173,7 @@ impl NetworkClient for TonicClient {
                 })
                 .collect(),
             highest_accepted_rounds,
+            breadth_first,
         });
         request.set_timeout(timeout);
         let mut stream = client
@@ -540,9 +542,15 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
             })
             .collect();
         let highest_accepted_rounds = inner.highest_accepted_rounds;
+        let breadth_first = inner.breadth_first;
         let blocks = self
             .service
-            .handle_fetch_blocks(peer_index, block_refs, highest_accepted_rounds)
+            .handle_fetch_blocks(
+                peer_index,
+                block_refs,
+                highest_accepted_rounds,
+                breadth_first,
+            )
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
         let responses: std::vec::IntoIter<Result<FetchBlocksResponse, tonic::Status>> =
@@ -1062,8 +1070,16 @@ pub(crate) struct FetchBlocksRequest {
     block_refs: Vec<Vec<u8>>,
     // The highest accepted round per authority. The vector represents the round for each authority
     // and its length should be the same as the committee size.
+    // When this field is non-empty, additional ancestors of the requested blocks can be fetched.
     #[prost(uint32, repeated, tag = "2")]
     highest_accepted_rounds: Vec<Round>,
+    // When true, this indicates that missing ancestors should be added breadth-first, by searching through
+    // missing ancestors of the requested blocks.
+    // When false, this indicates that missing ancestors should be added depth-first, by adding missing
+    // ancestors from the requested block authorities.
+    // This field is only meaningful when highest_accepted_rounds is non-empty.
+    #[prost(bool, tag = "3")]
+    breadth_first: bool,
 }
 
 #[derive(Clone, prost::Message)]
