@@ -1,13 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, pin::Pin, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    pin::Pin,
+    sync::Arc,
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use futures::{ready, stream, task, Stream, StreamExt};
 use parking_lot::RwLock;
+use rand::seq::SliceRandom as _;
 use sui_macros::fail_point_async;
 use tap::TapFallible;
 use tokio::{sync::broadcast, time::sleep};
@@ -444,6 +450,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         peer: AuthorityIndex,
         mut block_refs: Vec<BlockRef>,
         highest_accepted_rounds: Vec<Round>,
+        breadth_first: bool,
     ) -> ConsensusResult<Vec<Bytes>> {
         fail_point_async!("consensus-rpc-response");
 
@@ -463,11 +470,16 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         }
 
         // Some quick validation of the requested block refs
-        if !highest_accepted_rounds.is_empty() {
-            block_refs.truncate(self.context.parameters.max_blocks_per_sync);
+        let max_response_num_blocks = if !highest_accepted_rounds.is_empty() {
+            self.context.parameters.max_blocks_per_sync
         } else {
-            block_refs.truncate(self.context.parameters.max_blocks_per_fetch);
+            self.context.parameters.max_blocks_per_fetch
+        };
+        if block_refs.len() > max_response_num_blocks {
+            block_refs.truncate(max_response_num_blocks);
         }
+
+        // Validate the requested block refs.
         for block in &block_refs {
             if !self.context.committee.is_valid_index(block.author) {
                 return Err(ConsensusError::InvalidAuthorityIndex {
@@ -491,39 +503,62 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .flatten()
                 .collect::<Vec<_>>();
 
-            // Get additional blocks for authorities with missing block, if they are available in cache.
-            // Compute the lowest missing round per requested authority.
-            let mut lowest_missing_rounds = BTreeMap::<AuthorityIndex, Round>::new();
-            for block_ref in blocks.iter().map(|b| b.reference()) {
-                let entry = lowest_missing_rounds
-                    .entry(block_ref.author)
-                    .or_insert(block_ref.round);
-                *entry = (*entry).min(block_ref.round);
-            }
+            if breadth_first {
+                // Get unique missing ancestor blocks of the requested blocks.
+                let mut missing_ancestors = blocks
+                    .iter()
+                    .flat_map(|block| block.ancestors().to_vec())
+                    .filter(|block_ref| highest_accepted_rounds[block_ref.author] < block_ref.round)
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .collect::<Vec<_>>();
 
-            // Retrieve additional blocks per authority, from peer's highest accepted round + 1 to
-            // lowest missing round (exclusive) per requested authority.
-            // No block from other authorities are retrieved. It is possible that the requestor is not
-            // seeing missing block from another authority, and serving a block would just lead to unnecessary
-            // data transfer. Or missing blocks from other authorities are requested from other peers.
-            for (authority, lowest_missing_round) in lowest_missing_rounds {
-                let highest_accepted_round = highest_accepted_rounds[authority];
-                if highest_accepted_round >= lowest_missing_round {
-                    continue;
+                // If there are too many missing ancestors, randomly select a subset to avoid
+                // fetching duplicated blocks across peers.
+                let selected_num_blocks = max_response_num_blocks.saturating_sub(blocks.len());
+                if selected_num_blocks < missing_ancestors.len() {
+                    missing_ancestors = missing_ancestors
+                        .choose_multiple(&mut rand::thread_rng(), selected_num_blocks)
+                        .copied()
+                        .collect::<Vec<_>>();
                 }
-                let missing_blocks = dag_state.get_cached_blocks_in_range(
-                    authority,
-                    highest_accepted_round + 1,
-                    lowest_missing_round,
-                    self.context
-                        .parameters
-                        .max_blocks_per_sync
-                        .saturating_sub(blocks.len()),
-                );
-                blocks.extend(missing_blocks);
-                if blocks.len() >= self.context.parameters.max_blocks_per_sync {
-                    blocks.truncate(self.context.parameters.max_blocks_per_sync);
-                    break;
+                let ancestor_blocks = self.dag_state.read().get_blocks(&missing_ancestors);
+                blocks.extend(ancestor_blocks.into_iter().flatten());
+            } else {
+                // Get additional blocks from authorities with missing block, if they are available in cache.
+                // Compute the lowest missing round per requested authority.
+                let mut lowest_missing_rounds = BTreeMap::<AuthorityIndex, Round>::new();
+                for block_ref in blocks.iter().map(|b| b.reference()) {
+                    let entry = lowest_missing_rounds
+                        .entry(block_ref.author)
+                        .or_insert(block_ref.round);
+                    *entry = (*entry).min(block_ref.round);
+                }
+
+                // Retrieve additional blocks per authority, from peer's highest accepted round + 1 to
+                // lowest missing round (exclusive) per requested authority.
+                // No block from other authorities are retrieved. It is possible that the requestor is not
+                // seeing missing block from another authority, and serving a block would just lead to unnecessary
+                // data transfer. Or missing blocks from other authorities are requested from other peers.
+                for (authority, lowest_missing_round) in lowest_missing_rounds {
+                    let highest_accepted_round = highest_accepted_rounds[authority];
+                    if highest_accepted_round >= lowest_missing_round {
+                        continue;
+                    }
+                    let missing_blocks = dag_state.get_cached_blocks_in_range(
+                        authority,
+                        highest_accepted_round + 1,
+                        lowest_missing_round,
+                        self.context
+                            .parameters
+                            .max_blocks_per_sync
+                            .saturating_sub(blocks.len()),
+                    );
+                    blocks.extend(missing_blocks);
+                    if blocks.len() >= self.context.parameters.max_blocks_per_sync {
+                        blocks.truncate(self.context.parameters.max_blocks_per_sync);
+                        break;
+                    }
                 }
             }
 
@@ -842,7 +877,11 @@ async fn make_recv_future<T: Clone>(
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeSet, sync::Arc, time::Duration};
+    use std::{
+        collections::{BTreeMap, BTreeSet},
+        sync::Arc,
+        time::Duration,
+    };
 
     use async_trait::async_trait;
     use bytes::Bytes;
@@ -965,6 +1004,7 @@ mod tests {
             _peer: AuthorityIndex,
             _block_refs: Vec<BlockRef>,
             _highest_accepted_rounds: Vec<Round>,
+            _breadth_first: bool,
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
             unimplemented!("Unimplemented")
@@ -1072,6 +1112,175 @@ mod tests {
         let blocks = core_dispatcher.get_blocks();
         assert_eq!(blocks.len(), 1);
         assert_eq!(blocks[0], input_block);
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_handle_fetch_blocks() {
+        // GIVEN
+        // Use NUM_AUTHORITIES and NUM_ROUNDS higher than max_blocks_per_sync to test limits.
+        const NUM_AUTHORITIES: usize = 40;
+        const NUM_ROUNDS: usize = 40;
+        let (mut context, _keys) = Context::new_for_test(NUM_AUTHORITIES);
+        context
+            .protocol_config
+            .set_consensus_batched_block_sync_for_testing(true);
+        let context = Arc::new(context);
+        let block_verifier = Arc::new(crate::block_verifier::NoopBlockVerifier {});
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
+        let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
+        let network_client = Arc::new(FakeNetworkClient::default());
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
+        let synchronizer = Synchronizer::start(
+            network_client,
+            context.clone(),
+            core_dispatcher.clone(),
+            commit_vote_monitor.clone(),
+            block_verifier.clone(),
+            transaction_certifier.clone(),
+            dag_state.clone(),
+            false,
+        );
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+        let authority_service = Arc::new(AuthorityService::new(
+            context.clone(),
+            block_verifier,
+            commit_vote_monitor,
+            round_tracker,
+            synchronizer,
+            core_dispatcher.clone(),
+            rx_block_broadcast,
+            transaction_certifier,
+            dag_state.clone(),
+            store,
+        ));
+
+        // GIVEN: 40 rounds of blocks in the dag state.
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder
+            .layers(1..=(NUM_ROUNDS as u32))
+            .build()
+            .persist_layers(dag_state.clone());
+        let all_blocks = dag_builder.all_blocks();
+
+        // WHEN: Request 2 blocks from round 40, get ancestors breadth first.
+        let missing_block_refs: Vec<BlockRef> = all_blocks
+            .iter()
+            .rev()
+            .take(2)
+            .map(|b| b.reference())
+            .collect();
+        let highest_accepted_rounds: Vec<Round> = vec![1; NUM_AUTHORITIES];
+        let results = authority_service
+            .handle_fetch_blocks(
+                AuthorityIndex::new_for_test(0),
+                missing_block_refs.clone(),
+                highest_accepted_rounds,
+                true,
+            )
+            .await
+            .unwrap();
+
+        // THEN: the expected number of unique blocks are returned.
+        let blocks: BTreeMap<BlockRef, VerifiedBlock> = results
+            .iter()
+            .map(|b| {
+                let signed = bcs::from_bytes(b).unwrap();
+                let block = VerifiedBlock::new_verified(signed, b.clone());
+                (block.reference(), block)
+            })
+            .collect();
+        assert_eq!(blocks.len(), context.parameters.max_blocks_per_sync);
+        // All missing blocks are returned.
+        for b in &missing_block_refs {
+            assert!(blocks.contains_key(b));
+        }
+        let num_missing_ancestors = blocks
+            .keys()
+            .filter(|b| b.round == NUM_ROUNDS as Round - 1)
+            .count();
+        assert_eq!(
+            num_missing_ancestors,
+            context.parameters.max_blocks_per_sync - missing_block_refs.len()
+        );
+
+        // WHEN: Request 2 blocks from round 37, get ancestors depth first.
+        let missing_round = NUM_ROUNDS as Round - 3;
+        let missing_block_refs: Vec<BlockRef> = all_blocks
+            .iter()
+            .filter(|b| b.reference().round == missing_round)
+            .map(|b| b.reference())
+            .take(2)
+            .collect();
+        let mut highest_accepted_rounds: Vec<Round> = vec![1; NUM_AUTHORITIES];
+        // Try to fill up the blocks from the 1st authority in missing_block_refs.
+        highest_accepted_rounds[missing_block_refs[0].author] = missing_round - 5;
+        let results = authority_service
+            .handle_fetch_blocks(
+                AuthorityIndex::new_for_test(0),
+                missing_block_refs.clone(),
+                highest_accepted_rounds,
+                false,
+            )
+            .await
+            .unwrap();
+
+        // THEN: the expected number of unique blocks are returned.
+        let blocks: BTreeMap<BlockRef, VerifiedBlock> = results
+            .iter()
+            .map(|b| {
+                let signed = bcs::from_bytes(b).unwrap();
+                let block = VerifiedBlock::new_verified(signed, b.clone());
+                (block.reference(), block)
+            })
+            .collect();
+        assert_eq!(blocks.len(), context.parameters.max_blocks_per_sync);
+        // All missing blocks are returned.
+        for b in &missing_block_refs {
+            assert!(blocks.contains_key(b));
+        }
+        // Ancestor blocks are from the expected rounds and authorities.
+        let expected_authors = [missing_block_refs[0].author, missing_block_refs[1].author];
+        for b in blocks.keys() {
+            assert!(b.round <= missing_round);
+            assert!(expected_authors.contains(&b.author));
+        }
+
+        // WHEN: Request 5 block from round 40, not getting ancestors.
+        let missing_block_refs: Vec<BlockRef> = all_blocks
+            .iter()
+            .filter(|b| b.reference().round == NUM_ROUNDS as Round - 10)
+            .map(|b| b.reference())
+            .take(5)
+            .collect();
+        let results = authority_service
+            .handle_fetch_blocks(
+                AuthorityIndex::new_for_test(0),
+                missing_block_refs.clone(),
+                vec![],
+                false,
+            )
+            .await
+            .unwrap();
+
+        // THEN: the expected number of unique blocks are returned.
+        let blocks: BTreeMap<BlockRef, VerifiedBlock> = results
+            .iter()
+            .map(|b| {
+                let signed = bcs::from_bytes(b).unwrap();
+                let block = VerifiedBlock::new_verified(signed, b.clone());
+                (block.reference(), block)
+            })
+            .collect();
+        assert_eq!(blocks.len(), 5);
+        for b in &missing_block_refs {
+            assert!(blocks.contains_key(b));
+        }
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]

@@ -161,6 +161,7 @@ impl NetworkClient for AnemoClient {
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
         highest_accepted_rounds: Vec<Round>,
+        breadth_first: bool,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
         let mut client = self.get_client(peer, timeout).await?;
@@ -176,6 +177,7 @@ impl NetworkClient for AnemoClient {
                 })
                 .collect(),
             highest_accepted_rounds,
+            breadth_first,
         };
         let response = client
             .fetch_blocks(anemo::Request::new(request).with_timeout(timeout))
@@ -343,10 +345,10 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
             .collect();
 
         let highest_accepted_rounds = body.highest_accepted_rounds;
-
+        let breadth_first = body.breadth_first;
         let blocks = self
             .service
-            .handle_fetch_blocks(index, block_refs, highest_accepted_rounds)
+            .handle_fetch_blocks(index, block_refs, highest_accepted_rounds, breadth_first)
             .await
             .map_err(|e| {
                 anemo::rpc::Status::new_with_message(
@@ -752,6 +754,7 @@ pub(crate) struct SendBlockResponse {}
 pub(crate) struct FetchBlocksRequest {
     block_refs: Vec<Vec<u8>>,
     highest_accepted_rounds: Vec<Round>,
+    breadth_first: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
