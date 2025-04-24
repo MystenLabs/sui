@@ -91,7 +91,6 @@ mod tests {
     use super::*;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::{
-        store::Store,
         types::{event::Event, test_checkpoint_data_builder::TestCheckpointDataBuilder},
         Indexer,
     };

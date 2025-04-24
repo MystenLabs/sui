@@ -91,7 +91,7 @@ impl PgReader {
                 Err(Error::PgConnect(anyhow!("Cancelled while connecting to the database")))
             }
 
-            conn = db.connection() => {
+            conn = db.connect() => {
                 Ok(Connection {
                     conn: conn.map_err(Error::PgConnect)?,
                     metrics: self.metrics.clone(),

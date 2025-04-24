@@ -171,9 +171,10 @@ impl DerefMut for IndexerCluster {
 
 #[cfg(test)]
 mod tests {
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
     use diesel::{Insertable, QueryDsl, Queryable};
     use diesel_async::RunQueryDsl;
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use sui_synthetic_ingestion::synthetic_ingestion;
     use tempfile::tempdir;
 
@@ -185,7 +186,6 @@ mod tests {
     use crate::pipeline::Processor;
     use crate::types::full_checkpoint_content::CheckpointData;
     use crate::FieldCount;
-    use crate::Store;
 
     use super::*;
 

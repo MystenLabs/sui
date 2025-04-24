@@ -195,6 +195,11 @@ pub(super) fn collector<H: Handler + 'static>(
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
+    use tokio::sync::mpsc;
+
+    use crate::db::Db;
     use crate::{
         db::Connection,
         metrics::tests::test_metrics,
@@ -212,10 +217,6 @@ mod tests {
         // Fake a large number of fields to test max_chunk_rows.
         const FIELD_COUNT: usize = 32;
     }
-
-    use crate::db::Db;
-    use std::time::Duration;
-    use tokio::sync::mpsc;
 
     struct TestHandler;
     impl Processor for TestHandler {

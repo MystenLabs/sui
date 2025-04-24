@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_field_count::FieldCount;
-
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
+use sui_field_count::FieldCount;
 
 use crate::schema::watermarks;
 

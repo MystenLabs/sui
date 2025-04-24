@@ -7,9 +7,10 @@ use anyhow::Result;
 use diesel::sql_query;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::{Connection, Db, FieldCount},
+    db::{Connection, Db},
     pipeline::{concurrent::Handler, Processor},
     types::{base_types::ObjectID, full_checkpoint_content::CheckpointData, object::Object},
+    FieldCount,
 };
 use sui_indexer_alt_schema::{objects::StoredObjInfo, schema::obj_info};
 
@@ -198,7 +199,6 @@ impl TryInto<StoredObjInfo> for &ProcessedObjInfo {
 mod tests {
     use sui_indexer_alt_framework::{
         db,
-        store::Store,
         types::{
             base_types::{dbg_addr, SequenceNumber},
             object::{Authenticator, Owner},

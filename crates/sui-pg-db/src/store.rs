@@ -18,6 +18,8 @@ use crate::model::StoredWatermark;
 use crate::schema::watermarks;
 use crate::{Connection, Db};
 
+pub use sui_indexer_alt_framework_store_traits::Store;
+
 #[async_trait]
 impl store::Connection for Connection<'_> {
     async fn committer_watermark(
@@ -176,7 +178,7 @@ impl store::Store for Db {
     type Connection<'c> = Connection<'c>;
 
     async fn connect<'c>(&'c self) -> anyhow::Result<Self::Connection<'c>> {
-        Ok(self.connection().await?)
+        Ok(Connection(self.0.get().await?))
     }
 }
 
@@ -190,7 +192,7 @@ impl store::TransactionalStore for Db {
             &'r mut Self::Connection<'_>,
         ) -> ScopedBoxFuture<'a, 'r, anyhow::Result<R>>,
     {
-        let mut conn = self.connection().await?;
+        let mut conn = self.connect().await?;
         AsyncConnection::transaction(&mut conn, |conn| f(conn)).await
     }
 }

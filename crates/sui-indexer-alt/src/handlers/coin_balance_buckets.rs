@@ -7,7 +7,7 @@ use anyhow::{anyhow, bail, Result};
 use diesel::sql_query;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::{Connection, Db, FieldCount},
+    db::{Connection, Db},
     pipeline::{concurrent::Handler, Processor},
     types::{
         base_types::{ObjectID, SuiAddress},
@@ -15,6 +15,7 @@ use sui_indexer_alt_framework::{
         object::{Object, Owner},
         TypeTag,
     },
+    FieldCount,
 };
 use sui_indexer_alt_schema::{
     objects::{StoredCoinBalanceBucket, StoredCoinOwnerKind},
@@ -305,7 +306,6 @@ mod tests {
     use super::*;
     use diesel::QueryDsl;
     use sui_indexer_alt_framework::{
-        store::Store,
         types::{
             base_types::{dbg_addr, MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
             digests::TransactionDigest,

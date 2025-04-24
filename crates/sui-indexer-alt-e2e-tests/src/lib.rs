@@ -380,7 +380,7 @@ impl OffchainCluster {
 
         let mut conn = self
             .db
-            .connection()
+            .connect()
             .await
             .context("Failed to connect to database")?;
 
@@ -406,7 +406,7 @@ impl OffchainCluster {
 
         let mut conn = self
             .db
-            .connection()
+            .connect()
             .await
             .context("Failed to connect to database")?;
 

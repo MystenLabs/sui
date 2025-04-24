@@ -18,7 +18,7 @@ use pipeline::{
     Processor,
 };
 use prometheus::Registry;
-use sui_indexer_alt_framework_store_traits::{CommitterWatermark, Connection, Store};
+use sui_indexer_alt_framework_store_traits::{CommitterWatermark, Connection};
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db::{temp::TempDb, Db, DbArgs};
 use tempfile::tempdir;
@@ -28,12 +28,9 @@ use tracing::{info, warn};
 use url::Url;
 
 pub use anyhow::Result;
+pub use sui_field_count::FieldCount;
 /// External users access the store trait through framework::store
 pub use sui_indexer_alt_framework_store_traits as store;
-// TODO (wlmyng)
-// #[cfg(feature = "postgres")]
-// pub use sui_indexer_alt_framework_store_pg::pg_store;
-pub use sui_field_count::FieldCount;
 /// External users can opt in to a specific implementation through framework::db
 pub use sui_pg_db as db;
 pub use sui_sql_macro::sql;
@@ -482,7 +479,7 @@ mod tests {
     use crate::FieldCount;
     use crate::{
         db,
-        store::{CommitterWatermark, Connection, Store},
+        store::{CommitterWatermark, Connection},
         types::full_checkpoint_content::CheckpointData,
     };
 
