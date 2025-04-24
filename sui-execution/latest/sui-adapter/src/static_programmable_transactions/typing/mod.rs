@@ -13,7 +13,7 @@ pub fn translate_and_verify(
     env: &env::Env,
     lt: L::Transaction,
 ) -> Result<ast::Transaction, ExecutionError> {
-    let ast = translate::transaction(env, lt)?;
-    verify::transaction(env, &ast)?;
+    let mut ast = translate::transaction(env, lt)?;
+    verify::transaction(env, &mut ast)?;
     Ok(ast)
 }

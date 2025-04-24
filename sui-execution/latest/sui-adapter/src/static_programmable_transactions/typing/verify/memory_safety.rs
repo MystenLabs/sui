@@ -7,7 +7,7 @@ use crate::static_programmable_transactions::{
     env::Env,
     typing::ast::{self as T, Type},
 };
-use move_regex_borrow_graph::{collections::Path, references::Ref};
+use move_regex_borrow_graph::references::Ref;
 use sui_types::{
     error::{command_argument_error, ExecutionError, ExecutionErrorKind},
     execution_status::CommandArgumentError,
