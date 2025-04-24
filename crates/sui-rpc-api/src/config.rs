@@ -29,6 +29,15 @@ pub struct Config {
     /// If not provided then the node will not create an https service.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tls: Option<TlsConfig>,
+
+    /// Maxumum budget for rendering a Move value into JSON.
+    ///
+    /// This sets the numbers of bytes that we are willing to spend on rendering field names and
+    /// values when rendering a Move value into a JSON value.
+    ///
+    /// Defaults to `1MiB` if not specified.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_json_move_value_size: Option<usize>,
 }
 
 impl Config {
@@ -43,6 +52,10 @@ impl Config {
 
     pub fn tls_config(&self) -> Option<&TlsConfig> {
         self.tls.as_ref()
+    }
+
+    pub fn max_json_move_value_size(&self) -> usize {
+        self.max_json_move_value_size.unwrap_or(1024 * 1024)
     }
 }
 

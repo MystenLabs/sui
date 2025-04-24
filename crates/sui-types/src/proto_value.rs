@@ -20,53 +20,11 @@ use move_core_types::{
 use prost_types::value::Kind;
 use prost_types::Struct;
 use prost_types::Value;
-use std::sync::LazyLock;
-use tracing::info;
 
 /// This is the maximum depth of a proto message
 /// The maximum depth of a proto message is 100. Given this value may be nested itself somewhere
 /// we'll conservitively cap this to ~80% of that.
 const MAX_DEPTH: usize = 80;
-
-/// Environment variable to override the default budget for deserialization. This can be set at
-/// runtime to change the maximum size of values that can be deserialized.
-const MAX_BOUND_VAR_NAME: &str = "MAX_JSON_MOVE_VALUE_SIZE";
-
-/// Default budget for deserialization -- we're okay to spend 1MiB on rendering a move value to
-/// JSON.
-const DEFAULT_MAX_BOUND: usize = 1024 * 1024;
-
-/// Budget for rendering a Move value into JSON. This sets the numbers of bytes that we
-/// are willing to spend on rendering field names and values when rendering a Move value into a
-/// JSON value.
-///
-/// Bounded deserialization is intended for use outside of the validator, and so uses a fixed bound
-/// that needs to be set at startup rather than one that is configured as part of the protocol.
-///
-/// If the environment variable `MAX_JSON_MOVE_VALUE_SIZE` is unset we default to
-/// `DEFAULT_MAX_BOUND` which allows 1MiB space usage on rendering a value to JSON.
-///
-/// This is read only once and after that the value is cached. To change this value you will need
-/// to restart the process with the new value set (or the value unset if you wish to use the
-/// `DEFAULT_MAX_BOUND` value).
-static MAX_BOUND: LazyLock<usize> = LazyLock::new(|| {
-    let max_bound_opt = std::env::var(MAX_BOUND_VAR_NAME)
-        .ok()
-        .and_then(|s| s.parse().ok());
-    if let Some(max_bound) = max_bound_opt {
-        info!(
-            "Using custom value for '{}' max bound: {}",
-            MAX_BOUND_VAR_NAME, max_bound
-        );
-        max_bound
-    } else {
-        info!(
-            "Using default value for '{}' -- max bound: {}",
-            MAX_BOUND_VAR_NAME, DEFAULT_MAX_BOUND
-        );
-        DEFAULT_MAX_BOUND
-    }
-});
 
 pub struct ProtoVisitor {
     /// Budget left to spend on visiting.
@@ -87,12 +45,6 @@ pub enum Error {
 
     #[error("Unexpected type")]
     UnexpectedType,
-}
-
-impl Default for ProtoVisitor {
-    fn default() -> Self {
-        Self::new(*MAX_BOUND)
-    }
 }
 
 impl ProtoVisitor {
@@ -698,7 +650,7 @@ pub(crate) mod tests {
 
     fn json<T: serde::Serialize>(layout: A::MoveTypeLayout, data: T) -> serde_json::Value {
         let bcs = bcs::to_bytes(&data).unwrap();
-        let proto_value = ProtoVisitor::default()
+        let proto_value = ProtoVisitor::new(1024 * 1024)
             .deserialize_value(&bcs, &layout)
             .unwrap();
         proto_value_to_json_value(proto_value)
