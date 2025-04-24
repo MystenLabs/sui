@@ -19,6 +19,7 @@ async-trait.workspace = true
 bcs.workspace = true
 bytes.workspace = true
 clap.workspace = true
+clap_complete.workspace = true
 move-core-types.workspace = true
 roaring.workspace = true
 serde.workspace = true

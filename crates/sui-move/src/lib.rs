@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use clap::Parser;
+use clap::{Parser};
 use move_cli::base::test::UnitTestResult;
 use move_package::BuildConfig;
 use std::path::Path;
@@ -25,6 +25,12 @@ pub enum Command {
     Migrate(migrate::Migrate),
     New(new::New),
     Test(unit_test::Test),
+    /// Generate autocompletion script for SUI
+    #[clap(name = "completion", hide = true)]
+    Completion {
+        #[clap(long = "shell")]
+        shell: Option<String>,
+    },
 }
 #[derive(Parser)]
 pub struct Calib {
@@ -64,5 +70,6 @@ pub fn execute_move_command(
 
             Ok(())
         }
+        Command::Completion { shell: _ } => {Ok(())}
     }
 }

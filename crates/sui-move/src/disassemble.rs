@@ -13,6 +13,7 @@ use std::io::{BufReader, Read};
 use std::path::Path;
 use std::path::PathBuf;
 
+/// Disassemble a Move binary file
 #[derive(Parser)]
 #[group(id = "sui-move-disassemmble")]
 pub struct Disassemble {
