@@ -14,9 +14,6 @@ use sui_indexer_alt_schema::{objects::StoredObjVersion, schema::obj_versions};
 
 pub(crate) struct ObjVersions;
 
-/// A temporary pipeline to backfill deleted/wrapped records.
-pub(crate) struct ObjVersionsSentinelBackfill;
-
 impl Processor for ObjVersions {
     const NAME: &'static str = "obj_versions";
     type Value = StoredObjVersion;
@@ -51,17 +48,6 @@ impl Processor for ObjVersions {
     }
 }
 
-impl Processor for ObjVersionsSentinelBackfill {
-    const NAME: &'static str = "obj_versions_sentinel_backfill";
-    type Value = StoredObjVersion;
-
-    fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
-        let mut values = ObjVersions.process(checkpoint)?;
-        values.retain(|v| v.object_digest.is_none());
-        Ok(values)
-    }
-}
-
 #[async_trait::async_trait]
 impl Handler for ObjVersions {
     type Store = Db;
@@ -75,17 +61,5 @@ impl Handler for ObjVersions {
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
-    }
-}
-
-#[async_trait::async_trait]
-impl Handler for ObjVersionsSentinelBackfill {
-    type Store = Db;
-
-    const MIN_EAGER_ROWS: usize = 100;
-    const MAX_PENDING_ROWS: usize = 10000;
-
-    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
-        ObjVersions::commit(values, conn).await
     }
 }
