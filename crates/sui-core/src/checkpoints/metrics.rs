@@ -23,6 +23,7 @@ pub struct CheckpointMetrics {
     pub last_ignored_checkpoint_signature_received: IntGauge,
     pub highest_accumulated_epoch: IntGauge,
     pub checkpoint_creation_latency: Histogram,
+    pub forward_dependency_count: Histogram,
     // TODO: delete once users are migrated to non-Mysten histogram.
     pub checkpoint_creation_latency_ms: MystenHistogram,
     pub remote_checkpoint_forks: IntCounter,
@@ -132,6 +133,12 @@ impl CheckpointMetrics {
                 "checkpoint_creation_latency",
                 "Latency from consensus commit timstamp to local checkpoint creation in milliseconds",
                 mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            forward_dependency_count: register_histogram_with_registry!(
+                "forward_dependency_count",
+                "Number of forward dependencies we waited for in each checkpoint",
+                vec![1.0, 5.0, 10.0, 20.0, 30.0, 40.0, 50.0, 100.0, 300.0, 1000.0],
                 registry,
             ).unwrap(),
             checkpoint_creation_latency_ms: MystenHistogram::new_in_registry(

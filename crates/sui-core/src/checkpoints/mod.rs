@@ -1627,6 +1627,9 @@ impl CheckpointBuilder {
                 all_effects_and_transaction_sizes.push((effects, size));
             }
 
+            self.metrics
+                .forward_dependency_count
+                .observe(transaction_keys.len() as f64);
             self.epoch_store
                 .consensus_messages_processed_notify(transaction_keys)
                 .await?;
