@@ -194,8 +194,8 @@ fn legacy_val_abstract_memory_size_consistency() -> PartialVMResult<()> {
         Value::vector_u256([1, 2, 3, 4].iter().map(|q| U256::from(*q as u64))),
         Value::struct_(Struct::pack([])),
         Value::struct_(Struct::pack([Value::u8(0), Value::bool(false)])),
-        Value::vector_value([]),
-        Value::vector_value([Value::u8(0), Value::u8(1)]),
+        Value::vector_value([], 128).unwrap(),
+        Value::vector_value([Value::u8(0), Value::u8(1)], 128).unwrap(),
     ];
 
     let mut locals = Locals::new(vals.len());
@@ -230,4 +230,132 @@ fn test_vm_value_vector_u64_casting() {
 #[test]
 fn assert_sizes() {
     assert_eq!(size_of::<Value>(), 16);
+}
+
+#[test]
+fn vector_value_max_depth() {
+    let depth1_vals = [
+        Value::u8(0),
+        Value::u16(0),
+        Value::u32(0),
+        Value::u64(0),
+        Value::u128(0),
+        Value::u256(U256::zero()),
+        Value::bool(true),
+        Value::address(AccountAddress::ZERO),
+    ];
+
+    let depth2_vals = vec![
+        Value::vector_u8([0, 1, 2]),
+        Value::vector_u16([0, 1, 2]),
+        Value::vector_u32([0, 1, 2]),
+        Value::vector_u64([]),
+        Value::vector_u128([1, 2, 3, 4]),
+        Value::vector_u256([1, 2, 3, 4].iter().map(|q| U256::from(*q as u64))),
+        Value::vector_value([Value::u8(0), Value::u8(1)], 128).unwrap(),
+        Value::struct_(Struct::pack([Value::u8(0), Value::bool(false)])),
+        Value::struct_(Struct::pack([
+            Value::u8(0),
+            Value::u16(0),
+            Value::u32(0),
+            Value::u64(0),
+            Value::u128(0),
+            Value::u256(U256::zero()),
+            Value::bool(true),
+            Value::address(AccountAddress::ZERO),
+        ])),
+    ];
+
+    let depth3_vals = vec![
+        Value::struct_(Struct::pack([Value::struct_(Struct::pack([]))])),
+        Value::struct_(Struct::pack([
+            Value::u8(0),
+            Value::bool(false),
+            Value::struct_(Struct::pack([])),
+        ])),
+        Value::struct_(Struct::pack([
+            Value::vector_u8([0, 1, 2]),
+            Value::vector_u16([0, 1, 2]),
+            Value::vector_u32([0, 1, 2]),
+            Value::vector_u64([]),
+            Value::vector_u128([1, 2, 3, 4]),
+            Value::vector_u256([1, 2, 3, 4].iter().map(|q| U256::from(*q as u64))),
+            Value::vector_value([Value::u8(0), Value::u8(1)], 128).unwrap(),
+            Value::struct_(Struct::pack([Value::u8(0), Value::bool(false)])),
+        ])),
+    ];
+
+    let depth4_vals = vec![
+        Value::struct_(Struct::pack([
+            Value::u8(0),
+            Value::bool(false),
+            Value::struct_(Struct::pack([Value::struct_(Struct::pack([]))])),
+        ])),
+        Value::struct_(Struct::pack([
+            Value::struct_(Struct::pack([Value::struct_(Struct::pack([]))])),
+            Value::struct_(Struct::pack([
+                Value::u8(0),
+                Value::bool(false),
+                Value::struct_(Struct::pack([])),
+            ])),
+            Value::struct_(Struct::pack([
+                Value::vector_u8([0, 1, 2]),
+                Value::vector_u16([0, 1, 2]),
+                Value::vector_u32([0, 1, 2]),
+                Value::vector_u64([]),
+                Value::vector_u128([1, 2, 3, 4]),
+                Value::vector_u256([1, 2, 3, 4].iter().map(|q| U256::from(*q as u64))),
+                Value::vector_value([Value::u8(0), Value::u8(1)], 128).unwrap(),
+                Value::struct_(Struct::pack([Value::u8(0), Value::bool(false)])),
+            ])),
+        ])),
+    ];
+
+    for v1 in depth1_vals.into_iter() {
+        assert!(v1.check_below_depth(0).is_err());
+        assert!(v1.check_below_depth(1).is_ok());
+        let vec_val = Value::vector_value([v1], 2).unwrap();
+        assert!(vec_val.check_below_depth(0).is_err());
+        assert!(vec_val.check_below_depth(1).is_err());
+        assert!(vec_val.check_below_depth(2).is_ok());
+    }
+
+    for v2 in depth2_vals.into_iter() {
+        assert!(v2.check_below_depth(0).is_err());
+        assert!(v2.check_below_depth(1).is_err());
+        assert!(v2.check_below_depth(2).is_ok());
+        let vec_val = Value::vector_value([v2], 3).unwrap();
+        assert!(vec_val.check_below_depth(0).is_err());
+        assert!(vec_val.check_below_depth(1).is_err());
+        assert!(vec_val.check_below_depth(2).is_err());
+        assert!(vec_val.check_below_depth(3).is_ok());
+    }
+
+    for v3 in depth3_vals.into_iter() {
+        assert!(v3.check_below_depth(0).is_err());
+        assert!(v3.check_below_depth(1).is_err());
+        assert!(v3.check_below_depth(2).is_err());
+        assert!(v3.check_below_depth(3).is_ok());
+        let vec_val = Value::vector_value([v3], 4).unwrap();
+        assert!(vec_val.check_below_depth(0).is_err());
+        assert!(vec_val.check_below_depth(1).is_err());
+        assert!(vec_val.check_below_depth(2).is_err());
+        assert!(vec_val.check_below_depth(3).is_err());
+        assert!(vec_val.check_below_depth(4).is_ok());
+    }
+
+    for v4 in depth4_vals.into_iter() {
+        assert!(v4.check_below_depth(0).is_err());
+        assert!(v4.check_below_depth(1).is_err());
+        assert!(v4.check_below_depth(2).is_err());
+        assert!(v4.check_below_depth(3).is_err());
+        assert!(v4.check_below_depth(4).is_ok());
+        let vec_val = Value::vector_value([v4], 5).unwrap();
+        assert!(vec_val.check_below_depth(0).is_err());
+        assert!(vec_val.check_below_depth(1).is_err());
+        assert!(vec_val.check_below_depth(2).is_err());
+        assert!(vec_val.check_below_depth(3).is_err());
+        assert!(vec_val.check_below_depth(4).is_err());
+        assert!(vec_val.check_below_depth(5).is_ok());
+    }
 }

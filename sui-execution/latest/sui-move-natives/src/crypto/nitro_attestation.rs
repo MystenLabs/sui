@@ -102,7 +102,7 @@ pub fn load_nitro_attestation_internal(
                             Value::vector_u8(payload.module_id.as_bytes().to_vec()),
                             Value::u64(payload.timestamp),
                             Value::vector_u8(payload.digest.as_bytes().to_vec()),
-                            to_indexed_struct(payload.pcrs)?,
+                            to_indexed_struct(context, payload.pcrs)?,
                             to_option_vector_u8(payload.public_key)?,
                             to_option_vector_u8(payload.user_data)?,
                             to_option_vector_u8(payload.nonce)?,
@@ -136,7 +136,7 @@ fn to_option_vector_u8(value: Option<Vec<u8>>) -> PartialVMResult<Value> {
 // Convert a list of PCRs into a vector of PCREntry struct with index and value,
 // where the indices are [0, 1, 2, 3, 4, 8] since AWS currently supports PCR0,
 // PCR1, PCR2, PCR3, PCR4, PCR8.
-fn to_indexed_struct(pcrs: Vec<Vec<u8>>) -> PartialVMResult<Value> {
+fn to_indexed_struct(context: &NativeContext, pcrs: Vec<Vec<u8>>) -> PartialVMResult<Value> {
     let indices = [0, 1, 2, 3, 4, 8];
     if pcrs.len() != indices.len() {
         return Err(PartialVMError::new(StatusCode::ABORTED).with_sub_status(INVALID_PCRS_ERROR));
@@ -148,5 +148,17 @@ fn to_indexed_struct(pcrs: Vec<Vec<u8>>) -> PartialVMResult<Value> {
             Value::vector_u8(pcr.to_vec()),
         ])));
     }
-    Ok(Value::vector_value(indexed_struct))
+
+    // Should never be None at this point, but if it is, use the default value for the max
+    // depth.
+    debug_assert!(context
+        .runtime_limits_config()
+        .max_value_nest_depth
+        .is_some());
+    let max_value_nest_depth = context
+        .runtime_limits_config()
+        .max_value_nest_depth
+        .unwrap_or(/* DEFAULT_MAX_VALUE_DEPTH */ 128);
+
+    Value::vector_value(indexed_struct, max_value_nest_depth)
 }

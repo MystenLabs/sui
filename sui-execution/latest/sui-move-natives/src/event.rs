@@ -156,8 +156,19 @@ pub fn get_events_by_type(
             }
         })
         .collect::<Vec<_>>();
+
+    // Should never be None at this point, but if it is, use the default value for the max
+    // depth.
+    debug_assert!(context
+        .runtime_limits_config()
+        .max_value_nest_depth
+        .is_some());
+    let max_value_nest_depth = context
+        .runtime_limits_config()
+        .max_value_nest_depth
+        .unwrap_or(/* DEFAULT_MAX_VALUE_DEPTH */ 128);
     Ok(NativeResult::ok(
         legacy_test_cost(),
-        smallvec![Value::vector_value(matched_events)],
+        smallvec![Value::vector_value(matched_events, max_value_nest_depth)?],
     ))
 }

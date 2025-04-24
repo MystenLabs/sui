@@ -1423,11 +1423,86 @@ impl Value {
         ))))
     }
 
-    // REVIEW: This API can break
-    pub fn vector_value(it: impl IntoIterator<Item = Value>) -> Self {
-        Self(ValueImpl::Container(Container::Vec(Rc::new(RefCell::new(
-            it.into_iter().map(|v| v.0).collect(),
+    /// Create a vector of values. Ensures that the depth of the resulting vector is less than the
+    /// maximal value depth allowed in the VM. It is the caller's responsibility to ensure that any
+    /// values passed in are below the max depth, or to handle the error appropriately.
+    pub fn vector_value(
+        it: impl IntoIterator<Item = Value>,
+        max_value_depth: u64,
+    ) -> PartialVMResult<Self> {
+        // Sub 1 since we are about to pack this into a container.
+        let max_value_depth = max_value_depth.saturating_sub(1);
+        Ok(Self(ValueImpl::Container(Container::Vec(Rc::new(
+            RefCell::new(
+                it.into_iter()
+                    .map(|v| {
+                        v.0.check_below_depth(max_value_depth)?;
+                        Ok(v.0)
+                    })
+                    .collect::<PartialVMResult<_>>()?,
+            ),
         )))))
+    }
+}
+
+#[cfg(test)]
+impl Value {
+    pub(crate) fn check_below_depth(&self, max_depth: u64) -> PartialVMResult<()> {
+        self.0.check_below_depth(max_depth)
+    }
+}
+
+impl ValueImpl {
+    fn check_below_depth(&self, max_depth: u64) -> PartialVMResult<()> {
+        if max_depth == 0 {
+            return Err(PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED));
+        }
+        match &self {
+            ValueImpl::Invalid
+            | ValueImpl::U8(_)
+            | ValueImpl::U16(_)
+            | ValueImpl::U32(_)
+            | ValueImpl::U64(_)
+            | ValueImpl::U128(_)
+            | ValueImpl::U256(_)
+            | ValueImpl::Bool(_)
+            | ValueImpl::Address(_) => Ok(()),
+            ValueImpl::ContainerRef(r) => r.container().check_below_depth(max_depth),
+            ValueImpl::IndexedRef(r) => r.container_ref.container().check_below_depth(max_depth),
+            ValueImpl::Container(container) => container.check_below_depth(max_depth),
+        }
+    }
+}
+
+impl Container {
+    fn check_below_depth(&self, max_depth: u64) -> PartialVMResult<()> {
+        // We are a container so have minimal depth of at least one
+        if max_depth <= 1 {
+            return Err(PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED));
+        }
+
+        match self {
+            Container::Locals(vals) | Container::Vec(vals) | Container::Struct(vals) => {
+                for val in vals.borrow().iter() {
+                    val.check_below_depth(max_depth.saturating_sub(1))?;
+                }
+                Ok(())
+            }
+            Container::Variant(variant) => {
+                for val in variant.borrow().1.iter() {
+                    val.check_below_depth(max_depth.saturating_sub(1))?;
+                }
+                Ok(())
+            }
+            Container::VecU8(_)
+            | Container::VecU16(_)
+            | Container::VecU32(_)
+            | Container::VecU64(_)
+            | Container::VecU128(_)
+            | Container::VecU256(_)
+            | Container::VecBool(_)
+            | Container::VecAddress(_) => Ok(()),
+        }
     }
 }
 

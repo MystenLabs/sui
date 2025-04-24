@@ -49,6 +49,8 @@ const E_UNABLE_TO_ALLOCATE_RECEIVING_TICKET: u64 = 5;
 const E_RECEIVING_TICKET_ALREADY_ALLOCATED: u64 = 6;
 const E_UNABLE_TO_DEALLOCATE_RECEIVING_TICKET: u64 = 7;
 
+const DEFAULT_MAX_VALUE_DEPTH: u64 = 128;
+
 type Set<K> = IndexSet<K>;
 
 /// An in-memory test store is a thin wrapper around the in-memory storage in a mutex. The mutex
@@ -420,7 +422,7 @@ pub fn ids_for_address(
         .and_then(|inv| inv.get(&specified_ty))
         .map(|s| s.iter().map(|id| pack_id(*id)).collect::<Vec<Value>>())
         .unwrap_or_default();
-    let ids_vector = Value::vector_value(ids);
+    let ids_vector = Value::vector_value(ids, DEFAULT_MAX_VALUE_DEPTH)?;
     Ok(NativeResult::ok(legacy_test_cost(), smallvec![ids_vector]))
 }
 
@@ -813,7 +815,7 @@ fn pack_id(a: impl Into<AccountAddress>) -> Value {
 }
 
 fn pack_ids(items: impl IntoIterator<Item = impl Into<AccountAddress>>) -> Value {
-    Value::vector_value(items.into_iter().map(pack_id))
+    Value::vector_value(items.into_iter().map(pack_id), DEFAULT_MAX_VALUE_DEPTH).unwrap()
 }
 
 fn pack_vec_map(items: impl IntoIterator<Item = (Value, Value)>) -> Value {
@@ -821,7 +823,9 @@ fn pack_vec_map(items: impl IntoIterator<Item = (Value, Value)>) -> Value {
         items
             .into_iter()
             .map(|(k, v)| Value::struct_(values::Struct::pack(vec![k, v]))),
-    )]))
+        DEFAULT_MAX_VALUE_DEPTH,
+    )
+    .unwrap()]))
 }
 
 fn transaction_effects(
@@ -877,7 +881,11 @@ fn pack_option(opt: Option<Value>) -> Value {
         Some(v) => vec![v],
         None => vec![],
     };
-    Value::struct_(values::Struct::pack(vec![Value::vector_value(item)]))
+    Value::struct_(values::Struct::pack(vec![Value::vector_value(
+        item,
+        DEFAULT_MAX_VALUE_DEPTH,
+    )
+    .unwrap()]))
 }
 
 fn find_all_wrapped_objects<'a, 'i>(
