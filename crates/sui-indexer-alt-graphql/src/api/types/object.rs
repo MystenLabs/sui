@@ -11,6 +11,7 @@ use sui_indexer_alt_reader::{
     object_versions::{CheckpointBoundedObjectVersionKey, VersionBoundedObjectVersionKey},
     pg_reader::PgReader,
 };
+use sui_indexer_alt_schema::objects::StoredObjVersion;
 use sui_types::{
     base_types::{SequenceNumber, SuiAddress as NativeSuiAddress},
     digests::ObjectDigest,
@@ -193,22 +194,7 @@ impl Object {
             return Ok(None);
         };
 
-        // Lack of an object digest indicates that the object was deleted or wrapped at this
-        // version.
-        let Some(digest) = stored.object_digest else {
-            return Ok(None);
-        };
-
-        let addressable = Addressable::with_address(
-            NativeSuiAddress::from_bytes(stored.object_id)
-                .context("Failed to deserialize SuiAddress")?,
-        );
-
-        Ok(Some(Object::with_ref(
-            addressable,
-            SequenceNumber::from_u64(stored.object_version as u64),
-            ObjectDigest::try_from(&digest[..]).context("Failed to deserialize Object Digest")?,
-        )))
+        Object::from_stored_version(stored)
     }
 
     /// Fetch the latest version of the object at the given address as of the checkpoint with
@@ -231,22 +217,7 @@ impl Object {
             return Ok(None);
         };
 
-        // Lack of an object digest indicates that the object was deleted or wrapped at this
-        // version.
-        let Some(digest) = stored.object_digest else {
-            return Ok(None);
-        };
-
-        let addressable = Addressable::with_address(
-            NativeSuiAddress::from_bytes(stored.object_id)
-                .context("Failed to deserialize SuiAddress")?,
-        );
-
-        Ok(Some(Object::with_ref(
-            addressable,
-            SequenceNumber::from_u64(stored.object_version as u64),
-            ObjectDigest::try_from(&digest[..]).context("Failed to deserialize Object Digest")?,
-        )))
+        Object::from_stored_version(stored)
     }
 
     /// Load the object at the given ID and version from the store, and return it fully inflated
@@ -269,6 +240,29 @@ impl Object {
             digest: object.digest(),
             contents: Some(object),
         }))
+    }
+
+    /// Construct a GraphQL representation of an `Object` from versioning information. This
+    /// representation does not pre-fetch object contents.
+    pub(crate) fn from_stored_version(
+        stored: StoredObjVersion,
+    ) -> Result<Option<Self>, RpcError<Error>> {
+        // Lack of an object digest indicates that the object was deleted or wrapped at this
+        // version.
+        let Some(digest) = stored.object_digest else {
+            return Ok(None);
+        };
+
+        let addressable = Addressable::with_address(
+            NativeSuiAddress::from_bytes(stored.object_id)
+                .context("Failed to deserialize SuiAddress")?,
+        );
+
+        Ok(Some(Object::with_ref(
+            addressable,
+            SequenceNumber::from_u64(stored.object_version as u64),
+            ObjectDigest::try_from(&digest[..]).context("Failed to deserialize Object Digest")?,
+        )))
     }
 
     /// Return a copy of the object's contents, either cached in the object or fetched from the KV
