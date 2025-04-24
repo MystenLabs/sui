@@ -28,7 +28,17 @@ pub fn list_owned_objects(
         .as_ref()
         .ok_or_else(|| RpcError::new(tonic::Code::InvalidArgument, "missing owner"))?
         .parse()
-        .map_err(|e| RpcError::new(tonic::Code::InvalidArgument, format!("invalid parent: {e}")))?;
+        .map_err(|e| RpcError::new(tonic::Code::InvalidArgument, format!("invalid owner: {e}")))?;
+    let object_type = request
+        .object_type
+        .map(|s| s.parse())
+        .transpose()
+        .map_err(|e| {
+            RpcError::new(
+                tonic::Code::InvalidArgument,
+                format!("invalid object_type: {e}"),
+            )
+        })?;
 
     let page_size = request
         .page_size
@@ -39,8 +49,21 @@ pub fn list_owned_objects(
         .map(|token| decode_page_token(&token))
         .transpose()?;
 
+    if let Some(token) = &page_token {
+        if token.owner != owner || token.object_type != object_type {
+            return Err(RpcError::new(
+                tonic::Code::InvalidArgument,
+                "invalid page_token",
+            ));
+        }
+    }
+
     let mut object_info = indexes
-        .owned_objects_iter(owner.into(), None, page_token)?
+        .owned_objects_iter(
+            owner.into(),
+            object_type.clone(),
+            page_token.map(|t| t.inner),
+        )?
         .take(page_size + 1)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|err| RpcError::new(tonic::Code::Internal, err.to_string()))?;
@@ -50,7 +73,13 @@ pub fn list_owned_objects(
         object_info
             .pop()
             .unwrap()
-            .pipe(encode_page_token)
+            .pipe(|cursor| {
+                encode_page_token(PageToken {
+                    owner,
+                    object_type,
+                    inner: cursor,
+                })
+            })
             .pipe(Some)
     } else {
         None
@@ -62,11 +91,11 @@ pub fn list_owned_objects(
     })
 }
 
-fn decode_page_token(page_token: &[u8]) -> Result<OwnedObjectInfo> {
+fn decode_page_token(page_token: &[u8]) -> Result<PageToken> {
     bcs::from_bytes(page_token).map_err(Into::into)
 }
 
-fn encode_page_token(page_token: OwnedObjectInfo) -> Bytes {
+fn encode_page_token(page_token: PageToken) -> Bytes {
     bcs::to_bytes(&page_token).unwrap().into()
 }
 
@@ -78,4 +107,11 @@ fn owned_object_to_proto(info: OwnedObjectInfo) -> OwnedObject {
         owner: Some(sui_sdk_types::Owner::Address(info.owner.into()).into()),
         object_type: Some(info.object_type.to_canonical_string(true)),
     }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct PageToken {
+    owner: Address,
+    object_type: Option<move_core_types::language_storage::StructTag>,
+    inner: OwnedObjectInfo,
 }

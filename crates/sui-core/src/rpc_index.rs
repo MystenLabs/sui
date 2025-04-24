@@ -599,7 +599,15 @@ impl IndexStoreTables {
                     // and if an object type was supplied that the type matches
                     && object_type
                         .as_ref()
-                        .map(|ty| ty == &key.object_type).unwrap_or(true)
+                        .map(|ty| {
+                            ty.address == key.object_type.address
+                                && ty.module == key.object_type.module
+                                && ty.name == key.object_type.name
+                                // If type_params are not provided then we match all params
+                                && (ty.type_params.is_empty() ||
+                                    // If they are provided the type params must match
+                                    ty.type_params == key.object_type.type_params)
+                        }).unwrap_or(true)
             }))
     }
 
