@@ -15804,6 +15804,7 @@ dependencies = [
  "anemo",
  "anyhow",
  "async-trait",
+ "base64 0.21.7",
  "bcs",
  "better_any",
  "bincode",
