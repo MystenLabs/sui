@@ -99,7 +99,7 @@ pub struct CheckpointHandler {
 #[async_trait]
 impl Worker for CheckpointHandler {
     type Result = ();
-    async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> anyhow::Result<()> {
+    async fn process_checkpoint(&self, checkpoint: Arc<CheckpointData>) -> anyhow::Result<()> {
         let time_now_ms = chrono::Utc::now().timestamp_millis();
         let cp_download_lag = time_now_ms - checkpoint.checkpoint_summary.timestamp_ms as i64;
         info!(
@@ -121,9 +121,9 @@ impl Worker for CheckpointHandler {
         );
         let checkpoint_data = Self::index_checkpoint(
             &self.state,
-            checkpoint,
+            &checkpoint,
             Arc::new(self.metrics.clone()),
-            Self::index_packages(std::slice::from_ref(checkpoint), &self.metrics),
+            Self::index_packages(std::slice::from_ref(&checkpoint), &self.metrics),
         )
         .await?;
         self.indexed_checkpoint_sender.send(checkpoint_data).await?;

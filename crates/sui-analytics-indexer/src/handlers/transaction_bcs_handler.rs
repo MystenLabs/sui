@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use fastcrypto::encoding::{Base64, Encoding};
+use std::sync::Arc;
 use sui_data_ingestion_core::Worker;
 use tokio::sync::Mutex;
 
@@ -24,12 +25,9 @@ pub(crate) struct State {
 impl Worker for TransactionBCSHandler {
     type Result = ();
 
-    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
-        let CheckpointData {
-            checkpoint_summary,
-            transactions: checkpoint_transactions,
-            ..
-        } = checkpoint_data;
+    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
+        let checkpoint_summary = &checkpoint_data.checkpoint_summary;
+        let checkpoint_transactions = &checkpoint_data.transactions;
         let mut state = self.state.lock().await;
         for checkpoint_transaction in checkpoint_transactions {
             self.process_transaction(
@@ -97,6 +95,7 @@ mod tests {
     use crate::handlers::transaction_bcs_handler::TransactionBCSHandler;
     use fastcrypto::encoding::{Base64, Encoding};
     use simulacrum::Simulacrum;
+    use std::sync::Arc;
     use sui_data_ingestion_core::Worker;
     use sui_types::base_types::SuiAddress;
     use sui_types::storage::ReadStore;
@@ -113,13 +112,15 @@ mod tests {
 
         // Create a checkpoint which should include the transaction we executed.
         let checkpoint = sim.create_checkpoint();
-        let checkpoint_data = sim.get_checkpoint_data(
-            checkpoint.clone(),
-            sim.get_checkpoint_contents_by_digest(&checkpoint.content_digest)
-                .unwrap(),
-        )?;
+        let checkpoint_data = Arc::new(
+            sim.get_checkpoint_data(
+                checkpoint.clone(),
+                sim.get_checkpoint_contents_by_digest(&checkpoint.content_digest)
+                    .unwrap(),
+            )?,
+        );
         let txn_handler = TransactionBCSHandler::new();
-        txn_handler.process_checkpoint(&checkpoint_data).await?;
+        txn_handler.process_checkpoint(checkpoint_data).await?;
         let transaction_entries = txn_handler.state.lock().await.transactions.clone();
         assert_eq!(transaction_entries.len(), 1);
         let db_txn = transaction_entries.first().unwrap();

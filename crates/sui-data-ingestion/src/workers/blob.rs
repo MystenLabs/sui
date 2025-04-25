@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
+use std::sync::Arc;
 use bytes::Bytes;
 use object_store::path::Path;
 use object_store::ObjectStore;
@@ -34,8 +35,8 @@ impl BlobWorker {
 #[async_trait]
 impl Worker for BlobWorker {
     type Result = ();
-    async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> Result<()> {
-        let bytes = Blob::encode(checkpoint, BlobEncoding::Bcs)?.to_bytes();
+    async fn process_checkpoint(&self, checkpoint: Arc<CheckpointData>) -> Result<()> {
+        let bytes = Blob::encode(&checkpoint, BlobEncoding::Bcs)?.to_bytes();
         let location = Path::from(format!(
             "{}.chk",
             checkpoint.checkpoint_summary.sequence_number

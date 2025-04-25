@@ -10,6 +10,7 @@ use prometheus::Registry;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 use sui_protocol_config::ProtocolConfig;
 use sui_storage::blob::{Blob, BlobEncoding};
@@ -75,7 +76,7 @@ struct TestWorker;
 #[async_trait]
 impl Worker for TestWorker {
     type Result = ();
-    async fn process_checkpoint(&self, _checkpoint: &CheckpointData) -> Result<()> {
+    async fn process_checkpoint(&self, _checkpoint: Arc<CheckpointData>) -> Result<()> {
         Ok(())
     }
 }

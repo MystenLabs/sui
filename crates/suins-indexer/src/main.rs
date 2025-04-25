@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
+use std::sync::Arc;
 use diesel::{dsl::sql, BoolExpressionMethods, ExpressionMethods};
 use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
 use dotenvy::dotenv;
@@ -108,9 +109,9 @@ impl SuinsIndexerWorker {
 #[async_trait]
 impl Worker for SuinsIndexerWorker {
     type Result = ();
-    async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> Result<()> {
+    async fn process_checkpoint(&self, checkpoint: Arc<CheckpointData>) -> Result<()> {
         let checkpoint_seq_number = checkpoint.checkpoint_summary.sequence_number;
-        let (updates, removals) = self.indexer.process_checkpoint(checkpoint);
+        let (updates, removals) = self.indexer.process_checkpoint(&checkpoint);
 
         // every 1000 checkpoints, we will print the checkpoint sequence number
         // to the console to keep track of progress

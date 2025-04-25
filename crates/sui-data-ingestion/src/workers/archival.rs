@@ -10,6 +10,7 @@ use object_store::path::Path;
 use object_store::ObjectStore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::io::Cursor;
 use sui_archival::{
     create_file_metadata_from_bytes, finalize_manifest, read_manifest_from_bytes, FileType,
@@ -34,8 +35,8 @@ pub struct ArchivalWorker;
 #[async_trait]
 impl Worker for ArchivalWorker {
     type Result = CheckpointData;
-    async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> Result<CheckpointData> {
-        Ok(checkpoint.clone())
+    async fn process_checkpoint(&self, checkpoint: Arc<CheckpointData>) -> Result<CheckpointData> {
+        Ok((*checkpoint).clone())
     }
 }
 

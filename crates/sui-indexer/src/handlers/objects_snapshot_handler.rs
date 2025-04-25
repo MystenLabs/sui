@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
+use std::sync::Arc;
 use mysten_metrics::get_metrics;
 use mysten_metrics::metered_channel::Sender;
 use mysten_metrics::spawn_monitored_task;
@@ -35,10 +36,10 @@ pub struct CheckpointObjectChanges {
 #[async_trait]
 impl Worker for ObjectsSnapshotHandler {
     type Result = ();
-    async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> anyhow::Result<()> {
-        let transformed_data = CheckpointHandler::index_objects(checkpoint, &self.metrics).await?;
+    async fn process_checkpoint(&self, checkpoint: Arc<CheckpointData>) -> anyhow::Result<()> {
+        let transformed_data = CheckpointHandler::index_objects(&checkpoint, &self.metrics).await?;
         self.sender
-            .send((CommitterWatermark::from(checkpoint), transformed_data))
+            .send((CommitterWatermark::from(&*checkpoint), transformed_data))
             .await?;
         Ok(())
     }
