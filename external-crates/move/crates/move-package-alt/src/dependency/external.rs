@@ -43,7 +43,7 @@ type ResolverName = String;
 #[serde(try_from = "RField", into = "RField")]
 pub struct ExternalDependency {
     /// The `<res>` in `{ r.<res> = <data> }`
-    resolver: ResolverName,
+    pub resolver: ResolverName,
 
     /// the `<data>` in `{ r.<res> = <data> }`
     data: Located<toml::Value>,

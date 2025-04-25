@@ -20,8 +20,8 @@ use std::{
 
 use derive_where::derive_where;
 use serde::{
-    de::{self, MapAccess, SeqAccess, Visitor},
     Deserialize, Deserializer, Serialize,
+    de::{self, MapAccess, SeqAccess, Visitor},
 };
 
 use crate::{

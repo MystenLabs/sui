@@ -26,6 +26,7 @@ use crate::package::{EnvironmentName, PackageName};
 ///
 /// To get the correctly merged set of dependencies for a given environment, see [Self::default_deps],
 /// [Self::deps_for_env], and [Self::deps_for].
+///
 #[derive(Clone, Serialize, Deserialize)]
 pub struct DependencySet<T> {
     #[serde(flatten)]

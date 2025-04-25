@@ -1,14 +1,14 @@
 ---
-source: crates/move-package-alt/tests/test_runner.rs
+source: crates/move-package-alt/tests/pinning_tests.rs
 ---
-[mock.Local]
+[mock]
 local = "."
 
-[mock2.Local]
+[mock2]
 local = ".."
 
-[overrides.mainnet.mock.Local]
+[overrides.mainnet.mock]
 local = "."
 
-[overrides.mainnet.mock2.Local]
+[overrides.mainnet.mock2]
 local = ".."
