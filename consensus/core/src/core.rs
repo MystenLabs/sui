@@ -666,7 +666,7 @@ impl Core {
                     .collect()
             };
             self.transaction_certifier
-                .get_block_transaction_votes(hard_linked_ancestors)
+                .get_own_votes(hard_linked_ancestors)
         } else {
             vec![]
         };
@@ -859,7 +859,7 @@ impl Core {
                 .collect::<Vec<_>>();
             self.block_manager.try_accept_committed_blocks(blocks);
 
-            // If the certified `decided_leaders` is empty then try to run the decision rule.
+            // If there is no certified commit to process, run the decision rule.
             if decided_leaders.is_empty() {
                 // TODO: limit commits by commits_until_update, which may be needed when leader schedule length is reduced.
                 decided_leaders = self.committer.try_decide(self.last_decided_leader);
@@ -876,39 +876,33 @@ impl Core {
             };
 
             self.last_decided_leader = last_decided.slot();
-
-            let sequenced_leaders = decided_leaders
-                .into_iter()
-                .filter_map(|leader| leader.into_committed_block())
-                .collect::<Vec<_>>();
-
-            tracing::debug!("Decided {} leaders and {commits_until_update} commits can be made before next leader schedule change", sequenced_leaders.len());
-
             self.context
                 .metrics
                 .node_metrics
                 .last_decided_leader_round
                 .set(self.last_decided_leader.round as i64);
 
+            let sequenced_leaders = decided_leaders
+                .into_iter()
+                .filter_map(|leader| leader.into_committed_block())
+                .collect::<Vec<_>>();
             // It's possible to reach this point as the decided leaders might all of them be "Skip" decisions. In this case there is no
             // leader to commit and we should break the loop.
             if sequenced_leaders.is_empty() {
                 break;
             }
-
             tracing::info!(
-                "Committing {} leaders: {}",
+                "Committing {} leaders: {}; {} commits before next leader schedule change",
                 sequenced_leaders.len(),
                 sequenced_leaders
                     .iter()
-                    .map(|b| b.reference().to_string())
-                    .join(",")
+                    .map(|(b, _)| b.reference().to_string())
+                    .join(","),
+                commits_until_update,
             );
 
             // TODO: refcount subdags
             let subdags = self.commit_observer.handle_commit(sequenced_leaders)?;
-
-            self.dag_state.write().add_scoring_subdags(subdags.clone());
 
             // Try to unsuspend blocks if gc_round has advanced.
             self.block_manager
@@ -1021,9 +1015,11 @@ impl Core {
         true
     }
 
-    // Try to decide which of the certified commits will have to be committed next respecting the `limit`. If provided `limit` is zero, it will panic.
-    // The function returns the list of decided leaders and updates in place the remaining certified commits. If empty vector is returned, it means that
-    // there are no certified commits to be committed as `certified_commits` is either empty or all of the certified commits are already committed.
+    // Try to decide which of the certified commits will have to be committed next respecting the `limit`.
+    // If provided `limit` is zero, it will panic.
+    // The function returns a list of commit leaders and certified commits. If empty vector is returned, it means that
+    // there are no certified commits to be committed as `certified_commits` is either empty or all of the certified
+    // commits are already committed.
     #[tracing::instrument(skip_all)]
     fn try_decide_certified(
         &mut self,
@@ -1056,7 +1052,7 @@ impl Core {
             .map(|commit| {
                 let leader = commit.blocks().last().expect("Certified commit should have at least one block");
                 assert_eq!(leader.reference(), commit.leader(), "Last block of the committed sub dag should have the same digest as the leader of the commit");
-                let leader = DecidedLeader::Commit(leader.clone());
+                let leader = DecidedLeader::Commit(leader.clone(), /* direct */ false);
                 UniversalCommitter::update_metrics(&self.context, &leader, Decision::Certified);
                 (leader, commit)
             })
@@ -1463,6 +1459,7 @@ impl CoreTextFixture {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
         );
 
@@ -1581,12 +1578,17 @@ mod test {
             context.clone(),
             dag_state.clone(),
         ));
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
 
         let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
         );
 
@@ -1710,12 +1712,17 @@ mod test {
             context.clone(),
             dag_state.clone(),
         ));
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
 
         let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
         );
 
@@ -1825,6 +1832,7 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
         );
 
@@ -2037,12 +2045,17 @@ mod test {
             context.clone(),
             dag_state.clone(),
         ));
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
 
         let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
         );
 
@@ -2195,12 +2208,17 @@ mod test {
             context.clone(),
             dag_state.clone(),
         ));
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
 
         let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
         );
 
@@ -2292,6 +2310,7 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
         );
 
@@ -2645,6 +2664,7 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
         );
 
@@ -2943,6 +2963,7 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
         );
 
@@ -3037,6 +3058,7 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
         );
 
@@ -3108,6 +3130,7 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
         );
 
@@ -3562,6 +3585,7 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
         );
 

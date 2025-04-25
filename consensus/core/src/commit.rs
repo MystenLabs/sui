@@ -3,6 +3,7 @@
 
 use std::{
     cmp::Ordering,
+    collections::BTreeMap,
     fmt::{self, Debug, Display, Formatter},
     hash::{Hash, Hasher},
     ops::{Deref, Range, RangeInclusive},
@@ -343,11 +344,10 @@ pub type CommitVote = CommitRef;
 pub struct CommittedSubDag {
     /// A reference to the leader of the sub-dag
     pub leader: BlockRef,
-    // TODO: refactor blocks and rejected_transactions_by_block to CertifiedBlock.
     /// All the committed blocks that are part of this sub-dag
     pub blocks: Vec<VerifiedBlock>,
     /// Indices of rejected transactions in each block.
-    pub rejected_transactions_by_block: Vec<Vec<TransactionIndex>>,
+    pub rejected_transactions_by_block: BTreeMap<BlockRef, Vec<TransactionIndex>>,
     /// The timestamp of the commit, obtained from the timestamp of the leader block.
     pub timestamp_ms: BlockTimestampMs,
     /// The reference of the commit.
@@ -364,12 +364,11 @@ impl CommittedSubDag {
     pub fn new(
         leader: BlockRef,
         blocks: Vec<VerifiedBlock>,
-        rejected_transactions_by_block: Vec<Vec<TransactionIndex>>,
+        rejected_transactions_by_block: BTreeMap<BlockRef, Vec<TransactionIndex>>,
         timestamp_ms: BlockTimestampMs,
         commit_ref: CommitRef,
         reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
     ) -> Self {
-        assert_eq!(blocks.len(), rejected_transactions_by_block.len());
         Self {
             leader,
             blocks,
@@ -445,7 +444,7 @@ pub fn load_committed_subdag_from_store(
         })
         .collect::<Vec<_>>();
     // TODO(fastpath): recover rejected transaction indices from commit.
-    let rejected_transactions = vec![vec![]; blocks.len()];
+    let rejected_transactions = BTreeMap::new();
     let leader_block_idx = leader_block_idx.expect("Leader block must be in the sub-dag");
     let leader_block_ref = blocks[leader_block_idx].reference();
     CommittedSubDag::new(
@@ -490,9 +489,9 @@ impl LeaderStatus {
         }
     }
 
-    pub(crate) fn into_decided_leader(self) -> Option<DecidedLeader> {
+    pub(crate) fn into_decided_leader(self, direct: bool) -> Option<DecidedLeader> {
         match self {
-            Self::Commit(block) => Some(DecidedLeader::Commit(block)),
+            Self::Commit(block) => Some(DecidedLeader::Commit(block, direct)),
             Self::Skip(slot) => Some(DecidedLeader::Skip(slot)),
             Self::Undecided(..) => None,
         }
@@ -512,7 +511,7 @@ impl Display for LeaderStatus {
 /// Decision of each leader slot.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum DecidedLeader {
-    Commit(VerifiedBlock),
+    Commit(VerifiedBlock, bool),
     Skip(Slot),
 }
 
@@ -520,15 +519,15 @@ impl DecidedLeader {
     // Slot where the leader is decided.
     pub(crate) fn slot(&self) -> Slot {
         match self {
-            Self::Commit(block) => block.reference().into(),
+            Self::Commit(block, _direct) => block.reference().into(),
             Self::Skip(slot) => *slot,
         }
     }
 
     // Converts to committed block if the decision is to commit. Returns None otherwise.
-    pub(crate) fn into_committed_block(self) -> Option<VerifiedBlock> {
+    pub(crate) fn into_committed_block(self) -> Option<(VerifiedBlock, bool)> {
         match self {
-            Self::Commit(block) => Some(block),
+            Self::Commit(block, direct) => Some((block, direct)),
             Self::Skip(_) => None,
         }
     }
@@ -536,7 +535,7 @@ impl DecidedLeader {
     #[cfg(test)]
     pub(crate) fn round(&self) -> Round {
         match self {
-            Self::Commit(block) => block.round(),
+            Self::Commit(block, _direct) => block.round(),
             Self::Skip(leader) => leader.round,
         }
     }
@@ -544,7 +543,7 @@ impl DecidedLeader {
     #[cfg(test)]
     pub(crate) fn authority(&self) -> AuthorityIndex {
         match self {
-            Self::Commit(block) => block.author(),
+            Self::Commit(block, _direct) => block.author(),
             Self::Skip(leader) => leader.authority,
         }
     }
@@ -553,7 +552,7 @@ impl DecidedLeader {
 impl Display for DecidedLeader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Commit(block) => write!(f, "Commit({})", block.reference()),
+            Self::Commit(block, _direct) => write!(f, "Commit({})", block.reference()),
             Self::Skip(slot) => write!(f, "Skip({slot})"),
         }
     }

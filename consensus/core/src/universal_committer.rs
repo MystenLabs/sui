@@ -100,7 +100,8 @@ impl UniversalCommitter {
             if leader.round() == GENESIS_ROUND {
                 continue;
             }
-            let Some(decided_leader) = leader.into_decided_leader() else {
+            let Some(decided_leader) = leader.into_decided_leader(decision == Decision::Direct)
+            else {
                 break;
             };
             Self::update_metrics(&self.context, &decided_leader, decision);
