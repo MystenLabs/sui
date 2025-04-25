@@ -587,7 +587,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         }
 
         info!(
-            "Synced {} missing blocks from peer {peer_index} {peer_hostname}: {}",
+            "Synced ({sync_method}) {} missing blocks from peer {peer_index} {peer_hostname}: {}",
             blocks.len(),
             blocks.iter().map(|b| b.reference().to_string()).join(", "),
         );
@@ -966,6 +966,8 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 } else {
                     Self::fetch_blocks_from_authorities_old(context.clone(), blocks_to_fetch.clone(), network_client, missing_blocks, dag_state).await
                 };
+                info!("Periodic fetching: fetched {} blocks", results.len());
+
                 context.metrics.node_metrics.synchronizer_fetch_blocks_scheduler_inflight.dec();
                 if results.is_empty() {
                     return;
@@ -1145,7 +1147,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     }
                 },
                 _ = &mut fetcher_timeout => {
-                    info!("Timed out while fetching missing blocks");
+                    info!("Periodic fetching: request timed out");
                     break;
                 }
             }
@@ -1302,7 +1304,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     }
                 },
                 _ = &mut fetcher_timeout => {
-                    info!("Timed out while fetching missing blocks");
+                    info!("Periodic fetching: timed out");
                     break;
                 }
             }
