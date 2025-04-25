@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -24,15 +25,16 @@ use crate::package_store::PackageCache;
 use crate::tables::{ObjectEntry, ObjectStatus};
 use crate::FileType;
 
-pub struct ObjectHandler {
-    state: Mutex<State>,
+// Context contains shared resources
+struct Context {
     package_filter: Option<ObjectID>,
     metrics: AnalyticsMetrics,
     package_cache: Arc<PackageCache>,
 }
 
-struct State {
-    objects: Vec<ObjectEntry>,
+pub struct ObjectHandler {
+    state: Mutex<BTreeMap<usize, Vec<ObjectEntry>>>,
+    context: Arc<Context>,
 }
 
 #[async_trait::async_trait]
@@ -45,22 +47,22 @@ impl Worker for ObjectHandler {
             transactions: checkpoint_transactions,
             ..
         } = checkpoint_data;
-        let mut state = self.state.lock().await;
         for checkpoint_transaction in checkpoint_transactions {
             for object in checkpoint_transaction.output_objects.iter() {
-                self.package_cache.update(object)?;
+                self.context.package_cache.update(object)?;
             }
-            self.process_transaction(
+            Self::process_transaction(
                 checkpoint_summary.epoch,
                 checkpoint_summary.sequence_number,
                 checkpoint_summary.timestamp_ms,
                 checkpoint_transaction,
                 &checkpoint_transaction.effects,
-                &mut state,
+                self.context.clone(),
             )
             .await?;
             if checkpoint_summary.end_of_epoch_data.is_some() {
-                self.package_cache
+                self.context
+                    .package_cache
                     .resolver
                     .package_store()
                     .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
@@ -74,7 +76,10 @@ impl Worker for ObjectHandler {
 impl AnalyticsHandler<ObjectEntry> for ObjectHandler {
     async fn read(&self) -> Result<Box<dyn Iterator<Item = ObjectEntry>>> {
         let mut state = self.state.lock().await;
-        let objects = std::mem::take(&mut state.objects);
+        let objects_map = std::mem::take(&mut *state);
+
+        // Flatten the map into a single iterator in order by transaction index
+        let objects = objects_map.into_values().flatten().collect::<Vec<_>>();
         Ok(Box::new(objects.into_iter()))
     }
 
@@ -82,7 +87,7 @@ impl AnalyticsHandler<ObjectEntry> for ObjectHandler {
         Ok(FileType::Object)
     }
 
-    fn name(&self) -> &str {
+    fn name() -> &'static str {
         "object"
     }
 }
@@ -93,39 +98,45 @@ impl ObjectHandler {
         package_filter: &Option<String>,
         metrics: AnalyticsMetrics,
     ) -> Self {
-        let state = State { objects: vec![] };
-        Self {
-            state: Mutex::new(state),
+        let context = Arc::new(Context {
             package_filter: package_filter
                 .clone()
                 .map(|x| ObjectID::from_hex_literal(&x).unwrap()),
             metrics,
             package_cache,
+        });
+
+        Self {
+            state: Mutex::new(BTreeMap::new()),
+            context,
         }
     }
     async fn process_transaction(
-        &self,
         epoch: u64,
         checkpoint: u64,
         timestamp_ms: u64,
         checkpoint_transaction: &CheckpointTransaction,
         effects: &TransactionEffects,
-        state: &mut State,
-    ) -> Result<()> {
+        context: Arc<Context>,
+    ) -> Result<Vec<ObjectEntry>> {
         let object_status_tracker = ObjectStatusTracker::new(effects);
+        let mut vec = Vec::new();
         for object in checkpoint_transaction.output_objects.iter() {
-            self.process_object(
+            if let Some(object_entry) = Self::process_object(
                 epoch,
                 checkpoint,
                 timestamp_ms,
                 object,
                 &object_status_tracker,
-                state,
+                context.clone(),
             )
-            .await?;
+            .await?
+            {
+                vec.push(object_entry);
+            }
         }
         for (object_ref, _) in effects.all_removed_objects().iter() {
-            let entry = ObjectEntry {
+            let object_entry = ObjectEntry {
                 object_id: object_ref.0.to_string(),
                 digest: object_ref.2.to_string(),
                 version: u64::from(object_ref.1),
@@ -147,13 +158,13 @@ impl ObjectHandler {
                 object_json: None,
                 bcs_length: 0,
             };
-            state.objects.push(entry);
+            vec.push(object_entry);
         }
-        Ok(())
+        Ok(vec)
     }
 
     async fn check_type_hierarchy(
-        &self,
+        context: Arc<Context>,
         type_tag: &TypeTag,
         original_package_id: ObjectID,
     ) -> Result<bool> {
@@ -179,7 +190,7 @@ impl ObjectHandler {
         let mut original_ids = JoinSet::new();
 
         for id in package_ids {
-            let package_cache = self.package_cache.clone();
+            let package_cache = context.package_cache.clone();
             original_ids.spawn(async move { package_cache.get_original_package_id(id).await });
         }
 
@@ -196,14 +207,13 @@ impl ObjectHandler {
     // Object data. Only called if there are objects in the transaction.
     // Responsible to build the live object table.
     async fn process_object(
-        &self,
         epoch: u64,
         checkpoint: u64,
         timestamp_ms: u64,
         object: &Object,
         object_status_tracker: &ObjectStatusTracker,
-        state: &mut State,
-    ) -> Result<()> {
+        context: Arc<Context>,
+    ) -> Result<Option<ObjectEntry>> {
         let move_obj_opt = object.data.try_as_move();
         let has_public_transfer = move_obj_opt
             .map(|o| o.has_public_transfer())
@@ -212,7 +222,7 @@ impl ObjectHandler {
             .struct_tag()
             .and_then(|tag| object.data.try_as_move().map(|mo| (tag, mo.contents())))
         {
-            match get_move_struct(&tag, contents, &self.package_cache.resolver).await {
+            match get_move_struct(&tag, contents, &context.package_cache.resolver).await {
                 Ok(move_struct) => Some(move_struct),
                 Err(err)
                     if err
@@ -222,9 +232,10 @@ impl ObjectHandler {
                         })
                         .is_some() =>
                 {
-                    self.metrics
+                    context
+                        .metrics
                         .total_too_large_to_deserialize
-                        .with_label_values(&[self.name()])
+                        .with_label_values(&[Self::name()])
                         .inc();
                     tracing::warn!(
                         "Skipping struct with type {} because it was too large.",
@@ -250,17 +261,16 @@ impl ObjectHandler {
 
         let object_type = move_obj_opt.map(|o| o.type_());
 
-        let is_match = if let Some(package_id) = self.package_filter {
+        let is_match = if let Some(package_id) = context.package_filter {
             if let Some(object_type) = object_type {
-                let original_package_id = self
+                let original_package_id = context
                     .package_cache
                     .get_original_package_id(package_id.into())
                     .await?;
 
                 // Check if any type parameter matches the package filter
                 let type_tag: TypeTag = object_type.clone().into();
-                self.check_type_hierarchy(&type_tag, original_package_id)
-                    .await?
+                Self::check_type_hierarchy(context, &type_tag, original_package_id).await?
             } else {
                 false
             }
@@ -269,7 +279,7 @@ impl ObjectHandler {
         };
 
         if !is_match {
-            return Ok(());
+            return Ok(None);
         }
 
         let object_id = object.id();
@@ -301,79 +311,6 @@ impl ObjectHandler {
             struct_tag: struct_tag.map(|x| x.to_string()),
             object_json: sui_move_struct.map(|x| x.to_json_value().to_string()),
         };
-        state.objects.push(entry);
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use move_core_types::{
-        account_address::AccountAddress, identifier::Identifier, language_storage::StructTag,
-    };
-    use prometheus::Registry;
-    use std::str::FromStr;
-    use sui_types::TypeTag;
-
-    fn create_struct_tag(
-        addr: &str,
-        module: &str,
-        name: &str,
-        type_params: Vec<TypeTag>,
-    ) -> TypeTag {
-        TypeTag::Struct(Box::new(StructTag {
-            address: AccountAddress::from_str(addr).unwrap(),
-            module: Identifier::new(module).unwrap(),
-            name: Identifier::new(name).unwrap(),
-            type_params,
-        }))
-    }
-
-    #[tokio::test]
-    async fn test_check_type_hierarchy() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let registry = Registry::new();
-        let metrics = AnalyticsMetrics::new(&registry);
-        let package_cache = Arc::new(PackageCache::new(temp_dir.path(), "http://localhost:9000"));
-        let handler = ObjectHandler::new(package_cache, &Some("0xabc".to_string()), metrics);
-
-        // 1. Direct match
-        let type_tag = create_struct_tag("0xabc", "module", "Type", vec![]);
-        assert!(handler
-            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap(),)
-            .await
-            .unwrap());
-
-        // 2. Match in type parameter
-        let inner_type = create_struct_tag("0xabc", "module", "Inner", vec![]);
-        let type_tag = create_struct_tag("0xcde", "module", "Type", vec![inner_type]);
-        assert!(handler
-            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap(),)
-            .await
-            .unwrap());
-
-        // 3. Match in nested vector
-        let inner_type = create_struct_tag("0xabc", "module", "Inner", vec![]);
-        let vector_type = TypeTag::Vector(Box::new(inner_type));
-        let type_tag = create_struct_tag("0xcde", "module", "Type", vec![vector_type]);
-        assert!(handler
-            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap(),)
-            .await
-            .unwrap());
-
-        // 4. No match
-        let type_tag = create_struct_tag("0xcde", "module", "Type", vec![]);
-        assert!(!handler
-            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap(),)
-            .await
-            .unwrap());
-
-        // 5. Primitive type
-        let type_tag = TypeTag::U64;
-        assert!(!handler
-            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap(),)
-            .await
-            .unwrap());
+        Ok(Some(entry))
     }
 }

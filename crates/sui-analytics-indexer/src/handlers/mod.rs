@@ -45,7 +45,7 @@ pub trait AnalyticsHandler<S>: Worker<Result = ()> {
     async fn read(&self) -> Result<Box<dyn Iterator<Item = S>>>;
     /// Type of data being written by this processor i.e. checkpoint, object, etc
     fn file_type(&self) -> Result<FileType>;
-    fn name(&self) -> &str;
+    fn name() -> &'static str;
 }
 
 fn initial_shared_version(object: &Object) -> Option<u64> {
