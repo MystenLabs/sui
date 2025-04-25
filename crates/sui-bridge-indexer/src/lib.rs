@@ -11,7 +11,6 @@ use crate::storage::PgBridgePersistent;
 use crate::sui_bridge_indexer::SuiBridgeDataMapper;
 use ethers::providers::{Http, Provider};
 use ethers::types::Address as EthAddress;
-use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use std::sync::Arc;
 use strum_macros::Display;
@@ -19,8 +18,10 @@ use sui_bridge::eth_client::EthClient;
 use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge::utils::get_eth_contract_addresses;
-use sui_bridge_schema::models::GovernanceAction as DBGovernanceAction;
 use sui_bridge_schema::models::TokenTransferData as DBTokenTransferData;
+use sui_bridge_schema::models::{
+    BridgeDataSource, GovernanceAction as DBGovernanceAction, TokenTransferStatus,
+};
 use sui_bridge_schema::models::{SuiErrorTransactions, TokenTransfer as DBTokenTransfer};
 use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_indexer_builder::indexer_builder::{BackfillStrategy, Datasource, Indexer, IndexerBuilder};
@@ -104,9 +105,9 @@ impl TokenTransfer {
             timestamp_ms: self.timestamp_ms as i64,
             txn_hash: self.txn_hash.clone(),
             txn_sender: self.txn_sender.clone(),
-            status: self.status.to_string(),
+            status: self.status,
             gas_usage: self.gas_usage,
-            data_source: self.data_source.to_string(),
+            data_source: self.data_source,
             is_finalized: self.is_finalized,
         }
     }
@@ -144,31 +145,13 @@ impl GovernanceAction {
     fn to_db(&self) -> DBGovernanceAction {
         DBGovernanceAction {
             nonce: self.nonce.map(|nonce| nonce as i64),
-            data_source: self.data_source.to_string(),
+            data_source: self.data_source,
             txn_digest: self.tx_digest.clone(),
             sender_address: self.sender.to_vec(),
             timestamp_ms: self.timestamp_ms as i64,
             action: self.action.to_string(),
             data: self.data.clone(),
         }
-    }
-}
-
-#[derive(Clone)]
-pub(crate) enum TokenTransferStatus {
-    Deposited,
-    Approved,
-    Claimed,
-}
-
-impl Display for TokenTransferStatus {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let str = match self {
-            TokenTransferStatus::Deposited => "Deposited",
-            TokenTransferStatus::Approved => "Approved",
-            TokenTransferStatus::Claimed => "Claimed",
-        };
-        write!(f, "{str}")
     }
 }
 
@@ -181,22 +164,6 @@ pub(crate) enum GovernanceActionType {
     UpgradeEVMContract,
     AddSuiTokens,
     AddEVMTokens,
-}
-
-#[derive(Clone)]
-enum BridgeDataSource {
-    Sui,
-    Eth,
-}
-
-impl Display for BridgeDataSource {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let str = match self {
-            BridgeDataSource::Eth => "ETH",
-            BridgeDataSource::Sui => "SUI",
-        };
-        write!(f, "{str}")
-    }
 }
 
 pub async fn create_sui_indexer(
