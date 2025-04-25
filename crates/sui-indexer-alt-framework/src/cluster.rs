@@ -178,8 +178,6 @@ mod tests {
     use sui_synthetic_ingestion::synthetic_ingestion;
     use tempfile::tempdir;
 
-    use super::*;
-
     use crate::pipeline::concurrent::{self, ConcurrentConfig};
     use crate::pipeline::Processor;
     use crate::postgres::{
@@ -188,6 +186,8 @@ mod tests {
     };
     use crate::types::full_checkpoint_content::CheckpointData;
     use crate::FieldCount;
+
+    use super::*;
 
     diesel::table! {
         /// Table for storing transaction counts per checkpoint.

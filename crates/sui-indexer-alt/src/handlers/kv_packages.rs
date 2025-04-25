@@ -6,8 +6,8 @@ use std::sync::Arc;
 use anyhow::{anyhow, Result};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::{Connection, Db},
     pipeline::{concurrent::Handler, Processor},
+    postgres::{Connection, Db},
     types::{base_types::SuiAddress, full_checkpoint_content::CheckpointData},
 };
 use sui_indexer_alt_schema::{packages::StoredKvPackage, schema::kv_packages};

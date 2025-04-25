@@ -16,9 +16,6 @@ use prometheus::Registry;
 use sui_indexer_alt_framework_store_traits::{
     CommitterWatermark, Connection, Store, TransactionalStore,
 };
-use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
-use sui_pg_db::{temp::TempDb, Db, DbArgs};
-use tempfile::tempdir;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};

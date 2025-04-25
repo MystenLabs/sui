@@ -198,11 +198,6 @@ impl TryInto<StoredObjInfo> for &ProcessedObjInfo {
 #[cfg(test)]
 mod tests {
     use sui_indexer_alt_framework::{
-<<<<<<< HEAD
-        db,
-=======
-        store::Store,
->>>>>>> d8bf107848 (Parameterize Indexer on Store, framework provides impl for Indexer<Db> if postgres feature flag is specified. Tests in framework will use postgres)
         types::{
             base_types::{dbg_addr, SequenceNumber},
             object::{Authenticator, Owner},
