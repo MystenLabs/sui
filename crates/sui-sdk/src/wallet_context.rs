@@ -67,6 +67,10 @@ impl WalletContext {
         self.config.keystore.addresses()
     }
 
+    pub fn get_env_override(&self) -> Option<String> {
+        self.env_override.clone()
+    }
+
     pub async fn get_client(&self) -> Result<SuiClient, anyhow::Error> {
         let read = self.client.read().await;
 

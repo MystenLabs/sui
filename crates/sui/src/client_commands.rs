@@ -1691,12 +1691,12 @@ impl SuiClientCommands {
                 context.config.save()?;
                 SuiClientCommandResult::NewEnv(env)
             }
-            SuiClientCommands::ActiveEnv => {
-                SuiClientCommandResult::ActiveEnv(context.config.active_env.clone())
-            }
+            SuiClientCommands::ActiveEnv => SuiClientCommandResult::ActiveEnv(
+                context.get_active_env().ok().map(|e| e.alias.clone()),
+            ),
             SuiClientCommands::Envs => SuiClientCommandResult::Envs(
                 context.config.envs.clone(),
-                context.config.active_env.clone(),
+                context.get_active_env().ok().map(|e| e.alias.clone()),
             ),
             SuiClientCommands::VerifySource {
                 package_path,

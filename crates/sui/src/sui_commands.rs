@@ -147,7 +147,7 @@ pub struct SuiEnvConfig {
     #[clap(long = "client.config")]
     config: Option<PathBuf>,
     /// The Sui environment to use. This must be present in the current config file.
-    #[clap(long = "env")]
+    #[clap(long = "client.env")]
     env: Option<String>,
 }
 
@@ -527,7 +527,7 @@ impl SuiCommand {
                                 bail!(
                                     "`sui move build --dump-bytecode-as-base64` requires a connection to the network. \
                                      Current active network is {} but failed to connect to it.", 
-                                     context.config.active_env.as_ref().unwrap()
+                                     context.get_active_env()?.alias
                                 );
                             };
 
