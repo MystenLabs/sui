@@ -25,7 +25,7 @@ use crate::package_store::PackageCache;
 use crate::tables::{ObjectEntry, ObjectStatus};
 use crate::FileType;
 
-const NAME: &str = "move_call";
+const NAME: &str = "object";
 
 // Context contains shared resources
 struct Context {
@@ -364,5 +364,108 @@ impl ObjectHandler {
             object_json: sui_move_struct.map(|x| x.to_json_value().to_string()),
         };
         Ok(Some(entry))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use move_core_types::{
+        account_address::AccountAddress, identifier::Identifier, language_storage::StructTag,
+    };
+    use prometheus::Registry;
+    use std::str::FromStr;
+    use sui_types::TypeTag;
+
+    fn create_struct_tag(
+        addr: &str,
+        module: &str,
+        name: &str,
+        type_params: Vec<TypeTag>,
+    ) -> TypeTag {
+        TypeTag::Struct(Box::new(StructTag {
+            address: AccountAddress::from_str(addr).unwrap(),
+            module: Identifier::new(module).unwrap(),
+            name: Identifier::new(name).unwrap(),
+            type_params,
+        }))
+    }
+
+    #[tokio::test]
+    async fn test_check_type_hierarchy() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let registry = Registry::new();
+        let metrics = AnalyticsMetrics::new(&registry);
+        let package_cache = Arc::new(PackageCache::new(temp_dir.path(), "http://localhost:9000"));
+        
+        // Create context directly instead of using the handler
+        let context = Arc::new(Context {
+            package_filter: Some(ObjectID::from_hex_literal("0xabc").unwrap()),
+            metrics,
+            package_cache,
+        });
+
+        // 1. Direct match
+        let type_tag = create_struct_tag("0xabc", "module", "Type", vec![]);
+        assert!(
+            ObjectHandler::check_type_hierarchy(
+                context.clone(),
+                &type_tag,
+                ObjectID::from_hex_literal("0xabc").unwrap(),
+            )
+            .await
+            .unwrap()
+        );
+
+        // 2. Match in type parameter
+        let inner_type = create_struct_tag("0xabc", "module", "Inner", vec![]);
+        let type_tag = create_struct_tag("0xcde", "module", "Type", vec![inner_type]);
+        assert!(
+            ObjectHandler::check_type_hierarchy(
+                context.clone(),
+                &type_tag,
+                ObjectID::from_hex_literal("0xabc").unwrap(),
+            )
+            .await
+            .unwrap()
+        );
+
+        // 3. Match in nested vector
+        let inner_type = create_struct_tag("0xabc", "module", "Inner", vec![]);
+        let vector_type = TypeTag::Vector(Box::new(inner_type));
+        let type_tag = create_struct_tag("0xcde", "module", "Type", vec![vector_type]);
+        assert!(
+            ObjectHandler::check_type_hierarchy(
+                context.clone(),
+                &type_tag,
+                ObjectID::from_hex_literal("0xabc").unwrap(),
+            )
+            .await
+            .unwrap()
+        );
+
+        // 4. No match
+        let type_tag = create_struct_tag("0xcde", "module", "Type", vec![]);
+        assert!(
+            !ObjectHandler::check_type_hierarchy(
+                context.clone(),
+                &type_tag,
+                ObjectID::from_hex_literal("0xabc").unwrap(),
+            )
+            .await
+            .unwrap()
+        );
+
+        // 5. Primitive type
+        let type_tag = TypeTag::U64;
+        assert!(
+            !ObjectHandler::check_type_hierarchy(
+                context.clone(),
+                &type_tag,
+                ObjectID::from_hex_literal("0xabc").unwrap(),
+            )
+            .await
+            .unwrap()
+        );
     }
 }

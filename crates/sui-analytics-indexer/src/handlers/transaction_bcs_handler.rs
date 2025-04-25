@@ -135,6 +135,7 @@ impl TransactionBCSHandler {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
     use crate::handlers::transaction_bcs_handler::TransactionBCSHandler;
     use fastcrypto::encoding::{Base64, Encoding};
     use simulacrum::Simulacrum;
@@ -160,7 +161,7 @@ mod tests {
                 .unwrap(),
         )?;
         let txn_handler = TransactionBCSHandler::new();
-        txn_handler.process_checkpoint(&checkpoint_data).await?;
+        txn_handler.process_checkpoint(Arc::new(checkpoint_data)).await?;
         
         // Extract entries from state
         let transaction_map = txn_handler.state.lock().await;

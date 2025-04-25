@@ -276,6 +276,7 @@ fn compute_transaction_positions(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
     use crate::handlers::transaction_handler::TransactionHandler;
     use simulacrum::Simulacrum;
     use sui_data_ingestion_core::Worker;
@@ -300,7 +301,7 @@ mod tests {
                 .unwrap(),
         )?;
         let txn_handler = TransactionHandler::new();
-        txn_handler.process_checkpoint(&checkpoint_data).await?;
+        txn_handler.process_checkpoint(Arc::new(checkpoint_data)).await?;
         let transaction_map = txn_handler.state.lock().await;
         let transaction_entries: Vec<_> = transaction_map.values().flatten().cloned().collect();
         assert_eq!(transaction_entries.len(), 1);
