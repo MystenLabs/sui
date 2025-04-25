@@ -25,7 +25,7 @@ pub struct EventEmitCostParams {
     pub event_emit_value_size_derivation_cost_per_byte: InternalGas,
     pub event_emit_tag_size_derivation_cost_per_byte: InternalGas,
     pub event_emit_output_cost_per_byte: InternalGas,
-    pub event_emit_auth_stream_cost: InternalGas,
+    pub event_emit_auth_stream_cost: Option<InternalGas>,
 }
 /***************************************************************************************************
  * native fun emit
@@ -165,6 +165,15 @@ fn emit_impl(
         context,
         event_emit_cost_params.event_emit_output_cost_per_byte * ev_size.into()
     );
+
+    if stream_ref.is_some() {
+        native_charge_gas_early_exit!(
+            context,
+            // this code cannot be reached in protocol versions which don't define
+            // event_emit_auth_stream_cost
+            event_emit_cost_params.event_emit_auth_stream_cost.unwrap()
+        );
+    }
 
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
 

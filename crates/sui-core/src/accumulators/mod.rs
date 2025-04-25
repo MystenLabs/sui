@@ -169,6 +169,10 @@ pub fn create_accumulator_update_transactions(
         }
     }
 
+    if merges.is_empty() && splits.is_empty() {
+        return vec![];
+    }
+
     let mut builder = ProgrammableTransactionBuilder::new();
 
     for (accumulator_obj, merged_value) in merges {
