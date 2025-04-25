@@ -54,8 +54,8 @@ impl<W: Worker + 'static> WorkerPool<W> {
             "Starting indexing pipeline {} with concurrency {}. Current watermark is {}.",
             self.task_name, self.concurrency, watermark
         );
-        let (progress_sender, mut progress_receiver) = mpsc::channel(MAX_CHECKPOINTS_IN_PROGRESS);
-        let (reducer_sender, reducer_receiver) = mpsc::channel(MAX_CHECKPOINTS_IN_PROGRESS);
+        let (progress_sender, mut progress_receiver) = mpsc::channel(*MAX_CHECKPOINTS_IN_PROGRESS);
+        let (reducer_sender, reducer_receiver) = mpsc::channel(*MAX_CHECKPOINTS_IN_PROGRESS);
         let mut workers = vec![];
         let mut idle: BTreeSet<_> = (0..self.concurrency).collect();
         let mut checkpoints = VecDeque::new();
@@ -65,7 +65,7 @@ impl<W: Worker + 'static> WorkerPool<W> {
         // spawn child workers
         for worker_id in 0..self.concurrency {
             let (worker_sender, mut worker_recv) =
-                mpsc::channel::<Arc<CheckpointData>>(MAX_CHECKPOINTS_IN_PROGRESS);
+                mpsc::channel::<Arc<CheckpointData>>(*MAX_CHECKPOINTS_IN_PROGRESS);
             let (term_sender, mut term_receiver) = oneshot::channel::<()>();
             let cloned_progress_sender = progress_sender.clone();
             let task_name = self.task_name.clone();
