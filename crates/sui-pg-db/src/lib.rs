@@ -273,7 +273,6 @@ mod tests {
     use super::*;
     use diesel::prelude::QueryableByName;
     use diesel_async::RunQueryDsl;
-    use diesel_migrations::EmbeddedMigrations;
 
     #[tokio::test]
     async fn temp_db_smoketest() {
