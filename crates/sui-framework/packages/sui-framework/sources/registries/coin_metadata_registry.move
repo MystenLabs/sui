@@ -7,10 +7,9 @@ use sui::package::Publisher;
 use sui::transfer::Receiving;
 use sui::vec_map::{Self, VecMap};
 
-const EMetadataAlreadyExists: u64 = 1;
-const EMetadataNotFound: u64 = 2;
-const EAlreadyClaimed: u64 = 3;
-const ENotSystemAddress: u64 = 4;
+const EMetadataNotFound: u64 = 0;
+const EAlreadyClaimed: u64 = 1;
+const ENotSystemAddress: u64 = 2;
 
 /// @0x10.
 public struct CoinMetadataRegistry has key { id: UID }
@@ -24,6 +23,7 @@ public struct CoinMetadataKey<phantom T>() has copy, drop, store;
 
 public struct MetadataCap<phantom T> has key, store { id: UID }
 
+// enum for extensibility?
 public struct Metadata<phantom T> has key, store {
     id: UID,
     decimals: u8,
@@ -32,10 +32,12 @@ public struct Metadata<phantom T> has key, store {
     description: String,
     icon_url: String,
     supply: Option<Supply<T>>,
+    is_fixed_supply: bool,
+    is_regulated: bool,
     treasury_cap_id: Option<ID>,
     metadata_cap_id: Option<ID>,
     deny_cap_id: Option<ID>,
-    fields: VecMap<String, String>,
+    extra_fields: VecMap<String, String>,
 }
 
 // hot potato pattern to enforce registration after "create_currency" metadata creation
@@ -44,10 +46,10 @@ public struct InitMetadata<phantom T> {
 }
 
 // call this after create_currency_v2 to register the metadata
-public fun transfer<T>(init: InitMetadata<T>) {
+public fun transfer_inner<T>(init: InitMetadata<T>) {
     let InitMetadata { metadata } = init;
 
-    transfer::public_transfer(
+    transfer::transfer(
         metadata,
         coin_metadata_registry_id().to_address(),
     );
@@ -152,17 +154,13 @@ public fun total_fixed_supply<T>(metadata: &Metadata<T>): u64 {
 
 public fun cap_claimed<T>(metadata: &Metadata<T>): bool { metadata.metadata_cap_id.is_some() }
 
-// TODO: need a decision on the assumptions here. maybe we get rid of these functions and
-// let the caller interpret the metadata themselves
+public fun is_fixed_supply<T>(metadata: &Metadata<T>): bool {
+    metadata.supply.is_some() || metadata.is_fixed_supply
+}
 
-/// TODO: Assumptions are painful here :( (no way to verify supply is fixed outside of registry)
-/// It is safer to mark a coin as not frozen when it is actually frozen than to incorrectly
-/// mark it as frozen when it is not. This method supports the happy path so I think the trade
-/// off is worth it.
-public fun is_fixed_supply<T>(metadata: &Metadata<T>): bool { metadata.supply.is_some() }
-
-/// TODO: Assumptions are also painful here :( (no way to verify supply is fixed outside of registry)
-public fun is_regulated<T>(metadata: &Metadata<T>): bool { metadata.deny_cap_id.is_some() }
+public fun is_regulated<T>(metadata: &Metadata<T>): bool {
+    metadata.deny_cap_id.is_some() || metadata.is_regulated
+}
 
 public fun exists<T>(registry: &CoinMetadataRegistry): bool {
     dynamic_object_field::exists_(&registry.id, CoinMetadataKey<T>())
@@ -185,11 +183,24 @@ public(package) fun register_metadata<T>(
     registry: &mut CoinMetadataRegistry,
     metadata: Metadata<T>,
 ) {
-    // assert!(!registry.exists<T>(), EMetadataAlreadyExists);
-    // skip metadata if it already exists, to account for accidental migration by reference?
-    if (registry.exists<T>()) {
-        // destroy metadata (and supply?)
-        abort
+    // if registry already exists but the supplied metadata has a supply, extract and register supply
+    if (registry.exists<T>() && metadata.supply.is_some()) {
+        let Metadata {
+            id,
+            mut supply,
+            ..,
+        } = metadata;
+        registry.register_supply(supply.extract());
+        supply.destroy_none();
+        id.delete();
+    } else if (registry.exists<T>()) {
+        let Metadata {
+            id,
+            supply,
+            ..,
+        } = metadata;
+        supply.destroy_none();
+        id.delete();
     } else {
         dynamic_object_field::add(&mut registry.id, CoinMetadataKey<T>(), metadata);
     }
@@ -246,7 +257,9 @@ public(package) fun create_metadata<T>(
         treasury_cap_id,
         metadata_cap_id,
         deny_cap_id,
-        fields: vec_map::empty(),
+        extra_fields: vec_map::empty(),
+        is_fixed_supply: false,
+        is_regulated: false,
     }
 }
 
@@ -262,7 +275,9 @@ public(package) fun empty<T>(ctx: &mut TxContext): Metadata<T> {
         treasury_cap_id: option::none(),
         metadata_cap_id: option::none(),
         deny_cap_id: option::none(),
-        fields: vec_map::empty(),
+        extra_fields: vec_map::empty(),
+        is_fixed_supply: false,
+        is_regulated: false,
     }
 }
 
