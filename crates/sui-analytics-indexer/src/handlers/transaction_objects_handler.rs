@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
+use std::sync::Arc;
 use sui_data_ingestion_core::Worker;
 use tokio::sync::Mutex;
 
@@ -26,12 +27,9 @@ struct State {
 impl Worker for TransactionObjectsHandler {
     type Result = ();
 
-    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
-        let CheckpointData {
-            checkpoint_summary,
-            transactions: checkpoint_transactions,
-            ..
-        } = checkpoint_data;
+    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
+        let checkpoint_summary = &checkpoint_data.checkpoint_summary;
+        let checkpoint_transactions = &checkpoint_data.transactions;
         let mut state = self.state.lock().await;
         for checkpoint_transaction in checkpoint_transactions {
             self.process_transaction(

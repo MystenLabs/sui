@@ -3,6 +3,7 @@
 
 use crate::{BigTableClient, KeyValueStoreReader, KeyValueStoreWriter, TransactionData};
 use async_trait::async_trait;
+use std::sync::Arc;
 use sui_data_ingestion_core::Worker;
 use sui_types::full_checkpoint_content::CheckpointData;
 
@@ -14,7 +15,7 @@ pub struct KvWorker {
 impl Worker for KvWorker {
     type Result = ();
 
-    async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> anyhow::Result<()> {
+    async fn process_checkpoint(&self, checkpoint: Arc<CheckpointData>) -> anyhow::Result<()> {
         let mut client = self.client.clone();
         let mut objects = vec![];
         let mut transactions = vec![];
@@ -33,7 +34,7 @@ impl Worker for KvWorker {
         }
         client.save_objects(&objects).await?;
         client.save_transactions(&transactions).await?;
-        client.save_checkpoint(checkpoint).await?;
+        client.save_checkpoint(&checkpoint).await?;
         if let Some(epoch_info) = checkpoint.epoch_info()? {
             if epoch_info.epoch > 0 {
                 if let Some(mut prev) = client.get_epoch(epoch_info.epoch - 1).await? {

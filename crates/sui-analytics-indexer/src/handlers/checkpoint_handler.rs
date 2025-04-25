@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use fastcrypto::traits::EncodeDecodeBase64;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use sui_data_ingestion_core::Worker;
@@ -27,12 +28,9 @@ struct State {
 impl Worker for CheckpointHandler {
     type Result = ();
 
-    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
-        let CheckpointData {
-            checkpoint_summary,
-            transactions: checkpoint_transactions,
-            ..
-        } = checkpoint_data;
+    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
+        let checkpoint_summary = &checkpoint_data.checkpoint_summary;
+        let checkpoint_transactions = &checkpoint_data.transactions;
         self.process_checkpoint_transactions(checkpoint_summary, checkpoint_transactions)
             .await;
         Ok(())

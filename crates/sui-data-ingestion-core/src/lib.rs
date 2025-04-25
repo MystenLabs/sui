@@ -19,6 +19,7 @@ pub use progress_store::{
     ExecutorProgress, FileProgressStore, ProgressStore, ShimIndexerProgressStore, ShimProgressStore,
 };
 pub use reader::ReaderOptions;
+use std::sync::Arc;
 use sui_types::full_checkpoint_content::CheckpointData;
 pub use util::{create_remote_store_client, end_of_epoch_data};
 pub use worker_pool::WorkerPool;
@@ -26,7 +27,7 @@ pub use worker_pool::WorkerPool;
 #[async_trait]
 pub trait Worker: Send + Sync {
     type Result: Send + Sync + Clone;
-    async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> Result<Self::Result>;
+    async fn process_checkpoint(&self, checkpoint: Arc<CheckpointData>) -> Result<Self::Result>;
 
     fn preprocess_hook(&self, _: &CheckpointData) -> Result<()> {
         Ok(())

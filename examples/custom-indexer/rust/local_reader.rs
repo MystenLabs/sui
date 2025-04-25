@@ -4,6 +4,7 @@
 use tokio::sync::oneshot;
 use anyhow::Result;
 use async_trait::async_trait;
+use std::sync::Arc;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_data_ingestion_core as sdic;
 use sdic::{Worker, WorkerPool, ReaderOptions};
@@ -17,7 +18,7 @@ struct CustomWorker;
 #[async_trait]
 impl Worker for CustomWorker {
     type Result = ();
-    async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> Result<()> {
+    async fn process_checkpoint(&self, checkpoint: Arc<CheckpointData>) -> Result<()> {
         // custom processing logic
         println!("Processing Local checkpoint: {}", checkpoint.checkpoint_summary.to_string());
         Ok(())

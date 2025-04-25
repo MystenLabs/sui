@@ -3,6 +3,7 @@
 
 use crate::state_sync::metrics::Metrics;
 use anemo::async_trait;
+use std::sync::Arc;
 use sui_archival::reader::ArchiveReader;
 use sui_data_ingestion_core::Worker;
 use sui_types::full_checkpoint_content::CheckpointData;
@@ -15,7 +16,7 @@ pub(crate) struct StateSyncWorker<S>(pub(crate) S, pub(crate) Metrics);
 impl<S: WriteStore + Clone + Send + Sync + 'static> Worker for StateSyncWorker<S> {
     type Result = ();
 
-    async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> anyhow::Result<()> {
+    async fn process_checkpoint(&self, checkpoint: Arc<CheckpointData>) -> anyhow::Result<()> {
         let verified_checkpoint = ArchiveReader::get_or_insert_verified_checkpoint(
             &self.0,
             checkpoint.checkpoint_summary.clone(),
