@@ -1,0 +1,14 @@
+# Broken external resolver produces a well-formed TOML output that doesn't represent a valid dependency
+
+[package]
+name = "example"
+edition = "2024.beta"
+license = "Apache-2.0"
+authors = ["Move Team"]
+
+[environments]
+mainnet = "35834a8a"
+
+[dependencies.mock.r.mock-resolver]
+output.resolved = { not-a-dep = "" }
+stderr = "stderr output"

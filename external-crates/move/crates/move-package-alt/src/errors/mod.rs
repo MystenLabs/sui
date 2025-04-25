@@ -16,6 +16,7 @@ pub use located::{with_file, Located};
 
 mod files;
 pub use files::FileHandle;
+pub use resolver_error::ResolverError;
 
 mod resolver_error;
 
@@ -52,6 +53,9 @@ pub enum PackageError {
 
     #[error(transparent)]
     Toml(#[from] toml_edit::de::Error),
+
+    #[error(transparent)]
+    Resolver(#[from] ResolverError),
 }
 
 impl PackageError {
