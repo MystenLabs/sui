@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -20,13 +21,14 @@ use sui_types::effects::TransactionEvents;
 use sui_types::event::Event;
 use sui_types::full_checkpoint_content::CheckpointData;
 
-pub struct EventHandler {
-    state: Mutex<State>,
+// Context contains shared resources
+struct Context {
     package_cache: Arc<PackageCache>,
 }
 
-struct State {
-    events: Vec<EventEntry>,
+pub struct EventHandler {
+    state: Mutex<BTreeMap<usize, Vec<EventEntry>>>,
+    context: Arc<Context>,
 }
 
 #[async_trait::async_trait]
@@ -39,29 +41,83 @@ impl Worker for EventHandler {
             transactions: checkpoint_transactions,
             ..
         } = checkpoint_data;
-        let mut state = self.state.lock().await;
+
+        // Update package cache first (still need to do this serially)
         for checkpoint_transaction in checkpoint_transactions {
             for object in checkpoint_transaction.output_objects.iter() {
-                self.package_cache.update(object)?;
-            }
-            if let Some(events) = &checkpoint_transaction.events {
-                self.process_events(
-                    checkpoint_summary.epoch,
-                    checkpoint_summary.sequence_number,
-                    checkpoint_transaction.transaction.digest(),
-                    checkpoint_summary.timestamp_ms,
-                    events,
-                    &mut state,
-                )
-                .await?;
-            }
-            if checkpoint_summary.end_of_epoch_data.is_some() {
-                self.package_cache
-                    .resolver
-                    .package_store()
-                    .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
+                self.context.package_cache.update(object)?;
             }
         }
+
+        // Create a channel to collect results
+        let (tx, mut rx) =
+            tokio::sync::mpsc::channel::<(usize, Vec<EventEntry>)>(checkpoint_transactions.len());
+
+        // Process transactions in parallel
+        let mut futures = Vec::new();
+
+        for (idx, checkpoint_transaction) in checkpoint_transactions.iter().enumerate() {
+            if let Some(events) = &checkpoint_transaction.events {
+                let tx = tx.clone();
+                let context = self.context.clone();
+                let transaction = checkpoint_transaction.clone();
+                let epoch = checkpoint_summary.epoch;
+                let checkpoint_seq = checkpoint_summary.sequence_number;
+                let timestamp_ms = checkpoint_summary.timestamp_ms;
+                let events_clone = events.clone();
+
+                // Spawn a task for each transaction
+                let handle = tokio::spawn(async move {
+                    match Self::process_events(
+                        epoch,
+                        checkpoint_seq,
+                        transaction.transaction.digest(),
+                        timestamp_ms,
+                        &events_clone,
+                        context,
+                    )
+                    .await
+                    {
+                        Ok(entries) => {
+                            if !entries.is_empty() {
+                                let _ = tx.send((idx, entries)).await;
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Error processing transaction at index {}: {}", idx, e);
+                        }
+                    }
+                });
+
+                futures.push(handle);
+            }
+        }
+
+        // Drop the original sender so the channel can close when all tasks are done
+        drop(tx);
+
+        // Wait for all tasks to complete
+        for handle in futures {
+            if let Err(e) = handle.await {
+                tracing::error!("Task panicked: {}", e);
+            }
+        }
+
+        // Collect results into the state in order by transaction index
+        let mut state = self.state.lock().await;
+        while let Some((idx, events)) = rx.recv().await {
+            state.insert(idx, events);
+        }
+
+        // If end of epoch, evict package store
+        if checkpoint_summary.end_of_epoch_data.is_some() {
+            self.context
+                .package_cache
+                .resolver
+                .package_store()
+                .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
+        }
+
         Ok(())
     }
 }
@@ -70,36 +126,39 @@ impl Worker for EventHandler {
 impl AnalyticsHandler<EventEntry> for EventHandler {
     async fn read(&self) -> Result<Box<dyn Iterator<Item = EventEntry>>> {
         let mut state = self.state.lock().await;
-        let events = std::mem::take(&mut state.events);
-        Ok(Box::new(events.into_iter()))
+        let events_map = std::mem::take(&mut *state);
+
+        // Flatten the map into a single iterator in order by transaction index
+        Ok(Box::new(events_map.into_values().flatten()))
     }
 
     fn file_type(&self) -> Result<FileType> {
         Ok(FileType::Event)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "event"
     }
 }
 
 impl EventHandler {
     pub fn new(package_cache: Arc<PackageCache>) -> Self {
-        let state = State { events: vec![] };
+        let context = Arc::new(Context { package_cache });
+
         Self {
-            state: Mutex::new(state),
-            package_cache,
+            state: Mutex::new(BTreeMap::new()),
+            context,
         }
     }
     async fn process_events(
-        &self,
         epoch: u64,
         checkpoint: u64,
         digest: &TransactionDigest,
         timestamp_ms: u64,
         events: &TransactionEvents,
-        state: &mut State,
-    ) -> Result<()> {
+        context: Arc<Context>,
+    ) -> Result<Vec<EventEntry>> {
+        let mut entries = Vec::new();
         for (idx, event) in events.data.iter().enumerate() {
             let Event {
                 package_id,
@@ -108,7 +167,7 @@ impl EventHandler {
                 type_,
                 contents,
             } = event;
-            let layout = self
+            let layout = context
                 .package_cache
                 .resolver
                 .type_layout(move_core_types::language_storage::TypeTag::Struct(
@@ -132,8 +191,8 @@ impl EventHandler {
                 event_json: event_json.to_string(),
             };
 
-            state.events.push(entry);
+            entries.push(entry);
         }
-        Ok(())
+        Ok(entries)
     }
 }

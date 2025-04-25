@@ -25,6 +25,8 @@ use crate::package_store::PackageCache;
 use crate::tables::{ObjectEntry, ObjectStatus};
 use crate::FileType;
 
+const NAME: &str = "move_call";
+
 // Context contains shared resources
 struct Context {
     package_filter: Option<ObjectID>,
@@ -132,16 +134,15 @@ impl AnalyticsHandler<ObjectEntry> for ObjectHandler {
         let objects_map = std::mem::take(&mut *state);
 
         // Flatten the map into a single iterator in order by transaction index
-        let objects = objects_map.into_values().flatten().collect::<Vec<_>>();
-        Ok(Box::new(objects.into_iter()))
+        Ok(Box::new(objects_map.into_values().flatten()))
     }
 
     fn file_type(&self) -> Result<FileType> {
         Ok(FileType::Object)
     }
 
-    fn name() -> &'static str {
-        "object"
+    fn name(&self) -> &'static str {
+        NAME
     }
 }
 
@@ -288,7 +289,7 @@ impl ObjectHandler {
                     context
                         .metrics
                         .total_too_large_to_deserialize
-                        .with_label_values(&[Self::name()])
+                        .with_label_values(&[NAME])
                         .inc();
                     tracing::warn!(
                         "Skipping struct with type {} because it was too large.",

@@ -56,7 +56,7 @@ impl AnalyticsHandler<TransactionBCSEntry> for TransactionBCSHandler {
         Ok(FileType::TransactionBCS)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "transaction_bcs"
     }
 }

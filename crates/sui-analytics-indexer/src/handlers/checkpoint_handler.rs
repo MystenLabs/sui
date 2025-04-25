@@ -51,7 +51,7 @@ impl AnalyticsHandler<CheckpointEntry> for CheckpointHandler {
         Ok(FileType::Checkpoint)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "checkpoint"
     }
 }

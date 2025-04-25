@@ -56,7 +56,7 @@ impl AnalyticsHandler<MovePackageEntry> for PackageHandler {
         Ok(FileType::MovePackage)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "package"
     }
 }

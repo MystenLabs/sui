@@ -82,7 +82,7 @@ impl AnalyticsHandler<DynamicFieldEntry> for DynamicFieldHandler {
         Ok(FileType::DynamicField)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "dynamic_field"
     }
 }

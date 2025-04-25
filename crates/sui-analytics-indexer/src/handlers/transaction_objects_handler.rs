@@ -59,7 +59,7 @@ impl AnalyticsHandler<TransactionObjectEntry> for TransactionObjectsHandler {
         Ok(FileType::TransactionObjects)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "transaction_objects"
     }
 }

@@ -18,6 +18,7 @@ use crate::package_store::PackageCache;
 use crate::tables::WrappedObjectEntry;
 use crate::FileType;
 
+const NAME: &str = "wrapped_object";
 pub struct WrappedObjectHandler {
     state: Mutex<State>,
     metrics: AnalyticsMetrics,
@@ -74,8 +75,8 @@ impl AnalyticsHandler<WrappedObjectEntry> for WrappedObjectHandler {
         Ok(FileType::WrappedObject)
     }
 
-    fn name(&self) -> &str {
-        "wrapped_object"
+    fn name(&self) -> &'static str {
+        NAME
     }
 }
 
@@ -129,7 +130,7 @@ impl WrappedObjectHandler {
                 {
                     self.metrics
                         .total_too_large_to_deserialize
-                        .with_label_values(&[self.name()])
+                        .with_label_values(&[NAME])
                         .inc();
                     tracing::warn!(
                         "Skipping struct with type {} because it was too large.",

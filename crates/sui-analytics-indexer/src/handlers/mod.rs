@@ -2,20 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::future::Future;
-use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout, MoveValue};
 use move_core_types::language_storage::{StructTag, TypeTag};
 use sui_data_ingestion_core::Worker;
-use tokio::sync::Mutex;
 
 use sui_package_resolver::{PackageStore, Resolver};
 use sui_types::base_types::ObjectID;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::full_checkpoint_content::CheckpointTransaction;
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::object::{Object, Owner};
 use sui_types::transaction::TransactionData;
@@ -49,92 +45,7 @@ pub trait AnalyticsHandler<S>: Worker<Result = ()> {
     async fn read(&self) -> Result<Box<dyn Iterator<Item = S>>>;
     /// Type of data being written by this processor i.e. checkpoint, object, etc
     fn file_type(&self) -> Result<FileType>;
-    fn name() -> &'static str;
-}
-
-/// A reusable helper for parallel transaction processing
-pub struct ParallelTransactionProcessor<S: Send + 'static> {
-    /// Stores results by transaction index to maintain order
-    results: Mutex<BTreeMap<usize, Vec<S>>>,
-}
-
-impl<S: Send + 'static> ParallelTransactionProcessor<S> {
-    /// Create a new processor
-    pub fn new() -> Self {
-        Self {
-            results: Mutex::new(BTreeMap::new()),
-        }
-    }
-
-    /// Process transactions in parallel and collect results
-    pub async fn process_transactions<F, Fut>(
-        &self,
-        transactions: &[CheckpointTransaction],
-        epoch: u64,
-        checkpoint_seq: u64,
-        timestamp_ms: u64,
-        process_fn: F,
-    ) -> Result<()>
-    where
-        F: Fn(usize, &CheckpointTransaction, u64, u64, u64) -> Fut + Send + Sync + Clone + 'static,
-        Fut: Future<Output = Result<Vec<S>>> + Send,
-    {
-        // Create a channel to collect results
-        let (tx, mut rx) = tokio::sync::mpsc::channel::<(usize, Vec<S>)>(transactions.len());
-
-        // Process transactions in parallel
-        let mut futures = Vec::new();
-
-        for (idx, transaction) in transactions.iter().enumerate() {
-            let tx = tx.clone();
-            let process_fn = process_fn.clone();
-            let transaction_clone = transaction.clone();
-
-            // Spawn a task for each transaction
-            let handle = tokio::spawn(async move {
-                match process_fn(idx, &transaction_clone, epoch, checkpoint_seq, timestamp_ms).await
-                {
-                    Ok(entries) => {
-                        if !entries.is_empty() {
-                            let _ = tx.send((idx, entries)).await;
-                        }
-                    }
-                    Err(e) => {
-                        tracing::error!("Error processing transaction at index {}: {}", idx, e);
-                    }
-                }
-            });
-
-            futures.push(handle);
-        }
-
-        // Drop the original sender so the channel can close when all tasks are done
-        drop(tx);
-
-        // Wait for all tasks to complete
-        for handle in futures {
-            if let Err(e) = handle.await {
-                tracing::error!("Task panicked: {}", e);
-            }
-        }
-
-        // Collect results into the state in order by transaction index
-        let mut results = self.results.lock().await;
-        while let Some((idx, items)) = rx.recv().await {
-            results.insert(idx, items);
-        }
-
-        Ok(())
-    }
-
-    /// Take all results and return an iterator that preserves order
-    pub async fn take_results(&self) -> Result<Box<dyn Iterator<Item = S>>> {
-        let mut results = self.results.lock().await;
-        let results_map = std::mem::take(&mut *results);
-
-        // Flatten the map into a single iterator in order by transaction index
-        Ok(Box::new(results_map.into_values().into_iter().flatten()))
-    }
+    fn name(&self) -> &'static str;
 }
 
 fn initial_shared_version(object: &Object) -> Option<u64> {
