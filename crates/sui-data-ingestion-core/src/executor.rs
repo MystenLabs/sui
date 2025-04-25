@@ -11,6 +11,7 @@ use crate::{DataIngestionMetrics, ReaderOptions};
 use anyhow::Result;
 use futures::Future;
 use mysten_metrics::spawn_monitored_task;
+use once_cell::sync::Lazy;
 use prometheus::Registry;
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -19,8 +20,40 @@ use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
+use tracing::info;
 
-pub const MAX_CHECKPOINTS_IN_PROGRESS: usize = 10000;
+/// Environment variable to override the default maximum number of checkpoints that can be processed concurrently.
+const MAX_CHECKPOINTS_IN_PROGRESS_VAR_NAME: &str = "MAX_CHECKPOINTS_IN_PROGRESS";
+
+/// Default maximum number of checkpoints in progress.
+const DEFAULT_MAX_CHECKPOINTS_IN_PROGRESS: usize = 10_000;
+
+/// Maximum number of checkpoints that can be processed concurrently.
+///
+/// This value can be overridden by setting the `MAX_CHECKPOINTS_IN_PROGRESS` environment variable
+/// before starting the process. If the environment variable is unset, the default value of
+/// `DEFAULT_MAX_CHECKPOINTS_IN_PROGRESS` will be used.
+///
+/// This is read once at startup and cached. Changing the environment variable at runtime will not
+/// have any effect.
+pub static MAX_CHECKPOINTS_IN_PROGRESS: Lazy<usize> = Lazy::new(|| {
+    let max_checkpoints_opt = std::env::var(MAX_CHECKPOINTS_IN_PROGRESS_VAR_NAME)
+        .ok()
+        .and_then(|s| s.parse().ok());
+    if let Some(max_checkpoints) = max_checkpoints_opt {
+        info!(
+            "Using custom value for '{}' max checkpoints in progress: {}",
+            MAX_CHECKPOINTS_IN_PROGRESS_VAR_NAME, max_checkpoints
+        );
+        max_checkpoints
+    } else {
+        info!(
+            "Using default value for '{}' -- max checkpoints in progress: {}",
+            MAX_CHECKPOINTS_IN_PROGRESS_VAR_NAME, DEFAULT_MAX_CHECKPOINTS_IN_PROGRESS
+        );
+        DEFAULT_MAX_CHECKPOINTS_IN_PROGRESS
+    }
+});
 
 pub struct IndexerExecutor<P> {
     pools: Vec<Pin<Box<dyn Future<Output = ()> + Send>>>,
@@ -34,7 +67,7 @@ pub struct IndexerExecutor<P> {
 impl<P: ProgressStore> IndexerExecutor<P> {
     pub fn new(progress_store: P, number_of_jobs: usize, metrics: DataIngestionMetrics) -> Self {
         let (pool_progress_sender, pool_progress_receiver) =
-            mpsc::channel(number_of_jobs * MAX_CHECKPOINTS_IN_PROGRESS);
+            mpsc::channel(number_of_jobs * *MAX_CHECKPOINTS_IN_PROGRESS);
         Self {
             pools: vec![],
             pool_senders: vec![],
@@ -48,7 +81,7 @@ impl<P: ProgressStore> IndexerExecutor<P> {
     /// Registers new worker pool in executor
     pub async fn register<W: Worker + 'static>(&mut self, pool: WorkerPool<W>) -> Result<()> {
         let checkpoint_number = self.progress_store.load(pool.task_name.clone()).await?;
-        let (sender, receiver) = mpsc::channel(MAX_CHECKPOINTS_IN_PROGRESS);
+        let (sender, receiver) = mpsc::channel(*MAX_CHECKPOINTS_IN_PROGRESS);
         self.pools.push(Box::pin(pool.run(
             checkpoint_number,
             receiver,
