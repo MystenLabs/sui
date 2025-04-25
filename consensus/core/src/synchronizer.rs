@@ -25,7 +25,7 @@ use tokio::{
     task::{JoinError, JoinSet},
     time::{sleep, sleep_until, timeout, Instant},
 };
-use tracing::{debug, error, info, trace, warn};
+use tracing::{error, info, trace, warn};
 
 use crate::{
     authority_service::COMMIT_LAG_MULTIPLIER, core_thread::CoreThreadDispatcher,
@@ -1283,9 +1283,14 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
         tokio::pin!(fetcher_timeout);
 
+        info!("Periodic fetching: start requests");
         loop {
             tokio::select! {
-                Some((response, blocks_guard, _retries, peer_index, _highest_rounds)) = request_futures.next() => {
+                result = request_futures.next() => {
+                    let Some((response, blocks_guard, _retries, peer_index, _highest_rounds)) = result else {
+                        info!("Periodic fetching: done");
+                        break;
+                    };
                     let peer_hostname = &context.committee.authority(peer_index).hostname;
                     match response {
                         Ok(fetched_blocks) => {
@@ -1304,7 +1309,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     }
                 },
                 _ = &mut fetcher_timeout => {
-                    info!("Periodic fetching: timed out");
+                    info!("Periodic fetching: request timed out");
                     break;
                 }
             }
