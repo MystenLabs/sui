@@ -91,6 +91,7 @@ pub mod type_input;
 pub mod versioned;
 pub mod zk_login_authenticator;
 pub mod zk_login_util;
+pub mod proto_value;
 
 #[path = "./unit_tests/utils.rs"]
 pub mod utils;

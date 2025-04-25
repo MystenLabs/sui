@@ -5,10 +5,13 @@ syntax = "proto3";
 
 package sui.rpc.v2alpha;
 
+import "google/protobuf/struct.proto";
 import "google/protobuf/field_mask.proto";
 import "sui/rpc/v2beta/executed_transaction.proto";
 import "sui/rpc/v2beta/owner.proto";
 import "sui/rpc/v2beta/transaction.proto";
+import "sui/rpc/v2beta/argument.proto";
+import "sui/rpc/v2beta/bcs.proto";
 
 service LiveDataService {
   rpc ListDynamicFields(ListDynamicFieldsRequest) returns (ListDynamicFieldsResponse);
@@ -18,7 +21,8 @@ service LiveDataService {
 
   rpc SimulateTransaction(SimulateTransactionRequest) returns (SimulateTransactionResponse);
   rpc ResolveTransaction(ResolveTransactionRequest) returns (ResolveTransactionResponse);
-  // ViewFunction?
+
+  rpc ViewFunction(ViewFunctionRequest) returns (ViewFunctionResponse);
 }
 
 // Request message for `NodeService.GetCoinInfo`.
@@ -161,6 +165,28 @@ message ResolveTransactionRequest {
 message ResolveTransactionResponse {
   optional sui.rpc.v2beta.Transaction transaction = 1;
   optional SimulateTransactionResponse simulation = 2;
+}
+
+message ViewFunctionRequest {
+  optional sui.rpc.v2beta.ProgrammableTransaction view_functions = 1;
+}
+
+message ViewFunctionResponse {
+  repeated CommandResult outputs = 1;
+}
+
+// An intermediate result/output from the execution of a single command
+message CommandResult {
+  repeated CommandOutput return_values = 1;
+  repeated CommandOutput mutated_by_ref = 2;
+}
+
+message CommandOutput {
+  optional sui.rpc.v2beta.Argument argument = 1;
+  optional sui.rpc.v2beta.Bcs value = 2;
+
+  // JSON rendering of the output.
+  optional google.protobuf.Value json = 3;
 }
 
 message ListOwnedObjectsRequest {

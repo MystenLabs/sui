@@ -189,7 +189,7 @@ pub fn resolve_transaction(
     .pipe(Ok)
 }
 
-struct NormalizedPackages {
+pub(super) struct NormalizedPackages {
     pool: normalized::RcPool,
     packages: HashMap<ObjectId, NormalizedPackage>,
 }
@@ -200,7 +200,7 @@ struct NormalizedPackage {
     normalized_modules: BTreeMap<String, normalized::Module<normalized::RcIdentifier>>,
 }
 
-fn called_packages(
+pub(super) fn called_packages(
     reader: &StateReader,
     protocol_config: &ProtocolConfig,
     commands: &[Command],
@@ -264,9 +264,6 @@ fn resolve_unresolved_transaction(
     unresolved_inputs: &[crate::proto::rpc::v2beta::Input],
     commands: Vec<Command>,
     gas_payment: Option<crate::proto::rpc::v2beta::GasPayment>,
-    // optional string sender = 5;
-    // optional GasPayment gas_payment = 6;
-    // optional TransactionExpiration expiration = 7;
 ) -> Result<TransactionData> {
     let gas_data = if let Some(unresolved_gas_payment) = gas_payment {
         let payment = unresolved_gas_payment
@@ -370,7 +367,7 @@ fn resolve_object_reference_with_object(
     Ok((id, v, d))
 }
 
-fn resolve_ptb(
+pub(super) fn resolve_ptb(
     reader: &StateReader,
     called_packages: &mut NormalizedPackages,
     unresolved_inputs: &[crate::proto::rpc::v2beta::Input],

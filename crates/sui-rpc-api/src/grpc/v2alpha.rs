@@ -19,6 +19,8 @@ use crate::proto::rpc::v2alpha::SimulateTransactionRequest;
 use crate::proto::rpc::v2alpha::SimulateTransactionResponse;
 use crate::proto::rpc::v2alpha::SubscribeCheckpointsRequest;
 use crate::proto::rpc::v2alpha::SubscribeCheckpointsResponse;
+use crate::proto::rpc::v2alpha::ViewFunctionRequest;
+use crate::proto::rpc::v2alpha::ViewFunctionResponse;
 use crate::proto::rpc::v2beta::Checkpoint;
 use crate::subscription::SubscriptionServiceHandle;
 use crate::RpcService;
@@ -72,6 +74,7 @@ mod list_dynamic_fields;
 mod list_owned_objects;
 mod resolve;
 mod simulate_transaction;
+mod view_function;
 
 #[tonic::async_trait]
 impl LiveDataService for RpcService {
@@ -116,6 +119,15 @@ impl LiveDataService for RpcService {
         request: tonic::Request<ResolveTransactionRequest>,
     ) -> Result<tonic::Response<ResolveTransactionResponse>, tonic::Status> {
         resolve::resolve_transaction(self, request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+
+    async fn view_function(
+        &self,
+        request: tonic::Request<ViewFunctionRequest>,
+    ) -> Result<tonic::Response<ViewFunctionResponse>, tonic::Status> {
+        view_function::view_function(self, request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)
     }

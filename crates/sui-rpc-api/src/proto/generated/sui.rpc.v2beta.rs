@@ -619,6 +619,9 @@ pub struct Event {
     /// BCS serialized bytes of the event.
     #[prost(message, optional, tag = "5")]
     pub contents: ::core::option::Option<Bcs>,
+    /// JSON rendering of the event.
+    #[prost(message, optional, boxed, tag = "100")]
+    pub json: ::core::option::Option<::prost::alloc::boxed::Box<::prost_types::Value>>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ExecutedTransaction {
@@ -2269,6 +2272,9 @@ pub struct Object {
     /// the present storage gas price.
     #[prost(uint64, optional, tag = "13")]
     pub storage_rebate: ::core::option::Option<u64>,
+    /// JSON rendering of the object.
+    #[prost(message, optional, boxed, tag = "100")]
+    pub json: ::core::option::Option<::prost::alloc::boxed::Box<::prost_types::Value>>,
 }
 /// Module defined by a package.
 #[derive(Clone, PartialEq, ::prost::Message)]

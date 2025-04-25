@@ -6,11 +6,14 @@ use std::collections::BTreeMap;
 use crate::base_types::ObjectID;
 use crate::effects::TransactionEffects;
 use crate::effects::TransactionEvents;
+use crate::error::ExecutionError;
 use crate::error::SuiError;
+use crate::execution::ExecutionResult;
 use crate::object::Object;
 use crate::quorum_driver_types::ExecuteTransactionRequestV3;
 use crate::quorum_driver_types::ExecuteTransactionResponseV3;
 use crate::quorum_driver_types::QuorumDriverError;
+use crate::transaction::ProgrammableTransaction;
 use crate::transaction::TransactionData;
 
 /// Trait to define the interface for how the REST service interacts with a a QuorumDriver or a
@@ -27,6 +30,11 @@ pub trait TransactionExecutor: Send + Sync {
         &self,
         transaction: TransactionData,
     ) -> Result<SimulateTransactionResult, SuiError>;
+
+    fn view_function(
+        &self,
+        view_function: ProgrammableTransaction,
+    ) -> Result<ViewFunctionResult, SuiError>;
 }
 
 pub struct SimulateTransactionResult {
@@ -36,3 +44,5 @@ pub struct SimulateTransactionResult {
     pub output_objects: BTreeMap<ObjectID, Object>,
     pub mock_gas_id: Option<ObjectID>,
 }
+
+pub type ViewFunctionResult = Result<Vec<ExecutionResult>, ExecutionError>;
