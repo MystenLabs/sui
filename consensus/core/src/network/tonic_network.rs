@@ -13,6 +13,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
 use futures::{stream, Stream, StreamExt as _};
+use mysten_metrics::monitored_scope;
 use mysten_network::{
     callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler},
     multiaddr::Protocol,
@@ -189,13 +190,15 @@ impl NetworkClient for TonicClient {
             .into_inner();
         let mut blocks = vec![];
         let mut total_fetched_bytes = 0;
+        info!("fetch_blocks: starting");
+        let _scope = monitored_scope("TonicClient::fetch_blocks");
         loop {
             match stream.message().await {
                 Ok(Some(response)) => {
+                    info!("fetch_blocks: got response bytes={}", response.blocks.len());
                     for b in &response.blocks {
                         total_fetched_bytes += b.len();
                     }
-                    blocks.extend(response.blocks);
                     if total_fetched_bytes > MAX_TOTAL_FETCHED_BYTES {
                         info!(
                             "fetch_blocks() fetched bytes exceeded limit: {} > {}, terminating stream.",
@@ -203,6 +206,7 @@ impl NetworkClient for TonicClient {
                         );
                         break;
                     }
+                    blocks.extend(response.blocks);
                 }
                 Ok(None) => {
                     break;
@@ -224,6 +228,7 @@ impl NetworkClient for TonicClient {
                 }
             }
         }
+        info!("fetch_blocks: done (total_fetched_bytes={total_fetched_bytes})");
         Ok(blocks)
     }
 

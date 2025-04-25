@@ -722,7 +722,10 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         AuthorityIndex,
         Vec<Round>,
     ) {
+        let _scope = monitored_scope("Synchronizer::fetch_blocks_request");
         let start = Instant::now();
+
+        info!("Fetch request: starting (remaining_retries={remaining_retries}) start={start:?}");
         let resp = timeout(
             request_timeout,
             network_client.fetch_blocks(
@@ -738,9 +741,9 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             ),
         )
         .await;
+        info!("Fetch request: got response (remaining_retries={remaining_retries}) start={start:?} elapsed={elapsed:?}");
 
         fail_point_async!("consensus-delay");
-
         let resp = match resp {
             Ok(Err(err)) => {
                 // network error
@@ -763,6 +766,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             }
             Ok(result) => result,
         };
+        info!("Fetch request: done (remaining_retries={remaining_retries}) start={start:?}");
         (resp, blocks_guard, remaining_retries, peer, highest_rounds)
     }
 
@@ -1167,6 +1171,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         missing_blocks: BTreeSet<BlockRef>,
         dag_state: Arc<RwLock<DagState>>,
     ) -> Vec<(BlocksGuard, Vec<Bytes>, AuthorityIndex)> {
+        let _scope = monitored_scope("Synchronizer::fetch_blocks_from_authorities");
         // Preliminary truncation of missing blocks to fetch. Since each peer can have different
         // number of missing blocks and the fetching is batched by peer, so keep more than max_blocks_per_sync
         // per peer on average.
@@ -1287,8 +1292,9 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         loop {
             tokio::select! {
                 result = request_futures.next() => {
+                    info!("Periodic fetching: got response");
                     let Some((response, blocks_guard, _retries, peer_index, _highest_rounds)) = result else {
-                        info!("Periodic fetching: done");
+                        info!("Periodic fetching: done with all requests");
                         break;
                     };
                     let peer_hostname = &context.committee.authority(peer_index).hostname;
@@ -1315,6 +1321,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             }
         }
 
+        info!("Periodic fetching: returning response");
         results
     }
 }
