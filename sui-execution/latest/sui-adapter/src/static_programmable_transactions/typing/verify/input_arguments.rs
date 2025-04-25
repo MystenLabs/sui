@@ -31,7 +31,7 @@ impl Context {
             .iter()
             .map(|(arg, _)| {
                 Some(match arg {
-                    InputArg::Pure(_) | InputArg::Object(ObjectArg::Receiving(_)) => return None,
+                    InputArg::Pure(_) | InputArg::Receiving(_) => return None,
                     InputArg::Object(ObjectArg::ImmObject(_)) => ObjectUsage {
                         allow_by_value: false,
                         allow_by_mut_ref: false,
@@ -87,7 +87,7 @@ fn check_constraint(
 ) -> Result<(), ExecutionError> {
     match arg {
         InputArg::Pure(bytes) => check_pure_bytes(command_arg_idx, bytes, constraint),
-        InputArg::Object(ObjectArg::Receiving(_)) => check_receiving(command_arg_idx, constraint),
+        InputArg::Receiving(_) => check_receiving(command_arg_idx, constraint),
         InputArg::Object(
             ObjectArg::ImmObject(_) | ObjectArg::OwnedObject(_) | ObjectArg::SharedObject { .. },
         ) => {

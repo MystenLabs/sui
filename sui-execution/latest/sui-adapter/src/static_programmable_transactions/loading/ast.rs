@@ -27,6 +27,7 @@ pub type Commands = Vec<Command>;
 
 pub enum InputArg {
     Pure(Vec<u8>),
+    Receiving(ObjectRef),
     Object(ObjectArg),
 }
 
@@ -38,7 +39,6 @@ pub enum ObjectArg {
         initial_shared_version: SequenceNumber,
         mutable: bool,
     },
-    Receiving(ObjectRef),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -111,6 +111,23 @@ pub use sui_types::transaction::Argument;
 //**************************************************************************************************
 // impl
 //**************************************************************************************************
+
+impl ObjectArg {
+    pub fn id(&self) -> ObjectID {
+        match self {
+            ObjectArg::ImmObject(oref) | ObjectArg::OwnedObject(oref) => oref.0,
+            ObjectArg::SharedObject { id, .. } => *id,
+        }
+    }
+
+    pub fn is_mutable(&self) -> bool {
+        match self {
+            ObjectArg::ImmObject(_) => false,
+            ObjectArg::OwnedObject(_) => true,
+            ObjectArg::SharedObject { mutable, .. } => *mutable,
+        }
+    }
+}
 
 impl Type {
     pub fn abilities(&self) -> AbilitySet {

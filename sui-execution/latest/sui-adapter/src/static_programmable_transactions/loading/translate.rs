@@ -28,10 +28,9 @@ pub fn transaction(
 fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), ExecutionError> {
     Ok(match arg {
         CallArg::Pure(bytes) => (L::InputArg::Pure(bytes), L::InputType::Bytes),
-        CallArg::Object(ObjectArg::Receiving(oref)) => (
-            L::InputArg::Object(L::ObjectArg::Receiving(oref)),
-            L::InputType::Bytes,
-        ),
+        CallArg::Object(ObjectArg::Receiving(oref)) => {
+            (L::InputArg::Receiving(oref), L::InputType::Bytes)
+        }
         CallArg::Object(ObjectArg::ImmOrOwnedObject(oref)) => {
             let id = &oref.0;
             let obj = env.read_object(id)?;

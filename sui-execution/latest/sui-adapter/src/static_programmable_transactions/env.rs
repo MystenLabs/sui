@@ -26,11 +26,11 @@ use sui_types::{
     Identifier,
 };
 
-pub struct Env<'a, 'b, 'state> {
-    protocol_config: &'a ProtocolConfig,
-    vm: &'a MoveVM,
-    state_view: &'a dyn ExecutionState,
-    linkage_view: &'b LinkageView<'state>,
+pub struct Env<'pc, 'vm, 'state, 'linkage> {
+    protocol_config: &'pc ProtocolConfig,
+    vm: &'vm MoveVM,
+    state_view: &'state dyn ExecutionState,
+    linkage_view: &'linkage LinkageView<'state>,
     gas_coin_type: OnceCell<Type>,
     upgrade_ticket_type: OnceCell<Type>,
     upgrade_receipt_type: OnceCell<Type>,
@@ -48,12 +48,12 @@ macro_rules! get_or_init_ty {
     }};
 }
 
-impl<'a, 'b, 'state> Env<'a, 'b, 'state> {
+impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
     pub fn new(
-        protocol_config: &'a ProtocolConfig,
-        vm: &'a MoveVM,
-        state_view: &'a dyn ExecutionState,
-        linkage_view: &'b LinkageView<'state>,
+        protocol_config: &'pc ProtocolConfig,
+        vm: &'vm MoveVM,
+        state_view: &'state dyn ExecutionState,
+        linkage_view: &'linkage LinkageView<'state>,
     ) -> Self {
         Self {
             protocol_config,
@@ -64,6 +64,14 @@ impl<'a, 'b, 'state> Env<'a, 'b, 'state> {
             upgrade_ticket_type: OnceCell::new(),
             upgrade_receipt_type: OnceCell::new(),
         }
+    }
+
+    pub fn protocol_config(&self) -> &'pc ProtocolConfig {
+        self.protocol_config
+    }
+
+    pub fn state_view(&self) -> &'state dyn ExecutionState {
+        self.state_view
     }
 
     pub fn convert_vm_error(&self, e: VMError) -> ExecutionError {

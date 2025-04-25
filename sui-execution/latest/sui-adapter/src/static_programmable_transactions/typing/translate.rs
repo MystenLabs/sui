@@ -70,7 +70,7 @@ impl Context {
             .into_iter()
             .enumerate()
             .map(|(i, (arg, ty))| match (&arg, ty) {
-                (InputArg::Pure(_) | InputArg::Object(ObjectArg::Receiving(_)), _) => {
+                (InputArg::Pure(_) | InputArg::Receiving(_), _) => {
                     let tys = gathered_input_types.remove(&(i as u16)).unwrap_or_default();
                     (arg, T::InputType::Bytes(tys))
                 }

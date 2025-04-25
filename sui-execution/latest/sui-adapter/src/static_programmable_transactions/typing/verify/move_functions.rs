@@ -33,7 +33,7 @@ impl Context {
             .iter()
             .map(|(arg, _)| match arg {
                 InputArg::Pure(_) => IsDirty::NotFixed,
-                InputArg::Object(_) => IsDirty::Fixed { is_dirty: false },
+                InputArg::Receiving(_) | InputArg::Object(_) => IsDirty::Fixed { is_dirty: false },
             })
             .collect();
         Self {
