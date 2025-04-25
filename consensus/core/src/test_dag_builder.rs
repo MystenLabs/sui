@@ -224,7 +224,7 @@ impl DagBuilder {
 
             let leader_block_ref = leader_block.reference();
 
-            let (to_commit, rejected_transactions) = Linearizer::linearize_sub_dag(
+            let to_commit = Linearizer::linearize_sub_dag(
                 &self.context.clone(),
                 leader_block.clone(),
                 self.last_committed_rounds.clone(),
@@ -260,7 +260,7 @@ impl DagBuilder {
             let sub_dag = CommittedSubDag::new(
                 leader_block_ref,
                 to_commit,
-                rejected_transactions,
+                BTreeMap::new(),
                 last_timestamp_ms,
                 commit.reference(),
                 vec![],

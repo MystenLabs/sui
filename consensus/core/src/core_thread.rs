@@ -501,6 +501,7 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
         );
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
