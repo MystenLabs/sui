@@ -47,27 +47,80 @@ impl Worker for ObjectHandler {
             transactions: checkpoint_transactions,
             ..
         } = checkpoint_data;
+
+        // Update package cache first (still need to do this serially)
         for checkpoint_transaction in checkpoint_transactions {
             for object in checkpoint_transaction.output_objects.iter() {
                 self.context.package_cache.update(object)?;
             }
-            Self::process_transaction(
-                checkpoint_summary.epoch,
-                checkpoint_summary.sequence_number,
-                checkpoint_summary.timestamp_ms,
-                checkpoint_transaction,
-                &checkpoint_transaction.effects,
-                self.context.clone(),
-            )
-            .await?;
-            if checkpoint_summary.end_of_epoch_data.is_some() {
-                self.context
-                    .package_cache
-                    .resolver
-                    .package_store()
-                    .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
+        }
+
+        // Create a channel to collect results
+        let (tx, mut rx) =
+            tokio::sync::mpsc::channel::<(usize, Vec<ObjectEntry>)>(checkpoint_transactions.len());
+
+        // Process transactions in parallel
+        let mut futures = Vec::new();
+
+        for (idx, checkpoint_transaction) in checkpoint_transactions.iter().enumerate() {
+            let tx = tx.clone();
+            let context = self.context.clone();
+            let transaction = checkpoint_transaction.clone();
+            let epoch = checkpoint_summary.epoch;
+            let checkpoint_seq = checkpoint_summary.sequence_number;
+            let timestamp_ms = checkpoint_summary.timestamp_ms;
+
+            // Spawn a task for each transaction
+            let handle = tokio::spawn(async move {
+                match Self::process_transaction(
+                    epoch,
+                    checkpoint_seq,
+                    timestamp_ms,
+                    &transaction,
+                    &transaction.effects,
+                    context,
+                )
+                .await
+                {
+                    Ok(entries) => {
+                        if !entries.is_empty() {
+                            let _ = tx.send((idx, entries)).await;
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("Error processing transaction at index {}: {}", idx, e);
+                    }
+                }
+            });
+
+            futures.push(handle);
+        }
+
+        // Drop the original sender so the channel can close when all tasks are done
+        drop(tx);
+
+        // Wait for all tasks to complete
+        for handle in futures {
+            if let Err(e) = handle.await {
+                tracing::error!("Task panicked: {}", e);
             }
         }
+
+        // Collect results into the state in order by transaction index
+        let mut state = self.state.lock().await;
+        while let Some((idx, objects)) = rx.recv().await {
+            state.insert(idx, objects);
+        }
+
+        // If end of epoch, evict package store
+        if checkpoint_summary.end_of_epoch_data.is_some() {
+            self.context
+                .package_cache
+                .resolver
+                .package_store()
+                .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
+        }
+
         Ok(())
     }
 }
