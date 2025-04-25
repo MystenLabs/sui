@@ -27,11 +27,16 @@ async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<()> {
         .collect();
 
     add_bindir();
-    let pinned = dependency::pin(&Vanilla, &deps, &manifest.environments).await?;
+    let pinned = dependency::pin(&Vanilla, &deps, &manifest.environments).await;
+
+    let output = match pinned {
+        Ok(ref deps) => format!("{deps:?}"),
+        Err(ref err) => err.to_string(),
+    };
 
     insta_assert! {
         input_path: input_path,
-        contents: format!("{:?}", pinned.default_deps()),
+        contents: output,
         suffix: "pinned",
     }
 

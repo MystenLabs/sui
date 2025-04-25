@@ -1,6 +1,9 @@
 //! Conveniences for managing the entire collection of dependencies (including overrides) for a
 //! package
-use std::collections::{btree_map, BTreeMap};
+use std::{
+    collections::{btree_map, BTreeMap},
+    fmt::Display,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -9,9 +12,16 @@ use crate::package::{EnvironmentName, PackageName};
 /// A set of default dependencies and dep overrides. Within each environment, package names are
 /// unique.
 ///
-/// Iterating over a dependency set produces (Option<EnvironmentName>, PackageName, T) tuples; the
-/// environment name is None to represent the default environment. See [DependencySet::iter] for
-/// more details.
+/// Iterating over a dependency set produces Option<[EnvironmentName]>, [PackageName], T) tuples for
+/// all declared dependencies (an environment name of `None` represents the default environment).
+///
+/// Note that this doesn't do any merging or inheritance - default dependencies are returned with
+/// the environment `None`, and the only dependencies returned with `Some(e)` are
+/// those that were explicitly added with `Some(e)`.
+///
+/// To get the correctly merged set of dependencies for a given environment, see [Self::default_deps],
+/// [Self::deps_for_env], and [Self::deps_for].
+///
 #[derive(Clone, Serialize, Deserialize)]
 pub struct DependencySet<T> {
     #[serde(flatten)]
@@ -57,6 +67,19 @@ impl<T> DependencySet<T> {
         result
     }
 
+    /// Convenience method to return either [default_deps] or [deps_for_env] depending on [env]; an
+    /// [env] of [None] indicates a request for the default dependencies.
+    pub fn deps_for(&self, env: Option<&EnvironmentName>) -> BTreeMap<PackageName, &T> {
+        match env {
+            Some(env) => self.deps_for_env(env),
+            None => self
+                .default_deps()
+                .iter()
+                .map(|(pkg, dep)| (pkg.clone(), dep))
+                .collect(),
+        }
+    }
+
     /// Set `self[env][package_name] = value` (dropping previous value if any)
     pub fn insert(&mut self, env: Option<EnvironmentName>, package_name: PackageName, value: T) {
         match env {
@@ -66,13 +89,6 @@ impl<T> DependencySet<T> {
         .insert(package_name, value);
     }
 
-    /// Produce `(env, package, dep)` for all _declared_ dependencies. Note that this doesn't do
-    /// any inheritance - default dependencies are returned with the environment `None`, and the
-    /// only dependencies returned in the environment `Some(e)` are those that were added in
-    /// `Some(e)`.
-    ///
-    /// To get the correctly merged set of dependencies for a given environment, see [default_deps]
-    /// and [deps_for_env].
     pub fn iter(&self) -> Iter<T> {
         self.into_iter()
     }
@@ -197,5 +213,13 @@ impl<T> Extend<(Option<EnvironmentName>, PackageName, T)> for DependencySet<T> {
         for (env, pack, value) in iter {
             self.insert(env, pack, value);
         }
+    }
+}
+
+impl<T: Serialize> std::fmt::Debug for DependencySet<T> {
+    /// Format [self] as toml for easy reading and diffing
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let toml = toml_edit::ser::to_string_pretty(self).expect("dependency set should serialize");
+        write!(f, "{toml}")
     }
 }

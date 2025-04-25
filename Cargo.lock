@@ -4721,18 +4721,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "external-resolver"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "serde",
- "thiserror 1.0.69",
- "tokio",
- "toml 0.5.11",
- "tracing",
-]
-
-[[package]]
 name = "eyre"
 version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8019,7 +8007,6 @@ dependencies = [
  "append-only-vec",
  "codespan-reporting",
  "derive-where",
- "external-resolver",
  "futures",
  "serde",
  "serde_spanned",
