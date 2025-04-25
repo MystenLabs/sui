@@ -23,6 +23,7 @@ use crate::AnalyticsMetrics;
 
 use crate::package_store::PackageCache;
 use crate::tables::{ObjectEntry, ObjectStatus};
+use crate::tx_parallel::{run_parallel, TxProcessor};
 use crate::FileType;
 
 const NAME: &str = "object";
@@ -34,8 +35,9 @@ struct Context {
     package_cache: Arc<PackageCache>,
 }
 
+#[derive(Clone)]
 pub struct ObjectHandler {
-    state: Mutex<BTreeMap<usize, Vec<ObjectEntry>>>,
+    state: Arc<Mutex<BTreeMap<usize, Vec<ObjectEntry>>>>,
     context: Arc<Context>,
 }
 
@@ -44,76 +46,21 @@ impl Worker for ObjectHandler {
     type Result = ();
 
     async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
-        let checkpoint_summary = &checkpoint_data.checkpoint_summary;
-        let checkpoint_transactions = &checkpoint_data.transactions;
-
         // Update package cache first (still need to do this serially)
-        for checkpoint_transaction in checkpoint_transactions {
+        for checkpoint_transaction in &checkpoint_data.transactions {
             for object in checkpoint_transaction.output_objects.iter() {
                 self.context.package_cache.update(object)?;
             }
         }
 
-        // Create a channel to collect results
-        let (tx, mut rx) =
-            tokio::sync::mpsc::channel::<(usize, Vec<ObjectEntry>)>(checkpoint_transactions.len());
+        // Run parallel processing
+        let results = run_parallel(checkpoint_data.clone(), Arc::new(self.clone())).await?;
 
-        // Process transactions in parallel
-        let mut futures = Vec::new();
-
-        for (idx, _checkpoint_transaction) in checkpoint_transactions.iter().enumerate() {
-            let tx = tx.clone();
-            let context = self.context.clone();
-            let epoch = checkpoint_summary.epoch;
-            let checkpoint_seq = checkpoint_summary.sequence_number;
-            let timestamp_ms = checkpoint_summary.timestamp_ms;
-            let checkpoint_data_clone = checkpoint_data.clone();
-
-            // Spawn a task for each transaction
-            let handle = tokio::spawn(async move {
-                let transaction = &checkpoint_data_clone.transactions[idx];
-                match Self::process_transaction(
-                    epoch,
-                    checkpoint_seq,
-                    timestamp_ms,
-                    transaction,
-                    &transaction.effects,
-                    context,
-                )
-                .await
-                {
-                    Ok(entries) => {
-                        if !entries.is_empty() {
-                            let _ = tx.send((idx, entries)).await;
-                        }
-                    }
-                    Err(e) => {
-                        tracing::error!("Error processing transaction at index {}: {}", idx, e);
-                    }
-                }
-            });
-
-            futures.push(handle);
-        }
-
-        // Drop the original sender so the channel can close when all tasks are done
-        drop(tx);
-
-        // Wait for all tasks to complete
-        for handle in futures {
-            if let Err(e) = handle.await {
-                tracing::error!("Task panicked: {}", e);
-            }
-        }
-
-        // Collect results into the state in order by transaction index
-        let mut state = self.state.lock().await;
-        while let Some((idx, objects)) = rx.recv().await {
-            state.insert(idx, objects);
-        }
+        // Store results
+        *self.state.lock().await = results;
 
         // If end of epoch, evict package store
-        if checkpoint_summary.end_of_epoch_data.is_some() {
+        if checkpoint_data.checkpoint_summary.end_of_epoch_data.is_some() {
             self.context
                 .package_cache
                 .resolver
@@ -122,6 +69,22 @@ impl Worker for ObjectHandler {
         }
 
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl TxProcessor<ObjectEntry> for ObjectHandler {
+    async fn process_transaction(&self, tx_idx: usize, checkpoint: &CheckpointData) -> Result<Vec<ObjectEntry>> {
+        let transaction = &checkpoint.transactions[tx_idx];
+        Self::process_transaction(
+            checkpoint.checkpoint_summary.epoch,
+            checkpoint.checkpoint_summary.sequence_number,
+            checkpoint.checkpoint_summary.timestamp_ms,
+            transaction,
+            &transaction.effects,
+            self.context.clone(),
+        )
+        .await
     }
 }
 
@@ -159,7 +122,7 @@ impl ObjectHandler {
         });
 
         Self {
-            state: Mutex::new(BTreeMap::new()),
+            state: Arc::new(Mutex::new(BTreeMap::new())),
             context,
         }
     }
@@ -397,7 +360,7 @@ mod tests {
         let registry = Registry::new();
         let metrics = AnalyticsMetrics::new(&registry);
         let package_cache = Arc::new(PackageCache::new(temp_dir.path(), "http://localhost:9000"));
-        
+
         // Create context directly instead of using the handler
         let context = Arc::new(Context {
             package_filter: Some(ObjectID::from_hex_literal("0xabc").unwrap()),
@@ -407,65 +370,55 @@ mod tests {
 
         // 1. Direct match
         let type_tag = create_struct_tag("0xabc", "module", "Type", vec![]);
-        assert!(
-            ObjectHandler::check_type_hierarchy(
-                context.clone(),
-                &type_tag,
-                ObjectID::from_hex_literal("0xabc").unwrap(),
-            )
-            .await
-            .unwrap()
-        );
+        assert!(ObjectHandler::check_type_hierarchy(
+            context.clone(),
+            &type_tag,
+            ObjectID::from_hex_literal("0xabc").unwrap(),
+        )
+        .await
+        .unwrap());
 
         // 2. Match in type parameter
         let inner_type = create_struct_tag("0xabc", "module", "Inner", vec![]);
         let type_tag = create_struct_tag("0xcde", "module", "Type", vec![inner_type]);
-        assert!(
-            ObjectHandler::check_type_hierarchy(
-                context.clone(),
-                &type_tag,
-                ObjectID::from_hex_literal("0xabc").unwrap(),
-            )
-            .await
-            .unwrap()
-        );
+        assert!(ObjectHandler::check_type_hierarchy(
+            context.clone(),
+            &type_tag,
+            ObjectID::from_hex_literal("0xabc").unwrap(),
+        )
+        .await
+        .unwrap());
 
         // 3. Match in nested vector
         let inner_type = create_struct_tag("0xabc", "module", "Inner", vec![]);
         let vector_type = TypeTag::Vector(Box::new(inner_type));
         let type_tag = create_struct_tag("0xcde", "module", "Type", vec![vector_type]);
-        assert!(
-            ObjectHandler::check_type_hierarchy(
-                context.clone(),
-                &type_tag,
-                ObjectID::from_hex_literal("0xabc").unwrap(),
-            )
-            .await
-            .unwrap()
-        );
+        assert!(ObjectHandler::check_type_hierarchy(
+            context.clone(),
+            &type_tag,
+            ObjectID::from_hex_literal("0xabc").unwrap(),
+        )
+        .await
+        .unwrap());
 
         // 4. No match
         let type_tag = create_struct_tag("0xcde", "module", "Type", vec![]);
-        assert!(
-            !ObjectHandler::check_type_hierarchy(
-                context.clone(),
-                &type_tag,
-                ObjectID::from_hex_literal("0xabc").unwrap(),
-            )
-            .await
-            .unwrap()
-        );
+        assert!(!ObjectHandler::check_type_hierarchy(
+            context.clone(),
+            &type_tag,
+            ObjectID::from_hex_literal("0xabc").unwrap(),
+        )
+        .await
+        .unwrap());
 
         // 5. Primitive type
         let type_tag = TypeTag::U64;
-        assert!(
-            !ObjectHandler::check_type_hierarchy(
-                context.clone(),
-                &type_tag,
-                ObjectID::from_hex_literal("0xabc").unwrap(),
-            )
-            .await
-            .unwrap()
-        );
+        assert!(!ObjectHandler::check_type_hierarchy(
+            context.clone(),
+            &type_tag,
+            ObjectID::from_hex_literal("0xabc").unwrap(),
+        )
+        .await
+        .unwrap());
     }
 }

@@ -45,12 +45,7 @@ impl Worker for TransactionBCSHandler {
             // Spawn a task for each transaction
             let handle = tokio::spawn(async move {
                 let transaction = &checkpoint_data_clone.transactions[idx];
-                match Self::process_transaction(
-                    epoch,
-                    checkpoint_seq,
-                    timestamp_ms,
-                    transaction,
-                ) {
+                match Self::process_transaction(epoch, checkpoint_seq, timestamp_ms, transaction) {
                     Ok(entries) => {
                         if !entries.is_empty() {
                             let _ = tx.send((idx, entries)).await;
@@ -106,11 +101,11 @@ impl AnalyticsHandler<TransactionBCSEntry> for TransactionBCSHandler {
 
 impl TransactionBCSHandler {
     pub fn new() -> Self {
-        TransactionBCSHandler { 
+        TransactionBCSHandler {
             state: Mutex::new(BTreeMap::new()),
         }
     }
-    
+
     fn process_transaction(
         epoch: u64,
         checkpoint: u64,
@@ -128,17 +123,17 @@ impl TransactionBCSHandler {
             timestamp_ms,
             bcs: Base64::encode(bcs::to_bytes(&txn_data).unwrap()),
         };
-        
+
         Ok(vec![entry])
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
     use crate::handlers::transaction_bcs_handler::TransactionBCSHandler;
     use fastcrypto::encoding::{Base64, Encoding};
     use simulacrum::Simulacrum;
+    use std::sync::Arc;
     use sui_data_ingestion_core::Worker;
     use sui_types::base_types::SuiAddress;
     use sui_types::storage::ReadStore;
@@ -161,8 +156,10 @@ mod tests {
                 .unwrap(),
         )?;
         let txn_handler = TransactionBCSHandler::new();
-        txn_handler.process_checkpoint(Arc::new(checkpoint_data)).await?;
-        
+        txn_handler
+            .process_checkpoint(Arc::new(checkpoint_data))
+            .await?;
+
         // Extract entries from state
         let transaction_map = txn_handler.state.lock().await;
         let transaction_entries: Vec<_> = transaction_map.values().flatten().cloned().collect();

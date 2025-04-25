@@ -8,16 +8,17 @@ use anyhow::Result;
 use sui_data_ingestion_core::Worker;
 use tokio::sync::Mutex;
 
-use sui_types::base_types::ObjectID;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::transaction::TransactionDataAPI;
 
 use crate::handlers::AnalyticsHandler;
 use crate::tables::MoveCallEntry;
+use crate::tx_parallel::{run_parallel, TxProcessor};
 use crate::FileType;
 
+#[derive(Clone)]
 pub struct MoveCallHandler {
-    state: Mutex<BTreeMap<usize, Vec<MoveCallEntry>>>,
+    state: Arc<Mutex<BTreeMap<usize, Vec<MoveCallEntry>>>>,
 }
 
 const NAME: &str = "move_call";
@@ -27,68 +28,47 @@ impl Worker for MoveCallHandler {
     type Result = ();
 
     async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
-        let checkpoint_summary = &checkpoint_data.checkpoint_summary;
-        let checkpoint_transactions = &checkpoint_data.transactions;
-
-        // Create a channel to collect results
-        let (tx, mut rx) = tokio::sync::mpsc::channel::<(usize, Vec<MoveCallEntry>)>(
-            checkpoint_transactions.len(),
-        );
-
-        // Process transactions in parallel
-        let mut futures = Vec::new();
-
-        for (idx, checkpoint_transaction) in checkpoint_transactions.iter().enumerate() {
-            if !checkpoint_transaction
-                .transaction
-                .transaction_data()
-                .move_calls()
-                .is_empty()
-            {
-                let tx = tx.clone();
-                let epoch = checkpoint_summary.epoch;
-                let checkpoint_seq = checkpoint_summary.sequence_number;
-                let timestamp_ms = checkpoint_summary.timestamp_ms;
-                let transaction_digest = checkpoint_transaction.transaction.digest().base58_encode();
-                let checkpoint_data_clone = checkpoint_data.clone();
-
-                // Spawn a task for each transaction
-                let handle = tokio::spawn(async move {
-                    let transaction = &checkpoint_data_clone.transactions[idx];
-                    let entries = Self::process_move_calls(
-                        epoch,
-                        checkpoint_seq,
-                        timestamp_ms,
-                        transaction_digest,
-                        &transaction.transaction.transaction_data().move_calls(),
-                    );
-
-                    if !entries.is_empty() {
-                        let _ = tx.send((idx, entries)).await;
-                    }
-                });
-
-                futures.push(handle);
-            }
-        }
-
-        // Drop the original sender so the channel can close when all tasks are done
-        drop(tx);
-
-        // Wait for all tasks to complete
-        for handle in futures {
-            if let Err(e) = handle.await {
-                tracing::error!("Task panicked: {}", e);
-            }
-        }
-
-        // Collect results into the state in order by transaction index
-        let mut state = self.state.lock().await;
-        while let Some((idx, entries)) = rx.recv().await {
-            state.insert(idx, entries);
-        }
-
+        let results = run_parallel(checkpoint_data, Arc::new(self.clone())).await?;
+        *self.state.lock().await = results;
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl TxProcessor<MoveCallEntry> for MoveCallHandler {
+    async fn process_transaction(
+        &self,
+        tx_idx: usize,
+        checkpoint: &CheckpointData,
+    ) -> Result<Vec<MoveCallEntry>> {
+        let transaction = &checkpoint.transactions[tx_idx];
+        let move_calls = transaction.transaction.transaction_data().move_calls();
+
+        // Skip if no move calls
+        if move_calls.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let epoch = checkpoint.checkpoint_summary.epoch;
+        let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
+        let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
+        let transaction_digest = transaction.transaction.digest().base58_encode();
+
+        let mut entries = Vec::new();
+        for (package, module, function) in move_calls.iter() {
+            let entry = MoveCallEntry {
+                transaction_digest: transaction_digest.clone(),
+                checkpoint: checkpoint_seq,
+                epoch,
+                timestamp_ms,
+                package: package.to_string(),
+                module: module.to_string(),
+                function: function.to_string(),
+            };
+            entries.push(entry);
+        }
+
+        Ok(entries)
     }
 }
 
@@ -114,30 +94,7 @@ impl AnalyticsHandler<MoveCallEntry> for MoveCallHandler {
 impl MoveCallHandler {
     pub fn new() -> Self {
         Self {
-            state: Mutex::new(BTreeMap::new()),
+            state: Arc::new(Mutex::new(BTreeMap::new())),
         }
-    }
-
-    fn process_move_calls(
-        epoch: u64,
-        checkpoint: u64,
-        timestamp_ms: u64,
-        transaction_digest: String,
-        move_calls: &[(&ObjectID, &str, &str)],
-    ) -> Vec<MoveCallEntry> {
-        let mut entries = Vec::new();
-        for (package, module, function) in move_calls.iter() {
-            let entry = MoveCallEntry {
-                transaction_digest: transaction_digest.clone(),
-                checkpoint,
-                epoch,
-                timestamp_ms,
-                package: package.to_string(),
-                module: module.to_string(),
-                function: function.to_string(),
-            };
-            entries.push(entry);
-        }
-        entries
     }
 }

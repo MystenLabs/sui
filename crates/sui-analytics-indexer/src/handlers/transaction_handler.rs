@@ -13,17 +13,18 @@ use sui_types::messages_checkpoint::CheckpointContents;
 use tokio::sync::Mutex;
 use tracing::error;
 
-use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::transaction::{Command, TransactionDataAPI, TransactionKind};
 
 use crate::handlers::AnalyticsHandler;
 use crate::tables::TransactionEntry;
+use crate::tx_parallel::{run_parallel, TxProcessor};
 use crate::FileType;
 
+#[derive(Clone)]
 pub struct TransactionHandler {
-    pub(crate) state: Mutex<BTreeMap<usize, Vec<TransactionEntry>>>,
+    pub(crate) state: Arc<Mutex<BTreeMap<usize, Vec<TransactionEntry>>>>,
 }
 
 #[async_trait::async_trait]
@@ -31,106 +32,29 @@ impl Worker for TransactionHandler {
     type Result = ();
 
     async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
-        let checkpoint_summary = &checkpoint_data.checkpoint_summary;
-        let checkpoint_transactions = &checkpoint_data.transactions;
-        let checkpoint_contents = &checkpoint_data.checkpoint_contents;
-        let transaction_positions = compute_transaction_positions(checkpoint_contents);
-
-        // Create a channel to collect results
-        let (tx, mut rx) = tokio::sync::mpsc::channel::<(usize, Vec<TransactionEntry>)>(
-            checkpoint_transactions.len(),
-        );
-
-        // Process transactions in parallel
-        let mut futures = Vec::new();
-
-        for (idx, _checkpoint_transaction) in checkpoint_transactions.iter().enumerate() {
-            let tx = tx.clone();
-            let epoch = checkpoint_summary.epoch;
-            let checkpoint_seq = checkpoint_summary.sequence_number;
-            let timestamp_ms = checkpoint_summary.timestamp_ms;
-            let transaction_positions = transaction_positions.clone();
-            let checkpoint_data_clone = checkpoint_data.clone();
-
-            // Spawn a task for each transaction
-            let handle = tokio::spawn(async move {
-                let transaction = &checkpoint_data_clone.transactions[idx];
-                match Self::process_transaction(
-                    epoch,
-                    checkpoint_seq,
-                    timestamp_ms,
-                    transaction,
-                    &transaction.effects,
-                    &transaction_positions,
-                ) {
-                    Ok(entries) => {
-                        if !entries.is_empty() {
-                            let _ = tx.send((idx, entries)).await;
-                        }
-                    }
-                    Err(e) => {
-                        tracing::error!("Error processing transaction at index {}: {}", idx, e);
-                    }
-                }
-            });
-
-            futures.push(handle);
-        }
-
-        // Drop the original sender so the channel can close when all tasks are done
-        drop(tx);
-
-        // Wait for all tasks to complete
-        for handle in futures {
-            if let Err(e) = handle.await {
-                tracing::error!("Task panicked: {}", e);
-            }
-        }
-
-        // Collect results into the state in order by transaction index
-        let mut state = self.state.lock().await;
-        while let Some((idx, transactions)) = rx.recv().await {
-            state.insert(idx, transactions);
-        }
-
+        let results = run_parallel(checkpoint_data, Arc::new(self.clone())).await?;
+        *self.state.lock().await = results;
         Ok(())
     }
 }
 
 #[async_trait::async_trait]
-impl AnalyticsHandler<TransactionEntry> for TransactionHandler {
-    async fn read(&self) -> Result<Box<dyn Iterator<Item = TransactionEntry>>> {
-        let mut state = self.state.lock().await;
-        let transactions_map = std::mem::take(&mut *state);
-
-        // Flatten the map into a single iterator in order by transaction index
-        Ok(Box::new(transactions_map.into_values().flatten()))
-    }
-
-    fn file_type(&self) -> Result<FileType> {
-        Ok(FileType::Transaction)
-    }
-
-    fn name(&self) -> &'static str {
-        "transaction"
-    }
-}
-
-impl TransactionHandler {
-    pub fn new() -> Self {
-        TransactionHandler {
-            state: Mutex::new(BTreeMap::new()),
-        }
-    }
-
-    fn process_transaction(
-        epoch: u64,
-        checkpoint: u64,
-        timestamp_ms: u64,
-        checkpoint_transaction: &CheckpointTransaction,
-        effects: &TransactionEffects,
-        transaction_positions: &HashMap<TransactionDigest, usize>,
+impl TxProcessor<TransactionEntry> for TransactionHandler {
+    async fn process_transaction(
+        &self,
+        tx_idx: usize,
+        checkpoint: &CheckpointData,
     ) -> Result<Vec<TransactionEntry>> {
+        let transaction = &checkpoint.transactions[tx_idx];
+        let epoch = checkpoint.checkpoint_summary.epoch;
+        let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
+        let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
+
+        let transaction_positions = compute_transaction_positions(&checkpoint.checkpoint_contents);
+
+        let checkpoint_transaction = transaction;
+        let effects = &transaction.effects;
+
         let transaction = &checkpoint_transaction.transaction;
         let txn_data = transaction.transaction_data();
         let gas_object = effects.gas_object();
@@ -206,7 +130,7 @@ impl TransactionHandler {
         let effects_json = serde_json::to_string(&checkpoint_transaction.effects)?;
         let entry = TransactionEntry {
             transaction_digest,
-            checkpoint,
+            checkpoint: checkpoint_seq,
             epoch,
             timestamp_ms,
 
@@ -262,6 +186,33 @@ impl TransactionHandler {
     }
 }
 
+#[async_trait::async_trait]
+impl AnalyticsHandler<TransactionEntry> for TransactionHandler {
+    async fn read(&self) -> Result<Box<dyn Iterator<Item = TransactionEntry>>> {
+        let mut state = self.state.lock().await;
+        let transactions_map = std::mem::take(&mut *state);
+
+        // Flatten the map into a single iterator in order by transaction index
+        Ok(Box::new(transactions_map.into_values().flatten()))
+    }
+
+    fn file_type(&self) -> Result<FileType> {
+        Ok(FileType::Transaction)
+    }
+
+    fn name(&self) -> &'static str {
+        "transaction"
+    }
+}
+
+impl TransactionHandler {
+    pub fn new() -> Self {
+        TransactionHandler {
+            state: Arc::new(Mutex::new(BTreeMap::new())),
+        }
+    }
+}
+
 fn compute_transaction_positions(
     checkpoint_contents: &CheckpointContents,
 ) -> HashMap<TransactionDigest, usize> {
@@ -276,9 +227,9 @@ fn compute_transaction_positions(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
     use crate::handlers::transaction_handler::TransactionHandler;
     use simulacrum::Simulacrum;
+    use std::sync::Arc;
     use sui_data_ingestion_core::Worker;
     use sui_types::base_types::SuiAddress;
     use sui_types::storage::ReadStore;
@@ -301,7 +252,9 @@ mod tests {
                 .unwrap(),
         )?;
         let txn_handler = TransactionHandler::new();
-        txn_handler.process_checkpoint(Arc::new(checkpoint_data)).await?;
+        txn_handler
+            .process_checkpoint(Arc::new(checkpoint_data))
+            .await?;
         let transaction_map = txn_handler.state.lock().await;
         let transaction_entries: Vec<_> = transaction_map.values().flatten().cloned().collect();
         assert_eq!(transaction_entries.len(), 1);

@@ -14,21 +14,16 @@ use tokio::sync::Mutex;
 use crate::handlers::AnalyticsHandler;
 use crate::package_store::PackageCache;
 use crate::tables::EventEntry;
+use crate::tx_parallel::{run_parallel, TxProcessor};
 use crate::FileType;
 use sui_json_rpc_types::type_and_fields_from_move_event_data;
-use sui_types::digests::TransactionDigest;
-use sui_types::effects::TransactionEvents;
 use sui_types::event::Event;
 use sui_types::full_checkpoint_content::CheckpointData;
 
-// Context contains shared resources
-struct Context {
-    package_cache: Arc<PackageCache>,
-}
-
+#[derive(Clone)]
 pub struct EventHandler {
-    state: Mutex<BTreeMap<usize, Vec<EventEntry>>>,
-    context: Arc<Context>,
+    state: Arc<Mutex<BTreeMap<usize, Vec<EventEntry>>>>,
+    package_cache: Arc<PackageCache>,
 }
 
 #[async_trait::async_trait]
@@ -36,86 +31,90 @@ impl Worker for EventHandler {
     type Result = ();
 
     async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
-        let checkpoint_summary = &checkpoint_data.checkpoint_summary;
-        let checkpoint_transactions = &checkpoint_data.transactions;
-
-        // Update package cache first (still need to do this serially)
-        for checkpoint_transaction in checkpoint_transactions {
+        // Update package cache first (serial operation)
+        for checkpoint_transaction in &checkpoint_data.transactions {
             for object in checkpoint_transaction.output_objects.iter() {
-                self.context.package_cache.update(object)?;
+                self.package_cache.update(object)?;
             }
         }
 
-        // Create a channel to collect results
-        let (tx, mut rx) =
-            tokio::sync::mpsc::channel::<(usize, Vec<EventEntry>)>(checkpoint_transactions.len());
-
-        // Process transactions in parallel
-        let mut futures = Vec::new();
-
-        for (idx, checkpoint_transaction) in checkpoint_transactions.iter().enumerate() {
-            if let Some(events) = &checkpoint_transaction.events {
-                let tx = tx.clone();
-                let context = self.context.clone();
-                let transaction = checkpoint_transaction.clone();
-                let epoch = checkpoint_summary.epoch;
-                let checkpoint_seq = checkpoint_summary.sequence_number;
-                let timestamp_ms = checkpoint_summary.timestamp_ms;
-                let events_clone = events.clone();
-
-                // Spawn a task for each transaction
-                let handle = tokio::spawn(async move {
-                    match Self::process_events(
-                        epoch,
-                        checkpoint_seq,
-                        transaction.transaction.digest(),
-                        timestamp_ms,
-                        &events_clone,
-                        context,
-                    )
-                    .await
-                    {
-                        Ok(entries) => {
-                            if !entries.is_empty() {
-                                let _ = tx.send((idx, entries)).await;
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!("Error processing transaction at index {}: {}", idx, e);
-                        }
-                    }
-                });
-
-                futures.push(handle);
-            }
-        }
-
-        // Drop the original sender so the channel can close when all tasks are done
-        drop(tx);
-
-        // Wait for all tasks to complete
-        for handle in futures {
-            if let Err(e) = handle.await {
-                tracing::error!("Task panicked: {}", e);
-            }
-        }
-
-        // Collect results into the state in order by transaction index
-        let mut state = self.state.lock().await;
-        while let Some((idx, events)) = rx.recv().await {
-            state.insert(idx, events);
-        }
+        // Run parallel processing
+        let results = run_parallel(checkpoint_data.clone(), Arc::new(self.clone())).await?;
 
         // If end of epoch, evict package store
-        if checkpoint_summary.end_of_epoch_data.is_some() {
-            self.context
-                .package_cache
+        if checkpoint_data
+            .checkpoint_summary
+            .end_of_epoch_data
+            .is_some()
+        {
+            self.package_cache
                 .resolver
                 .package_store()
                 .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
         }
 
+        // Store results
+        *self.state.lock().await = results;
+
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl TxProcessor<EventEntry> for EventHandler {
+    async fn process_transaction(
+        &self,
+        tx_idx: usize,
+        checkpoint: &CheckpointData,
+    ) -> Result<Vec<EventEntry>> {
+        let transaction = &checkpoint.transactions[tx_idx];
+
+        // Skip if no events
+        if let Some(events) = &transaction.events {
+            let epoch = checkpoint.checkpoint_summary.epoch;
+            let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
+            let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
+            let digest = transaction.transaction.digest();
+
+            let mut entries = Vec::new();
+            for (idx, event) in events.data.iter().enumerate() {
+                let Event {
+                    package_id,
+                    transaction_module,
+                    sender,
+                    type_,
+                    contents,
+                } = event;
+                let layout = self
+                    .package_cache
+                    .resolver
+                    .type_layout(move_core_types::language_storage::TypeTag::Struct(
+                        Box::new(type_.clone()),
+                    ))
+                    .await?;
+                let move_value = MoveValue::simple_deserialize(contents, &layout)?;
+                let (_, event_json) = type_and_fields_from_move_event_data(move_value)?;
+                let entry = EventEntry {
+                    transaction_digest: digest.base58_encode(),
+                    event_index: idx as u64,
+                    checkpoint: checkpoint_seq,
+                    epoch,
+                    timestamp_ms,
+                    sender: sender.to_string(),
+                    package: package_id.to_string(),
+                    module: transaction_module.to_string(),
+                    event_type: type_.to_string(),
+                    bcs: "".to_string(),
+                    bcs_length: contents.len() as u64,
+                    event_json: event_json.to_string(),
+                };
+
+                entries.push(entry);
+            }
+            Ok(entries)
+        } else {
+            Ok(Vec::new())
+        }
     }
 }
 
@@ -140,56 +139,9 @@ impl AnalyticsHandler<EventEntry> for EventHandler {
 
 impl EventHandler {
     pub fn new(package_cache: Arc<PackageCache>) -> Self {
-        let context = Arc::new(Context { package_cache });
-
         Self {
-            state: Mutex::new(BTreeMap::new()),
-            context,
+            state: Arc::new(Mutex::new(BTreeMap::new())),
+            package_cache,
         }
-    }
-    async fn process_events(
-        epoch: u64,
-        checkpoint: u64,
-        digest: &TransactionDigest,
-        timestamp_ms: u64,
-        events: &TransactionEvents,
-        context: Arc<Context>,
-    ) -> Result<Vec<EventEntry>> {
-        let mut entries = Vec::new();
-        for (idx, event) in events.data.iter().enumerate() {
-            let Event {
-                package_id,
-                transaction_module,
-                sender,
-                type_,
-                contents,
-            } = event;
-            let layout = context
-                .package_cache
-                .resolver
-                .type_layout(move_core_types::language_storage::TypeTag::Struct(
-                    Box::new(type_.clone()),
-                ))
-                .await?;
-            let move_value = MoveValue::simple_deserialize(contents, &layout)?;
-            let (_, event_json) = type_and_fields_from_move_event_data(move_value)?;
-            let entry = EventEntry {
-                transaction_digest: digest.base58_encode(),
-                event_index: idx as u64,
-                checkpoint,
-                epoch,
-                timestamp_ms,
-                sender: sender.to_string(),
-                package: package_id.to_string(),
-                module: transaction_module.to_string(),
-                event_type: type_.to_string(),
-                bcs: "".to_string(),
-                bcs_length: contents.len() as u64,
-                event_json: event_json.to_string(),
-            };
-
-            entries.push(entry);
-        }
-        Ok(entries)
     }
 }
