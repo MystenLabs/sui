@@ -23,9 +23,10 @@ use crate::{
     package::{EnvironmentName, PackageName},
 };
 
-use super::external_protocol::{Query, QueryID, QueryResult, Request, Response};
-
-use super::{pin, DependencySet, ManifestDependencyInfo, PinnedDependencyInfo};
+use super::{
+    external_protocol::{Query, QueryID, QueryResult, Request, Response},
+    pin, DependencySet, ManifestDependencyInfo, PinnedDependencyInfo,
+};
 
 type ResolverName = String;
 
@@ -215,7 +216,7 @@ fn extract_query_result<F: MoveFlavor>(
 ) -> Result<ManifestDependencyInfo<F>, ResolverError> {
     let result = response
         .responses
-        .get(&query_id(&None, &pkg_name))
+        .get(&query_id(&env, &pkg_name))
         .expect("response has all keys");
 
     match result {
@@ -231,9 +232,19 @@ fn extract_query_result<F: MoveFlavor>(
                 warn!("{resolver}: {warning}");
             }
 
-            ManifestDependencyInfo::<F>::deserialize(resolved.clone()).map_err(|_| {
-                ResolverError::bad_resolver(resolver, "incorrectly formatted dependency")
-            })
+            let result =
+                ManifestDependencyInfo::<F>::deserialize(resolved.clone()).map_err(|_| {
+                    ResolverError::bad_resolver(resolver, "incorrectly formatted dependency")
+                })?;
+
+            if let ManifestDependencyInfo::<F>::External(_) = result {
+                Err(ResolverError::bad_resolver(
+                    resolver,
+                    "resolvers must return resolved dependencies",
+                ))
+            } else {
+                Ok(result)
+            }
         }
     }
 }

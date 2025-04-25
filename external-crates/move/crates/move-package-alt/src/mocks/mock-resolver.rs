@@ -68,7 +68,7 @@ pub fn main() -> ExitCode {
         .map(|(id, query)| {
             let env_str = match query.environment_id {
                 Some(e) => format!("for environment {}", &e),
-                None => format!("for default environment"),
+                None => "for default environment".to_string(),
             };
 
             debug!("Resolving request `{id}` {env_str}.");

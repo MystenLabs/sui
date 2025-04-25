@@ -67,7 +67,8 @@ impl<T> DependencySet<T> {
         result
     }
 
-    /// Convenience method to return either [default_deps] or [deps_for_env] depending on [env]
+    /// Convenience method to return either [default_deps] or [deps_for_env] depending on [env]; an
+    /// [env] of [None] indicates a request for the default dependencies.
     pub fn deps_for(&self, env: Option<&EnvironmentName>) -> BTreeMap<PackageName, &T> {
         match env {
             Some(env) => self.deps_for_env(env),
@@ -215,11 +216,10 @@ impl<T> Extend<(Option<EnvironmentName>, PackageName, T)> for DependencySet<T> {
     }
 }
 
-/// We print dependency sets as toml for easy reading
 impl<T: Serialize> std::fmt::Debug for DependencySet<T> {
+    /// Format [self] as toml for easy reading and diffing
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let toml =
-            toml_edit::ser::to_string_pretty(self).expect("dependency set serialization works");
+        let toml = toml_edit::ser::to_string_pretty(self).expect("dependency set should serialize");
         write!(f, "{toml}")
     }
 }

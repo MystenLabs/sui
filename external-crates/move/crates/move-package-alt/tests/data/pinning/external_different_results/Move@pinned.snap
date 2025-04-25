@@ -5,4 +5,4 @@ source: crates/move-package-alt/tests/pinning_tests.rs
 local = "default resolution"
 
 [overrides.mainnet.mock]
-local = "default resolution"
+local = "mainnet resolution"

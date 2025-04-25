@@ -149,7 +149,7 @@ impl Request {
             if !response.responses.contains_key(key) {
                 return Err(ResolverError::bad_resolver(
                     resolver,
-                    format!(r#"it didn't resolve "{key}""#),
+                    format!("it didn't resolve '{key}'"),
                 ));
             }
         }
@@ -218,6 +218,6 @@ async fn recv_response(
         return Err(ResolverError::nonzero_exit(resolver, output.status));
     }
 
-    Ok(toml::from_str(&response)
-        .map_err(|it| ResolverError::bad_resolver(resolver, "incorrectly formatted response"))?)
+    toml::from_str(&response)
+        .map_err(|_| ResolverError::bad_resolver(resolver, "incorrectly formatted response"))
 }
