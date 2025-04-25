@@ -219,8 +219,6 @@ struct UncommittedData {
 
     transaction_effects: DashMap<TransactionEffectsDigest, TransactionEffects>,
 
-    transaction_events: DashMap<TransactionDigest, TransactionEvents>,
-
     executed_effects_digests: DashMap<TransactionDigest, TransactionEffectsDigest>,
 
     // Transaction outputs that have not yet been written to the DB. Items are removed from this
@@ -239,7 +237,6 @@ impl UncommittedData {
             transaction_effects: DashMap::with_shard_amount(2048),
             executed_effects_digests: DashMap::with_shard_amount(2048),
             pending_transaction_writes: DashMap::with_shard_amount(2048),
-            transaction_events: DashMap::with_shard_amount(2048),
             total_transaction_inserts: AtomicU64::new(0),
             total_transaction_commits: AtomicU64::new(0),
         }
@@ -251,7 +248,6 @@ impl UncommittedData {
         self.transaction_effects.clear();
         self.executed_effects_digests.clear();
         self.pending_transaction_writes.clear();
-        self.transaction_events.clear();
         self.total_transaction_inserts
             .store(0, std::sync::atomic::Ordering::Relaxed);
         self.total_transaction_commits
@@ -266,7 +262,6 @@ impl UncommittedData {
                     && self.markers.is_empty()
                     && self.transaction_effects.is_empty()
                     && self.executed_effects_digests.is_empty()
-                    && self.transaction_events.is_empty()
                     && self
                         .total_transaction_inserts
                         .load(std::sync::atomic::Ordering::Relaxed)
@@ -276,6 +271,12 @@ impl UncommittedData {
             );
         }
         empty
+    }
+
+    fn get_events(&self, tx_digest: &TransactionDigest) -> Option<TransactionEvents> {
+        self.pending_transaction_writes
+            .get(tx_digest)
+            .map(|outputs| outputs.events.clone())
     }
 }
 
@@ -843,7 +844,6 @@ impl WritebackCache {
             written,
             deleted,
             wrapped,
-            events,
             ..
         } = &*tx_outputs;
 
@@ -901,9 +901,6 @@ impl WritebackCache {
         // store it anyway to avoid special cases in commint_transaction_outputs, and translate
         // an empty events structure to None when reading.
         self.metrics.record_cache_write("transaction_events");
-        self.dirty
-            .transaction_events
-            .insert(tx_digest, events.clone());
 
         self.metrics.record_cache_write("executed_effects_digests");
         self.dirty
@@ -1088,11 +1085,6 @@ impl WritebackCache {
             .transaction_effects
             .remove(&effects_digest)
             .expect("effects must exist");
-
-        self.dirty
-            .transaction_events
-            .remove(&tx_digest)
-            .expect("events must exist");
 
         self.dirty
             .executed_effects_digests
@@ -1990,7 +1982,7 @@ impl TransactionCacheRead for WritebackCache {
             |(digest, _)| {
                 self.metrics
                     .record_cache_request("transaction_events", "uncommitted");
-                if let Some(events) = self.dirty.transaction_events.get(digest).map(|e| e.clone()) {
+                if let Some(events) = self.dirty.get_events(digest) {
                     self.metrics
                         .record_cache_hit("transaction_events", "uncommitted");
 
