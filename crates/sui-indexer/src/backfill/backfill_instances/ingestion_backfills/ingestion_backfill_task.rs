@@ -58,8 +58,8 @@ pub struct Adapter<T: IngestionBackfillTrait> {
 #[async_trait::async_trait]
 impl<T: IngestionBackfillTrait> Worker for Adapter<T> {
     type Result = ();
-    async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> anyhow::Result<()> {
-        let processed = T::process_checkpoint(checkpoint);
+    async fn process_checkpoint(&self, checkpoint: Arc<CheckpointData>) -> anyhow::Result<()> {
+        let processed = T::process_checkpoint(&checkpoint);
         self.ready_checkpoints
             .insert(checkpoint.checkpoint_summary.sequence_number, processed);
         self.notify.notify_waiters();

@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 use std::collections::HashMap;
 
 use anyhow::Result;
+use std::sync::Arc;
 use sui_data_ingestion_core::Worker;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointContents;
@@ -32,13 +33,10 @@ pub(crate) struct State {
 impl Worker for TransactionHandler {
     type Result = ();
 
-    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
-        let CheckpointData {
-            checkpoint_summary,
-            transactions: checkpoint_transactions,
-            checkpoint_contents,
-            ..
-        } = checkpoint_data;
+    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
+        let checkpoint_summary = &checkpoint_data.checkpoint_summary;
+        let checkpoint_transactions = &checkpoint_data.transactions;
+        let checkpoint_contents = &checkpoint_data.checkpoint_contents;
         let transaction_positions = compute_transaction_positions(checkpoint_contents);
         let mut state = self.state.lock().await;
         for checkpoint_transaction in checkpoint_transactions {
@@ -237,6 +235,7 @@ fn compute_transaction_positions(
 mod tests {
     use crate::handlers::transaction_handler::TransactionHandler;
     use simulacrum::Simulacrum;
+    use std::sync::Arc;
     use sui_data_ingestion_core::Worker;
     use sui_types::base_types::SuiAddress;
     use sui_types::storage::ReadStore;
@@ -253,13 +252,15 @@ mod tests {
 
         // Create a checkpoint which should include the transaction we executed.
         let checkpoint = sim.create_checkpoint();
-        let checkpoint_data = sim.get_checkpoint_data(
-            checkpoint.clone(),
-            sim.get_checkpoint_contents_by_digest(&checkpoint.content_digest)
-                .unwrap(),
-        )?;
+        let checkpoint_data = Arc::new(
+            sim.get_checkpoint_data(
+                checkpoint.clone(),
+                sim.get_checkpoint_contents_by_digest(&checkpoint.content_digest)
+                    .unwrap(),
+            )?,
+        );
         let txn_handler = TransactionHandler::new();
-        txn_handler.process_checkpoint(&checkpoint_data).await?;
+        txn_handler.process_checkpoint(checkpoint_data).await?;
         let transaction_entries = txn_handler.state.lock().await.transactions.clone();
         assert_eq!(transaction_entries.len(), 1);
         let db_txn = transaction_entries.first().unwrap();
