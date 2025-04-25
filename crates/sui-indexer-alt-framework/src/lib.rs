@@ -8,7 +8,7 @@ use diesel::{
     migration::{self, Migration, MigrationSource},
     pg::Pg,
 };
-use diesel_migrations::{embed_migrations, EmbeddedMigrations};
+use diesel_migrations::EmbeddedMigrations;
 use futures::future;
 use ingestion::{client::IngestionClient, ClientArgs, IngestionConfig, IngestionService};
 use metrics::IndexerMetrics;
@@ -18,7 +18,7 @@ use pipeline::{
     Processor,
 };
 use prometheus::Registry;
-use store::{CommitterWatermark, Connection};
+use sui_indexer_alt_framework_store_traits::{CommitterWatermark, Connection};
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db::{temp::TempDb, Db, DbArgs};
 use tempfile::tempdir;
@@ -29,6 +29,9 @@ use url::Url;
 
 pub use anyhow::Result;
 pub use sui_field_count::FieldCount;
+/// External users access the store trait through framework::store
+pub use sui_indexer_alt_framework_store_traits as store;
+/// External users can opt in to a specific implementation through framework::db
 pub use sui_pg_db as db;
 pub use sui_sql_macro::sql;
 pub use sui_types as types;
@@ -37,14 +40,12 @@ pub use sui_types as types;
 pub mod cluster;
 pub mod ingestion;
 pub mod metrics;
-pub mod models;
-pub mod pg_store;
 pub mod pipeline;
-pub mod schema;
-pub mod store;
 pub mod task;
 
-const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
+// TODO (wlmyng)
+// #[cfg(feature = "postgres")]
+const MIGRATIONS: EmbeddedMigrations = sui_pg_db::MIGRATIONS;
 
 /// Command-line arguments for the indexer
 #[derive(clap::Args, Default, Debug, Clone)]
@@ -475,8 +476,12 @@ impl Indexer {
 mod tests {
     use async_trait::async_trait;
 
-    use crate::types::full_checkpoint_content::CheckpointData;
-    use sui_pg_db::Connection as PgConnection;
+    use crate::FieldCount;
+    use crate::{
+        db,
+        store::{CommitterWatermark, Connection},
+        types::full_checkpoint_content::CheckpointData,
+    };
 
     use super::*;
 
@@ -509,7 +514,7 @@ mod tests {
                 const PRUNING_REQUIRES_PROCESSED_VALUES: bool = $pruning_requires_processed_values;
                 async fn commit<'a>(
                     _values: &[Self::Value],
-                    _conn: &mut PgConnection<'a>,
+                    _conn: &mut db::Connection<'a>,
                 ) -> anyhow::Result<usize> {
                     todo!()
                 }

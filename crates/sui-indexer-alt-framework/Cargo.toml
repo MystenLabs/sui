@@ -27,18 +27,19 @@ thiserror.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true
+tonic.workspace = true
 tracing.workspace = true
 tracing-subscriber = { workspace = true, optional = true }
 url.workspace = true
 
 sui-field-count.workspace = true
+sui-indexer-alt-framework-store-traits.workspace = true
 sui-indexer-alt-metrics.workspace = true
 sui-pg-db.workspace = true
+sui-rpc-api.workspace = true
 sui-sql-macro.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
-sui-rpc-api.workspace = true
-tonic.workspace = true
 
 [dev-dependencies]
 rand.workspace = true

@@ -11,29 +11,39 @@ use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use scoped_futures::ScopedBoxFuture;
+use sui_indexer_alt_framework_store_traits as store;
 use sui_sql_macro::sql;
 
-use crate::db::{Connection as PgConnection, Db as PgDb};
-use crate::models::watermarks::StoredWatermark;
+use crate::model::StoredWatermark;
 use crate::schema::watermarks;
-use crate::store::{
-    CommitterWatermark, Connection, PrunerWatermark, ReaderWatermark, Store, TransactionalStore,
-};
+use crate::{Connection, Db};
+
+pub use sui_indexer_alt_framework_store_traits::Store;
 
 #[async_trait]
-impl Connection for PgConnection<'_> {
+impl store::Connection for Connection<'_> {
     async fn committer_watermark(
         &mut self,
         pipeline: &'static str,
-    ) -> anyhow::Result<Option<CommitterWatermark>> {
-        let watermark = StoredWatermark::get(self, pipeline).await?;
+    ) -> anyhow::Result<Option<store::CommitterWatermark>> {
+        let watermark: Option<(i64, i64, i64, i64)> = watermarks::table
+            .select((
+                watermarks::epoch_hi_inclusive,
+                watermarks::checkpoint_hi_inclusive,
+                watermarks::tx_hi,
+                watermarks::timestamp_ms_hi_inclusive,
+            ))
+            .filter(watermarks::pipeline.eq(pipeline))
+            .first(self)
+            .await
+            .optional()?;
 
         if let Some(watermark) = watermark {
-            Ok(Some(CommitterWatermark {
-                epoch_hi_inclusive: watermark.epoch_hi_inclusive as u64,
-                checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive as u64,
-                tx_hi: watermark.tx_hi as u64,
-                timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive as u64,
+            Ok(Some(store::CommitterWatermark {
+                epoch_hi_inclusive: watermark.0 as u64,
+                checkpoint_hi_inclusive: watermark.1 as u64,
+                tx_hi: watermark.2 as u64,
+                timestamp_ms_hi_inclusive: watermark.3 as u64,
             }))
         } else {
             Ok(None)
@@ -43,15 +53,51 @@ impl Connection for PgConnection<'_> {
     async fn reader_watermark(
         &mut self,
         pipeline: &'static str,
-    ) -> anyhow::Result<Option<ReaderWatermark>> {
-        let watermark = StoredWatermark::get(self, pipeline)
+    ) -> anyhow::Result<Option<store::ReaderWatermark>> {
+        let watermark: Option<(i64, i64)> = watermarks::table
+            .select((watermarks::checkpoint_hi_inclusive, watermarks::reader_lo))
+            .filter(watermarks::pipeline.eq(pipeline))
+            .first(self)
             .await
-            .map_err(anyhow::Error::from)?;
+            .optional()?;
 
         if let Some(watermark) = watermark {
-            Ok(Some(ReaderWatermark {
-                checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive as u64,
-                reader_lo: watermark.reader_lo as u64,
+            Ok(Some(store::ReaderWatermark {
+                checkpoint_hi_inclusive: watermark.0 as u64,
+                reader_lo: watermark.1 as u64,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn pruner_watermark(
+        &mut self,
+        pipeline: &'static str,
+        delay: Duration,
+    ) -> anyhow::Result<Option<store::PrunerWatermark>> {
+        //     |---------- + delay ---------------------|
+        //                             |--- wait_for ---|
+        //     |-----------------------|----------------|
+        //     ^                       ^
+        //     pruner_timestamp        NOW()
+        let wait_for = sql!(as BigInt,
+            "CAST({BigInt} + 1000 * EXTRACT(EPOCH FROM pruner_timestamp - NOW()) AS BIGINT)",
+            delay.as_millis() as i64,
+        );
+
+        let watermark: Option<(i64, i64, i64)> = watermarks::table
+            .select((wait_for, watermarks::pruner_hi, watermarks::reader_lo))
+            .filter(watermarks::pipeline.eq(pipeline))
+            .first(self)
+            .await
+            .optional()?;
+
+        if let Some(watermark) = watermark {
+            Ok(Some(store::PrunerWatermark {
+                wait_for_ms: watermark.0 as u64,
+                pruner_hi: watermark.1 as u64,
+                reader_lo: watermark.2 as u64,
             }))
         } else {
             Ok(None)
@@ -61,7 +107,7 @@ impl Connection for PgConnection<'_> {
     async fn set_committer_watermark(
         &mut self,
         pipeline: &'static str,
-        watermark: CommitterWatermark,
+        watermark: store::CommitterWatermark,
     ) -> anyhow::Result<bool> {
         // Create a StoredWatermark directly from CommitterWatermark
         let stored_watermark = StoredWatermark {
@@ -92,8 +138,7 @@ impl Connection for PgConnection<'_> {
                 watermarks::checkpoint_hi_inclusive.lt(stored_watermark.checkpoint_hi_inclusive),
             )
             .execute(self)
-            .await
-            .map_err(anyhow::Error::from)?
+            .await?
             > 0)
     }
 
@@ -110,43 +155,8 @@ impl Connection for PgConnection<'_> {
             .filter(watermarks::pipeline.eq(pipeline))
             .filter(watermarks::reader_lo.lt(reader_lo as i64))
             .execute(self)
-            .await
-            .map_err(anyhow::Error::from)?
+            .await?
             > 0)
-    }
-
-    async fn pruner_watermark(
-        &mut self,
-        pipeline: &'static str,
-        delay: Duration,
-    ) -> anyhow::Result<Option<PrunerWatermark>> {
-        //     |---------- + delay ---------------------|
-        //                             |--- wait_for ---|
-        //     |-----------------------|----------------|
-        //     ^                       ^
-        //     pruner_timestamp        NOW()
-        let wait_for = sql!(as BigInt,
-            "CAST({BigInt} + 1000 * EXTRACT(EPOCH FROM pruner_timestamp - NOW()) AS BIGINT)",
-            delay.as_millis() as i64,
-        );
-
-        let watermark: Option<(i64, i64, i64)> = watermarks::table
-            .select((wait_for, watermarks::pruner_hi, watermarks::reader_lo))
-            .filter(watermarks::pipeline.eq(pipeline))
-            .first(self)
-            .await
-            .optional()
-            .map_err(anyhow::Error::from)?;
-
-        if let Some(watermark) = watermark {
-            Ok(Some(PrunerWatermark {
-                wait_for_ms: watermark.0 as u64,
-                pruner_hi: watermark.1 as u64,
-                reader_lo: watermark.2 as u64,
-            }))
-        } else {
-            Ok(None)
-        }
     }
 
     async fn set_pruner_watermark(
@@ -158,24 +168,22 @@ impl Connection for PgConnection<'_> {
             .set(watermarks::pruner_hi.eq(pruner_hi as i64))
             .filter(watermarks::pipeline.eq(pipeline))
             .execute(self)
-            .await
-            .map_err(anyhow::Error::from)?
+            .await?
             > 0)
     }
 }
 
 #[async_trait]
-impl Store for PgDb {
-    type Connection<'c> = PgConnection<'c>;
+impl store::Store for Db {
+    type Connection<'c> = Connection<'c>;
 
     async fn connect<'c>(&'c self) -> anyhow::Result<Self::Connection<'c>> {
-        let conn = self.connect().await?;
-        Ok(conn)
+        Ok(Connection(self.0.get().await?))
     }
 }
 
 #[async_trait]
-impl TransactionalStore for PgDb {
+impl store::TransactionalStore for Db {
     async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
     where
         R: Send + 'a,

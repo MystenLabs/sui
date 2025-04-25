@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ops::{Deref, DerefMut};
 use std::time::Duration;
 
 use anyhow::anyhow;
@@ -21,7 +22,15 @@ use futures::FutureExt;
 use tracing::info;
 use url::Url;
 
+mod model;
+
+pub mod schema;
+pub mod store;
 pub mod temp;
+
+use diesel_migrations::{embed_migrations, EmbeddedMigrations};
+
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct DbArgs {
@@ -41,7 +50,8 @@ pub struct DbArgs {
 #[derive(Clone)]
 pub struct Db(Pool<AsyncPgConnection>);
 
-pub type Connection<'p> = PooledConnection<'p, AsyncPgConnection>;
+/// Wrapper struct over the remote `PooledConnection` type for dealing with the `Store` trait.
+pub struct Connection<'a>(PooledConnection<'a, AsyncPgConnection>);
 
 impl DbArgs {
     pub fn connection_timeout(&self) -> Duration {
@@ -70,7 +80,7 @@ impl Db {
     /// Retrieves a connection from the pool. Can fail with a timeout if a connection cannot be
     /// established before the [DbArgs::connection_timeout] has elapsed.
     pub async fn connect(&self) -> anyhow::Result<Connection<'_>> {
-        Ok(self.0.get().await?)
+        Ok(Connection(self.0.get().await?))
     }
 
     /// Statistics about the connection pool
@@ -218,6 +228,20 @@ async fn pool(
         .connection_timeout(args.connection_timeout())
         .build(manager)
         .await?)
+}
+
+impl<'a> Deref for Connection<'a> {
+    type Target = PooledConnection<'a, AsyncPgConnection>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Connection<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
 #[cfg(test)]

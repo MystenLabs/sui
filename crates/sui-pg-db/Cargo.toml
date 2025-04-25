@@ -8,16 +8,23 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
 bb8 = "0.8.5"
 clap.workspace = true
-diesel.workspace = true
+chrono.workspace = true
+diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 diesel_migrations.workspace = true
 futures.workspace = true
+scoped-futures.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 url.workspace = true
+
+sui-field-count.workspace = true
+sui-indexer-alt-framework-store-traits.workspace = true
+sui-sql-macro.workspace = true
 
 [dev-dependencies]
 telemetry-subscribers.workspace = true

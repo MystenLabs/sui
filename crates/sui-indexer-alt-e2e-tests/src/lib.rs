@@ -12,7 +12,7 @@ use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::RunQueryDsl;
 use simulacrum::Simulacrum;
 use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
-use sui_indexer_alt_framework::{ingestion::ClientArgs, schema::watermarks, IndexerArgs};
+use sui_indexer_alt_framework::{db::schema::watermarks, ingestion::ClientArgs, IndexerArgs};
 use sui_indexer_alt_graphql::{
     config::RpcConfig as GraphQlConfig, start_rpc as start_graphql, RpcArgs as GraphQlArgs,
 };

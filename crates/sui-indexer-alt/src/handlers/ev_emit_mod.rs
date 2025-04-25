@@ -7,8 +7,8 @@ use std::{collections::BTreeSet, sync::Arc};
 use anyhow::Result;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::db::{Connection, Db};
 use sui_indexer_alt_framework::{
+    db::{Connection, Db},
     pipeline::{concurrent::Handler, Processor},
     types::full_checkpoint_content::CheckpointData,
 };
