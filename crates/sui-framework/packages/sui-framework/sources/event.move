@@ -51,7 +51,9 @@ public use fun destroy_cap as EventStreamCap.destroy;
 public use fun emit_authenticated as EventStreamCap.emit;
 
 public struct EventStreamHead has store {
+    /// Merkle root for all events in the current checkpoint.
     root: vector<u8>,
+    /// Hash of the previous version of the head object.
     prev: vector<u8>,
 }
 

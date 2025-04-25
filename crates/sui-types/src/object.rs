@@ -23,7 +23,6 @@ use crate::crypto::{default_hash, deterministic_random_account_key};
 use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
 use crate::error::{SuiError, SuiResult};
 use crate::gas_coin::GAS;
-use crate::is_system_package;
 use crate::layout_resolver::LayoutResolver;
 use crate::move_package::MovePackage;
 use crate::{
@@ -32,6 +31,7 @@ use crate::{
     },
     gas_coin::GasCoin,
 };
+use crate::{is_system_package, SUI_FRAMEWORK_ADDRESS};
 use sui_protocol_config::ProtocolConfig;
 
 use self::balance_traversal::BalanceTraversal;
@@ -890,6 +890,17 @@ impl ObjectInner {
     pub fn is_coin(&self) -> bool {
         if let Some(move_object) = self.data.try_as_move() {
             move_object.type_().is_coin()
+        } else {
+            false
+        }
+    }
+
+    pub fn is_stream_head(&self) -> bool {
+        if let Some(move_object) = self.data.try_as_move() {
+            let type_ = move_object.type_();
+            type_.address() == SUI_FRAMEWORK_ADDRESS
+                && type_.module().as_str() == "event"
+                && type_.name().as_str() == "EventStreamHead"
         } else {
             false
         }
