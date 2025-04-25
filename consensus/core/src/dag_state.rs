@@ -971,11 +971,14 @@ impl DagState {
     /// There is no meaning accepting any blocks with round <= gc_round. The Garbage Collection (GC) round is calculated based on the latest
     /// committed leader round. When GC is disabled that will return the genesis round.
     pub(crate) fn gc_round(&self) -> Round {
-        self.calculate_gc_round(self.last_commit_round())
+        Self::calculate_gc_round(
+            self.last_commit_round(),
+            self.context.protocol_config.gc_depth(),
+        )
     }
 
-    pub(crate) fn calculate_gc_round(&self, commit_round: Round) -> Round {
-        let gc_depth = self.context.protocol_config.gc_depth();
+    /// Calculates the GC round based on the latest committed leader round and the GC depth.
+    pub(crate) fn calculate_gc_round(commit_round: Round, gc_depth: Round) -> Round {
         commit_round.saturating_sub(gc_depth)
     }
 

@@ -673,7 +673,7 @@ mod tests {
         let unscored_subdags = vec![CommittedSubDag::new(
             BlockRef::new(1, AuthorityIndex::ZERO, BlockDigest::MIN),
             vec![],
-            vec![],
+            BTreeMap::new(),
             context.clock.timestamp_utc_ms(),
             CommitRef::new(1, CommitDigest::MIN),
             vec![],
@@ -755,7 +755,7 @@ mod tests {
         let leader_block = leader.unwrap();
         let leader_ref = leader_block.reference();
         let commit_index = 1;
-        let rejected_transactions = vec![vec![]; blocks.len()];
+        let rejected_transactions = BTreeMap::new();
 
         let last_commit = TrustedCommit::new_for_test(
             commit_index,
