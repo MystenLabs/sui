@@ -116,14 +116,22 @@ export function activate(context: vscode.ExtensionContext) {
                         levels: 1
                     });
 
-                    const stackFrame: StackFrame = stackTraceResponse.stackFrames[0];
-                    if (stackFrame && stackFrame.source && stackFrame.source.path !== previousSourcePath) {
-                        previousSourcePath = stackFrame.source.path;
-                        const editor = vscode.window.activeTextEditor;
-                        if (editor) {
-                            const optimized_lines = stackTraceResponse.optimizedLines;
+                    const editor = vscode.window.activeTextEditor;
+                    if (!editor) {
+                        return;
+                    }
+                    const optimized_lines = stackTraceResponse.optimizedLines;
+                    let decorationsArray: vscode.DecorationOptions[] = [];
+                    if (optimized_lines && optimized_lines.length > 0) {
+                        const stackFrame: StackFrame = stackTraceResponse.stackFrames[0];
+                        if (stackFrame && stackFrame.source) {
+                            if (stackFrame.source.path === previousSourcePath) {
+                                // don't do anything (neither reset nor set decorations)
+                                // if the source path is the same as the previous one
+                                return;
+                            }
+                            previousSourcePath = stackFrame.source.path;
                             const document = editor.document;
-                            let decorationsArray: vscode.DecorationOptions[] = [];
 
                             optimized_lines.forEach((lineNumber: number) => {
                                 const line = document.lineAt(lineNumber);
@@ -139,9 +147,9 @@ export function activate(context: vscode.ExtensionContext) {
                                 }
                             });
 
-                            editor.setDecorations(decorationType, decorationsArray);
                         }
                     }
+                    editor.setDecorations(decorationType, decorationsArray);
                 }
             }
         })

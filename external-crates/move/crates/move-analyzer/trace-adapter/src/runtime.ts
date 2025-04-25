@@ -13,6 +13,8 @@ import {
     readAllDebugInfos
 } from './debug_info_utils';
 import {
+    INLINED_FRAME_ID_SAME_FILE,
+    INLINED_FRAME_ID_DIFFERENT_FILE,
     TraceEffectKind,
     TraceEvent,
     TraceEventKind,
@@ -111,10 +113,10 @@ interface IRuntimeVariable {
 }
 
 /**
- * Describes a stack frame in the runtime and its current state
- * during trace viewing session.
+ * Describes a stack frame in the runtime representing a Move function
+ * call and its current state during trace viewing session.
  */
-interface IRuntimeStackFrame {
+interface IMoveCallStackFrame {
     /**
      *  Frame identifier.
      */
@@ -197,12 +199,91 @@ interface IRuntimeStackFrame {
 }
 
 /**
- * Describes the runtime stack during trace viewing session
+ * Describes the Move call stack during trace viewing session
  * (oldest frame is at the bottom of the stack at index 0).
  */
-export interface IRuntimeStack {
-    frames: IRuntimeStackFrame[];
+export interface IMoveCallStack {
+    frames: IMoveCallStackFrame[];
     globals: Map<number, RuntimeValueType>;
+}
+
+/**
+ * Describes information about a Move call.
+ */
+export interface IMoveCallInfo {
+    pkg: string;
+    module: string;
+    function: string;
+}
+
+/**
+ * Describes the type of PTB summary.
+ */
+export type PTBSummary = IMoveCallInfo | string;
+
+/**
+ * Describes PTB frame containing the PTB summary.
+ */
+interface IPTBSummaryFrame {
+    /**
+     * PTB summary frame ID.
+     */
+    id: number;
+    /**
+     * PTB summary frame (virtual) line.
+     */
+    line: number;
+    /**
+     * PTB summary.
+     */
+    summary: PTBSummary[];
+}
+
+/**
+ * Kind of native PTB command (other tham Move call).
+ * Strings reflect names of the commands in the PTB.
+ */
+export enum PTBCommandKind {
+    MoveCallStart = 'MoveCallStart',
+    MoveCallEnd = 'MoveCallEnd',
+    SplitCoins = 'SplitCoins',
+}
+
+/**
+ * Contains information about a PTB command stack frame.
+ */
+export type PTBNativeCommandStackFrameInfo =
+    | {
+        kind: PTBCommandKind.SplitCoins
+        description: string // TODO: add more details
+    };
+
+/**
+ * Describes PTB command stack frame.
+ */
+export interface IPTBCommandStackFrame {
+    id: number;
+    line: number;
+    command: PTBNativeCommandStackFrameInfo;
+}
+
+/**
+ * Describes PTB call staack during trace viewing session.
+ */
+export interface IPTBStack {
+    /**
+     * A frame containing the PTB summary. It's present
+     * when the trace is indeed generated for PTB and not
+     * for a single Move function.
+     */
+    summaryFrame?: IPTBSummaryFrame
+    /**
+     * A frame containing either the PTB native command information
+     * or a Move call execution stack. It's present either when
+     * executing a PTB command (along with summary frame), or by itself
+     * if the trace represents a single Move function call.
+     */
+    commandFrame?: IPTBCommandStackFrame | IMoveCallStack;
 }
 
 /**
@@ -259,12 +340,9 @@ export class Runtime extends EventEmitter {
     private eventIndex = 0;
 
     /**
-     * Current frame stack.
+     * Current PTB stack.
      */
-    private frameStack = {
-        frames: [] as IRuntimeStackFrame[],
-        globals: new Map<number, RuntimeValueType>()
-    };
+    private ptbStack: IPTBStack = {};
 
     /**
      * Map of file hashes to file info (both for source files
@@ -294,7 +372,11 @@ export class Runtime extends EventEmitter {
      * @throws Error with a descriptive error message if starting runtime has failed.
      *
      */
-    public async start(openedFilePath: string, traceInfo: string, stopOnEntry: boolean): Promise<void> {
+    public async start(
+        openedFilePath: string,
+        traceInfo: string,
+        stopOnEntry: boolean
+    ): Promise<void> {
         const openedFileExt = path.extname(openedFilePath);
         const openedFileBaseName = path.basename(openedFilePath, TRACE_FILE_EXT);
         let srcDebugInfosModMap = new Map<string, IDebugInfo>();
@@ -399,42 +481,56 @@ export class Runtime extends EventEmitter {
         // start trace viewing session with the first trace event
         this.eventIndex = 0;
 
-        // setup frame stack with the first frame
         const currentEvent = this.trace.events[this.eventIndex];
-        if (currentEvent.type !== TraceEventKind.OpenFrame) {
-            throw new Error(`First event in trace is not an OpenFrame event`);
-        }
-        const newFrame =
-            this.newStackFrame(
-                currentEvent.id,
-                currentEvent.name,
-                currentEvent.srcFileHash,
-                currentEvent.bcodeFileHash,
-                currentEvent.localsTypes,
-                currentEvent.localsNames,
-                currentEvent.optimizedSrcLines,
-                currentEvent.optimizedBcodeLines
-            );
-        if (path.extname(newFrame.srcFilePath) === BCODE_FILE_EXT) {
-            // disassembed bytecode file is the only file available
-            // meanting disassembly view is on
-            if (newFrame.bcodeFilePath !== undefined) {
-                // this should never happen but assert just in case
-                throw new Error('Disassembled bytecode file path is not expected to be set for file: '
-                    + newFrame.srcFilePath);
+        if (openedFilePath.endsWith(TRACE_FILE_EXT) && openedFileBaseName === REPLAY_TRACE_FILE_NAME) {
+            // replay tool trace
+            if (currentEvent.type !== TraceEventKind.PTBStart) {
+                throw new Error(`First event in trace is not an OpenFrame event`);
             }
-            disassemblyView = true;
-        }
-        // disassembly mode was triggered if disassembly view is on
-        // and we have both source and disassembled bytecode files
-        newFrame.disassemblyModeTriggered = disassemblyView && newFrame.bcodeFilePath !== undefined;
-        newFrame.disassemblyView = disassemblyView;
+            const ptbStartFrame: IPTBSummaryFrame = {
+                id: currentEvent.id,
+                line: 1,
+                summary: currentEvent.summary
+            };
+            this.ptbStack.summaryFrame = ptbStartFrame;
+        } else {
+            // setup frame stack with the first frame
+            if (currentEvent.type !== TraceEventKind.OpenFrame) {
+                throw new Error(`First event in trace is not an OpenFrame event`);
+            }
+            const newFrame =
+                this.newStackFrame(
+                    currentEvent.id,
+                    currentEvent.name,
+                    currentEvent.srcFileHash,
+                    currentEvent.bcodeFileHash,
+                    currentEvent.localsTypes,
+                    currentEvent.localsNames,
+                    currentEvent.optimizedSrcLines,
+                    currentEvent.optimizedBcodeLines
+                );
+            if (path.extname(newFrame.srcFilePath) === BCODE_FILE_EXT) {
+                // disassembed bytecode file is the only file available
+                // meanting disassembly view is on
+                if (newFrame.bcodeFilePath !== undefined) {
+                    // this should never happen but assert just in case
+                    throw new Error('Disassembled bytecode file path is not expected to be set for file: '
+                        + newFrame.srcFilePath);
+                }
+                disassemblyView = true;
+            }
+            // disassembly mode was triggered if disassembly view is on
+            // and we have both source and disassembled bytecode files
+            newFrame.disassemblyModeTriggered = disassemblyView && newFrame.bcodeFilePath !== undefined;
+            newFrame.disassemblyView = disassemblyView;
 
-        this.frameStack = {
-            frames: [newFrame],
-            globals: new Map<number, RuntimeValueType>()
-        };
-        this.step(/* next */ false, /* stopAtCloseFrame */ false);
+            const frameStack: IMoveCallStack = {
+                frames: [newFrame],
+                globals: new Map<number, RuntimeValueType>()
+            };
+            this.ptbStack.commandFrame = frameStack;
+            this.step(/* next */ false, /* stopAtCloseFrame */ false);
+        }
     }
 
     /**
@@ -442,8 +538,8 @@ export class Runtime extends EventEmitter {
      *
      * @returns current frame stack.
      */
-    public stack(): IRuntimeStack {
-        return this.frameStack;
+    public stack(): IPTBStack {
+        return this.ptbStack;
     }
 
     /**
@@ -463,250 +559,285 @@ export class Runtime extends EventEmitter {
             return ExecutionResult.TraceEnd;
         }
         let currentEvent = this.trace.events[this.eventIndex];
-        if (currentEvent.type === TraceEventKind.Instruction) {
-            const stackHeight = this.frameStack.frames.length;
-            if (stackHeight <= 0) {
-                // this should never happen
-                throw new Error('No frame on the stack when processing Instruction event when stepping');
+
+        if (currentEvent.type === TraceEventKind.Instruction ||
+            currentEvent.type === TraceEventKind.ReplaceInlinedFrame ||
+            currentEvent.type === TraceEventKind.OpenFrame ||
+            currentEvent.type === TraceEventKind.CloseFrame ||
+            currentEvent.type === TraceEventKind.Effect) {
+            // Move call instructions
+
+            const cmdFrame = this.ptbStack.commandFrame;
+            if (!cmdFrame || !('frames' in cmdFrame) || !('globals' in cmdFrame)) {
+                throw new Error(`No active Move call when processing event ${currentEvent.type}`);
             }
-            const currentFrame = this.frameStack.frames[stackHeight - 1];
-            // remember last call instruction line before it (potentially) changes
-            // in the `instruction` call below
-            const lastCallInstructionLine = currentFrame.disassemblyModeTriggered
-                ? currentFrame.lastCallInstructionBcodeLine
-                : currentFrame.lastCallInstructionSrcLine;
-            let [sameLine, currentLine] = this.instruction(currentFrame, currentEvent);
-            // do not attempt to skip events on the same line if the previous event
-            // was a switch to/from an inlined frame - we want execution to stop before
-            // the first instruction of the inlined frame is processed
-            const prevEvent = this.trace.events[this.eventIndex - 1];
-            sameLine = sameLine &&
-                !(prevEvent.type === TraceEventKind.ReplaceInlinedFrame
-                    || prevEvent.type === TraceEventKind.OpenFrame && prevEvent.id < 0
-                    || prevEvent.type === TraceEventKind.CloseFrame && prevEvent.id < 0);
-            if (sameLine) {
-                if (!next && (currentEvent.kind === TraceInstructionKind.CALL
-                    || currentEvent.kind === TraceInstructionKind.CALL_GENERIC)
-                    && lastCallInstructionLine === currentLine) {
-                    // We are about to step into another call on the same line
-                    // but we should wait for user action to do so rather than
-                    // having debugger step into it automatically. If we don't
-                    // the user will observe a weird effect. For example,
-                    // consider the following code:
-                    // ```
-                    // foo();
-                    // assert(bar() == baz());
-                    // ```
-                    // In the code above, after executing `foo()`, the user
-                    // will move to the next line and will expect to only
-                    // step into `bar` rather than having debugger to step
-                    // immediately into `baz` as well. At the same time,
-                    // if the user intended to step over functions using `next`,
-                    // we should skip over all calls on the same line (both `bar`
-                    // and `baz` in the example above).
-                    //
-                    // The following explains a bit more formally what needs
-                    // to happen both on on `next` and `step` actions when
-                    // call and non-call instructions are interleaved:
-                    //
-                    // When `step` is called:
-                    //
-                    // When there is only one call on the same line, we want to
-                    // stop on the first instruction of this line, then after
-                    // user `step` action enter the call, and then after
-                    // exiting the call go to the instruction on the next line:
-                    // 6: instruction
-                    // 7: instruction       // stop here
-                    // 7: call              // enter call here
-                    // 7: instruction
-                    // 8: instruction       // stop here
-                    //
-                    // When there is more than one call on the same line, we
-                    // want to stop on the first instruction of this line,
-                    // then after user `step` action enter the call, then
-                    // after exiting the call stop on the next call instruction
-                    // and wait for another `step` action from the user:
-                    // 6: instruction
-                    // 7: instruction       // stop here
-                    // 7: call              // enter call here
-                    // 7: instruction
-                    // 7: call              // stop and then enter call here
-                    // 7: instruction
-                    // 8: instruction       // stop here
-                    //
-                    // When `next` is called, things have to happen differently,
-                    // particularly when there are multiple calls on the same line:
-                    // 6: instruction
-                    // 7: instruction       // stop here
-                    // 7: call
-                    // 7: instruction
-                    // 7: call
-                    // 7: instruction
-                    // 8: instruction       // stop here
-                    //
-                    // To support this, we need to keep track of the line number when
-                    // the last call instruction in a give frame happened, and
-                    // also we need to make `stepOut` aware of whether it is executed
-                    // as part of `next` (which is how `next` is implemented) or not.
-                    this.sendEvent(RuntimeEvents.stopOnStep);
-                    return ExecutionResult.Ok;
+            const moveCallStack = cmdFrame as IMoveCallStack;
+
+            if (currentEvent.type === TraceEventKind.Instruction) {
+                const stackHeight = moveCallStack.frames.length;
+                if (stackHeight <= 0) {
+                    // this should never happen
+                    throw new Error('No frame on the stack when processing Instruction event when stepping');
+                }
+                const currentFrame = moveCallStack.frames[stackHeight - 1];
+                // remember last call instruction line before it (potentially) changes
+                // in the `instruction` call below
+                const lastCallInstructionLine = currentFrame.disassemblyModeTriggered
+                    ? currentFrame.lastCallInstructionBcodeLine
+                    : currentFrame.lastCallInstructionSrcLine;
+                let [sameLine, currentLine] = this.instruction(currentFrame, currentEvent);
+                // do not attempt to skip events on the same line if the previous event
+                // was a switch to/from an inlined frame - we want execution to stop before
+                // the first instruction of the inlined frame is processed
+                const prevEvent = this.trace.events[this.eventIndex - 1];
+                sameLine = sameLine &&
+                    !(prevEvent.type === TraceEventKind.ReplaceInlinedFrame
+                        || prevEvent.type === TraceEventKind.OpenFrame && prevEvent.id < 0
+                        || prevEvent.type === TraceEventKind.CloseFrame && prevEvent.id < 0);
+                if (sameLine) {
+                    if (!next && (currentEvent.kind === TraceInstructionKind.CALL
+                        || currentEvent.kind === TraceInstructionKind.CALL_GENERIC)
+                        && lastCallInstructionLine === currentLine) {
+                        // We are about to step into another call on the same line
+                        // but we should wait for user action to do so rather than
+                        // having debugger step into it automatically. If we don't
+                        // the user will observe a weird effect. For example,
+                        // consider the following code:
+                        // ```
+                        // foo();
+                        // assert(bar() == baz());
+                        // ```
+                        // In the code above, after executing `foo()`, the user
+                        // will move to the next line and will expect to only
+                        // step into `bar` rather than having debugger to step
+                        // immediately into `baz` as well. At the same time,
+                        // if the user intended to step over functions using `next`,
+                        // we should skip over all calls on the same line (both `bar`
+                        // and `baz` in the example above).
+                        //
+                        // The following explains a bit more formally what needs
+                        // to happen both on on `next` and `step` actions when
+                        // call and non-call instructions are interleaved:
+                        //
+                        // When `step` is called:
+                        //
+                        // When there is only one call on the same line, we want to
+                        // stop on the first instruction of this line, then after
+                        // user `step` action enter the call, and then after
+                        // exiting the call go to the instruction on the next line:
+                        // 6: instruction
+                        // 7: instruction       // stop here
+                        // 7: call              // enter call here
+                        // 7: instruction
+                        // 8: instruction       // stop here
+                        //
+                        // When there is more than one call on the same line, we
+                        // want to stop on the first instruction of this line,
+                        // then after user `step` action enter the call, then
+                        // after exiting the call stop on the next call instruction
+                        // and wait for another `step` action from the user:
+                        // 6: instruction
+                        // 7: instruction       // stop here
+                        // 7: call              // enter call here
+                        // 7: instruction
+                        // 7: call              // stop and then enter call here
+                        // 7: instruction
+                        // 8: instruction       // stop here
+                        //
+                        // When `next` is called, things have to happen differently,
+                        // particularly when there are multiple calls on the same line:
+                        // 6: instruction
+                        // 7: instruction       // stop here
+                        // 7: call
+                        // 7: instruction
+                        // 7: call
+                        // 7: instruction
+                        // 8: instruction       // stop here
+                        //
+                        // To support this, we need to keep track of the line number when
+                        // the last call instruction in a give frame happened, and
+                        // also we need to make `stepOut` aware of whether it is executed
+                        // as part of `next` (which is how `next` is implemented) or not.
+                        this.sendEvent(RuntimeEvents.stopOnStep);
+                        return ExecutionResult.Ok;
+                    } else {
+                        return this.step(next, stopAtCloseFrame);
+                    }
+                }
+                this.sendEvent(RuntimeEvents.stopOnStep);
+                return ExecutionResult.Ok;
+            } else if (currentEvent.type === TraceEventKind.ReplaceInlinedFrame) {
+                let currentFrame = moveCallStack.frames.pop();
+                if (!currentFrame) {
+                    throw new Error('No frame to pop when processing `ReplaceInlinedFrame` event');
+                }
+                currentFrame.srcFileHash = currentEvent.fileHash;
+                currentFrame.optimizedSrcLines = currentEvent.optimizedLines;
+                const currentFile = this.filesMap.get(currentFrame.srcFileHash);
+                if (!currentFile) {
+                    throw new Error('Cannot find file with hash '
+                        + currentFrame.srcFileHash
+                        + ' when processing `ReplaceInlinedFrame` event');
+                }
+                currentFrame.srcFilePath = currentFile.path;
+                moveCallStack.frames.push(currentFrame);
+                return this.step(next, stopAtCloseFrame);
+            } else if (currentEvent.type === TraceEventKind.OpenFrame) {
+                // if function is native then the next event will be CloseFrame
+                if (currentEvent.isNative) {
+                    // see if native function aborted
+                    if (this.trace.events.length > this.eventIndex + 1) {
+                        const nextEvent = this.trace.events[this.eventIndex + 1];
+                        if (nextEvent.type === TraceEventKind.Effect &&
+                            nextEvent.effect.type === TraceEffectKind.ExecutionError) {
+                            this.sendEvent(RuntimeEvents.stopOnException, nextEvent.effect.msg);
+                            return ExecutionResult.Exception;
+                        }
+                    }
+                    // process optional effects until reaching CloseFrame for the native function
+                    while (true) {
+                        const executionResult = this.step(/* next */ false, /* stopAtCloseFrame */ true);
+                        if (executionResult === ExecutionResult.Exception) {
+                            return executionResult;
+                        }
+                        if (executionResult === ExecutionResult.TraceEnd) {
+                            throw new Error('Cannot find CloseFrame event for native function');
+                        }
+                        const currentEvent = this.trace.events[this.eventIndex];
+                        if (currentEvent.type === TraceEventKind.CloseFrame) {
+                            break;
+                        }
+                    }
+                    // skip over CloseFrame as there is no frame to pop
+                    this.eventIndex++;
+                    return this.step(next, stopAtCloseFrame);
+                }
+
+                // create a new frame and push it onto the stack
+                const newFrame =
+                    this.newStackFrame(
+                        currentEvent.id,
+                        currentEvent.name,
+                        currentEvent.srcFileHash,
+                        currentEvent.bcodeFileHash,
+                        currentEvent.localsTypes,
+                        currentEvent.localsNames,
+                        currentEvent.optimizedSrcLines,
+                        currentEvent.optimizedBcodeLines
+                    );
+                // when creating a new frame maintain the invariant
+                // that all frames that belong to modules in the same
+                // file get the same view
+                newFrame.disassemblyModeTriggered = moveCallStack.frames.find(
+                    frame => frame.disassemblyModeTriggered
+                        && frame.bcodeFilePath === newFrame.bcodeFilePath
+                        && frame.srcFilePath === newFrame.srcFilePath
+                ) !== undefined;
+                newFrame.disassemblyView = moveCallStack.frames.find(
+                    frame => frame.disassemblyView
+                        && frame.bcodeFilePath === newFrame.bcodeFilePath
+                        && frame.srcFilePath === newFrame.srcFilePath
+                ) !== undefined;
+
+                // set values of parameters in the new frame
+                moveCallStack.frames.push(newFrame);
+                for (let i = 0; i < currentEvent.paramValues.length; i++) {
+                    localWrite(
+                        newFrame,
+                        moveCallStack.frames.length - 1,
+                        i,
+                        currentEvent.paramValues[i]
+                    );
+                }
+
+                if (next && !(newFrame.disassemblyView &&
+                    (newFrame.id === INLINED_FRAME_ID_SAME_FILE
+                        || newFrame.id === INLINED_FRAME_ID_DIFFERENT_FILE))) {
+                    // step out of the frame right away unless this frame is inlined
+                    // and it's showing disassembly (otherwise we will see instructions
+                    // skipped in the disassembly view for apparently no reason)
+                    return this.stepOut(next);
                 } else {
                     return this.step(next, stopAtCloseFrame);
                 }
-            }
-            this.sendEvent(RuntimeEvents.stopOnStep);
-            return ExecutionResult.Ok;
-        } else if (currentEvent.type === TraceEventKind.ReplaceInlinedFrame) {
-            let currentFrame = this.frameStack.frames.pop();
-            if (!currentFrame) {
-                throw new Error('No frame to pop when processing `ReplaceInlinedFrame` event');
-            }
-            currentFrame.srcFileHash = currentEvent.fileHash;
-            currentFrame.optimizedSrcLines = currentEvent.optimizedLines;
-            const currentFile = this.filesMap.get(currentFrame.srcFileHash);
-            if (!currentFile) {
-                throw new Error('Cannot find file with hash '
-                    + currentFrame.srcFileHash
-                    + ' when processing `ReplaceInlinedFrame` event');
-            }
-            currentFrame.srcFilePath = currentFile.path;
-            this.frameStack.frames.push(currentFrame);
-            return this.step(next, stopAtCloseFrame);
-        } else if (currentEvent.type === TraceEventKind.OpenFrame) {
-            // if function is native then the next event will be CloseFrame
-            if (currentEvent.isNative) {
-                // see if native function aborted
-                if (this.trace.events.length > this.eventIndex + 1) {
-                    const nextEvent = this.trace.events[this.eventIndex + 1];
-                    if (nextEvent.type === TraceEventKind.Effect &&
-                        nextEvent.effect.type === TraceEffectKind.ExecutionError) {
-                        this.sendEvent(RuntimeEvents.stopOnException, nextEvent.effect.msg);
-                        return ExecutionResult.Exception;
+            } else if (currentEvent.type === TraceEventKind.CloseFrame) {
+                if (stopAtCloseFrame) {
+                    // don't do anything as the caller needs to inspect
+                    // the event before proceeding
+                    return ExecutionResult.Ok;
+                } else {
+                    // pop the top frame from the stack
+                    const framesLength = moveCallStack.frames.length;
+                    if (framesLength <= 0) {
+                        throw new Error('No frame to pop at CloseFrame event with ID: '
+                            + currentEvent.id);
                     }
-                }
-                // process optional effects until reaching CloseFrame for the native function
-                while (true) {
-                    const executionResult = this.step(/* next */ false, /* stopAtCloseFrame */ true);
-                    if (executionResult === ExecutionResult.Exception) {
-                        return executionResult;
+                    const currentFrameID = moveCallStack.frames[framesLength - 1].id;
+                    if (currentFrameID !== currentEvent.id) {
+                        throw new Error('Frame ID mismatch at CloseFrame event with ID: '
+                            + currentEvent.id
+                            + ' (current frame ID: '
+                            + currentFrameID
+                            + ')');
                     }
-                    if (executionResult === ExecutionResult.TraceEnd) {
-                        throw new Error('Cannot find CloseFrame event for native function');
-                    }
-                    const currentEvent = this.trace.events[this.eventIndex];
-                    if (currentEvent.type === TraceEventKind.CloseFrame) {
-                        break;
-                    }
+                    moveCallStack.frames.pop();
+                    return this.step(next, stopAtCloseFrame);
                 }
-                // skip over CloseFrame as there is no frame to pop
-                this.eventIndex++;
-                return this.step(next, stopAtCloseFrame);
-            }
-
-            // create a new frame and push it onto the stack
-            const newFrame =
-                this.newStackFrame(
-                    currentEvent.id,
-                    currentEvent.name,
-                    currentEvent.srcFileHash,
-                    currentEvent.bcodeFileHash,
-                    currentEvent.localsTypes,
-                    currentEvent.localsNames,
-                    currentEvent.optimizedSrcLines,
-                    currentEvent.optimizedBcodeLines
-                );
-            // when creating a new frame maintain the invariant
-            // that all frames that belong to modules in the same
-            // file get the same view
-            newFrame.disassemblyModeTriggered = this.frameStack.frames.find(
-                frame => frame.disassemblyModeTriggered
-                    && frame.bcodeFilePath === newFrame.bcodeFilePath
-                    && frame.srcFilePath === newFrame.srcFilePath
-            ) !== undefined;
-            newFrame.disassemblyView = this.frameStack.frames.find(
-                frame => frame.disassemblyView
-                    && frame.bcodeFilePath === newFrame.bcodeFilePath
-                    && frame.srcFilePath === newFrame.srcFilePath
-            ) !== undefined;
-
-            // set values of parameters in the new frame
-            this.frameStack.frames.push(newFrame);
-            for (let i = 0; i < currentEvent.paramValues.length; i++) {
-                localWrite(
-                    newFrame,
-                    this.frameStack.frames.length - 1,
-                    i,
-                    currentEvent.paramValues[i]
-                );
-            }
-
-            if (next && (!newFrame.disassemblyView || newFrame.id >= 0)) {
-                // step out of the frame right away if this frame is not inlined
-                // (id >= 0) or if we are NOT showing disassembly for it
-                // (otherwise we will see instructions skipped in the disassembly
-                // view for apparently no reason)
-                return this.stepOut(next);
-            } else {
-                return this.step(next, stopAtCloseFrame);
-            }
-        } else if (currentEvent.type === TraceEventKind.CloseFrame) {
-            if (stopAtCloseFrame) {
-                // don't do anything as the caller needs to inspect
-                // the event before proceeding
-                return ExecutionResult.Ok;
-            } else {
-                // pop the top frame from the stack
-                const framesLength = this.frameStack.frames.length;
-                if (framesLength <= 0) {
-                    throw new Error('No frame to pop at CloseFrame event with ID: '
-                        + currentEvent.id);
+            } else if (currentEvent.type === TraceEventKind.Effect) {
+                const effect = currentEvent.effect;
+                if (effect.type === TraceEffectKind.ExecutionError) {
+                    this.sendEvent(RuntimeEvents.stopOnException, effect.msg);
+                    return ExecutionResult.Exception;
                 }
-                const currentFrameID = this.frameStack.frames[framesLength - 1].id;
-                if (currentFrameID !== currentEvent.id) {
-                    throw new Error('Frame ID mismatch at CloseFrame event with ID: '
-                        + currentEvent.id
-                        + ' (current frame ID: '
-                        + currentFrameID
-                        + ')');
-                }
-                this.frameStack.frames.pop();
-                return this.step(next, stopAtCloseFrame);
-            }
-        } else if (currentEvent.type === TraceEventKind.Effect) {
-            const effect = currentEvent.effect;
-            if (effect.type === TraceEffectKind.ExecutionError) {
-                this.sendEvent(RuntimeEvents.stopOnException, effect.msg);
-                return ExecutionResult.Exception;
-            }
-            if (effect.type === TraceEffectKind.Write) {
-                const traceLocation = effect.indexedLoc.loc;
-                if ('globalIndex' in traceLocation) {
-                    const globalValue = effect.value;
-                    this.frameStack.globals.set(traceLocation.globalIndex, globalValue);
-                } else if ('frameID' in traceLocation && 'localIndex' in traceLocation) {
-                    const traceValue = effect.value;
-                    let frame = undefined;
-                    let frameIdx = 0;
-                    for (const f of this.frameStack.frames) {
-                        if (f.id === traceLocation.frameID) {
-                            frame = f;
-                            break;
+                if (effect.type === TraceEffectKind.Write) {
+                    const traceLocation = effect.indexedLoc.loc;
+                    if ('globalIndex' in traceLocation) {
+                        const globalValue = effect.value;
+                        moveCallStack.globals.set(traceLocation.globalIndex, globalValue);
+                    } else if ('frameID' in traceLocation && 'localIndex' in traceLocation) {
+                        const traceValue = effect.value;
+                        let frame = undefined;
+                        let frameIdx = 0;
+                        for (const f of moveCallStack.frames) {
+                            if (f.id === traceLocation.frameID) {
+                                frame = f;
+                                break;
+                            }
+                            frameIdx++;
                         }
-                        frameIdx++;
+                        if (!frame) {
+                            throw new Error('Cannot find frame with ID: '
+                                + traceLocation.frameID
+                                + ' when processing Write effect for local variable at index: '
+                                + traceLocation.localIndex);
+                        }
+                        localWrite(frame, frameIdx, traceLocation.localIndex, traceValue);
                     }
-                    if (!frame) {
-                        throw new Error('Cannot find frame with ID: '
-                            + traceLocation.frameID
-                            + ' when processing Write effect for local variable at index: '
-                            + traceLocation.localIndex);
-                    }
-                    localWrite(frame, frameIdx, traceLocation.localIndex, traceValue);
+                }
+                return this.step(next, stopAtCloseFrame);
+            }
+            throw new Error('Unknown Move call event: ' + currentEvent);
+        } else {
+            if (currentEvent.type === TraceEventKind.PTBCommand) {
+                switch (currentEvent.command.kind) {
+                    case PTBCommandKind.MoveCallStart:
+                        const frameStack: IMoveCallStack = {
+                            frames: [],
+                            globals: new Map<number, RuntimeValueType>()
+                        };
+                        this.ptbStack.commandFrame = frameStack;
+                        return this.step(next, stopAtCloseFrame);
+                    case PTBCommandKind.MoveCallEnd:
+                        // go back to summary frame
+                        this.ptbStack.commandFrame = undefined;
+                        if (this.ptbStack.summaryFrame) {
+                            this.ptbStack.summaryFrame.line += 1;
+                        }
+                        this.sendEvent(RuntimeEvents.stopOnStep);
+                        return ExecutionResult.Ok;
                 }
             }
-            return this.step(next, stopAtCloseFrame);
-        } else {
-            // ignore other events
-            return this.step(next, stopAtCloseFrame);
+            throw new Error('Unknown PTB command event: ' + currentEvent);
         }
     }
 
@@ -719,42 +850,62 @@ export class Runtime extends EventEmitter {
      * @throws Error with a descriptive error message if the step out event cannot be handled.
      */
     public stepOut(next: boolean): ExecutionResult {
-        const stackHeight = this.frameStack.frames.length;
-        if (stackHeight <= 1) {
-            // do nothing as there is no frame to step out to
-            this.sendEvent(RuntimeEvents.stopOnStep);
-            return ExecutionResult.Ok;
+        const summaryFrame = this.ptbStack.summaryFrame;
+        const cmdFrame = this.ptbStack.commandFrame;
+        if (summaryFrame && !cmdFrame) {
+            // stepping out of (top) active summary frame
+            // finishes debugging session
+            return ExecutionResult.TraceEnd;
         }
-        // newest frame is at the top of the stack
-        const currentFrame = this.frameStack.frames[stackHeight - 1];
-        let currentEvent = this.trace.events[this.eventIndex];
-        // skip all events until the corresponding CloseFrame event,
-        // pop the top frame from the stack, and proceed to the next event
-        while (true) {
-            // when calling `step` in the loop below, we need to avoid
-            // skipping over calls next-style otherwise we can miss seeing
-            // the actual close frame event that we are looking for
-            // and have the loop execute too far
-            const executionResult = this.step(/* next */ false, /* stopAtCloseFrame */ true);
-            if (executionResult === ExecutionResult.Exception) {
-                return executionResult;
+
+        // summary frame is not active here which means that
+        // command frame must be
+
+        if (!cmdFrame) {
+            throw new Error('No active frame when processing step out event');
+        }
+
+        if ('frames' in cmdFrame && 'globals' in cmdFrame) {
+            const moveCallStack = cmdFrame as IMoveCallStack;
+            const stackHeight = moveCallStack.frames.length;
+            if (stackHeight === 0 || (stackHeight === 1 && !summaryFrame)) {
+                // do nothing as there is no frame to step out to
+                this.sendEvent(RuntimeEvents.stopOnStep);
+                return ExecutionResult.Ok;
             }
-            if (executionResult === ExecutionResult.TraceEnd) {
-                throw new Error('Cannot find corresponding CloseFrame event for function: ' +
-                    currentFrame.name);
-            }
-            currentEvent = this.trace.events[this.eventIndex];
-            if (currentEvent.type === TraceEventKind.CloseFrame) {
-                const currentFrameID = currentFrame.id;
-                // `step` call finished at the CloseFrame event
-                // but did not process it so we need pop the frame here
-                this.frameStack.frames.pop();
-                if (currentEvent.id === currentFrameID) {
-                    break;
+            // newest frame is at the top of the stack
+            const currentFrame = moveCallStack.frames[stackHeight - 1];
+            let currentEvent = this.trace.events[this.eventIndex];
+            // skip all events until the corresponding CloseFrame event,
+            // pop the top frame from the stack, and proceed to the next event
+            while (true) {
+                // when calling `step` in the loop below, we need to avoid
+                // skipping over calls next-style otherwise we can miss seeing
+                // the actual close frame event that we are looking for
+                // and have the loop execute too far
+                const executionResult = this.step(/* next */ false, /* stopAtCloseFrame */ true);
+                if (executionResult === ExecutionResult.Exception) {
+                    return executionResult;
+                }
+                if (executionResult === ExecutionResult.TraceEnd) {
+                    throw new Error('Cannot find corresponding CloseFrame event for function: ' +
+                        currentFrame.name);
+                }
+                currentEvent = this.trace.events[this.eventIndex];
+                if (currentEvent.type === TraceEventKind.CloseFrame) {
+                    const currentFrameID = currentFrame.id;
+                    // `step` call finished at the CloseFrame event
+                    // but did not process it so we need pop the frame here
+                    moveCallStack.frames.pop();
+                    if (currentEvent.id === currentFrameID) {
+                        break;
+                    }
                 }
             }
+            return this.step(next, /* stopAtCloseFrame */ false);
+        } else {
+            throw new Error('Stepping out of PTB command frame is not supported yet');
         }
-        return this.step(next, /* stopAtCloseFrame */ false);
     }
 
     /**
@@ -772,26 +923,33 @@ export class Runtime extends EventEmitter {
             }
             let currentEvent = this.trace.events[this.eventIndex];
             if (currentEvent.type === TraceEventKind.Instruction) {
-                const stackHeight = this.frameStack.frames.length;
-                if (stackHeight <= 0) {
-                    // this should never happen
-                    throw new Error('No frame on the stack when processing Instruction event when continuing');
+                const cmdFrame = this.ptbStack.commandFrame;
+                if (cmdFrame && 'frames' in cmdFrame && 'globals' in cmdFrame) {
+                    const moveCallStack = cmdFrame as IMoveCallStack;
+                    const stackHeight = moveCallStack.frames.length;
+                    if (stackHeight <= 0) {
+                        // this should never happen
+                        throw new Error('No frame on the stack when processing Instruction event when continuing');
+                    }
+                    const currentFrame = moveCallStack.frames[stackHeight - 1];
+                    const filePath = currentFrame.disassemblyModeTriggered
+                        ? currentFrame.bcodeFilePath!
+                        : currentFrame.srcFilePath;
+                    const breakpoints = this.lineBreakpoints.get(filePath);
+                    if (!breakpoints) {
+                        continue;
+                    }
+                    const instLine = currentFrame.disassemblyModeTriggered
+                        ? currentEvent.bcodeLoc!.line
+                        : currentEvent.srcLoc.line;
+                    if (breakpoints.has(instLine)) {
+                        this.sendEvent(RuntimeEvents.stopOnLineBreakpoint);
+                        return ExecutionResult.Ok;
+                    }
+                } else {
+                    throw new Error('No active Move call when processing Instruction event');
                 }
-                const currentFrame = this.frameStack.frames[stackHeight - 1];
-                const filePath = currentFrame.disassemblyModeTriggered
-                    ? currentFrame.bcodeFilePath!
-                    : currentFrame.srcFilePath;
-                const breakpoints = this.lineBreakpoints.get(filePath);
-                if (!breakpoints) {
-                    continue;
-                }
-                const instLine = currentFrame.disassemblyModeTriggered
-                    ? currentEvent.bcodeLoc!.line
-                    : currentEvent.srcLoc.line;
-                if (breakpoints.has(instLine)) {
-                    this.sendEvent(RuntimeEvents.stopOnLineBreakpoint);
-                    return ExecutionResult.Ok;
-                }
+
             }
         }
     }
@@ -819,6 +977,7 @@ export class Runtime extends EventEmitter {
         if (!tracedLines && fileExt === BCODE_FILE_EXT) {
             tracedLines = this.trace.tracedBcodeLines.get(filePath);
         }
+
         // Set all breakpoints to invalid and validate the correct ones in the loop,
         // otherwise let them all be invalid if there are no traced lines.
         // Valid breakpoints are those that are on lines that have at least
@@ -845,7 +1004,7 @@ export class Runtime extends EventEmitter {
      * @throws Error with a descriptive error message if instruction event cannot be handled.
      */
     private instruction(
-        currentFrame: IRuntimeStackFrame,
+        currentFrame: IMoveCallStackFrame,
         instructionEvent: Extract<TraceEvent, { type: TraceEventKind.Instruction }>
     ): [boolean, number] {
         // if current instruction ends lifetime of a local variable, mark this in the
@@ -894,7 +1053,7 @@ export class Runtime extends EventEmitter {
     }
 
     /**
-     * Given a path to afile, sets the currently opened Move file to that path
+     * Given a path to a file, sets the currently opened Move file to that path
      * if this file that corresponds to one of the frames on the stack.
      *
      * @param filePath path to the currently opened Move file.
@@ -902,13 +1061,25 @@ export class Runtime extends EventEmitter {
      * or `undefined` if the file cannot be found.
      */
     public setCurrentMoveFileFromPath(filePath: string): string | undefined {
-        if (this.frameStack.frames.find(frame =>
-            frame.disassemblyModeTriggered
-                ? frame.bcodeFilePath === filePath
-                : frame.srcFilePath === filePath)) {
-            this.currentMoveFile = filePath;
-        } else {
+        const summaryFrame = this.ptbStack.summaryFrame;
+        const cmdFrame = this.ptbStack.commandFrame;
+        if (summaryFrame && !cmdFrame) {
+            // summary frame is active, do nothing
             this.currentMoveFile = undefined;
+        } else {
+            if (cmdFrame && 'frames' in cmdFrame && 'globals' in cmdFrame) {
+                const moveCallStack = cmdFrame as IMoveCallStack;
+                if (moveCallStack.frames.find(frame =>
+                    frame.disassemblyModeTriggered
+                        ? frame.bcodeFilePath === filePath
+                        : frame.srcFilePath === filePath)) {
+                    this.currentMoveFile = filePath;
+                } else {
+                    this.currentMoveFile = undefined;
+                }
+            } else {
+                this.currentMoveFile = undefined;
+            }
         }
         return this.currentMoveFile;
     }
@@ -923,13 +1094,25 @@ export class Runtime extends EventEmitter {
      * or `undefined` if the file cannot be found.
      */
     public setCurrentMoveFileFromFrame(frameId: number): string | undefined {
-        const frame = this.frameStack.frames.find(frame => frame.id === frameId);
-        if (frame) {
-            this.currentMoveFile = frame.disassemblyModeTriggered
-                ? frame.bcodeFilePath
-                : frame.srcFilePath;
-        } else {
+        const summaryFrame = this.ptbStack.summaryFrame;
+        const cmdFrame = this.ptbStack.commandFrame;
+        if (summaryFrame && !cmdFrame) {
+            // summary frame is active, no current Move file
             this.currentMoveFile = undefined;
+        } else {
+            if (cmdFrame && 'frames' in cmdFrame && 'globals' in cmdFrame) {
+                const moveCallStack = cmdFrame as IMoveCallStack;
+                const frame = moveCallStack.frames.find(frame => frame.id === frameId);
+                if (frame) {
+                    this.currentMoveFile = frame.disassemblyModeTriggered
+                        ? frame.bcodeFilePath
+                        : frame.srcFilePath;
+                } else {
+                    this.currentMoveFile = undefined;
+                }
+            } else {
+                this.currentMoveFile = undefined;
+            }
         }
         return this.currentMoveFile;
     }
@@ -939,8 +1122,17 @@ export class Runtime extends EventEmitter {
      * source is the currently opened Move file.
      */
     public toggleDisassembly(): void {
-        if (this.currentMoveFile) {
-            this.frameStack.frames.forEach(frame => {
+        if (!this.currentMoveFile) {
+            return;
+        }
+        const cmdFrame = this.ptbStack.commandFrame;
+        if (this.ptbStack.summaryFrame && !cmdFrame) {
+            // summary frame is active, do nothing
+            return;
+        }
+        if (cmdFrame && 'frames' in cmdFrame && 'globals' in cmdFrame) {
+            const moveCallStack = cmdFrame as IMoveCallStack;
+            moveCallStack.frames.forEach(frame => {
                 if (frame.srcFilePath === this.currentMoveFile
                     && frame.bcodeFileHash !== undefined
                     && frame.bcodeFilePath !== undefined
@@ -954,8 +1146,14 @@ export class Runtime extends EventEmitter {
     }
 
     public toggleSource(): void {
-        if (this.currentMoveFile) {
-            this.frameStack.frames.forEach(frame => {
+        const cmdFrame = this.ptbStack.commandFrame;
+        if (this.ptbStack.summaryFrame && !cmdFrame) {
+            // summary frame is active, do nothing
+            return;
+        }
+        if (cmdFrame && 'frames' in cmdFrame && 'globals' in cmdFrame) {
+            const moveCallStack = cmdFrame as IMoveCallStack;
+            moveCallStack.frames.forEach(frame => {
                 if (frame.bcodeFilePath === this.currentMoveFile) {
                     frame.disassemblyModeTriggered = false;
                     frame.disassemblyView = false;
@@ -988,11 +1186,11 @@ export class Runtime extends EventEmitter {
         localsInfo: ILocalInfo[],
         optimizedSrcLines: number[],
         optimizedBcodeLines: undefined | number[]
-    ): IRuntimeStackFrame {
+    ): IMoveCallStackFrame {
         const currentFile = this.filesMap.get(srcFileHash);
 
         if (!currentFile) {
-            throw new Error(`Cannot find file with hash: ${srcFileHash}`);
+            throw new Error(`Cannot find file with hash: ${srcFileHash} `);
         }
         const srcFilePath = currentFile.path;
         let bcodeFilePath = undefined;
@@ -1006,7 +1204,7 @@ export class Runtime extends EventEmitter {
         let locals = [];
         // create first scope for local variables
         locals[0] = [];
-        const stackFrame: IRuntimeStackFrame = {
+        const stackFrame: IMoveCallStackFrame = {
             id: frameID,
             name: funName,
             srcFilePath,
@@ -1065,8 +1263,38 @@ export class Runtime extends EventEmitter {
      * @returns string representation of the runtime.
      */
     public toString(): string {
+        let res = '';
+        const summaryFrame = this.ptbStack.summaryFrame;
+        if (summaryFrame) {
+            res += `summary frame: \n`;
+            for (const summary of summaryFrame.summary) {
+                const summaryStr = typeof summary === 'string'
+                    ? summary
+                    : 'MoveCall';
+                res += this.singleTab + summaryStr + '\n';
+            }
+        }
+        const cmdFrame = this.ptbStack.commandFrame;
+        if (cmdFrame) {
+            if ('frames' in cmdFrame && 'globals' in cmdFrame) {
+                const moveCallStack = cmdFrame as IMoveCallStack;
+                res += this.moveCalStacktoString(moveCallStack);
+            } else {
+                // TODO: handle native PTB commands
+            }
+        }
+        return res;
+    }
+
+    /**
+     * Returns a string representing current Move call stack.
+     *
+     * @param moveCallStack current Move call stack.
+     * @returns string representation of the runtime.
+     */
+    public moveCalStacktoString(moveCallStack: IMoveCallStack): string {
         let res = 'current frame stack:\n';
-        for (const frame of this.frameStack.frames) {
+        for (const frame of moveCallStack.frames) {
             const fileName = frame.disassemblyModeTriggered ?
                 path.basename(frame.bcodeFilePath!) :
                 path.basename(frame.srcFilePath);
@@ -1086,6 +1314,7 @@ export class Runtime extends EventEmitter {
                     if (local && (frame.disassemblyView || !isGeneratedLocal(local.info))) {
                         // don't show "artificial" locals outside of the disassembly view
                         res += this.varToString(
+                            moveCallStack,
                             this.singleTab + this.singleTab + this.singleTab,
                             local,
                             frame.disassemblyView
@@ -1108,11 +1337,13 @@ export class Runtime extends EventEmitter {
     /**
      * Returns a string representation of a runtime variable.
      *
+     * @param moveCallStack current Move call stack.
+     * @param tabs indentation for the string representation.
      * @param variable runtime variable.
-     *
      * @returns string representation of the variable.
      */
     private varToString(
+        moveCallStack: IMoveCallStack,
         tabs: string,
         variable: IRuntimeVariable,
         showDisassembly: boolean
@@ -1120,22 +1351,28 @@ export class Runtime extends EventEmitter {
         let varName = showDisassembly
             ? variable.info.internalName
             : variable.info.name;
-        return this.valueToString(tabs, variable.value, varName, [], variable.type);
+        return this.valueToString(moveCallStack, tabs, variable.value, varName, [], variable.type);
     }
 
     /**
      * Returns a string representation of a runtime compound value.
      *
+     * @param moveCallStack current Move call stack.
+     * @param tabs indentation for the string representation.
      * @param compoundValue runtime compound value.
      * @returns string representation of the compound value.
      */
-    private compoundValueToString(tabs: string, compoundValue: IRuntimeCompoundValue): string {
+    private compoundValueToString(
+        moveCallStack: IMoveCallStack,
+        tabs: string,
+        compoundValue: IRuntimeCompoundValue
+    ): string {
         const type = compoundValue.variantName
             ? compoundValue.type + '::' + compoundValue.variantName
             : compoundValue.type;
         let res = '(' + type + ') {\n';
         for (const [name, value] of compoundValue.fields) {
-            res += this.valueToString(tabs + this.singleTab, value, name, []);
+            res += this.valueToString(moveCallStack, tabs + this.singleTab, value, name, []);
         }
         res += tabs + '}\n';
         return res;
@@ -1144,12 +1381,15 @@ export class Runtime extends EventEmitter {
     /**
      * Returns a string representation of a runtime reference value.
      *
+     * @param moveCallStack current Move call stack.
+     * @param tabs indentation for the string representation.
      * @param refValue runtime reference value.
      * @param name name of the variable containing reference value.
      * @param type optional type of the variable containing reference value.
      * @returns string representation of the reference value.
      */
     private refValueToString(
+        moveCallStack: IMoveCallStack,
         tabs: string,
         refValue: IRuntimeRefValue,
         name: string,
@@ -1159,14 +1399,14 @@ export class Runtime extends EventEmitter {
         let res = '';
         if ('globalIndex' in indexedLoc.loc) {
             // global location
-            const globalValue = this.frameStack.globals.get(indexedLoc.loc.globalIndex);
+            const globalValue = moveCallStack.globals.get(indexedLoc.loc.globalIndex);
             if (globalValue) {
                 const indexPath = [...indexedLoc.indexPath];
-                return this.valueToString(tabs, globalValue, name, indexPath, type);
+                return this.valueToString(moveCallStack, tabs, globalValue, name, indexPath, type);
             }
         } else if ('frameID' in indexedLoc.loc && 'localIndex' in indexedLoc.loc) {
             const frameID = indexedLoc.loc.frameID;
-            const frame = this.frameStack.frames.find(frame => frame.id === frameID);
+            const frame = moveCallStack.frames.find(frame => frame.id === frameID);
             let local = undefined;
             if (!frame) {
                 return res;
@@ -1181,7 +1421,7 @@ export class Runtime extends EventEmitter {
                 return res;
             }
             const indexPath = [...indexedLoc.indexPath];
-            return this.valueToString(tabs, local.value, name, indexPath, type);
+            return this.valueToString(moveCallStack, tabs, local.value, name, indexPath, type);
         }
         return res;
     }
@@ -1189,6 +1429,7 @@ export class Runtime extends EventEmitter {
     /**
      * Returns a string representation of a runtime value.
      *
+     * @param moveCallStack current Move call stack.
      * @param value runtime value.
      * @param name name of the variable containing the value.
      * @param indexPath a path to actual value for compound types (e.g, [1, 7] means
@@ -1197,6 +1438,7 @@ export class Runtime extends EventEmitter {
      * @returns string representation of the value.
      */
     private valueToString(
+        moveCallStack: IMoveCallStack,
         tabs: string,
         value: RuntimeValueType,
         name: string,
@@ -1213,12 +1455,12 @@ export class Runtime extends EventEmitter {
             if (indexPath.length > 0) {
                 const index = indexPath.pop();
                 if (index !== undefined) {
-                    res += this.valueToString(tabs, value[index], name, indexPath, type);
+                    res += this.valueToString(moveCallStack, tabs, value[index], name, indexPath, type);
                 }
             } else {
                 res += tabs + name + ' : [\n';
                 for (let i = 0; i < value.length; i++) {
-                    res += this.valueToString(tabs + this.singleTab, value[i], String(i), indexPath);
+                    res += this.valueToString(moveCallStack, tabs + this.singleTab, value[i], String(i), indexPath);
                 }
                 res += tabs + ']\n';
                 if (type) {
@@ -1229,16 +1471,16 @@ export class Runtime extends EventEmitter {
             if (indexPath.length > 0) {
                 const index = indexPath.pop();
                 if (index !== undefined) {
-                    res += this.valueToString(tabs, value.fields[index][1], name, indexPath, type);
+                    res += this.valueToString(moveCallStack, tabs, value.fields[index][1], name, indexPath, type);
                 }
             } else {
-                res += tabs + name + ' : ' + this.compoundValueToString(tabs, value);
+                res += tabs + name + ' : ' + this.compoundValueToString(moveCallStack, tabs, value);
                 if (type) {
                     res += tabs + 'type: ' + type + '\n';
                 }
             }
         } else {
-            res += this.refValueToString(tabs, value, name, type);
+            res += this.refValueToString(moveCallStack, tabs, value, name, type);
         }
         return res;
     }
@@ -1293,7 +1535,7 @@ function hashToFileMap(
  * @param runtimeValue variable value.
  */
 function localWrite(
-    frame: IRuntimeStackFrame,
+    frame: IMoveCallStackFrame,
     frameIdx: number,
     localIndex: number,
     value: RuntimeValueType

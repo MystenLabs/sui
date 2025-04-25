@@ -9,7 +9,10 @@ import {
     IRuntimeVariableLoc,
     IRuntimeGlobalLoc,
     IRuntimeLoc,
-    IRuntimeRefValue
+    IRuntimeRefValue,
+    PTBCommandKind as PTBCommandKind,
+    PTBSummary,
+    IMoveCallInfo
 } from './runtime';
 import {
     IDebugInfo,
@@ -183,11 +186,20 @@ interface JSONTraceCloseFrame {
     return_: JSONTraceRuntimeValueContent[];
 }
 
+interface JSONExternalMoveCallInfo {
+    MoveCall: IMoveCallInfo
+}
+
+type JSONTraceExternal =
+    | { Summary: [JSONExternalMoveCallInfo | string][] }
+    | string;
+
 interface JSONTraceEvent {
     OpenFrame?: JSONTraceOpenFrame;
     Instruction?: JSONTraceInstruction;
     Effect?: JSONTraceEffect;
     CloseFrame?: JSONTraceCloseFrame;
+    External?: JSONTraceExternal;
 }
 
 interface JSONTraceRootObject {
@@ -229,7 +241,9 @@ export enum TraceEventKind {
     OpenFrame,
     CloseFrame,
     Instruction,
-    Effect
+    Effect,
+    PTBStart,
+    PTBCommand
 }
 
 /**
@@ -262,7 +276,17 @@ export type TraceEvent =
         bcodeLoc?: ILoc,
         kind: TraceInstructionKind
     }
-    | { type: TraceEventKind.Effect, effect: EventEffect };
+    | { type: TraceEventKind.Effect, effect: EventEffect }
+    | { type: TraceEventKind.PTBStart, id: number, summary: PTBSummary[] }
+    | { type: TraceEventKind.PTBCommand, command: PTBCommandInfo };
+
+export type PTBCommandInfo =
+    | {
+        kind: PTBCommandKind.MoveCallStart
+    } | {
+        kind: PTBCommandKind.MoveCallEnd
+    };
+
 
 /**
  * Kind of an effect of an instruction.
@@ -357,12 +381,18 @@ interface ITraceGenFrameInfo {
  * An ID of a virtual frame representing a macro defined in the same file
  * where it is inlined.
  */
-const INLINED_FRAME_ID_SAME_FILE = -1;
+export const INLINED_FRAME_ID_SAME_FILE = -1;
+
 /**
  * An ID of a virtual frame representing a macro defined in a different file
  * than file where it is inlined.
  */
-const INLINED_FRAME_ID_DIFFERENT_FILE = -2;
+export const INLINED_FRAME_ID_DIFFERENT_FILE = -2;
+
+/**
+ * An ID of a virtual frame representing PTB start event.
+ */
+export const PTB_START_FRAME_ID = -3;
 
 /**
  * Reads a Move VM execution trace from a JSON file.
@@ -565,15 +595,6 @@ export async function readTrace(
             if (instBcodeFileLoc) {
                 recordTracedLine(filesMap, tracedBcodeLines, instBcodeFileLoc);
             }
-            // re-read frame info as it may have changed as a result of processing
-            // and inlined call
-            frameInfo = frameInfoStack[frameInfoStack.length - 1];
-            const filePath = frameInfo.srcFilePath;
-            const lines = tracedSrcLines.get(filePath) || new Set<number>();
-            // floc is still good as the pc_locs used for its computation
-            // do not change as a result of processing inlined frames
-            lines.add(instSrcFileLoc.loc.line);
-            tracedSrcLines.set(filePath, lines);
             events.push({
                 type: TraceEventKind.Instruction,
                 pc: event.Instruction.pc,
@@ -583,6 +604,9 @@ export async function readTrace(
                     ? TraceInstructionKind[name as keyof typeof TraceInstructionKind]
                     : TraceInstructionKind.UNKNOWN
             });
+            // re-read frame info as it may have changed as a result of processing
+            // and inlined call
+            frameInfo = frameInfoStack[frameInfoStack.length - 1];
 
             // Set end of lifetime for all locals to the max instruction PC ever seen
             // for a given local (if they are live after this instructions, they will
@@ -651,6 +675,47 @@ export async function readTrace(
                         msg: effect.ExecutionError
                     }
                 });
+            }
+        } else if (event.External) {
+            const external = event.External;
+            if (typeof external === 'string') {
+                if (external === PTBCommandKind.MoveCallStart) {
+                    events.push({
+                        type: TraceEventKind.PTBCommand,
+                        command: {
+                            kind: PTBCommandKind.MoveCallStart
+                        }
+                    });
+                } else if (external === PTBCommandKind.MoveCallEnd) {
+                    events.push({
+                        type: TraceEventKind.PTBCommand,
+                        command: {
+                            kind: PTBCommandKind.MoveCallEnd
+                        }
+                    });
+                }
+            } else {
+                const summary: PTBSummary[] = external.Summary.map((s) => {
+                    if (typeof s === 'object' && 'MoveCall' in s &&
+                        s.MoveCall && typeof s.MoveCall === 'object' &&
+                        'pkg' in s.MoveCall && 'module' in s.MoveCall && 'function' in s.MoveCall) {
+
+                        const info: IMoveCallInfo = {
+                            pkg: s.MoveCall.pkg as string,
+                            module: s.MoveCall.module as string,
+                            function: s.MoveCall.function as string
+                        };
+                        return info;
+                    } else {
+                        return s.toString();
+                    }
+                });
+                events.push({
+                    type: TraceEventKind.PTBStart,
+                    id: PTB_START_FRAME_ID,
+                    summary
+                });
+
             }
         }
     }
@@ -1103,6 +1168,28 @@ function eventToString(event: TraceEvent): string {
                 + event.bcodeLoc;
         case TraceEventKind.Effect:
             return `Effect ${effectToString(event.effect)}`;
+        case TraceEventKind.PTBStart:
+            let commands = '';
+            for (const c of event.summary) {
+                if (typeof c === 'object' && 'pkg' in c && 'module ' in c && 'function' in c) {
+                    commands += (c.pkg
+                        + '::'
+                        + c.module
+                        + '::'
+                        + c.function);
+                } else {
+                    commands += c.toString();
+                }
+                commands += '\n';
+            }
+            return commands;
+        case TraceEventKind.PTBCommand:
+            switch (event.command.kind) {
+                case PTBCommandKind.MoveCallStart:
+                    return 'MoveCallStart';
+                case PTBCommandKind.MoveCallEnd:
+                    return 'MoveCallEnd';
+            }
     }
 }
 
