@@ -45,7 +45,8 @@ where
             let processor = processor.clone();
             let checkpoint = checkpoint.clone();
 
-            async move {
+            // Add tokio::spawn here to properly make this async
+            tokio::spawn(async move {
                 match processor.process_transaction(idx, &checkpoint).await {
                     Ok(entries) => (idx, entries),
                     Err(e) => {
@@ -53,15 +54,23 @@ where
                         (idx, Vec::new())
                     }
                 }
-            }
+            })
         })
-        .buffer_unordered(checkpoint_transactions.len());
+        .buffer_unordered(num_cpus::get() * 4);
 
     // Collect results from the stream
     futures::pin_mut!(buffered_stream);
-    while let Some((idx, entries)) = buffered_stream.next().await {
-        if !entries.is_empty() {
-            results.insert(idx, entries);
+    while let Some(result) = buffered_stream.next().await {
+        // Need to unwrap the JoinHandle result from tokio::spawn
+        match result {
+            Ok((idx, entries)) => {
+                if !entries.is_empty() {
+                    results.insert(idx, entries);
+                }
+            }
+            Err(e) => {
+                error!("Task join error: {}", e);
+            }
         }
     }
 
