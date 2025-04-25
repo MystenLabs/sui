@@ -25,7 +25,7 @@ url.workspace = true
 
 simulacrum.workspace = true
 sui-indexer-alt.workspace = true
-sui-indexer-alt-framework.workspace = true
+sui-indexer-alt-framework = { workspace = true, features = ["postgres"] }
 sui-indexer-alt-graphql.workspace = true
 sui-indexer-alt-jsonrpc.workspace = true
 sui-indexer-alt-reader.workspace = true

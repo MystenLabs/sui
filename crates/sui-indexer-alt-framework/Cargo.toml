@@ -35,19 +35,21 @@ url.workspace = true
 sui-field-count.workspace = true
 sui-indexer-alt-framework-store-traits.workspace = true
 sui-indexer-alt-metrics.workspace = true
-sui-pg-db.workspace = true
 sui-rpc-api.workspace = true
-sui-sql-macro.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
+
+sui-pg-db = { workspace = true, optional = true }
 
 [dev-dependencies]
 rand.workspace = true
 telemetry-subscribers.workspace = true
 wiremock.workspace = true
+sui-pg-db.workspace = true
 
 sui-synthetic-ingestion.workspace = true
 
 [features]
 default = ["cluster"]
-cluster = ["dep:tracing-subscriber"]
+cluster = ["dep:tracing-subscriber", "postgres"]
+postgres = ["dep:sui-pg-db"]

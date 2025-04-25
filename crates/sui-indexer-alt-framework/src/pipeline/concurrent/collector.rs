@@ -197,11 +197,10 @@ pub(super) fn collector<H: Handler + 'static>(
 mod tests {
     use std::time::Duration;
 
+    use sui_pg_db::{Connection, Db};
     use tokio::sync::mpsc;
 
-    use crate::db::Db;
     use crate::{
-        db::Connection,
         metrics::tests::test_metrics,
         pipeline::{concurrent::max_chunk_rows, Processor},
         types::full_checkpoint_content::CheckpointData,

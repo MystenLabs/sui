@@ -276,7 +276,7 @@ mod tests {
         .await
         .unwrap();
 
-        writer.run_migrations(MIGRATIONS).await.unwrap();
+        writer.run_migrations(Some(&MIGRATIONS)).await.unwrap();
         (temp_db, writer, reader)
     }
 

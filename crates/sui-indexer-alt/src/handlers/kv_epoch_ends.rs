@@ -8,8 +8,8 @@ use anyhow::{bail, Context, Result};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::{Connection, Db},
     pipeline::{concurrent::Handler, Processor},
+    postgres::{Connection, Db},
     types::{
         event::SystemEpochInfoEvent,
         full_checkpoint_content::CheckpointData,
@@ -181,7 +181,7 @@ mod tests {
     #[tokio::test]
     pub async fn test_kv_epoch_ends_safe_mode() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let mut conn = indexer.store().connect().await.unwrap();
 
         let mut builder = TestCheckpointDataBuilder::new(0);
         let checkpoint = Arc::new(builder.advance_epoch(true));
@@ -206,7 +206,7 @@ mod tests {
     #[tokio::test]
     pub async fn test_kv_epoch_ends_same_epoch() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let mut conn = indexer.store().connect().await.unwrap();
 
         // Test that there is nothing to commit while we haven't reached epoch end.
         let mut builder = TestCheckpointDataBuilder::new(0);
@@ -260,7 +260,7 @@ mod tests {
     #[tokio::test]
     pub async fn test_kv_epoch_ends_advance_multiple_epochs() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let mut conn = indexer.store().connect().await.unwrap();
 
         // Advance epoch three times, 0, 1, 2
         let mut builder = TestCheckpointDataBuilder::new(0);

@@ -5,7 +5,7 @@ use std::ops::{Deref, DerefMut};
 use std::time::Duration;
 
 use anyhow::anyhow;
-use diesel::migration::{MigrationSource, MigrationVersion};
+use diesel::migration::{Migration, MigrationSource, MigrationVersion};
 use diesel::pg::Pg;
 use diesel::ConnectionError;
 use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
@@ -23,6 +23,9 @@ use tracing::info;
 use url::Url;
 
 mod model;
+
+pub use sui_field_count::FieldCount;
+pub use sui_sql_macro::sql;
 
 pub mod schema;
 pub mod store;
@@ -141,11 +144,13 @@ impl Db {
 
     /// Run migrations on the database. Use Diesel's `embed_migrations!` macro to generate the
     /// `migrations` parameter for your indexer.
-    pub async fn run_migrations<S: MigrationSource<Pg> + Send + Sync + 'static>(
+    pub async fn run_migrations(
         &self,
-        migrations: S,
+        migrations: Option<&'static EmbeddedMigrations>,
     ) -> anyhow::Result<Vec<MigrationVersion<'static>>> {
         use diesel_migrations::MigrationHarness;
+
+        let merged_migrations = merge_migrations(migrations);
 
         info!("Running migrations ...");
         let conn = self.0.dedicated_connection().await?;
@@ -154,7 +159,7 @@ impl Db {
 
         let finished_migrations = tokio::task::spawn_blocking(move || {
             wrapper
-                .run_pending_migrations(migrations)
+                .run_pending_migrations(merged_migrations)
                 .map(|versions| versions.iter().map(MigrationVersion::as_owned).collect())
         })
         .await?
@@ -176,18 +181,32 @@ impl Default for DbArgs {
 }
 
 /// Drop all tables, and re-run migrations if supplied.
-pub async fn reset_database<S: MigrationSource<Pg> + Send + Sync + 'static>(
+pub async fn reset_database(
     database_url: Url,
     db_config: DbArgs,
-    migrations: Option<S>,
+    migrations: Option<&'static EmbeddedMigrations>,
 ) -> anyhow::Result<()> {
     let db = Db::for_write(database_url, db_config).await?;
     db.clear_database().await?;
     if let Some(migrations) = migrations {
-        db.run_migrations(migrations).await?;
+        db.run_migrations(Some(migrations)).await?;
     }
 
     Ok(())
+}
+
+impl<'a> Deref for Connection<'a> {
+    type Target = PooledConnection<'a, AsyncPgConnection>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Connection<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
 async fn pool(
@@ -230,18 +249,23 @@ async fn pool(
         .await?)
 }
 
-impl<'a> Deref for Connection<'a> {
-    type Target = PooledConnection<'a, AsyncPgConnection>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
+/// Returns new migrations derived from the combination of provided migrations and migrations
+/// defined in this crate.
+pub fn merge_migrations(
+    migrations: Option<&'static EmbeddedMigrations>,
+) -> impl MigrationSource<Pg> + Send + Sync + 'static {
+    struct Migrations(Option<&'static EmbeddedMigrations>);
+    impl MigrationSource<Pg> for Migrations {
+        fn migrations(&self) -> diesel::migration::Result<Vec<Box<dyn Migration<Pg>>>> {
+            let mut migrations = MIGRATIONS.migrations()?;
+            if let Some(more_migrations) = self.0 {
+                migrations.extend(more_migrations.migrations()?);
+            }
+            Ok(migrations)
+        }
     }
-}
 
-impl DerefMut for Connection<'_> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
+    Migrations(migrations)
 }
 
 #[cfg(test)]
@@ -249,7 +273,6 @@ mod tests {
     use super::*;
     use diesel::prelude::QueryableByName;
     use diesel_async::RunQueryDsl;
-    use diesel_migrations::EmbeddedMigrations;
 
     #[tokio::test]
     async fn temp_db_smoketest() {
@@ -295,7 +318,7 @@ mod tests {
         .unwrap();
         assert_eq!(cnt.cnt, 1);
 
-        reset_database::<EmbeddedMigrations>(url.clone(), DbArgs::default(), None)
+        reset_database(url.clone(), DbArgs::default(), None)
             .await
             .unwrap();
 
