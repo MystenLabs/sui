@@ -80,7 +80,7 @@ impl CheckpointReader {
     /// Reads files in a local directory, validates them, and forwards `CheckpointData` to the executor.
     async fn read_local_files(&self) -> Result<Vec<Arc<CheckpointData>>> {
         let mut checkpoints = vec![];
-        for offset in 0..MAX_CHECKPOINTS_IN_PROGRESS {
+        for offset in 0..*MAX_CHECKPOINTS_IN_PROGRESS {
             let sequence_number = self.current_checkpoint_number + offset as u64;
             if self.exceeds_capacity(sequence_number) {
                 break;
@@ -97,7 +97,7 @@ impl CheckpointReader {
     }
 
     fn exceeds_capacity(&self, checkpoint_number: CheckpointSequenceNumber) -> bool {
-        ((MAX_CHECKPOINTS_IN_PROGRESS as u64 + self.last_pruned_watermark) <= checkpoint_number)
+        ((*MAX_CHECKPOINTS_IN_PROGRESS as u64 + self.last_pruned_watermark) <= checkpoint_number)
             || self.data_limiter.exceeds()
     }
 
@@ -328,8 +328,8 @@ impl CheckpointReader {
         mpsc::Sender<CheckpointSequenceNumber>,
         oneshot::Sender<()>,
     ) {
-        let (checkpoint_sender, checkpoint_recv) = mpsc::channel(MAX_CHECKPOINTS_IN_PROGRESS);
-        let (processed_sender, processed_receiver) = mpsc::channel(MAX_CHECKPOINTS_IN_PROGRESS);
+        let (checkpoint_sender, checkpoint_recv) = mpsc::channel(*MAX_CHECKPOINTS_IN_PROGRESS);
+        let (processed_sender, processed_receiver) = mpsc::channel(*MAX_CHECKPOINTS_IN_PROGRESS);
         let (exit_sender, exit_receiver) = oneshot::channel();
         let reader = Self {
             path,
