@@ -452,9 +452,9 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     // get the highest accepted rounds
                     let highest_rounds = Self::get_highest_accepted_rounds(dag_state.clone(), &context);
 
-                    requests.push(Self::fetch_blocks_request(network_client.clone(), peer_index, blocks_guard, highest_rounds, true, FETCH_REQUEST_TIMEOUT, 1))
+                    requests.push(Self::fetch_blocks_request(network_client.clone(), peer_index, blocks_guard, highest_rounds, true, FETCH_REQUEST_TIMEOUT, MAX_RETRIES))
                 },
-                Some((response, blocks_guard, retries, _peer, highest_rounds)) = requests.next() => {
+                Some((response, blocks_guard, remaining_retries, _peer, highest_rounds)) = requests.next() => {
                     match response {
                         Ok(blocks) => {
                             if let Err(err) = Self::process_fetched_blocks(blocks,
@@ -474,10 +474,10 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                         },
                         Err(_) => {
                             context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer_hostname, "live"]).inc();
-                            if retries <= MAX_RETRIES {
-                                requests.push(Self::fetch_blocks_request(network_client.clone(), peer_index, blocks_guard, highest_rounds, true, FETCH_REQUEST_TIMEOUT, retries))
+                            if remaining_retries > 0 {
+                                requests.push(Self::fetch_blocks_request(network_client.clone(), peer_index, blocks_guard, highest_rounds, true, FETCH_REQUEST_TIMEOUT, remaining_retries))
                             } else {
-                                warn!("Max retries {retries} reached while trying to fetch blocks from peer {peer_index} {peer_hostname}.");
+                                warn!("Max retries {MAX_RETRIES} reached while trying to fetch blocks from peer {peer_index} {peer_hostname}.");
                                 // we don't necessarily need to do, but dropping the guard here to unlock the blocks
                                 drop(blocks_guard);
                             }
@@ -714,7 +714,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         highest_rounds: Vec<Round>,
         breadth_first: bool,
         request_timeout: Duration,
-        mut retries: u32,
+        mut remaining_retries: u32,
     ) -> (
         ConsensusResult<Vec<Bytes>>,
         BlocksGuard,
@@ -743,21 +743,27 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
         let resp = match resp {
             Ok(Err(err)) => {
+                // network error
                 // Add a delay before retrying - if that is needed. If request has timed out then eventually
                 // this will be a no-op.
-                sleep_until(start + request_timeout).await;
-                retries += 1;
+                if remaining_retries > 0 {
+                    sleep(std::cmp::min(
+                        Duration::from_millis(100),
+                        request_timeout.saturating_sub(start.elapsed()),
+                    ))
+                    .await;
+                    remaining_retries -= 1;
+                }
                 Err(err)
-            } // network error
+            }
             Err(err) => {
                 // timeout
-                sleep_until(start + request_timeout).await;
-                retries += 1;
+                remaining_retries = remaining_retries.saturating_sub(1);
                 Err(ConsensusError::NetworkRequestTimeout(err.to_string()))
             }
             Ok(result) => result,
         };
-        (resp, blocks_guard, retries, peer, highest_rounds)
+        (resp, blocks_guard, remaining_retries, peer, highest_rounds)
     }
 
     fn start_fetch_own_last_block_task(&mut self) {
@@ -939,7 +945,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 self.context
                     .metrics
                     .node_metrics
-                    .fetch_blocks_scheduler_skipped
+                    .synchronizer_fetch_blocks_scheduler_skipped
                     .with_label_values(&["commit_lagging"])
                     .inc();
                 return Ok(());
@@ -948,8 +954,8 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
         self.fetch_blocks_scheduler_task
             .spawn(monitored_future!(async move {
-                let _scope = monitored_scope("FetchMissingBlocksScheduler");
-                context.metrics.node_metrics.fetch_blocks_scheduler_inflight.inc();
+                let _scope = monitored_scope("Synchronizer::Periodic");
+                context.metrics.node_metrics.synchronizer_fetch_blocks_scheduler_inflight.inc();
                 let total_requested = missing_blocks.len();
 
                 fail_point_async!("consensus-delay");
@@ -960,7 +966,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 } else {
                     Self::fetch_blocks_from_authorities_old(context.clone(), blocks_to_fetch.clone(), network_client, missing_blocks, dag_state).await
                 };
-                context.metrics.node_metrics.fetch_blocks_scheduler_inflight.dec();
+                context.metrics.node_metrics.synchronizer_fetch_blocks_scheduler_inflight.dec();
                 if results.is_empty() {
                     return;
                 }
@@ -1265,7 +1271,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     highest_rounds.clone(),
                     false,
                     FETCH_REQUEST_TIMEOUT,
-                    1,
+                    0,
                 ));
             }
         }
@@ -1277,7 +1283,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
         loop {
             tokio::select! {
-                Some((response, blocks_guard, _retries, peer_index, highest_rounds)) = request_futures.next() => {
+                Some((response, blocks_guard, _retries, peer_index, _highest_rounds)) = request_futures.next() => {
                     let peer_hostname = &context.committee.authority(peer_index).hostname;
                     match response {
                         Ok(fetched_blocks) => {
@@ -1288,37 +1294,10 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                 break;
                             }
                         },
-                        Err(_) => {
+                        Err(e) => {
+                            debug!("Periodic sync failure when fetching from peer {peer_hostname}: {e}");
                             context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer_hostname, "periodic"]).inc();
-                            // try again if there is any peer left
-                            if let Some(next_peer) = peers.next() {
-                                // do best effort to lock guards. If we can't lock then don't bother at this run.
-                                if let Some(blocks_guard) = inflight_blocks.swap_locks(blocks_guard, next_peer) {
-                                    info!(
-                                        "Retrying syncing {} missing blocks from peer {}: {}",
-                                        blocks_guard.block_refs.len(),
-                                        peer_hostname,
-                                        blocks_guard.block_refs
-                                            .iter()
-                                            .map(|b| b.to_string())
-                                            .collect::<Vec<_>>()
-                                            .join(", ")
-                                    );
-                                    request_futures.push(Self::fetch_blocks_request(
-                                        network_client.clone(),
-                                        next_peer,
-                                        blocks_guard,
-                                        highest_rounds,
-                                        false,
-                                        FETCH_REQUEST_TIMEOUT,
-                                        1,
-                                    ));
-                                } else {
-                                    debug!("Couldn't acquire locks to fetch blocks from peer {next_peer}.")
-                                }
-                            } else {
-                                debug!("No more peers left to fetch blocks");
-                            }
+                            // Retry at a higher level, since more blocks could have arrived during the fetch.
                         }
                     }
                 },
