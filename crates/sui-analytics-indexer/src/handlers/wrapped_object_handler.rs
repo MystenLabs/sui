@@ -4,19 +4,18 @@
 use anyhow::Result;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use sui_data_ingestion_core::Worker;
-use sui_types::SYSTEM_PACKAGE_ADDRESSES;
-use tokio::sync::Mutex;
 
+use futures::future::try_join_all;
+use sui_data_ingestion_core::Worker;
 use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 use sui_types::object::Object;
+use sui_types::SYSTEM_PACKAGE_ADDRESSES;
+use tokio::sync::{Mutex, Semaphore};
 
 use crate::handlers::{get_move_struct, parse_struct, AnalyticsHandler};
-use crate::AnalyticsMetrics;
-
 use crate::package_store::PackageCache;
 use crate::tables::WrappedObjectEntry;
-use crate::FileType;
+use crate::{AnalyticsMetrics, FileType};
 
 pub struct WrappedObjectHandler {
     state: Mutex<State>,
@@ -38,26 +37,73 @@ impl Worker for WrappedObjectHandler {
             transactions: checkpoint_transactions,
             ..
         } = checkpoint_data;
-        let mut state = self.state.lock().await;
-        for checkpoint_transaction in checkpoint_transactions {
-            for object in checkpoint_transaction.output_objects.iter() {
-                self.package_cache.update(object)?;
-            }
-            self.process_transaction(
-                checkpoint_summary.epoch,
-                checkpoint_summary.sequence_number,
-                checkpoint_summary.timestamp_ms,
-                checkpoint_transaction,
-                &mut state,
-            )
-            .await?;
-            if checkpoint_summary.end_of_epoch_data.is_some() {
-                self.package_cache
-                    .resolver
-                    .package_store()
-                    .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
-            }
+
+        // Nothing to do.
+        if checkpoint_transactions.is_empty() {
+            return Ok(());
         }
+
+        // --------------------------------------------------------------------
+        // Concurrency infrastructure – one semaphore per transaction
+        // --------------------------------------------------------------------
+        let n = checkpoint_transactions.len();
+        let semaphores: Vec<Arc<Semaphore>> = (0..n).map(|_| Arc::new(Semaphore::new(0))).collect();
+        semaphores[0].add_permits(1); // first tx may flush immediately
+
+        // Own the transactions so we can move them into async blocks.
+        let transactions: Vec<CheckpointTransaction> = checkpoint_transactions.clone();
+
+        // Build a future for every transaction.
+        let mut futs = Vec::with_capacity(n);
+        for (idx, tx) in transactions.into_iter().enumerate() {
+            let sem_curr = semaphores[idx].clone();
+            let sem_next = semaphores.get(idx + 1).cloned();
+            let epoch = checkpoint_summary.epoch;
+            let checkpoint = checkpoint_summary.sequence_number;
+            let timestamp_ms = checkpoint_summary.timestamp_ms;
+            let end_of_epoch = checkpoint_summary.end_of_epoch_data.is_some();
+
+            futs.push(async move {
+                // 1. Package-cache updates can run fully in parallel.
+                for object in tx.output_objects.iter() {
+                    self.package_cache.update(object)?;
+                }
+
+                // 2. Build wrapped-object rows into a local buffer.
+                let mut local_state = State {
+                    wrapped_objects: Vec::new(),
+                };
+                self.process_transaction(epoch, checkpoint, timestamp_ms, &tx, &mut local_state)
+                    .await?;
+
+                // 3. Wait until our turn to flush into the shared state.
+                sem_curr.acquire().await.unwrap().forget();
+
+                {
+                    let mut state = self.state.lock().await;
+                    state.wrapped_objects.extend(local_state.wrapped_objects);
+                }
+
+                // 4. Evict system packages once per transaction if end-of-epoch.
+                if end_of_epoch {
+                    self.package_cache
+                        .resolver
+                        .package_store()
+                        .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
+                }
+
+                // 5. Signal the next transaction in the chain.
+                if let Some(next) = sem_next {
+                    next.add_permits(1);
+                }
+
+                Ok::<(), anyhow::Error>(())
+            });
+        }
+
+        // Drive all tasks concurrently and propagate any error.
+        try_join_all(futs).await?;
+
         Ok(())
     }
 }
@@ -89,6 +135,7 @@ impl WrappedObjectHandler {
             package_cache,
         }
     }
+
     async fn process_transaction(
         &self,
         epoch: u64,
@@ -141,10 +188,12 @@ impl WrappedObjectHandler {
         } else {
             None
         };
+
         let mut wrapped_structs = BTreeMap::new();
         if let Some(move_struct) = move_struct {
             parse_struct("$", move_struct, &mut wrapped_structs);
         }
+
         for (json_path, wrapped_struct) in wrapped_structs.iter() {
             let entry = WrappedObjectEntry {
                 object_id: wrapped_struct.object_id.map(|id| id.to_string()),

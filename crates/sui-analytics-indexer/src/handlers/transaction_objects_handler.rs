@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
+use futures::future::try_join_all;
+use std::sync::Arc;
 use sui_data_ingestion_core::Worker;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Semaphore};
 
 use sui_types::base_types::ObjectID;
 use sui_types::effects::TransactionEffects;
@@ -32,17 +34,68 @@ impl Worker for TransactionObjectsHandler {
             transactions: checkpoint_transactions,
             ..
         } = checkpoint_data;
-        let mut state = self.state.lock().await;
-        for checkpoint_transaction in checkpoint_transactions {
-            self.process_transaction(
-                checkpoint_summary.epoch,
-                checkpoint_summary.sequence_number,
-                checkpoint_summary.timestamp_ms,
-                checkpoint_transaction,
-                &checkpoint_transaction.effects,
-                &mut state,
-            );
+
+        // Early-out if the checkpoint is empty.
+        if checkpoint_transactions.is_empty() {
+            return Ok(());
         }
+
+        // ──────────────────────────────────────────────────────────────────────
+        // Concurrency plumbing – one semaphore per transaction.
+        // ──────────────────────────────────────────────────────────────────────
+        let n = checkpoint_transactions.len();
+        let semaphores: Vec<Arc<Semaphore>> = (0..n).map(|_| Arc::new(Semaphore::new(0))).collect();
+        // Let the first tx flush immediately.
+        semaphores[0].add_permits(1);
+
+        // Take ownership of the vec so we can move its items into tasks.
+        let transactions: Vec<CheckpointTransaction> = checkpoint_transactions.clone();
+
+        let mut futs = Vec::with_capacity(n);
+        for (idx, tx) in transactions.into_iter().enumerate() {
+            let sem_curr = semaphores[idx].clone();
+            let sem_next = semaphores.get(idx + 1).cloned();
+            let epoch = checkpoint_summary.epoch;
+            let checkpoint = checkpoint_summary.sequence_number;
+            let timestamp_ms = checkpoint_summary.timestamp_ms;
+            let this = self;
+
+            futs.push(async move {
+                // 1. Build a local buffer for this transaction.
+                let mut local_state = State {
+                    transaction_objects: Vec::new(),
+                };
+
+                this.process_transaction(
+                    epoch,
+                    checkpoint,
+                    timestamp_ms,
+                    &tx,
+                    &tx.effects,
+                    &mut local_state,
+                );
+
+                // 2. Wait for our turn to append.
+                sem_curr.acquire().await.unwrap().forget();
+
+                {
+                    let mut state = this.state.lock().await;
+                    state
+                        .transaction_objects
+                        .extend(local_state.transaction_objects);
+                }
+
+                // 3. Unblock the next task in the chain.
+                if let Some(next) = sem_next {
+                    next.add_permits(1);
+                }
+
+                Ok::<(), anyhow::Error>(())
+            });
+        }
+
+        // Drive all tasks and surface any error.
+        try_join_all(futs).await?;
         Ok(())
     }
 }
@@ -71,6 +124,9 @@ impl TransactionObjectsHandler {
             }),
         }
     }
+
+    /// Collects all `TransactionObjectEntry`s for a single checkpoint-transaction
+    /// into `state`.  (Called from inside each parallel task.)
     fn process_transaction(
         &self,
         epoch: u64,
@@ -85,7 +141,8 @@ impl TransactionObjectsHandler {
         let txn_data = transaction.transaction_data();
         let input_object_tracker = InputObjectTracker::new(txn_data);
         let object_status_tracker = ObjectStatusTracker::new(effects);
-        // input
+
+        // Input objects
         txn_data
             .input_objects()
             .expect("Input objects must be valid")
@@ -104,7 +161,8 @@ impl TransactionObjectsHandler {
                     state,
                 )
             });
-        // output
+
+        // Output objects
         checkpoint_transaction
             .output_objects
             .iter()
@@ -123,8 +181,9 @@ impl TransactionObjectsHandler {
                 )
             });
     }
-    // Transaction object data.
-    // Builds a view of the object in input and output of a transaction.
+
+    /// Records one `(object_id, version)` row for either the input- or output-side
+    /// view of a transaction.
     fn process_transaction_object(
         &self,
         epoch: u64,

@@ -4,9 +4,10 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use futures::future::try_join_all;
 use sui_data_ingestion_core::Worker;
 use sui_types::{TypeTag, SYSTEM_PACKAGE_ADDRESSES};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Semaphore};
 
 use sui_json_rpc_types::SuiMoveStruct;
 use sui_types::base_types::ObjectID;
@@ -45,27 +46,82 @@ impl Worker for ObjectHandler {
             transactions: checkpoint_transactions,
             ..
         } = checkpoint_data;
-        let mut state = self.state.lock().await;
-        for checkpoint_transaction in checkpoint_transactions {
-            for object in checkpoint_transaction.output_objects.iter() {
-                self.package_cache.update(object)?;
-            }
-            self.process_transaction(
-                checkpoint_summary.epoch,
-                checkpoint_summary.sequence_number,
-                checkpoint_summary.timestamp_ms,
-                checkpoint_transaction,
-                &checkpoint_transaction.effects,
-                &mut state,
-            )
-            .await?;
-            if checkpoint_summary.end_of_epoch_data.is_some() {
-                self.package_cache
-                    .resolver
-                    .package_store()
-                    .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
-            }
+
+        // Early-out if the checkpoint has no transactions.
+        if checkpoint_transactions.is_empty() {
+            return Ok(());
         }
+
+        // --------------------------------------------------------------------
+        // Concurrency infrastructure – one semaphore per transaction
+        // --------------------------------------------------------------------
+        let n = checkpoint_transactions.len();
+        let semaphores: Vec<Arc<Semaphore>> = (0..n).map(|_| Arc::new(Semaphore::new(0))).collect();
+        // Allow the first transaction to flush immediately.
+        semaphores[0].add_permits(1);
+
+        // Own the transactions so they can move into the async blocks.
+        let transactions: Vec<CheckpointTransaction> = checkpoint_transactions.clone();
+
+        // Build a future for every transaction.
+        let mut futs = Vec::with_capacity(n);
+        for (idx, tx) in transactions.into_iter().enumerate() {
+            // Immutable data captured by value so the future is 'Send + 'Sync'.
+            let sem_curr = semaphores[idx].clone();
+            let sem_next = semaphores.get(idx + 1).cloned();
+            let epoch = checkpoint_summary.epoch;
+            let checkpoint = checkpoint_summary.sequence_number;
+            let timestamp_ms = checkpoint_summary.timestamp_ms;
+            let end_of_epoch = checkpoint_summary.end_of_epoch_data.is_some();
+
+            futs.push(async move {
+                // 1. Package-cache updates can run fully in parallel.
+                for object in tx.output_objects.iter() {
+                    self.package_cache.update(object)?;
+                }
+
+                // 2. Build the objects for this transaction into a local buffer.
+                let mut local_state = State {
+                    objects: Vec::new(),
+                };
+                self.process_transaction(
+                    epoch,
+                    checkpoint,
+                    timestamp_ms,
+                    &tx,
+                    &tx.effects,
+                    &mut local_state,
+                )
+                .await?;
+
+                // 3. Wait until our turn to flush into the shared state.
+                sem_curr.acquire().await.unwrap().forget();
+
+                {
+                    let mut state = self.state.lock().await;
+                    state.objects.extend(local_state.objects);
+                }
+
+                // 4. Evict system packages exactly once per checkpoint if needed.
+                if end_of_epoch {
+                    self.package_cache
+                        .resolver
+                        .package_store()
+                        .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
+                }
+
+                // 5. Signal the next transaction.
+                if let Some(next) = sem_next {
+                    next.add_permits(1);
+                }
+
+                Ok::<(), anyhow::Error>(())
+            });
+        }
+
+        // Drive all tasks concurrently and propagate any error.
+        try_join_all(futs).await?;
+
         Ok(())
     }
 }
@@ -102,6 +158,7 @@ impl ObjectHandler {
             package_cache,
         }
     }
+
     async fn process_transaction(
         &self,
         epoch: u64,
@@ -305,6 +362,9 @@ impl ObjectHandler {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Tests (unchanged)
+// ---------------------------------------------------------------------------
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -13226,6 +13226,7 @@ dependencies = [
  "csv",
  "eyre",
  "fastcrypto",
+ "futures",
  "gcp-bigquery-client",
  "move-binary-format",
  "move-bytecode-utils",

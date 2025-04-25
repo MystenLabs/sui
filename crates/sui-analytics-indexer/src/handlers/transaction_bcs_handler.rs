@@ -3,8 +3,10 @@
 
 use anyhow::Result;
 use fastcrypto::encoding::{Base64, Encoding};
+use futures::future::try_join_all;
+use std::sync::Arc;
 use sui_data_ingestion_core::Worker;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Semaphore};
 
 use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 
@@ -30,16 +32,65 @@ impl Worker for TransactionBCSHandler {
             transactions: checkpoint_transactions,
             ..
         } = checkpoint_data;
-        let mut state = self.state.lock().await;
-        for checkpoint_transaction in checkpoint_transactions {
-            self.process_transaction(
-                checkpoint_summary.epoch,
-                checkpoint_summary.sequence_number,
-                checkpoint_summary.timestamp_ms,
-                checkpoint_transaction,
-                &mut state,
-            )?;
+
+        // Early-out if there’s nothing to do.
+        if checkpoint_transactions.is_empty() {
+            return Ok(());
         }
+
+        // ──────────────────────────────────────────────────────────────────────────
+        // Concurrency infrastructure – one semaphore per transaction
+        // ──────────────────────────────────────────────────────────────────────────
+        let n = checkpoint_transactions.len();
+        let semaphores: Vec<Arc<Semaphore>> = (0..n).map(|_| Arc::new(Semaphore::new(0))).collect();
+        semaphores[0].add_permits(1); // kick-start the chain
+
+        let epoch = checkpoint_summary.epoch;
+        let checkpoint = checkpoint_summary.sequence_number;
+        let timestamp_ms = checkpoint_summary.timestamp_ms;
+
+        // Own the transactions so they can move into async blocks cleanly.
+        let transactions: Vec<CheckpointTransaction> = checkpoint_transactions.clone();
+
+        let mut futs = Vec::with_capacity(n);
+        for (idx, tx) in transactions.into_iter().enumerate() {
+            let sem_curr = semaphores[idx].clone();
+            let sem_next = semaphores.get(idx + 1).cloned();
+            let handler_ref = self; // capture &self by value into the task
+
+            futs.push(async move {
+                // Build the entry completely off the shared state.
+                let transaction = &tx.transaction;
+                let txn_data = transaction.transaction_data();
+                let transaction_digest = transaction.digest().base58_encode();
+
+                let entry = TransactionBCSEntry {
+                    transaction_digest,
+                    checkpoint,
+                    epoch,
+                    timestamp_ms,
+                    bcs: Base64::encode(bcs::to_bytes(&txn_data).unwrap()),
+                };
+
+                // Wait for our turn to push into the shared vector.
+                sem_curr.acquire().await.unwrap().forget();
+
+                {
+                    let mut state = handler_ref.state.lock().await;
+                    state.transactions.push(entry);
+                }
+
+                // Signal the next transaction (if any).
+                if let Some(next) = sem_next {
+                    next.add_permits(1);
+                }
+
+                Ok::<(), anyhow::Error>(())
+            });
+        }
+
+        // Drive all tasks concurrently; bubble up the first error if any.
+        try_join_all(futs).await?;
         Ok(())
     }
 }
@@ -63,31 +114,9 @@ impl AnalyticsHandler<TransactionBCSEntry> for TransactionBCSHandler {
 impl TransactionBCSHandler {
     pub fn new() -> Self {
         let state = Mutex::new(State {
-            transactions: vec![],
+            transactions: Vec::new(),
         });
         TransactionBCSHandler { state }
-    }
-    fn process_transaction(
-        &self,
-        epoch: u64,
-        checkpoint: u64,
-        timestamp_ms: u64,
-        checkpoint_transaction: &CheckpointTransaction,
-        state: &mut State,
-    ) -> Result<()> {
-        let transaction = &checkpoint_transaction.transaction;
-        let txn_data = transaction.transaction_data();
-        let transaction_digest = transaction.digest().base58_encode();
-
-        let entry = TransactionBCSEntry {
-            transaction_digest,
-            checkpoint,
-            epoch,
-            timestamp_ms,
-            bcs: Base64::encode(bcs::to_bytes(&txn_data).unwrap()),
-        };
-        state.transactions.push(entry);
-        Ok(())
     }
 }
 
