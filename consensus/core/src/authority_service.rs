@@ -496,8 +496,9 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         let blocks = if !highest_accepted_rounds.is_empty() {
             block_refs.sort();
             block_refs.dedup();
-            let dag_state = self.dag_state.read();
-            let mut blocks = dag_state
+            let mut blocks = self
+                .dag_state
+                .read()
                 .get_blocks(&block_refs)
                 .into_iter()
                 .flatten()
@@ -540,6 +541,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 // No block from other authorities are retrieved. It is possible that the requestor is not
                 // seeing missing block from another authority, and serving a block would just lead to unnecessary
                 // data transfer. Or missing blocks from other authorities are requested from other peers.
+                let dag_state = self.dag_state.read();
                 for (authority, lowest_missing_round) in lowest_missing_rounds {
                     let highest_accepted_round = highest_accepted_rounds[authority];
                     if highest_accepted_round >= lowest_missing_round {
