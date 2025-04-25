@@ -1,0 +1,111 @@
+// Move bytecode v6
+module 2.transfer {
+use 0000000000000000000000000000000000000000000000000000000000000002::object;
+
+struct Receiving<phantom Ty0: key> has drop {
+	id: ID,
+	version: u64
+}
+
+public transfer<Ty0: key>(Arg0: Ty0, Arg1: address) {
+B0:
+	0: MoveLoc[0](Arg0: Ty0)
+	1: MoveLoc[1](Arg1: address)
+	2: Call transfer_impl<Ty0>(Ty0, address)
+	3: Ret
+}
+
+public public_transfer<Ty0: store + key>(Arg0: Ty0, Arg1: address) {
+B0:
+	0: MoveLoc[0](Arg0: Ty0)
+	1: MoveLoc[1](Arg1: address)
+	2: Call transfer_impl<Ty0>(Ty0, address)
+	3: Ret
+}
+
+public freeze_object<Ty0: key>(Arg0: Ty0) {
+B0:
+	0: MoveLoc[0](Arg0: Ty0)
+	1: Call freeze_object_impl<Ty0>(Ty0)
+	2: Ret
+}
+
+public public_freeze_object<Ty0: store + key>(Arg0: Ty0) {
+B0:
+	0: MoveLoc[0](Arg0: Ty0)
+	1: Call freeze_object_impl<Ty0>(Ty0)
+	2: Ret
+}
+
+public share_object<Ty0: key>(Arg0: Ty0) {
+B0:
+	0: MoveLoc[0](Arg0: Ty0)
+	1: Call share_object_impl<Ty0>(Ty0)
+	2: Ret
+}
+
+public public_share_object<Ty0: store + key>(Arg0: Ty0) {
+B0:
+	0: MoveLoc[0](Arg0: Ty0)
+	1: Call share_object_impl<Ty0>(Ty0)
+	2: Ret
+}
+
+public receive<Ty0: key>(Arg0: &mut UID, Arg1: Receiving<Ty0>): Ty0 {
+L2:	loc0: ID
+L3:	loc1: u64
+B0:
+	0: MoveLoc[1](Arg1: Receiving<Ty0>)
+	1: UnpackGeneric[0](Receiving<Ty0>)
+	2: StLoc[3](loc1: u64)
+	3: StLoc[2](loc0: ID)
+	4: MoveLoc[0](Arg0: &mut UID)
+	5: FreezeRef
+	6: Call object::uid_to_address(&UID): address
+	7: MoveLoc[2](loc0: ID)
+	8: MoveLoc[3](loc1: u64)
+	9: Call receive_impl<Ty0>(address, ID, u64): Ty0
+	10: Ret
+}
+
+public public_receive<Ty0: store + key>(Arg0: &mut UID, Arg1: Receiving<Ty0>): Ty0 {
+L2:	loc0: ID
+L3:	loc1: u64
+B0:
+	0: MoveLoc[1](Arg1: Receiving<Ty0>)
+	1: UnpackGeneric[0](Receiving<Ty0>)
+	2: StLoc[3](loc1: u64)
+	3: StLoc[2](loc0: ID)
+	4: MoveLoc[0](Arg0: &mut UID)
+	5: FreezeRef
+	6: Call object::uid_to_address(&UID): address
+	7: MoveLoc[2](loc0: ID)
+	8: MoveLoc[3](loc1: u64)
+	9: Call receive_impl<Ty0>(address, ID, u64): Ty0
+	10: Ret
+}
+
+public receiving_object_id<Ty0: key>(Arg0: &Receiving<Ty0>): ID {
+B0:
+	0: MoveLoc[0](Arg0: &Receiving<Ty0>)
+	1: ImmBorrowFieldGeneric[0](Receiving.id: ID)
+	2: ReadRef
+	3: Ret
+}
+
+native public(friend) freeze_object_impl<Ty0: key>(Arg0: Ty0);
+
+native public(friend) share_object_impl<Ty0: key>(Arg0: Ty0);
+
+native public(friend) transfer_impl<Ty0: key>(Arg0: Ty0, Arg1: address);
+
+native receive_impl<Ty0: key>(Arg0: address, Arg1: ID, Arg2: u64): Ty0;
+
+Constants [
+	0 => u64: 0
+	1 => u64: 1
+	2 => u64: 2
+	3 => u64: 3
+	4 => u64: 4
+]
+}

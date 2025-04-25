@@ -1,0 +1,407 @@
+// Move bytecode v6
+module 1.type_name {
+use 0000000000000000000000000000000000000000000000000000000000000001::address;
+use 0000000000000000000000000000000000000000000000000000000000000001::ascii;
+
+struct TypeName has copy, drop, store {
+	name: String
+}
+
+native public get<Ty0>(): TypeName;
+
+native public get_with_original_ids<Ty0>(): TypeName;
+
+public is_primitive(Arg0: &TypeName): bool {
+L1:	loc0: bool
+L2:	loc1: &vector<u8>
+L3:	loc2: vector<u8>
+L4:	loc3: &vector<u8>
+L5:	loc4: vector<u8>
+L6:	loc5: &vector<u8>
+L7:	loc6: vector<u8>
+L8:	loc7: &vector<u8>
+L9:	loc8: vector<u8>
+L10:	loc9: &vector<u8>
+L11:	loc10: bool
+L12:	loc11: vector<u8>
+L13:	loc12: &vector<u8>
+L14:	loc13: vector<u8>
+L15:	loc14: &vector<u8>
+L16:	loc15: vector<u8>
+L17:	loc16: &vector<u8>
+L18:	loc17: vector<u8>
+L19:	loc18: &vector<u8>
+B0:
+	0: MoveLoc[0](Arg0: &TypeName)
+	1: ImmBorrowField[0](TypeName.name: String)
+	2: Call ascii::as_bytes(&String): &vector<u8>
+	3: StLoc[19](loc18: &vector<u8>)
+	4: CopyLoc[19](loc18: &vector<u8>)
+	5: StLoc[10](loc9: &vector<u8>)
+	6: LdConst[8](vector<u8>: "boo..)
+	7: StLoc[9](loc8: vector<u8>)
+	8: MoveLoc[10](loc9: &vector<u8>)
+	9: ImmBorrowLoc[9](loc8: vector<u8>)
+	10: Eq
+	11: BrFalse(17)
+B1:
+	12: MoveLoc[19](loc18: &vector<u8>)
+	13: Pop
+	14: LdTrue
+	15: StLoc[1](loc0: bool)
+	16: Branch(187)
+B2:
+	17: CopyLoc[19](loc18: &vector<u8>)
+	18: StLoc[8](loc7: &vector<u8>)
+	19: LdConst[9](vector<u8>: "u8"..)
+	20: StLoc[7](loc6: vector<u8>)
+	21: MoveLoc[8](loc7: &vector<u8>)
+	22: ImmBorrowLoc[7](loc6: vector<u8>)
+	23: Eq
+	24: BrFalse(30)
+B3:
+	25: MoveLoc[19](loc18: &vector<u8>)
+	26: Pop
+	27: LdTrue
+	28: StLoc[1](loc0: bool)
+	29: Branch(187)
+B4:
+	30: CopyLoc[19](loc18: &vector<u8>)
+	31: StLoc[6](loc5: &vector<u8>)
+	32: LdConst[10](vector<u8>: "u16..)
+	33: StLoc[5](loc4: vector<u8>)
+	34: MoveLoc[6](loc5: &vector<u8>)
+	35: ImmBorrowLoc[5](loc4: vector<u8>)
+	36: Eq
+	37: BrFalse(43)
+B5:
+	38: MoveLoc[19](loc18: &vector<u8>)
+	39: Pop
+	40: LdTrue
+	41: StLoc[1](loc0: bool)
+	42: Branch(187)
+B6:
+	43: CopyLoc[19](loc18: &vector<u8>)
+	44: StLoc[4](loc3: &vector<u8>)
+	45: LdConst[11](vector<u8>: "u32..)
+	46: StLoc[3](loc2: vector<u8>)
+	47: MoveLoc[4](loc3: &vector<u8>)
+	48: ImmBorrowLoc[3](loc2: vector<u8>)
+	49: Eq
+	50: BrFalse(56)
+B7:
+	51: MoveLoc[19](loc18: &vector<u8>)
+	52: Pop
+	53: LdTrue
+	54: StLoc[1](loc0: bool)
+	55: Branch(187)
+B8:
+	56: CopyLoc[19](loc18: &vector<u8>)
+	57: StLoc[2](loc1: &vector<u8>)
+	58: LdConst[12](vector<u8>: "u64..)
+	59: StLoc[18](loc17: vector<u8>)
+	60: MoveLoc[2](loc1: &vector<u8>)
+	61: ImmBorrowLoc[18](loc17: vector<u8>)
+	62: Eq
+	63: BrFalse(69)
+B9:
+	64: MoveLoc[19](loc18: &vector<u8>)
+	65: Pop
+	66: LdTrue
+	67: StLoc[1](loc0: bool)
+	68: Branch(187)
+B10:
+	69: CopyLoc[19](loc18: &vector<u8>)
+	70: StLoc[17](loc16: &vector<u8>)
+	71: LdConst[13](vector<u8>: "u12..)
+	72: StLoc[16](loc15: vector<u8>)
+	73: MoveLoc[17](loc16: &vector<u8>)
+	74: ImmBorrowLoc[16](loc15: vector<u8>)
+	75: Eq
+	76: BrFalse(82)
+B11:
+	77: MoveLoc[19](loc18: &vector<u8>)
+	78: Pop
+	79: LdTrue
+	80: StLoc[1](loc0: bool)
+	81: Branch(187)
+B12:
+	82: CopyLoc[19](loc18: &vector<u8>)
+	83: StLoc[15](loc14: &vector<u8>)
+	84: LdConst[14](vector<u8>: "u25..)
+	85: StLoc[14](loc13: vector<u8>)
+	86: MoveLoc[15](loc14: &vector<u8>)
+	87: ImmBorrowLoc[14](loc13: vector<u8>)
+	88: Eq
+	89: BrFalse(95)
+B13:
+	90: MoveLoc[19](loc18: &vector<u8>)
+	91: Pop
+	92: LdTrue
+	93: StLoc[1](loc0: bool)
+	94: Branch(187)
+B14:
+	95: CopyLoc[19](loc18: &vector<u8>)
+	96: StLoc[13](loc12: &vector<u8>)
+	97: LdConst[15](vector<u8>: "add..)
+	98: StLoc[12](loc11: vector<u8>)
+	99: MoveLoc[13](loc12: &vector<u8>)
+	100: ImmBorrowLoc[12](loc11: vector<u8>)
+	101: Eq
+	102: BrFalse(108)
+B15:
+	103: MoveLoc[19](loc18: &vector<u8>)
+	104: Pop
+	105: LdTrue
+	106: StLoc[1](loc0: bool)
+	107: Branch(187)
+B16:
+	108: CopyLoc[19](loc18: &vector<u8>)
+	109: VecLen(8)
+	110: LdU64(6)
+	111: Ge
+	112: BrFalse(181)
+B17:
+	113: CopyLoc[19](loc18: &vector<u8>)
+	114: LdU64(0)
+	115: VecImmBorrow(8)
+	116: ReadRef
+	117: LdConst[1](u8: 118)
+	118: Eq
+	119: BrFalse(176)
+B18:
+	120: CopyLoc[19](loc18: &vector<u8>)
+	121: LdU64(1)
+	122: VecImmBorrow(8)
+	123: ReadRef
+	124: LdConst[2](u8: 101)
+	125: Eq
+	126: BrFalse(171)
+B19:
+	127: CopyLoc[19](loc18: &vector<u8>)
+	128: LdU64(2)
+	129: VecImmBorrow(8)
+	130: ReadRef
+	131: LdConst[3](u8: 99)
+	132: Eq
+	133: BrFalse(166)
+B20:
+	134: CopyLoc[19](loc18: &vector<u8>)
+	135: LdU64(3)
+	136: VecImmBorrow(8)
+	137: ReadRef
+	138: LdConst[4](u8: 116)
+	139: Eq
+	140: BrFalse(161)
+B21:
+	141: CopyLoc[19](loc18: &vector<u8>)
+	142: LdU64(4)
+	143: VecImmBorrow(8)
+	144: ReadRef
+	145: LdConst[5](u8: 111)
+	146: Eq
+	147: BrFalse(156)
+B22:
+	148: MoveLoc[19](loc18: &vector<u8>)
+	149: LdU64(5)
+	150: VecImmBorrow(8)
+	151: ReadRef
+	152: LdConst[6](u8: 114)
+	153: Eq
+	154: StLoc[11](loc10: bool)
+	155: Branch(185)
+B23:
+	156: MoveLoc[19](loc18: &vector<u8>)
+	157: Pop
+	158: LdFalse
+	159: StLoc[11](loc10: bool)
+	160: Branch(185)
+B24:
+	161: MoveLoc[19](loc18: &vector<u8>)
+	162: Pop
+	163: LdFalse
+	164: StLoc[11](loc10: bool)
+	165: Branch(185)
+B25:
+	166: MoveLoc[19](loc18: &vector<u8>)
+	167: Pop
+	168: LdFalse
+	169: StLoc[11](loc10: bool)
+	170: Branch(185)
+B26:
+	171: MoveLoc[19](loc18: &vector<u8>)
+	172: Pop
+	173: LdFalse
+	174: StLoc[11](loc10: bool)
+	175: Branch(185)
+B27:
+	176: MoveLoc[19](loc18: &vector<u8>)
+	177: Pop
+	178: LdFalse
+	179: StLoc[11](loc10: bool)
+	180: Branch(185)
+B28:
+	181: MoveLoc[19](loc18: &vector<u8>)
+	182: Pop
+	183: LdFalse
+	184: StLoc[11](loc10: bool)
+B29:
+	185: MoveLoc[11](loc10: bool)
+	186: StLoc[1](loc0: bool)
+B30:
+	187: MoveLoc[1](loc0: bool)
+	188: Ret
+}
+
+public borrow_string(Arg0: &TypeName): &String {
+B0:
+	0: MoveLoc[0](Arg0: &TypeName)
+	1: ImmBorrowField[0](TypeName.name: String)
+	2: Ret
+}
+
+public get_address(Arg0: &TypeName): String {
+L1:	loc0: vector<u8>
+L2:	loc1: u64
+L3:	loc2: u64
+L4:	loc3: &vector<u8>
+B0:
+	0: CopyLoc[0](Arg0: &TypeName)
+	1: Call is_primitive(&TypeName): bool
+	2: Not
+	3: BrFalse(5)
+B1:
+	4: Branch(9)
+B2:
+	5: MoveLoc[0](Arg0: &TypeName)
+	6: Pop
+	7: LdConst[7](u64: 0)
+	8: Abort
+B3:
+	9: Call address::length(): u64
+	10: LdU64(2)
+	11: Mul
+	12: StLoc[3](loc2: u64)
+	13: MoveLoc[0](Arg0: &TypeName)
+	14: ImmBorrowField[0](TypeName.name: String)
+	15: Call ascii::as_bytes(&String): &vector<u8>
+	16: StLoc[4](loc3: &vector<u8>)
+	17: LdConst[16](vector<u8>: "" /..)
+	18: StLoc[1](loc0: vector<u8>)
+	19: LdU64(0)
+	20: StLoc[2](loc1: u64)
+B4:
+	21: CopyLoc[2](loc1: u64)
+	22: CopyLoc[3](loc2: u64)
+	23: Lt
+	24: BrFalse(36)
+B5:
+	25: MutBorrowLoc[1](loc0: vector<u8>)
+	26: CopyLoc[4](loc3: &vector<u8>)
+	27: CopyLoc[2](loc1: u64)
+	28: VecImmBorrow(8)
+	29: ReadRef
+	30: VecPushBack(8)
+	31: MoveLoc[2](loc1: u64)
+	32: LdU64(1)
+	33: Add
+	34: StLoc[2](loc1: u64)
+	35: Branch(21)
+B6:
+	36: MoveLoc[4](loc3: &vector<u8>)
+	37: Pop
+	38: MoveLoc[1](loc0: vector<u8>)
+	39: Call ascii::string(vector<u8>): String
+	40: Ret
+}
+
+public get_module(Arg0: &TypeName): String {
+L1:	loc0: &u8
+L2:	loc1: u8
+L3:	loc2: u64
+L4:	loc3: vector<u8>
+L5:	loc4: &vector<u8>
+B0:
+	0: CopyLoc[0](Arg0: &TypeName)
+	1: Call is_primitive(&TypeName): bool
+	2: Not
+	3: BrFalse(5)
+B1:
+	4: Branch(9)
+B2:
+	5: MoveLoc[0](Arg0: &TypeName)
+	6: Pop
+	7: LdConst[7](u64: 0)
+	8: Abort
+B3:
+	9: Call address::length(): u64
+	10: LdU64(2)
+	11: Mul
+	12: LdU64(2)
+	13: Add
+	14: StLoc[3](loc2: u64)
+	15: MoveLoc[0](Arg0: &TypeName)
+	16: ImmBorrowField[0](TypeName.name: String)
+	17: Call ascii::as_bytes(&String): &vector<u8>
+	18: StLoc[5](loc4: &vector<u8>)
+	19: LdConst[16](vector<u8>: "" /..)
+	20: StLoc[4](loc3: vector<u8>)
+	21: LdConst[0](u8: 58)
+	22: StLoc[2](loc1: u8)
+B4:
+	23: CopyLoc[5](loc4: &vector<u8>)
+	24: CopyLoc[3](loc2: u64)
+	25: VecImmBorrow(8)
+	26: StLoc[1](loc0: &u8)
+	27: CopyLoc[1](loc0: &u8)
+	28: ImmBorrowLoc[2](loc1: u8)
+	29: Neq
+	30: BrFalse(40)
+B5:
+	31: MutBorrowLoc[4](loc3: vector<u8>)
+	32: MoveLoc[1](loc0: &u8)
+	33: ReadRef
+	34: VecPushBack(8)
+	35: MoveLoc[3](loc2: u64)
+	36: LdU64(1)
+	37: Add
+	38: StLoc[3](loc2: u64)
+	39: Branch(23)
+B6:
+	40: MoveLoc[5](loc4: &vector<u8>)
+	41: Pop
+	42: MoveLoc[1](loc0: &u8)
+	43: Pop
+	44: MoveLoc[4](loc3: vector<u8>)
+	45: Call ascii::string(vector<u8>): String
+	46: Ret
+}
+
+public into_string(Arg0: TypeName): String {
+B0:
+	0: ImmBorrowLoc[0](Arg0: TypeName)
+	1: ImmBorrowField[0](TypeName.name: String)
+	2: ReadRef
+	3: Ret
+}
+
+Constants [
+	0 => u8: 58
+	1 => u8: 118
+	2 => u8: 101
+	3 => u8: 99
+	4 => u8: 116
+	5 => u8: 111
+	6 => u8: 114
+	7 => u64: 0
+	8 => vector<u8>: "bool" // interpreted as UTF8 string
+	9 => vector<u8>: "u8" // interpreted as UTF8 string
+	10 => vector<u8>: "u16" // interpreted as UTF8 string
+	11 => vector<u8>: "u32" // interpreted as UTF8 string
+	12 => vector<u8>: "u64" // interpreted as UTF8 string
+	13 => vector<u8>: "u128" // interpreted as UTF8 string
+	14 => vector<u8>: "u256" // interpreted as UTF8 string
+	15 => vector<u8>: "address" // interpreted as UTF8 string
+	16 => vector<u8>: "" // interpreted as UTF8 string
+]
+}

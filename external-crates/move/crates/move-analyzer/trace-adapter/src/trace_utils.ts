@@ -9,7 +9,10 @@ import {
     IRuntimeVariableLoc,
     IRuntimeGlobalLoc,
     IRuntimeLoc,
-    IRuntimeRefValue
+    IRuntimeRefValue,
+    PTBCommandKind as PTBCommandKind,
+    PTBSummary,
+    IMoveCallInfo
 } from './runtime';
 import {
     IDebugInfo,
@@ -183,11 +186,36 @@ interface JSONTraceCloseFrame {
     return_: JSONTraceRuntimeValueContent[];
 }
 
+interface JSONExternalMoveCallInfo {
+    MoveCall: IMoveCallInfo
+}
+
+interface JSONTraceExternalMoveValue {
+    type_: JSONTraceType;
+    value: JSONTraceMoveValue;
+}
+
+interface JSONTraceExternalTransfer {
+    to_transfer: JSONTraceExternalMoveValue[];
+}
+
+interface JSONTraceExternalSplitCoins {
+    input: JSONTraceExternalMoveValue;
+    result: JSONTraceExternalMoveValue[];
+}
+
+type JSONTraceExternal =
+    | { Summary: [JSONExternalMoveCallInfo | string][] }
+    | { TransferObjects: JSONTraceExternalTransfer }
+    | { SplitCoins: JSONTraceExternalSplitCoins }
+    | string;
+
 interface JSONTraceEvent {
     OpenFrame?: JSONTraceOpenFrame;
     Instruction?: JSONTraceInstruction;
     Effect?: JSONTraceEffect;
     CloseFrame?: JSONTraceCloseFrame;
+    External?: JSONTraceExternal;
 }
 
 interface JSONTraceRootObject {
@@ -229,7 +257,9 @@ export enum TraceEventKind {
     OpenFrame,
     CloseFrame,
     Instruction,
-    Effect
+    Effect,
+    PTBStart,
+    PTBCommand
 }
 
 /**
@@ -262,7 +292,33 @@ export type TraceEvent =
         bcodeLoc?: ILoc,
         kind: TraceInstructionKind
     }
-    | { type: TraceEventKind.Effect, effect: EventEffect };
+    | { type: TraceEventKind.Effect, effect: EventEffect }
+    | { type: TraceEventKind.PTBStart, id: number, summary: PTBSummary[] }
+    | { type: TraceEventKind.PTBCommand, command: PTBCommandInfo };
+
+export type PTBCommandInfo =
+    | {
+        kind: PTBCommandKind.MoveCallStart
+    } | {
+        kind: PTBCommandKind.MoveCallEnd
+    } | {
+        kind: PTBCommandKind.SplitCoinsStart
+        id: number
+        localsTypes: string[]
+        localsNames: string[]
+        localsValues: RuntimeValueType[]
+    } | {
+        kind: PTBCommandKind.SplitCoinsEnd
+    } | {
+        kind: PTBCommandKind.TransferStart
+        id: number
+        localsTypes: string[]
+        localsNames: string[]
+        localsValues: RuntimeValueType[]
+    } | {
+        kind: PTBCommandKind.TransferEnd
+    };
+
 
 /**
  * Kind of an effect of an instruction.
@@ -357,12 +413,29 @@ interface ITraceGenFrameInfo {
  * An ID of a virtual frame representing a macro defined in the same file
  * where it is inlined.
  */
-const INLINED_FRAME_ID_SAME_FILE = -1;
+export const INLINED_FRAME_ID_SAME_FILE = Number.MAX_SAFE_INTEGER - 1;
+
 /**
  * An ID of a virtual frame representing a macro defined in a different file
  * than file where it is inlined.
  */
-const INLINED_FRAME_ID_DIFFERENT_FILE = -2;
+export const INLINED_FRAME_ID_DIFFERENT_FILE = Number.MAX_SAFE_INTEGER - 2;
+
+/**
+ * An ID of a virtual frame representing PTB start event.
+ */
+export const PTB_START_FRAME_ID = Number.MAX_SAFE_INTEGER - 3;
+
+/**
+ * An ID of a virtual frame representing PTB transfer event.
+ */
+export const TRANSFER_FRAME_ID = Number.MAX_SAFE_INTEGER - 4;
+
+/**
+ * An ID of a virtual frame representing PTB split coins event.
+ */
+export const SPLIT_COINS_FRAME_ID = Number.MAX_SAFE_INTEGER - 5;
+
 
 /**
  * Reads a Move VM execution trace from a JSON file.
@@ -565,15 +638,6 @@ export async function readTrace(
             if (instBcodeFileLoc) {
                 recordTracedLine(filesMap, tracedBcodeLines, instBcodeFileLoc);
             }
-            // re-read frame info as it may have changed as a result of processing
-            // and inlined call
-            frameInfo = frameInfoStack[frameInfoStack.length - 1];
-            const filePath = frameInfo.srcFilePath;
-            const lines = tracedSrcLines.get(filePath) || new Set<number>();
-            // floc is still good as the pc_locs used for its computation
-            // do not change as a result of processing inlined frames
-            lines.add(instSrcFileLoc.loc.line);
-            tracedSrcLines.set(filePath, lines);
             events.push({
                 type: TraceEventKind.Instruction,
                 pc: event.Instruction.pc,
@@ -583,6 +647,9 @@ export async function readTrace(
                     ? TraceInstructionKind[name as keyof typeof TraceInstructionKind]
                     : TraceInstructionKind.UNKNOWN
             });
+            // re-read frame info as it may have changed as a result of processing
+            // and inlined call
+            frameInfo = frameInfoStack[frameInfoStack.length - 1];
 
             // Set end of lifetime for all locals to the max instruction PC ever seen
             // for a given local (if they are live after this instructions, they will
@@ -649,6 +716,106 @@ export async function readTrace(
                     effect: {
                         type: TraceEffectKind.ExecutionError,
                         msg: effect.ExecutionError
+                    }
+                });
+            }
+        } else if (event.External) {
+            const external = event.External;
+            if (typeof external === 'string') {
+                if (external === PTBCommandKind.MoveCallStart) {
+                    events.push({
+                        type: TraceEventKind.PTBCommand,
+                        command: {
+                            kind: PTBCommandKind.MoveCallStart
+                        }
+                    });
+                } else if (external === PTBCommandKind.MoveCallEnd) {
+                    events.push({
+                        type: TraceEventKind.PTBCommand,
+                        command: {
+                            kind: PTBCommandKind.MoveCallEnd
+                        }
+                    });
+                }
+            } else if ('Summary' in external) {
+                const summary: PTBSummary[] = external.Summary.map((s) => {
+                    if (typeof s === 'object' && 'MoveCall' in s &&
+                        s.MoveCall && typeof s.MoveCall === 'object' &&
+                        'pkg' in s.MoveCall && 'module' in s.MoveCall && 'function' in s.MoveCall) {
+
+                        const info: IMoveCallInfo = {
+                            pkg: s.MoveCall.pkg as string,
+                            module: s.MoveCall.module as string,
+                            function: s.MoveCall.function as string
+                        };
+                        return info;
+                    } else {
+                        return s.toString();
+                    }
+                });
+                events.push({
+                    type: TraceEventKind.PTBStart,
+                    id: PTB_START_FRAME_ID,
+                    summary
+                });
+
+            } else if ('TransferObjects' in external) {
+                const localsTypes: string[] = [];
+                const localsNames: string[] = [];
+                const localsValues: RuntimeValueType = [];
+                external.TransferObjects.to_transfer.forEach((v, idx) => {
+                    localsTypes.push(JSONTraceTypeToString(v.type_.type_, v.type_.ref_type));
+                    localsValues.push(traceRuntimeValueFromJSON(v.value));
+                    localsNames.push('obj' + idx);
+                });
+
+                events.push({
+                    type: TraceEventKind.PTBCommand,
+                    command: {
+                        kind: PTBCommandKind.TransferStart,
+                        id: TRANSFER_FRAME_ID,
+                        localsTypes,
+                        localsNames,
+                        localsValues
+                    }
+                });
+                // Additional marker to make stepping through PTB frames easier
+                events.push({
+                    type: TraceEventKind.PTBCommand,
+                    command: {
+                        kind: PTBCommandKind.TransferEnd
+                    }
+                });
+            } else if ('SplitCoins' in external) {
+                const localsTypes: string[] = [];
+                const localsNames: string[] = [];
+                const localsValues: RuntimeValueType = [];
+                const input = external.SplitCoins.input;
+                const coinType = JSONTraceTypeToString(input.type_.type_, input.type_.ref_type);
+                localsTypes.push(coinType);
+                localsValues.push(traceRuntimeValueFromJSON(input.value));
+                localsNames.push('input');
+                const splitCoinValues = external.SplitCoins.result.map((v) => {
+                    return traceRuntimeValueFromJSON(v.value);
+                });
+                localsTypes.push(`vector<${coinType}>`);
+                localsValues.push(splitCoinValues);
+                localsNames.push('result');
+                events.push({
+                    type: TraceEventKind.PTBCommand,
+                    command: {
+                        kind: PTBCommandKind.SplitCoinsStart,
+                        id: SPLIT_COINS_FRAME_ID,
+                        localsTypes,
+                        localsNames,
+                        localsValues
+                    }
+                });
+                // Additional marker to make stepping through PTB frames easier
+                events.push({
+                    type: TraceEventKind.PTBCommand,
+                    command: {
+                        kind: PTBCommandKind.SplitCoinsEnd
                     }
                 });
             }
@@ -1103,6 +1270,23 @@ function eventToString(event: TraceEvent): string {
                 + event.bcodeLoc;
         case TraceEventKind.Effect:
             return `Effect ${effectToString(event.effect)}`;
+        case TraceEventKind.PTBStart:
+            let commands = '';
+            for (const c of event.summary) {
+                if (typeof c === 'object' && 'pkg' in c && 'module ' in c && 'function' in c) {
+                    commands += (c.pkg
+                        + '::'
+                        + c.module
+                        + '::'
+                        + c.function);
+                } else {
+                    commands += c.toString();
+                }
+                commands += '\n';
+            }
+            return commands;
+        case TraceEventKind.PTBCommand:
+            return event.command.kind;
     }
 }
 
