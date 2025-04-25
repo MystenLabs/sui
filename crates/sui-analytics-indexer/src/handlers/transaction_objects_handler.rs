@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use anyhow::Result;
 use sui_data_ingestion_core::Worker;
 use tokio::sync::Mutex;
@@ -15,11 +17,7 @@ use crate::tables::TransactionObjectEntry;
 use crate::FileType;
 
 pub struct TransactionObjectsHandler {
-    state: Mutex<State>,
-}
-
-struct State {
-    transaction_objects: Vec<TransactionObjectEntry>,
+    state: Mutex<BTreeMap<usize, Vec<TransactionObjectEntry>>>,
 }
 
 #[async_trait::async_trait]
@@ -32,17 +30,61 @@ impl Worker for TransactionObjectsHandler {
             transactions: checkpoint_transactions,
             ..
         } = checkpoint_data;
-        let mut state = self.state.lock().await;
-        for checkpoint_transaction in checkpoint_transactions {
-            self.process_transaction(
-                checkpoint_summary.epoch,
-                checkpoint_summary.sequence_number,
-                checkpoint_summary.timestamp_ms,
-                checkpoint_transaction,
-                &checkpoint_transaction.effects,
-                &mut state,
-            );
+
+        // Create a channel to collect results
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<(usize, Vec<TransactionObjectEntry>)>(
+            checkpoint_transactions.len(),
+        );
+
+        // Process transactions in parallel
+        let mut futures = Vec::new();
+
+        for (idx, checkpoint_transaction) in checkpoint_transactions.iter().enumerate() {
+            let tx = tx.clone();
+            let transaction = checkpoint_transaction.clone();
+            let epoch = checkpoint_summary.epoch;
+            let checkpoint_seq = checkpoint_summary.sequence_number;
+            let timestamp_ms = checkpoint_summary.timestamp_ms;
+
+            // Spawn a task for each transaction
+            let handle = tokio::spawn(async move {
+                match Self::process_transaction(
+                    epoch,
+                    checkpoint_seq,
+                    timestamp_ms,
+                    &transaction,
+                    &transaction.effects,
+                ) {
+                    Ok(entries) => {
+                        if !entries.is_empty() {
+                            let _ = tx.send((idx, entries)).await;
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("Error processing transaction at index {}: {}", idx, e);
+                    }
+                }
+            });
+
+            futures.push(handle);
         }
+
+        // Drop the original sender so the channel can close when all tasks are done
+        drop(tx);
+
+        // Wait for all tasks to complete
+        for handle in futures {
+            if let Err(e) = handle.await {
+                tracing::error!("Task panicked: {}", e);
+            }
+        }
+
+        // Collect results into the state in order by transaction index
+        let mut state = self.state.lock().await;
+        while let Some((idx, transaction_objects)) = rx.recv().await {
+            state.insert(idx, transaction_objects);
+        }
+
         Ok(())
     }
 }
@@ -51,8 +93,10 @@ impl Worker for TransactionObjectsHandler {
 impl AnalyticsHandler<TransactionObjectEntry> for TransactionObjectsHandler {
     async fn read(&self) -> Result<Box<dyn Iterator<Item = TransactionObjectEntry>>> {
         let mut state = self.state.lock().await;
-        let transaction_objects = std::mem::take(&mut state.transaction_objects);
-        Ok(Box::new(transaction_objects.into_iter()))
+        let transactions_map = std::mem::take(&mut *state);
+
+        // Flatten the map into a single iterator in order by transaction index
+        Ok(Box::new(transactions_map.into_values().flatten()))
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -67,67 +111,64 @@ impl AnalyticsHandler<TransactionObjectEntry> for TransactionObjectsHandler {
 impl TransactionObjectsHandler {
     pub fn new() -> Self {
         TransactionObjectsHandler {
-            state: Mutex::new(State {
-                transaction_objects: vec![],
-            }),
+            state: Mutex::new(BTreeMap::new()),
         }
     }
+    
     fn process_transaction(
-        &self,
         epoch: u64,
         checkpoint: u64,
         timestamp_ms: u64,
         checkpoint_transaction: &CheckpointTransaction,
         effects: &TransactionEffects,
-        state: &mut State,
-    ) {
+    ) -> Result<Vec<TransactionObjectEntry>> {
         let transaction = &checkpoint_transaction.transaction;
         let transaction_digest = transaction.digest().base58_encode();
         let txn_data = transaction.transaction_data();
         let input_object_tracker = InputObjectTracker::new(txn_data);
         let object_status_tracker = ObjectStatusTracker::new(effects);
+        let mut transaction_objects = Vec::new();
+        
         // input
-        txn_data
-            .input_objects()
-            .expect("Input objects must be valid")
-            .iter()
-            .map(|object| (object.object_id(), object.version().map(|v| v.value())))
-            .for_each(|(object_id, version)| {
-                self.process_transaction_object(
-                    epoch,
-                    checkpoint,
-                    timestamp_ms,
-                    transaction_digest.clone(),
-                    &object_id,
-                    version,
-                    &input_object_tracker,
-                    &object_status_tracker,
-                    state,
-                )
-            });
+        for object in txn_data.input_objects().expect("Input objects must be valid").iter() {
+            let object_id = object.object_id();
+            let version = object.version().map(|v| v.value());
+            let entry = Self::create_transaction_object_entry(
+                epoch,
+                checkpoint,
+                timestamp_ms,
+                transaction_digest.clone(),
+                &object_id,
+                version,
+                &input_object_tracker,
+                &object_status_tracker,
+            );
+            transaction_objects.push(entry);
+        }
+        
         // output
-        checkpoint_transaction
-            .output_objects
-            .iter()
-            .map(|object| (object.id(), Some(object.version().value())))
-            .for_each(|(object_id, version)| {
-                self.process_transaction_object(
-                    epoch,
-                    checkpoint,
-                    timestamp_ms,
-                    transaction_digest.clone(),
-                    &object_id,
-                    version,
-                    &input_object_tracker,
-                    &object_status_tracker,
-                    state,
-                )
-            });
+        for object in checkpoint_transaction.output_objects.iter() {
+            let object_id = object.id();
+            let version = Some(object.version().value());
+            let entry = Self::create_transaction_object_entry(
+                epoch,
+                checkpoint,
+                timestamp_ms,
+                transaction_digest.clone(),
+                &object_id,
+                version,
+                &input_object_tracker,
+                &object_status_tracker,
+            );
+            transaction_objects.push(entry);
+        }
+        
+        Ok(transaction_objects)
     }
+    
     // Transaction object data.
     // Builds a view of the object in input and output of a transaction.
-    fn process_transaction_object(
-        &self,
+    fn create_transaction_object_entry(
         epoch: u64,
         checkpoint: u64,
         timestamp_ms: u64,
@@ -136,9 +177,8 @@ impl TransactionObjectsHandler {
         version: Option<u64>,
         input_object_tracker: &InputObjectTracker,
         object_status_tracker: &ObjectStatusTracker,
-        state: &mut State,
-    ) {
-        let entry = TransactionObjectEntry {
+    ) -> TransactionObjectEntry {
+        TransactionObjectEntry {
             object_id: object_id.to_string(),
             version,
             transaction_digest,
@@ -147,7 +187,6 @@ impl TransactionObjectsHandler {
             timestamp_ms,
             input_kind: input_object_tracker.get_input_object_kind(object_id),
             object_status: object_status_tracker.get_object_status(object_id),
-        };
-        state.transaction_objects.push(entry);
+        }
     }
 }
