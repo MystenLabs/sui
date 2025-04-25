@@ -6,7 +6,7 @@ use std::{path::PathBuf, time::Instant};
 use prometheus::Registry;
 use sui_indexer_alt_framework::{
     ingestion::ClientArgs,
-    postgres::{self, reset_database, DbArgs},
+    postgres::{reset_database, DbArgs},
     IndexerArgs,
 };
 use sui_indexer_alt_schema::MIGRATIONS;
@@ -44,12 +44,7 @@ pub async fn run_benchmark(
     let last_checkpoint = *ingestion_data.keys().last().unwrap();
     let num_transactions: usize = ingestion_data.values().map(|c| c.transactions.len()).sum();
 
-    reset_database(
-        database_url.clone(),
-        db_args.clone(),
-        Some(postgres::migrations(Some(&MIGRATIONS))),
-    )
-    .await?;
+    reset_database(database_url.clone(), db_args.clone(), Some(&MIGRATIONS)).await?;
 
     let indexer_args = IndexerArgs {
         first_checkpoint: Some(first_checkpoint),
