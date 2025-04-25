@@ -35,20 +35,21 @@ impl Worker for TransactionBCSHandler {
         // Process transactions in parallel
         let mut futures = Vec::new();
 
-        for (idx, checkpoint_transaction) in checkpoint_transactions.iter().enumerate() {
+        for (idx, _checkpoint_transaction) in checkpoint_transactions.iter().enumerate() {
             let tx = tx.clone();
-            let transaction = checkpoint_transaction.clone();
             let epoch = checkpoint_summary.epoch;
             let checkpoint_seq = checkpoint_summary.sequence_number;
             let timestamp_ms = checkpoint_summary.timestamp_ms;
+            let checkpoint_data_clone = checkpoint_data.clone();
 
             // Spawn a task for each transaction
             let handle = tokio::spawn(async move {
+                let transaction = &checkpoint_data_clone.transactions[idx];
                 match Self::process_transaction(
                     epoch,
                     checkpoint_seq,
                     timestamp_ms,
-                    &transaction,
+                    transaction,
                 ) {
                     Ok(entries) => {
                         if !entries.is_empty() {

@@ -39,10 +39,7 @@ impl Worker for MoveCallHandler {
         let mut futures = Vec::new();
 
         for (idx, checkpoint_transaction) in checkpoint_transactions.iter().enumerate() {
-            // Clone the checkpoint transaction
-            let transaction = checkpoint_transaction.clone();
-
-            if !transaction
+            if !checkpoint_transaction
                 .transaction
                 .transaction_data()
                 .move_calls()
@@ -52,10 +49,12 @@ impl Worker for MoveCallHandler {
                 let epoch = checkpoint_summary.epoch;
                 let checkpoint_seq = checkpoint_summary.sequence_number;
                 let timestamp_ms = checkpoint_summary.timestamp_ms;
-                let transaction_digest = transaction.transaction.digest().base58_encode();
+                let transaction_digest = checkpoint_transaction.transaction.digest().base58_encode();
+                let checkpoint_data_clone = checkpoint_data.clone();
 
                 // Spawn a task for each transaction
                 let handle = tokio::spawn(async move {
+                    let transaction = &checkpoint_data_clone.transactions[idx];
                     let entries = Self::process_move_calls(
                         epoch,
                         checkpoint_seq,
