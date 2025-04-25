@@ -68,9 +68,10 @@ impl Worker for EventHandler {
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<EventEntry> for EventHandler {
-    async fn read(&self) -> Result<Vec<EventEntry>> {
+    async fn read(&self) -> Result<Box<dyn Iterator<Item = EventEntry>>> {
         let mut state = self.state.lock().await;
-        Ok(std::mem::take(&mut state.events))
+        let events = std::mem::take(&mut state.events);
+        Ok(Box::new(events.into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {

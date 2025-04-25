@@ -71,11 +71,11 @@ impl Worker for DynamicFieldHandler {
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<DynamicFieldEntry> for DynamicFieldHandler {
-    async fn read(&self) -> Result<Vec<DynamicFieldEntry>> {
+    async fn read(&self) -> Result<Box<dyn Iterator<Item = DynamicFieldEntry>>> {
         let mut state = self.state.lock().await;
         let cloned = state.dynamic_fields.clone();
         state.dynamic_fields.clear();
-        Ok(cloned)
+        Ok(Box::new(cloned.into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {

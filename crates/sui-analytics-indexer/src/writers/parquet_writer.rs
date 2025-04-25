@@ -96,17 +96,20 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
         Ok(FileFormat::PARQUET)
     }
 
-    fn write(&mut self, rows: &[S]) -> Result<()> {
-        if rows.is_empty() {
+    fn write(&mut self, rows: Box<dyn Iterator<Item = S>>) -> Result<()> {
+        let mut peekable = rows.peekable();
+        
+        // Return early if there are no rows
+        if peekable.peek().is_none() {
             return Ok(());
         }
 
-        self.row_count += rows.len();
-
-        //  Lazily sample the first row to infer the schema and decide which concrete builder to instantiate.
+        // Lazily sample the first row to infer the schema and decide which concrete builder to instantiate.
         if self.builders.is_empty() {
+            // We already peeked, so there must be at least one row
+            let first_row = peekable.peek().unwrap();
             for col_idx in 0..S::schema().len() {
-                let value = rows[0].get_column(col_idx);
+                let value = first_row.get_column(col_idx);
                 self.builders.push(match value {
                     ParquetValue::U64(_) | ParquetValue::OptionU64(_) => {
                         ColumnBuilder::U64(UInt64Builder::new())
@@ -120,7 +123,9 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
             }
         }
 
-        for row in rows {
+        let mut count = 0;
+        for row in peekable {
+            count += 1;
             for (col_idx, value) in (0..S::schema().len()).map(|i| (i, row.get_column(i))) {
                 match (&mut self.builders[col_idx], value) {
                     (ColumnBuilder::U64(b), ParquetValue::U64(v)) => b.append_value(v),
@@ -142,6 +147,7 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
             }
         }
 
+        self.row_count += count;
         Ok(())
     }
 

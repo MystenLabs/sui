@@ -64,9 +64,10 @@ impl Worker for WrappedObjectHandler {
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<WrappedObjectEntry> for WrappedObjectHandler {
-    async fn read(&self) -> Result<Vec<WrappedObjectEntry>> {
+    async fn read(&self) -> Result<Box<dyn Iterator<Item = WrappedObjectEntry>>> {
         let mut state = self.state.lock().await;
-        Ok(std::mem::take(&mut state.wrapped_objects))
+        let wrapped_objects = std::mem::take(&mut state.wrapped_objects);
+        Ok(Box::new(wrapped_objects.into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {

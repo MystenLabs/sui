@@ -41,8 +41,8 @@ const WRAPPED_INDEXING_DISALLOW_LIST: [&str; 4] = [
 pub trait AnalyticsHandler<S>: Worker<Result = ()> {
     /// Read back rows which are ready to be persisted. This function
     /// will be invoked by the analytics processor after every call to
-    /// process_checkpoint
-    async fn read(&self) -> Result<Vec<S>>;
+    /// process_checkpoint. Returns an iterator over the rows.
+    async fn read(&self) -> Result<Box<dyn Iterator<Item = S>>>;
     /// Type of data being written by this processor i.e. checkpoint, object, etc
     fn file_type(&self) -> Result<FileType>;
     fn name(&self) -> &str;

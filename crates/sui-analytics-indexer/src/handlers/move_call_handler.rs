@@ -52,9 +52,10 @@ impl Worker for MoveCallHandler {
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<MoveCallEntry> for MoveCallHandler {
-    async fn read(&self) -> Result<Vec<MoveCallEntry>> {
+    async fn read(&self) -> Result<Box<dyn Iterator<Item = MoveCallEntry>>> {
         let mut state = self.state.lock().await;
-        Ok(std::mem::take(&mut state.move_calls))
+        let move_calls = std::mem::take(&mut state.move_calls);
+        Ok(Box::new(move_calls.into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {

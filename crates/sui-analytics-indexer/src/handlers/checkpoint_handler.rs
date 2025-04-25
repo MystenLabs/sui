@@ -41,9 +41,10 @@ impl Worker for CheckpointHandler {
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<CheckpointEntry> for CheckpointHandler {
-    async fn read(&self) -> Result<Vec<CheckpointEntry>> {
+    async fn read(&self) -> Result<Box<dyn Iterator<Item = CheckpointEntry>>> {
         let mut state = self.state.lock().await;
-        Ok(std::mem::take(&mut state.checkpoints))
+        let checkpoints = std::mem::take(&mut state.checkpoints);
+        Ok(Box::new(checkpoints.into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {

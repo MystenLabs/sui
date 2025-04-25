@@ -58,9 +58,10 @@ impl Worker for TransactionHandler {
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<TransactionEntry> for TransactionHandler {
-    async fn read(&self) -> Result<Vec<TransactionEntry>> {
+    async fn read(&self) -> Result<Box<dyn Iterator<Item = TransactionEntry>>> {
         let mut state = self.state.lock().await;
-        Ok(std::mem::take(&mut state.transactions))
+        let transactions = std::mem::take(&mut state.transactions);
+        Ok(Box::new(transactions.into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {

@@ -91,8 +91,8 @@ impl<S: Serialize + ParquetSchema + 'static> Worker for AnalyticsProcessor<S> {
             .with_label_values(&[self.name()])
             .inc();
         self.handler.process_checkpoint(checkpoint_data).await?;
-        let rows = self.handler.read().await?;
-        state.writer.write(&rows)?;
+        let row_iterator = self.handler.read().await?;
+        state.writer.write(row_iterator)?;
         state.current_checkpoint_range.end = state
             .current_checkpoint_range
             .end

@@ -72,9 +72,10 @@ impl Worker for ObjectHandler {
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<ObjectEntry> for ObjectHandler {
-    async fn read(&self) -> Result<Vec<ObjectEntry>> {
+    async fn read(&self) -> Result<Box<dyn Iterator<Item = ObjectEntry>>> {
         let mut state = self.state.lock().await;
-        Ok(std::mem::take(&mut state.objects))
+        let objects = std::mem::take(&mut state.objects);
+        Ok(Box::new(objects.into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {

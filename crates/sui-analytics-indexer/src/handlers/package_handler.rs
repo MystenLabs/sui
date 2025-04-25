@@ -46,9 +46,10 @@ impl Worker for PackageHandler {
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<MovePackageEntry> for PackageHandler {
-    async fn read(&self) -> Result<Vec<MovePackageEntry>> {
+    async fn read(&self) -> Result<Box<dyn Iterator<Item = MovePackageEntry>>> {
         let mut state = self.state.lock().await;
-        Ok(std::mem::take(&mut state.packages))
+        let packages = std::mem::take(&mut state.packages);
+        Ok(Box::new(packages.into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {
