@@ -106,6 +106,7 @@ fn owned_object_to_proto(info: OwnedObjectInfo) -> OwnedObject {
         digest: Some(info.digest.to_string()),
         owner: Some(sui_sdk_types::Owner::Address(info.owner.into()).into()),
         object_type: Some(info.object_type.to_canonical_string(true)),
+        balance: info.balance,
     }
 }
 

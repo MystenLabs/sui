@@ -250,6 +250,9 @@ pub struct OwnedObject {
     pub owner: ::core::option::Option<super::v2beta::Owner>,
     #[prost(string, optional, tag = "6")]
     pub object_type: ::core::option::Option<::prost::alloc::string::String>,
+    /// Current balance if this object is a `0x2::coin::Coin<T>`
+    #[prost(uint64, optional, tag = "200")]
+    pub balance: ::core::option::Option<u64>,
 }
 /// Generated client implementations.
 pub mod live_data_service_client {

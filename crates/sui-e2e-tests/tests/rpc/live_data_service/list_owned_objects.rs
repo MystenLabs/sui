@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::PathBuf;
+use sui_macros::sim_test;
 use sui_move_build::BuildConfig;
 use sui_rpc_api::proto::rpc::v2alpha::live_data_service_client::LiveDataServiceClient;
 use sui_rpc_api::proto::rpc::v2alpha::{
@@ -14,7 +15,7 @@ use sui_types::transaction::{CallArg, ObjectArg, TransactionData, TransactionKin
 use sui_types::Identifier;
 use test_cluster::TestClusterBuilder;
 
-#[tokio::test]
+#[sim_test]
 async fn test_indexing_with_tto() {
     let cluster = TestClusterBuilder::new().build().await;
 
@@ -260,7 +261,7 @@ async fn test_indexing_with_tto() {
     );
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_filter_by_type() {
     let cluster = TestClusterBuilder::new().build().await;
 
@@ -495,4 +496,50 @@ async fn test_filter_by_type() {
         1
     );
     assert_eq!(objects.iter().filter(|o| o.object_type() == sui).count(), 5);
+}
+
+#[sim_test]
+async fn test_reverse_sorted_coins_by_balance() {
+    let cluster = TestClusterBuilder::new().build().await;
+
+    let mut channel = tonic::transport::Channel::from_shared(cluster.rpc_url().to_owned())
+        .unwrap()
+        .connect()
+        .await
+        .unwrap();
+    let mut client = LiveDataServiceClient::new(channel.clone());
+
+    let address = sui_types::base_types::SuiAddress::random_for_testing_only();
+
+    // send 5 coins to address `address` with different values
+    let amounts = [1, 2, 3, 4, 5];
+    for amount in amounts {
+        let txn = sui_test_transaction_builder::make_transfer_sui_transaction(
+            &cluster.wallet,
+            Some(address),
+            Some(amount),
+        )
+        .await;
+        crate::execute_transaction(&mut channel, &txn).await;
+    }
+
+    let objects = client
+        .list_owned_objects(ListOwnedObjectsRequest {
+            owner: Some(address.to_string()),
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .objects;
+
+    assert_eq!(amounts.len(), objects.len());
+
+    let balances = objects
+        .iter()
+        .map(|o| o.balance.unwrap())
+        .collect::<Vec<_>>();
+    let mut sorted_amounts = amounts;
+    sorted_amounts.reverse();
+    assert_eq!(sorted_amounts.as_slice(), balances.as_slice());
 }
