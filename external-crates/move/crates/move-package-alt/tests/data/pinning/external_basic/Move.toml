@@ -8,5 +8,5 @@ authors = ["Move Team"]
 mainnet = "35834a8a"
 
 [dependencies]
-mock = { r.mock-resolver = { resolved = { local = "."} } }
-mock2 = { r.mock-resolver-2 = { resolved = { local = ".." } } }
+mock = { r.mock-resolver = { output = { resolved = { local = "."} } } }
+mock2 = { r.mock-resolver-2 = { output = { resolved = { local = ".." } } } }
