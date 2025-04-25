@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
+use std::sync::Arc;
 use sui_data_ingestion_core::{setup_single_workflow, Worker};
 use sui_types::full_checkpoint_content::CheckpointData;
 
@@ -11,7 +12,7 @@ struct CustomWorker;
 #[async_trait]
 impl Worker for CustomWorker {
     type Result = ();
-    async fn process_checkpoint(&self, checkpoint: &CheckpointData) -> Result<()> {
+    async fn process_checkpoint(&self, checkpoint: Arc<CheckpointData>) -> Result<()> {
         // custom processing logic
         // print out the checkpoint number
         println!(

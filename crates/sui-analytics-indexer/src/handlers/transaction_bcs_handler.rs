@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use anyhow::Result;
 use fastcrypto::encoding::{Base64, Encoding};
@@ -22,12 +23,9 @@ pub struct TransactionBCSHandler {
 impl Worker for TransactionBCSHandler {
     type Result = ();
 
-    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
-        let CheckpointData {
-            checkpoint_summary,
-            transactions: checkpoint_transactions,
-            ..
-        } = checkpoint_data;
+    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
+        let checkpoint_summary = &checkpoint_data.checkpoint_summary;
+        let checkpoint_transactions = &checkpoint_data.transactions;
 
         // Create a channel to collect results
         let (tx, mut rx) = tokio::sync::mpsc::channel::<(usize, Vec<TransactionBCSEntry>)>(

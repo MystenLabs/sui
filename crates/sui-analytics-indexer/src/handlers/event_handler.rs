@@ -35,12 +35,9 @@ pub struct EventHandler {
 impl Worker for EventHandler {
     type Result = ();
 
-    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
-        let CheckpointData {
-            checkpoint_summary,
-            transactions: checkpoint_transactions,
-            ..
-        } = checkpoint_data;
+    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
+        let checkpoint_summary = &checkpoint_data.checkpoint_summary;
+        let checkpoint_transactions = &checkpoint_data.transactions;
 
         // Update package cache first (still need to do this serially)
         for checkpoint_transaction in checkpoint_transactions {

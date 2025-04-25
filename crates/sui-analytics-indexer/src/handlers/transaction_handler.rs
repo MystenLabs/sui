@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use anyhow::Result;
 use sui_data_ingestion_core::Worker;
@@ -29,13 +30,10 @@ pub struct TransactionHandler {
 impl Worker for TransactionHandler {
     type Result = ();
 
-    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
-        let CheckpointData {
-            checkpoint_summary,
-            transactions: checkpoint_transactions,
-            checkpoint_contents,
-            ..
-        } = checkpoint_data;
+    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
+        let checkpoint_summary = &checkpoint_data.checkpoint_summary;
+        let checkpoint_transactions = &checkpoint_data.transactions;
+        let checkpoint_contents = &checkpoint_data.checkpoint_contents;
         let transaction_positions = compute_transaction_positions(checkpoint_contents);
 
         // Create a channel to collect results

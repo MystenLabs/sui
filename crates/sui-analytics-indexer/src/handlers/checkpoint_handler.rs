@@ -3,12 +3,13 @@
 
 use anyhow::Result;
 use fastcrypto::traits::EncodeDecodeBase64;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use sui_data_ingestion_core::Worker;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
-use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSummary};
+use sui_types::full_checkpoint_content::CheckpointData;
+use sui_types::messages_checkpoint::CheckpointSummary;
 use sui_types::transaction::TransactionDataAPI;
 
 use crate::handlers::AnalyticsHandler;
@@ -27,14 +28,8 @@ struct State {
 impl Worker for CheckpointHandler {
     type Result = ();
 
-    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
-        let CheckpointData {
-            checkpoint_summary,
-            transactions: checkpoint_transactions,
-            ..
-        } = checkpoint_data;
-        self.process_checkpoint_transactions(checkpoint_summary, checkpoint_transactions)
-            .await;
+    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
+        self.process_checkpoint_transactions(checkpoint_data).await;
         Ok(())
     }
 }
@@ -64,11 +59,7 @@ impl CheckpointHandler {
             }),
         }
     }
-    async fn process_checkpoint_transactions(
-        &self,
-        summary: &CertifiedCheckpointSummary,
-        checkpoint_transactions: &[CheckpointTransaction],
-    ) {
+    async fn process_checkpoint_transactions(&self, checkpoint_data: Arc<CheckpointData>) {
         let CheckpointSummary {
             epoch,
             sequence_number,
@@ -78,16 +69,16 @@ impl CheckpointHandler {
             timestamp_ms,
             end_of_epoch_data,
             ..
-        } = summary.data();
+        } = checkpoint_data.checkpoint_summary.data();
 
         let total_gas_cost = epoch_rolling_gas_cost_summary.computation_cost as i64
             + epoch_rolling_gas_cost_summary.storage_cost as i64
             - epoch_rolling_gas_cost_summary.storage_rebate as i64;
-        let total_transaction_blocks = checkpoint_transactions.len() as u64;
+        let total_transaction_blocks = checkpoint_data.transactions.len() as u64;
         let mut total_transactions: u64 = 0;
         let mut total_successful_transaction_blocks: u64 = 0;
         let mut total_successful_transactions: u64 = 0;
-        for checkpoint_transaction in checkpoint_transactions {
+        for checkpoint_transaction in &checkpoint_data.transactions {
             let txn_data = checkpoint_transaction.transaction.transaction_data();
             let cmds = txn_data.kind().num_commands() as u64;
             total_transactions += cmds;
@@ -99,7 +90,7 @@ impl CheckpointHandler {
 
         let checkpoint_entry = CheckpointEntry {
             sequence_number: *sequence_number,
-            checkpoint_digest: summary.digest().base58_encode(),
+            checkpoint_digest: checkpoint_data.checkpoint_summary.digest().base58_encode(),
             previous_checkpoint_digest: previous_digest.map(|d| d.base58_encode()),
             epoch: *epoch,
             end_of_epoch: end_of_epoch_data.is_some(),
@@ -114,7 +105,11 @@ impl CheckpointHandler {
             total_successful_transactions,
             network_total_transaction: *network_total_transactions,
             timestamp_ms: *timestamp_ms,
-            validator_signature: summary.auth_sig().signature.encode_base64(),
+            validator_signature: checkpoint_data
+                .checkpoint_summary
+                .auth_sig()
+                .signature
+                .encode_base64(),
         };
         let mut state = self.state.lock().await;
         state.checkpoints.push(checkpoint_entry);
