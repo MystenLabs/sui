@@ -22,6 +22,7 @@ use mysten_network::{
 use parking_lot::RwLock;
 use sui_http::ServerHandle;
 use sui_tls::AllowPublicKeys;
+use tokio::time::sleep;
 use tokio_stream::{iter, Iter};
 use tonic::{codec::CompressionEncoding, Request, Response, Streaming};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer};
@@ -193,37 +194,69 @@ impl NetworkClient for TonicClient {
         info!("fetch_blocks: starting");
         let _scope = monitored_scope("TonicClient::fetch_blocks");
         loop {
-            match stream.message().await {
-                Ok(Some(response)) => {
-                    info!("fetch_blocks: got response bytes={}", response.blocks.len());
-                    for b in &response.blocks {
-                        total_fetched_bytes += b.len();
-                    }
-                    if total_fetched_bytes > MAX_TOTAL_FETCHED_BYTES {
-                        info!(
-                            "fetch_blocks() fetched bytes exceeded limit: {} > {}, terminating stream.",
-                            total_fetched_bytes, MAX_TOTAL_FETCHED_BYTES,
-                        );
-                        break;
-                    }
-                    blocks.extend(response.blocks);
-                }
-                Ok(None) => {
-                    break;
-                }
-                Err(e) => {
+            tokio::select! {
+                // Biasing towards the sleep is often desired in timeout scenarios
+                // to ensure the timeout is checked promptly.
+                biased;
+
+                _ = sleep(timeout) => {
+                    // Timeout occurred while waiting for the next message
                     if blocks.is_empty() {
-                        if e.code() == tonic::Code::DeadlineExceeded {
-                            return Err(ConsensusError::NetworkRequestTimeout(format!(
-                                "fetch_blocks failed mid-stream: {e:?}"
-                            )));
-                        }
-                        return Err(ConsensusError::NetworkRequest(format!(
-                            "fetch_blocks failed mid-stream: {e:?}"
+                        warn!("fetch_blocks timed out waiting for first/next message (timeout: {:?})", timeout);
+                        // If no blocks were received at all, return a specific timeout error.
+                        // This distinguishes between initial connection timeout (handled before the loop)
+                        // and timeout waiting for the stream data itself.
+                        return Err(ConsensusError::NetworkRequestTimeout(format!(
+                            "fetch_blocks timed out waiting for message stream (timeout: {:?})", timeout
                         )));
                     } else {
-                        warn!("fetch_blocks failed mid-stream: {e:?}");
+                        // If some blocks were received, warn and return partial results.
+                        warn!("fetch_blocks timed out mid-stream after receiving {} bytes (timeout: {:?})", total_fetched_bytes, timeout);
                         break;
+                    }
+                }
+
+                maybe_message = stream.message() => {
+                    match maybe_message {
+                        Ok(Some(response)) => {
+                            info!("fetch_blocks: got response bytes={}", response.blocks.len());
+                            for b in &response.blocks {
+                                total_fetched_bytes += b.len();
+                            }
+                            if total_fetched_bytes > MAX_TOTAL_FETCHED_BYTES {
+                                info!(
+                                    "fetch_blocks() fetched bytes exceeded limit: {} > {}, terminating stream.",
+                                    total_fetched_bytes, MAX_TOTAL_FETCHED_BYTES,
+                                );
+                                break;
+                            }
+                            blocks.extend(response.blocks);
+                        }
+                        Ok(None) => {
+                            // Stream completed successfully.
+                            break;
+                        }
+                        Err(e) => {
+                            // Handle non-timeout errors from the stream.
+                            if blocks.is_empty() {
+                                if e.code() == tonic::Code::DeadlineExceeded {
+                                     // This specific deadline error likely comes from Tonic's internal handling,
+                                     // potentially related to the initial request deadline or keepalives.
+                                    warn!("fetch_blocks Tonic DeadlineExceeded error mid-stream: {e:?}");
+                                    return Err(ConsensusError::NetworkRequestTimeout(format!(
+                                        "fetch_blocks failed mid-stream (DeadlineExceeded): {e:?}"
+                                    )));
+                                }
+                                warn!("fetch_blocks generic error mid-stream: {e:?}");
+                                return Err(ConsensusError::NetworkRequest(format!(
+                                    "fetch_blocks failed mid-stream: {e:?}"
+                                )));
+                            } else {
+                                // If we received some blocks before the error, return partial results.
+                                warn!("fetch_blocks failed mid-stream after receiving data: {e:?}");
+                                break;
+                            }
+                        }
                     }
                 }
             }

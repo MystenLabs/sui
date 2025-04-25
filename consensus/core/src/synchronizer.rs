@@ -741,7 +741,9 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             ),
         )
         .await;
-        info!("Fetch request: got response (remaining_retries={remaining_retries}) start={start:?} elapsed={elapsed:?}");
+        info!(
+            "Fetch request: got response (remaining_retries={remaining_retries}) start={start:?}"
+        );
 
         fail_point_async!("consensus-delay");
         let resp = match resp {
