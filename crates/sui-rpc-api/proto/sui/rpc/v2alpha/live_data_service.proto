@@ -206,5 +206,8 @@ message OwnedObject {
   optional sui.rpc.v2beta.Owner owner = 5;
   optional string object_type = 6;
 
+  // Current balance if this object is a `0x2::coin::Coin<T>`
+  optional uint64 balance = 200;
+
   // Note field numbers match sui.rpc.v2beta.Object in case we want to just use that message
 }
