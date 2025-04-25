@@ -12,7 +12,10 @@ use move_binary_format::{
     file_format::{AbilitySet, TypeParameterIndex},
     CompiledModule,
 };
-use move_core_types::language_storage::{ModuleId, StructTag};
+use move_core_types::{
+    annotated_value,
+    language_storage::{ModuleId, StructTag},
+};
 use move_vm_runtime::move_vm::MoveVM;
 use std::{cell::OnceCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
@@ -115,6 +118,13 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             .map_err(|e| self.convert_vm_error(e))
     }
 
+    pub fn fully_annotated_layout(
+        &self,
+        _ty: &Type,
+    ) -> Result<annotated_value::MoveTypeLayout, ExecutionError> {
+        todo!("LOADING")
+    }
+
     pub fn load_function(
         &self,
         _package: ObjectID,
@@ -158,7 +168,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         //     signature,
         //     tx_context,
         // })
-        todo!()
+        todo!("LOADING")
     }
 
     pub fn load_type_input(&self, _idx: usize, _ty: TypeInput) -> Result<Type, ExecutionError> {
@@ -167,13 +177,13 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         //     .map_err(|e| make_invariant_violation!("{}", e.to_string()))?;
         // load_type(self.vm, self.linkage_view, &[], &tag)
         //     .map_err(|e| self.convert_type_argument_error(idx, e))
-        todo!()
+        todo!("LOADING")
     }
 
     pub fn load_type_from_struct(&self, _tag: &StructTag) -> Result<Type, ExecutionError> {
         // load_type_from_struct(self.vm, self.linkage_view, &[], tag)
         //     .map_err(|e| self.convert_vm_error(e))
-        todo!()
+        todo!("LOADING")
     }
 
     pub fn gas_coin_type(&self) -> Result<Type, ExecutionError> {
