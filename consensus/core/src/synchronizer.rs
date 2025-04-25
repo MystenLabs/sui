@@ -417,7 +417,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     // TODO: consider starting backup fetches in parallel, when a fetch takes too long?
                     if self.fetch_blocks_scheduler_task.is_empty() {
                         if let Err(err) = self.start_fetch_missing_blocks_task().await {
-                            debug!("Core is shutting down, synchronizer is shutting down: {err:?}");
+                            info!("Core is shutting down, synchronizer is shutting down: {err:?}");
                             return;
                         };
                     }
@@ -586,7 +586,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 .inc();
         }
 
-        debug!(
+        info!(
             "Synced {} missing blocks from peer {peer_index} {peer_hostname}: {}",
             blocks.len(),
             blocks.iter().map(|b| b.reference().to_string()).join(", "),
@@ -982,7 +982,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     }
                 }
 
-                debug!("Total blocks requested to fetch: {}, total fetched: {}", total_requested, total_fetched);
+                info!("Total blocks requested to fetch: {}, total fetched: {}", total_requested, total_fetched);
             }));
         Ok(())
     }
@@ -1136,16 +1136,16 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                         1,
                                     ));
                                 } else {
-                                    debug!("Couldn't acquire locks to fetch blocks from peer {next_peer}.")
+                                    info!("Couldn't acquire locks to fetch blocks from peer {next_peer}.")
                                 }
                             } else {
-                                debug!("No more peers left to fetch blocks");
+                                info!("No more peers left to fetch blocks");
                             }
                         }
                     }
                 },
                 _ = &mut fetcher_timeout => {
-                    debug!("Timed out while fetching missing blocks");
+                    info!("Timed out while fetching missing blocks");
                     break;
                 }
             }
@@ -1295,14 +1295,14 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                             }
                         },
                         Err(e) => {
-                            debug!("Periodic sync failure when fetching from peer {peer_hostname}: {e}");
+                            info!("Periodic sync failure when fetching from peer {peer_hostname}: {e}");
                             context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer_hostname, "periodic"]).inc();
                             // Retry at a higher level, since more blocks could have arrived during the fetch.
                         }
                     }
                 },
                 _ = &mut fetcher_timeout => {
-                    debug!("Timed out while fetching missing blocks");
+                    info!("Timed out while fetching missing blocks");
                     break;
                 }
             }
