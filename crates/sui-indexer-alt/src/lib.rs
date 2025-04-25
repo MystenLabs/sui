@@ -23,7 +23,7 @@ use sui_indexer_alt_framework::{
         sequential::SequentialConfig,
         CommitterConfig,
     },
-    postgres::{self, Db, DbArgs},
+    postgres::{Db, DbArgs},
     Indexer, IndexerArgs,
 };
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
@@ -102,7 +102,7 @@ pub async fn setup_indexer(
 
     // we want to merge &MIGRATIONS with the migrations from the store
     store
-        .run_migrations(postgres::migrations(Some(&MIGRATIONS)))
+        .run_migrations(Some(&MIGRATIONS))
         .await
         .context("Failed to run pending migrations")?;
 

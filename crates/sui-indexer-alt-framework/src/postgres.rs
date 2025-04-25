@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use diesel_migrations::EmbeddedMigrations;
 use prometheus::Registry;
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
-use sui_pg_db::{self as db, temp::TempDb};
+use sui_pg_db::temp::TempDb;
 use tempfile::tempdir;
 use tokio_util::sync::CancellationToken;
 use url::Url;
@@ -51,7 +51,7 @@ impl Indexer<Db> {
 
         // At indexer initialization, we ensure that the DB schema is up-to-date.
         store
-            .run_migrations(db::migrations(migrations))
+            .run_migrations(migrations)
             .await
             .context("Failed to run pending migrations")?;
 
@@ -79,10 +79,7 @@ impl Indexer<Db> {
         let store = Db::for_write(temp_db.database().url().clone(), DbArgs::default())
             .await
             .unwrap();
-        store
-            .run_migrations(db::migrations(Some(migrations)))
-            .await
-            .unwrap();
+        store.run_migrations(Some(migrations)).await.unwrap();
 
         let indexer = Indexer::new(
             store,

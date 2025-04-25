@@ -144,11 +144,13 @@ impl Db {
 
     /// Run migrations on the database. Use Diesel's `embed_migrations!` macro to generate the
     /// `migrations` parameter for your indexer.
-    pub async fn run_migrations<S: MigrationSource<Pg> + Send + Sync + 'static>(
+    pub async fn run_migrations(
         &self,
-        migrations: S,
+        migrations: Option<&'static EmbeddedMigrations>,
     ) -> anyhow::Result<Vec<MigrationVersion<'static>>> {
         use diesel_migrations::MigrationHarness;
+
+        let merged_migrations = merge_migrations(migrations);
 
         info!("Running migrations ...");
         let conn = self.0.dedicated_connection().await?;
@@ -157,7 +159,7 @@ impl Db {
 
         let finished_migrations = tokio::task::spawn_blocking(move || {
             wrapper
-                .run_pending_migrations(migrations)
+                .run_pending_migrations(merged_migrations)
                 .map(|versions| versions.iter().map(MigrationVersion::as_owned).collect())
         })
         .await?
@@ -179,15 +181,15 @@ impl Default for DbArgs {
 }
 
 /// Drop all tables, and re-run migrations if supplied.
-pub async fn reset_database<S: MigrationSource<Pg> + Send + Sync + 'static>(
+pub async fn reset_database(
     database_url: Url,
     db_config: DbArgs,
-    migrations: Option<S>,
+    migrations: Option<&'static EmbeddedMigrations>,
 ) -> anyhow::Result<()> {
     let db = Db::for_write(database_url, db_config).await?;
     db.clear_database().await?;
     if let Some(migrations) = migrations {
-        db.run_migrations(migrations).await?;
+        db.run_migrations(Some(migrations)).await?;
     }
 
     Ok(())
@@ -249,7 +251,7 @@ async fn pool(
 
 /// Returns new migrations derived from the combination of provided migrations and migrations
 /// defined in this crate.
-pub fn migrations(
+pub fn merge_migrations(
     migrations: Option<&'static EmbeddedMigrations>,
 ) -> impl MigrationSource<Pg> + Send + Sync + 'static {
     struct Migrations(Option<&'static EmbeddedMigrations>);
@@ -317,7 +319,7 @@ mod tests {
         .unwrap();
         assert_eq!(cnt.cnt, 1);
 
-        reset_database::<EmbeddedMigrations>(url.clone(), DbArgs::default(), None)
+        reset_database(url.clone(), DbArgs::default(), None)
             .await
             .unwrap();
 
