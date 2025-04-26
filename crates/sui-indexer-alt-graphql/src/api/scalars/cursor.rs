@@ -24,7 +24,7 @@ pub(crate) enum Error {
 }
 
 impl<C> JsonCursor<C> {
-    pub fn new(cursor: C) -> Self {
+    pub(crate) fn new(cursor: C) -> Self {
         Self(cursor)
     }
 }
