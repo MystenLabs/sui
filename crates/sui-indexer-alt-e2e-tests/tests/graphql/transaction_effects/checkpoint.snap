@@ -1,0 +1,55 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-7:
+//# programmable --sender A --inputs @A
+//> 0: TransferObjects([Gas], Input(0))
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 9-10:
+//# programmable --sender A --inputs @A
+//> 0: TransferObjects([Gas], Input(0))
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 12:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 14-15:
+//# programmable --sender A --inputs @A
+//> 0: TransferObjects([Gas], Input(0))
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 17:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 6, lines 19-32:
+//# run-graphql
+Response: {
+  "data": {
+    "e1": {
+      "checkpoint": {
+        "sequenceNumber": 1
+      }
+    },
+    "e2": {
+      "checkpoint": {
+        "sequenceNumber": 1
+      }
+    },
+    "e4": {
+      "checkpoint": {
+        "sequenceNumber": 2
+      }
+    }
+  }
+}

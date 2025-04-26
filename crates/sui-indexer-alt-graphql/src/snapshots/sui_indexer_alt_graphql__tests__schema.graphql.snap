@@ -15,6 +15,25 @@ String containing Base64-encoded binary data.
 scalar Base64
 
 
+"""
+Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
+"""
+type Checkpoint {
+	"""
+	The checkpoint's position in the total order of finalized checkpoints, agreed upon by consensus.
+	"""
+	sequenceNumber: UInt53!
+	"""
+	The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
+	"""
+	timestamp: DateTime
+}
+
+"""
+ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ. Note that the milliseconds part is optional, and it may be omitted if its value is 0.
+"""
+scalar DateTime
+
 
 """
 Interface implemented by GraphQL types representing entities that are identified by an address.
@@ -218,6 +237,18 @@ type Query {
 	"""
 	chainIdentifier: String!
 	"""
+	Fetch a checkpoint by its sequence number.
+	
+	Returns `null` if the checkpoint does not exist in the store, either because it never existed or because it was pruned.
+	"""
+	checkpoint(sequenceNumber: UInt53!): Checkpoint
+	"""
+	Fetch checkpoints by their sequence numbers.
+	
+	Returns a list of checkpoints that is guaranteed to be the same length as `keys`. If a checkpoint in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the checkpoint does not exist yet, or because it was pruned.
+	"""
+	multiGetCheckpoints(keys: [UInt53!]!): [Checkpoint]!
+	"""
 	Fetch objects by their keys.
 	
 	Returns a list of objects that is guaranteed to be the same length as `keys`. If an object in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the object never existed, or because it was pruned.
@@ -410,6 +441,10 @@ type TransactionEffects {
 	The transaction that ran to produce these effects.
 	"""
 	transaction: Transaction
+	"""
+	The checkpoint this transaction was finalized in.
+	"""
+	checkpoint: Checkpoint
 	"""
 	The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
 	"""

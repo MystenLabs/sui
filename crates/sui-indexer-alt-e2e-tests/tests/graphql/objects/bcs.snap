@@ -6,13 +6,13 @@ processed 8 tasks
 init:
 A: object(0,0)
 
-task 1, lines 7-17:
+task 1, lines 6-16:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 4628400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 19-21:
+task 2, lines 18-20:
 //# programmable --sender A --inputs 42 @A
 //> 0: P::M::new(Input(0));
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -20,7 +20,7 @@ created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 23-25:
+task 3, lines 22-24:
 //# programmable --sender A --inputs 43 @A
 //> 0: P::M::new(Input(0));
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -28,7 +28,7 @@ created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4, line 27:
+task 4, line 26:
 //# view-object 2,0
 Owner: Account Address ( A )
 Version: 2
@@ -41,7 +41,7 @@ Contents: P::M::T {
     x: 42u64,
 }
 
-task 5, line 29:
+task 5, line 28:
 //# view-object 3,0
 Owner: Account Address ( A )
 Version: 3
@@ -54,11 +54,11 @@ Contents: P::M::T {
     x: 43u64,
 }
 
-task 6, line 31:
+task 6, line 30:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 7, lines 33-49:
+task 7, lines 32-48:
 //# run-graphql
 Response: {
   "data": {

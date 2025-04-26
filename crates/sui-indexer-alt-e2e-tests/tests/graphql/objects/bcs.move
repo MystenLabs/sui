@@ -3,7 +3,6 @@
 
 //# init --protocol-version 70 --accounts A --addresses P=0x0 --simulator
 
-
 //# publish
 module P::M {
   public struct T has key, store {

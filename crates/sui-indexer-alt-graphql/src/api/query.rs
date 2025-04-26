@@ -10,6 +10,7 @@ use crate::error::RpcError;
 use super::{
     scalars::{digest::Digest, sui_address::SuiAddress, uint53::UInt53},
     types::{
+        checkpoint::Checkpoint,
         object::{self, Object, ObjectKey},
         service_config::ServiceConfig,
         transaction::Transaction,
@@ -25,6 +26,29 @@ impl Query {
     async fn chain_identifier(&self, ctx: &Context<'_>) -> Result<String, RpcError> {
         let chain_id: ChainIdentifier = *ctx.data()?;
         Ok(chain_id.to_string())
+    }
+
+    /// Fetch a checkpoint by its sequence number.
+    ///
+    /// Returns `null` if the checkpoint does not exist in the store, either because it never existed or because it was pruned.
+    async fn checkpoint(
+        &self,
+        ctx: &Context<'_>,
+        sequence_number: UInt53,
+    ) -> Result<Option<Checkpoint>, RpcError> {
+        Checkpoint::fetch(ctx, sequence_number).await
+    }
+
+    /// Fetch checkpoints by their sequence numbers.
+    ///
+    /// Returns a list of checkpoints that is guaranteed to be the same length as `keys`. If a checkpoint in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the checkpoint does not exist yet, or because it was pruned.
+    async fn multi_get_checkpoints(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<UInt53>,
+    ) -> Result<Vec<Option<Checkpoint>>, RpcError> {
+        let checkpoints = keys.into_iter().map(|k| Checkpoint::fetch(ctx, k));
+        try_join_all(checkpoints).await
     }
 
     /// Fetch objects by their keys.
