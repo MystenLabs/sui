@@ -122,7 +122,7 @@ impl WatermarkTask {
     }
 
     /// The shared watermarks structure that this task writes to.
-    pub fn watermarks(&self) -> WatermarksLock {
+    pub(crate) fn watermarks(&self) -> WatermarksLock {
         self.watermarks.clone()
     }
 
@@ -130,7 +130,7 @@ impl WatermarkTask {
     ///
     /// This operation consume the `self` and returns a handle to the spawned tokio task. The task
     /// will continue to run until its cancellation token is triggered.
-    pub fn run(self) -> JoinHandle<()> {
+    pub(crate) fn run(self) -> JoinHandle<()> {
         tokio::spawn(async move {
             let Self {
                 watermarks,

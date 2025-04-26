@@ -82,10 +82,10 @@ pub(crate) struct ObjectImpl<'o>(&'o Object);
 #[derive(InputObject, Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ObjectKey {
     /// The object's ID.
-    pub address: SuiAddress,
+    pub(crate) address: SuiAddress,
 
     /// If specified, tries to fetch the object at this exact version.
-    pub version: Option<UInt53>,
+    pub(crate) version: Option<UInt53>,
 
     /// If specified, tries to fetch the latest version of the object at or before this version.
     ///
@@ -94,10 +94,10 @@ pub(crate) struct ObjectKey {
     /// - The root object of the object it is wrapped in, if it is wrapped.
     /// - The root object of its owner, if it is owned by another object.
     /// - The object itself, if it is not object-owned or wrapped.
-    pub root_version: Option<UInt53>,
+    pub(crate) root_version: Option<UInt53>,
 
     /// If specified, tries to fetch the latest version as of this checkpoint.
-    pub at_checkpoint: Option<UInt53>,
+    pub(crate) at_checkpoint: Option<UInt53>,
 }
 
 #[derive(thiserror::Error, Debug, Clone)]
