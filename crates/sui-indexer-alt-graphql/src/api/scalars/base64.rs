@@ -13,12 +13,11 @@ pub(crate) struct Base64(pub(crate) Vec<u8>);
 #[Scalar]
 impl ScalarType for Base64 {
     fn parse(value: Value) -> InputValueResult<Self> {
-        match value {
-            Value::String(s) => Ok(Base64(
-                NativeBase64::decode(&s).map_err(|r| InputValueError::custom(r.to_string()))?,
-            )),
-            _ => Err(InputValueError::expected_type(value)),
-        }
+        let Value::String(s) = value else {
+            return Err(InputValueError::expected_type(value));
+        };
+
+        Base64::from_str(&s)
     }
 
     fn to_value(&self) -> Value {
@@ -27,7 +26,7 @@ impl ScalarType for Base64 {
 }
 
 impl FromStr for Base64 {
-    type Err = InputValueError<String>;
+    type Err = InputValueError<Self>;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Base64(
