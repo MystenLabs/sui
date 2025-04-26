@@ -9,14 +9,16 @@ use fastcrypto::encoding::{Base64, Encoding};
 use sui_data_ingestion_core::Worker;
 use tokio::sync::Mutex;
 
-use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
+use sui_types::full_checkpoint_content::CheckpointData;
 
+use crate::handlers::parallel_tx_processor::{run_parallel, TxProcessor};
 use crate::handlers::AnalyticsHandler;
 use crate::tables::TransactionBCSEntry;
 use crate::FileType;
 
+#[derive(Clone)]
 pub struct TransactionBCSHandler {
-    pub(crate) state: Mutex<BTreeMap<usize, Vec<TransactionBCSEntry>>>,
+    pub(crate) state: Arc<Mutex<BTreeMap<usize, Vec<TransactionBCSEntry>>>>,
 }
 
 #[async_trait::async_trait]
@@ -24,59 +26,37 @@ impl Worker for TransactionBCSHandler {
     type Result = ();
 
     async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
-        let checkpoint_summary = &checkpoint_data.checkpoint_summary;
-        let checkpoint_transactions = &checkpoint_data.transactions;
-
-        // Create a channel to collect results
-        let (tx, mut rx) = tokio::sync::mpsc::channel::<(usize, Vec<TransactionBCSEntry>)>(
-            checkpoint_transactions.len(),
-        );
-
-        // Process transactions in parallel
-        let mut futures = Vec::new();
-
-        for (idx, _checkpoint_transaction) in checkpoint_transactions.iter().enumerate() {
-            let tx = tx.clone();
-            let epoch = checkpoint_summary.epoch;
-            let checkpoint_seq = checkpoint_summary.sequence_number;
-            let timestamp_ms = checkpoint_summary.timestamp_ms;
-            let checkpoint_data_clone = checkpoint_data.clone();
-
-            // Spawn a task for each transaction
-            let handle = tokio::spawn(async move {
-                let transaction = &checkpoint_data_clone.transactions[idx];
-                match Self::process_transaction(epoch, checkpoint_seq, timestamp_ms, transaction) {
-                    Ok(entries) => {
-                        if !entries.is_empty() {
-                            let _ = tx.send((idx, entries)).await;
-                        }
-                    }
-                    Err(e) => {
-                        tracing::error!("Error processing transaction at index {}: {}", idx, e);
-                    }
-                }
-            });
-
-            futures.push(handle);
-        }
-
-        // Drop the original sender so the channel can close when all tasks are done
-        drop(tx);
-
-        // Wait for all tasks to complete
-        for handle in futures {
-            if let Err(e) = handle.await {
-                tracing::error!("Task panicked: {}", e);
-            }
-        }
-
-        // Collect results into the state in order by transaction index
-        let mut state = self.state.lock().await;
-        while let Some((idx, transactions)) = rx.recv().await {
-            state.insert(idx, transactions);
-        }
-
+        let results = run_parallel(checkpoint_data, Arc::new(self.clone())).await?;
+        *self.state.lock().await = results;
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl TxProcessor<TransactionBCSEntry> for TransactionBCSHandler {
+    async fn process_transaction(
+        &self,
+        tx_idx: usize,
+        checkpoint: &CheckpointData,
+    ) -> Result<Vec<TransactionBCSEntry>> {
+        let transaction = &checkpoint.transactions[tx_idx];
+        let epoch = checkpoint.checkpoint_summary.epoch;
+        let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
+        let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
+
+        let txn = &transaction.transaction;
+        let txn_data = txn.transaction_data();
+        let transaction_digest = txn.digest().base58_encode();
+
+        let entry = TransactionBCSEntry {
+            transaction_digest,
+            checkpoint: checkpoint_seq,
+            epoch,
+            timestamp_ms,
+            bcs: Base64::encode(bcs::to_bytes(&txn_data).unwrap()),
+        };
+
+        Ok(vec![entry])
     }
 }
 
@@ -102,29 +82,8 @@ impl AnalyticsHandler<TransactionBCSEntry> for TransactionBCSHandler {
 impl TransactionBCSHandler {
     pub fn new() -> Self {
         TransactionBCSHandler {
-            state: Mutex::new(BTreeMap::new()),
+            state: Arc::new(Mutex::new(BTreeMap::new())),
         }
-    }
-
-    fn process_transaction(
-        epoch: u64,
-        checkpoint: u64,
-        timestamp_ms: u64,
-        checkpoint_transaction: &CheckpointTransaction,
-    ) -> Result<Vec<TransactionBCSEntry>> {
-        let transaction = &checkpoint_transaction.transaction;
-        let txn_data = transaction.transaction_data();
-        let transaction_digest = transaction.digest().base58_encode();
-
-        let entry = TransactionBCSEntry {
-            transaction_digest,
-            checkpoint,
-            epoch,
-            timestamp_ms,
-            bcs: Base64::encode(bcs::to_bytes(&txn_data).unwrap()),
-        };
-
-        Ok(vec![entry])
     }
 }
 
