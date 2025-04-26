@@ -3,13 +3,6 @@
 
 //# init --protocol-version 70 --accounts A --addresses P=0x0 --simulator
 
-// 1. Create an object
-// 2. Create a checkpoint without modifying the object
-// 3. Modify the object
-// 4. Wrap the object
-// 5. Unwrap the object
-// 6. Delete the object
-
 //# publish
 module P::M {
   use sui::coin::Coin;
@@ -39,13 +32,28 @@ module P::M {
 
 //# create-checkpoint
 
+//# run-graphql
+{ # Object created
+  object(address: "@{obj_3_0}") { version }
+}
+
 //# create-checkpoint
+
+//# run-graphql
+{ # Object not touched
+  object(address: "@{obj_3_0}") { version }
+}
 
 //# programmable --sender A --inputs 43 object(3,0)
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: MergeCoins(Input(1), [Result(0)])
 
 //# create-checkpoint
+
+//# run-graphql
+{ # Object modified
+  object(address: "@{obj_3_0}") { version }
+}
 
 //# programmable --sender A --inputs 44 object(3,0)
 //> 0: SplitCoins(Gas, [Input(0)]);
@@ -57,22 +65,42 @@ module P::M {
 
 //# create-checkpoint
 
+//# run-graphql
+{ # Object modified twice in one checkpoint
+  object(address: "@{obj_3_0}") { version }
+}
+
 //# programmable --sender A --inputs object(3,0) @A
 //> 0: P::M::wrap(Input(0));
 //> 1: TransferObjects([Result(0)], Input(1))
 
 //# create-checkpoint
 
-//# programmable --sender A --inputs object(11,0) @A
+//# run-graphql
+{ # Object wrapped
+  object(address: "@{obj_3_0}") { version }
+}
+
+//# programmable --sender A --inputs object(15,0) @A
 //> 0: P::M::unwrap(Input(0));
 //> 1: TransferObjects([Result(0)], Input(1))
 
 //# create-checkpoint
 
+//# run-graphql
+{ # Object unwrapped
+  object(address: "@{obj_3_0}") { version }
+}
+
 //# programmable --sender A --inputs object(3,0)
 //> 0: MergeCoins(Gas, [Input(0)])
 
 //# create-checkpoint
+
+//# run-graphql
+{ # Object deleted
+  object(address: "@{obj_3_0}") { version }
+}
 
 //# run-graphql
 { # Querying at the checkpoint before the object was created should return no
