@@ -20,8 +20,8 @@ use crate::error::request_timeout;
 
 /// How long to wait for each kind of operation before timing out.
 pub(crate) struct TimeoutConfig {
-    pub query: Duration,
-    pub mutation: Duration,
+    pub(crate) query: Duration,
+    pub(crate) mutation: Duration,
 }
 
 /// The timeout extension is responsible for limiting the amount of time spent serving any single
