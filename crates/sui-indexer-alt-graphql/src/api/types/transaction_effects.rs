@@ -9,16 +9,24 @@ use async_graphql::{
     Context, Object,
 };
 use fastcrypto::encoding::{Base58, Encoding};
-use sui_indexer_alt_reader::kv_loader::{KvLoader, TransactionContents};
+use sui_indexer_alt_reader::kv_loader::{
+    KvLoader, TransactionContents as NativeTransactionContents,
+};
 use sui_types::{digests::TransactionDigest, effects::TransactionEffectsAPI};
 
 use crate::{
     api::scalars::{base64::Base64, cursor::JsonCursor, digest::Digest},
+    consistency,
     error::RpcError,
     pagination::{Page, PaginationConfig},
+    scope::Scope,
 };
 
-use super::{checkpoint::Checkpoint, object_change::ObjectChange, transaction::Transaction};
+use super::{
+    checkpoint::Checkpoint,
+    object_change::ObjectChange,
+    transaction::{Transaction, TransactionContents},
+};
 
 #[derive(Clone)]
 pub(crate) struct TransactionEffects {
@@ -27,9 +35,12 @@ pub(crate) struct TransactionEffects {
 }
 
 #[derive(Clone)]
-pub(crate) struct EffectsContents(pub Option<Arc<TransactionContents>>);
+pub(crate) struct EffectsContents {
+    pub(crate) scope: Scope,
+    pub(crate) contents: Option<Arc<NativeTransactionContents>>,
+}
 
-type CObjectChange = JsonCursor<usize>;
+type CObjectChange = JsonCursor<consistency::Indexed>;
 
 /// The results of executing a transaction.
 #[Object]
@@ -48,11 +59,7 @@ impl TransactionEffects {
 
     #[graphql(flatten)]
     async fn contents(&self, ctx: &Context<'_>) -> Result<EffectsContents, RpcError> {
-        Ok(if self.contents.0.is_some() {
-            self.contents.clone()
-        } else {
-            EffectsContents::fetch(ctx, self.digest).await?
-        })
+        self.contents.fetch(ctx, self.digest).await
     }
 }
 
@@ -60,18 +67,19 @@ impl TransactionEffects {
 impl EffectsContents {
     /// The checkpoint this transaction was finalized in.
     async fn checkpoint(&self) -> Option<Checkpoint> {
-        let Some(content) = &self.0 else {
+        let Some(content) = &self.contents else {
             return None;
         };
 
         Some(Checkpoint::with_sequence_number(
+            self.scope.clone(),
             content.cp_sequence_number(),
         ))
     }
 
     /// The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
     async fn effects_bcs(&self) -> Result<Option<Base64>, RpcError> {
-        let Some(content) = &self.0 else {
+        let Some(content) = &self.contents else {
             return Ok(None);
         };
 
@@ -80,7 +88,7 @@ impl EffectsContents {
 
     /// A 32-byte hash that uniquely identifies the effects contents, encoded in Base58.
     async fn effects_digest(&self) -> Result<Option<String>, RpcError> {
-        let Some(content) = &self.0 else {
+        let Some(content) = &self.contents else {
             return Ok(None);
         };
 
@@ -100,17 +108,21 @@ impl EffectsContents {
         let limits = pagination.limits("TransactionEffects", "objectChanges");
         let page = Page::from_params(limits, first, after, last, before)?;
 
-        let Some(content) = &self.0 else {
+        let Some(content) = &self.contents else {
             return Ok(None);
         };
 
         let object_changes = content.effects()?.object_changes();
-        let cursors = page.paginate_indices(object_changes.len());
+        let cursors = page.paginate_indices(&self.scope, object_changes.len())?;
 
         let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
         for edge in cursors.edges {
+            let scope = self
+                .scope
+                .with_checkpoint_viewed_at(edge.cursor.checkpoint_viewed_at);
             let object_change = ObjectChange {
-                native: object_changes[*edge.cursor].clone(),
+                scope,
+                native: object_changes[edge.cursor.ix].clone(),
             };
 
             conn.edges.push(Edge::new(edge.cursor, object_change))
@@ -124,13 +136,20 @@ impl TransactionEffects {
     /// Load the effects from the store, and return it fully inflated (with contents already
     /// fetched). Returns `None` if the effects do not exist (either never existed or were pruned
     /// from the store).
-    pub(crate) async fn fetch(ctx: &Context<'_>, digest: Digest) -> Result<Option<Self>, RpcError> {
-        let contents = EffectsContents::fetch(ctx, digest.into()).await?;
-        let Some(tx) = &contents.0 else {
+    pub(crate) async fn fetch(
+        ctx: &Context<'_>,
+        scope: Scope,
+        digest: Digest,
+    ) -> Result<Option<Self>, RpcError> {
+        let contents = EffectsContents::empty(scope)
+            .fetch(ctx, digest.into())
+            .await?;
+
+        let Some(tx) = &contents.contents else {
             return Ok(None);
         };
 
-        Ok(Some(TransactionEffects {
+        Ok(Some(Self {
             digest: tx.digest()?,
             contents,
         }))
@@ -138,26 +157,53 @@ impl TransactionEffects {
 }
 
 impl EffectsContents {
+    fn empty(scope: Scope) -> Self {
+        Self {
+            scope,
+            contents: None,
+        }
+    }
+
+    /// Attempt to fill the contents. If the contents are already filled, returns a clone,
+    /// otherwise attempts to fetch from the store. The resulting value may still have an empty
+    /// contents field, because it could not be found in the store.
     pub(crate) async fn fetch(
+        &self,
         ctx: &Context<'_>,
         digest: TransactionDigest,
     ) -> Result<Self, RpcError> {
-        let kv_loader: &KvLoader = ctx.data()?;
+        if self.contents.is_some() {
+            return Ok(self.clone());
+        }
 
-        let transaction = kv_loader
+        let kv_loader: &KvLoader = ctx.data()?;
+        let Some(transaction) = kv_loader
             .load_one_transaction(digest)
             .await
-            .context("Failed to fetch transaction contents")?;
+            .context("Failed to fetch transaction contents")?
+        else {
+            return Ok(self.clone());
+        };
 
-        Ok(Self(transaction.map(Arc::new)))
+        // Discard the loaded result if we are viewing it at a checkpoint before it existed.
+        if transaction.cp_sequence_number() > self.scope.checkpoint_viewed_at() {
+            return Ok(self.clone());
+        }
+
+        Ok(Self {
+            scope: self.scope.clone(),
+            contents: Some(Arc::new(transaction)),
+        })
     }
 }
 
 impl From<Transaction> for TransactionEffects {
     fn from(tx: Transaction) -> Self {
+        let TransactionContents { scope, contents } = tx.contents;
+
         Self {
             digest: tx.digest,
-            contents: EffectsContents(tx.contents.0),
+            contents: EffectsContents { scope, contents },
         }
     }
 }
