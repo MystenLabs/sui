@@ -5,7 +5,7 @@ use async_graphql::{Context, Object};
 use futures::future::try_join_all;
 use sui_types::digests::ChainIdentifier;
 
-use crate::error::RpcError;
+use crate::{error::RpcError, scope::Scope};
 
 use super::{
     scalars::{digest::Digest, sui_address::SuiAddress, uint53::UInt53},
@@ -28,15 +28,19 @@ impl Query {
         Ok(chain_id.to_string())
     }
 
-    /// Fetch a checkpoint by its sequence number.
+    /// Fetch a checkpoint by its sequence number, or the latest checkpoint if no sequence number is provided.
     ///
     /// Returns `null` if the checkpoint does not exist in the store, either because it never existed or because it was pruned.
     async fn checkpoint(
         &self,
         ctx: &Context<'_>,
-        sequence_number: UInt53,
+        sequence_number: Option<UInt53>,
     ) -> Result<Option<Checkpoint>, RpcError> {
-        Checkpoint::fetch(ctx, sequence_number).await
+        let scope = Scope::new(ctx)?;
+        let sequence_number =
+            sequence_number.unwrap_or_else(|| scope.checkpoint_viewed_at().into());
+
+        Checkpoint::fetch(ctx, scope, sequence_number).await
     }
 
     /// Fetch checkpoints by their sequence numbers.
@@ -47,7 +51,11 @@ impl Query {
         ctx: &Context<'_>,
         keys: Vec<UInt53>,
     ) -> Result<Vec<Option<Checkpoint>>, RpcError> {
-        let checkpoints = keys.into_iter().map(|k| Checkpoint::fetch(ctx, k));
+        let scope = Scope::new(ctx)?;
+        let checkpoints = keys
+            .into_iter()
+            .map(|k| Checkpoint::fetch(ctx, scope.clone(), k));
+
         try_join_all(checkpoints).await
     }
 
@@ -59,7 +67,11 @@ impl Query {
         ctx: &Context<'_>,
         keys: Vec<ObjectKey>,
     ) -> Result<Vec<Option<Object>>, RpcError<object::Error>> {
-        let objects = keys.into_iter().map(|k| Object::by_key(ctx, k));
+        let scope = Scope::new(ctx)?;
+        let objects = keys
+            .into_iter()
+            .map(|k| Object::by_key(ctx, scope.clone(), k));
+
         try_join_all(objects).await
     }
 
@@ -71,7 +83,11 @@ impl Query {
         ctx: &Context<'_>,
         keys: Vec<Digest>,
     ) -> Result<Vec<Option<Transaction>>, RpcError> {
-        let transactions = keys.into_iter().map(|d| Transaction::fetch(ctx, d));
+        let scope = Scope::new(ctx)?;
+        let transactions = keys
+            .into_iter()
+            .map(|d| Transaction::fetch(ctx, scope.clone(), d));
+
         try_join_all(transactions).await
     }
 
@@ -83,7 +99,11 @@ impl Query {
         ctx: &Context<'_>,
         keys: Vec<Digest>,
     ) -> Result<Vec<Option<TransactionEffects>>, RpcError> {
-        let effects = keys.into_iter().map(|d| TransactionEffects::fetch(ctx, d));
+        let scope = Scope::new(ctx)?;
+        let effects = keys
+            .into_iter()
+            .map(|d| TransactionEffects::fetch(ctx, scope.clone(), d));
+
         try_join_all(effects).await
     }
 
@@ -112,6 +132,7 @@ impl Query {
     ) -> Result<Option<Object>, RpcError<object::Error>> {
         Object::by_key(
             ctx,
+            Scope::new(ctx)?,
             ObjectKey {
                 address,
                 version,
@@ -135,7 +156,7 @@ impl Query {
         ctx: &Context<'_>,
         digest: Digest,
     ) -> Result<Option<Transaction>, RpcError> {
-        Transaction::fetch(ctx, digest).await
+        Transaction::fetch(ctx, Scope::new(ctx)?, digest).await
     }
 
     /// Fetch transaction effects by its transaction's digest.
@@ -146,6 +167,6 @@ impl Query {
         ctx: &Context<'_>,
         digest: Digest,
     ) -> Result<Option<TransactionEffects>, RpcError> {
-        TransactionEffects::fetch(ctx, digest).await
+        TransactionEffects::fetch(ctx, Scope::new(ctx)?, digest).await
     }
 }

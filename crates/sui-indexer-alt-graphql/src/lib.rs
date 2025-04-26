@@ -53,12 +53,14 @@ use crate::middleware::version::Version;
 mod api;
 pub mod args;
 pub mod config;
+mod consistency;
 mod error;
 mod extensions;
 mod health;
 mod metrics;
 mod middleware;
 mod pagination;
+mod scope;
 mod task;
 
 #[derive(clap::Args, Clone, Debug)]

@@ -4,7 +4,7 @@
 use async_graphql::{Interface, Object};
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 
-use crate::api::scalars::sui_address::SuiAddress;
+use crate::{api::scalars::sui_address::SuiAddress, scope::Scope};
 
 use super::{move_package::MovePackage, object::Object};
 
@@ -19,7 +19,9 @@ pub(crate) enum IAddressable {
     Object(Object),
 }
 
+#[derive(Clone)]
 pub(crate) struct Addressable {
+    pub(crate) scope: Scope,
     pub(crate) address: NativeSuiAddress,
 }
 
@@ -34,8 +36,8 @@ impl Addressable {
 }
 
 impl Addressable {
-    pub(crate) fn with_address(address: NativeSuiAddress) -> Self {
-        Self { address }
+    pub(crate) fn with_address(scope: Scope, address: NativeSuiAddress) -> Self {
+        Self { scope, address }
     }
 }
 

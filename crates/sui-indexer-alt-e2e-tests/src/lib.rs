@@ -7,9 +7,12 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{bail, Context};
+use anyhow::{bail, ensure, Context};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::RunQueryDsl;
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 use simulacrum::Simulacrum;
 use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
 use sui_indexer_alt_framework::{ingestion::ClientArgs, postgres::schema::watermarks, IndexerArgs};
@@ -38,7 +41,10 @@ use sui_types::{
     transaction::Transaction,
 };
 use tempfile::TempDir;
-use tokio::{task::JoinHandle, time::error::Elapsed};
+use tokio::{
+    task::JoinHandle,
+    time::{error::Elapsed, interval},
+};
 use tokio_util::sync::CancellationToken;
 use url::Url;
 
@@ -198,7 +204,7 @@ impl FullCluster {
     pub async fn create_checkpoint(&mut self) -> VerifiedCheckpoint {
         let checkpoint = self.executor.create_checkpoint();
         self.offchain
-            .wait_for_checkpoint(checkpoint.sequence_number, Duration::from_secs(10))
+            .wait_for_indexer(checkpoint.sequence_number, Duration::from_secs(10))
             .await
             .expect("Timed out waiting for a checkpoint");
 
@@ -228,12 +234,12 @@ impl FullCluster {
 
     /// Waits until the indexer has caught up to the given `checkpoint`, or the `timeout` is
     /// reached (an error).
-    pub async fn wait_for_checkpoint(
+    pub async fn wait_for_indexer(
         &self,
         checkpoint: u64,
         timeout: Duration,
     ) -> Result<(), Elapsed> {
-        self.offchain.wait_for_checkpoint(checkpoint, timeout).await
+        self.offchain.wait_for_indexer(checkpoint, timeout).await
     }
 
     /// Waits until the indexer's pruner has caught up to the given `checkpoint`, for the given
@@ -420,19 +426,61 @@ impl OffchainCluster {
         Ok(latest.map(|l| l as u64))
     }
 
+    /// Returns the latest checkpoint that the GraphQL service is aware of.
+    pub async fn latest_graphql_checkpoint(&self) -> anyhow::Result<u64> {
+        let query = json!({
+            "query": "query { checkpoint { sequenceNumber } }"
+        });
+
+        let client = Client::new();
+        let request = client.post(self.graphql_url()).json(&query);
+        let response = request
+            .send()
+            .await
+            .context("Request to GraphQL server failed")?;
+
+        #[derive(Serialize, Deserialize)]
+        struct Response {
+            data: Data,
+        }
+
+        #[derive(Serialize, Deserialize)]
+        struct Data {
+            checkpoint: Checkpoint,
+        }
+
+        #[derive(Serialize, Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Checkpoint {
+            sequence_number: i64,
+        }
+
+        let body: Response = response
+            .json()
+            .await
+            .context("Failed to parse GraphQL response")?;
+
+        ensure!(
+            body.data.checkpoint.sequence_number != i64::MAX,
+            "Indexer has not started yet",
+        );
+
+        Ok(body.data.checkpoint.sequence_number as u64)
+    }
+
     /// Waits until the indexer has caught up to the given `checkpoint`, or the `timeout` is
     /// reached (an error).
-    pub async fn wait_for_checkpoint(
+    pub async fn wait_for_indexer(
         &self,
         checkpoint: u64,
         timeout: Duration,
     ) -> Result<(), Elapsed> {
         tokio::time::timeout(timeout, async move {
+            let mut interval = interval(Duration::from_millis(200));
             loop {
+                interval.tick().await;
                 if matches!(self.latest_checkpoint().await, Ok(Some(l)) if l >= checkpoint) {
                     break;
-                } else {
-                    tokio::time::sleep(Duration::from_millis(200)).await;
                 }
             }
         })
@@ -448,14 +496,33 @@ impl OffchainCluster {
         timeout: Duration,
     ) -> Result<(), Elapsed> {
         tokio::time::timeout(timeout, async move {
+            let mut interval = interval(Duration::from_millis(200));
             loop {
+                interval.tick().await;
                 if matches!(self.latest_pruner_checkpoint(pipeline).await, Ok(Some(l)) if l >= checkpoint) {
                     break;
-                } else {
-                    tokio::time::sleep(Duration::from_millis(200)).await;
                 }
             }
         }).await
+    }
+
+    /// Waits until GraphQL has caught up to the given `checkpoint`, or the `timeout` is reached
+    /// (an error).
+    pub async fn wait_for_graphql(
+        &self,
+        checkpoint: u64,
+        timeout: Duration,
+    ) -> Result<(), Elapsed> {
+        tokio::time::timeout(timeout, async move {
+            let mut interval = interval(Duration::from_millis(200));
+            loop {
+                interval.tick().await;
+                if matches!(self.latest_graphql_checkpoint().await, Ok(l) if l >= checkpoint) {
+                    break;
+                }
+            }
+        })
+        .await
     }
 
     /// Triggers cancellation of all downstream services, waits for them to stop, and cleans up the

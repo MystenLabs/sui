@@ -21,6 +21,7 @@ use sui_types::{
 use crate::{
     api::scalars::{base64::Base64, sui_address::SuiAddress, uint53::UInt53},
     error::{bad_user_input, RpcError},
+    scope::Scope,
 };
 
 use super::{
@@ -61,9 +62,9 @@ pub(crate) enum IObject {
 
 pub(crate) struct Object {
     pub(crate) super_: Addressable,
-    version: SequenceNumber,
-    digest: ObjectDigest,
-    contents: Option<Arc<NativeObject>>,
+    pub(crate) version: SequenceNumber,
+    pub(crate) digest: ObjectDigest,
+    pub(crate) contents: Option<Arc<NativeObject>>,
 }
 
 /// Type to implement GraphQL fields that are shared by all Objects.
@@ -165,6 +166,7 @@ impl Object {
     /// upperbound against a "root version", or an upperbound against a checkpoint.
     pub(crate) async fn by_key(
         ctx: &Context<'_>,
+        scope: Scope,
         key: ObjectKey,
     ) -> Result<Option<Self>, RpcError<Error>> {
         let bounds = key.version.is_some() as u8
@@ -174,11 +176,12 @@ impl Object {
         if bounds > 1 {
             Err(bad_user_input(Error::OneBound))
         } else if let Some(v) = key.version {
-            Ok(Self::at_version(ctx, key.address, v).await?)
+            Ok(Self::at_version(ctx, scope, key.address, v).await?)
         } else if let Some(v) = key.root_version {
-            Ok(Self::version_bounded(ctx, key.address, v).await?)
+            Ok(Self::version_bounded(ctx, scope, key.address, v).await?)
         } else if let Some(cp) = key.at_checkpoint {
-            Ok(Self::checkpoint_bounded(ctx, key.address, cp).await?)
+            let scope = scope.with_checkpoint_viewed_at(cp.into());
+            Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp).await?)
         } else {
             Err(bad_user_input(Error::NotSupported))
         }
@@ -188,6 +191,7 @@ impl Object {
     /// `root_version`.
     pub(crate) async fn version_bounded(
         ctx: &Context<'_>,
+        scope: Scope,
         address: SuiAddress,
         root_version: UInt53,
     ) -> Result<Option<Self>, RpcError<Error>> {
@@ -204,13 +208,14 @@ impl Object {
             return Ok(None);
         };
 
-        Object::from_stored_version(stored)
+        Object::from_stored_version(scope, stored)
     }
 
     /// Fetch the latest version of the object at the given address as of the checkpoint with
     /// sequence number `at_checkpoint`.
     pub(crate) async fn checkpoint_bounded(
         ctx: &Context<'_>,
+        scope: Scope,
         address: SuiAddress,
         at_checkpoint: UInt53,
     ) -> Result<Option<Self>, RpcError<Error>> {
@@ -227,7 +232,7 @@ impl Object {
             return Ok(None);
         };
 
-        Object::from_stored_version(stored)
+        Object::from_stored_version(scope, stored)
     }
 
     /// Load the object at the given ID and version from the store, and return it fully inflated
@@ -235,6 +240,7 @@ impl Object {
     /// existed or was pruned from the store).
     pub(crate) async fn at_version(
         ctx: &Context<'_>,
+        scope: Scope,
         address: SuiAddress,
         version: UInt53,
     ) -> Result<Option<Self>, RpcError<Error>> {
@@ -242,12 +248,12 @@ impl Object {
             return Ok(None);
         };
 
-        Ok(Some(Self::from_contents(c)))
+        Ok(Some(Self::from_contents(scope, c)))
     }
 
     /// Construct a GraphQL representation of an `Object` from its native representation.
-    pub(crate) fn from_contents(contents: Arc<NativeObject>) -> Self {
-        let addressable = Addressable::with_address(contents.id().into());
+    pub(crate) fn from_contents(scope: Scope, contents: Arc<NativeObject>) -> Self {
+        let addressable = Addressable::with_address(scope, contents.id().into());
 
         Self {
             super_: addressable,
@@ -260,6 +266,7 @@ impl Object {
     /// Construct a GraphQL representation of an `Object` from versioning information. This
     /// representation does not pre-fetch object contents.
     pub(crate) fn from_stored_version(
+        scope: Scope,
         stored: StoredObjVersion,
     ) -> Result<Option<Self>, RpcError<Error>> {
         // Lack of an object digest indicates that the object was deleted or wrapped at this
@@ -268,7 +275,14 @@ impl Object {
             return Ok(None);
         };
 
+        // If the object's version is from a later checkpoint than is being viewed currently, then
+        // discard this result.
+        if stored.cp_sequence_number as u64 > scope.checkpoint_viewed_at() {
+            return Ok(None);
+        }
+
         let addressable = Addressable::with_address(
+            scope,
             NativeSuiAddress::from_bytes(stored.object_id)
                 .context("Failed to deserialize SuiAddress")?,
         );
@@ -278,6 +292,16 @@ impl Object {
             SequenceNumber::from_u64(stored.object_version as u64),
             ObjectDigest::try_from(&digest[..]).context("Failed to deserialize Object Digest")?,
         )))
+    }
+
+    /// Returns a copy of this object but with its contents pre-fetched.
+    pub(crate) async fn inflated(&self, ctx: &Context<'_>) -> Result<Self, RpcError<Error>> {
+        Ok(Self {
+            super_: self.super_.clone(),
+            version: self.version,
+            digest: self.digest,
+            contents: self.contents(ctx).await?,
+        })
     }
 
     /// Return a copy of the object's contents, either cached in the object or fetched from the KV
@@ -324,6 +348,7 @@ impl ObjectImpl<'_> {
         };
 
         Ok(Some(Transaction::with_id(
+            self.0.super_.scope.clone(),
             object.as_ref().previous_transaction,
         )))
     }

@@ -26,6 +26,7 @@ use sui_transactional_test_runner::{
     run_tasks_with_adapter,
     test_adapter::{OffChainConfig, SuiTestAdapter, PRE_COMPILED},
 };
+use tokio::join;
 use tokio_util::sync::CancellationToken;
 
 struct OffchainReader {
@@ -49,10 +50,9 @@ impl OffchainReader {
 #[async_trait::async_trait]
 impl OffchainStateReader for OffchainReader {
     async fn wait_for_checkpoint_catchup(&self, checkpoint: u64, base_timeout: Duration) {
-        let _ = self
-            .cluster
-            .wait_for_checkpoint(checkpoint, base_timeout)
-            .await;
+        let indexer = self.cluster.wait_for_indexer(checkpoint, base_timeout);
+        let graphql = self.cluster.wait_for_graphql(checkpoint, base_timeout);
+        let _ = join!(indexer, graphql);
     }
 
     async fn wait_for_pruned_checkpoint(&self, _: u64, _: Duration) {

@@ -56,7 +56,7 @@
   }
 }
 
-//# run-graphql --cursors 2
+//# run-graphql --cursors {"i":2,"c":1}
 { # Offset at the front and then fetch from the front
   transactionEffects(digest: "@{digest_1}") {
     objectChanges(after: "@{cursor_0}", first: 3) {
@@ -71,7 +71,7 @@
   }
 }
 
-//# run-graphql --cursors 2
+//# run-graphql --cursors {"i":2,"c":1}
 { # Offset at the front and then fetch from the back
   transactionEffects(digest: "@{digest_1}") {
     objectChanges(after: "@{cursor_0}", last: 3) {
@@ -86,7 +86,7 @@
   }
 }
 
-//# run-graphql --cursors 5
+//# run-graphql --cursors {"i":5,"c":1}
 { # Offset at the front such that the first page is not full
   transactionEffects(digest: "@{digest_1}") {
     objectChanges(after: "@{cursor_0}", first: 5) {
@@ -101,7 +101,7 @@
   }
 }
 
-//# run-graphql --cursors 5
+//# run-graphql --cursors {"i":5,"c":1}
 { # Offset at the front such that the first page is not full, fetch from the back
   transactionEffects(digest: "@{digest_1}") {
     objectChanges(after: "@{cursor_0}", last: 5) {
@@ -116,7 +116,7 @@
   }
 }
 
-//# run-graphql --cursors 5
+//# run-graphql --cursors {"i":5,"c":1}
 { # Offset at the back and fetch from the back
   transactionEffects(digest: "@{digest_1}") {
     objectChanges(before: "@{cursor_0}", last: 3) {
@@ -131,7 +131,7 @@
   }
 }
 
-//# run-graphql --cursors 5
+//# run-graphql --cursors {"i":5,"c":1}
 { # Offset at the back and fetch from the front
   transactionEffects(digest: "@{digest_1}") {
     objectChanges(before: "@{cursor_0}", first: 3) {
@@ -146,7 +146,7 @@
   }
 }
 
-//# run-graphql --cursors 2
+//# run-graphql --cursors {"i":2,"c":1}
 { # Offset at the back such that the first page is not full, fetch from the back
   transactionEffects(digest: "@{digest_1}") {
     objectChanges(before: "@{cursor_0}", last: 5) {
@@ -161,7 +161,7 @@
   }
 }
 
-//# run-graphql --cursors 2
+//# run-graphql --cursors {"i":2,"c":1}
 { # Offset at the back such that the first page is not full, fetch from the front
   transactionEffects(digest: "@{digest_1}") {
     objectChanges(before: "@{cursor_0}", first: 5) {
@@ -176,7 +176,7 @@
   }
 }
 
-//# run-graphql --cursors 2 6
+//# run-graphql --cursors {"i":2,"c":1} {"i":6,"c":1}
 { # Offset at the front and back
   transactionEffects(digest: "@{digest_1}") {
     objectChanges(after: "@{cursor_0}", before: "@{cursor_1}") {
@@ -191,7 +191,7 @@
   }
 }
 
-//# run-graphql --cursors 2 6
+//# run-graphql --cursors {"i":2,"c":1} {"i":6,"c":1}
 { # Offset at the front and back, limit at the front
   transactionEffects(digest: "@{digest_1}") {
     objectChanges(after: "@{cursor_0}", before: "@{cursor_1}", first: 2) {
@@ -206,7 +206,7 @@
   }
 }
 
-//# run-graphql --cursors 2 6
+//# run-graphql --cursors {"i":2,"c":1} {"i":6,"c":1}
 { # Offset at the front and back, limit at the back
   transactionEffects(digest: "@{digest_1}") {
     objectChanges(after: "@{cursor_0}", before: "@{cursor_1}", last: 2) {

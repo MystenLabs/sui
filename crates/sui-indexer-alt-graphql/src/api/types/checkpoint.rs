@@ -14,6 +14,7 @@ use sui_types::{
 use crate::{
     api::scalars::{date_time::DateTime, uint53::UInt53},
     error::RpcError,
+    scope::Scope,
 };
 
 pub(crate) struct Checkpoint {
@@ -22,15 +23,16 @@ pub(crate) struct Checkpoint {
 }
 
 #[derive(Clone)]
-struct CheckpointContents(
-    Option<
+struct CheckpointContents {
+    scope: Scope,
+    contents: Option<
         Arc<(
             CheckpointSummary,
             NativeCheckpointContents,
             AuthorityStrongQuorumSignInfo,
         )>,
     >,
-);
+}
 
 /// Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
 #[Object]
@@ -42,11 +44,7 @@ impl Checkpoint {
 
     #[graphql(flatten)]
     async fn contents(&self, ctx: &Context<'_>) -> Result<CheckpointContents, RpcError> {
-        Ok(if self.contents.0.is_some() {
-            self.contents.clone()
-        } else {
-            CheckpointContents::fetch(ctx, self.sequence_number).await?
-        })
+        self.contents.fetch(ctx, self.sequence_number).await
     }
 }
 
@@ -54,7 +52,7 @@ impl Checkpoint {
 impl CheckpointContents {
     /// The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
     async fn timestamp(&self) -> Result<Option<DateTime>, RpcError> {
-        let Some(contents) = &self.0 else {
+        let Some(contents) = &self.contents else {
             return Ok(None);
         };
 
@@ -66,10 +64,10 @@ impl Checkpoint {
     /// Construct a checkpoint that is represented by just its identifier (its sequence number).
     /// This does not check whether the checkpoint exists, so should not be used to "fetch" a
     /// checkpoint based on user input.
-    pub(crate) fn with_sequence_number(sequence_number: u64) -> Self {
+    pub(crate) fn with_sequence_number(scope: Scope, sequence_number: u64) -> Self {
         Self {
             sequence_number,
-            contents: CheckpointContents(None),
+            contents: CheckpointContents::empty(scope),
         }
     }
 
@@ -78,29 +76,60 @@ impl Checkpoint {
     /// pruned from the store).
     pub(crate) async fn fetch(
         ctx: &Context<'_>,
+        scope: Scope,
         sequence_number: UInt53,
     ) -> Result<Option<Self>, RpcError> {
-        let contents = CheckpointContents::fetch(ctx, sequence_number.into()).await?;
-        let Some(cp) = &contents.0 else {
+        let contents = CheckpointContents::empty(scope)
+            .fetch(ctx, sequence_number.into())
+            .await?;
+
+        let Some(cp) = &contents.contents else {
             return Ok(None);
         };
 
         Ok(Some(Checkpoint {
             sequence_number: cp.0.sequence_number,
-            contents: CheckpointContents(Some(cp.clone())),
+            contents,
         }))
     }
 }
 
 impl CheckpointContents {
-    pub(crate) async fn fetch(ctx: &Context<'_>, sequence_number: u64) -> Result<Self, RpcError> {
-        let kv_loader: &KvLoader = ctx.data()?;
+    fn empty(scope: Scope) -> Self {
+        Self {
+            scope,
+            contents: None,
+        }
+    }
 
-        let checkpoint = kv_loader
+    /// Attempt to fill the contents. If the contents are already filled, returns a clone,
+    /// otherwise attempts to fetch from the store. The resulting value may still have an empty
+    /// contents field, because it could not be found in the store.
+    pub(crate) async fn fetch(
+        &self,
+        ctx: &Context<'_>,
+        sequence_number: u64,
+    ) -> Result<Self, RpcError> {
+        if self.contents.is_some() {
+            return Ok(self.clone());
+        }
+
+        let kv_loader: &KvLoader = ctx.data()?;
+        let Some(checkpoint) = kv_loader
             .load_one_checkpoint(sequence_number)
             .await
-            .context("Failed to fetch checkpoint contents")?;
+            .context("Failed to fetch checkpoint contents")?
+        else {
+            return Ok(self.clone());
+        };
 
-        Ok(Self(checkpoint.map(Arc::new)))
+        if checkpoint.0.sequence_number > self.scope.checkpoint_viewed_at() {
+            return Ok(self.clone());
+        }
+
+        Ok(Self {
+            scope: self.scope.clone(),
+            contents: Some(Arc::new(checkpoint)),
+        })
     }
 }
