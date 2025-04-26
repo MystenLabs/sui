@@ -11,10 +11,10 @@ use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 use sui_data_ingestion_core::Worker;
 use tokio::sync::Mutex;
 
+use crate::handlers::parallel_tx_processor::{run_parallel, TxProcessor};
 use crate::handlers::AnalyticsHandler;
 use crate::package_store::PackageCache;
 use crate::tables::EventEntry;
-use crate::tx_parallel::{run_parallel, TxProcessor};
 use crate::FileType;
 use sui_json_rpc_types::type_and_fields_from_move_event_data;
 use sui_types::event::Event;

@@ -11,9 +11,9 @@ use tokio::sync::Mutex;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::transaction::TransactionDataAPI;
 
+use crate::handlers::parallel_tx_processor::{run_parallel, TxProcessor};
 use crate::handlers::AnalyticsHandler;
 use crate::tables::MoveCallEntry;
-use crate::tx_parallel::{run_parallel, TxProcessor};
 use crate::FileType;
 
 #[derive(Clone)]

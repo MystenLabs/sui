@@ -21,10 +21,10 @@ use sui_types::dynamic_field::{DynamicFieldName, DynamicFieldType};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::object::Object;
 
+use crate::handlers::parallel_tx_processor::{run_parallel, TxProcessor};
 use crate::handlers::AnalyticsHandler;
 use crate::package_store::PackageCache;
 use crate::tables::DynamicFieldEntry;
-use crate::tx_parallel::{run_parallel, TxProcessor};
 use crate::FileType;
 
 #[derive(Clone)]
@@ -47,7 +47,7 @@ impl Worker for DynamicFieldHandler {
 
         // Run parallel processing
         let results = run_parallel(checkpoint_data.clone(), Arc::new(self.clone())).await?;
-        
+
         // Collect results into the state
         let mut state = self.state.lock().await;
         for entries in results.into_values() {
@@ -55,7 +55,11 @@ impl Worker for DynamicFieldHandler {
         }
 
         // If end of epoch, evict package store
-        if checkpoint_data.checkpoint_summary.end_of_epoch_data.is_some() {
+        if checkpoint_data
+            .checkpoint_summary
+            .end_of_epoch_data
+            .is_some()
+        {
             self.package_cache
                 .resolver
                 .package_store()
@@ -68,27 +72,34 @@ impl Worker for DynamicFieldHandler {
 
 #[async_trait::async_trait]
 impl TxProcessor<DynamicFieldEntry> for DynamicFieldHandler {
-    async fn process_transaction(&self, tx_idx: usize, checkpoint: &CheckpointData) -> Result<Vec<DynamicFieldEntry>> {
+    async fn process_transaction(
+        &self,
+        tx_idx: usize,
+        checkpoint: &CheckpointData,
+    ) -> Result<Vec<DynamicFieldEntry>> {
         let checkpoint_transaction = &checkpoint.transactions[tx_idx];
         let all_objects: HashMap<_, _> = checkpoint_transaction
             .output_objects
             .iter()
             .map(|x| (x.id(), x.clone()))
             .collect();
-        
+
         let mut entries = Vec::new();
         for object in checkpoint_transaction.output_objects.iter() {
-            if let Some(entry) = self.process_dynamic_field(
-                checkpoint.checkpoint_summary.epoch,
-                checkpoint.checkpoint_summary.sequence_number,
-                checkpoint.checkpoint_summary.timestamp_ms,
-                object,
-                &all_objects,
-            ).await? {
+            if let Some(entry) = self
+                .process_dynamic_field(
+                    checkpoint.checkpoint_summary.epoch,
+                    checkpoint.checkpoint_summary.sequence_number,
+                    checkpoint.checkpoint_summary.timestamp_ms,
+                    object,
+                    &all_objects,
+                )
+                .await?
+            {
                 entries.push(entry);
             }
         }
-        
+
         Ok(entries)
     }
 }
@@ -206,5 +217,4 @@ impl DynamicFieldHandler {
         };
         Ok(Some(entry))
     }
-
 }

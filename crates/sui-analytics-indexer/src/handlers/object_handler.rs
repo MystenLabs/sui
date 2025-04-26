@@ -21,9 +21,9 @@ use crate::handlers::{
 };
 use crate::AnalyticsMetrics;
 
+use crate::handlers::parallel_tx_processor::{run_parallel, TxProcessor};
 use crate::package_store::PackageCache;
 use crate::tables::{ObjectEntry, ObjectStatus};
-use crate::tx_parallel::{run_parallel, TxProcessor};
 use crate::FileType;
 
 const NAME: &str = "object";
@@ -60,7 +60,11 @@ impl Worker for ObjectHandler {
         *self.state.lock().await = results;
 
         // If end of epoch, evict package store
-        if checkpoint_data.checkpoint_summary.end_of_epoch_data.is_some() {
+        if checkpoint_data
+            .checkpoint_summary
+            .end_of_epoch_data
+            .is_some()
+        {
             self.context
                 .package_cache
                 .resolver
@@ -74,7 +78,11 @@ impl Worker for ObjectHandler {
 
 #[async_trait::async_trait]
 impl TxProcessor<ObjectEntry> for ObjectHandler {
-    async fn process_transaction(&self, tx_idx: usize, checkpoint: &CheckpointData) -> Result<Vec<ObjectEntry>> {
+    async fn process_transaction(
+        &self,
+        tx_idx: usize,
+        checkpoint: &CheckpointData,
+    ) -> Result<Vec<ObjectEntry>> {
         let transaction = &checkpoint.transactions[tx_idx];
         Self::process_transaction(
             checkpoint.checkpoint_summary.epoch,

@@ -9,9 +9,9 @@ use sui_data_ingestion_core::Worker;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::sync::Mutex;
 
+use crate::handlers::parallel_tx_processor::{run_parallel, TxProcessor};
 use crate::handlers::AnalyticsHandler;
 use crate::tables::MovePackageEntry;
-use crate::tx_parallel::{run_parallel, TxProcessor};
 use crate::FileType;
 
 #[derive(Clone)]

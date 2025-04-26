@@ -56,7 +56,6 @@ pub mod errors;
 mod handlers;
 pub mod package_store;
 pub mod tables;
-pub mod tx_parallel;
 mod writers;
 
 const EPOCH_DIR_PREFIX: &str = "epoch_";

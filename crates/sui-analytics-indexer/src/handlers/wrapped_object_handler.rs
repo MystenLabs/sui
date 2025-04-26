@@ -13,9 +13,9 @@ use sui_types::full_checkpoint_content::CheckpointData;
 use crate::handlers::{get_move_struct, parse_struct, AnalyticsHandler};
 use crate::AnalyticsMetrics;
 
+use crate::handlers::parallel_tx_processor::{run_parallel, TxProcessor};
 use crate::package_store::PackageCache;
 use crate::tables::WrappedObjectEntry;
-use crate::tx_parallel::{run_parallel, TxProcessor};
 use crate::FileType;
 
 const NAME: &str = "wrapped_object";
