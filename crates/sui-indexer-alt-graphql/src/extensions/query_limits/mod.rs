@@ -29,13 +29,13 @@ pub(crate) mod show_usage;
 mod visitor;
 
 pub(crate) struct QueryLimitsConfig {
-    pub max_output_nodes: u32,
-    pub max_query_nodes: u32,
-    pub max_query_depth: u32,
-    pub max_query_payload_size: u32,
-    pub max_tx_payload_size: u32,
+    pub(crate) max_output_nodes: u32,
+    pub(crate) max_query_nodes: u32,
+    pub(crate) max_query_depth: u32,
+    pub(crate) max_query_payload_size: u32,
+    pub(crate) max_tx_payload_size: u32,
 
-    pub tx_payload_args: BTreeSet<(&'static str, &'static str, &'static str)>,
+    pub(crate) tx_payload_args: BTreeSet<(&'static str, &'static str, &'static str)>,
 }
 
 /// Extension factory for adding checks that the query is within configurable limits.
@@ -64,7 +64,7 @@ struct Usage {
 
 impl QueryLimitsConfig {
     /// Requests to this service can definitely not exceed this size, in bytes.
-    pub fn max_payload_size(&self) -> u32 {
+    pub(crate) fn max_payload_size(&self) -> u32 {
         self.max_query_payload_size + self.max_tx_payload_size
     }
 }

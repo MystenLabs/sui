@@ -21,8 +21,8 @@ use super::transaction_effects::{EffectsContents, TransactionEffects};
 
 #[derive(Clone)]
 pub(crate) struct Transaction {
-    pub digest: TransactionDigest,
-    pub contents: TransactionContents,
+    pub(crate) digest: TransactionDigest,
+    pub(crate) contents: TransactionContents,
 }
 
 #[derive(Clone)]

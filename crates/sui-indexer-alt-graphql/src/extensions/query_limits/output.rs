@@ -17,7 +17,7 @@ use super::{
 /// How many output nodes are estimated to be output from this query.
 #[derive(Serialize, Deserialize)]
 pub(super) struct Usage {
-    pub nodes: u32,
+    pub(super) nodes: u32,
 }
 
 struct OutputNodeBudget<'c> {
