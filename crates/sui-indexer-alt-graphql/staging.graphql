@@ -233,11 +233,11 @@ type Query {
 	"""
 	chainIdentifier: String!
 	"""
-	Fetch a checkpoint by its sequence number.
+	Fetch a checkpoint by its sequence number, or the latest checkpoint if no sequence number is provided.
 	
 	Returns `null` if the checkpoint does not exist in the store, either because it never existed or because it was pruned.
 	"""
-	checkpoint(sequenceNumber: UInt53!): Checkpoint
+	checkpoint(sequenceNumber: UInt53): Checkpoint
 	"""
 	Fetch checkpoints by their sequence numbers.
 	
