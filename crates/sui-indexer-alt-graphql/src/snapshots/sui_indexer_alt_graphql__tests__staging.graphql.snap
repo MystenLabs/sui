@@ -182,7 +182,9 @@ type ObjectChangeEdge {
 """
 Identifies a specific version of an object.
 
-The `address` field must be specified, as well as exactly one of `version` or `rootVersion`.
+The `address` field must be specified, as well as at most one of `version`, `rootVersion`, or `atCheckpoint`. If none are provided, the object is fetched at the current checkpoint.
+
+See `Query.object` for more details.
 """
 input ObjectKey {
 	"""
@@ -279,7 +281,9 @@ type Query {
 	
 	If `atCheckpoint` is specified, the object will be fetched at the latest version as of this checkpoint.
 	
-	It is an error to specify both `version` and `rootVersion`, or to specify neither.
+	If none of the above are specified, the object is fetched at the latest checkpoint.
+	
+	It is an error to specify more than one of `version`, `rootVersion`, or `atCheckpoint`.
 	
 	Returns `null` if an object cannot be found that meets this criteria.
 	"""

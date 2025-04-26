@@ -119,7 +119,9 @@ impl Query {
     ///
     /// If `atCheckpoint` is specified, the object will be fetched at the latest version as of this checkpoint.
     ///
-    /// It is an error to specify both `version` and `rootVersion`, or to specify neither.
+    /// If none of the above are specified, the object is fetched at the latest checkpoint.
+    ///
+    /// It is an error to specify more than one of `version`, `rootVersion`, or `atCheckpoint`.
     ///
     /// Returns `null` if an object cannot be found that meets this criteria.
     async fn object(
