@@ -72,7 +72,9 @@ pub(crate) struct ObjectImpl<'o>(&'o Object);
 
 /// Identifies a specific version of an object.
 ///
-/// The `address` field must be specified, as well as exactly one of `version` or `rootVersion`.
+/// The `address` field must be specified, as well as at most one of `version`, `rootVersion`, or `atCheckpoint`. If none are provided, the object is fetched at the current checkpoint.
+///
+/// See `Query.object` for more details.
 #[derive(InputObject, Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ObjectKey {
     /// The object's ID.
@@ -96,10 +98,7 @@ pub(crate) struct ObjectKey {
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub(crate) enum Error {
-    #[error("Operation not supported")]
-    NotSupported,
-
-    #[error("At most one of a version or a root version can be specified when fetching an object")]
+    #[error("At most one of a version, a root version, or a checkpoint bound can be specified when fetching an object")]
     OneBound,
 }
 
@@ -163,7 +162,8 @@ impl Object {
     }
 
     /// Fetch an object by its key. The key can either specify an exact version to fetch, an
-    /// upperbound against a "root version", or an upperbound against a checkpoint.
+    /// upperbound against a "root version", an upperbound against a checkpoint, or none of the
+    /// above.
     pub(crate) async fn by_key(
         ctx: &Context<'_>,
         scope: Scope,
@@ -183,7 +183,8 @@ impl Object {
             let scope = scope.with_checkpoint_viewed_at(cp.into());
             Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp).await?)
         } else {
-            Err(bad_user_input(Error::NotSupported))
+            let cp: UInt53 = scope.checkpoint_viewed_at().into();
+            Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp).await?)
         }
     }
 

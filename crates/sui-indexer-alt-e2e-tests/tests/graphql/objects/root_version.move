@@ -183,14 +183,7 @@ module P::M {
   valueAfter: object(address: "@{obj_2_2}", rootVersion: 9) { version }
 }
 
-
 //# run-graphql
 { # Fetching an object with multiple version constraints is not supported.
   object(address: "@{obj_2_0}", version: 4, rootVersion: 4) { version }
-}
-
-//# run-graphql
-{ # Fetching an object without providing a version constraint is also currently
-  # not supported.
-  object(address: "@{obj_2_0}") { version }
 }
