@@ -18,6 +18,9 @@ anyhow.workspace = true
 diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 prometheus.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 tempfile.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
@@ -42,9 +45,6 @@ tracing.workspace = true
 async-trait.workspace = true
 datatest-stable.workspace = true
 jsonrpsee.workspace = true
-reqwest.workspace = true
-serde.workspace = true
-serde_json.workspace = true
 telemetry-subscribers.workspace = true
 
 move-core-types.workspace = true

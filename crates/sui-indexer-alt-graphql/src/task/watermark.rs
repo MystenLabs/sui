@@ -200,6 +200,12 @@ impl Watermarks {
         Ok(watermarks)
     }
 
+    /// The high watermark across all pipelines. Returned as an inclusive checkpoint number,
+    /// inclusive epoch number and an exclusive transaction sequence number.
+    pub(crate) fn high_watermark(&self) -> &Watermark {
+        &self.global_hi
+    }
+
     /// Timestamp corresponding to high watermark. Can be `None` if the timestamp is out of range
     /// (should not happen under normal operation).
     pub(crate) fn timestamp_hi(&self) -> Option<DateTime<Utc>> {
@@ -222,6 +228,12 @@ impl Watermarks {
                 transaction: row.tx_lo,
             },
         );
+    }
+}
+
+impl Watermark {
+    pub(crate) fn checkpoint(&self) -> u64 {
+        self.checkpoint as u64
     }
 }
 
