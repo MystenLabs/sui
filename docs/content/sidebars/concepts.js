@@ -170,6 +170,7 @@ const concepts = [
 			'concepts/tokenomics/sui-bridging',
 			'concepts/tokenomics/gas-pricing',
 			'concepts/tokenomics/gas-in-sui',
+			'concepts/tokenomics/token-launches',
 			'concepts/tokenomics/vesting-strategies'
 		],
 	},

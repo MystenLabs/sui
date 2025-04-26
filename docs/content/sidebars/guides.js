@@ -83,7 +83,7 @@ const guides = [
 				items: [
 					'guides/developer/coin/regulated',
 					'guides/developer/coin/in-game-token',
-					'guides/developer/coin/loyalty',
+					'guides/developer/coin/loyalty'
 				],
 			},
 			'guides/developer/stablecoins',
