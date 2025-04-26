@@ -18,7 +18,7 @@ use crate::{
     pagination::{Page, PaginationConfig},
 };
 
-use super::{object_change::ObjectChange, transaction::Transaction};
+use super::{checkpoint::Checkpoint, object_change::ObjectChange, transaction::Transaction};
 
 #[derive(Clone)]
 pub(crate) struct TransactionEffects {
@@ -58,6 +58,17 @@ impl TransactionEffects {
 
 #[Object]
 impl EffectsContents {
+    /// The checkpoint this transaction was finalized in.
+    async fn checkpoint(&self) -> Option<Checkpoint> {
+        let Some(content) = &self.0 else {
+            return None;
+        };
+
+        Some(Checkpoint::with_sequence_number(
+            content.cp_sequence_number(),
+        ))
+    }
+
     /// The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
     async fn effects_bcs(&self) -> Result<Option<Base64>, RpcError> {
         let Some(content) = &self.0 else {

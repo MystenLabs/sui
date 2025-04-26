@@ -1,0 +1,73 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 2, line 8:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, line 12:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 5, lines 14-25:
+//# run-graphql
+Response: {
+  "data": {
+    "c0": {
+      "sequenceNumber": 0,
+      "timestamp": "1970-01-01T00:00:00Z"
+    },
+    "c1": {
+      "sequenceNumber": 1,
+      "timestamp": "1970-01-01T00:00:00.123Z"
+    },
+    "c2": {
+      "sequenceNumber": 2,
+      "timestamp": "1970-01-01T00:00:00.444Z"
+    },
+    "multiGetCheckpoints": [
+      {
+        "sequenceNumber": 0,
+        "timestamp": "1970-01-01T00:00:00Z"
+      },
+      {
+        "sequenceNumber": 1,
+        "timestamp": "1970-01-01T00:00:00.123Z"
+      },
+      {
+        "sequenceNumber": 2,
+        "timestamp": "1970-01-01T00:00:00.444Z"
+      }
+    ]
+  }
+}
+
+task 6, lines 27-32:
+//# run-graphql
+Response: {
+  "data": {
+    "checkpoint": null
+  }
+}
+
+task 7, lines 34-39:
+//# run-graphql
+Response: {
+  "data": {
+    "multiGetCheckpoints": [
+      {
+        "sequenceNumber": 2
+      },
+      null,
+      {
+        "sequenceNumber": 0
+      },
+      null
+    ]
+  }
+}
