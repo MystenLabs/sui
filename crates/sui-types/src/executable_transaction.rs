@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+use std::time::Instant;
+
+use crate::digests::{TransactionDigest, TransactionEffectsDigest};
 use crate::messages_checkpoint::CheckpointSequenceNumber;
+use crate::storage::InputKey;
 use crate::{committee::EpochId, crypto::AuthorityStrongQuorumSignInfo};
 
 use crate::message_envelope::{Envelope, TrustedEnvelope, VerifiedEnvelope};
@@ -66,5 +71,63 @@ pub type TrustedExecutableTransaction = TrustedEnvelope<SenderSignedData, Certif
 impl VerifiedExecutableTransaction {
     pub fn gas_budget(&self) -> u64 {
         self.data().transaction_data().gas_budget()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct PendingCertificateStats {
+    // The time this certificate enters transaction manager.
+    #[allow(unused)]
+    pub enqueue_time: Instant,
+    // The time this certificate becomes ready for execution.
+    pub ready_time: Option<Instant>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PendingCertificate {
+    // Information about the transaction to be executed.
+    pub executable_certificate: PendingExecutableCertificate,
+    // The input object this certificate is waiting for to become available in order to be executed.
+    pub waiting_input_objects: BTreeSet<InputKey>,
+    // Stores stats about this transaction.
+    pub stats: PendingCertificateStats,
+}
+
+#[derive(Clone, Debug)]
+pub struct PendingExecutableCertificate {
+    // Certificate to be executed, certified either through a certificate or a checkpoint.
+    pub certificate: VerifiedExecutableTransaction,
+    // When executing from checkpoint, the certified effects digest is provided, so that forks can
+    // be detected prior to committing the transaction.
+    pub expected_effects_digest: Option<TransactionEffectsDigest>,
+}
+
+impl PendingCertificate {
+    pub fn certificate(&self) -> &VerifiedExecutableTransaction {
+        &self.executable_certificate.certificate
+    }
+
+    pub fn digest(&self) -> &TransactionDigest {
+        self.certificate().digest()
+    }
+
+    pub fn epoch(&self) -> EpochId {
+        self.certificate().epoch()
+    }
+}
+
+impl PendingExecutableCertificate {
+    pub fn new(certificate: VerifiedExecutableTransaction) -> Self {
+        Self::new_with_info(certificate, None)
+    }
+
+    pub fn new_with_info(
+        certificate: VerifiedExecutableTransaction,
+        expected_effects_digest: Option<TransactionEffectsDigest>,
+    ) -> Self {
+        Self {
+            certificate,
+            expected_effects_digest,
+        }
     }
 }

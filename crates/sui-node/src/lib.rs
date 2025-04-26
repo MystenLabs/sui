@@ -47,6 +47,7 @@ use sui_rpc_api::ServerVersion;
 use sui_types::base_types::ConciseableName;
 use sui_types::crypto::RandomnessRound;
 use sui_types::digests::ChainIdentifier;
+use sui_types::executable_transaction::PendingExecutableCertificate;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::messages_consensus::ConsensusTransactionKind;
@@ -767,7 +768,10 @@ impl SuiNode {
                     ),
                 );
             state
-                .try_execute_immediately(&transaction, None, &epoch_store)
+                .try_execute_immediately(
+                    &PendingExecutableCertificate::new(transaction),
+                    &epoch_store,
+                )
                 .instrument(span)
                 .await
                 .unwrap();

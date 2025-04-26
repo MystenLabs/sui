@@ -54,6 +54,7 @@ use sui_config::NodeConfig;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::crypto::RandomnessRound;
 use sui_types::dynamic_field::visitor as DFV;
+use sui_types::executable_transaction::PendingExecutableCertificate;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution::ExecutionTiming;
 use sui_types::execution_status::ExecutionStatus;
@@ -1246,13 +1247,14 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     pub async fn try_execute_immediately(
         &self,
-        certificate: &VerifiedExecutableTransaction,
-        mut expected_effects_digest: Option<TransactionEffectsDigest>,
+        executable_certificate: &PendingExecutableCertificate,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let _scope = monitored_scope("Execution::try_execute_immediately");
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
 
+        let certificate = &executable_certificate.certificate;
+        let mut expected_effects_digest = executable_certificate.expected_effects_digest;
         let tx_digest = certificate.digest();
 
         // prevent concurrent executions of the same tx.
@@ -1333,8 +1335,9 @@ impl AuthorityState {
         let epoch_store = self.epoch_store_for_testing();
         let (effects, execution_error_opt) = self
             .try_execute_immediately(
-                &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
-                None,
+                &PendingExecutableCertificate::new(
+                    VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
+                ),
                 &epoch_store,
             )
             .await?;
