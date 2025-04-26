@@ -11,13 +11,16 @@ use mysten_metrics::{
     monitored_mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     monitored_scope, spawn_logged_monitored_task,
 };
+use parking_lot::RwLock;
 
 use crate::{
+    commit::{Commit, TrustedCommit},
     context::Context,
+    dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     transaction_certifier::TransactionCertifier,
-    BlockAPI, BlockRef, CommitIndex, CommittedSubDag, Round, TransactionIndex,
+    BlockAPI, BlockRef, CommitRef, CommittedSubDag, Round, TransactionIndex,
 };
 
 /// Number of rounds between the leader that committed a transaction to the latest leader,
@@ -44,10 +47,11 @@ impl CommitFinalizerHandle {
 
 pub(crate) struct CommitFinalizer {
     context: Arc<Context>,
+    dag_state: Arc<RwLock<DagState>>,
     transaction_certifier: TransactionCertifier,
     commit_sender: UnboundedSender<CommittedSubDag>,
 
-    last_processed_commit: Option<CommitIndex>,
+    last_processed_commit: CommitRef,
     commits: VecDeque<CommitState>,
     blocks: BTreeMap<BlockRef, BlockState>,
 }
@@ -55,14 +59,16 @@ pub(crate) struct CommitFinalizer {
 impl CommitFinalizer {
     fn new(
         context: Arc<Context>,
+        dag_state: Arc<RwLock<DagState>>,
         transaction_certifier: TransactionCertifier,
         commit_sender: UnboundedSender<CommittedSubDag>,
     ) -> Self {
         Self {
             context,
+            dag_state,
             transaction_certifier,
             commit_sender,
-            last_processed_commit: None,
+            last_processed_commit: CommitRef::MIN,
             commits: VecDeque::new(),
             blocks: BTreeMap::new(),
         }
@@ -70,30 +76,69 @@ impl CommitFinalizer {
 
     pub(crate) fn start(
         context: Arc<Context>,
+        dag_state: Arc<RwLock<DagState>>,
         transaction_certifier: TransactionCertifier,
         commit_sender: UnboundedSender<CommittedSubDag>,
     ) -> CommitFinalizerHandle {
-        let processor = Self::new(context, transaction_certifier, commit_sender);
+        let finalizer = Self::new(context, dag_state, transaction_certifier, commit_sender);
         let (sender, receiver) = unbounded_channel("commit_finalizer");
-        let _handle = spawn_logged_monitored_task!(processor.run(receiver), "commit_finalizer");
+        let _handle = spawn_logged_monitored_task!(finalizer.run(receiver), "commit_finalizer");
         CommitFinalizerHandle { sender }
     }
 
     async fn run(mut self, mut receiver: UnboundedReceiver<(CommittedSubDag, bool)>) {
-        if self.context.protocol_config.mysticeti_fastpath() {
-            while let Some((committed_sub_dag, direct)) = receiver.recv().await {
-                let finalized_commits = self.process_commit(committed_sub_dag, direct);
-                for commit in finalized_commits {
-                    if let Err(e) = self.commit_sender.send(commit) {
-                        tracing::warn!(
-                            "Failed to send to commit handler, probably due to shutdown: {e:?}"
+        while let Some((committed_sub_dag, direct)) = receiver.recv().await {
+            let finalized_commits = if self.context.protocol_config.mysticeti_fastpath() {
+                self.process_commit(committed_sub_dag, direct)
+            } else {
+                vec![committed_sub_dag]
+            };
+            for mut committed_sub_dag in finalized_commits {
+                {
+                    let mut dag_state = self.dag_state.write();
+
+                    // Create serializable Commit.
+                    let commit = Commit::new(
+                        &self.context,
+                        committed_sub_dag.index,
+                        self.last_processed_commit.digest,
+                        committed_sub_dag.timestamp_ms,
+                        committed_sub_dag.leader,
+                        committed_sub_dag
+                            .blocks
+                            .iter()
+                            .map(|block| block.reference())
+                            .collect(),
+                        committed_sub_dag.rejected_transactions_by_block.clone(),
+                    );
+                    let serialized = commit
+                        .serialize()
+                        .unwrap_or_else(|e| panic!("Failed to serialize commit: {}", e));
+                    let commit = TrustedCommit::new_trusted(commit, serialized);
+
+                    // Update the last processed commit.
+                    if self.last_processed_commit.index > 0 {
+                        assert_eq!(
+                            self.last_processed_commit.index + 1,
+                            committed_sub_dag.index
                         );
-                        return;
                     }
+                    self.last_processed_commit = commit.reference();
+
+                    // Update the commit reference in the committed subdag.
+                    committed_sub_dag.commit_digest = commit.digest();
+
+                    // Buffer commit in dag state for persistence later.
+                    dag_state.add_finalized_commit(commit);
+
+                    // Committed blocks must be persisted to storage before sending them to Sui and executing
+                    // their transactions.
+                    // Commit metadata can be persisted more lazily because they are recoverable. Uncommitted
+                    // blocks can wait to persist too.
+                    // But for simplicity, all unpersisted blocks and commits are flushed to storage.
+                    dag_state.flush();
                 }
-            }
-        } else {
-            while let Some((committed_sub_dag, _direct)) = receiver.recv().await {
+
                 if let Err(e) = self.commit_sender.send(committed_sub_dag) {
                     tracing::warn!(
                         "Failed to send to commit handler, probably due to shutdown: {e:?}"
@@ -111,13 +156,6 @@ impl CommitFinalizer {
     ) -> Vec<CommittedSubDag> {
         let _scope = monitored_scope("CommitFinalizer::process_commit");
 
-        if let Some(last_processed_commit) = self.last_processed_commit {
-            assert_eq!(
-                last_processed_commit + 1,
-                committed_sub_dag.commit_ref.index
-            );
-        }
-        self.last_processed_commit = Some(committed_sub_dag.commit_ref.index);
         self.commits.push_back(CommitState::new(committed_sub_dag));
 
         let mut finalized_commits = vec![];
@@ -553,6 +591,7 @@ mod tests {
         let (commit_sender, _commit_receiver) = unbounded_channel("consensus_commit_output");
         let commit_finalizer = CommitFinalizer::new(
             context.clone(),
+            dag_state.clone(),
             transaction_certifier.clone(),
             commit_sender,
         );

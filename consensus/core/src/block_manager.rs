@@ -917,7 +917,7 @@ mod tests {
             BlockRef::new(10, AuthorityIndex::new_for_test(0), BlockDigest::MIN),
             vec![],
         );
-        dag_state.write().set_last_commit(last_commit);
+        dag_state.write().set_last_commit_for_test(last_commit);
         assert_eq!(
             dag_state.read().gc_round(),
             6,
@@ -1007,7 +1007,7 @@ mod tests {
             BlockRef::new(10, AuthorityIndex::new_for_test(0), BlockDigest::MIN),
             vec![],
         );
-        dag_state.write().set_last_commit(last_commit);
+        dag_state.write().set_last_commit_for_test(last_commit);
         assert_eq!(
             dag_state.read().gc_round(),
             6,
@@ -1156,7 +1156,7 @@ mod tests {
                 ),
                 vec![],
             );
-            dag_state.write().set_last_commit(last_commit);
+            dag_state.write().set_last_commit_for_test(last_commit);
 
             // AND
             block_manager.try_unsuspend_blocks_for_latest_gc_round();
@@ -1192,7 +1192,7 @@ mod tests {
             BlockRef::new(6, AuthorityIndex::new_for_test(0), BlockDigest::MIN),
             vec![],
         );
-        dag_state.write().set_last_commit(last_commit);
+        dag_state.write().set_last_commit_for_test(last_commit);
         assert_eq!(
             dag_state.read().gc_round(),
             2,

@@ -57,6 +57,7 @@ impl CommitObserver {
         let commit_interpreter = Linearizer::new(context.clone(), dag_state.clone());
         let commit_finalizer_handle = CommitFinalizer::start(
             context.clone(),
+            dag_state.clone(),
             transaction_certifier,
             commit_consumer.commit_sender,
         );
@@ -108,7 +109,7 @@ impl CommitObserver {
         for (commit, direct) in committed_sub_dags.iter().zip(direct_commits) {
             tracing::debug!(
                 "Sending commit {} leader {} to execution.",
-                commit.commit_ref,
+                commit.index,
                 commit.leader
             );
             tracing::trace!("Committed subdag: {:#?}", commit);
@@ -194,7 +195,7 @@ impl CommitObserver {
         for commit in committed {
             info!(
                 "Consensus commit {} with leader {} has {} blocks",
-                commit.commit_ref,
+                commit.index,
                 commit.leader,
                 commit.blocks.len()
             );
@@ -202,9 +203,7 @@ impl CommitObserver {
             metrics
                 .last_committed_leader_round
                 .set(commit.leader.round as i64);
-            metrics
-                .last_commit_index
-                .set(commit.commit_ref.index as i64);
+            metrics.last_commit_index.set(commit.index as i64);
             metrics
                 .blocks_per_commit_count
                 .observe(commit.blocks.len() as f64);
@@ -303,7 +302,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         // Commit first 5 leaders.
-        let mut commits = observer
+        let mut partial_commits = observer
             .handle_commit(leaders[0..5].iter().map(|b| (b.clone(), true)).collect())
             .unwrap();
 
@@ -311,7 +310,7 @@ mod tests {
         leader_schedule.update_leader_schedule_v2(&dag_state);
 
         // Commit the next 5 leaders.
-        commits.extend(
+        partial_commits.extend(
             observer
                 .handle_commit(leaders[5..].iter().map(|b| (b.clone(), true)).collect())
                 .unwrap(),
@@ -319,7 +318,7 @@ mod tests {
 
         // Check commits are returned by CommitObserver::handle_commit is accurate
         let mut expected_stored_refs: Vec<BlockRef> = vec![];
-        for (idx, subdag) in commits.iter().enumerate() {
+        for (idx, subdag) in partial_commits.iter().enumerate() {
             tracing::info!("{subdag:?}");
             assert_eq!(subdag.leader, leaders[idx].reference());
 
@@ -356,7 +355,7 @@ mod tests {
             let expected_ts = if idx == 0 {
                 expected_ts
             } else {
-                expected_ts.max(commits[idx - 1].timestamp_ms)
+                expected_ts.max(partial_commits[idx - 1].timestamp_ms)
             };
 
             assert_eq!(expected_ts, subdag.timestamp_ms);
@@ -374,14 +373,14 @@ mod tests {
                 expected_stored_refs.push(block.reference());
                 assert!(block.round() <= leaders[idx].round());
             }
-            assert_eq!(subdag.commit_ref.index, idx as CommitIndex + 1);
+            assert_eq!(subdag.index, idx as CommitIndex + 1);
         }
 
         // Check commits sent over consensus output channel is accurate
         let mut processed_subdag_index = 0;
         while let Ok(Some(subdag)) = timeout(Duration::from_secs(1), commit_receiver.recv()).await {
-            assert_eq!(subdag, commits[processed_subdag_index]);
-            processed_subdag_index = subdag.commit_ref.index as usize;
+            assert_eq!(subdag.blocks, partial_commits[processed_subdag_index].blocks);
+            processed_subdag_index = subdag.index as usize;
             if processed_subdag_index == leaders.len() {
                 break;
             }
@@ -392,10 +391,7 @@ mod tests {
 
         // Check commits have been persisted to storage
         let last_commit = mem_store.read_last_commit().unwrap().unwrap();
-        assert_eq!(
-            last_commit.index(),
-            commits.last().unwrap().commit_ref.index
-        );
+        assert_eq!(last_commit.index(), partial_commits.last().unwrap().index);
         let all_stored_commits = mem_store
             .scan_commits((0..=CommitIndex::MAX).into())
             .unwrap();
@@ -457,7 +453,7 @@ mod tests {
         // Commit first batch of leaders (2) and "receive" the subdags as the
         // consumer of the consensus output channel.
         let expected_last_processed_index: usize = 2;
-        let mut commits = observer
+        let mut partial_commits = observer
             .handle_commit(
                 leaders
                     .iter()
@@ -471,9 +467,9 @@ mod tests {
         let mut processed_subdag_index = 0;
         while let Ok(Some(subdag)) = timeout(Duration::from_secs(1), commit_receiver.recv()).await {
             tracing::info!("Processed {subdag}");
-            assert_eq!(subdag, commits[processed_subdag_index]);
+            assert_eq!(subdag.blocks, partial_commits[processed_subdag_index].blocks);
             assert_eq!(subdag.reputation_scores_desc, vec![]);
-            processed_subdag_index = subdag.commit_ref.index as usize;
+            processed_subdag_index = subdag.index as usize;
             if processed_subdag_index == expected_last_processed_index {
                 break;
             }
@@ -492,7 +488,7 @@ mod tests {
         // Handle next batch of leaders (1), these will be sent by consensus but not
         // "processed" by consensus output channel. Simulating something happened on
         // the consumer side where the commits were not persisted.
-        commits.append(
+        partial_commits.append(
             &mut observer
                 .handle_commit(
                     leaders
@@ -507,9 +503,9 @@ mod tests {
         let expected_last_sent_index = num_rounds as usize;
         while let Ok(Some(subdag)) = timeout(Duration::from_secs(1), commit_receiver.recv()).await {
             tracing::info!("{subdag} was sent but not processed by consumer");
-            assert_eq!(subdag, commits[processed_subdag_index]);
+            assert_eq!(subdag.blocks, partial_commits[processed_subdag_index].blocks);
             assert_eq!(subdag.reputation_scores_desc, vec![]);
-            processed_subdag_index = subdag.commit_ref.index as usize;
+            processed_subdag_index = subdag.index as usize;
             if processed_subdag_index == expected_last_sent_index {
                 break;
             }
@@ -541,14 +537,14 @@ mod tests {
         processed_subdag_index = expected_last_processed_index;
         while let Ok(Some(subdag)) = timeout(Duration::from_secs(1), commit_receiver.recv()).await {
             tracing::info!("Processed {subdag} on resubmission");
-            assert_eq!(subdag, commits[processed_subdag_index]);
+            assert_eq!(subdag.blocks, partial_commits[processed_subdag_index].blocks);
             assert_eq!(subdag.reputation_scores_desc, vec![]);
-            processed_subdag_index = subdag.commit_ref.index as usize;
+            processed_subdag_index = subdag.index as usize;
             if processed_subdag_index == expected_last_sent_index {
                 break;
             }
         }
-        assert_eq!(processed_subdag_index, expected_last_sent_index);
+        assert_eq!(processed_subdag_index, expected_last_sent_index - 2);
 
         verify_channel_empty(&mut commit_receiver).await;
     }
@@ -606,7 +602,7 @@ mod tests {
         // Commit all of the leaders and "receive" the subdags as the consumer of
         // the consensus output channel.
         let expected_last_processed_index: usize = 10;
-        let commits = observer
+        let partial_commits = observer
             .handle_commit(leaders.iter().map(|b| (b.clone(), true)).collect())
             .unwrap();
 
@@ -614,9 +610,9 @@ mod tests {
         let mut processed_subdag_index = 0;
         while let Ok(Some(subdag)) = timeout(Duration::from_secs(1), commit_receiver.recv()).await {
             tracing::info!("Processed {subdag}");
-            assert_eq!(subdag, commits[processed_subdag_index]);
+            assert_eq!(subdag.blocks, partial_commits[processed_subdag_index].blocks);
             assert_eq!(subdag.reputation_scores_desc, vec![]);
-            processed_subdag_index = subdag.commit_ref.index as usize;
+            processed_subdag_index = subdag.index as usize;
             if processed_subdag_index == expected_last_processed_index {
                 break;
             }

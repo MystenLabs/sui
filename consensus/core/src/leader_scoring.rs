@@ -112,12 +112,10 @@ impl ScoringSubdag {
             // If the commit range is not set, then set it to the range of the first
             // committed subdag index.
             if self.commit_range.is_none() {
-                self.commit_range = Some(CommitRange::new(
-                    subdag.commit_ref.index..=subdag.commit_ref.index,
-                ));
+                self.commit_range = Some(CommitRange::new(subdag.index..=subdag.index));
             } else {
                 let commit_range = self.commit_range.as_mut().unwrap();
-                commit_range.extend_to(subdag.commit_ref.index);
+                commit_range.extend_to(subdag.index);
             }
 
             // Add the committed leader to the list of leaders we will be scoring.

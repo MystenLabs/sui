@@ -898,7 +898,7 @@ impl MysticetiConsensusHandler {
         tasks.spawn(monitored_future!(async move {
             // TODO: pause when execution is overloaded, so consensus can detect the backpressure.
             while let Some(consensus_commit) = commit_receiver.recv().await {
-                let commit_index = consensus_commit.commit_ref.index;
+                let commit_index = consensus_commit.index;
                 if commit_index <= last_processed_commit_at_startup {
                     consensus_handler.handle_prior_consensus_commit(consensus_commit);
                 } else {
@@ -1340,11 +1340,8 @@ impl CommitIntervalObserver {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
     use consensus_core::{
-        BlockAPI, CertifiedBlock, CommitDigest, CommitRef, CommittedSubDag, TestBlock, Transaction,
-        VerifiedBlock,
+        BlockAPI, CertifiedBlock, CommittedSubDag, TestBlock, Transaction, VerifiedBlock,
     };
     use futures::pin_mut;
     use prometheus::Registry;
@@ -1503,12 +1500,10 @@ mod tests {
         // AND create the consensus commit
         let leader_block = blocks[0].clone();
         let committed_sub_dag = CommittedSubDag::new(
+            1,
             leader_block.reference(),
             blocks.clone(),
-            BTreeMap::new(),
             leader_block.timestamp_ms(),
-            CommitRef::new(10, CommitDigest::MIN),
-            vec![],
         );
 
         // Test that the consensus handler respects backpressure.

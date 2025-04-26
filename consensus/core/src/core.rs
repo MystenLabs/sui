@@ -46,6 +46,7 @@ use crate::{
     universal_committer::{
         universal_committer_builder::UniversalCommitterBuilder, UniversalCommitter,
     },
+    CommitRef,
 };
 #[cfg(test)]
 use crate::{
@@ -915,9 +916,13 @@ impl Core {
 
         // Sanity check: for commits that have been linearized using the certified commits, ensure that the same sub dag has been committed.
         for sub_dag in &committed_sub_dags {
-            if let Some(commit_ref) = certified_commits_map.remove(&sub_dag.commit_ref.index) {
+            if let Some(commit_ref) = certified_commits_map.remove(&sub_dag.index) {
                 assert_eq!(
-                    commit_ref, sub_dag.commit_ref,
+                    commit_ref,
+                    CommitRef {
+                        index: sub_dag.index,
+                        digest: sub_dag.commit_digest,
+                    },
                     "Certified commit has different reference than the committed sub dag"
                 );
             }
@@ -3407,8 +3412,7 @@ mod test {
             .cloned()
             .collect::<Vec<_>>();
         assert!(
-            certified_commits.last().unwrap().index()
-                <= committed_sub_dags.last().unwrap().commit_ref.index,
+            certified_commits.last().unwrap().index() <= committed_sub_dags.last().unwrap().index,
             "Highest certified commit should older than the highest committed index."
         );
 
@@ -3660,7 +3664,7 @@ mod test {
         // We should have committed up to round 4
         assert_eq!(committed_sub_dags.len(), 4);
         for (index, committed_sub_dag) in committed_sub_dags.iter().enumerate() {
-            assert_eq!(committed_sub_dag.commit_ref.index as usize, index + 1);
+            assert_eq!(committed_sub_dag.index as usize, index + 1);
 
             // ensure that block from E1 node has not been committed
             for block in committed_sub_dag.blocks.iter() {

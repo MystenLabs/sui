@@ -21,7 +21,7 @@ use crate::{
     dag_state::DagState,
     leader_schedule::{LeaderSchedule, LeaderSwapTable},
     linearizer::{BlockStoreAPI, Linearizer},
-    CommitRef, CommittedSubDag, Transaction,
+    CommittedSubDag, Transaction,
 };
 
 /// DagBuilder API
@@ -141,15 +141,16 @@ impl DagBuilder {
         &mut self,
         leader_rounds: RangeInclusive<Round>,
     ) -> Vec<(CommittedSubDag, TrustedCommit)> {
-        let (last_leader_round, mut last_commit_ref, mut last_timestamp_ms) =
+        let (last_commit_index, last_leader_round, last_commit_digest, mut last_timestamp_ms) =
             if let Some((sub_dag, _)) = self.committed_sub_dags.last() {
                 (
+                    sub_dag.index,
                     sub_dag.leader.round,
-                    sub_dag.commit_ref,
+                    sub_dag.commit_digest,
                     sub_dag.timestamp_ms,
                 )
             } else {
-                (0, CommitRef::new(0, CommitDigest::MIN), 0)
+                (0, 0, CommitDigest::MIN, 0)
             };
 
         struct BlockStorage {
@@ -245,8 +246,8 @@ impl DagBuilder {
             }
 
             let commit = TrustedCommit::new_for_test(
-                last_commit_ref.index + 1,
-                last_commit_ref.digest,
+                last_commit_index + 1,
+                last_commit_digest,
                 last_timestamp_ms,
                 leader_block_ref,
                 to_commit
@@ -255,16 +256,13 @@ impl DagBuilder {
                     .collect::<Vec<_>>(),
             );
 
-            last_commit_ref = commit.reference();
-
-            let sub_dag = CommittedSubDag::new(
+            let mut sub_dag = CommittedSubDag::new(
+                last_commit_index + 1,
                 leader_block_ref,
                 to_commit,
-                BTreeMap::new(),
                 last_timestamp_ms,
-                commit.reference(),
-                vec![],
             );
+            sub_dag.commit_digest = commit.digest();
 
             self.committed_sub_dags.push((sub_dag, commit));
         }

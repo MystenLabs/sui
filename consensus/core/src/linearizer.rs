@@ -12,10 +12,10 @@ use parking_lot::RwLock;
 
 use crate::{
     block::{BlockAPI, BlockRef, BlockTimestampMs, VerifiedBlock},
-    commit::{sort_sub_dag_blocks, Commit, CommittedSubDag, TrustedCommit},
+    commit::{sort_sub_dag_blocks, Commit, CommittedSubDag},
     context::Context,
     dag_state::DagState,
-    Round,
+    CommitDigest, Round,
 };
 
 /// The `StorageAPI` trait provides an interface for the block store and has been
@@ -69,24 +69,20 @@ impl Linearizer {
         Self { context, dag_state }
     }
 
-    /// Collect the sub-dag and the corresponding commit from a specific leader excluding any duplicates or
+    /// Collect the sub-dag from a specific leader excluding any duplicates or
     /// blocks that have already been committed (within previous sub-dags).
-    fn collect_sub_dag_and_commit(
-        &mut self,
-        leader_block: VerifiedBlock,
-    ) -> (CommittedSubDag, TrustedCommit) {
+    fn collect_sub_dag(&mut self, leader_block: VerifiedBlock) -> CommittedSubDag {
         let _s = self
             .context
             .metrics
             .node_metrics
             .scope_processing_time
-            .with_label_values(&["Linearizer::collect_sub_dag_and_commit"])
+            .with_label_values(&["Linearizer::collect_sub_dag"])
             .start_timer();
 
-        // Grab latest commit state from dag state
+        // Grab latest commit state from dag state, and update commit status per block.
         let mut dag_state = self.dag_state.write();
         let last_commit_index = dag_state.last_commit_index();
-        let last_commit_digest = dag_state.last_commit_digest();
         let last_commit_timestamp_ms = dag_state.last_commit_timestamp_ms();
         let last_committed_rounds = dag_state.last_committed_rounds();
 
@@ -105,35 +101,26 @@ impl Linearizer {
             last_commit_timestamp_ms,
         );
 
+        let partial_commit = Arc::new(Commit::new(
+            &self.context,
+            last_commit_index + 1,
+            CommitDigest::MIN,
+            timestamp_ms,
+            leader_block.reference(),
+            to_commit.iter().map(|block| block.reference()).collect(),
+            BTreeMap::new(),
+        ));
+        dag_state.set_last_commit(partial_commit);
+
         drop(dag_state);
 
-        // Create the Commit.
-        let commit = Commit::new(
-            last_commit_index + 1,
-            last_commit_digest,
-            timestamp_ms,
-            leader_block.reference(),
-            to_commit
-                .iter()
-                .map(|block| block.reference())
-                .collect::<Vec<_>>(),
-        );
-        let serialized = commit
-            .serialize()
-            .unwrap_or_else(|e| panic!("Failed to serialize commit: {}", e));
-        let commit = TrustedCommit::new_trusted(commit, serialized);
-
         // Create the corresponding committed sub dag
-        let sub_dag = CommittedSubDag::new(
+        CommittedSubDag::new(
+            last_commit_index + 1,
             leader_block.reference(),
             to_commit,
-            BTreeMap::new(),
             timestamp_ms,
-            commit.reference(),
-            vec![],
-        );
-
-        (sub_dag, commit)
+        )
     }
 
     /// Calculates the commit's timestamp. If the median based timestamp calculation is enabled,
@@ -295,24 +282,13 @@ impl Linearizer {
 
         let mut committed_sub_dags = vec![];
         for leader_block in committed_leaders {
-            // Collect the sub-dag generated using each of these leaders and the corresponding commit.
-            let (sub_dag, commit) = self.collect_sub_dag_and_commit(leader_block);
+            // Collect the sub-dag generated using each of these leaders.
+            let sub_dag = self.collect_sub_dag(leader_block);
 
             self.update_blocks_pruned_metric(&sub_dag);
 
-            // Buffer commit in dag state for persistence later.
-            // This also updates the last committed rounds.
-            self.dag_state.write().add_commit(commit.clone());
-
             committed_sub_dags.push(sub_dag);
         }
-
-        // Committed blocks must be persisted to storage before sending them to Sui and executing
-        // their transactions.
-        // Commit metadata can be persisted more lazily because they are recoverable. Uncommitted
-        // blocks can wait to persist too.
-        // But for simplicity, all unpersisted blocks and commits are flushed to storage.
-        self.dag_state.write().flush();
 
         committed_sub_dags
     }
@@ -490,7 +466,7 @@ mod tests {
             for block in subdag.blocks.iter() {
                 assert!(block.round() <= leaders[idx].round());
             }
-            assert_eq!(subdag.commit_ref.index, idx as CommitIndex + 1);
+            assert_eq!(subdag.index, idx as CommitIndex + 1);
         }
     }
 
@@ -499,6 +475,8 @@ mod tests {
     async fn test_handle_already_committed(
         #[values(true, false)] consensus_median_timestamp: bool,
     ) {
+        use crate::commit::TrustedCommit;
+
         telemetry_subscribers::init_for_testing();
         let num_authorities = 4;
         let (mut context, _) = Context::new_for_test(num_authorities);
@@ -548,7 +526,7 @@ mod tests {
             first_leader.reference(),
             blocks.iter().map(|block| block.reference()).collect(),
         );
-        dag_state.write().add_commit(first_commit_data);
+        dag_state.write().set_last_commit(first_commit_data.inner());
 
         // Mark the blocks as committed in DagState. This will allow to correctly detect the committed blocks when the new linearizer logic is enabled.
         for block in blocks.iter() {
@@ -593,7 +571,7 @@ mod tests {
         let subdag = &commit[0];
         tracing::info!("{subdag:?}");
         assert_eq!(subdag.leader, leader.reference());
-        assert_eq!(subdag.commit_ref.index, expected_second_commit.index());
+        assert_eq!(subdag.index, expected_second_commit.index());
 
         let expected_ts = if consensus_median_timestamp {
             median_timestamp_by_stake(
@@ -767,7 +745,7 @@ mod tests {
             for block in subdag.blocks.iter() {
                 assert!(block.round() <= leaders[idx].round());
             }
-            assert_eq!(subdag.commit_ref.index, idx as CommitIndex + 1);
+            assert_eq!(subdag.index, idx as CommitIndex + 1);
         }
     }
 
@@ -892,7 +870,7 @@ mod tests {
             for block in subdag.blocks.iter() {
                 assert!(block.round() <= leaders[idx].round());
             }
-            assert_eq!(subdag.commit_ref.index, idx as CommitIndex + 1);
+            assert_eq!(subdag.index, idx as CommitIndex + 1);
         }
     }
 

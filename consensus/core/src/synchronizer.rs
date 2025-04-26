@@ -2000,7 +2000,7 @@ mod tests {
                 let commit =
                     TrustedCommit::new_for_test(index, CommitDigest::MIN, 0, BlockRef::MIN, vec![]);
 
-                d.add_commit(commit);
+                d.set_last_commit(commit.inner());
             }
 
             assert_eq!(

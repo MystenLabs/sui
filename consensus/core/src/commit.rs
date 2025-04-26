@@ -7,7 +7,7 @@ use std::{
     fmt::{self, Debug, Display, Formatter},
     hash::{Hash, Hasher},
     ops::{Deref, Range, RangeInclusive},
-    sync::Arc,
+    sync::{Arc, OnceLock},
 };
 
 use bytes::Bytes;
@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     block::{BlockAPI, BlockRef, BlockTimestampMs, Round, Slot, VerifiedBlock},
+    context::Context,
     leader_scoring::ReputationScores,
     storage::Store,
     TransactionIndex,
@@ -48,7 +49,7 @@ pub(crate) type WaveNumber = u32;
 /// corresponding Commit and blocks referenced in the Commit.
 /// A field must meet these requirements to be added to Commit:
 /// - helps with recovery locally and for peers catching up.
-/// - cannot be derived from a sequence of Commits and other persisted values.
+/// - cannot be derived from past Commits and other persisted values.
 ///
 /// For example, transactions in blocks should not be included in Commit, because they can be
 /// retrieved from blocks specified in Commit. Last committed round per authority also should not
@@ -58,24 +59,38 @@ pub(crate) type WaveNumber = u32;
 #[enum_dispatch(CommitAPI)]
 pub(crate) enum Commit {
     V1(CommitV1),
+    V2(CommitV2),
 }
 
 impl Commit {
     /// Create a new commit.
     pub(crate) fn new(
+        context: &Context,
         index: CommitIndex,
         previous_digest: CommitDigest,
         timestamp_ms: BlockTimestampMs,
         leader: BlockRef,
         blocks: Vec<BlockRef>,
+        rejected_transactions: BTreeMap<BlockRef, Vec<TransactionIndex>>,
     ) -> Self {
-        Commit::V1(CommitV1 {
-            index,
-            previous_digest,
-            timestamp_ms,
-            leader,
-            blocks,
-        })
+        if context.protocol_config.mysticeti_fastpath() {
+            Commit::V2(CommitV2 {
+                index,
+                previous_digest,
+                timestamp_ms,
+                leader,
+                blocks,
+                rejected_transactions,
+            })
+        } else {
+            Commit::V1(CommitV1 {
+                index,
+                previous_digest,
+                timestamp_ms,
+                leader,
+                blocks,
+            })
+        }
     }
 
     pub(crate) fn serialize(&self) -> Result<Bytes, bcs::Error> {
@@ -87,38 +102,40 @@ impl Commit {
 /// Accessors to Commit info.
 #[enum_dispatch]
 pub(crate) trait CommitAPI {
-    fn round(&self) -> Round;
-    fn index(&self) -> CommitIndex;
-    fn previous_digest(&self) -> CommitDigest;
-    fn timestamp_ms(&self) -> BlockTimestampMs;
-    fn leader(&self) -> BlockRef;
-    fn blocks(&self) -> &[BlockRef];
-}
-
-/// Specifies one consensus commit.
-/// It is stored on disk, so it does not contain blocks which are stored individually.
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
-pub(crate) struct CommitV1 {
     /// Index of the commit.
     /// First commit after genesis has an index of 1, then every next commit has an index incremented by 1.
-    index: CommitIndex,
+    fn index(&self) -> CommitIndex;
+
     /// Digest of the previous commit.
     /// Set to CommitDigest::MIN for the first commit after genesis.
-    previous_digest: CommitDigest,
-    /// Timestamp of the commit, max of the timestamp of the leader block and previous Commit timestamp.
-    timestamp_ms: BlockTimestampMs,
+    fn previous_digest(&self) -> CommitDigest;
+
+    /// The timestamp of the commit.
+    fn timestamp_ms(&self) -> BlockTimestampMs;
+
     /// A reference to the commit leader.
+    fn leader(&self) -> BlockRef;
+
+    /// The round number of the commit leader.
+    fn round(&self) -> Round;
+
+    /// References to committed blocks, in the commit order.
+    fn blocks(&self) -> &[BlockRef];
+
+    /// The rejected transactions that are part of the commit.
+    fn rejected_transactions(&self) -> &BTreeMap<BlockRef, Vec<TransactionIndex>>;
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+pub(crate) struct CommitV1 {
+    index: CommitIndex,
+    previous_digest: CommitDigest,
+    timestamp_ms: BlockTimestampMs,
     leader: BlockRef,
-    /// Refs to committed blocks, in the commit order.
     blocks: Vec<BlockRef>,
-    // TODO(fastpath): record rejected transactions.
 }
 
 impl CommitAPI for CommitV1 {
-    fn round(&self) -> Round {
-        self.leader.round
-    }
-
     fn index(&self) -> CommitIndex {
         self.index
     }
@@ -135,8 +152,57 @@ impl CommitAPI for CommitV1 {
         self.leader
     }
 
+    fn round(&self) -> Round {
+        self.leader.round
+    }
+
     fn blocks(&self) -> &[BlockRef] {
         &self.blocks
+    }
+
+    fn rejected_transactions(&self) -> &BTreeMap<BlockRef, Vec<TransactionIndex>> {
+        static NONE: OnceLock<BTreeMap<BlockRef, Vec<TransactionIndex>>> = OnceLock::new();
+        NONE.get_or_init(BTreeMap::new)
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+pub(crate) struct CommitV2 {
+    index: CommitIndex,
+    previous_digest: CommitDigest,
+    timestamp_ms: BlockTimestampMs,
+    leader: BlockRef,
+    blocks: Vec<BlockRef>,
+    rejected_transactions: BTreeMap<BlockRef, Vec<TransactionIndex>>,
+}
+
+impl CommitAPI for CommitV2 {
+    fn index(&self) -> CommitIndex {
+        self.index
+    }
+
+    fn previous_digest(&self) -> CommitDigest {
+        self.previous_digest
+    }
+
+    fn timestamp_ms(&self) -> BlockTimestampMs {
+        self.timestamp_ms
+    }
+
+    fn leader(&self) -> BlockRef {
+        self.leader
+    }
+
+    fn round(&self) -> Round {
+        self.leader.round
+    }
+
+    fn blocks(&self) -> &[BlockRef] {
+        &self.blocks
+    }
+
+    fn rejected_transactions(&self) -> &BTreeMap<BlockRef, Vec<TransactionIndex>> {
+        &self.rejected_transactions
     }
 }
 
@@ -172,7 +238,17 @@ impl TrustedCommit {
         leader: BlockRef,
         blocks: Vec<BlockRef>,
     ) -> Self {
-        let commit = Commit::new(index, previous_digest, timestamp_ms, leader, blocks);
+        let (context, _) = Context::new_for_test(1);
+        let rejected_transactions = BTreeMap::new();
+        let commit = Commit::new(
+            &context,
+            index,
+            previous_digest,
+            timestamp_ms,
+            leader,
+            blocks,
+            rejected_transactions,
+        );
         let serialized = commit.serialize().unwrap();
         Self::new_trusted(commit, serialized)
     }
@@ -186,6 +262,10 @@ impl TrustedCommit {
 
     pub(crate) fn digest(&self) -> CommitDigest {
         self.digest
+    }
+
+    pub(crate) fn inner(&self) -> Arc<Commit> {
+        self.inner.clone()
     }
 
     pub(crate) fn serialized(&self) -> &Bytes {
@@ -314,6 +394,16 @@ pub struct CommitRef {
 }
 
 impl CommitRef {
+    pub const MIN: Self = Self {
+        index: CommitIndex::MIN,
+        digest: CommitDigest::MIN,
+    };
+
+    pub const MAX: Self = Self {
+        index: CommitIndex::MAX,
+        digest: CommitDigest::MAX,
+    };
+
     pub fn new(index: CommitIndex, digest: CommitDigest) -> Self {
         Self { index, digest }
     }
@@ -335,47 +425,55 @@ impl fmt::Debug for CommitRef {
 pub type CommitVote = CommitRef;
 
 /// The output of consensus to execution is an ordered list of [`CommittedSubDag`].
-/// Each CommittedSubDag contains the information needed to execution transactions in
-/// the consensus commit.
+/// Each CommittedSubDag contains the information needed to execute transactions in
+/// the consensus commit, along with other useful updates.
 ///
-/// The application processing CommittedSubDag can arbitrarily sort the blocks within
-/// each sub-dag (but using a deterministic algorithm).
+/// Different components in consensus set different fields in this struct.
 #[derive(Clone, PartialEq)]
 pub struct CommittedSubDag {
+    /// -------- Set in Linearizer --------
+    ///
+    /// Index of this commit.
+    /// First commit after genesis has a index of 1, then every next commit has a
+    /// index incremented by 1.
+    pub index: CommitIndex,
     /// A reference to the leader of the sub-dag
     pub leader: BlockRef,
     /// All the committed blocks that are part of this sub-dag
     pub blocks: Vec<VerifiedBlock>,
-    /// Indices of rejected transactions in each block.
-    pub rejected_transactions_by_block: BTreeMap<BlockRef, Vec<TransactionIndex>>,
     /// The timestamp of the commit, obtained from the timestamp of the leader block.
     pub timestamp_ms: BlockTimestampMs,
-    /// The reference of the commit.
-    /// First commit after genesis has a index of 1, then every next commit has a
-    /// index incremented by 1.
-    pub commit_ref: CommitRef,
+
+    /// -------- Set in CommitObserver --------
+    ///
     /// Optional scores that are provided as part of the consensus output to Sui
     /// that can then be used by Sui for future submission to consensus.
     pub reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
+
+    /// -------- Set in CommitFinalizer --------
+    ///
+    /// Indices of rejected transactions in each block.
+    pub rejected_transactions_by_block: BTreeMap<BlockRef, Vec<TransactionIndex>>,
+    /// The digest of the underlying serializable commit.
+    pub commit_digest: CommitDigest,
 }
 
 impl CommittedSubDag {
     /// Creates a new committed sub dag.
     pub fn new(
+        index: CommitIndex,
         leader: BlockRef,
         blocks: Vec<VerifiedBlock>,
-        rejected_transactions_by_block: BTreeMap<BlockRef, Vec<TransactionIndex>>,
         timestamp_ms: BlockTimestampMs,
-        commit_ref: CommitRef,
-        reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
     ) -> Self {
         Self {
+            index,
             leader,
             blocks,
-            rejected_transactions_by_block,
             timestamp_ms,
-            commit_ref,
-            reputation_scores_desc,
+            rejected_transactions_by_block: BTreeMap::new(),
+            commit_digest: CommitDigest::MIN,
+            reputation_scores_desc: vec![],
         }
     }
 }
@@ -392,31 +490,45 @@ pub(crate) fn sort_sub_dag_blocks(blocks: &mut [VerifiedBlock]) {
 
 impl Display for CommittedSubDag {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "C({},{},[", self.index, self.leader)?;
         write!(
             f,
-            "CommittedSubDag(leader={}, ref={}, blocks=[",
-            self.leader, self.commit_ref
-        )?;
-        for (idx, block) in self.blocks.iter().enumerate() {
-            if idx > 0 {
-                write!(f, ", ")?;
-            }
-            write!(f, "{}", block.digest())?;
-        }
-        write!(f, "])")
+            "{}])",
+            self.blocks
+                .iter()
+                .map(|b| b.reference().to_string())
+                .collect::<Vec<_>>()
+                .join(", "),
+        )
     }
 }
 
 impl fmt::Debug for CommittedSubDag {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}@{} ([", self.leader, self.commit_ref)?;
-        for block in &self.blocks {
-            write!(f, "{}, ", block.reference())?;
-        }
         write!(
             f,
-            "];{}ms;rs{:?})",
-            self.timestamp_ms, self.reputation_scores_desc
+            "C({},{},{},[",
+            self.index, self.commit_digest, self.leader
+        )?;
+        write!(
+            f,
+            "{}",
+            self.blocks
+                .iter()
+                .map(|b| b.reference().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )?;
+        write!(
+            f,
+            "];{}ms;rs{:?};r[{}])",
+            self.timestamp_ms,
+            self.reputation_scores_desc,
+            self.rejected_transactions_by_block
+                .iter()
+                .map(|(block_ref, transactions)| format!("{}: {:?}", block_ref, transactions))
+                .collect::<Vec<_>>()
+                .join(", ")
         )
     }
 }
@@ -443,18 +555,19 @@ pub fn load_committed_subdag_from_store(
             commit_block
         })
         .collect::<Vec<_>>();
-    // TODO(fastpath): recover rejected transaction indices from commit.
-    let rejected_transactions = BTreeMap::new();
+    let rejected_transactions = commit.rejected_transactions().clone();
     let leader_block_idx = leader_block_idx.expect("Leader block must be in the sub-dag");
     let leader_block_ref = blocks[leader_block_idx].reference();
-    CommittedSubDag::new(
+    let mut sub_dag = CommittedSubDag::new(
+        commit.index(),
         leader_block_ref,
         blocks,
-        rejected_transactions,
         commit.timestamp_ms(),
-        commit.reference(),
-        reputation_scores_desc,
-    )
+    );
+    sub_dag.rejected_transactions_by_block = rejected_transactions;
+    sub_dag.commit_digest = commit.digest();
+    sub_dag.reputation_scores_desc = reputation_scores_desc;
+    sub_dag
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -726,7 +839,7 @@ mod tests {
             subdag.blocks.len(),
             (num_authorities * wave_length) as usize + 1
         );
-        assert_eq!(subdag.commit_ref, commit.reference());
+        assert_eq!(subdag.commit_digest, commit.digest());
         assert_eq!(subdag.reputation_scores_desc, vec![]);
     }
 

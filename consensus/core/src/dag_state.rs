@@ -21,7 +21,7 @@ use crate::{
         VerifiedBlock, GENESIS_ROUND,
     },
     commit::{
-        load_committed_subdag_from_store, CommitAPI as _, CommitDigest, CommitIndex, CommitInfo,
+        load_committed_subdag_from_store, Commit, CommitAPI as _, CommitIndex, CommitInfo,
         CommitRef, CommitVote, TrustedCommit, GENESIS_COMMIT_INDEX,
     },
     context::Context,
@@ -68,8 +68,15 @@ pub(crate) struct DagState {
     // Highest round of blocks accepted.
     highest_accepted_round: Round,
 
-    // Last consensus commit of the dag.
-    last_commit: Option<TrustedCommit>,
+    // Records info about the last commit, for building the next commit.
+    //
+    // IMPORTANT: values in this commit are incomplete. Fields that are correct are:
+    // - index
+    // - timestamp_ms
+    // - leader
+    // - blocks
+    // All other fields should not be used.
+    last_commit: Option<Arc<Commit>>,
 
     // Last wall time when commit round advanced. Does not persist across restarts.
     last_commit_round_advancement_time: Option<std::time::Instant>,
@@ -92,7 +99,7 @@ pub(crate) struct DagState {
     // Buffer the reputation scores & last_committed_rounds to be flushed with the
     // next dag state flush. This is okay because we can recover reputation scores
     // & last_committed_rounds from the commits as needed.
-    commit_info_to_write: Vec<(CommitRef, CommitInfo)>,
+    commit_info_to_write: VecDeque<(CommitIndex, CommitInfo)>,
 
     // Persistent storage for blocks, commits and other consensus data.
     store: Arc<dyn Store>,
@@ -165,13 +172,13 @@ impl DagState {
             recent_refs_by_authority: vec![BTreeSet::new(); num_authorities],
             threshold_clock,
             highest_accepted_round: 0,
-            last_commit: last_commit.clone(),
+            last_commit: last_commit.as_ref().map(|c| c.inner().clone()),
             last_commit_round_advancement_time: None,
             last_committed_rounds: last_committed_rounds.clone(),
             pending_commit_votes: VecDeque::new(),
             blocks_to_write: vec![],
             commits_to_write: vec![],
-            commit_info_to_write: vec![],
+            commit_info_to_write: VecDeque::new(),
             scoring_subdag,
             store: store.clone(),
             cached_rounds,
@@ -833,9 +840,9 @@ impl DagState {
         self.highest_accepted_round
     }
 
-    // Buffers a new commit in memory and updates last committed rounds.
+    // Updates last committed info.
     // REQUIRED: must not skip over any commit index.
-    pub(crate) fn add_commit(&mut self, commit: TrustedCommit) {
+    pub(crate) fn set_last_commit(&mut self, commit: Arc<Commit>) {
         let time_diff = if let Some(last_commit) = &self.last_commit {
             if commit.index() <= last_commit.index() {
                 error!(
@@ -870,8 +877,6 @@ impl DagState {
             true
         };
 
-        self.last_commit = Some(commit.clone());
-
         if commit_round_advanced {
             let now = std::time::Instant::now();
             if let Some(previous_time) = self.last_commit_round_advancement_time {
@@ -902,6 +907,11 @@ impl DagState {
                 .set((*round).into());
         }
 
+        self.last_commit = Some(commit);
+    }
+
+    // Buffers a finalized commit in memory, to be flushed to storage later.s
+    pub(crate) fn add_finalized_commit(&mut self, commit: TrustedCommit) {
         self.pending_commit_votes.push_back(commit.reference());
         self.commits_to_write.push(commit);
     }
@@ -921,7 +931,7 @@ impl DagState {
             .as_ref()
             .expect("Last commit should already be set.");
         self.commit_info_to_write
-            .push((last_commit.reference(), commit_info));
+            .push_back((last_commit.index(), commit_info));
     }
 
     pub(crate) fn take_commit_votes(&mut self, limit: usize) -> Vec<CommitVote> {
@@ -937,14 +947,6 @@ impl DagState {
         match &self.last_commit {
             Some(commit) => commit.index(),
             None => 0,
-        }
-    }
-
-    /// Digest of the last commit.
-    pub(crate) fn last_commit_digest(&self) -> CommitDigest {
-        match &self.last_commit {
-            Some(commit) => commit.digest(),
-            None => CommitDigest::MIN,
         }
     }
 
@@ -1019,8 +1021,18 @@ impl DagState {
         // Flush buffered data to storage.
         let blocks = std::mem::take(&mut self.blocks_to_write);
         let commits = std::mem::take(&mut self.commits_to_write);
-        let commit_info_to_write = std::mem::take(&mut self.commit_info_to_write);
-
+        let mut commit_map = commits
+            .iter()
+            .map(|c| (c.index(), c.reference()))
+            .collect::<BTreeMap<_, _>>();
+        let mut commit_info = Vec::new();
+        while let Some((commit_index, _)) = self.commit_info_to_write.front() {
+            if let Some(commit_ref) = commit_map.remove(commit_index) {
+                commit_info.push((commit_ref, self.commit_info_to_write.pop_front().unwrap().1));
+            } else {
+                break;
+            }
+        }
         if blocks.is_empty() && commits.is_empty() {
             return;
         }
@@ -1030,14 +1042,14 @@ impl DagState {
             blocks.iter().map(|b| b.reference().to_string()).join(","),
             commits.len(),
             commits.iter().map(|c| c.reference().to_string()).join(","),
-            commit_info_to_write.len(),
-            commit_info_to_write
+            commit_info.len(),
+            commit_info
                 .iter()
-                .map(|(commit_ref, _)| commit_ref.to_string())
+                .map(|(commit_index, _)| commit_index.to_string())
                 .join(","),
         );
         self.store
-            .write(WriteBatch::new(blocks, commits, commit_info_to_write))
+            .write(WriteBatch::new(blocks, commits, commit_info))
             .unwrap_or_else(|e| panic!("Failed to write to storage: {:?}", e));
         self.context
             .metrics
@@ -1172,8 +1184,8 @@ impl DagState {
     }
 
     #[cfg(test)]
-    pub(crate) fn set_last_commit(&mut self, commit: TrustedCommit) {
-        self.last_commit = Some(commit);
+    pub(crate) fn set_last_commit_for_test(&mut self, commit: TrustedCommit) {
+        self.last_commit = Some(commit.inner());
     }
 }
 
@@ -1208,6 +1220,7 @@ mod test {
         storage::{mem_store::MemStore, WriteBatch},
         test_dag_builder::DagBuilder,
         test_dag_parser::parse_dag,
+        CommitDigest,
     };
 
     #[tokio::test]
@@ -1547,7 +1560,7 @@ mod test {
             round_6_block.reference(),
             vec![],
         );
-        dag_state.set_last_commit(last_commit);
+        dag_state.set_last_commit_for_test(last_commit);
         assert_eq!(
             dag_state.gc_round(),
             3,
@@ -1733,16 +1746,19 @@ mod test {
         }
 
         // Now add a commit to trigger an eviction
-        dag_state.add_commit(TrustedCommit::new_for_test(
-            1 as CommitIndex,
-            CommitDigest::MIN,
-            0,
-            blocks.last().unwrap().reference(),
-            blocks
-                .into_iter()
-                .map(|block| block.reference())
-                .collect::<Vec<_>>(),
-        ));
+        dag_state.set_last_commit(
+            TrustedCommit::new_for_test(
+                1 as CommitIndex,
+                CommitDigest::MIN,
+                0,
+                blocks.last().unwrap().reference(),
+                blocks
+                    .into_iter()
+                    .map(|block| block.reference())
+                    .collect::<Vec<_>>(),
+            )
+            .inner(),
+        );
 
         dag_state.flush();
 
@@ -1789,13 +1805,16 @@ mod test {
             .for_each(|block| dag_state.accept_block(block));
 
         // Now add a commit for leader round 5 to trigger an eviction
-        dag_state.add_commit(TrustedCommit::new_for_test(
-            1 as CommitIndex,
-            CommitDigest::MIN,
-            0,
-            dag_builder.leader_block(5).unwrap().reference(),
-            vec![],
-        ));
+        dag_state.set_last_commit(
+            TrustedCommit::new_for_test(
+                1 as CommitIndex,
+                CommitDigest::MIN,
+                0,
+                dag_builder.leader_block(5).unwrap().reference(),
+                vec![],
+            )
+            .inner(),
+        );
 
         dag_state.flush();
 
@@ -1905,7 +1924,7 @@ mod test {
         let temp_commits = commits.split_off(5);
         dag_state.accept_blocks(dag_builder.blocks(1..=5));
         for commit in commits.clone() {
-            dag_state.add_commit(commit);
+            dag_state.set_last_commit(commit.inner());
         }
 
         // Flush the dag state
@@ -1914,7 +1933,8 @@ mod test {
         // Add the rest of the blocks and commits to the dag state
         dag_state.accept_blocks(dag_builder.blocks(6..=num_rounds));
         for commit in temp_commits.clone() {
-            dag_state.add_commit(commit);
+            dag_state.set_last_commit(commit.inner());
+            dag_state.add_finalized_commit(commit);
         }
 
         // All blocks should be found in DagState.
@@ -2025,7 +2045,8 @@ mod test {
         let temp_commits = commits.split_off(7);
         dag_state.accept_blocks(dag_builder.blocks(1..=8));
         for commit in commits.clone() {
-            dag_state.add_commit(commit);
+            dag_state.set_last_commit(commit.inner());
+            dag_state.add_finalized_commit(commit);
         }
 
         // Holds all the committed blocks from the commits that ended up being persisted (flushed). Any commits that not flushed will not be considered.
@@ -2040,7 +2061,8 @@ mod test {
         // Add the rest of the blocks and commits to the dag state
         dag_state.accept_blocks(dag_builder.blocks(9..=num_rounds));
         for commit in temp_commits.clone() {
-            dag_state.add_commit(commit);
+            dag_state.set_last_commit(commit.inner());
+            dag_state.add_finalized_commit(commit);
         }
 
         // All blocks should be found in DagState.
@@ -2364,13 +2386,16 @@ mod test {
             dag_state.accept_block(block);
         }
 
-        dag_state.add_commit(TrustedCommit::new_for_test(
-            1 as CommitIndex,
-            CommitDigest::MIN,
-            context.clock.timestamp_utc_ms(),
-            dag_builder.leader_block(3).unwrap().reference(),
-            vec![],
-        ));
+        dag_state.set_last_commit(
+            TrustedCommit::new_for_test(
+                1 as CommitIndex,
+                CommitDigest::MIN,
+                context.clock.timestamp_utc_ms(),
+                dag_builder.leader_block(3).unwrap().reference(),
+                vec![],
+            )
+            .inner(),
+        );
 
         // WHEN search for the latest blocks
         let end_round = 4;
@@ -2480,16 +2505,19 @@ mod test {
             }
         }
 
-        dag_state.add_commit(TrustedCommit::new_for_test(
-            1 as CommitIndex,
-            CommitDigest::MIN,
-            0,
-            all_blocks.last().unwrap().reference(),
-            all_blocks
-                .into_iter()
-                .map(|block| block.reference())
-                .collect::<Vec<_>>(),
-        ));
+        dag_state.set_last_commit(
+            TrustedCommit::new_for_test(
+                1 as CommitIndex,
+                CommitDigest::MIN,
+                0,
+                all_blocks.last().unwrap().reference(),
+                all_blocks
+                    .into_iter()
+                    .map(|block| block.reference())
+                    .collect::<Vec<_>>(),
+            )
+            .inner(),
+        );
 
         // Flush the store so we keep in memory only the last 1 round from the last commit for each
         // authority.
@@ -2551,13 +2579,16 @@ mod test {
             dag_state.accept_block(block);
         }
 
-        dag_state.add_commit(TrustedCommit::new_for_test(
-            1 as CommitIndex,
-            CommitDigest::MIN,
-            0,
-            dag_builder.leader_block(3).unwrap().reference(),
-            vec![],
-        ));
+        dag_state.set_last_commit(
+            TrustedCommit::new_for_test(
+                1 as CommitIndex,
+                CommitDigest::MIN,
+                0,
+                dag_builder.leader_block(3).unwrap().reference(),
+                vec![],
+            )
+            .inner(),
+        );
 
         // Flush the store so we update the evict rounds
         dag_state.flush();

@@ -437,7 +437,7 @@ mod tests {
     use super::*;
     use crate::{
         block::{BlockDigest, BlockRef, BlockTimestampMs, TestBlock, VerifiedBlock},
-        commit::{CommitDigest, CommitInfo, CommitRef, CommittedSubDag, TrustedCommit},
+        commit::{CommitDigest, CommitInfo, CommittedSubDag, TrustedCommit},
         storage::{mem_store::MemStore, Store, WriteBatch},
         test_dag_builder::DagBuilder,
     };
@@ -671,12 +671,10 @@ mod tests {
             Arc::new(MemStore::new()),
         )));
         let unscored_subdags = vec![CommittedSubDag::new(
+            1,
             BlockRef::new(1, AuthorityIndex::ZERO, BlockDigest::MIN),
             vec![],
-            BTreeMap::new(),
             context.clock.timestamp_utc_ms(),
-            CommitRef::new(1, CommitDigest::MIN),
-            vec![],
         )];
         dag_state.write().add_scoring_subdags(unscored_subdags);
 
@@ -768,17 +766,14 @@ mod tests {
                 .collect::<Vec<_>>(),
         );
 
-        let unscored_subdags = vec![CommittedSubDag::new(
-            leader_ref,
-            blocks,
-            rejected_transactions,
-            context.clock.timestamp_utc_ms(),
-            last_commit.reference(),
-            vec![],
-        )];
+        let mut sub_dag =
+            CommittedSubDag::new(1, leader_ref, blocks, context.clock.timestamp_utc_ms());
+        sub_dag.rejected_transactions_by_block = rejected_transactions;
+        sub_dag.commit_digest = last_commit.digest();
+        let unscored_subdags = vec![sub_dag];
 
         let mut dag_state_write = dag_state.write();
-        dag_state_write.set_last_commit(last_commit);
+        dag_state_write.set_last_commit_for_test(last_commit);
         dag_state_write.add_scoring_subdags(unscored_subdags);
         drop(dag_state_write);
 

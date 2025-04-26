@@ -64,7 +64,7 @@ impl ConsensusCommitAPI for consensus_core::CommittedSubDag {
     }
 
     fn commit_sub_dag_index(&self) -> u64 {
-        self.commit_ref.index.into()
+        self.index.into()
     }
 
     fn transactions(&self) -> Vec<(AuthorityIndex, Vec<ParsedTransaction>)> {
@@ -89,7 +89,7 @@ impl ConsensusCommitAPI for consensus_core::CommittedSubDag {
             // We port CommitDigest, a consensus space object, into ConsensusCommitDigest, a sui-core space object.
             // We assume they always have the same format.
             static_assertions::assert_eq_size!(ConsensusCommitDigest, CommitDigest);
-            ConsensusCommitDigest::new(self.commit_ref.digest.into_inner())
+            ConsensusCommitDigest::new(self.commit_digest.into_inner())
         } else {
             ConsensusCommitDigest::default()
         }
