@@ -1125,7 +1125,9 @@ async fn test_epoch_flag_upgrade() {
         all_flags
     );
 
+    tracing::error!("Waiting for epoch 1");
     test_cluster.wait_for_epoch_all_nodes(1).await;
+    tracing::error!("Epoch 1 done");
 
     let mut any_empty = false;
     for node in test_cluster.all_node_handles() {
@@ -1140,12 +1142,17 @@ async fn test_epoch_flag_upgrade() {
     }
     assert!(!any_empty);
 
+    tracing::error!("Sleeping for 15 seconds");
     sleep(Duration::from_secs(15)).await;
 
+    tracing::error!("Stopping all validators");
     test_cluster.stop_all_validators().await;
+    tracing::error!("Starting all validators");
     test_cluster.start_all_validators().await;
 
+    tracing::error!("Waiting for epoch 2");
     test_cluster.wait_for_epoch_all_nodes(2).await;
+    tracing::error!("Epoch 2 done");
 }
 
 #[cfg(msim)]

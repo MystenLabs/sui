@@ -211,7 +211,9 @@ impl TestCluster {
             if v.is_running() {
                 continue;
             }
+            tracing::error!("Starting validator {:?}", v.name());
             v.start().await.unwrap();
+            tracing::error!("Validator {:?} started", v.name());
         }
         tokio::time::sleep(Duration::from_secs(3)).await;
     }

@@ -41,12 +41,14 @@ impl Drop for Container {
 impl Container {
     /// Spawn a new Node.
     pub async fn spawn(config: NodeConfig, runtime: RuntimeType) -> Self {
+        tracing::error!("func spawning channel");
         let (startup_sender, startup_receiver) = tokio::sync::oneshot::channel();
         let (cancel_sender, cancel_receiver) = tokio::sync::oneshot::channel();
         let name = AuthorityPublicKeyBytes::from(config.protocol_key_pair().public())
             .concise()
             .to_string();
 
+        tracing::error!("func spawning thread");
         let thread = thread::Builder::new().name(name).spawn(move || {
             let span = if get_global_telemetry_config()
                 .map(|c| c.enable_otlp_tracing)
@@ -92,13 +94,16 @@ impl Container {
             };
             let runtime = builder.enable_all().build().unwrap();
 
+            tracing::error!("Blocking runtime");
             runtime.block_on(async move {
                 let registry_service = mysten_metrics::start_prometheus_server(config.metrics_address);
                 info!(
                     "Started Prometheus HTTP endpoint. To query metrics use\n\tcurl -s http://{}/metrics",
                     config.metrics_address
                 );
+                tracing::error!("Starting Sui node");
                 let server = SuiNode::start(config, registry_service).await.unwrap();
+                tracing::error!("Sui node started");
                 // Notify that we've successfully started the node
                 let _ = startup_sender.send(Arc::downgrade(&server));
                 // run until canceled
@@ -106,9 +111,12 @@ impl Container {
 
                 trace!("cancellation received; shutting down thread");
             });
+            tracing::error!("Runtime unblocked");
         }).unwrap();
 
+        tracing::error!("Waiting for startup");
         let node = startup_receiver.await.unwrap();
+        tracing::error!("Startup complete");
 
         Self {
             join_handle: Some(thread),

@@ -60,7 +60,11 @@ impl Node {
     pub async fn spawn(&self) -> Result<()> {
         info!(name =% self.name().concise(), "starting in-memory node");
         let config = self.config().clone();
-        *self.container.lock().unwrap() = Some(Container::spawn(config, self.runtime_type).await);
+        tracing::error!("Node spawning container");
+        let new_container = Container::spawn(config, self.runtime_type).await;
+        tracing::error!("Node locking container");
+        let mut container = self.container.lock().unwrap();
+        *container = Some(new_container);
         Ok(())
     }
 
