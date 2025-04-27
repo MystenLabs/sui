@@ -16,7 +16,6 @@ use sui_types::{digests::TransactionDigest, effects::TransactionEffectsAPI};
 
 use crate::{
     api::scalars::{base64::Base64, cursor::JsonCursor, digest::Digest},
-    consistency,
     error::RpcError,
     pagination::{Page, PaginationConfig},
     scope::Scope,
@@ -40,7 +39,7 @@ pub(crate) struct EffectsContents {
     pub(crate) contents: Option<Arc<NativeTransactionContents>>,
 }
 
-type CObjectChange = JsonCursor<consistency::Indexed>;
+type CObjectChange = JsonCursor<usize>;
 
 /// The results of executing a transaction.
 #[Object]
@@ -113,16 +112,13 @@ impl EffectsContents {
         };
 
         let object_changes = content.effects()?.object_changes();
-        let cursors = page.paginate_indices(&self.scope, object_changes.len())?;
+        let cursors = page.paginate_indices(object_changes.len());
 
         let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
         for edge in cursors.edges {
-            let scope = self
-                .scope
-                .with_checkpoint_viewed_at(edge.cursor.checkpoint_viewed_at);
             let object_change = ObjectChange {
-                scope,
-                native: object_changes[edge.cursor.ix].clone(),
+                scope: self.scope.clone(),
+                native: object_changes[*edge.cursor].clone(),
             };
 
             conn.edges.push(Edge::new(edge.cursor, object_change))

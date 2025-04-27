@@ -8,11 +8,7 @@ use async_graphql::{
     registry::MetaField,
 };
 
-use crate::{
-    api::scalars::cursor::JsonCursor,
-    consistency::{self, Checkpointed, Indexed},
-    scope::Scope,
-};
+use crate::api::scalars::cursor::JsonCursor;
 
 /// Configuration for page size limits, specifying a max multi-get size, as well as a default and
 /// max page size for each paginated fields. Page limits can be customized for specific fields,
@@ -63,12 +59,6 @@ pub(crate) enum End {
 pub(crate) enum Error {
     #[error("Cannot provide both 'first' and 'last' parameters for connection")]
     FirstAndLast,
-
-    #[error(
-        "'after' cursor is pinned to checkpoint {after} and 'before' cursor is pinned to \
-         checkpoint {before}. They cannot be used together."
-    )]
-    InconsistentCheckpoint { after: u64, before: u64 },
 
     #[error("Page size of {limit} exceeds max of {max} for connection")]
     TooLarge { limit: u64, max: u32 },
@@ -163,51 +153,19 @@ impl<C> Page<C> {
     }
 }
 
-impl<C: Checkpointed> Page<C> {
-    /// Calculate the checkpoint that results under this page should be pinned to, based on
-    /// checkpoint information in the cursors, or if none are provided, the scope that the page is
-    /// being fetched in.
-    ///
-    /// It is an error for both cursors to be present and pointing to pinned to different
-    /// checkpoints.
-    fn checkpoint_viewed_at(&self, scope: &Scope) -> Result<u64, Error> {
-        match (self.after(), self.before()) {
-            // If both cursors have been supplied, they must be pinned to the same checkpoint.
-            (Some(a), Some(b)) if a.checkpoint_viewed_at() != b.checkpoint_viewed_at() => {
-                Err(Error::InconsistentCheckpoint {
-                    after: a.checkpoint_viewed_at(),
-                    before: b.checkpoint_viewed_at(),
-                })
-            }
-
-            // Otherwise, either cursor sets the checkpoint viewed at.
-            (Some(c), _) | (_, Some(c)) => Ok(c.checkpoint_viewed_at()),
-
-            // Otherwise, it is set by the overall scope.
-            (None, None) => Ok(scope.checkpoint_viewed_at()),
-        }
-    }
-}
-
-impl Page<JsonCursor<consistency::Indexed>> {
+impl Page<JsonCursor<usize>> {
     /// Treat the cursors of this Page as indices into a range [0, total). Returns a connection
     /// with the cursors filled out, but no data.
-    ///
-    /// `scope` is used to pin the returned cursors to a checkpoint in case the page contains no
-    /// cursors to get consistency information from.
     pub(crate) fn paginate_indices(
         &self,
-        scope: &Scope,
         total: usize,
-    ) -> Result<Connection<JsonCursor<consistency::Indexed>, EmptyFields>, Error> {
-        let checkpoint_viewed_at = self.checkpoint_viewed_at(scope)?;
-
-        let mut lo = self.after().map_or(0, |a| a.ix.saturating_add(1));
-        let mut hi = self.before().map_or(total, |b| b.ix);
+    ) -> Connection<JsonCursor<usize>, EmptyFields> {
+        let mut lo = self.after().map_or(0, |a| a.saturating_add(1));
+        let mut hi = self.before().map_or(total, |b| **b);
         let mut conn = Connection::new(false, false);
 
         if hi <= lo {
-            return Ok(conn);
+            return conn;
         } else if (hi - lo) > self.limit() {
             if self.is_from_front() {
                 hi = lo + self.limit();
@@ -218,17 +176,11 @@ impl Page<JsonCursor<consistency::Indexed>> {
 
         conn.has_previous_page = 0 < lo;
         conn.has_next_page = hi < total;
-        for ix in lo..hi {
-            conn.edges.push(Edge::new(
-                JsonCursor::new(Indexed {
-                    ix,
-                    checkpoint_viewed_at,
-                }),
-                EmptyFields,
-            ));
+        for i in lo..hi {
+            conn.edges.push(Edge::new(JsonCursor::new(i), EmptyFields));
         }
 
-        Ok(conn)
+        conn
     }
 }
 
@@ -240,18 +192,7 @@ pub(crate) fn is_connection(field: &MetaField) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use serde::{Deserialize, Serialize};
-
     use super::*;
-
-    #[derive(Serialize, Deserialize)]
-    struct Consistent(usize);
-
-    impl Checkpointed for JsonCursor<Consistent> {
-        fn checkpoint_viewed_at(&self) -> u64 {
-            self.0 as u64
-        }
-    }
 
     #[test]
     fn test_default_page() {
@@ -355,100 +296,6 @@ mod tests {
                 limit: 1000,
                 max: 100,
             })
-        ));
-    }
-
-    #[test]
-    fn test_page_consistency_with_cursors() {
-        let limits = PageLimits {
-            default: 10,
-            max: 100,
-        };
-
-        let scope = Scope::new_for_test(10);
-        let page: Page<JsonCursor<Consistent>> = Page::from_params(
-            &limits,
-            None,
-            Some(JsonCursor::new(Consistent(5))),
-            None,
-            Some(JsonCursor::new(Consistent(5))),
-        )
-        .unwrap();
-
-        assert_eq!(5, page.checkpoint_viewed_at(&scope).unwrap());
-    }
-
-    #[test]
-    fn test_page_consistency_with_one_cursor() {
-        let limits = PageLimits {
-            default: 10,
-            max: 100,
-        };
-
-        let scope = Scope::new_for_test(10);
-
-        // `after` cursor only.
-        let page: Page<JsonCursor<Consistent>> = Page::from_params(
-            &limits,
-            None,
-            Some(JsonCursor::new(Consistent(5))),
-            None,
-            None,
-        )
-        .unwrap();
-
-        assert_eq!(5, page.checkpoint_viewed_at(&scope).unwrap());
-
-        // `before` cursor only.
-        let page: Page<JsonCursor<Consistent>> = Page::from_params(
-            &limits,
-            None,
-            None,
-            None,
-            Some(JsonCursor::new(Consistent(5))),
-        )
-        .unwrap();
-
-        assert_eq!(5, page.checkpoint_viewed_at(&scope).unwrap());
-    }
-
-    #[test]
-    fn test_page_consistency_with_no_cursor() {
-        let limits = PageLimits {
-            default: 10,
-            max: 100,
-        };
-
-        let scope = Scope::new_for_test(10);
-        let page: Page<JsonCursor<Consistent>> =
-            Page::from_params(&limits, None, None, None, None).unwrap();
-
-        assert_eq!(10, page.checkpoint_viewed_at(&scope).unwrap());
-    }
-
-    #[test]
-    fn test_page_inconsistent() {
-        let limits = PageLimits {
-            default: 10,
-            max: 100,
-        };
-
-        let scope = Scope::new_for_test(10);
-        let page: Page<JsonCursor<Consistent>> = Page::from_params(
-            &limits,
-            None,
-            Some(JsonCursor::new(Consistent(5))),
-            None,
-            Some(JsonCursor::new(Consistent(6))),
-        )
-        .unwrap();
-
-        assert!(matches!(
-            page.checkpoint_viewed_at(&scope).unwrap_err(),
-            Error::InconsistentCheckpoint {
-                after: 5,
-                before: 6,
-            }
         ));
     }
 }

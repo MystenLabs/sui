@@ -53,7 +53,6 @@ use crate::middleware::version::Version;
 mod api;
 pub mod args;
 pub mod config;
-mod consistency;
 mod error;
 mod extensions;
 mod health;

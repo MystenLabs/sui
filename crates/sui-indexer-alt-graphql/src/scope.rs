@@ -30,14 +30,6 @@ impl Scope {
         })
     }
 
-    /// Create a new scope for test purposes.
-    #[cfg(test)]
-    pub(crate) fn new_for_test(checkpoint_viewed_at: u64) -> Self {
-        Self {
-            checkpoint_viewed_at,
-        }
-    }
-
     /// Created a nested scope pinned to a different checkpoint.
     pub(crate) fn with_checkpoint_viewed_at(&self, checkpoint_viewed_at: u64) -> Self {
         Self {
