@@ -68,6 +68,9 @@ interface IObject {
 }
 
 
+"""
+A MovePackage is a kind of Object that represents code that has been published on-chain. It exposes information about its modules, type definitions, functions, and dependencies.
+"""
 type MovePackage implements IAddressable & IObject {
 	"""
 	The MovePackage's ID.
@@ -212,6 +215,28 @@ input ObjectKey {
 }
 
 """
+Identifies a specific version of a package.
+
+The `address` field must be specified, as well as at most one of `version`, or `atCheckpoint`. If neither is provided, the package is fetched at the current checkpoint.
+
+See `Query.package` for more details.
+"""
+input PackageKey {
+	"""
+	The object's ID.
+	"""
+	address: SuiAddress!
+	"""
+	If specified, tries to fetch the package at this exact version.
+	"""
+	version: UInt53
+	"""
+	If specified, tries to fetch the latest version as of this checkpoint.
+	"""
+	atCheckpoint: UInt53
+}
+
+"""
 Information about pagination in a connection
 """
 type PageInfo {
@@ -257,6 +282,12 @@ type Query {
 	"""
 	multiGetObjects(keys: [ObjectKey!]!): [Object]!
 	"""
+	Fetch packages by their keys.
+	
+	Returns a list of packages that is guaranteed to be the same length as `keys`. If a package in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because that address never pointed to a package, or because the package was pruned.
+	"""
+	multiGetPackages(keys: [PackageKey!]!): [MovePackage]!
+	"""
 	Fetch transactions by their digests.
 	
 	Returns a list of transactions that is guaranteed to be the same length as `keys`. If a digest in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the transaction never existed, or because it was pruned.
@@ -288,6 +319,20 @@ type Query {
 	Returns `null` if an object cannot be found that meets this criteria.
 	"""
 	object(address: SuiAddress!, version: UInt53, rootVersion: UInt53, atCheckpoint: UInt53): Object
+	"""
+	Fetch a package by its address.
+	
+	If `version` is specified, the package loaded is the one that shares its original ID with the package at `address`, but whose version is `version`.
+	
+	If `atCheckpoint` is specified, the package loaded is the one with the largest version among all packages sharing an original ID with the package at `address` and was published at or before `atCheckpoint`.
+	
+	If neither are specified, the package is fetched at the latest checkpoint.
+	
+	It is an error to specify both `version` and `atCheckpoint`, and `null` will be returned if the package cannot be found as of the latest checkpoint, or the address points to an object that is not a package.
+	
+	Note that this interpretation of `version` and "latest" differs from the one used by `Query.object`, because non-system package upgrades generate objects with different IDs. To fetch a package using the versioning semantics of objects, use `Object.asMovePackage` nested under `Query.object`.
+	"""
+	package(address: SuiAddress!, version: UInt53, atCheckpoint: UInt53): MovePackage
 	"""
 	Configuration for this RPC service.
 	"""

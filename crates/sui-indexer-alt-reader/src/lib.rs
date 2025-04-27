@@ -11,6 +11,7 @@ pub(crate) mod metrics;
 pub mod object_versions;
 pub mod objects;
 pub mod package_resolver;
+pub mod packages;
 pub mod pg_reader;
 pub mod system_package_task;
 pub mod transactions;
