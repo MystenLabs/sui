@@ -6,7 +6,6 @@ use std::{
     sync::Arc,
 };
 
-use consensus_config::Stake;
 use mysten_metrics::{
     monitored_mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     monitored_scope, spawn_logged_monitored_task,
@@ -17,7 +16,7 @@ use crate::{
     error::{ConsensusError, ConsensusResult},
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     transaction_certifier::TransactionCertifier,
-    BlockAPI, BlockRef, CommitIndex, CommittedSubDag, Round, TransactionIndex,
+    BlockAPI, BlockRef, CommitIndex, CommittedSubDag, Round, TransactionIndex, VerifiedBlock,
 };
 
 /// Number of rounds between the leader that committed a transaction to the latest leader,
@@ -164,9 +163,15 @@ impl CommitFinalizer {
         // All blocks in a direct commit are finalized. But the transactions contained in them
         // may not have been finalized.
         let pending_blocks = std::mem::take(&mut commit_state.pending_blocks);
-        for block_ref in pending_blocks {
-            let reject_votes = self.transaction_certifier.get_reject_votes(&block_ref)
-                .unwrap_or_else(|| panic!("No vote info found for {block_ref}. It is likely gc'ed or failed to be recovered after crash."));
+        for (block_ref, block) in pending_blocks {
+            let Some(reject_votes) = self.transaction_certifier.get_reject_votes(&block_ref) else {
+                // In this case, fall back to indirect finalization for the block.
+                commit_state.pending_blocks.insert(block_ref, block);
+                tracing::debug!(
+                    "No vote info found for {block_ref}. It is likely not recovered after restart."
+                );
+                continue;
+            };
             for (transaction_index, stake) in reject_votes {
                 let entry = if stake < self.context.committee.quorum_threshold() {
                     commit_state
@@ -290,12 +295,13 @@ impl CommitFinalizer {
             .copied()
             .collect::<Vec<_>>();
         for block_ref in pending_transactions {
-            let reject_votes: BTreeMap<TransactionIndex, Stake> = self
-                .transaction_certifier
-                .get_reject_votes(&block_ref)
-                .unwrap_or_else(|| panic!("No vote info found for {block_ref}. It is likely gc'ed or failed to be recovered after crash."))
-                .into_iter()
-                .collect();
+            let Some(reject_votes) = self.transaction_certifier.get_reject_votes(&block_ref) else {
+                // In this case, it is ok to skip since this is just an optimization.
+                tracing::debug!(
+                    "No vote info found for {block_ref}. It is likely not recovered after restart."
+                );
+                continue;
+            };
             for (transaction_index, stake) in reject_votes {
                 if stake < self.context.committee.quorum_threshold() {
                     // pending_transactions do not need to be updated in this case,
@@ -325,7 +331,7 @@ impl CommitFinalizer {
         let index = 0;
         let curr_leader_round = self.commits[index].commit.leader.round;
         let pending_blocks = self.commits[index].pending_blocks.clone();
-        for block_ref in pending_blocks {
+        for (block_ref, block) in pending_blocks {
             let (block_finalized, _) =
                 self.try_indirect_finalize_block(curr_leader_round, block_ref, BTreeMap::new());
             if !block_finalized {
@@ -333,12 +339,18 @@ impl CommitFinalizer {
             }
             let curr_commit_state = &mut self.commits[index];
             curr_commit_state.pending_blocks.remove(&block_ref);
-            let reject_votes: BTreeMap<TransactionIndex, Stake> = self
-                .transaction_certifier
-                .get_reject_votes(&block_ref)
-                .unwrap_or_else(|| panic!("No vote info found for {block_ref}. It is likely gc'ed or failed to be recovered after crash."))
-                .into_iter()
-                .collect();
+            let Some(reject_votes) = self.transaction_certifier.get_reject_votes(&block_ref) else {
+                // In this case, insert all transactions from the block into pending_transactions.
+                curr_commit_state
+                    .pending_transactions
+                    .entry(block_ref)
+                    .or_default()
+                    .extend(0..block.transactions().len() as TransactionIndex);
+                tracing::debug!(
+                    "No vote info found for {block_ref}. It is likely not recovered after restart."
+                );
+                continue;
+            };
             for (transaction_index, stake) in reject_votes {
                 let entry = if stake < self.context.committee.quorum_threshold() {
                     curr_commit_state
@@ -498,7 +510,7 @@ impl CommitFinalizer {
 struct CommitState {
     commit: CommittedSubDag,
     // Blocks pending finalization.
-    pending_blocks: BTreeSet<BlockRef>,
+    pending_blocks: BTreeMap<BlockRef, VerifiedBlock>,
     // Transactions pending finalization, where the block is already finalized.
     pending_transactions: BTreeMap<BlockRef, BTreeSet<TransactionIndex>>,
     // Transactions rejected by a quorum or indirectly finalized, per block.
@@ -507,7 +519,11 @@ struct CommitState {
 
 impl CommitState {
     fn new(commit: CommittedSubDag) -> Self {
-        let pending_blocks = commit.blocks.iter().map(|b| b.reference()).collect();
+        let pending_blocks = commit
+            .blocks
+            .iter()
+            .map(|b| (b.reference(), b.clone()))
+            .collect();
         Self {
             commit,
             pending_blocks,
