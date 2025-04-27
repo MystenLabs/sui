@@ -24,6 +24,10 @@ type Checkpoint {
 	"""
 	sequenceNumber: UInt53!
 	"""
+	Query the RPC as if this checkpoint were the latest checkpoint.
+	"""
+	query: Query
+	"""
 	The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
 	"""
 	timestamp: DateTime
