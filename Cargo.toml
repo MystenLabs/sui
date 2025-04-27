@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 
+
 exclude = [
   "examples/tic-tac-toe/cli",
   "external-crates/move/crates/bytecode-interpreter-crypto",
