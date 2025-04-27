@@ -8,7 +8,10 @@ use async_graphql::{dataloader::DataLoader, Context, InputObject, Interface, Obj
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer_alt_reader::{
     kv_loader::KvLoader,
-    object_versions::{CheckpointBoundedObjectVersionKey, VersionBoundedObjectVersionKey},
+    object_versions::{
+        CheckpointBoundedObjectVersionKey, VersionBoundedObjectVersionKey,
+        VersionedObjectVersionKey,
+    },
     pg_reader::PgReader,
 };
 use sui_indexer_alt_schema::objects::StoredObjVersion;
@@ -17,6 +20,7 @@ use sui_types::{
     digests::ObjectDigest,
     object::Object as NativeObject,
 };
+use tokio::join;
 
 use crate::{
     api::scalars::{base64::Base64, sui_address::SuiAddress, uint53::UInt53},
@@ -238,16 +242,30 @@ impl Object {
 
     /// Load the object at the given ID and version from the store, and return it fully inflated
     /// (with contents already fetched). Returns `None` if the object does not exist (either never
-    /// existed or was pruned from the store).
+    /// existed, was pruned from the store, or did not exist at the checkpoint being viewed).
     pub(crate) async fn at_version(
         ctx: &Context<'_>,
         scope: Scope,
         address: SuiAddress,
         version: UInt53,
     ) -> Result<Option<Self>, RpcError<Error>> {
-        let Some(c) = contents(ctx, address, version).await? else {
+        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+
+        let contents = contents(ctx, address, version);
+        let stored_version =
+            pg_loader.load_one(VersionedObjectVersionKey(address.into(), version.into()));
+        let (contents, stored_version) = join!(contents, stored_version);
+
+        let Some(c) = contents? else {
             return Ok(None);
         };
+
+        if stored_version
+            .context("Failed to get object version")?
+            .is_none_or(|s| s.cp_sequence_number as u64 > scope.checkpoint_viewed_at())
+        {
+            return Ok(None);
+        }
 
         Ok(Some(Self::from_contents(scope, c)))
     }
