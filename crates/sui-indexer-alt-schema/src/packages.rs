@@ -16,3 +16,10 @@ pub struct StoredPackage {
     pub serialized_object: Vec<u8>,
     pub cp_sequence_number: i64,
 }
+
+#[derive(QueryableByName, Debug, Clone)]
+#[diesel(table_name = kv_packages)]
+pub struct StoredPackageOriginalId {
+    pub package_id: Vec<u8>,
+    pub original_id: Vec<u8>,
+}

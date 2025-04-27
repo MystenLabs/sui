@@ -11,6 +11,7 @@ use super::{
     scalars::{digest::Digest, sui_address::SuiAddress, uint53::UInt53},
     types::{
         checkpoint::Checkpoint,
+        move_package::{self, MovePackage, PackageKey},
         object::{self, Object, ObjectKey},
         service_config::ServiceConfig,
         transaction::Transaction,
@@ -80,6 +81,22 @@ impl Query {
         try_join_all(objects).await
     }
 
+    /// Fetch packages by their keys.
+    ///
+    /// Returns a list of packages that is guaranteed to be the same length as `keys`. If a package in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because that address never pointed to a package, or because the package was pruned.
+    async fn multi_get_packages(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<PackageKey>,
+    ) -> Result<Vec<Option<MovePackage>>, RpcError<move_package::Error>> {
+        let scope = self.scope(ctx)?;
+        let packages = keys
+            .into_iter()
+            .map(|k| MovePackage::by_key(ctx, scope.clone(), k));
+
+        try_join_all(packages).await
+    }
+
     /// Fetch transactions by their digests.
     ///
     /// Returns a list of transactions that is guaranteed to be the same length as `keys`. If a digest in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the transaction never existed, or because it was pruned.
@@ -144,6 +161,36 @@ impl Query {
                 address,
                 version,
                 root_version,
+                at_checkpoint,
+            },
+        )
+        .await
+    }
+
+    /// Fetch a package by its address.
+    ///
+    /// If `version` is specified, the package loaded is the one that shares its original ID with the package at `address`, but whose version is `version`.
+    ///
+    /// If `atCheckpoint` is specified, the package loaded is the one with the largest version among all packages sharing an original ID with the package at `address` and was published at or before `atCheckpoint`.
+    ///
+    /// If neither are specified, the package is fetched at the latest checkpoint.
+    ///
+    /// It is an error to specify both `version` and `atCheckpoint`, and `null` will be returned if the package cannot be found as of the latest checkpoint, or the address points to an object that is not a package.
+    ///
+    /// Note that this interpretation of `version` and "latest" differs from the one used by `Query.object`, because non-system package upgrades generate objects with different IDs. To fetch a package using the versioning semantics of objects, use `Object.asMovePackage` nested under `Query.object`.
+    async fn package(
+        &self,
+        ctx: &Context<'_>,
+        address: SuiAddress,
+        version: Option<UInt53>,
+        at_checkpoint: Option<UInt53>,
+    ) -> Result<Option<MovePackage>, RpcError<move_package::Error>> {
+        MovePackage::by_key(
+            ctx,
+            self.scope(ctx)?,
+            PackageKey {
+                address,
+                version,
                 at_checkpoint,
             },
         )
