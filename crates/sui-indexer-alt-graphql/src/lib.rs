@@ -242,7 +242,7 @@ impl Default for RpcArgs {
 
 /// The GraphQL schema this service will serve, without any extensions or context added.
 pub fn schema() -> SchemaBuilder<Query, EmptyMutation, EmptySubscription> {
-    Schema::build(Query, EmptyMutation, EmptySubscription)
+    Schema::build(Query::default(), EmptyMutation, EmptySubscription)
         .register_output_type::<IAddressable>()
         .register_output_type::<IObject>()
 }

@@ -18,7 +18,12 @@ use super::{
     },
 };
 
-pub struct Query;
+#[derive(Default)]
+pub struct Query {
+    /// Queries will use this scope if it is populated, instead of creating a fresh scope from
+    /// information in the request-wide [Context].
+    pub(crate) scope: Option<Scope>,
+}
 
 #[Object]
 impl Query {
@@ -36,11 +41,11 @@ impl Query {
         ctx: &Context<'_>,
         sequence_number: Option<UInt53>,
     ) -> Result<Option<Checkpoint>, RpcError> {
-        let scope = Scope::new(ctx)?;
+        let scope = self.scope(ctx)?;
         let sequence_number =
             sequence_number.unwrap_or_else(|| scope.checkpoint_viewed_at().into());
 
-        Checkpoint::fetch(ctx, scope, sequence_number).await
+        Checkpoint::fetch(scope, sequence_number).await
     }
 
     /// Fetch checkpoints by their sequence numbers.
@@ -51,10 +56,10 @@ impl Query {
         ctx: &Context<'_>,
         keys: Vec<UInt53>,
     ) -> Result<Vec<Option<Checkpoint>>, RpcError> {
-        let scope = Scope::new(ctx)?;
+        let scope = self.scope(ctx)?;
         let checkpoints = keys
             .into_iter()
-            .map(|k| Checkpoint::fetch(ctx, scope.clone(), k));
+            .map(|k| Checkpoint::fetch(scope.clone(), k));
 
         try_join_all(checkpoints).await
     }
@@ -67,7 +72,7 @@ impl Query {
         ctx: &Context<'_>,
         keys: Vec<ObjectKey>,
     ) -> Result<Vec<Option<Object>>, RpcError<object::Error>> {
-        let scope = Scope::new(ctx)?;
+        let scope = self.scope(ctx)?;
         let objects = keys
             .into_iter()
             .map(|k| Object::by_key(ctx, scope.clone(), k));
@@ -83,7 +88,7 @@ impl Query {
         ctx: &Context<'_>,
         keys: Vec<Digest>,
     ) -> Result<Vec<Option<Transaction>>, RpcError> {
-        let scope = Scope::new(ctx)?;
+        let scope = self.scope(ctx)?;
         let transactions = keys
             .into_iter()
             .map(|d| Transaction::fetch(ctx, scope.clone(), d));
@@ -99,7 +104,7 @@ impl Query {
         ctx: &Context<'_>,
         keys: Vec<Digest>,
     ) -> Result<Vec<Option<TransactionEffects>>, RpcError> {
-        let scope = Scope::new(ctx)?;
+        let scope = self.scope(ctx)?;
         let effects = keys
             .into_iter()
             .map(|d| TransactionEffects::fetch(ctx, scope.clone(), d));
@@ -134,7 +139,7 @@ impl Query {
     ) -> Result<Option<Object>, RpcError<object::Error>> {
         Object::by_key(
             ctx,
-            Scope::new(ctx)?,
+            self.scope(ctx)?,
             ObjectKey {
                 address,
                 version,
@@ -158,7 +163,7 @@ impl Query {
         ctx: &Context<'_>,
         digest: Digest,
     ) -> Result<Option<Transaction>, RpcError> {
-        Transaction::fetch(ctx, Scope::new(ctx)?, digest).await
+        Transaction::fetch(ctx, self.scope(ctx)?, digest).await
     }
 
     /// Fetch transaction effects by its transaction's digest.
@@ -169,6 +174,13 @@ impl Query {
         ctx: &Context<'_>,
         digest: Digest,
     ) -> Result<Option<TransactionEffects>, RpcError> {
-        TransactionEffects::fetch(ctx, Scope::new(ctx)?, digest).await
+        TransactionEffects::fetch(ctx, self.scope(ctx)?, digest).await
+    }
+}
+
+impl Query {
+    /// The scope under which all queries are supposed to be queried.
+    fn scope<E: std::error::Error>(&self, ctx: &Context<'_>) -> Result<Scope, RpcError<E>> {
+        self.scope.clone().map_or_else(|| Scope::new(ctx), Ok)
     }
 }
