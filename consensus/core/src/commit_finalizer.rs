@@ -164,6 +164,7 @@ impl CommitFinalizer {
         // may not have been finalized.
         let pending_blocks = std::mem::take(&mut commit_state.pending_blocks);
         for (block_ref, block) in pending_blocks {
+            // Optimistically get transactions that are not yet accepted, from TransactionCertifier.
             let Some(reject_votes) = self.transaction_certifier.get_reject_votes(&block_ref) else {
                 // In this case, fall back to indirect finalization for the block.
                 commit_state.pending_blocks.insert(block_ref, block);
@@ -295,6 +296,7 @@ impl CommitFinalizer {
             .copied()
             .collect::<Vec<_>>();
         for block_ref in pending_transactions {
+            // Optimistically get transactions that are rejected by a quorum, from TransactionCertifier.
             let Some(reject_votes) = self.transaction_certifier.get_reject_votes(&block_ref) else {
                 // In this case, it is ok to skip since this is just an optimization.
                 tracing::debug!(
@@ -339,6 +341,7 @@ impl CommitFinalizer {
             }
             let curr_commit_state = &mut self.commits[index];
             curr_commit_state.pending_blocks.remove(&block_ref);
+            // Optimistically get transactions that are not yet accepted, from TransactionCertifier.
             let Some(reject_votes) = self.transaction_certifier.get_reject_votes(&block_ref) else {
                 // In this case, insert all transactions from the block into pending_transactions.
                 curr_commit_state

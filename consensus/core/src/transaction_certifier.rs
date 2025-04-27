@@ -86,8 +86,10 @@ impl TransactionCertifier {
                 .into_iter()
                 .map(|b| {
                     if dag_state.is_hard_linked(&b.reference()) {
+                        // Own votes are not needed for blocks in causal history of own proposed blocks.
                         (b, vec![])
                     } else {
+                        // Own votes are needed to be included in future proposed blocks.
                         let reject_transaction_votes = block_verifier
                             .verify_and_vote(b.signed_block())
                             .unwrap_or_else(|e| {
