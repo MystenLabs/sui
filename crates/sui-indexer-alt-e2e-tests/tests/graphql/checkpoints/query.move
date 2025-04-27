@@ -46,3 +46,22 @@ fragment State on Query {
   checkpoint { sequenceNumber }
   object(address: "@{obj_1_0}") { version }
 }
+
+//# run-graphql
+{ # Querying at a checkpoint hides objects that exist, but at a future
+  # checkpoint.
+  checkpoint(sequenceNumber: 1) {
+    query {
+      # Latest as of checkpoint 1
+      latest: object(address: "@{obj_1_0}") { version }
+
+      # This version does not exist, so should not return anything
+      byVersion: object(address: "@{obj_1_0}", version: 4) { version }
+
+      # "atCheckpoint" will override the fact that this field is nested inside
+      # a `Checkpoint.query`.
+      atCheckpoint: object(address: "@{obj_1_0}", atCheckpoint: 4) { version }
+    }
+  }
+
+}

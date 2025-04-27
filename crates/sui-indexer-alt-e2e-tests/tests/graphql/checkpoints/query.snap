@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 8 tasks
+processed 9 tasks
 
 init:
 A: object(0,0)
@@ -89,5 +89,23 @@ Response: {
       }
     },
     "nonexistent": null
+  }
+}
+
+task 8, lines 50-67:
+//# run-graphql
+Response: {
+  "data": {
+    "checkpoint": {
+      "query": {
+        "latest": {
+          "version": 2
+        },
+        "byVersion": null,
+        "atCheckpoint": {
+          "version": 4
+        }
+      }
+    }
   }
 }
