@@ -31,6 +31,8 @@ use crate::{
     mysticeti_adapter::LazyMysticetiClient,
 };
 
+use super::ReplayWaiter;
+
 #[cfg(test)]
 #[path = "../unit_tests/mysticeti_manager_tests.rs"]
 pub mod mysticeti_manager_tests;
@@ -223,11 +225,6 @@ impl ConsensusManagerTrait for MysticetiManager {
 
         let mut consensus_handler = self.consensus_handler.lock().await;
         *consensus_handler = Some(handler);
-
-        // Wait until all locally available commits have been processed
-        info!("replaying commits at startup");
-        registered_authority.0.replay_complete().await;
-        info!("Startup commit replay complete");
     }
 
     async fn shutdown(&self) {
@@ -260,5 +257,10 @@ impl ConsensusManagerTrait for MysticetiManager {
 
     async fn is_running(&self) -> bool {
         Running::False != *self.running.lock().await
+    }
+
+    fn replay_waiter(&self) -> Option<ReplayWaiter> {
+        let authority = self.authority.load_full()?;
+        Some(ReplayWaiter::new(authority))
     }
 }

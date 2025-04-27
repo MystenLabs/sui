@@ -8,9 +8,10 @@ use crate::consensus_validator::SuiTxValidator;
 use crate::mysticeti_adapter::LazyMysticetiClient;
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
+use consensus_core::ConsensusAuthority;
 use enum_dispatch::enum_dispatch;
 use fastcrypto::traits::KeyPair as _;
-use mysten_metrics::RegistryService;
+use mysten_metrics::{RegistryID, RegistryService};
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -46,6 +47,8 @@ pub trait ConsensusManagerTrait {
     async fn shutdown(&self);
 
     async fn is_running(&self) -> bool;
+
+    fn replay_waiter(&self) -> Option<ReplayWaiter>;
 }
 
 // Wraps the underlying consensus protocol managers to make calling
@@ -160,6 +163,10 @@ impl ConsensusManagerTrait for ConsensusManager {
         let active = self.active.lock();
         *active
     }
+
+    fn replay_waiter(&self) -> Option<ReplayWaiter> {
+        self.mysticeti_manager.replay_waiter()
+    }
 }
 
 /// A ConsensusClient that can be updated internally at any time. This usually happening during epoch
@@ -218,6 +225,21 @@ impl ConsensusClient for UpdatableConsensusClient {
     ) -> SuiResult<BlockStatusReceiver> {
         let client = self.get().await;
         client.submit(transactions, epoch_store).await
+    }
+}
+
+#[derive(Clone)]
+pub struct ReplayWaiter {
+    authority: Arc<(ConsensusAuthority, RegistryID)>,
+}
+
+impl ReplayWaiter {
+    pub(crate) fn new(authority: Arc<(ConsensusAuthority, RegistryID)>) -> Self {
+        Self { authority }
+    }
+
+    pub(crate) async fn wait_for_replay(&self) {
+        self.authority.0.replay_complete().await;
     }
 }
 
