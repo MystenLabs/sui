@@ -1,0 +1,93 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-8:
+//# programmable --sender A --inputs 42 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 10:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 12-14:
+//# programmable --sender A --inputs object(1,0) 1
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: MergeCoins(Gas, [Result(0)])
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 4, lines 16-18:
+//# programmable --sender A --inputs object(1,0) 2
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: MergeCoins(Gas, [Result(0)])
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 5, line 20:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 6, line 22:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 7, lines 24-48:
+//# run-graphql
+Response: {
+  "data": {
+    "checkpoint": {
+      "sequenceNumber": 3
+    },
+    "object": {
+      "version": 4
+    },
+    "genesis": {
+      "query": {
+        "checkpoint": {
+          "sequenceNumber": 0
+        },
+        "object": null
+      }
+    },
+    "created": {
+      "query": {
+        "checkpoint": {
+          "sequenceNumber": 1
+        },
+        "object": {
+          "version": 2
+        }
+      }
+    },
+    "modified": {
+      "query": {
+        "checkpoint": {
+          "sequenceNumber": 2
+        },
+        "object": {
+          "version": 4
+        }
+      }
+    },
+    "untouched": {
+      "query": {
+        "checkpoint": {
+          "sequenceNumber": 3
+        },
+        "object": {
+          "version": 4
+        }
+      }
+    },
+    "nonexistent": null
+  }
+}

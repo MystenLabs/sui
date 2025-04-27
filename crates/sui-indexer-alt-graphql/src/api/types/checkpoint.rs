@@ -12,7 +12,10 @@ use sui_types::{
 };
 
 use crate::{
-    api::scalars::{date_time::DateTime, uint53::UInt53},
+    api::{
+        query::Query,
+        scalars::{date_time::DateTime, uint53::UInt53},
+    },
     error::RpcError,
     scope::Scope,
 };
@@ -40,6 +43,17 @@ impl Checkpoint {
     /// The checkpoint's position in the total order of finalized checkpoints, agreed upon by consensus.
     async fn sequence_number(&self) -> UInt53 {
         self.sequence_number.into()
+    }
+
+    /// Query the RPC as if this checkpoint were the latest checkpoint.
+    async fn query(&self) -> Option<Query> {
+        let scope = Some(
+            self.contents
+                .scope
+                .with_checkpoint_viewed_at(self.sequence_number),
+        );
+
+        Some(Query { scope })
     }
 
     #[graphql(flatten)]
@@ -71,26 +85,20 @@ impl Checkpoint {
         }
     }
 
-    /// Load the checkpoint from the store, and return it fully inflated (with contents already
-    /// fetched). Returns `None` if the checkpoint does not exist (either never existed or was
-    /// pruned from the store).
+    /// Return the checkpoint with the given sequence number, returns `None` if this checkpoint has
+    /// not happened yet, according to the scope.
     pub(crate) async fn fetch(
-        ctx: &Context<'_>,
         scope: Scope,
         sequence_number: UInt53,
     ) -> Result<Option<Self>, RpcError> {
-        let contents = CheckpointContents::empty(scope)
-            .fetch(ctx, sequence_number.into())
-            .await?;
-
-        let Some(cp) = &contents.contents else {
+        if u64::from(sequence_number) > scope.checkpoint_viewed_at() {
             return Ok(None);
-        };
+        }
 
-        Ok(Some(Checkpoint {
-            sequence_number: cp.0.sequence_number,
-            contents,
-        }))
+        Ok(Some(Self::with_sequence_number(
+            scope,
+            sequence_number.into(),
+        )))
     }
 }
 
