@@ -26,11 +26,14 @@ use crate::package::{EnvironmentName, PackageName};
 ///
 /// To get the correctly merged set of dependencies for a given environment, see [Self::default_deps],
 /// [Self::deps_for_env], and [Self::deps_for].
-///
 #[derive(Clone, Serialize, Deserialize)]
 pub struct DependencySet<T> {
+    /// The declared default dependencies
     #[serde(flatten)]
     defaults: BTreeMap<PackageName, T>,
+
+    /// The declared overrides
+    // Invariant: if e is in overrides, then overrides[e] is nonempty
     overrides: BTreeMap<EnvironmentName, BTreeMap<PackageName, T>>,
 }
 
@@ -94,6 +97,7 @@ impl<T> DependencySet<T> {
         .insert(package_name, value);
     }
 
+    /// Iterate over the declared entries of this set
     pub fn iter(&self) -> Iter<T> {
         self.into_iter()
     }
@@ -119,6 +123,39 @@ impl<T> DependencySet<T> {
                 .and_then(|deps| deps.get(package_name)),
             None => self.defaults.get(package_name),
         }
+    }
+
+    /// A copy of [self] expanded with an entry (package name, env, dep) for all
+    /// packages in [self] and environments in [envs].
+    pub fn explode(&mut self, envs: impl IntoIterator<Item = EnvironmentName>)
+    where
+        T: Clone,
+    {
+        for env in envs {
+            let deps: Vec<(PackageName, T)> = self
+                .deps_for_env(&env)
+                .into_iter()
+                .map(|(pkg, dep)| (pkg, dep.clone()))
+                .collect();
+
+            for (pkg, dep) in deps {
+                self.insert(Some(env.clone()), pkg, dep)
+            }
+        }
+    }
+
+    /// Remove any override entries from [self] that are the same as the default entries.
+    ///
+    /// Calling [collapse] changes the results of iteration but leaves the `deps_for...` methods
+    /// unchanged
+    pub fn collapse(&mut self)
+    where
+        T: Eq,
+    {
+        for (env, values) in self.overrides.iter_mut() {
+            values.retain(|name, value| self.defaults.get(name) != Some(value));
+        }
+        self.overrides.retain(|env, packages| !packages.is_empty());
     }
 }
 
@@ -250,4 +287,9 @@ impl<T: Serialize> fmt::Debug for DependencySet<T> {
         let toml = toml_edit::ser::to_string_pretty(self).expect("dependency set should serialize");
         write!(f, "{toml}")
     }
+}
+
+#[cfg(test)]
+mod tests {
+    // TODO
 }
