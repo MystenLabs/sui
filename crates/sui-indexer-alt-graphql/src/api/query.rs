@@ -14,6 +14,7 @@ use super::{
         epoch::Epoch,
         move_package::{self, MovePackage, PackageKey},
         object::{self, Object, ObjectKey},
+        protocol_configs::ProtocolConfigs,
         service_config::ServiceConfig,
         transaction::Transaction,
         transaction_effects::TransactionEffects,
@@ -220,6 +221,11 @@ impl Query {
             },
         )
         .await
+    }
+
+    /// Fetch the protocol config by protocol version.
+    async fn protocol_configs(&self, version: UInt53) -> Option<ProtocolConfigs> {
+        Some(ProtocolConfigs::with_protocol_version(version.into()))
     }
 
     /// Configuration for this RPC service.
