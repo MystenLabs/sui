@@ -4,9 +4,11 @@
 use anyhow::Result;
 use object_store::aws::AmazonS3ConfigKey;
 use object_store::gcp::GoogleConfigKey;
+use object_store::path::Path;
 use object_store::{ClientOptions, ObjectStore, RetryConfig};
 use std::str::FromStr;
 use std::time::Duration;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use url::Url;
 
 pub fn create_remote_store_client(
@@ -23,7 +25,11 @@ pub fn create_remote_store_client(
         .with_timeout(Duration::from_secs(timeout_secs))
         .with_allow_http(true);
     let url = Url::parse(&url)?;
-    match url.scheme() {
+    let mut scheme = url.scheme();
+    if url.host_str().unwrap_or_default().starts_with("s3") {
+        scheme = "s3";
+    }
+    match scheme {
         "http" | "https" => {
             let http_store = object_store::http::HttpBuilder::new()
                 .with_url(url)
@@ -57,4 +63,14 @@ pub fn create_remote_store_client(
         )),
         _ => Err(anyhow::anyhow!("Unsupported URL scheme: {}", url.scheme())),
     }
+}
+
+pub async fn end_of_epoch_data(
+    url: String,
+    remote_store_options: Vec<(String, String)>,
+    timeout_secs: u64,
+) -> Result<Vec<CheckpointSequenceNumber>> {
+    let client = create_remote_store_client(url, remote_store_options, timeout_secs)?;
+    let response = client.get(&Path::from("epochs.json")).await?;
+    Ok(serde_json::from_slice(response.bytes().await?.as_ref())?)
 }
