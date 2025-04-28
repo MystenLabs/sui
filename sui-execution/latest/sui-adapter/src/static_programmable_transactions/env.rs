@@ -30,10 +30,10 @@ use sui_types::{
 };
 
 pub struct Env<'pc, 'vm, 'state, 'linkage> {
-    protocol_config: &'pc ProtocolConfig,
-    vm: &'vm MoveVM,
-    state_view: &'state dyn ExecutionState,
-    linkage_view: &'linkage LinkageView<'state>,
+    pub protocol_config: &'pc ProtocolConfig,
+    pub vm: &'vm MoveVM,
+    pub state_view: &'state mut dyn ExecutionState,
+    pub linkage_view: &'linkage LinkageView<'state>,
     gas_coin_type: OnceCell<Type>,
     upgrade_ticket_type: OnceCell<Type>,
     upgrade_receipt_type: OnceCell<Type>,
@@ -55,7 +55,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
     pub fn new(
         protocol_config: &'pc ProtocolConfig,
         vm: &'vm MoveVM,
-        state_view: &'state dyn ExecutionState,
+        state_view: &'state mut dyn ExecutionState,
         linkage_view: &'linkage LinkageView<'state>,
     ) -> Self {
         Self {
@@ -67,14 +67,6 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             upgrade_ticket_type: OnceCell::new(),
             upgrade_receipt_type: OnceCell::new(),
         }
-    }
-
-    pub fn protocol_config(&self) -> &'pc ProtocolConfig {
-        self.protocol_config
-    }
-
-    pub fn state_view(&self) -> &'state dyn ExecutionState {
-        self.state_view
     }
 
     pub fn convert_vm_error(&self, e: VMError) -> ExecutionError {

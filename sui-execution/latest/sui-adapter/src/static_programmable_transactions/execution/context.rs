@@ -15,20 +15,22 @@ use crate::{
         typing::ast as T,
     },
 };
+use move_binary_format::errors::Location;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 use move_vm_types::values::Value;
-use sui_move_natives::object_runtime::{self, get_all_uids};
+use sui_move_natives::object_runtime::{self, get_all_uids, ObjectRuntime};
 use sui_types::{
     base_types::{ObjectID, TxContext},
     error::ExecutionError,
+    execution::ExecutionResults,
     metrics::LimitsMetrics,
 };
 use tracing::instrument;
 
 /// Maintains all runtime state specific to programmable transactions
-pub struct Context<'a, 'vm, 'state, 'linkage> {
-    pub env: Env<'a, 'vm, 'state, 'linkage>,
+pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
+    pub env: &'env Env<'pc, 'vm, 'state, 'linkage>,
     /// Metrics for reporting exceeded limits
     pub metrics: Arc<LimitsMetrics>,
     pub native_extensions: NativeContextExtensions<'state>,
@@ -36,7 +38,7 @@ pub struct Context<'a, 'vm, 'state, 'linkage> {
     /// creation of new object IDs
     pub tx_context: Rc<RefCell<TxContext>>,
     /// The gas charger used for metering
-    pub gas_charger: &'a mut GasCharger,
+    pub gas_charger: &'gas mut GasCharger,
     /// User events are claimed after each Move call
     user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
     // runtime data
@@ -50,17 +52,18 @@ pub struct Context<'a, 'vm, 'state, 'linkage> {
     results: Vec<Vec<Option<Value>>>,
 }
 
-impl<'a, 'vm, 'state, 'linkage> Context<'a, 'vm, 'state, 'linkage> {
+impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
     #[instrument(name = "Context::new", level = "trace", skip_all)]
     pub fn new(
-        env: Env<'a, 'vm, 'state, 'linkage>,
+        env: &'env Env<'pc, 'vm, 'state, 'linkage>,
         metrics: Arc<LimitsMetrics>,
         tx_context: Rc<RefCell<TxContext>>,
-        gas_charger: &'a mut GasCharger,
+        gas_charger: &'gas mut GasCharger,
         inputs: T::Inputs,
     ) -> Result<Self, ExecutionError>
     where
-        'a: 'state,
+        'pc: 'state,
+        'env: 'state,
     {
         let mut input_object_map = BTreeMap::new();
         let inputs = inputs
@@ -83,10 +86,10 @@ impl<'a, 'vm, 'state, 'linkage> Context<'a, 'vm, 'state, 'linkage> {
             None => None,
         };
         let native_extensions = new_native_extensions(
-            env.state_view().as_child_resolver(),
+            env.state_view.as_child_resolver(),
             input_object_map,
             !gas_charger.is_unmetered(),
-            env.protocol_config(),
+            &env.protocol_config,
             metrics.clone(),
             tx_context.clone(),
         );
@@ -102,6 +105,16 @@ impl<'a, 'vm, 'state, 'linkage> Context<'a, 'vm, 'state, 'linkage> {
             inputs,
             results: vec![],
         })
+    }
+
+    pub fn finish(self) -> Result<ExecutionResults, ExecutionError> {
+        todo!()
+    }
+
+    pub fn object_runtime(&self) -> Result<&ObjectRuntime, ExecutionError> {
+        self.native_extensions
+            .get::<ObjectRuntime>()
+            .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))
     }
 }
 
