@@ -70,10 +70,7 @@ impl EffectsContents {
             return None;
         };
 
-        Some(Checkpoint::with_sequence_number(
-            self.scope.clone(),
-            content.cp_sequence_number(),
-        ))
+        Checkpoint::with_sequence_number(self.scope.clone(), content.cp_sequence_number())
     }
 
     /// The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.

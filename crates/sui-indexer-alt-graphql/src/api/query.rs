@@ -42,10 +42,11 @@ impl Query {
         sequence_number: Option<UInt53>,
     ) -> Result<Option<Checkpoint>, RpcError> {
         let scope = self.scope(ctx)?;
-        let sequence_number =
-            sequence_number.unwrap_or_else(|| scope.checkpoint_viewed_at().into());
+        let sequence_number = sequence_number
+            .map(|s| s.into())
+            .unwrap_or(scope.checkpoint_viewed_at());
 
-        Checkpoint::fetch(scope, sequence_number).await
+        Ok(Checkpoint::with_sequence_number(scope, sequence_number))
     }
 
     /// Fetch checkpoints by their sequence numbers.
@@ -57,11 +58,10 @@ impl Query {
         keys: Vec<UInt53>,
     ) -> Result<Vec<Option<Checkpoint>>, RpcError> {
         let scope = self.scope(ctx)?;
-        let checkpoints = keys
+        Ok(keys
             .into_iter()
-            .map(|k| Checkpoint::fetch(scope.clone(), k));
-
-        try_join_all(checkpoints).await
+            .map(|k| Checkpoint::with_sequence_number(scope.clone(), k.into()))
+            .collect())
     }
 
     /// Fetch objects by their keys.
