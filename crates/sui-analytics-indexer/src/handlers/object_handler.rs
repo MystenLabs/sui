@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -37,7 +36,7 @@ struct Context {
 
 #[derive(Clone)]
 pub struct ObjectHandler {
-    state: Arc<Mutex<BTreeMap<usize, Vec<ObjectEntry>>>>,
+    state: Arc<Mutex<Vec<ObjectEntry>>>,
     context: Arc<Context>,
 }
 
@@ -100,10 +99,7 @@ impl TxProcessor<ObjectEntry> for ObjectHandler {
 impl AnalyticsHandler<ObjectEntry> for ObjectHandler {
     async fn read(&self) -> Result<Box<dyn Iterator<Item = ObjectEntry>>> {
         let mut state = self.state.lock().await;
-        let objects_map = std::mem::take(&mut *state);
-
-        // Flatten the map into a single iterator in order by transaction index
-        Ok(Box::new(objects_map.into_values().flatten()))
+        Ok(Box::new(std::mem::take(&mut *state).into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -130,7 +126,7 @@ impl ObjectHandler {
         });
 
         Self {
-            state: Arc::new(Mutex::new(BTreeMap::new())),
+            state: Arc::new(Mutex::new(Vec::new())),
             context,
         }
     }

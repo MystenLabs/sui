@@ -21,7 +21,7 @@ use crate::FileType;
 const NAME: &str = "wrapped_object";
 #[derive(Clone)]
 pub struct WrappedObjectHandler {
-    state: Arc<Mutex<BTreeMap<usize, Vec<WrappedObjectEntry>>>>,
+    state: Arc<Mutex<Vec<WrappedObjectEntry>>>,
     metrics: AnalyticsMetrics,
     package_cache: Arc<PackageCache>,
 }
@@ -132,10 +132,7 @@ impl TxProcessor<WrappedObjectEntry> for WrappedObjectHandler {
 impl AnalyticsHandler<WrappedObjectEntry> for WrappedObjectHandler {
     async fn read(&self) -> Result<Box<dyn Iterator<Item = WrappedObjectEntry>>> {
         let mut state = self.state.lock().await;
-        let wrapped_objects_map = std::mem::take(&mut *state);
-
-        // Flatten the map into a single iterator in order by transaction index
-        Ok(Box::new(wrapped_objects_map.into_values().flatten()))
+        Ok(Box::new(std::mem::take(&mut *state).into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -150,7 +147,7 @@ impl AnalyticsHandler<WrappedObjectEntry> for WrappedObjectHandler {
 impl WrappedObjectHandler {
     pub fn new(package_cache: Arc<PackageCache>, metrics: AnalyticsMetrics) -> Self {
         WrappedObjectHandler {
-            state: Arc::new(Mutex::new(BTreeMap::new())),
+            state: Arc::new(Mutex::new(Vec::new())),
             metrics,
             package_cache,
         }

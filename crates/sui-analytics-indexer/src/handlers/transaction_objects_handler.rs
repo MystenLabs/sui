@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -18,7 +17,7 @@ use crate::FileType;
 
 #[derive(Clone)]
 pub struct TransactionObjectsHandler {
-    state: Arc<Mutex<BTreeMap<usize, Vec<TransactionObjectEntry>>>>,
+    state: Arc<Mutex<Vec<TransactionObjectEntry>>>,
 }
 
 #[async_trait::async_trait]
@@ -98,10 +97,7 @@ impl TxProcessor<TransactionObjectEntry> for TransactionObjectsHandler {
 impl AnalyticsHandler<TransactionObjectEntry> for TransactionObjectsHandler {
     async fn read(&self) -> Result<Box<dyn Iterator<Item = TransactionObjectEntry>>> {
         let mut state = self.state.lock().await;
-        let transactions_map = std::mem::take(&mut *state);
-
-        // Flatten the map into a single iterator in order by transaction index
-        Ok(Box::new(transactions_map.into_values().flatten()))
+        Ok(Box::new(std::mem::take(&mut *state).into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -116,7 +112,7 @@ impl AnalyticsHandler<TransactionObjectEntry> for TransactionObjectsHandler {
 impl TransactionObjectsHandler {
     pub fn new() -> Self {
         TransactionObjectsHandler {
-            state: Arc::new(Mutex::new(BTreeMap::new())),
+            state: Arc::new(Mutex::new(Vec::new())),
         }
     }
 }

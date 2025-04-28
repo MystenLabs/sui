@@ -49,10 +49,7 @@ impl Worker for DynamicFieldHandler {
         let results = run_parallel(checkpoint_data.clone(), Arc::new(self.clone())).await?;
 
         // Collect results into the state
-        let mut state = self.state.lock().await;
-        for entries in results.into_values() {
-            state.extend(entries);
-        }
+        *self.state.lock().await = results;
 
         // If end of epoch, evict package store
         if checkpoint_data
@@ -108,9 +105,7 @@ impl TxProcessor<DynamicFieldEntry> for DynamicFieldHandler {
 impl AnalyticsHandler<DynamicFieldEntry> for DynamicFieldHandler {
     async fn read(&self) -> Result<Box<dyn Iterator<Item = DynamicFieldEntry>>> {
         let mut state = self.state.lock().await;
-        let cloned = state.clone();
-        state.clear();
-        Ok(Box::new(cloned.into_iter()))
+        Ok(Box::new(std::mem::take(&mut *state).into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {

@@ -1,14 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::stream::{self, StreamExt};
 use sui_types::full_checkpoint_content::CheckpointData;
-use tracing::error;
 
 /// Trait for processing transactions in parallel across all transactions in a checkpoint.
 /// Implementations will extract and transform transaction data into structured rows for analytics.
@@ -24,65 +22,42 @@ pub trait TxProcessor<Row>: Send + Sync + 'static {
 }
 
 /// Run transaction processing in parallel across all transactions in a checkpoint.
-/// Returns a BTreeMap of transaction indices to rows, preserving order.
 pub async fn run_parallel<Row, P>(
     checkpoint: Arc<CheckpointData>,
     processor: Arc<P>,
-) -> Result<BTreeMap<usize, Vec<Row>>>
+) -> Result<Vec<Row>>
 where
     Row: Send + 'static,
     P: TxProcessor<Row>,
 {
-    let checkpoint_transactions = &checkpoint.transactions;
-    let transaction_indices: Vec<usize> = (0..checkpoint_transactions.len()).collect();
+    // Process transactions in parallel using buffered stream for ordered execution
+    let txn_len = checkpoint.transactions.len();
+    let mut entries = Vec::new();
 
-    // Run all transaction jobs in parallel with a buffer
-    let mut results = BTreeMap::new();
-
-    // Process transactions in parallel
-    let buffered_stream = stream::iter(transaction_indices)
+    let mut stream = stream::iter(0..txn_len)
         .map(|idx| {
-            let processor = processor.clone();
             let checkpoint = checkpoint.clone();
-
-            // Use tokio::spawn to properly parallelize tasks
-            tokio::spawn(async move {
-                // Return Result directly from processor to propagate errors
-                processor
-                    .process_transaction(idx, &checkpoint)
-                    .await
-                    .map(|entries| (idx, entries))
-            })
+            let processor = processor.clone();
+            tokio::spawn(async move { processor.process_transaction(idx, &checkpoint).await })
         })
-        .buffer_unordered(num_cpus::get() * 4); // Scale with available CPUs
+        .buffered(num_cpus::get() * 4);
 
-    // Collect results from the stream
-    futures::pin_mut!(buffered_stream);
-    while let Some(join_result) = buffered_stream.next().await {
-        match join_result {
-            Ok(process_result) => {
-                // Break early and return the first error
-                match process_result {
-                    Ok((idx, entries)) => {
-                        if !entries.is_empty() {
-                            results.insert(idx, entries);
-                        }
-                    }
-                    Err(e) => {
-                        error!("Transaction processing error: {}", e);
-                        return Err(anyhow::anyhow!("Failed to process transaction: {}", e));
-                    }
-                }
+    while let Some(join_res) = stream.next().await {
+        match join_res {
+            Ok(Ok(tx_entries)) => {
+                entries.extend(tx_entries);
+            }
+            Ok(Err(e)) => {
+                // Task executed but application logic returned an error
+                return Err(e);
             }
             Err(e) => {
-                // Task panicked or was cancelled, return immediately
-                error!("Task join error: {}", e);
+                // Task panicked or was cancelled
                 return Err(anyhow::anyhow!("Task join error: {}", e));
             }
         }
     }
-
-    Ok(results)
+    Ok(entries)
 }
 
 #[cfg(test)]

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -22,7 +21,7 @@ use sui_types::full_checkpoint_content::CheckpointData;
 
 #[derive(Clone)]
 pub struct EventHandler {
-    state: Arc<Mutex<BTreeMap<usize, Vec<EventEntry>>>>,
+    state: Arc<Mutex<Vec<EventEntry>>>,
     package_cache: Arc<PackageCache>,
 }
 
@@ -122,10 +121,7 @@ impl TxProcessor<EventEntry> for EventHandler {
 impl AnalyticsHandler<EventEntry> for EventHandler {
     async fn read(&self) -> Result<Box<dyn Iterator<Item = EventEntry>>> {
         let mut state = self.state.lock().await;
-        let events_map = std::mem::take(&mut *state);
-
-        // Flatten the map into a single iterator in order by transaction index
-        Ok(Box::new(events_map.into_values().flatten()))
+        Ok(Box::new(std::mem::take(&mut *state).into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -140,7 +136,7 @@ impl AnalyticsHandler<EventEntry> for EventHandler {
 impl EventHandler {
     pub fn new(package_cache: Arc<PackageCache>) -> Self {
         Self {
-            state: Arc::new(Mutex::new(BTreeMap::new())),
+            state: Arc::new(Mutex::new(Vec::new())),
             package_cache,
         }
     }
