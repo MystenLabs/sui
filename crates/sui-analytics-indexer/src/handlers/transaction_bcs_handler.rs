@@ -116,8 +116,7 @@ mod tests {
             .await?;
 
         // Extract entries from state
-        let transaction_map = txn_handler.state.lock().await;
-        let transaction_entries: Vec<_> = transaction_map.values().flatten().cloned().collect();
+        let transaction_entries = txn_handler.state.lock().await;
         assert_eq!(transaction_entries.len(), 1);
         let db_txn = transaction_entries.first().unwrap();
 

@@ -30,7 +30,6 @@ impl Worker for EventHandler {
     type Result = ();
 
     async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
-        // Update package cache first (serial operation)
         for checkpoint_transaction in &checkpoint_data.transactions {
             for object in checkpoint_transaction.output_objects.iter() {
                 self.package_cache.update(object)?;

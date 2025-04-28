@@ -45,7 +45,6 @@ impl Worker for ObjectHandler {
     type Result = ();
 
     async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
-        // Update package cache first (still need to do this serially)
         for checkpoint_transaction in &checkpoint_data.transactions {
             for object in checkpoint_transaction.output_objects.iter() {
                 self.context.package_cache.update(object)?;
