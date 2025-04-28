@@ -1,0 +1,64 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2alpha;
+
+// Describes a data type.
+message Descriptor {
+  optional string name = 1;
+  optional string package_id = 2;
+  optional string module = 3;
+
+  repeated Ability abilities = 4;
+  repeated TypeParameter type_parameters = 5;
+
+  repeated FieldDescriptor field = 10;
+}
+
+enum Ability {
+  ABILITY_UNKNOWN = 0;
+  COPY = 1;
+  DROP = 2;
+  STORE = 3;
+  KEY = 4;
+}
+
+message TypeParameter {
+  repeated Ability constraints = 1;
+  optional bool is_phantom = 2;
+}
+
+message FieldDescriptor {
+  optional string name = 1;
+  optional uint32 position = 2;
+
+  optional Type type = 5;
+
+  optional string type_name = 6;
+  //repeated type_parameters = 7;
+}
+
+message TypeParameterInstantiation {
+  optional Type type = 1;
+  optional uint32 type_parameter = 2;
+  optional string type_name = 3;
+
+
+}
+
+enum Type {
+  TYPE_UNKNOWN = 0;
+  ADDRESS = 1;
+  BOOL = 2;
+  U8 = 3;
+  U16 = 4;
+  U32 = 5;
+  U64 = 6;
+  U128 = 7;
+  U256 = 8;
+  VECTOR = 9;
+  DATA_TYPE = 10;
+  TYPE_PARAMETER = 11;
+}
