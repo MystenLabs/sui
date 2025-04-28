@@ -5,6 +5,7 @@ pub mod bigtable_reader;
 pub mod checkpoints;
 pub mod coin_metadata;
 pub mod displays;
+pub mod epochs;
 pub mod error;
 pub mod kv_loader;
 pub(crate) mod metrics;

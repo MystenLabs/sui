@@ -11,6 +11,7 @@ use super::{
     scalars::{digest::Digest, sui_address::SuiAddress, uint53::UInt53},
     types::{
         checkpoint::Checkpoint,
+        epoch::Epoch,
         move_package::{self, MovePackage, PackageKey},
         object::{self, Object, ObjectKey},
         service_config::ServiceConfig,
@@ -50,6 +51,14 @@ impl Query {
         Ok(Checkpoint::with_sequence_number(scope, sequence_number))
     }
 
+    /// Fetch an epoch by its ID.
+    ///
+    /// Returns `null` if the epoch does not exist yet, or was pruned.
+    async fn epoch(&self, ctx: &Context<'_>, epoch_id: UInt53) -> Result<Option<Epoch>, RpcError> {
+        let scope = self.scope(ctx)?;
+        Epoch::fetch(ctx, scope, epoch_id).await
+    }
+
     /// Fetch checkpoints by their sequence numbers.
     ///
     /// Returns a list of checkpoints that is guaranteed to be the same length as `keys`. If a checkpoint in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the checkpoint does not exist yet, or because it was pruned.
@@ -63,6 +72,22 @@ impl Query {
             .into_iter()
             .map(|k| Checkpoint::with_sequence_number(scope.clone(), k.into()))
             .collect())
+    }
+
+    /// Fetch epochs by their IDs.
+    ///
+    /// Returns a list of epochs that is guaranteed to be the same length as `keys`. If an epoch in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the epoch does not exist yet, or because it was pruned.
+    async fn multi_get_epochs(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<UInt53>,
+    ) -> Result<Vec<Option<Epoch>>, RpcError> {
+        let scope = self.scope(ctx)?;
+        let epochs = keys
+            .into_iter()
+            .map(|k| Epoch::fetch(ctx, scope.clone(), k));
+
+        try_join_all(epochs).await
     }
 
     /// Fetch objects by their keys.
