@@ -35,9 +35,5 @@ name = "mock-resolver-2"
 path = "src/mocks/mock-resolver-2.rs"
 
 [[test]]
-name = "parsing_tests"
-harness = false
-
-[[test]]
-name = "pinning_tests"
+name = "test_runner"
 harness = false
