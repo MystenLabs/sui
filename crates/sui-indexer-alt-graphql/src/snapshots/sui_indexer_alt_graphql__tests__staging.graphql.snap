@@ -65,6 +65,12 @@ type Epoch {
 	"""
 	epochId: UInt53!
 	"""
+	State of the Coin DenyList object (0x403) at the start of this epoch.
+	
+	The DenyList controls access to Regulated Coins. Writes to the DenyList are accumulated and only take effect on the next epoch boundary. Consequently, it's possible to determine the state of the DenyList for a transaction by reading it at the start of the epoch the transaction is in.
+	"""
+	coinDenyList: Object
+	"""
 	The epoch's corresponding protocol configuration, including the feature flags and the configuration options.
 	"""
 	protocolConfigs: ProtocolConfigs
