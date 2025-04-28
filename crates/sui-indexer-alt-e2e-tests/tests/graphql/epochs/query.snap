@@ -1,0 +1,62 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 2, line 8:
+//# advance-epoch
+Epoch advanced: 0
+
+task 4, line 12:
+//# advance-epoch
+Epoch advanced: 1
+
+task 5, line 14:
+//# advance-epoch
+Epoch advanced: 2
+
+task 6, lines 16-31:
+//# run-graphql
+Response: {
+  "data": {
+    "e0": {
+      "epochId": 0,
+      "referenceGasPrice": "1000",
+      "startTimestamp": "1970-01-01T00:00:00Z",
+      "endTimestamp": "1970-01-01T00:00:00.123Z"
+    },
+    "e1": {
+      "epochId": 1,
+      "referenceGasPrice": "1000",
+      "startTimestamp": "1970-01-01T00:00:00.123Z",
+      "endTimestamp": "1970-01-01T00:00:00.444Z"
+    },
+    "e2": {
+      "epochId": 2,
+      "referenceGasPrice": "1000",
+      "startTimestamp": "1970-01-01T00:00:00.444Z",
+      "endTimestamp": null
+    },
+    "e3": null
+  }
+}
+
+task 7, lines 33-46:
+//# run-graphql
+Response: {
+  "data": {
+    "checkpoint": {
+      "query": {
+        "epoch": {
+          "epochId": 1,
+          "referenceGasPrice": "1000",
+          "startTimestamp": "1970-01-01T00:00:00.123Z",
+          "endTimestamp": null
+        }
+      }
+    }
+  }
+}
