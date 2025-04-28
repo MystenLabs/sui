@@ -16,7 +16,7 @@ sui client --client.config config.yaml active-env
 sui client --client.config config.yaml --client.env one active-env
 sui client --client.config config.yaml --client.env two active-env
 
-# Unknown name -- error
+# Unknown name -- Should give you None and nothing active
 sui client --client.config config.yaml --client.env not_an_env envs
 sui client --client.config config.yaml --client.env not_an_env active-env
 
