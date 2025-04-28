@@ -7,7 +7,7 @@ use std::process::ExitStatus;
 use thiserror::Error;
 
 use crate::{
-    dependency::external_protocol::ResolverName,
+    dependency::external::ResolverName,
     package::{EnvironmentName, PackageName},
 };
 

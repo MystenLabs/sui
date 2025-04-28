@@ -3,13 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod dependency_set;
-mod external;
+// TODO: this shouldn't be pub; need to move resolver error into resolver module
+pub mod external;
 mod git;
 mod local;
 
-pub use dependency_set::DependencySet;
+// TODO: remove
 pub mod external_protocol;
 
+pub use dependency_set::DependencySet;
 use std::{
     collections::BTreeMap,
     fmt::{self, Debug},
@@ -17,6 +19,8 @@ use std::{
     path::PathBuf,
     process::{Command, Stdio},
 };
+
+use std::{collections::BTreeMap, fmt::Debug, path::PathBuf};
 
 use derive_where::derive_where;
 use serde::{
@@ -211,23 +215,17 @@ fn split<F: MoveFlavor>(
 /// default deps.
 pub async fn pin<F: MoveFlavor>(
     flavor: &F,
-    deps: &DependencySet<ManifestDependencyInfo<F>>,
+    mut deps: DependencySet<ManifestDependencyInfo<F>>,
     envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
 ) -> PackageResult<DependencySet<PinnedDependencyInfo<F>>> {
-    let (mut gits, mut exts, mut locs, mut flav) = split(deps);
-
     // resolution
-    let resolved = ExternalDependency::resolve::<F>(exts, envs).await?;
-    let (resolved_gits, resolved_exts, resolved_locs, resolved_flav) = split(&resolved);
-    assert!(resolved_exts.is_empty(), "resolve() returns resolved deps");
-
-    gits.extend(resolved_gits);
-    locs.extend(resolved_locs);
-    flav.extend(resolved_flav);
+    ExternalDependency::resolve(&mut deps, envs);
 
     // pinning
-    let pinned_gits: DependencySet<PinnedDependencyInfo<F>> = UnpinnedGitDependency::pin(gits)
-        .await?
+    let (mut gits, exts, mut locs, mut flav) = split(&deps);
+    assert!(exts.is_empty(), "resolve must remove external dependencies");
+
+    let pinned_gits: DependencySet<PinnedDependencyInfo<F>> = UnpinnedGitDependency::pin(gits)?
         .into_iter()
         .map(|(env, package, dep)| (env, package, PinnedDependencyInfo::Git::<F>(dep)))
         .collect();
