@@ -38,7 +38,7 @@ pub struct StoredEpochStart {
     pub system_state: Vec<u8>,
 }
 
-#[derive(Insertable, Debug, Clone, FieldCount)]
+#[derive(Insertable, Queryable, Debug, Clone, FieldCount)]
 #[diesel(table_name = kv_feature_flags)]
 pub struct StoredFeatureFlag {
     pub protocol_version: i64,
@@ -46,7 +46,7 @@ pub struct StoredFeatureFlag {
     pub flag_value: bool,
 }
 
-#[derive(Insertable, Debug, Clone, FieldCount)]
+#[derive(Insertable, Queryable, Debug, Clone, FieldCount)]
 #[diesel(table_name = kv_protocol_configs)]
 pub struct StoredProtocolConfig {
     pub protocol_version: i64,

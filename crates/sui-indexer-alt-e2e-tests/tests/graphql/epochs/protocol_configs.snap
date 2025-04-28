@@ -1,0 +1,58 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, line 6:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 2, lines 8-20:
+//# run-graphql
+Response: {
+  "data": {
+    "before": {
+      "protocolVersion": 69,
+      "configs": []
+    },
+    "after": {
+      "protocolVersion": 71,
+      "configs": []
+    }
+  }
+}
+
+task 3, lines 22-28:
+//# run-graphql
+Response: {
+  "data": {
+    "protocolConfigs": {
+      "config": {
+        "key": "max_move_object_size",
+        "value": "256000"
+      },
+      "featureFlag": {
+        "key": "enable_effects_v2",
+        "value": true
+      }
+    }
+  }
+}
+
+task 4, lines 30-36:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch": {
+      "protocolConfigs": {
+        "protocolVersion": 70
+      }
+    },
+    "protocolConfigs": {
+      "protocolVersion": 70
+    }
+  }
+}
