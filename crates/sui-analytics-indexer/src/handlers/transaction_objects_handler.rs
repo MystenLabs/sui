@@ -1,23 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use anyhow::Result;
-use futures::{stream, StreamExt};
 use sui_data_ingestion_core::Worker;
 use tokio::sync::Mutex;
 
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::transaction::TransactionDataAPI;
 
+use crate::handlers::parallel_tx_processor::{run_parallel, TxProcessor};
 use crate::handlers::{AnalyticsHandler, InputObjectTracker, ObjectStatusTracker};
 use crate::tables::TransactionObjectEntry;
 use crate::FileType;
 
 #[derive(Clone)]
 pub struct TransactionObjectsHandler {
-    state: Arc<Mutex<Vec<TransactionObjectEntry>>>,
+    state: Arc<Mutex<BTreeMap<usize, Vec<TransactionObjectEntry>>>>,
 }
 
 #[async_trait::async_trait]
@@ -25,109 +26,82 @@ impl Worker for TransactionObjectsHandler {
     type Result = ();
 
     async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
-        // Process transactions in parallel using buffered stream for ordered execution
-        let txn_len = checkpoint_data.transactions.len();
-        let mut entries = Vec::new();
-        
-        let mut stream = stream::iter(0..txn_len)
-            .map(|idx| {
-                let cp = checkpoint_data.clone();
-                tokio::spawn(async move { 
-                    handle_tx(idx, &cp).await
-                })
-            })
-            .buffered(num_cpus::get() * 4);
-
-        while let Some(join_res) = stream.next().await {
-            match join_res {
-                Ok(Ok(tx_entries)) => {
-                    entries.extend(tx_entries);
-                }
-                Ok(Err(e)) => {
-                    // Task executed but application logic returned an error
-                    return Err(e);
-                }
-                Err(e) => {
-                    // Task panicked or was cancelled
-                    return Err(anyhow::anyhow!("Task join error: {}", e));
-                }
-            }
-        }
-
-        // Store results
-        *self.state.lock().await = entries;
-        
+        let results = run_parallel(checkpoint_data, Arc::new(self.clone())).await?;
+        *self.state.lock().await = results;
         Ok(())
     }
 }
 
-/// Private per-tx helper for processing individual transactions
-async fn handle_tx(
-    tx_idx: usize, 
-    checkpoint: &CheckpointData
-) -> Result<Vec<TransactionObjectEntry>> {
-    let transaction = &checkpoint.transactions[tx_idx];
-    let epoch = checkpoint.checkpoint_summary.epoch;
-    let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
-    let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
+#[async_trait::async_trait]
+impl TxProcessor<TransactionObjectEntry> for TransactionObjectsHandler {
+    async fn process_transaction(
+        &self,
+        tx_idx: usize,
+        checkpoint: &CheckpointData,
+    ) -> Result<Vec<TransactionObjectEntry>> {
+        let transaction = &checkpoint.transactions[tx_idx];
+        let epoch = checkpoint.checkpoint_summary.epoch;
+        let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
+        let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
 
-    let transaction_digest = transaction.transaction.digest().base58_encode();
-    let txn_data = transaction.transaction.transaction_data();
-    let effects = &transaction.effects;
+        let transaction_digest = transaction.transaction.digest().base58_encode();
+        let txn_data = transaction.transaction.transaction_data();
+        let effects = &transaction.effects;
 
-    let input_object_tracker = InputObjectTracker::new(txn_data);
-    let object_status_tracker = ObjectStatusTracker::new(effects);
-    let mut transaction_objects = Vec::new();
+        let input_object_tracker = InputObjectTracker::new(txn_data);
+        let object_status_tracker = ObjectStatusTracker::new(effects);
+        let mut transaction_objects = Vec::new();
 
-    // input
-    for object in txn_data
-        .input_objects()
-        .expect("Input objects must be valid")
-        .iter()
-    {
-        let object_id = object.object_id();
-        let version = object.version().map(|v| v.value());
-        let entry = TransactionObjectEntry {
-            object_id: object_id.to_string(),
-            version,
-            transaction_digest: transaction_digest.clone(),
-            checkpoint: checkpoint_seq,
-            epoch,
-            timestamp_ms,
-            input_kind: input_object_tracker.get_input_object_kind(&object_id),
-            object_status: object_status_tracker.get_object_status(&object_id),
-        };
-        transaction_objects.push(entry);
+        // input
+        for object in txn_data
+            .input_objects()
+            .expect("Input objects must be valid")
+            .iter()
+        {
+            let object_id = object.object_id();
+            let version = object.version().map(|v| v.value());
+            let entry = TransactionObjectEntry {
+                object_id: object_id.to_string(),
+                version,
+                transaction_digest: transaction_digest.clone(),
+                checkpoint: checkpoint_seq,
+                epoch,
+                timestamp_ms,
+                input_kind: input_object_tracker.get_input_object_kind(&object_id),
+                object_status: object_status_tracker.get_object_status(&object_id),
+            };
+            transaction_objects.push(entry);
+        }
+
+        // output
+        for object in transaction.output_objects.iter() {
+            let object_id = object.id();
+            let version = Some(object.version().value());
+            let entry = TransactionObjectEntry {
+                object_id: object_id.to_string(),
+                version,
+                transaction_digest: transaction_digest.clone(),
+                checkpoint: checkpoint_seq,
+                epoch,
+                timestamp_ms,
+                input_kind: input_object_tracker.get_input_object_kind(&object_id),
+                object_status: object_status_tracker.get_object_status(&object_id),
+            };
+            transaction_objects.push(entry);
+        }
+
+        Ok(transaction_objects)
     }
-
-    // output
-    for object in transaction.output_objects.iter() {
-        let object_id = object.id();
-        let version = Some(object.version().value());
-        let entry = TransactionObjectEntry {
-            object_id: object_id.to_string(),
-            version,
-            transaction_digest: transaction_digest.clone(),
-            checkpoint: checkpoint_seq,
-            epoch,
-            timestamp_ms,
-            input_kind: input_object_tracker.get_input_object_kind(&object_id),
-            object_status: object_status_tracker.get_object_status(&object_id),
-        };
-        transaction_objects.push(entry);
-    }
-
-    Ok(transaction_objects)
 }
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<TransactionObjectEntry> for TransactionObjectsHandler {
     async fn read(&self) -> Result<Box<dyn Iterator<Item = TransactionObjectEntry>>> {
         let mut state = self.state.lock().await;
-        let entries = std::mem::take(&mut *state);
+        let transactions_map = std::mem::take(&mut *state);
 
-        // Return all entries
-        Ok(Box::new(entries.into_iter()))
+        // Flatten the map into a single iterator in order by transaction index
+        Ok(Box::new(transactions_map.into_values().flatten()))
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -142,7 +116,7 @@ impl AnalyticsHandler<TransactionObjectEntry> for TransactionObjectsHandler {
 impl TransactionObjectsHandler {
     pub fn new() -> Self {
         TransactionObjectsHandler {
-            state: Arc::new(Mutex::new(Vec::new())),
+            state: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 }
