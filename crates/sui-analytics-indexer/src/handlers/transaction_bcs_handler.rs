@@ -1,24 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use anyhow::Result;
 use fastcrypto::encoding::{Base64, Encoding};
+use futures::{stream, StreamExt};
 use sui_data_ingestion_core::Worker;
 use tokio::sync::Mutex;
 
 use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::handlers::parallel_tx_processor::{run_parallel, TxProcessor};
 use crate::handlers::AnalyticsHandler;
 use crate::tables::TransactionBCSEntry;
 use crate::FileType;
 
 #[derive(Clone)]
 pub struct TransactionBCSHandler {
-    pub(crate) state: Arc<Mutex<BTreeMap<usize, Vec<TransactionBCSEntry>>>>,
+    pub(crate) state: Arc<Mutex<Vec<TransactionBCSEntry>>>,
 }
 
 #[async_trait::async_trait]
@@ -26,48 +25,74 @@ impl Worker for TransactionBCSHandler {
     type Result = ();
 
     async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
-        let results = run_parallel(checkpoint_data, Arc::new(self.clone())).await?;
-        *self.state.lock().await = results;
+        // Process transactions in parallel using buffered stream for ordered execution
+        let txn_len = checkpoint_data.transactions.len();
+        let mut entries = Vec::new();
+        
+        let mut stream = stream::iter(0..txn_len)
+            .map(|idx| {
+                let cp = checkpoint_data.clone();
+                tokio::spawn(async move { 
+                    handle_tx(idx, &cp).await
+                })
+            })
+            .buffered(num_cpus::get() * 4);
+
+        while let Some(join_res) = stream.next().await {
+            match join_res {
+                Ok(Ok(tx_entries)) => {
+                    entries.extend(tx_entries);
+                }
+                Ok(Err(e)) => {
+                    // Task executed but application logic returned an error
+                    return Err(e);
+                }
+                Err(e) => {
+                    // Task panicked or was cancelled
+                    return Err(anyhow::anyhow!("Task join error: {}", e));
+                }
+            }
+        }
+
+        // Store results
+        *self.state.lock().await = entries;
         Ok(())
     }
 }
 
-#[async_trait::async_trait]
-impl TxProcessor<TransactionBCSEntry> for TransactionBCSHandler {
-    async fn process_transaction(
-        &self,
-        tx_idx: usize,
-        checkpoint: &CheckpointData,
-    ) -> Result<Vec<TransactionBCSEntry>> {
-        let transaction = &checkpoint.transactions[tx_idx];
-        let epoch = checkpoint.checkpoint_summary.epoch;
-        let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
-        let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
+/// Private per-tx helper for processing individual transactions
+async fn handle_tx(
+    tx_idx: usize, 
+    checkpoint: &CheckpointData,
+) -> Result<Vec<TransactionBCSEntry>> {
+    let transaction = &checkpoint.transactions[tx_idx];
+    let epoch = checkpoint.checkpoint_summary.epoch;
+    let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
+    let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
 
-        let txn = &transaction.transaction;
-        let txn_data = txn.transaction_data();
-        let transaction_digest = txn.digest().base58_encode();
+    let txn = &transaction.transaction;
+    let txn_data = txn.transaction_data();
+    let transaction_digest = txn.digest().base58_encode();
 
-        let entry = TransactionBCSEntry {
-            transaction_digest,
-            checkpoint: checkpoint_seq,
-            epoch,
-            timestamp_ms,
-            bcs: Base64::encode(bcs::to_bytes(&txn_data).unwrap()),
-        };
+    let entry = TransactionBCSEntry {
+        transaction_digest,
+        checkpoint: checkpoint_seq,
+        epoch,
+        timestamp_ms,
+        bcs: Base64::encode(bcs::to_bytes(&txn_data).unwrap()),
+    };
 
-        Ok(vec![entry])
-    }
+    Ok(vec![entry])
 }
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<TransactionBCSEntry> for TransactionBCSHandler {
     async fn read(&self) -> Result<Box<dyn Iterator<Item = TransactionBCSEntry>>> {
         let mut state = self.state.lock().await;
-        let transactions_map = std::mem::take(&mut *state);
+        let entries = std::mem::take(&mut *state);
 
-        // Flatten the map into a single iterator in order by transaction index
-        Ok(Box::new(transactions_map.into_values().flatten()))
+        // Return all entries
+        Ok(Box::new(entries.into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -82,7 +107,7 @@ impl AnalyticsHandler<TransactionBCSEntry> for TransactionBCSHandler {
 impl TransactionBCSHandler {
     pub fn new() -> Self {
         TransactionBCSHandler {
-            state: Arc::new(Mutex::new(BTreeMap::new())),
+            state: Arc::new(Mutex::new(Vec::new())),
         }
     }
 }
@@ -120,8 +145,8 @@ mod tests {
             .await?;
 
         // Extract entries from state
-        let transaction_map = txn_handler.state.lock().await;
-        let transaction_entries: Vec<_> = transaction_map.values().flatten().cloned().collect();
+        let transactions = txn_handler.state.lock().await;
+        let transaction_entries: Vec<_> = transactions.clone();
         assert_eq!(transaction_entries.len(), 1);
         let db_txn = transaction_entries.first().unwrap();
 

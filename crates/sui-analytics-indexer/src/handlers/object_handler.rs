@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use anyhow::Result;
+use futures::{stream, StreamExt};
 use sui_data_ingestion_core::Worker;
 use sui_types::{TypeTag, SYSTEM_PACKAGE_ADDRESSES};
 use tokio::sync::Mutex;
@@ -21,7 +21,6 @@ use crate::handlers::{
 };
 use crate::AnalyticsMetrics;
 
-use crate::handlers::parallel_tx_processor::{run_parallel, TxProcessor};
 use crate::package_store::PackageCache;
 use crate::tables::{ObjectEntry, ObjectStatus};
 use crate::FileType;
@@ -37,7 +36,7 @@ struct Context {
 
 #[derive(Clone)]
 pub struct ObjectHandler {
-    state: Arc<Mutex<BTreeMap<usize, Vec<ObjectEntry>>>>,
+    state: Arc<Mutex<Vec<ObjectEntry>>>,
     context: Arc<Context>,
 }
 
@@ -53,11 +52,47 @@ impl Worker for ObjectHandler {
             }
         }
 
-        // Run parallel processing
-        let results = run_parallel(checkpoint_data.clone(), Arc::new(self.clone())).await?;
+        // Process transactions in parallel using buffered stream for ordered execution
+        let txn_len = checkpoint_data.transactions.len();
+        let mut entries = Vec::new();
+        
+        let mut stream = stream::iter(0..txn_len)
+            .map(|idx| {
+                let cp = checkpoint_data.clone();
+                let handler = self.clone();
+                tokio::spawn(async move { 
+                    let transaction = &cp.transactions[idx];
+                    Self::process_transaction(
+                        cp.checkpoint_summary.epoch,
+                        cp.checkpoint_summary.sequence_number,
+                        cp.checkpoint_summary.timestamp_ms,
+                        transaction,
+                        &transaction.effects,
+                        handler.context.clone(),
+                    )
+                    .await
+                })
+            })
+            .buffered(num_cpus::get() * 4);
+
+        while let Some(join_res) = stream.next().await {
+            match join_res {
+                Ok(Ok(tx_entries)) => {
+                    entries.extend(tx_entries);
+                }
+                Ok(Err(e)) => {
+                    // Task executed but application logic returned an error
+                    return Err(e);
+                }
+                Err(e) => {
+                    // Task panicked or was cancelled
+                    return Err(anyhow::anyhow!("Task join error: {}", e));
+                }
+            }
+        }
 
         // Store results
-        *self.state.lock().await = results;
+        *self.state.lock().await = entries;
 
         // If end of epoch, evict package store
         if checkpoint_data
@@ -77,33 +112,13 @@ impl Worker for ObjectHandler {
 }
 
 #[async_trait::async_trait]
-impl TxProcessor<ObjectEntry> for ObjectHandler {
-    async fn process_transaction(
-        &self,
-        tx_idx: usize,
-        checkpoint: &CheckpointData,
-    ) -> Result<Vec<ObjectEntry>> {
-        let transaction = &checkpoint.transactions[tx_idx];
-        Self::process_transaction(
-            checkpoint.checkpoint_summary.epoch,
-            checkpoint.checkpoint_summary.sequence_number,
-            checkpoint.checkpoint_summary.timestamp_ms,
-            transaction,
-            &transaction.effects,
-            self.context.clone(),
-        )
-        .await
-    }
-}
-
-#[async_trait::async_trait]
 impl AnalyticsHandler<ObjectEntry> for ObjectHandler {
     async fn read(&self) -> Result<Box<dyn Iterator<Item = ObjectEntry>>> {
         let mut state = self.state.lock().await;
-        let objects_map = std::mem::take(&mut *state);
+        let entries = std::mem::take(&mut *state);
 
-        // Flatten the map into a single iterator in order by transaction index
-        Ok(Box::new(objects_map.into_values().flatten()))
+        // Return all entries
+        Ok(Box::new(entries.into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -130,7 +145,7 @@ impl ObjectHandler {
         });
 
         Self {
-            state: Arc::new(Mutex::new(BTreeMap::new())),
+            state: Arc::new(Mutex::new(Vec::new())),
             context,
         }
     }

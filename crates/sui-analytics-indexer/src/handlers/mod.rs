@@ -26,7 +26,6 @@ pub mod event_handler;
 pub mod move_call_handler;
 pub mod object_handler;
 pub mod package_handler;
-pub mod parallel_tx_processor;
 pub mod transaction_bcs_handler;
 pub mod transaction_handler;
 pub mod transaction_objects_handler;

@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use fastcrypto::encoding::{Base64, Encoding};
+use futures::{stream, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_data_ingestion_core::Worker;
@@ -21,7 +22,6 @@ use sui_types::dynamic_field::{DynamicFieldName, DynamicFieldType};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::object::Object;
 
-use crate::handlers::parallel_tx_processor::{run_parallel, TxProcessor};
 use crate::handlers::AnalyticsHandler;
 use crate::package_store::PackageCache;
 use crate::tables::DynamicFieldEntry;
@@ -45,13 +45,34 @@ impl Worker for DynamicFieldHandler {
             }
         }
 
-        // Run parallel processing
-        let results = run_parallel(checkpoint_data.clone(), Arc::new(self.clone())).await?;
+        // Process transactions in parallel using buffered stream for ordered execution
+        let txn_len = checkpoint_data.transactions.len();
+        let mut entries = Vec::new();
+        
+        let mut stream = stream::iter(0..txn_len)
+            .map(|idx| {
+                let cp = checkpoint_data.clone();
+                let handler = self.clone();
+                tokio::spawn(async move { 
+                    handle_tx(idx, &cp, &handler).await
+                })
+            })
+            .buffered(num_cpus::get() * 4);
 
-        // Collect results into the state
-        let mut state = self.state.lock().await;
-        for entries in results.into_values() {
-            state.extend(entries);
+        while let Some(join_res) = stream.next().await {
+            match join_res {
+                Ok(Ok(tx_entries)) => {
+                    entries.extend(tx_entries);
+                }
+                Ok(Err(e)) => {
+                    // Task executed but application logic returned an error
+                    return Err(e);
+                }
+                Err(e) => {
+                    // Task panicked or was cancelled
+                    return Err(anyhow::anyhow!("Task join error: {}", e));
+                }
+            }
         }
 
         // If end of epoch, evict package store
@@ -66,42 +87,43 @@ impl Worker for DynamicFieldHandler {
                 .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
         }
 
+        // Store results
+        *self.state.lock().await = entries;
+
         Ok(())
     }
 }
 
-#[async_trait::async_trait]
-impl TxProcessor<DynamicFieldEntry> for DynamicFieldHandler {
-    async fn process_transaction(
-        &self,
-        tx_idx: usize,
-        checkpoint: &CheckpointData,
-    ) -> Result<Vec<DynamicFieldEntry>> {
-        let checkpoint_transaction = &checkpoint.transactions[tx_idx];
-        let all_objects: HashMap<_, _> = checkpoint_transaction
-            .output_objects
-            .iter()
-            .map(|x| (x.id(), x.clone()))
-            .collect();
+/// Private per-tx helper for processing individual transactions
+async fn handle_tx(
+    tx_idx: usize, 
+    checkpoint: &CheckpointData,
+    handler: &DynamicFieldHandler
+) -> Result<Vec<DynamicFieldEntry>> {
+    let checkpoint_transaction = &checkpoint.transactions[tx_idx];
+    let all_objects: HashMap<_, _> = checkpoint_transaction
+        .output_objects
+        .iter()
+        .map(|x| (x.id(), x.clone()))
+        .collect();
 
-        let mut entries = Vec::new();
-        for object in checkpoint_transaction.output_objects.iter() {
-            if let Some(entry) = self
-                .process_dynamic_field(
-                    checkpoint.checkpoint_summary.epoch,
-                    checkpoint.checkpoint_summary.sequence_number,
-                    checkpoint.checkpoint_summary.timestamp_ms,
-                    object,
-                    &all_objects,
-                )
-                .await?
-            {
-                entries.push(entry);
-            }
+    let mut entries = Vec::new();
+    for object in checkpoint_transaction.output_objects.iter() {
+        if let Some(entry) = handler
+            .process_dynamic_field(
+                checkpoint.checkpoint_summary.epoch,
+                checkpoint.checkpoint_summary.sequence_number,
+                checkpoint.checkpoint_summary.timestamp_ms,
+                object,
+                &all_objects,
+            )
+            .await?
+        {
+            entries.push(entry);
         }
-
-        Ok(entries)
     }
+
+    Ok(entries)
 }
 
 #[async_trait::async_trait]
@@ -129,6 +151,7 @@ impl DynamicFieldHandler {
             package_cache,
         }
     }
+    
     async fn process_dynamic_field(
         &self,
         epoch: u64,
