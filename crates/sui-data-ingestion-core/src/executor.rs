@@ -93,13 +93,13 @@ impl<P: ProgressStore> IndexerExecutor<P> {
                         reader_checkpoint_number = seq_number;
                     }
                     self.metrics.data_ingestion_checkpoint.with_label_values(&[&task_name]).set(sequence_number as i64);
-                }
-                Some(checkpoint) = checkpoint_recv.recv() => {
                     if let Some(limit) = upper_limit {
-                        if checkpoint.checkpoint_summary.sequence_number > limit {
+                        if sequence_number > limit && self.pool_senders.len() == 1 {
                             break;
                         }
                     }
+                }
+                Some(checkpoint) = checkpoint_recv.recv() => {
                     for sender in &self.pool_senders {
                         sender.send(checkpoint.clone()).await?;
                     }

@@ -9,7 +9,6 @@ use bytes::buf::Reader;
 use bytes::{Buf, Bytes};
 use futures::{StreamExt, TryStreamExt};
 use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
-use rand::seq::SliceRandom;
 use std::borrow::Borrow;
 use std::future;
 use std::ops::Range;
@@ -58,84 +57,12 @@ impl ArchiveReaderMetrics {
     }
 }
 
-// ArchiveReaderBalancer selects archives for reading based on whether they can fulfill a checkpoint request
-#[derive(Default, Clone)]
-pub struct ArchiveReaderBalancer {
-    readers: Vec<Arc<ArchiveReader>>,
-}
-
-impl ArchiveReaderBalancer {
-    pub fn new(configs: Vec<ArchiveReaderConfig>, registry: &Registry) -> Result<Self> {
-        let mut readers = vec![];
-        let metrics = ArchiveReaderMetrics::new(registry);
-        for config in configs.into_iter() {
-            readers.push(Arc::new(ArchiveReader::new(config.clone(), &metrics)?));
-        }
-        Ok(ArchiveReaderBalancer { readers })
-    }
-    pub async fn get_archive_watermark(&self) -> Result<Option<u64>> {
-        let mut checkpoints: Vec<Result<CheckpointSequenceNumber>> = vec![];
-        for reader in self
-            .readers
-            .iter()
-            .filter(|r| r.use_for_pruning_watermark())
-        {
-            let latest_checkpoint = reader.latest_available_checkpoint().await;
-            info!(
-                "Latest archived checkpoint in remote store: {:?} is: {:?}",
-                reader.remote_store_identifier(),
-                latest_checkpoint
-            );
-            checkpoints.push(latest_checkpoint)
-        }
-        let checkpoints: Result<Vec<CheckpointSequenceNumber>> = checkpoints.into_iter().collect();
-        checkpoints.map(|vec| vec.into_iter().min())
-    }
-    pub async fn pick_one_random(
-        &self,
-        checkpoint_range: Range<CheckpointSequenceNumber>,
-    ) -> Option<Arc<ArchiveReader>> {
-        let mut archives_with_complete_range = vec![];
-        for reader in self.readers.iter() {
-            let latest_checkpoint = reader.latest_available_checkpoint().await.unwrap_or(0);
-            if latest_checkpoint >= checkpoint_range.end {
-                archives_with_complete_range.push(reader.clone());
-            }
-        }
-        if !archives_with_complete_range.is_empty() {
-            return Some(
-                archives_with_complete_range
-                    .choose(&mut rand::thread_rng())
-                    .unwrap()
-                    .clone(),
-            );
-        }
-        let mut archives_with_partial_range = vec![];
-        for reader in self.readers.iter() {
-            let latest_checkpoint = reader.latest_available_checkpoint().await.unwrap_or(0);
-            if latest_checkpoint >= checkpoint_range.start {
-                archives_with_partial_range.push(reader.clone());
-            }
-        }
-        if !archives_with_partial_range.is_empty() {
-            return Some(
-                archives_with_partial_range
-                    .choose(&mut rand::thread_rng())
-                    .unwrap()
-                    .clone(),
-            );
-        }
-        None
-    }
-}
-
 #[derive(Clone)]
 pub struct ArchiveReader {
     bucket: String,
     concurrency: usize,
     sender: Arc<Sender<()>>,
     manifest: Arc<Mutex<Manifest>>,
-    use_for_pruning_watermark: bool,
     remote_object_store: Arc<dyn ObjectStoreGetExt>,
     archive_reader_metrics: Arc<ArchiveReaderMetrics>,
 }
@@ -161,7 +88,6 @@ impl ArchiveReader {
             manifest,
             sender: Arc::new(sender),
             remote_object_store,
-            use_for_pruning_watermark: config.use_for_pruning_watermark,
             concurrency: config.download_concurrency.get(),
             archive_reader_metrics: metrics.clone(),
         })
@@ -524,10 +450,6 @@ impl ArchiveReader {
             .context("No checkpoint data in archive")
     }
 
-    pub fn use_for_pruning_watermark(&self) -> bool {
-        self.use_for_pruning_watermark
-    }
-
     pub fn remote_store_identifier(&self) -> String {
         self.remote_object_store.to_string()
     }
@@ -565,7 +487,7 @@ impl ArchiveReader {
     }
 
     /// Insert checkpoint summary if it doesn't already exist after verifying it
-    fn get_or_insert_verified_checkpoint<S>(
+    pub fn get_or_insert_verified_checkpoint<S>(
         store: &S,
         certified_checkpoint: CertifiedCheckpointSummary,
         verify: bool,

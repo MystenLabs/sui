@@ -10,7 +10,6 @@ use itertools::Itertools;
 use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::num::NonZeroUsize;
-use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -46,7 +45,6 @@ use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use prometheus::Registry;
 use serde::{Deserialize, Serialize};
 use sui_archival::reader::{ArchiveReader, ArchiveReaderMetrics};
-use sui_archival::{verify_archive_with_checksums, verify_archive_with_genesis_config};
 use sui_config::node::ArchiveReaderConfig;
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -65,7 +63,7 @@ use sui_types::messages_grpc::{
     TransactionStatus,
 };
 
-use sui_types::storage::{ReadStore, SharedInMemoryStore};
+use sui_types::storage::ReadStore;
 use tracing::info;
 
 pub mod commands;
@@ -608,7 +606,7 @@ fn start_summary_sync(
         let config = ArchiveReaderConfig {
             remote_store_config: archive_store_config,
             download_concurrency: NonZeroUsize::new(num_parallel_downloads).unwrap(),
-            use_for_pruning_watermark: false,
+            ingestion_url: None,
         };
         let metrics = ArchiveReaderMetrics::new(&Registry::default());
         let archive_reader = ArchiveReader::new(config, &metrics)?;
@@ -1103,70 +1101,4 @@ pub async fn download_db_snapshot(
         fs::remove_dir_all(&epochs_dir)?;
     }
     Ok(())
-}
-
-pub async fn verify_archive(
-    genesis: &Path,
-    remote_store_config: ObjectStoreConfig,
-    concurrency: usize,
-    interactive: bool,
-) -> Result<()> {
-    verify_archive_with_genesis_config(genesis, remote_store_config, concurrency, interactive, 10)
-        .await
-}
-
-pub async fn dump_checkpoints_from_archive(
-    remote_store_config: ObjectStoreConfig,
-    start_checkpoint: u64,
-    end_checkpoint: u64,
-    max_content_length: usize,
-) -> Result<()> {
-    let metrics = ArchiveReaderMetrics::new(&Registry::default());
-    let config = ArchiveReaderConfig {
-        remote_store_config,
-        download_concurrency: NonZeroUsize::new(1).unwrap(),
-        use_for_pruning_watermark: false,
-    };
-    let store = SharedInMemoryStore::default();
-    let archive_reader = ArchiveReader::new(config, &metrics)?;
-    archive_reader.sync_manifest_once().await?;
-    let checkpoint_counter = Arc::new(AtomicU64::new(0));
-    let txn_counter = Arc::new(AtomicU64::new(0));
-    archive_reader
-        .read(
-            store.clone(),
-            Range {
-                start: start_checkpoint,
-                end: end_checkpoint,
-            },
-            txn_counter,
-            checkpoint_counter,
-            false,
-        )
-        .await?;
-    for key in store
-        .inner()
-        .checkpoints()
-        .values()
-        .sorted_by(|a, b| a.sequence_number().cmp(&b.sequence_number))
-    {
-        let mut content = serde_json::to_string(
-            &store
-                .get_full_checkpoint_contents(Some(key.sequence_number), &key.content_digest)
-                .unwrap(),
-        )?;
-        content.truncate(max_content_length);
-        info!(
-            "{}:{}:{:?}",
-            key.sequence_number, key.content_digest, content
-        );
-    }
-    Ok(())
-}
-
-pub async fn verify_archive_by_checksum(
-    remote_store_config: ObjectStoreConfig,
-    concurrency: usize,
-) -> Result<()> {
-    verify_archive_with_checksums(remote_store_config, concurrency).await
 }
