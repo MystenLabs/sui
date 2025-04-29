@@ -8,9 +8,6 @@ pub mod external;
 mod git;
 mod local;
 
-// TODO: remove
-pub mod external_protocol;
-
 pub use dependency_set::DependencySet;
 use std::{
     collections::BTreeMap,

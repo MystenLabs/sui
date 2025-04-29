@@ -10,63 +10,49 @@ use tokio::io::{
 pub type RequestID = u64;
 
 #[derive(Serialize, Deserialize)]
-#[serde(bound = "", deny_unknown_fields)]
-pub struct BatchRequest {
+#[serde(deny_unknown_fields)]
+pub struct BatchRequest<A> {
     #[serde(flatten)]
-    pub requests: Vec<Request>,
-}
-
-/// The constant string "2.0"
-#[derive(Default, Debug)]
-pub struct TwoPointZero;
-
-#[derive(Serialize, Deserialize)]
-#[serde(bound = "", deny_unknown_fields)]
-pub struct BatchResponse {
-    #[serde(flatten)]
-    pub responses: Vec<Response>,
+    pub requests: Vec<Request<A>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct Request {
+pub struct Request<A> {
     pub jsonrpc: TwoPointZero,
 
     pub method: String,
 
-    pub params: serde_json::Value,
+    pub params: A,
 
     pub id: RequestID,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Response {
-    pub jsonrpc: TwoPointZero,
-    pub id: RequestID,
-
-    pub result: JsonRpcResult,
+pub struct BatchResponse<R> {
+    #[serde(flatten)]
+    pub responses: Vec<Response<R>>,
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Response<R> {
+    pub jsonrpc: TwoPointZero,
+    pub id: RequestID,
+
+    #[serde(flatten)]
+    pub result: JsonRpcResult<R>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(untagged)]
-pub enum JsonRpcResult {
-    Ok { result: serde_json::Value },
+pub enum JsonRpcResult<R> {
+    Ok { result: R },
     Err { error: RemoteError },
 }
 
-impl JsonRpcResult {
-    pub fn get<R: DeserializeOwned, E: From<RemoteError> + From<serde_json::Error>>(
-        self,
-    ) -> Result<R, E> {
-        match self {
-            JsonRpcResult::Ok { result } => Ok(R::deserialize(result)?),
-            JsonRpcResult::Err { error } => Err(error.into()),
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Error, Debug)]
+#[derive(Serialize, Deserialize, Error, Debug, Clone)]
 #[error("Remote endpoint returned error {code}: {message}")]
 pub struct RemoteError {
     pub code: i32,
@@ -75,6 +61,22 @@ pub struct RemoteError {
     #[serde(default)]
     pub data: Option<serde_json::Value>,
 }
+
+impl<R> JsonRpcResult<R> {
+    pub fn get<E>(self) -> Result<R, E>
+    where
+        E: From<RemoteError> + From<serde_json::Error>,
+    {
+        match self {
+            JsonRpcResult::Ok { result } => Ok(result),
+            JsonRpcResult::Err { error } => Err(error.into()),
+        }
+    }
+}
+
+/// The constant string "2.0"
+#[derive(Default, Debug)]
+pub struct TwoPointZero;
 
 impl Serialize for TwoPointZero {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

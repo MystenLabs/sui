@@ -15,16 +15,26 @@ use std::{
     collections::BTreeMap,
     env,
     io::{read_to_string, stdin},
-    process::ExitCode,
 };
 
+use move_package_alt::{
+    dependency::external::{RESOLVE_ARG, RESOLVE_METHOD},
+    jsonrpc::types::{
+        BatchRequest, BatchResponse, JsonRpcResult, RequestID, Response, TwoPointZero,
+    },
+};
 use serde::Deserialize;
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
-use move_package_alt::dependency::external_protocol::{
-    QueryID, QueryResult, RESOLVE_ARG, Request, Response,
-};
+type EnvironmentID = String;
+
+#[derive(Deserialize)]
+struct ResolveRequest {
+    #[serde(default)]
+    env: Option<EnvironmentID>,
+    data: RequestData,
+}
 
 #[derive(Deserialize)]
 #[serde(untagged)]
@@ -33,7 +43,7 @@ enum RequestData {
     Stdio(Exit),
 
     /// [stderr] should be printed and [output] should be included in the output
-    Echo(EchoValue),
+    Echo(EchoRequest),
 }
 
 #[derive(Deserialize)]
@@ -41,19 +51,21 @@ struct Exit {
     stdout: String,
 
     #[serde(default)]
-    stderr: String,
+    stderr: Option<String>,
 
     #[serde(default)]
-    exit_code: Option<u8>,
+    exit_code: Option<i32>,
 }
 
 #[derive(Deserialize)]
-struct EchoValue {
-    output: QueryResult,
+struct EchoRequest {
+    output: BTreeMap<EnvironmentID, JsonRpcResult<serde_json::Value>>,
+
+    #[serde(default)]
     stderr: Option<String>,
 }
 
-pub fn main() -> ExitCode {
+pub fn main() {
     let args: Vec<String> = env::args().collect();
     tracing_subscriber::fmt::fmt()
         .without_time()
@@ -66,71 +78,70 @@ pub fn main() -> ExitCode {
         "External resolver must be called with a single argument `{RESOLVE_ARG}`"
     );
 
-    let responses: Result<BTreeMap<QueryID, EchoValue>, Exit> = parse_input()
-        .queries
+    let responses: Vec<Response<serde_json::Value>> = parse_input()
         .into_iter()
-        .map(|(id, query)| {
-            let env_str = match query.environment_id {
-                Some(e) => format!("for environment {}", &e),
-                None => "for default environment".to_string(),
-            };
-
-            debug!("Resolving request `{id}` {env_str}.");
-
-            let data = RequestData::deserialize(query.argument)
-                .expect("Argument to mock resolver is expected to be well-formed");
-
-            match data {
-                RequestData::Stdio(exit) => Err(exit),
-                RequestData::Echo(process) => Ok((id, process)),
-            }
-        })
+        .map(|(id, request)| process_request(id, request))
         .collect();
 
-    generate_output(responses)
+    let response = BatchResponse::<serde_json::Value> { responses };
+    println!(
+        "{}",
+        serde_json::to_string(&response).expect("response can be serialized")
+    );
 }
 
 /// Read a [Request] from [stdin]
-fn parse_input() -> Request {
+fn parse_input() -> BTreeMap<RequestID, ResolveRequest> {
     let stdin = read_to_string(stdin()).expect("Stdin can be read");
     debug!("resolver stdin:\n{stdin}");
 
-    toml::from_str(&stdin)
-        .expect("External resolver must be passed a TOML-formatted request on stdin")
+    let batch: BatchRequest<ResolveRequest> = serde_json::from_str(&stdin)
+        .expect("External resolver must be passed a JSON RPC batch request");
+
+    batch
+        .requests
+        .into_iter()
+        .map(|req| {
+            assert!(req.method == RESOLVE_METHOD);
+            (req.id, req.params)
+        })
+        .collect()
 }
 
-/// Report [output] on [stdout], [stderr], and the process return value
-fn generate_output(output: Result<BTreeMap<String, EchoValue>, Exit>) -> ExitCode {
-    match output {
-        Ok(responses) => {
-            debug!("Producing stderr");
-            let responses = responses
-                .into_iter()
-                .map(|(id, p)| {
-                    if let Some(line) = p.stderr {
-                        eprintln!("{line}");
-                    };
-                    (id, p.output)
-                })
-                .collect();
+/// Process [request], creating a [Response] with the given [id]
+/// Ends the process if an [Exit] variant is discovered
+fn process_request(id: RequestID, request: ResolveRequest) -> Response<serde_json::Value> {
+    let env_str = match &request.env {
+        Some(e) => format!("for environment {}", e),
+        None => "for default environment".to_string(),
+    };
 
-            debug!("Producing stdout");
-            let response = Response { responses };
-            println!(
-                "{}",
-                toml::to_string(&response).expect("response can be serialized")
-            );
+    debug!("Resolving request `{id}` {env_str}.");
+    match request.data {
+        RequestData::Stdio(exit) => {
+            if let Some(line) = exit.stderr {
+                eprintln!("{line}");
+            };
+            print!("{}", exit.stdout);
 
-            debug!("Exiting (success)");
-            ExitCode::SUCCESS
+            std::process::exit(exit.exit_code.unwrap_or(0))
         }
-        Err(exit) => {
-            debug!("Producing stdout output");
-            println!("{}", exit.stdout);
-            debug!("Producing stderr output");
-            eprintln!("{}", exit.stderr);
-            debug!("Exiting");
-            exit.exit_code.unwrap_or(0).into()
+        RequestData::Echo(process) => {
+            if let Some(line) = process.stderr {
+                eprintln!("{line}");
+            };
+
+            let env_key: String = request.env.unwrap_or("default".to_string());
+            let result = process
+                .output
+                .get(&env_key)
+                .expect("output field contains all environment ids")
+                .clone();
+            Response {
+                jsonrpc: TwoPointZero,
+                id,
+                result,
+            }
         }
     }
 }

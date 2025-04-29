@@ -12,7 +12,8 @@ use thiserror::Error;
 use tokio::io::{AsyncRead, AsyncWrite, BufReader, BufWriter};
 
 mod client;
-mod types;
+mod server;
+pub mod types;
 
 pub use client::Endpoint;
 

@@ -83,7 +83,7 @@ where
     let mut response_json = String::new();
     endpoint.input.read_line(&mut response_json).await?;
 
-    let response: Response = serde_json::de::from_str(response_json.as_str())?;
+    let response: Response<R> = serde_json::de::from_str(response_json.as_str())?;
 
     if response.id != request.id {
         Err(JsonRpcError::OutOfOrder)
@@ -100,7 +100,7 @@ pub async fn batch_call<A: Serialize, R: DeserializeOwned>(
     method: impl AsRef<str>,
     args: impl IntoIterator<Item = A>,
 ) -> Result<impl Iterator<Item = R>, JsonRpcError> {
-    let requests: Vec<Request> = args
+    let requests: Vec<Request<A>> = args
         .into_iter()
         .map(|arg| make_request(endpoint, &method, arg))
         .collect();
@@ -114,14 +114,14 @@ pub async fn batch_call<A: Serialize, R: DeserializeOwned>(
     let mut response_json = String::new();
     endpoint.input.read_line(&mut response_json).await?;
 
-    let responses: BatchResponse = serde_json::de::from_str(response_json.as_str())?;
+    let responses: BatchResponse<R> = serde_json::de::from_str(response_json.as_str())?;
 
     // match up requests and responses
     if responses.responses.len() != batch.requests.len() {
         return Err(JsonRpcError::WrongResponses);
     }
 
-    let mut resp_by_id: BTreeMap<RequestID, Response> = responses
+    let mut resp_by_id: BTreeMap<RequestID, Response<R>> = responses
         .responses
         .into_iter()
         .map(|response| (response.id, response))
@@ -133,7 +133,7 @@ pub async fn batch_call<A: Serialize, R: DeserializeOwned>(
             .remove(&req.id)
             .ok_or_else(|| JsonRpcError::OutOfOrder)?;
 
-        result.push(response.result.get::<R, JsonRpcError>()?);
+        result.push(response.result.get::<JsonRpcError>()?);
     }
 
     Ok(result.into_iter())
@@ -144,11 +144,11 @@ fn make_request<A: Serialize>(
     endpoint: &mut Endpoint<impl AsyncRead + Unpin, impl AsyncWrite + Unpin>,
     method: impl AsRef<str>,
     arg: A,
-) -> Request {
-    let request = Request {
+) -> Request<A> {
+    let request = Request::<A> {
         jsonrpc: TwoPointZero,
         method: method.as_ref().to_string(),
-        params: serde_json::to_value(arg).expect("arguments should be serializable"),
+        params: arg,
         id: endpoint.sqn,
     };
     endpoint.sqn += 1;
