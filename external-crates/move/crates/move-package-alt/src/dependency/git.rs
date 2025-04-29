@@ -21,12 +21,13 @@ use std::{
     fmt,
     marker::PhantomData,
     path::{Path, PathBuf},
-    process::{Command, Output, Stdio},
+    process::{Output, Stdio},
 };
 
 use derive_where::derive_where;
 use serde::de::Error;
 use serde::{de, Deserialize, Deserializer, Serialize};
+use tokio::process::Command;
 use tracing::debug;
 
 use crate::errors::{GitError, GitErrorKind, Located, PackageError, PackageResult};
@@ -90,19 +91,23 @@ enum ShaError {
 impl UnpinnedGitDependency {
     /// Replace all commit-ishes in [deps] with commits (i.e. SHAs). Requires fetching the git
     /// repositories
-    pub fn pin(deps: DependencySet<Self>) -> PackageResult<DependencySet<PinnedGitDependency>> {
-        Ok(deps
-            .into_iter()
-            .map(|(env, package, dep)| (env, package, dep.pin_one().unwrap())) // TODO: errors!
-            .collect())
+    pub async fn pin(
+        deps: DependencySet<Self>,
+    ) -> PackageResult<DependencySet<PinnedGitDependency>> {
+        let mut res = DependencySet::new();
+        for (env, package, dep) in deps.into_iter() {
+            let dep = dep.pin_one().await?;
+            res.insert(env, package, dep);
+        }
+        Ok(res)
     }
 
     /// Replace the commit-ish [self.rev] with a commit (i.e. a SHA). Requires fetching the git
     /// repository
-    fn pin_one(&self) -> PackageResult<PinnedGitDependency> {
+    async fn pin_one(&self) -> PackageResult<PinnedGitDependency> {
         let git: GitRepo = self.clone().into();
-        let sha = git.find_sha()?;
-        let pinned_git_dep = git.fetch()?;
+        let sha = git.find_sha().await?;
+        let pinned_git_dep = git.fetch().await?;
 
         Ok(PinnedGitDependency {
             repo: self.repo.clone(),
@@ -134,8 +139,8 @@ impl GitRepo {
     }
 
     /// Ensures that the repo is checked out at the specified sha.
-    pub fn fetch(&self) -> PackageResult<PathBuf> {
-        let sha = self.find_sha()?;
+    pub async fn fetch(&self) -> PackageResult<PathBuf> {
+        let sha = self.find_sha().await?;
 
         if !check_is_commit_sha(&sha) {
             return Err(PackageError::Git(GitError::invalid_sha(
@@ -149,7 +154,7 @@ impl GitRepo {
         debug!("Repo path on disk: {:?}", repo_fs_path.display());
 
         // Check out the repo at the given sha
-        self.checkout_repo(&repo_fs_path, &sha)?;
+        self.checkout_repo(&repo_fs_path, &sha).await?;
 
         Ok(repo_fs_path)
     }
@@ -157,28 +162,24 @@ impl GitRepo {
     /// Checkout the repository using a sparse checkout. It will try to clone without checkout, set
     /// sparse checkout directory, and then checkout the folder specified by `self.path` at the
     /// given sha.
-    fn checkout_repo(&self, repo_fs_path: &PathBuf, sha: &str) -> PackageResult<()> {
+    async fn checkout_repo(&self, repo_fs_path: &PathBuf, sha: &str) -> PackageResult<()> {
         // Checkout repo if it does not exist already
         if !repo_fs_path.exists() {
             // Sparse checkout repo
-            self.try_clone_sparse_checkout(repo_fs_path)?;
+            self.try_clone_sparse_checkout(repo_fs_path).await?;
             debug!("Sparse checkout successful");
 
             debug!("Path to checkout: {:?}", self.path);
             // Set the sparse checkout path
-            self.try_sparse_checkout_init(repo_fs_path)?;
+            self.try_sparse_checkout_init(repo_fs_path).await?;
             debug!("Sparse checkout init successful");
 
-            self.try_set_sparse_dir(repo_fs_path, &self.path)?;
+            self.try_set_sparse_dir(repo_fs_path, &self.path).await?;
             debug!("Sparse checkout set successful");
 
-            self.try_checkout_at_sha(repo_fs_path, sha)?;
+            self.try_checkout_at_sha(repo_fs_path, sha).await?;
             debug!("Checkout at sha {sha} successful");
-
-            // check it is a Move project.
-            self.check_is_move_project(repo_fs_path, &self.path)?;
-            debug!("Move project check successful");
-        } else if self.is_dirty(repo_fs_path)? {
+        } else if self.is_dirty(repo_fs_path).await? {
             debug!("Repo is dirty");
             return Err(PackageError::Git(GitError::dirty(&self.repo_url)));
         }
@@ -186,52 +187,33 @@ impl GitRepo {
         Ok(())
     }
 
-    /// This function checks if the given path in this GitDependency has a Move.toml file.
-    /// It needs to be called after the checkout, as otherwise it will not be able to find the
-    /// file.
-    fn check_is_move_project(&self, repo_fs_path: &PathBuf, path: &PathBuf) -> PackageResult<()> {
-        let move_toml_path = repo_fs_path.join(path).join("Move.toml");
-        debug!(
-            "Checking is a Move project, move toml path: {:?}",
-            move_toml_path.display()
-        );
-
-        let cmd = self.run_git_cmd_with_args(
-            &["ls-tree", "HEAD", &move_toml_path.to_string_lossy()],
-            Some(repo_fs_path),
-        )?;
-
-        if cmd.stdout.is_empty() {
-            return Err(PackageError::Git(GitError::not_move_project(
-                &self.repo_url,
-            )));
-        }
-
-        Ok(())
-    }
-
     /// Check out the given SHA in the given repo
-    fn try_checkout_at_sha(&self, repo_fs_path: &PathBuf, sha: &str) -> PackageResult<()> {
+    async fn try_checkout_at_sha(&self, repo_fs_path: &PathBuf, sha: &str) -> PackageResult<()> {
         debug!("Checking out with SHA: {sha}");
-        let cmd = self.run_git_cmd_with_args(&["checkout", sha], Some(repo_fs_path))?;
+        let cmd = self
+            .run_git_cmd_with_args(&["checkout", sha], Some(repo_fs_path))
+            .await?;
         Ok(())
     }
 
-    fn try_set_sparse_dir(&self, repo_fs_path: &PathBuf, path: &Path) -> PackageResult<()> {
+    async fn try_set_sparse_dir(&self, repo_fs_path: &PathBuf, path: &Path) -> PackageResult<()> {
         debug!("Setting sparse checkout path to: {:?}", path);
-        let cmd = self.run_git_cmd_with_args(
-            &["sparse-checkout", "set", &path.to_string_lossy()],
-            Some(repo_fs_path),
-        )?;
+        let cmd = self
+            .run_git_cmd_with_args(
+                &["sparse-checkout", "set", &path.to_string_lossy()],
+                Some(repo_fs_path),
+            )
+            .await?;
         Ok(())
     }
 
     /// Try to initialize the repository in sparse-checkout mode.
-    fn try_sparse_checkout_init(&self, repo_fs_path: &PathBuf) -> PackageResult<()> {
+    async fn try_sparse_checkout_init(&self, repo_fs_path: &PathBuf) -> PackageResult<()> {
         // git sparse-checkout init --cone
         debug!("Calling sparse checkout init");
-        let cmd =
-            self.run_git_cmd_with_args(&["sparse-checkout", "init", "--cone"], Some(repo_fs_path))?;
+        let cmd = self
+            .run_git_cmd_with_args(&["sparse-checkout", "init", "--cone"], Some(repo_fs_path))
+            .await?;
 
         if !cmd.status.success() {
             return Err(PackageError::Git(GitError::generic(format!(
@@ -245,23 +227,25 @@ impl GitRepo {
     }
 
     /// Try to clone git repository with sparse mode and no checkout.
-    fn try_clone_sparse_checkout(&self, repo_fs_path: &Path) -> PackageResult<()> {
+    async fn try_clone_sparse_checkout(&self, repo_fs_path: &Path) -> PackageResult<()> {
         debug!(
             "Cloning repo with no checkout in sparse mode: {:?}, to folder: {:?}",
             self.repo_url,
             repo_fs_path.display()
         );
-        let cmd = self.run_git_cmd_with_args(
-            &[
-                "clone",
-                "--sparse",
-                "--filter=blob:none",
-                "--no-checkout",
-                &self.repo_url,
-                &repo_fs_path.to_string_lossy(),
-            ],
-            None,
-        );
+        let cmd = self
+            .run_git_cmd_with_args(
+                &[
+                    "clone",
+                    "--sparse",
+                    "--filter=blob:none",
+                    "--no-checkout",
+                    &self.repo_url,
+                    &repo_fs_path.to_string_lossy(),
+                ],
+                None,
+            )
+            .await;
 
         if cmd.is_err() {
             return Err(PackageError::Git(GitError::generic(format!(
@@ -275,7 +259,7 @@ impl GitRepo {
     }
 
     /// Runs a git command from the provided arguments.
-    pub fn run_git_cmd_with_args(
+    pub async fn run_git_cmd_with_args(
         &self,
         args: &[&str],
         cwd: Option<&PathBuf>,
@@ -291,16 +275,19 @@ impl GitRepo {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
+            .await
             .map_err(|e| PackageError::Git(GitError::command_error(e.to_string())))
     }
 
     /// Check if the git repository is dirty
-    pub fn is_dirty(&self, repo_fs_path: &PathBuf) -> PackageResult<bool> {
+    pub async fn is_dirty(&self, repo_fs_path: &PathBuf) -> PackageResult<bool> {
         debug!("Checking if repo is dirty");
-        let cmd = self.run_git_cmd_with_args(
-            &["status", "--porcelain", "--untracked-files=no"],
-            Some(repo_fs_path),
-        )?;
+        let cmd = self
+            .run_git_cmd_with_args(
+                &["status", "--porcelain", "--untracked-files=no"],
+                Some(repo_fs_path),
+            )
+            .await?;
 
         if !cmd.stdout.is_empty() {
             debug!("Repo {} is dirty", self.repo_url);
@@ -312,7 +299,7 @@ impl GitRepo {
 
     /// Find the SHA of the given commit/branch in the given repo. This will make a remote call so
     /// network is required.
-    fn find_sha(&self) -> PackageResult<String> {
+    async fn find_sha(&self) -> PackageResult<String> {
         if let Some(r) = self.rev.as_ref() {
             if check_is_commit_sha(r) {
                 return Ok(r.to_string());
@@ -326,10 +313,12 @@ impl GitRepo {
         // we have a branch or tag
         let sha = if let Some(r) = self.rev.as_ref() {
             // git ls-remote https://github.com/user/repo.git refs/heads/main
-            let cmd = self.run_git_cmd_with_args(
-                &["ls-remote", &self.repo_url, &format!("refs/heads/{r}")],
-                None,
-            )?;
+            let cmd = self
+                .run_git_cmd_with_args(
+                    &["ls-remote", &self.repo_url, &format!("refs/heads/{r}")],
+                    None,
+                )
+                .await?;
             let stdout = String::from_utf8(cmd.stdout)?;
             stdout
                 .split_whitespace()
@@ -338,16 +327,17 @@ impl GitRepo {
                 .to_string()
         } else {
             // nothing specified, so we need to find the default branch
-            self.find_default_branch_and_get_sha()?
+            self.find_default_branch_and_get_sha().await?
         };
 
         Ok(sha)
     }
 
     /// Find the default branch and return the SHA
-    fn find_default_branch_and_get_sha(&self) -> PackageResult<String> {
-        let cmd =
-            self.run_git_cmd_with_args(&["ls-remote", "--symref", &self.repo_url, "HEAD"], None)?;
+    async fn find_default_branch_and_get_sha(&self) -> PackageResult<String> {
+        let cmd = self
+            .run_git_cmd_with_args(&["ls-remote", "--symref", &self.repo_url, "HEAD"], None)
+            .await?;
         let stdout = String::from_utf8(cmd.stdout)?;
         let lines: Vec<_> = stdout.lines().collect();
         let default_branch = lines[0].split_whitespace().nth(1).ok_or_else(|| {
@@ -469,7 +459,7 @@ mod tests {
     /// Sets up a test Move project with git repository
     /// It returns the temporary directory, the root path of the project, the first commit sha, and
     /// and the second commit sha.
-    pub fn setup_test_move_project() -> (TempDir, PathBuf, String, String) {
+    pub async fn setup_test_move_project() -> (TempDir, PathBuf, String, String) {
         // Create a temporary directory
         let temp_dir = tempdir().unwrap();
         let mut root_path = temp_dir.path().to_path_buf();
@@ -483,6 +473,7 @@ mod tests {
             .args(["init", "--initial-branch=main"])
             .current_dir(&root_path)
             .output()
+            .await
             .unwrap();
 
         // Configure git user for commits
@@ -490,11 +481,13 @@ mod tests {
             .args(["config", "user.name", "Test User"])
             .current_dir(&root_path)
             .output()
+            .await
             .unwrap();
         Command::new("git")
             .args(["config", "user.email", "test@example.com"])
             .current_dir(&root_path)
             .output()
+            .await
             .unwrap();
 
         // Create directory structure
@@ -512,11 +505,13 @@ mod tests {
             .args(["add", "."])
             .current_dir(&root_path)
             .output()
+            .await
             .unwrap();
         Command::new("git")
             .args(["commit", "-m", "Initial commit", "."])
             .current_dir(&root_path)
             .output()
+            .await
             .unwrap();
 
         fs::create_dir_all(&pkg_b_path).unwrap();
@@ -530,17 +525,20 @@ mod tests {
             .args(["add", "."])
             .current_dir(&root_path)
             .output()
+            .await
             .unwrap();
         Command::new("git")
             .args(["commit", "-m", "Add dependencies", "."])
             .current_dir(&root_path)
             .output()
+            .await
             .unwrap();
         // Get commits SHA
         let commits = Command::new("git")
             .args(["log", "--pretty=format:%H"])
             .current_dir(&root_path)
             .output()
+            .await
             .unwrap();
         let commits = String::from_utf8_lossy(&commits.stdout);
         let commits: Vec<_> = commits.lines().collect();
@@ -549,6 +547,7 @@ mod tests {
             .args(["rev-parse", "--abbrev-ref", "HEAD"])
             .current_dir(&root_path)
             .output()
+            .await
             .unwrap();
 
         (
@@ -559,9 +558,9 @@ mod tests {
         )
     }
 
-    #[test]
-    fn test_sparse_checkout_folder() {
-        let (temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project();
+    #[tokio::test]
+    async fn test_sparse_checkout_folder() {
+        let (temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project().await;
         let temp_dir = setup_temp_dir();
         let fs_repo = fs_repo.to_str().unwrap();
 
@@ -573,13 +572,13 @@ mod tests {
         };
 
         // Fetch the dependency
-        let checkout_path = git_repo.fetch().unwrap();
+        let checkout_path = git_repo.fetch().await.unwrap();
 
         // Verify only packages/pkg_a was checked out
         assert!(checkout_path.join("packages/pkg_a").exists());
         assert!(!checkout_path.join("packages/pkg_b").exists());
 
-        let (_temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project();
+        let (_temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project().await;
         let fs_repo = fs_repo.to_str().unwrap();
         // Pass in a commit SHA
         let git_dep = GitRepo {
@@ -589,16 +588,16 @@ mod tests {
         };
 
         // Fetch the dependency
-        let checkout_path = git_dep.fetch().unwrap();
+        let checkout_path = git_dep.fetch().await.unwrap();
 
         // Verify only packages/pkg_b was checked out
         assert!(checkout_path.join("packages/pkg_b").exists());
         assert!(!checkout_path.join("packages/pkg_a").exists());
     }
 
-    #[test]
-    fn test_wrong_sha() {
-        let (_temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project();
+    #[tokio::test]
+    async fn test_wrong_sha() {
+        let (_temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project().await;
         let temp_dir = setup_temp_dir();
         let fs_repo = fs_repo.to_str().unwrap();
 
@@ -609,13 +608,13 @@ mod tests {
         };
 
         // Fetch the dependency
-        let result = git_dep.fetch();
+        let result = git_dep.fetch().await;
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_wrong_branch_name() {
-        let (_temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project();
+    #[tokio::test]
+    async fn test_wrong_branch_name() {
+        let (_temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project().await;
         let temp_dir = setup_temp_dir();
         let fs_repo = fs_repo.to_str().unwrap();
 
@@ -626,47 +625,13 @@ mod tests {
         };
 
         // Fetch the dependency
-        let result = git_dep.fetch();
+        let result = git_dep.fetch().await;
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_full_repository_checkout_no_move_toml_in_root() {
-        let (_temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project();
-        let temp_dir = setup_temp_dir();
-        let fs_repo = fs_repo.to_str().unwrap();
-
-        let git_dep = GitRepo {
-            repo_url: fs_repo.to_string(),
-            rev: Some("main".to_string()),
-            path: PathBuf::from(""),
-        };
-
-        // The move project from setup has no root Move.toml file, so this should fail
-        let result = git_dep.fetch();
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_non_existent_path_error() {
-        let (_temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project();
-        let temp_dir = setup_temp_dir();
-        let fs_repo = fs_repo.to_str().unwrap();
-
-        let git_dep = GitRepo {
-            repo_url: fs_repo.to_string(),
-            rev: Some("main".to_string()),
-            path: PathBuf::from("non_existent_folder"),
-        };
-
-        // Fetch should fail
-        let result = git_dep.fetch();
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_repo_is_dirty() {
-        let (_temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project();
+    #[tokio::test]
+    async fn test_repo_is_dirty() {
+        let (_temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project().await;
         let temp_dir = setup_temp_dir();
         let fs_repo = fs_repo.to_str().unwrap();
 
@@ -676,12 +641,12 @@ mod tests {
             path: PathBuf::from("packages/pkg_a"),
         };
 
-        let checkout_path = git_dep.fetch().unwrap();
+        let checkout_path = git_dep.fetch().await.unwrap();
         // Delete a file in the repo to make it dirty
         let move_toml_path = checkout_path.join("packages/pkg_a").join("Move.toml");
         fs::remove_file(move_toml_path).unwrap();
         // Check if the repo is dirty
-        let is_dirty = git_dep.is_dirty(&checkout_path).unwrap();
+        let is_dirty = git_dep.is_dirty(&checkout_path).await.unwrap();
         assert!(is_dirty);
     }
 }
