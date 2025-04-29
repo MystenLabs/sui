@@ -52,10 +52,14 @@ impl Query {
         Ok(Checkpoint::with_sequence_number(scope, sequence_number))
     }
 
-    /// Fetch an epoch by its ID.
+    /// Fetch an epoch by its ID, or fetch the latest epoch if no ID is provided.
     ///
     /// Returns `null` if the epoch does not exist yet, or was pruned.
-    async fn epoch(&self, ctx: &Context<'_>, epoch_id: UInt53) -> Result<Option<Epoch>, RpcError> {
+    async fn epoch(
+        &self,
+        ctx: &Context<'_>,
+        epoch_id: Option<UInt53>,
+    ) -> Result<Option<Epoch>, RpcError> {
         let scope = self.scope(ctx)?;
         Epoch::fetch(ctx, scope, epoch_id).await
     }
@@ -86,7 +90,7 @@ impl Query {
         let scope = self.scope(ctx)?;
         let epochs = keys
             .into_iter()
-            .map(|k| Epoch::fetch(ctx, scope.clone(), k));
+            .map(|k| Epoch::fetch(ctx, scope.clone(), Some(k)));
 
         try_join_all(epochs).await
     }
