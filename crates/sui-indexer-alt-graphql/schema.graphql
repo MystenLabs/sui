@@ -373,11 +373,11 @@ type Query {
 	"""
 	checkpoint(sequenceNumber: UInt53): Checkpoint
 	"""
-	Fetch an epoch by its ID.
+	Fetch an epoch by its ID, or fetch the latest epoch if no ID is provided.
 	
 	Returns `null` if the epoch does not exist yet, or was pruned.
 	"""
-	epoch(epochId: UInt53!): Epoch
+	epoch(epochId: UInt53): Epoch
 	"""
 	Fetch checkpoints by their sequence numbers.
 	

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use anyhow::Context as _;
 use async_graphql::{dataloader::DataLoader, Context, Object};
 use sui_indexer_alt_reader::{
-    epochs::{EpochEndKey, EpochStartKey},
+    epochs::{CheckpointBoundedEpochStartKey, EpochEndKey, EpochStartKey},
     pg_reader::PgReader,
 };
 use sui_indexer_alt_schema::epochs::{StoredEpochEnd, StoredEpochStart};
@@ -58,7 +58,7 @@ impl Epoch {
 
     #[graphql(flatten)]
     async fn start(&self, ctx: &Context<'_>) -> Result<EpochStart, RpcError> {
-        self.start.fetch(ctx, self.epoch_id).await
+        self.start.fetch(ctx, Some(self.epoch_id)).await
     }
 
     #[graphql(flatten)]
@@ -143,14 +143,18 @@ impl Epoch {
     }
 
     /// Load the epoch from the store, and return it fully inflated (with contents already
-    /// fetched). Returns `None` if the epoch does not exist (or started after the checkpoint being
-    /// viewed).
+    /// fetched). If `epoch_id` is provided, the epoch with that ID is loaded. Otherwise, the
+    /// latest epoch for the current checkpoint is loaded.
+    ///
+    /// Returns `None` if the epoch does not exist (or started after the checkpoint being viewed).
     pub(crate) async fn fetch(
         ctx: &Context<'_>,
         scope: Scope,
-        epoch_id: UInt53,
+        epoch_id: Option<UInt53>,
     ) -> Result<Option<Self>, RpcError> {
-        let start = EpochStart::empty(scope).fetch(ctx, epoch_id.into()).await?;
+        let start = EpochStart::empty(scope)
+            .fetch(ctx, epoch_id.map(|id| id.into()))
+            .await?;
 
         let Some(contents) = &start.contents else {
             return Ok(None);
@@ -175,17 +179,22 @@ impl EpochStart {
     /// otherwise attempts to fetch from the store. The resulting value may still have an empty
     /// contents field, because it could not be found in the store, or the epoch started after the
     /// checkpoint being viewed.
-    async fn fetch(&self, ctx: &Context<'_>, epoch_id: u64) -> Result<Self, RpcError> {
+    async fn fetch(&self, ctx: &Context<'_>, epoch_id: Option<u64>) -> Result<Self, RpcError> {
         if self.contents.is_some() {
             return Ok(self.clone());
         }
 
         let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
-        let Some(stored) = pg_loader
-            .load_one(EpochStartKey(epoch_id))
-            .await
-            .context("Failed to fetch epoch start information")?
-        else {
+
+        let load = if let Some(id) = epoch_id {
+            pg_loader.load_one(EpochStartKey(id)).await
+        } else {
+            let cp = self.scope.checkpoint_viewed_at();
+            pg_loader.load_one(CheckpointBoundedEpochStartKey(cp)).await
+        }
+        .context("Failed to fetch epoch start information")?;
+
+        let Some(stored) = load else {
             return Ok(self.clone());
         };
 

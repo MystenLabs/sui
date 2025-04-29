@@ -15,6 +15,8 @@
 
 //# run-graphql
 {
+  latest: epoch { ...E }
+
   e0: epoch(epochId: 0) { ...E }
   e1: epoch(epochId: 1) { ...E }
   e2: epoch(epochId: 2) { ...E }
@@ -31,16 +33,21 @@ fragment E on Epoch {
 }
 
 //# run-graphql
-{ # This checkpoint is half way through the epoch, so the epoch should return
-  # its starting information, but not its ending information.
+{ # This checkpoint is half way through an earlier epoch, which should be
+  # reflected in the latest epoch we get a start time for and an end time for.
   checkpoint(sequenceNumber: 2) {
     query {
-      epoch(epochId: 1) {
-        epochId
-        referenceGasPrice
-        startTimestamp
-        endTimestamp
-      }
+      latest: epoch { ...E }
+      e0: epoch(epochId: 0) { ...E }
+      e1: epoch(epochId: 1) { ...E }
+      e2: epoch(epochId: 2) { ...E }
     }
   }
+}
+
+fragment E on Epoch {
+  epochId
+  referenceGasPrice
+  startTimestamp
+  endTimestamp
 }
