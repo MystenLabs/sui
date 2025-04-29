@@ -6,7 +6,6 @@ edition = "2024.beta"
 
 [dependencies]
 MoveStdlib = { local = "../move-stdlib", override = true }
-Prover = { local = "../prover", override = true }
 
 [addresses]
 sui = "0x2"
