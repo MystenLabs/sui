@@ -178,11 +178,9 @@ impl GitRepo {
             // check it is a Move project.
             self.check_is_move_project(repo_fs_path, &self.path)?;
             debug!("Move project check successful");
-        } else {
-            if self.is_dirty(repo_fs_path)? {
-                debug!("Repo is dirty");
-                return Err(PackageError::Git(GitError::dirty(&self.repo_url)));
-            }
+        } else if self.is_dirty(repo_fs_path)? {
+            debug!("Repo is dirty");
+            return Err(PackageError::Git(GitError::dirty(&self.repo_url)));
         }
 
         Ok(())
@@ -684,6 +682,6 @@ mod tests {
         fs::remove_file(move_toml_path).unwrap();
         // Check if the repo is dirty
         let is_dirty = git_dep.is_dirty(&checkout_path).unwrap();
-        assert_eq!(is_dirty, true);
+        assert!(is_dirty);
     }
 }
