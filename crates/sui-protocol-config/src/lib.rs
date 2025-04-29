@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 82;
+const MAX_PROTOCOL_VERSION: u64 = 83;
 
 // Record history of protocol version allocations here:
 //
@@ -235,7 +235,8 @@ const MAX_PROTOCOL_VERSION: u64 = 82;
 // Version 81: Enable median based commit timestamp in consensus on mainnet.
 //             Enforce checkpoint timestamps are non-decreasing for testnet and mainnet.
 //             Increase threshold for bad nodes that won't be considered leaders in consensus in mainnet
-// Version 82:
+// Version 82: Relax bounding of size of values created in the adapter.
+// Version 83: Resolve `TypeInput` IDs to defining ID when converting to `TypeTag`s in the adapter.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -679,6 +680,10 @@ struct FeatureFlags {
     // If true, enables better errors and bounds for max ptb values
     #[serde(skip_serializing_if = "is_false")]
     max_ptb_value_size_v2: bool,
+
+    // If true, resolves all type input ids to be defining ID based in the adapter
+    #[serde(skip_serializing_if = "is_false")]
+    resolve_type_input_ids_to_defining_id: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1948,6 +1953,10 @@ impl ProtocolConfig {
 
     pub fn max_ptb_value_size_v2(&self) -> bool {
         self.feature_flags.max_ptb_value_size_v2
+    }
+
+    pub fn resolve_type_input_ids_to_defining_id(&self) -> bool {
+        self.feature_flags.resolve_type_input_ids_to_defining_id
     }
 }
 
@@ -3483,6 +3492,9 @@ impl ProtocolConfig {
                 }
                 82 => {
                     cfg.feature_flags.max_ptb_value_size_v2 = true;
+                }
+                83 => {
+                    cfg.feature_flags.resolve_type_input_ids_to_defining_id = true;
                 }
                 // Use this template when making changes:
                 //
