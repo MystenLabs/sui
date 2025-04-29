@@ -35,7 +35,7 @@ use local::LocalDependency;
 pub struct Pinned;
 
 /// Phantom type to represent unpinned dependencies (see [ManifestDependencyInfo])
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Unpinned;
 
 /// [ManifestDependencyInfo]s contain the dependency-type-specific things that users write in their
@@ -46,7 +46,7 @@ pub struct Unpinned;
 /// are not serialized to the Lock file. See [crate::package::manifest] for the full representation
 /// of an entry in the `dependencies` table.
 #[derive(Debug, Serialize, Deserialize)]
-#[derive_where(Clone)]
+#[derive_where(Clone, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum ManifestDependencyInfo<F: MoveFlavor> {
     Git(UnpinnedGitDependency),

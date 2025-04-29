@@ -9,12 +9,18 @@ use std::{
     fmt::Debug,
     marker::PhantomData,
     path::{Path, PathBuf},
+    process::Command,
 };
 
 use serde::{Deserialize, Serialize};
 
-use crate::flavor::MoveFlavor;
+use crate::{
+    errors::{ManifestError, PackageResult},
+    flavor::MoveFlavor,
+};
 use lockfile::{Lockfile, Publication};
+use manifest::Manifest;
+use tracing::debug;
 
 pub type EnvironmentName = String;
 pub type PackageName = String;
@@ -22,7 +28,7 @@ pub type PackageName = String;
 pub struct Package<F: MoveFlavor> {
     // TODO: maybe hold a lock on the lock file? Maybe not if move-analyzer wants to hold on to a
     // Package long term?
-    // TODO: manifest: manifest::Manifest,
+    manifest: Manifest<F>,
     lockfiles: Lockfile<F>,
     path: PathBuf,
 }
@@ -32,22 +38,47 @@ impl<F: MoveFlavor> Package<F> {
     /// Makes a best effort to translate old-style packages into the current format,
     ///
     /// Fails if [path] does not exist, or if it doesn't contain a manifest
-    pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        todo!()
+    pub fn load(path: impl AsRef<Path>) -> PackageResult<Self> {
+        let move_toml_path = path.as_ref().join("Move.toml");
+        debug!(
+            "Checking if there's a move toml file in path: {:?}",
+            move_toml_path.display()
+        );
+
+        let manifest = Manifest::<F>::read_from(&move_toml_path)?;
+
+        // check if there's a lockfile, and if it is not, we add one
+        let lockfiles = Lockfile::read_from(&path)?;
+
+        // iterate through each dependency and pin it. This will be later used to verify that the
+        // dependencies match exactly to the ones in the lockfile.
+        manifest
+            .dependencies
+            .iter()
+            .for_each(|(name, manifest_dep)| {
+                debug!("Dependency: {:?}", name);
+                debug!("Dependency info: {:?}", manifest_dep);
+            });
+
+        Ok(Self {
+            manifest,
+            lockfiles,
+            path: path.as_ref().to_path_buf(),
+        })
     }
 
     /// The path to the root directory of this package. This path is guaranteed to exist
     /// and contain a manifest file.
     pub fn path(&self) -> &Path {
-        todo!()
+        &self.path
     }
 
-    /// Return the metadata for the most recent published version in the given environemtn
-    pub fn publication_for(&self, env: EnvironmentName) -> Option<Publication<F>> {
-        todo!()
+    /// Return the metadata for the most recent published version in the given environment.
+    pub fn publication_for(&self, env: &EnvironmentName) -> Option<Publication<F>> { 
+        self.lockfiles.published_for_env(env)
     }
 
-    /// Register a published package on the given chain in the saved lockfiles
+    /// Register a published package on the given chain in the saved lockfiles.
     pub fn add_publication_for(
         &mut self,
         env: EnvironmentName,
