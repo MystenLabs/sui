@@ -1,10 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 use async_graphql::dataloader::Loader;
-use diesel::{ExpressionMethods, QueryDsl};
+use diesel::{
+    sql_types::{Array, BigInt},
+    ExpressionMethods, QueryDsl,
+};
 use sui_indexer_alt_schema::{
     epochs::{StoredEpochEnd, StoredEpochStart},
     schema::{kv_epoch_ends, kv_epoch_starts},
@@ -15,6 +21,10 @@ use crate::{error::Error, pg_reader::PgReader};
 /// Key for fetching information about the start of an epoch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EpochStartKey(pub u64);
+
+/// Key for fetching information about the latest epoch to have started as of a given checkpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CheckpointBoundedEpochStartKey(pub u64);
 
 /// Key for fetching information about the end of an epoch (which must already be finished).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -46,6 +56,69 @@ impl Loader<EpochStartKey> for PgReader {
         Ok(epochs
             .into_iter()
             .map(|e| (EpochStartKey(e.epoch as u64), e))
+            .collect())
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<CheckpointBoundedEpochStartKey> for PgReader {
+    type Value = StoredEpochStart;
+    type Error = Arc<Error>;
+
+    async fn load(
+        &self,
+        keys: &[CheckpointBoundedEpochStartKey],
+    ) -> Result<HashMap<CheckpointBoundedEpochStartKey, Self::Value>, Self::Error> {
+        if keys.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let mut conn = self.connect().await.map_err(Arc::new)?;
+
+        let cps: Vec<_> = keys.iter().map(|e| e.0 as i64).collect();
+        let query = diesel::sql_query(
+            r#"
+                SELECT
+                    v.*
+                FROM (
+                    SELECT UNNEST($1) cp_sequence_number
+                ) k
+                CROSS JOIN LATERAL (
+                    SELECT
+                        epoch,
+                        protocol_version,
+                        cp_lo,
+                        start_timestamp_ms,
+                        reference_gas_price,
+                        system_state
+                    FROM
+                        kv_epoch_starts
+                    WHERE
+                        kv_epoch_starts.cp_lo <= k.cp_sequence_number
+                    ORDER BY
+                        kv_epoch_starts.cp_lo DESC
+                    LIMIT
+                        1
+                ) v
+            "#,
+        )
+        .bind::<Array<BigInt>, _>(cps);
+
+        let stored_epochs: Vec<StoredEpochStart> = conn.results(query).await.map_err(Arc::new)?;
+
+        // A single data loader request may contain multiple keys for the same epoch. Store them in
+        // an ordered map, so that we can find the latest version for each key.
+        let cp_to_stored: BTreeMap<_, _> = stored_epochs
+            .into_iter()
+            .map(|epoch| (epoch.cp_lo as u64, epoch))
+            .collect();
+
+        Ok(keys
+            .iter()
+            .filter_map(|key| {
+                let stored = cp_to_stored.range(..=key.0).last()?.1;
+                Some((*key, stored.clone()))
+            })
             .collect())
     }
 }
