@@ -173,13 +173,16 @@ impl GitRepo {
             debug!("Sparse checkout set successful");
 
             self.try_checkout_at_sha(repo_fs_path, sha)?;
-            debug!("Checkout at sha successful");
+            debug!("Checkout at sha {sha} successful");
 
             // check it is a Move project.
             self.check_is_move_project(repo_fs_path, &self.path)?;
             debug!("Move project check successful");
         } else {
-            self.is_dirty()?;
+            if self.is_dirty(repo_fs_path)? {
+                debug!("Repo is dirty");
+                return Err(PackageError::Git(GitError::dirty(&self.repo_url)));
+            }
         }
 
         Ok(())
@@ -190,7 +193,10 @@ impl GitRepo {
     /// file.
     fn check_is_move_project(&self, repo_fs_path: &PathBuf, path: &PathBuf) -> PackageResult<()> {
         let move_toml_path = repo_fs_path.join(path).join("Move.toml");
-        debug!("Move toml path: {:?}", move_toml_path.display());
+        debug!(
+            "Checking is a Move project, move toml path: {:?}",
+            move_toml_path.display()
+        );
 
         let cmd = self.run_git_cmd_with_args(
             &["ls-tree", "HEAD", &move_toml_path.to_string_lossy()],
@@ -214,6 +220,7 @@ impl GitRepo {
     }
 
     fn try_set_sparse_dir(&self, repo_fs_path: &PathBuf, path: &Path) -> PackageResult<()> {
+        debug!("Setting sparse checkout path to: {:?}", path);
         let cmd = self.run_git_cmd_with_args(
             &["sparse-checkout", "set", &path.to_string_lossy()],
             Some(repo_fs_path),
@@ -224,6 +231,7 @@ impl GitRepo {
     /// Try to initialize the repository in sparse-checkout mode.
     fn try_sparse_checkout_init(&self, repo_fs_path: &PathBuf) -> PackageResult<()> {
         // git sparse-checkout init --cone
+        debug!("Calling sparse checkout init");
         let cmd =
             self.run_git_cmd_with_args(&["sparse-checkout", "init", "--cone"], Some(repo_fs_path))?;
 
@@ -240,6 +248,11 @@ impl GitRepo {
 
     /// Try to clone git repository with sparse mode and no checkout.
     fn try_clone_sparse_checkout(&self, repo_fs_path: &Path) -> PackageResult<()> {
+        debug!(
+            "Cloning repo with no checkout in sparse mode: {:?}, to folder: {:?}",
+            self.repo_url,
+            repo_fs_path.display()
+        );
         let cmd = self.run_git_cmd_with_args(
             &[
                 "clone",
@@ -270,6 +283,7 @@ impl GitRepo {
         cwd: Option<&PathBuf>,
     ) -> PackageResult<Output> {
         // Run the git command
+        debug!("Running git command: with args {:?}", args);
         let mut cmd = Command::new("git");
         if let Some(cwd) = cwd {
             cmd.current_dir(cwd);
@@ -283,16 +297,19 @@ impl GitRepo {
     }
 
     /// Check if the git repository is dirty
-    pub fn is_dirty(&self) -> PackageResult<()> {
-        // TODO: check if this works OK
-        let repo_fs_path = format_repo_to_fs_path(&self.repo_url, self.rev.as_ref().unwrap());
-        let cmd = self.run_git_cmd_with_args(&["status", "--porcelain"], Some(&repo_fs_path))?;
+    pub fn is_dirty(&self, repo_fs_path: &PathBuf) -> PackageResult<bool> {
+        debug!("Checking if repo is dirty");
+        let cmd = self.run_git_cmd_with_args(
+            &["status", "--porcelain", "--untracked-files=no"],
+            Some(repo_fs_path),
+        )?;
 
         if !cmd.stdout.is_empty() {
-            return Err(PackageError::Git(GitError::dirty(&self.repo_url)));
+            debug!("Repo {} is dirty", self.repo_url);
+            return Ok(true);
         }
 
-        Ok(())
+        Ok(false)
     }
 
     /// Find the SHA of the given commit/branch in the given repo. This will make a remote call so
@@ -344,7 +361,7 @@ impl GitRepo {
         })?;
         let sha = lines[1].split_whitespace().next().ok_or_else(|| {
             debug!(
-                "Error: could not find sha after for default branch.\nlines: {:?}\nself: {:?}\n",
+                "Error: could not find sha for default branch.\nlines: {:?}\nself: {:?}\n",
                 lines, self
             );
             PackageError::Git(GitError::no_sha(&self.repo_url, "HEAD"))
@@ -647,5 +664,26 @@ mod tests {
         // Fetch should fail
         let result = git_dep.fetch();
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_repo_is_dirty() {
+        let (_temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project();
+        let temp_dir = setup_temp_dir();
+        let fs_repo = fs_repo.to_str().unwrap();
+
+        let git_dep = GitRepo {
+            repo_url: fs_repo.to_string(),
+            rev: Some("main".to_string()),
+            path: PathBuf::from("packages/pkg_a"),
+        };
+
+        let checkout_path = git_dep.fetch().unwrap();
+        // Delete a file in the repo to make it dirty
+        let move_toml_path = checkout_path.join("packages/pkg_a").join("Move.toml");
+        fs::remove_file(move_toml_path).unwrap();
+        // Check if the repo is dirty
+        let is_dirty = git_dep.is_dirty(&checkout_path).unwrap();
+        assert_eq!(is_dirty, true);
     }
 }
