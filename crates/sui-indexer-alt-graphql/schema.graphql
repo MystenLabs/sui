@@ -449,9 +449,9 @@ type Query {
 	"""
 	package(address: SuiAddress!, version: UInt53, atCheckpoint: UInt53): MovePackage
 	"""
-	Fetch the protocol config by protocol version.
+	Fetch the protocol config by protocol version, or the latest protocol config used on chain if no version is provided.
 	"""
-	protocolConfigs(version: UInt53!): ProtocolConfigs
+	protocolConfigs(version: UInt53): ProtocolConfigs
 	"""
 	Configuration for this RPC service.
 	"""

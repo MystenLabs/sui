@@ -28,6 +28,11 @@
 }
 
 //# run-graphql
+{ # Latest protocol config
+  protocolConfigs { protocolVersion }
+}
+
+//# run-graphql
 { # Fetch protocol config version via epoch
   epoch(epochId: 0) { protocolConfigs { protocolVersion } }
 
