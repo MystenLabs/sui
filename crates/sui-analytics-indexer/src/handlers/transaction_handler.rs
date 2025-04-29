@@ -3,90 +3,66 @@
 
 use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use anyhow::Result;
-use std::sync::Arc;
-use sui_data_ingestion_core::Worker;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointContents;
-use tokio::sync::Mutex;
 use tracing::error;
 
-use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::transaction::{Command, TransactionDataAPI, TransactionKind};
 
-use crate::handlers::AnalyticsHandler;
+use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
 use crate::tables::TransactionEntry;
 use crate::FileType;
 
-pub struct TransactionHandler {
-    pub(crate) state: Mutex<State>,
-}
+#[derive(Clone)]
+pub struct TransactionHandler {}
 
-pub(crate) struct State {
-    pub(crate) transactions: Vec<TransactionEntry>,
-}
-
-#[async_trait::async_trait]
-impl Worker for TransactionHandler {
-    type Result = ();
-
-    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
-        let checkpoint_summary = &checkpoint_data.checkpoint_summary;
-        let checkpoint_transactions = &checkpoint_data.transactions;
-        let checkpoint_contents = &checkpoint_data.checkpoint_contents;
-        let transaction_positions = compute_transaction_positions(checkpoint_contents);
-        let mut state = self.state.lock().await;
-        for checkpoint_transaction in checkpoint_transactions {
-            self.process_transaction(
-                checkpoint_summary.epoch,
-                checkpoint_summary.sequence_number,
-                checkpoint_summary.timestamp_ms,
-                checkpoint_transaction,
-                &checkpoint_transaction.effects,
-                &transaction_positions,
-                &mut state,
-            )?;
-        }
-        Ok(())
+impl TransactionHandler {
+    pub fn new() -> Self {
+        TransactionHandler {}
     }
 }
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<TransactionEntry> for TransactionHandler {
-    async fn read(&self) -> Result<Vec<TransactionEntry>> {
-        let mut state = self.state.lock().await;
-        Ok(std::mem::take(&mut state.transactions))
+    async fn process_checkpoint(
+        &self,
+        checkpoint_data: Arc<CheckpointData>,
+    ) -> Result<Vec<TransactionEntry>> {
+        let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
+        Ok(results)
     }
 
     fn file_type(&self) -> Result<FileType> {
         Ok(FileType::Transaction)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "transaction"
     }
 }
 
-impl TransactionHandler {
-    pub fn new() -> Self {
-        let state = Mutex::new(State {
-            transactions: vec![],
-        });
-        TransactionHandler { state }
-    }
-    fn process_transaction(
+#[async_trait::async_trait]
+impl TransactionProcessor<TransactionEntry> for TransactionHandler {
+    async fn process_transaction(
         &self,
-        epoch: u64,
-        checkpoint: u64,
-        timestamp_ms: u64,
-        checkpoint_transaction: &CheckpointTransaction,
-        effects: &TransactionEffects,
-        transaction_positions: &HashMap<TransactionDigest, usize>,
-        state: &mut State,
-    ) -> Result<()> {
+        tx_idx: usize,
+        checkpoint: &CheckpointData,
+    ) -> Result<Vec<TransactionEntry>> {
+        let transaction = &checkpoint.transactions[tx_idx];
+        let epoch = checkpoint.checkpoint_summary.epoch;
+        let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
+        let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
+
+        let transaction_positions = compute_transaction_positions(&checkpoint.checkpoint_contents);
+
+        let checkpoint_transaction = transaction;
+        let effects = &transaction.effects;
+
         let transaction = &checkpoint_transaction.transaction;
         let txn_data = transaction.transaction_data();
         let gas_object = effects.gas_object();
@@ -162,7 +138,7 @@ impl TransactionHandler {
         let effects_json = serde_json::to_string(&checkpoint_transaction.effects)?;
         let entry = TransactionEntry {
             transaction_digest,
-            checkpoint,
+            checkpoint: checkpoint_seq,
             epoch,
             timestamp_ms,
 
@@ -214,8 +190,7 @@ impl TransactionHandler {
             events_bcs_length,
             signatures_bcs_length,
         };
-        state.transactions.push(entry);
-        Ok(())
+        Ok(vec![entry])
     }
 }
 
@@ -234,9 +209,9 @@ fn compute_transaction_positions(
 #[cfg(test)]
 mod tests {
     use crate::handlers::transaction_handler::TransactionHandler;
+    use crate::handlers::AnalyticsHandler;
     use simulacrum::Simulacrum;
     use std::sync::Arc;
-    use sui_data_ingestion_core::Worker;
     use sui_types::base_types::SuiAddress;
     use sui_types::storage::ReadStore;
 
@@ -252,16 +227,15 @@ mod tests {
 
         // Create a checkpoint which should include the transaction we executed.
         let checkpoint = sim.create_checkpoint();
-        let checkpoint_data = Arc::new(
-            sim.get_checkpoint_data(
-                checkpoint.clone(),
-                sim.get_checkpoint_contents_by_digest(&checkpoint.content_digest)
-                    .unwrap(),
-            )?,
-        );
+        let checkpoint_data = sim.get_checkpoint_data(
+            checkpoint.clone(),
+            sim.get_checkpoint_contents_by_digest(&checkpoint.content_digest)
+                .unwrap(),
+        )?;
         let txn_handler = TransactionHandler::new();
-        txn_handler.process_checkpoint(checkpoint_data).await?;
-        let transaction_entries = txn_handler.state.lock().await.transactions.clone();
+        let transaction_entries = txn_handler
+            .process_checkpoint(Arc::new(checkpoint_data))
+            .await?;
         assert_eq!(transaction_entries.len(), 1);
         let db_txn = transaction_entries.first().unwrap();
 

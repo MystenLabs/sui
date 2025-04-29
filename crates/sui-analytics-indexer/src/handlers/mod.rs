@@ -1,24 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
-
+use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
+use crate::FileType;
 use anyhow::{anyhow, Result};
+use async_trait::async_trait;
+use futures::stream::{self, StreamExt};
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout, MoveValue};
 use move_core_types::language_storage::{StructTag, TypeTag};
-use sui_data_ingestion_core::Worker;
-
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 use sui_package_resolver::{PackageStore, Resolver};
 use sui_types::base_types::ObjectID;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::object::{Object, Owner};
 use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionDataAPI;
-
-use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
-use crate::FileType;
 
 pub mod checkpoint_handler;
 pub mod df_handler;
@@ -38,14 +38,67 @@ const WRAPPED_INDEXING_DISALLOW_LIST: [&str; 4] = [
 ];
 
 #[async_trait::async_trait]
-pub trait AnalyticsHandler<S>: Worker<Result = ()> {
-    /// Read back rows which are ready to be persisted. This function
-    /// will be invoked by the analytics processor after every call to
-    /// process_checkpoint
-    async fn read(&self) -> Result<Vec<S>>;
+pub trait AnalyticsHandler<S>: Send + Sync {
+    /// Process a checkpoint and return an iterator over the rows.
+    /// This function is invoked by the analytics processor for each checkpoint.
+    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<Vec<S>>
+    where
+        S: Send + Sync;
     /// Type of data being written by this processor i.e. checkpoint, object, etc
     fn file_type(&self) -> Result<FileType>;
-    fn name(&self) -> &str;
+    fn name(&self) -> &'static str;
+}
+
+/// Trait for processing transactions in parallel across all transactions in a checkpoint.
+/// Implementations will extract and transform transaction data into structured rows for analytics.
+#[async_trait]
+pub trait TransactionProcessor<Row>: Send + Sync + 'static {
+    /// Process a single transaction at the given index and return the rows to be stored.
+    /// The implementation should handle extracting the transaction from the checkpoint.
+    async fn process_transaction(
+        &self,
+        tx_idx: usize,
+        checkpoint: &CheckpointData,
+    ) -> Result<Vec<Row>>;
+}
+
+/// Run transaction processing in parallel across all transactions in a checkpoint.
+pub async fn process_transactions<Row, P>(
+    checkpoint: Arc<CheckpointData>,
+    processor: Arc<P>,
+) -> Result<Vec<Row>>
+where
+    Row: Send + 'static,
+    P: TransactionProcessor<Row>,
+{
+    // Process transactions in parallel using buffered stream for ordered execution
+    let txn_len = checkpoint.transactions.len();
+    let mut entries = Vec::new();
+
+    let mut stream = stream::iter(0..txn_len)
+        .map(|idx| {
+            let checkpoint = checkpoint.clone();
+            let processor = processor.clone();
+            tokio::spawn(async move { processor.process_transaction(idx, &checkpoint).await })
+        })
+        .buffered(num_cpus::get());
+
+    while let Some(join_res) = stream.next().await {
+        match join_res {
+            Ok(Ok(tx_entries)) => {
+                entries.extend(tx_entries);
+            }
+            Ok(Err(e)) => {
+                // Task executed but application logic returned an error
+                return Err(e);
+            }
+            Err(e) => {
+                // Task panicked or was cancelled
+                return Err(anyhow::anyhow!("Task join error: {}", e));
+            }
+        }
+    }
+    Ok(entries)
 }
 
 fn initial_shared_version(object: &Object) -> Option<u64> {

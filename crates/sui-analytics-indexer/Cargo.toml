@@ -29,6 +29,7 @@ url.workspace = true
 serde_json.workspace = true
 strum.workspace = true
 strum_macros.workspace = true
+futures.workspace = true
 parquet.workspace = true
 arrow-array.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
@@ -54,6 +55,7 @@ gcp-bigquery-client = "0.25.0"
 snowflake-api.workspace = true
 tap.workspace = true
 serde_yaml.workspace = true
+num_cpus.workspace = true
 
 [dev-dependencies]
 
