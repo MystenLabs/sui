@@ -1,97 +1,75 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Result;
 use std::sync::Arc;
-use sui_data_ingestion_core::Worker;
-use tokio::sync::Mutex;
 
-use sui_types::base_types::ObjectID;
+use anyhow::Result;
+
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::transaction::TransactionDataAPI;
 
-use crate::handlers::AnalyticsHandler;
+use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
 use crate::tables::MoveCallEntry;
 use crate::FileType;
 
-pub struct MoveCallHandler {
-    state: Mutex<State>,
-}
+#[derive(Clone)]
+pub struct MoveCallHandler {}
 
-struct State {
-    move_calls: Vec<MoveCallEntry>,
-}
+const NAME: &str = "move_call";
 
 #[async_trait::async_trait]
-impl Worker for MoveCallHandler {
-    type Result = ();
-
-    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
-        let checkpoint_summary = &checkpoint_data.checkpoint_summary;
-        let checkpoint_transactions = &checkpoint_data.transactions;
-        let mut state = self.state.lock().await;
-        for checkpoint_transaction in checkpoint_transactions {
-            let move_calls = checkpoint_transaction
-                .transaction
-                .transaction_data()
-                .move_calls();
-            self.process_move_calls(
-                checkpoint_summary.epoch,
-                checkpoint_summary.sequence_number,
-                checkpoint_summary.timestamp_ms,
-                checkpoint_transaction.transaction.digest().base58_encode(),
-                &move_calls,
-                &mut state,
-            );
-        }
-        Ok(())
-    }
-}
-
-#[async_trait::async_trait]
-impl AnalyticsHandler<MoveCallEntry> for MoveCallHandler {
-    async fn read(&self) -> Result<Box<dyn Iterator<Item = MoveCallEntry>>> {
-        let mut state = self.state.lock().await;
-        let move_calls = std::mem::take(&mut state.move_calls);
-        Ok(Box::new(move_calls.into_iter()))
-    }
-
-    fn file_type(&self) -> Result<FileType> {
-        Ok(FileType::MoveCall)
-    }
-
-    fn name(&self) -> &str {
-        "move_call"
-    }
-}
-
-impl MoveCallHandler {
-    pub fn new() -> Self {
-        let state = State { move_calls: vec![] };
-        Self {
-            state: Mutex::new(state),
-        }
-    }
-    fn process_move_calls(
+impl TransactionProcessor<MoveCallEntry> for MoveCallHandler {
+    async fn process_transaction(
         &self,
-        epoch: u64,
-        checkpoint: u64,
-        timestamp_ms: u64,
-        transaction_digest: String,
-        move_calls: &[(&ObjectID, &str, &str)],
-        state: &mut State,
-    ) {
+        tx_idx: usize,
+        checkpoint: &CheckpointData,
+    ) -> Result<Vec<MoveCallEntry>> {
+        let transaction = &checkpoint.transactions[tx_idx];
+        let move_calls = transaction.transaction.transaction_data().move_calls();
+        let epoch = checkpoint.checkpoint_summary.epoch;
+        let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
+        let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
+        let transaction_digest = transaction.transaction.digest().base58_encode();
+
+        let mut entries = Vec::new();
         for (package, module, function) in move_calls.iter() {
             let entry = MoveCallEntry {
                 transaction_digest: transaction_digest.clone(),
-                checkpoint,
+                checkpoint: checkpoint_seq,
                 epoch,
                 timestamp_ms,
                 package: package.to_string(),
                 module: module.to_string(),
                 function: function.to_string(),
             };
-            state.move_calls.push(entry);
+            entries.push(entry);
         }
+
+        Ok(entries)
+    }
+}
+
+#[async_trait::async_trait]
+impl AnalyticsHandler<MoveCallEntry> for MoveCallHandler {
+    async fn process_checkpoint(
+        &self,
+        checkpoint_data: Arc<CheckpointData>,
+    ) -> Result<Box<dyn Iterator<Item = MoveCallEntry>>> {
+        let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
+        Ok(Box::new(results.into_iter()))
+    }
+
+    fn file_type(&self) -> Result<FileType> {
+        Ok(FileType::MoveCall)
+    }
+
+    fn name(&self) -> &'static str {
+        NAME
+    }
+}
+
+impl MoveCallHandler {
+    pub fn new() -> Self {
+        Self {}
     }
 }

@@ -98,7 +98,7 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
 
     fn write(&mut self, rows: Box<dyn Iterator<Item = S>>) -> Result<()> {
         let mut peekable = rows.peekable();
-        
+
         // Return early if there are no rows
         if peekable.peek().is_none() {
             return Ok(());
