@@ -27,7 +27,7 @@ pub struct StoredEpochEnd {
     pub epoch_commitments: Vec<u8>,
 }
 
-#[derive(Insertable, Queryable, Debug, Clone, FieldCount)]
+#[derive(Insertable, Queryable, QueryableByName, Debug, Clone, FieldCount)]
 #[diesel(table_name = kv_epoch_starts)]
 pub struct StoredEpochStart {
     pub epoch: i64,
