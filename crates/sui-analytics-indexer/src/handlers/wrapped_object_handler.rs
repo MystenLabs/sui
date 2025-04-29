@@ -4,9 +4,7 @@
 use anyhow::Result;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use sui_data_ingestion_core::Worker;
 use sui_types::SYSTEM_PACKAGE_ADDRESSES;
-use tokio::sync::Mutex;
 
 use sui_types::full_checkpoint_content::CheckpointData;
 
@@ -22,40 +20,8 @@ use crate::FileType;
 const NAME: &str = "wrapped_object";
 #[derive(Clone)]
 pub struct WrappedObjectHandler {
-    state: Arc<Mutex<Vec<WrappedObjectEntry>>>,
     metrics: AnalyticsMetrics,
     package_cache: Arc<PackageCache>,
-}
-
-#[async_trait::async_trait]
-impl Worker for WrappedObjectHandler {
-    type Result = ();
-
-    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
-        for checkpoint_transaction in &checkpoint_data.transactions {
-            for object in checkpoint_transaction.output_objects.iter() {
-                self.package_cache.update(object)?;
-            }
-        }
-
-        let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
-
-        if checkpoint_data
-            .checkpoint_summary
-            .end_of_epoch_data
-            .is_some()
-        {
-            self.package_cache
-                .resolver
-                .package_store()
-                .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
-        }
-
-        // Store results
-        *self.state.lock().await = results;
-
-        Ok(())
-    }
 }
 
 #[async_trait::async_trait]
@@ -128,9 +94,30 @@ impl TransactionProcessor<WrappedObjectEntry> for WrappedObjectHandler {
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<WrappedObjectEntry> for WrappedObjectHandler {
-    async fn read(&self) -> Result<Box<dyn Iterator<Item = WrappedObjectEntry>>> {
-        let mut state = self.state.lock().await;
-        Ok(Box::new(std::mem::take(&mut *state).into_iter()))
+    async fn process_checkpoint(
+        &self,
+        checkpoint_data: Arc<CheckpointData>,
+    ) -> Result<Box<dyn Iterator<Item = WrappedObjectEntry>>> {
+        for checkpoint_transaction in &checkpoint_data.transactions {
+            for object in checkpoint_transaction.output_objects.iter() {
+                self.package_cache.update(object)?;
+            }
+        }
+
+        let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
+
+        if checkpoint_data
+            .checkpoint_summary
+            .end_of_epoch_data
+            .is_some()
+        {
+            self.package_cache
+                .resolver
+                .package_store()
+                .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
+        }
+
+        Ok(Box::new(results.into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -145,7 +132,6 @@ impl AnalyticsHandler<WrappedObjectEntry> for WrappedObjectHandler {
 impl WrappedObjectHandler {
     pub fn new(package_cache: Arc<PackageCache>, metrics: AnalyticsMetrics) -> Self {
         WrappedObjectHandler {
-            state: Arc::new(Mutex::new(Vec::new())),
             metrics,
             package_cache,
         }

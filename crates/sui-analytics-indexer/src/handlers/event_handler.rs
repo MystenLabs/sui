@@ -7,8 +7,6 @@ use anyhow::Result;
 use move_core_types::annotated_value::MoveValue;
 use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 
-use sui_data_ingestion_core::Worker;
-use tokio::sync::Mutex;
 
 use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
 use crate::package_store::PackageCache;
@@ -20,42 +18,9 @@ use sui_types::full_checkpoint_content::CheckpointData;
 
 #[derive(Clone)]
 pub struct EventHandler {
-    state: Arc<Mutex<Vec<EventEntry>>>,
     package_cache: Arc<PackageCache>,
 }
 
-#[async_trait::async_trait]
-impl Worker for EventHandler {
-    type Result = ();
-
-    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
-        for checkpoint_transaction in &checkpoint_data.transactions {
-            for object in checkpoint_transaction.output_objects.iter() {
-                self.package_cache.update(object)?;
-            }
-        }
-
-        // Run parallel processing
-        let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
-
-        // If end of epoch, evict package store
-        if checkpoint_data
-            .checkpoint_summary
-            .end_of_epoch_data
-            .is_some()
-        {
-            self.package_cache
-                .resolver
-                .package_store()
-                .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
-        }
-
-        // Store results
-        *self.state.lock().await = results;
-
-        Ok(())
-    }
-}
 
 #[async_trait::async_trait]
 impl TransactionProcessor<EventEntry> for EventHandler {
@@ -117,9 +82,32 @@ impl TransactionProcessor<EventEntry> for EventHandler {
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<EventEntry> for EventHandler {
-    async fn read(&self) -> Result<Box<dyn Iterator<Item = EventEntry>>> {
-        let mut state = self.state.lock().await;
-        Ok(Box::new(std::mem::take(&mut *state).into_iter()))
+    async fn process_checkpoint(
+        &self,
+        checkpoint_data: Arc<CheckpointData>,
+    ) -> Result<Box<dyn Iterator<Item = EventEntry>>> {
+        for checkpoint_transaction in &checkpoint_data.transactions {
+            for object in checkpoint_transaction.output_objects.iter() {
+                self.package_cache.update(object)?;
+            }
+        }
+
+        // Run parallel processing
+        let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
+
+        // If end of epoch, evict package store
+        if checkpoint_data
+            .checkpoint_summary
+            .end_of_epoch_data
+            .is_some()
+        {
+            self.package_cache
+                .resolver
+                .package_store()
+                .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
+        }
+
+        Ok(Box::new(results.into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -134,7 +122,6 @@ impl AnalyticsHandler<EventEntry> for EventHandler {
 impl EventHandler {
     pub fn new(package_cache: Arc<PackageCache>) -> Self {
         Self {
-            state: Arc::new(Mutex::new(Vec::new())),
             package_cache,
         }
     }

@@ -10,7 +10,6 @@ use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout, MoveValue};
 use move_core_types::language_storage::{StructTag, TypeTag};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
-use sui_data_ingestion_core::Worker;
 use sui_package_resolver::{PackageStore, Resolver};
 use sui_types::base_types::ObjectID;
 use sui_types::effects::TransactionEffects;
@@ -39,11 +38,15 @@ const WRAPPED_INDEXING_DISALLOW_LIST: [&str; 4] = [
 ];
 
 #[async_trait::async_trait]
-pub trait AnalyticsHandler<S>: Worker<Result = ()> {
-    /// Read back rows which are ready to be persisted. This function
-    /// will be invoked by the analytics processor after every call to
-    /// process_checkpoint. Returns an iterator over the rows.
-    async fn read(&self) -> Result<Box<dyn Iterator<Item = S>>>;
+pub trait AnalyticsHandler<S>: Send + Sync {
+    /// Process a checkpoint and return an iterator over the rows.
+    /// This function is invoked by the analytics processor for each checkpoint.
+    async fn process_checkpoint(
+        &self,
+        checkpoint: Arc<CheckpointData>,
+    ) -> Result<Box<dyn Iterator<Item = S>>>
+    where
+        S: Send + Sync;
     /// Type of data being written by this processor i.e. checkpoint, object, etc
     fn file_type(&self) -> Result<FileType>;
     fn name(&self) -> &'static str;

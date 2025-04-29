@@ -5,8 +5,6 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use fastcrypto::encoding::{Base64, Encoding};
-use sui_data_ingestion_core::Worker;
-use tokio::sync::Mutex;
 
 use sui_types::full_checkpoint_content::CheckpointData;
 
@@ -15,20 +13,9 @@ use crate::tables::TransactionBCSEntry;
 use crate::FileType;
 
 #[derive(Clone)]
-pub struct TransactionBCSHandler {
-    pub(crate) state: Arc<Mutex<Vec<TransactionBCSEntry>>>,
-}
+pub struct TransactionBCSHandler {}
 
-#[async_trait::async_trait]
-impl Worker for TransactionBCSHandler {
-    type Result = ();
 
-    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
-        let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
-        *self.state.lock().await = results;
-        Ok(())
-    }
-}
 
 #[async_trait::async_trait]
 impl TransactionProcessor<TransactionBCSEntry> for TransactionBCSHandler {
@@ -60,9 +47,12 @@ impl TransactionProcessor<TransactionBCSEntry> for TransactionBCSHandler {
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<TransactionBCSEntry> for TransactionBCSHandler {
-    async fn read(&self) -> Result<Box<dyn Iterator<Item = TransactionBCSEntry>>> {
-        let mut state = self.state.lock().await;
-        Ok(Box::new(std::mem::take(&mut *state).into_iter()))
+    async fn process_checkpoint(
+        &self,
+        checkpoint_data: Arc<CheckpointData>,
+    ) -> Result<Box<dyn Iterator<Item = TransactionBCSEntry>>> {
+        let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
+        Ok(Box::new(results.into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -76,19 +66,17 @@ impl AnalyticsHandler<TransactionBCSEntry> for TransactionBCSHandler {
 
 impl TransactionBCSHandler {
     pub fn new() -> Self {
-        TransactionBCSHandler {
-            state: Arc::new(Mutex::new(Vec::new())),
-        }
+        TransactionBCSHandler {}
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::handlers::transaction_bcs_handler::TransactionBCSHandler;
+    use crate::handlers::AnalyticsHandler;
     use fastcrypto::encoding::{Base64, Encoding};
     use simulacrum::Simulacrum;
     use std::sync::Arc;
-    use sui_data_ingestion_core::Worker;
     use sui_types::base_types::SuiAddress;
     use sui_types::storage::ReadStore;
 
@@ -110,12 +98,12 @@ mod tests {
                 .unwrap(),
         )?;
         let txn_handler = TransactionBCSHandler::new();
-        txn_handler
+        let result_iterator = txn_handler
             .process_checkpoint(Arc::new(checkpoint_data))
             .await?;
-
-        // Extract entries from state
-        let transaction_entries = txn_handler.state.lock().await;
+            
+        // Extract entries from iterator
+        let transaction_entries: Vec<_> = result_iterator.collect();
         assert_eq!(transaction_entries.len(), 1);
         let db_txn = transaction_entries.first().unwrap();
 

@@ -4,9 +4,7 @@
 use anyhow::Result;
 use fastcrypto::traits::EncodeDecodeBase64;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
-use sui_data_ingestion_core::Worker;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSummary;
@@ -16,32 +14,17 @@ use crate::handlers::AnalyticsHandler;
 use crate::tables::CheckpointEntry;
 use crate::FileType;
 
-pub struct CheckpointHandler {
-    state: Mutex<State>,
-}
+pub struct CheckpointHandler {}
 
-struct State {
-    checkpoints: Vec<CheckpointEntry>,
-}
-
-#[async_trait::async_trait]
-impl Worker for CheckpointHandler {
-    type Result = ();
-
-    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
-        let checkpoint_entry = process_checkpoint_data(&checkpoint_data);
-        let mut state = self.state.lock().await;
-        state.checkpoints.push(checkpoint_entry);
-        Ok(())
-    }
-}
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<CheckpointEntry> for CheckpointHandler {
-    async fn read(&self) -> Result<Box<dyn Iterator<Item = CheckpointEntry>>> {
-        let mut state = self.state.lock().await;
-        let checkpoints = std::mem::take(&mut state.checkpoints);
-        Ok(Box::new(checkpoints.into_iter()))
+    async fn process_checkpoint(
+        &self,
+        checkpoint_data: Arc<CheckpointData>,
+    ) -> Result<Box<dyn Iterator<Item = CheckpointEntry>>> {
+        let checkpoint_entry = process_checkpoint_data(&checkpoint_data);
+        Ok(Box::new(vec![checkpoint_entry].into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -55,11 +38,7 @@ impl AnalyticsHandler<CheckpointEntry> for CheckpointHandler {
 
 impl CheckpointHandler {
     pub fn new() -> Self {
-        CheckpointHandler {
-            state: Mutex::new(State {
-                checkpoints: vec![],
-            }),
-        }
+        CheckpointHandler {}
     }
 }
 

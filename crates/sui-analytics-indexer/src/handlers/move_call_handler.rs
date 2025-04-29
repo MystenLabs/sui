@@ -4,8 +4,6 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use sui_data_ingestion_core::Worker;
-use tokio::sync::Mutex;
 
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::transaction::TransactionDataAPI;
@@ -15,22 +13,11 @@ use crate::tables::MoveCallEntry;
 use crate::FileType;
 
 #[derive(Clone)]
-pub struct MoveCallHandler {
-    state: Arc<Mutex<Vec<MoveCallEntry>>>,
-}
+pub struct MoveCallHandler {}
+
 
 const NAME: &str = "move_call";
 
-#[async_trait::async_trait]
-impl Worker for MoveCallHandler {
-    type Result = ();
-
-    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
-        let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
-        *self.state.lock().await = results;
-        Ok(())
-    }
-}
 
 #[async_trait::async_trait]
 impl TransactionProcessor<MoveCallEntry> for MoveCallHandler {
@@ -72,9 +59,12 @@ impl TransactionProcessor<MoveCallEntry> for MoveCallHandler {
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<MoveCallEntry> for MoveCallHandler {
-    async fn read(&self) -> Result<Box<dyn Iterator<Item = MoveCallEntry>>> {
-        let mut state = self.state.lock().await;
-        Ok(Box::new(std::mem::take(&mut *state).into_iter()))
+    async fn process_checkpoint(
+        &self,
+        checkpoint_data: Arc<CheckpointData>,
+    ) -> Result<Box<dyn Iterator<Item = MoveCallEntry>>> {
+        let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
+        Ok(Box::new(results.into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -88,8 +78,6 @@ impl AnalyticsHandler<MoveCallEntry> for MoveCallHandler {
 
 impl MoveCallHandler {
     pub fn new() -> Self {
-        Self {
-            state: Arc::new(Mutex::new(Vec::new())),
-        }
+        Self {}
     }
 }

@@ -4,29 +4,15 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use sui_data_ingestion_core::Worker;
 use sui_types::full_checkpoint_content::CheckpointData;
-use tokio::sync::Mutex;
 
 use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
 use crate::tables::MovePackageEntry;
 use crate::FileType;
 
 #[derive(Clone)]
-pub struct PackageHandler {
-    state: Arc<Mutex<Vec<MovePackageEntry>>>,
-}
+pub struct PackageHandler {}
 
-#[async_trait::async_trait]
-impl Worker for PackageHandler {
-    type Result = ();
-
-    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
-        let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
-        *self.state.lock().await = results;
-        Ok(())
-    }
-}
 
 #[async_trait::async_trait]
 impl TransactionProcessor<MovePackageEntry> for PackageHandler {
@@ -66,9 +52,12 @@ impl TransactionProcessor<MovePackageEntry> for PackageHandler {
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<MovePackageEntry> for PackageHandler {
-    async fn read(&self) -> Result<Box<dyn Iterator<Item = MovePackageEntry>>> {
-        let mut state = self.state.lock().await;
-        Ok(Box::new(std::mem::take(&mut *state).into_iter()))
+    async fn process_checkpoint(
+        &self,
+        checkpoint_data: Arc<CheckpointData>,
+    ) -> Result<Box<dyn Iterator<Item = MovePackageEntry>>> {
+        let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
+        Ok(Box::new(results.into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -82,8 +71,6 @@ impl AnalyticsHandler<MovePackageEntry> for PackageHandler {
 
 impl PackageHandler {
     pub fn new() -> Self {
-        PackageHandler {
-            state: Arc::new(Mutex::new(Vec::new())),
-        }
+        PackageHandler {}
     }
 }

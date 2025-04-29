@@ -4,8 +4,6 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use sui_data_ingestion_core::Worker;
-use tokio::sync::Mutex;
 
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::transaction::TransactionDataAPI;
@@ -18,20 +16,9 @@ use crate::tables::TransactionObjectEntry;
 use crate::FileType;
 
 #[derive(Clone)]
-pub struct TransactionObjectsHandler {
-    state: Arc<Mutex<Vec<TransactionObjectEntry>>>,
-}
+pub struct TransactionObjectsHandler {}
 
-#[async_trait::async_trait]
-impl Worker for TransactionObjectsHandler {
-    type Result = ();
 
-    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
-        let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
-        *self.state.lock().await = results;
-        Ok(())
-    }
-}
 
 #[async_trait::async_trait]
 impl TransactionProcessor<TransactionObjectEntry> for TransactionObjectsHandler {
@@ -97,9 +84,12 @@ impl TransactionProcessor<TransactionObjectEntry> for TransactionObjectsHandler 
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<TransactionObjectEntry> for TransactionObjectsHandler {
-    async fn read(&self) -> Result<Box<dyn Iterator<Item = TransactionObjectEntry>>> {
-        let mut state = self.state.lock().await;
-        Ok(Box::new(std::mem::take(&mut *state).into_iter()))
+    async fn process_checkpoint(
+        &self,
+        checkpoint_data: Arc<CheckpointData>,
+    ) -> Result<Box<dyn Iterator<Item = TransactionObjectEntry>>> {
+        let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
+        Ok(Box::new(results.into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -113,8 +103,6 @@ impl AnalyticsHandler<TransactionObjectEntry> for TransactionObjectsHandler {
 
 impl TransactionObjectsHandler {
     pub fn new() -> Self {
-        TransactionObjectsHandler {
-            state: Arc::new(Mutex::new(Vec::new())),
-        }
+        TransactionObjectsHandler {}
     }
 }

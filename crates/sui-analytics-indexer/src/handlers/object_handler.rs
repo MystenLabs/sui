@@ -4,9 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use sui_data_ingestion_core::Worker;
 use sui_types::{TypeTag, SYSTEM_PACKAGE_ADDRESSES};
-use tokio::sync::Mutex;
 
 use sui_json_rpc_types::SuiMoveStruct;
 use sui_types::base_types::ObjectID;
@@ -34,43 +32,9 @@ struct Context {
 
 #[derive(Clone)]
 pub struct ObjectHandler {
-    state: Arc<Mutex<Vec<ObjectEntry>>>,
     context: Arc<Context>,
 }
 
-#[async_trait::async_trait]
-impl Worker for ObjectHandler {
-    type Result = ();
-
-    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
-        for checkpoint_transaction in &checkpoint_data.transactions {
-            for object in checkpoint_transaction.output_objects.iter() {
-                self.context.package_cache.update(object)?;
-            }
-        }
-
-        // Run parallel processing
-        let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
-
-        // Store results
-        *self.state.lock().await = results;
-
-        // If end of epoch, evict package store
-        if checkpoint_data
-            .checkpoint_summary
-            .end_of_epoch_data
-            .is_some()
-        {
-            self.context
-                .package_cache
-                .resolver
-                .package_store()
-                .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
-        }
-
-        Ok(())
-    }
-}
 
 #[async_trait::async_trait]
 impl TransactionProcessor<ObjectEntry> for ObjectHandler {
@@ -94,9 +58,33 @@ impl TransactionProcessor<ObjectEntry> for ObjectHandler {
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<ObjectEntry> for ObjectHandler {
-    async fn read(&self) -> Result<Box<dyn Iterator<Item = ObjectEntry>>> {
-        let mut state = self.state.lock().await;
-        Ok(Box::new(std::mem::take(&mut *state).into_iter()))
+    async fn process_checkpoint(
+        &self,
+        checkpoint_data: Arc<CheckpointData>,
+    ) -> Result<Box<dyn Iterator<Item = ObjectEntry>>> {
+        for checkpoint_transaction in &checkpoint_data.transactions {
+            for object in checkpoint_transaction.output_objects.iter() {
+                self.context.package_cache.update(object)?;
+            }
+        }
+
+        // Run parallel processing
+        let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
+
+        // If end of epoch, evict package store
+        if checkpoint_data
+            .checkpoint_summary
+            .end_of_epoch_data
+            .is_some()
+        {
+            self.context
+                .package_cache
+                .resolver
+                .package_store()
+                .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
+        }
+
+        Ok(Box::new(results.into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -123,7 +111,6 @@ impl ObjectHandler {
         });
 
         Self {
-            state: Arc::new(Mutex::new(Vec::new())),
             context,
         }
     }

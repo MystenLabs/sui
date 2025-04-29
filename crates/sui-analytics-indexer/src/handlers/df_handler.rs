@@ -5,12 +5,10 @@ use anyhow::Result;
 use fastcrypto::encoding::{Base64, Encoding};
 use std::collections::HashMap;
 use std::sync::Arc;
-use sui_data_ingestion_core::Worker;
 use sui_indexer::errors::IndexerError;
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::{TypeTag, SYSTEM_PACKAGE_ADDRESSES};
 use tap::tap::TapFallible;
-use tokio::sync::Mutex;
 use tracing::warn;
 
 use sui_indexer::types::owner_to_owner_info;
@@ -28,42 +26,9 @@ use crate::FileType;
 
 #[derive(Clone)]
 pub struct DynamicFieldHandler {
-    state: Arc<Mutex<Vec<DynamicFieldEntry>>>,
     package_cache: Arc<PackageCache>,
 }
 
-#[async_trait::async_trait]
-impl Worker for DynamicFieldHandler {
-    type Result = ();
-
-    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
-        for checkpoint_transaction in &checkpoint_data.transactions {
-            for object in checkpoint_transaction.output_objects.iter() {
-                self.package_cache.update(object)?;
-            }
-        }
-
-        // Run parallel processing
-        let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
-
-        // Collect results into the state
-        *self.state.lock().await = results;
-
-        // If end of epoch, evict package store
-        if checkpoint_data
-            .checkpoint_summary
-            .end_of_epoch_data
-            .is_some()
-        {
-            self.package_cache
-                .resolver
-                .package_store()
-                .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
-        }
-
-        Ok(())
-    }
-}
 
 #[async_trait::async_trait]
 impl TransactionProcessor<DynamicFieldEntry> for DynamicFieldHandler {
@@ -101,9 +66,32 @@ impl TransactionProcessor<DynamicFieldEntry> for DynamicFieldHandler {
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<DynamicFieldEntry> for DynamicFieldHandler {
-    async fn read(&self) -> Result<Box<dyn Iterator<Item = DynamicFieldEntry>>> {
-        let mut state = self.state.lock().await;
-        Ok(Box::new(std::mem::take(&mut *state).into_iter()))
+    async fn process_checkpoint(
+        &self,
+        checkpoint_data: Arc<CheckpointData>,
+    ) -> Result<Box<dyn Iterator<Item = DynamicFieldEntry>>> {
+        for checkpoint_transaction in &checkpoint_data.transactions {
+            for object in checkpoint_transaction.output_objects.iter() {
+                self.package_cache.update(object)?;
+            }
+        }
+
+        // Run parallel processing
+        let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
+
+        // If end of epoch, evict package store
+        if checkpoint_data
+            .checkpoint_summary
+            .end_of_epoch_data
+            .is_some()
+        {
+            self.package_cache
+                .resolver
+                .package_store()
+                .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
+        }
+
+        Ok(Box::new(results.into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -118,7 +106,6 @@ impl AnalyticsHandler<DynamicFieldEntry> for DynamicFieldHandler {
 impl DynamicFieldHandler {
     pub fn new(package_cache: Arc<PackageCache>) -> Self {
         Self {
-            state: Arc::new(Mutex::new(Vec::new())),
             package_cache,
         }
     }

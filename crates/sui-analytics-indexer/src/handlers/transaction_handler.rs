@@ -6,10 +6,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::Result;
-use sui_data_ingestion_core::Worker;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointContents;
-use tokio::sync::Mutex;
 use tracing::error;
 
 use sui_types::effects::TransactionEffectsAPI;
@@ -21,20 +19,8 @@ use crate::tables::TransactionEntry;
 use crate::FileType;
 
 #[derive(Clone)]
-pub struct TransactionHandler {
-    pub(crate) state: Arc<Mutex<Vec<TransactionEntry>>>,
-}
+pub struct TransactionHandler {}
 
-#[async_trait::async_trait]
-impl Worker for TransactionHandler {
-    type Result = ();
-
-    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
-        let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
-        *self.state.lock().await = results;
-        Ok(())
-    }
-}
 
 #[async_trait::async_trait]
 impl TransactionProcessor<TransactionEntry> for TransactionHandler {
@@ -186,9 +172,12 @@ impl TransactionProcessor<TransactionEntry> for TransactionHandler {
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<TransactionEntry> for TransactionHandler {
-    async fn read(&self) -> Result<Box<dyn Iterator<Item = TransactionEntry>>> {
-        let mut state = self.state.lock().await;
-        Ok(Box::new(std::mem::take(&mut *state).into_iter()))
+    async fn process_checkpoint(
+        &self,
+        checkpoint_data: Arc<CheckpointData>,
+    ) -> Result<Box<dyn Iterator<Item = TransactionEntry>>> {
+        let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
+        Ok(Box::new(results.into_iter()))
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -202,9 +191,7 @@ impl AnalyticsHandler<TransactionEntry> for TransactionHandler {
 
 impl TransactionHandler {
     pub fn new() -> Self {
-        TransactionHandler {
-            state: Arc::new(Mutex::new(Vec::new())),
-        }
+        TransactionHandler {}
     }
 }
 
@@ -223,9 +210,9 @@ fn compute_transaction_positions(
 #[cfg(test)]
 mod tests {
     use crate::handlers::transaction_handler::TransactionHandler;
+    use crate::handlers::AnalyticsHandler;
     use simulacrum::Simulacrum;
     use std::sync::Arc;
-    use sui_data_ingestion_core::Worker;
     use sui_types::base_types::SuiAddress;
     use sui_types::storage::ReadStore;
 
@@ -247,10 +234,10 @@ mod tests {
                 .unwrap(),
         )?;
         let txn_handler = TransactionHandler::new();
-        txn_handler
+        let result_iterator = txn_handler
             .process_checkpoint(Arc::new(checkpoint_data))
             .await?;
-        let transaction_entries = txn_handler.state.lock().await;
+        let transaction_entries: Vec<_> = result_iterator.collect();
         assert_eq!(transaction_entries.len(), 1);
         let db_txn = transaction_entries.first().unwrap();
 
