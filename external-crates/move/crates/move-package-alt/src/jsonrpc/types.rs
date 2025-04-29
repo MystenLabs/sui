@@ -9,12 +9,8 @@ use tokio::io::{
 
 pub type RequestID = u64;
 
-#[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct BatchRequest<A> {
-    #[serde(flatten)]
-    pub requests: Vec<Request<A>>,
-}
+pub type BatchRequest<A> = Vec<Request<A>>;
+pub type BatchResponse<R> = Vec<Response<R>>;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -26,13 +22,6 @@ pub struct Request<A> {
     pub params: A,
 
     pub id: RequestID,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct BatchResponse<R> {
-    #[serde(flatten)]
-    pub responses: Vec<Response<R>>,
 }
 
 #[derive(Serialize, Deserialize)]

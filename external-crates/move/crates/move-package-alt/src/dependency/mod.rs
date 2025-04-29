@@ -16,6 +16,7 @@ use std::{
     path::PathBuf,
     process::{Command, Stdio},
 };
+use tracing::debug;
 
 use std::{collections::BTreeMap, fmt::Debug, path::PathBuf};
 
@@ -216,7 +217,7 @@ pub async fn pin<F: MoveFlavor>(
     envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
 ) -> PackageResult<DependencySet<PinnedDependencyInfo<F>>> {
     // resolution
-    ExternalDependency::resolve(&mut deps, envs);
+    ExternalDependency::resolve(&mut deps, envs).await;
 
     // pinning
     let (mut gits, exts, mut locs, mut flav) = split(&deps);

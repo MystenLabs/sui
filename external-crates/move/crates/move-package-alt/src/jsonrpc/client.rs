@@ -105,9 +105,7 @@ pub async fn batch_call<A: Serialize, R: DeserializeOwned>(
         .map(|arg| make_request(endpoint, &method, arg))
         .collect();
 
-    let batch = BatchRequest { requests };
-
-    let batch_json = serde_json::to_vec(&batch).expect("requests should be serializable");
+    let batch_json = serde_json::to_vec(&requests).expect("requests should be serializable");
 
     endpoint.output.write_all(&batch_json).await?;
 
@@ -117,18 +115,17 @@ pub async fn batch_call<A: Serialize, R: DeserializeOwned>(
     let responses: BatchResponse<R> = serde_json::de::from_str(response_json.as_str())?;
 
     // match up requests and responses
-    if responses.responses.len() != batch.requests.len() {
+    if responses.len() != requests.len() {
         return Err(JsonRpcError::WrongResponses);
     }
 
     let mut resp_by_id: BTreeMap<RequestID, Response<R>> = responses
-        .responses
         .into_iter()
         .map(|response| (response.id, response))
         .collect();
 
     let mut result: Vec<R> = Vec::new();
-    for req in batch.requests {
+    for req in requests {
         let response = resp_by_id
             .remove(&req.id)
             .ok_or_else(|| JsonRpcError::OutOfOrder)?;
