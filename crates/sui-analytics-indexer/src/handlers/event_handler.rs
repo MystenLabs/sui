@@ -7,7 +7,6 @@ use anyhow::Result;
 use move_core_types::annotated_value::MoveValue;
 use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 
-
 use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
 use crate::package_store::PackageCache;
 use crate::tables::EventEntry;
@@ -21,7 +20,6 @@ pub struct EventHandler {
     package_cache: Arc<PackageCache>,
 }
 
-
 #[async_trait::async_trait]
 impl TransactionProcessor<EventEntry> for EventHandler {
     async fn process_transaction(
@@ -30,6 +28,10 @@ impl TransactionProcessor<EventEntry> for EventHandler {
         checkpoint: &CheckpointData,
     ) -> Result<Vec<EventEntry>> {
         let transaction = &checkpoint.transactions[tx_idx];
+
+        for object in transaction.output_objects.iter() {
+            self.package_cache.update(object)?;
+        }
 
         // Skip if no events
         if let Some(events) = &transaction.events {
@@ -86,12 +88,6 @@ impl AnalyticsHandler<EventEntry> for EventHandler {
         &self,
         checkpoint_data: Arc<CheckpointData>,
     ) -> Result<Box<dyn Iterator<Item = EventEntry>>> {
-        for checkpoint_transaction in &checkpoint_data.transactions {
-            for object in checkpoint_transaction.output_objects.iter() {
-                self.package_cache.update(object)?;
-            }
-        }
-
         // Run parallel processing
         let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
 
@@ -121,8 +117,6 @@ impl AnalyticsHandler<EventEntry> for EventHandler {
 
 impl EventHandler {
     pub fn new(package_cache: Arc<PackageCache>) -> Self {
-        Self {
-            package_cache,
-        }
+        Self { package_cache }
     }
 }

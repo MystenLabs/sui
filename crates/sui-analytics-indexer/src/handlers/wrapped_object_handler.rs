@@ -32,6 +32,10 @@ impl TransactionProcessor<WrappedObjectEntry> for WrappedObjectHandler {
         checkpoint: &CheckpointData,
     ) -> Result<Vec<WrappedObjectEntry>> {
         let transaction = &checkpoint.transactions[tx_idx];
+        for object in transaction.output_objects.iter() {
+            self.package_cache.update(object)?;
+        }
+
         let epoch = checkpoint.checkpoint_summary.epoch;
         let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
         let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
@@ -98,12 +102,6 @@ impl AnalyticsHandler<WrappedObjectEntry> for WrappedObjectHandler {
         &self,
         checkpoint_data: Arc<CheckpointData>,
     ) -> Result<Box<dyn Iterator<Item = WrappedObjectEntry>>> {
-        for checkpoint_transaction in &checkpoint_data.transactions {
-            for object in checkpoint_transaction.output_objects.iter() {
-                self.package_cache.update(object)?;
-            }
-        }
-
         let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
 
         if checkpoint_data

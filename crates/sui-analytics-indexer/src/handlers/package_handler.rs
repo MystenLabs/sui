@@ -13,7 +13,6 @@ use crate::FileType;
 #[derive(Clone)]
 pub struct PackageHandler {}
 
-
 #[async_trait::async_trait]
 impl TransactionProcessor<MovePackageEntry> for PackageHandler {
     async fn process_transaction(

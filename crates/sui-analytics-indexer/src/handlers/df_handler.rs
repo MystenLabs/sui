@@ -29,7 +29,6 @@ pub struct DynamicFieldHandler {
     package_cache: Arc<PackageCache>,
 }
 
-
 #[async_trait::async_trait]
 impl TransactionProcessor<DynamicFieldEntry> for DynamicFieldHandler {
     async fn process_transaction(
@@ -38,6 +37,10 @@ impl TransactionProcessor<DynamicFieldEntry> for DynamicFieldHandler {
         checkpoint: &CheckpointData,
     ) -> Result<Vec<DynamicFieldEntry>> {
         let checkpoint_transaction = &checkpoint.transactions[tx_idx];
+        for object in checkpoint_transaction.output_objects.iter() {
+            self.package_cache.update(object)?;
+        }
+
         let all_objects: HashMap<_, _> = checkpoint_transaction
             .output_objects
             .iter()
@@ -70,12 +73,6 @@ impl AnalyticsHandler<DynamicFieldEntry> for DynamicFieldHandler {
         &self,
         checkpoint_data: Arc<CheckpointData>,
     ) -> Result<Box<dyn Iterator<Item = DynamicFieldEntry>>> {
-        for checkpoint_transaction in &checkpoint_data.transactions {
-            for object in checkpoint_transaction.output_objects.iter() {
-                self.package_cache.update(object)?;
-            }
-        }
-
         // Run parallel processing
         let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
 
@@ -105,9 +102,7 @@ impl AnalyticsHandler<DynamicFieldEntry> for DynamicFieldHandler {
 
 impl DynamicFieldHandler {
     pub fn new(package_cache: Arc<PackageCache>) -> Self {
-        Self {
-            package_cache,
-        }
+        Self { package_cache }
     }
     async fn process_dynamic_field(
         &self,
