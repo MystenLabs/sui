@@ -10,10 +10,11 @@ use tokio::sync::Mutex;
 
 use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::handlers::{get_move_struct, parse_struct, AnalyticsHandler};
+use crate::handlers::{
+    get_move_struct, parse_struct, process_transactions, AnalyticsHandler, TxProcessor,
+};
 use crate::AnalyticsMetrics;
 
-use crate::handlers::parallel_tx_processor::{run_parallel, TxProcessor};
 use crate::package_store::PackageCache;
 use crate::tables::WrappedObjectEntry;
 use crate::FileType;
@@ -37,7 +38,7 @@ impl Worker for WrappedObjectHandler {
             }
         }
 
-        let results = run_parallel(checkpoint_data.clone(), Arc::new(self.clone())).await?;
+        let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
 
         if checkpoint_data
             .checkpoint_summary

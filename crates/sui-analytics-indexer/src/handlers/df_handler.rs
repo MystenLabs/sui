@@ -21,8 +21,7 @@ use sui_types::dynamic_field::{DynamicFieldName, DynamicFieldType};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::object::Object;
 
-use crate::handlers::parallel_tx_processor::{run_parallel, TxProcessor};
-use crate::handlers::AnalyticsHandler;
+use crate::handlers::{process_transactions, AnalyticsHandler, TxProcessor};
 use crate::package_store::PackageCache;
 use crate::tables::DynamicFieldEntry;
 use crate::FileType;
@@ -45,7 +44,7 @@ impl Worker for DynamicFieldHandler {
         }
 
         // Run parallel processing
-        let results = run_parallel(checkpoint_data.clone(), Arc::new(self.clone())).await?;
+        let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
 
         // Collect results into the state
         *self.state.lock().await = results;

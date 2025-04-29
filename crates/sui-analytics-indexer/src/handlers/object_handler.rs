@@ -15,14 +15,12 @@ use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 use sui_types::object::Object;
 
 use crate::handlers::{
-    get_move_struct, get_owner_address, get_owner_type, initial_shared_version, AnalyticsHandler,
-    ObjectStatusTracker,
+    get_move_struct, get_owner_address, get_owner_type, initial_shared_version,
+    process_transactions, AnalyticsHandler, ObjectStatusTracker, TxProcessor,
 };
-use crate::AnalyticsMetrics;
-
-use crate::handlers::parallel_tx_processor::{run_parallel, TxProcessor};
 use crate::package_store::PackageCache;
 use crate::tables::{ObjectEntry, ObjectStatus};
+use crate::AnalyticsMetrics;
 use crate::FileType;
 
 const NAME: &str = "object";
@@ -52,7 +50,7 @@ impl Worker for ObjectHandler {
         }
 
         // Run parallel processing
-        let results = run_parallel(checkpoint_data.clone(), Arc::new(self.clone())).await?;
+        let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
 
         // Store results
         *self.state.lock().await = results;

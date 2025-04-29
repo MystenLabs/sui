@@ -10,8 +10,7 @@ use tokio::sync::Mutex;
 
 use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::handlers::parallel_tx_processor::{run_parallel, TxProcessor};
-use crate::handlers::AnalyticsHandler;
+use crate::handlers::{process_transactions, AnalyticsHandler, TxProcessor};
 use crate::tables::TransactionBCSEntry;
 use crate::FileType;
 
@@ -25,7 +24,7 @@ impl Worker for TransactionBCSHandler {
     type Result = ();
 
     async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
-        let results = run_parallel(checkpoint_data, Arc::new(self.clone())).await?;
+        let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
         *self.state.lock().await = results;
         Ok(())
     }

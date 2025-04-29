@@ -10,8 +10,7 @@ use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 use sui_data_ingestion_core::Worker;
 use tokio::sync::Mutex;
 
-use crate::handlers::parallel_tx_processor::{run_parallel, TxProcessor};
-use crate::handlers::AnalyticsHandler;
+use crate::handlers::{process_transactions, AnalyticsHandler, TxProcessor};
 use crate::package_store::PackageCache;
 use crate::tables::EventEntry;
 use crate::FileType;
@@ -37,7 +36,7 @@ impl Worker for EventHandler {
         }
 
         // Run parallel processing
-        let results = run_parallel(checkpoint_data.clone(), Arc::new(self.clone())).await?;
+        let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
 
         // If end of epoch, evict package store
         if checkpoint_data
