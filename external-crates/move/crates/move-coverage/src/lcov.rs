@@ -350,12 +350,12 @@ impl FileRecordKeeper {
                 }
 
                 let cfg = self.build_control_flow_graph(index as u16);
-                for block_start in cfg.blocks().iter() {
-                    let loc = f_source_map.get_code_location(*block_start).unwrap();
+                for cfg_block_id in cfg.blocks().iter() {
+                    let block_end = cfg.block_end(*cfg_block_id);
+                    let loc = f_source_map.get_code_location(block_end).unwrap();
                     let line_no = file_mapping.start_position(&loc).line_offset() + 1;
-                    let block_end = cfg.block_end(*block_start);
                     block_id += 1;
-                    for o in cfg.successors(*block_start) {
+                    for o in cfg.successors(*cfg_block_id) {
                         self.branches
                             .entry((index as u16, block_end))
                             .or_insert_with(|| BranchInfo::new(line_no, block_id - 1))
