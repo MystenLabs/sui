@@ -914,7 +914,7 @@ impl CheckpointStore {
     pub async fn reexecute_local_checkpoints(
         &self,
         state: &AuthorityState,
-        epoch_store: &AuthorityPerEpochStore,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
         let epoch = epoch_store.epoch();
         let highest_executed = self

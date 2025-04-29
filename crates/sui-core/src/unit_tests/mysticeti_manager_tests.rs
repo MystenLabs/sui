@@ -101,7 +101,6 @@ async fn test_mysticeti_manager() {
                     state.clone(),
                     Arc::new(NoopConsensusOverloadChecker {}),
                     Arc::new(CheckpointServiceNoop {}),
-                    state.transaction_manager().clone(),
                     SuiTxValidatorMetrics::new(&Registry::new()),
                 ),
             )
