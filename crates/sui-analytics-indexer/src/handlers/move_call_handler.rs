@@ -10,7 +10,7 @@ use tokio::sync::Mutex;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::transaction::TransactionDataAPI;
 
-use crate::handlers::{process_transactions, AnalyticsHandler, TxProcessor};
+use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
 use crate::tables::MoveCallEntry;
 use crate::FileType;
 
@@ -33,7 +33,7 @@ impl Worker for MoveCallHandler {
 }
 
 #[async_trait::async_trait]
-impl TxProcessor<MoveCallEntry> for MoveCallHandler {
+impl TransactionProcessor<MoveCallEntry> for MoveCallHandler {
     async fn process_transaction(
         &self,
         tx_idx: usize,

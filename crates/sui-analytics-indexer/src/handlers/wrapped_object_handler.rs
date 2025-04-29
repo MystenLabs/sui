@@ -11,7 +11,7 @@ use tokio::sync::Mutex;
 use sui_types::full_checkpoint_content::CheckpointData;
 
 use crate::handlers::{
-    get_move_struct, parse_struct, process_transactions, AnalyticsHandler, TxProcessor,
+    get_move_struct, parse_struct, process_transactions, AnalyticsHandler, TransactionProcessor,
 };
 use crate::AnalyticsMetrics;
 
@@ -59,7 +59,7 @@ impl Worker for WrappedObjectHandler {
 }
 
 #[async_trait::async_trait]
-impl TxProcessor<WrappedObjectEntry> for WrappedObjectHandler {
+impl TransactionProcessor<WrappedObjectEntry> for WrappedObjectHandler {
     async fn process_transaction(
         &self,
         tx_idx: usize,

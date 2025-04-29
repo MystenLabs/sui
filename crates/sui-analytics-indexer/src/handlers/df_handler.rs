@@ -21,7 +21,7 @@ use sui_types::dynamic_field::{DynamicFieldName, DynamicFieldType};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::object::Object;
 
-use crate::handlers::{process_transactions, AnalyticsHandler, TxProcessor};
+use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
 use crate::package_store::PackageCache;
 use crate::tables::DynamicFieldEntry;
 use crate::FileType;
@@ -66,7 +66,7 @@ impl Worker for DynamicFieldHandler {
 }
 
 #[async_trait::async_trait]
-impl TxProcessor<DynamicFieldEntry> for DynamicFieldHandler {
+impl TransactionProcessor<DynamicFieldEntry> for DynamicFieldHandler {
     async fn process_transaction(
         &self,
         tx_idx: usize,

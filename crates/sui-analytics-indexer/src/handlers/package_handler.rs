@@ -8,7 +8,7 @@ use sui_data_ingestion_core::Worker;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::sync::Mutex;
 
-use crate::handlers::{process_transactions, AnalyticsHandler, TxProcessor};
+use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
 use crate::tables::MovePackageEntry;
 use crate::FileType;
 
@@ -29,7 +29,7 @@ impl Worker for PackageHandler {
 }
 
 #[async_trait::async_trait]
-impl TxProcessor<MovePackageEntry> for PackageHandler {
+impl TransactionProcessor<MovePackageEntry> for PackageHandler {
     async fn process_transaction(
         &self,
         tx_idx: usize,

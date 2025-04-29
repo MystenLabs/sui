@@ -16,7 +16,7 @@ use sui_types::object::Object;
 
 use crate::handlers::{
     get_move_struct, get_owner_address, get_owner_type, initial_shared_version,
-    process_transactions, AnalyticsHandler, ObjectStatusTracker, TxProcessor,
+    process_transactions, AnalyticsHandler, ObjectStatusTracker, TransactionProcessor,
 };
 use crate::package_store::PackageCache;
 use crate::tables::{ObjectEntry, ObjectStatus};
@@ -73,7 +73,7 @@ impl Worker for ObjectHandler {
 }
 
 #[async_trait::async_trait]
-impl TxProcessor<ObjectEntry> for ObjectHandler {
+impl TransactionProcessor<ObjectEntry> for ObjectHandler {
     async fn process_transaction(
         &self,
         tx_idx: usize,

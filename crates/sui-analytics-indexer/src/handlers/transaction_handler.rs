@@ -16,7 +16,7 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::transaction::{Command, TransactionDataAPI, TransactionKind};
 
-use crate::handlers::{process_transactions, AnalyticsHandler, TxProcessor};
+use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
 use crate::tables::TransactionEntry;
 use crate::FileType;
 
@@ -37,7 +37,7 @@ impl Worker for TransactionHandler {
 }
 
 #[async_trait::async_trait]
-impl TxProcessor<TransactionEntry> for TransactionHandler {
+impl TransactionProcessor<TransactionEntry> for TransactionHandler {
     async fn process_transaction(
         &self,
         tx_idx: usize,

@@ -52,7 +52,7 @@ pub trait AnalyticsHandler<S>: Worker<Result = ()> {
 /// Trait for processing transactions in parallel across all transactions in a checkpoint.
 /// Implementations will extract and transform transaction data into structured rows for analytics.
 #[async_trait]
-pub trait TxProcessor<Row>: Send + Sync + 'static {
+pub trait TransactionProcessor<Row>: Send + Sync + 'static {
     /// Process a single transaction at the given index and return the rows to be stored.
     /// The implementation should handle extracting the transaction from the checkpoint.
     async fn process_transaction(
@@ -69,7 +69,7 @@ pub async fn process_transactions<Row, P>(
 ) -> Result<Vec<Row>>
 where
     Row: Send + 'static,
-    P: TxProcessor<Row>,
+    P: TransactionProcessor<Row>,
 {
     // Process transactions in parallel using buffered stream for ordered execution
     let txn_len = checkpoint.transactions.len();

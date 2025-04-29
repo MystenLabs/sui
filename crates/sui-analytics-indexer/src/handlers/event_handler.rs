@@ -10,7 +10,7 @@ use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 use sui_data_ingestion_core::Worker;
 use tokio::sync::Mutex;
 
-use crate::handlers::{process_transactions, AnalyticsHandler, TxProcessor};
+use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
 use crate::package_store::PackageCache;
 use crate::tables::EventEntry;
 use crate::FileType;
@@ -58,7 +58,7 @@ impl Worker for EventHandler {
 }
 
 #[async_trait::async_trait]
-impl TxProcessor<EventEntry> for EventHandler {
+impl TransactionProcessor<EventEntry> for EventHandler {
     async fn process_transaction(
         &self,
         tx_idx: usize,
