@@ -2456,6 +2456,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "append-only-vec",
+ "clap 4.5.28",
  "codespan-reporting",
  "datatest-stable",
  "derive-where",

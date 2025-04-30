@@ -33,7 +33,7 @@ type ResolverName = String;
 
 /// An external dependency has the form `{ r.<res> = <data> }`. External
 /// dependencies are resolved by external resolvers.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(try_from = "RField", into = "RField")]
 pub struct ExternalDependency {
     /// The `<res>` in `{ r.<res> = <data> }`
@@ -106,6 +106,21 @@ impl From<ExternalDependency> for RField {
         }
     }
 }
+
+impl<F: MoveFlavor> TryFrom<QueryResult> for ManifestDependencyInfo<F> {
+    type Error = anyhow::Error;
+
+    fn try_from(value: QueryResult) -> anyhow::Result<Self> {
+        match value {
+            // TODO: errors!
+            QueryResult::Error { error } => bail!("External resolver failed!"),
+            // TODO: warnings!
+            QueryResult::Success { warnings, resolved } => Ok(Self::deserialize(resolved)?),
+        }
+    }
+}
+
+impl Eq for ExternalDependency {}
 
 /// Resolve the dependencies in [dep_data] with the external resolver [resolver]; requests are
 /// performed for all environments in [envs]. Ensures that the returned dependency set contains no

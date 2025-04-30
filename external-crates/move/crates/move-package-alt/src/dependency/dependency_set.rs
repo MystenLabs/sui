@@ -92,6 +92,29 @@ impl<T> DependencySet<T> {
     pub fn iter(&self) -> Iter<T> {
         self.into_iter()
     }
+
+    /// Check if the dependency set contains the [`package_name`] for [`env`].
+    pub fn contains(&self, env: &Option<EnvironmentName>, package_name: &PackageName) -> bool {
+        match env {
+            Some(env) => self
+                .overrides
+                .get(env)
+                .is_some_and(|deps| deps.contains_key(package_name)),
+            None => self.defaults.contains_key(package_name),
+        }
+    }
+
+    /// Get the dependency for [`package_name`] in [`env`]. If the dependency is not found,
+    /// return None.
+    pub fn get(&self, env: &Option<EnvironmentName>, package_name: &PackageName) -> Option<&T> {
+        match env {
+            Some(env) => self
+                .overrides
+                .get(env)
+                .and_then(|deps| deps.get(package_name)),
+            None => self.defaults.get(package_name),
+        }
+    }
 }
 
 pub struct IntoIter<T> {

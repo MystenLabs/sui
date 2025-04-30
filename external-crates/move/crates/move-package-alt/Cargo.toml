@@ -9,6 +9,7 @@ edition = "2024"
 [dependencies]
 anyhow.workspace = true
 append-only-vec.workspace = true
+clap.workspace = true
 codespan-reporting.workspace = true
 derive-where.workspace = true
 move-command-line-common.workspace = true

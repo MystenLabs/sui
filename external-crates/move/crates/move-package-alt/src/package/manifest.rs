@@ -11,7 +11,7 @@ use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    dependency::ManifestDependencyInfo,
+    dependency::{DependencySet, ManifestDependencyInfo},
     errors::{FileHandle, Located, ManifestError, ManifestErrorKind, PackageResult, with_file},
     flavor::{MoveFlavor, Vanilla},
 };
@@ -31,9 +31,10 @@ pub struct Manifest<F: MoveFlavor> {
     package: PackageMetadata<F>,
     pub environments: BTreeMap<EnvironmentName, F::EnvironmentID>,
     #[serde(default)]
-    pub dependencies: BTreeMap<PackageName, ManifestDependency<F>>,
+    dependencies: BTreeMap<PackageName, ManifestDependency<F>>,
     #[serde(default)]
-    dep_overrides: BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyOverride<F>>>,
+    pub dep_overrides:
+        BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyOverride<F>>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -63,7 +64,7 @@ pub struct ManifestDependency<F: MoveFlavor> {
 #[derive(Debug, Deserialize)]
 #[serde(bound = "")]
 #[serde(rename_all = "kebab-case")]
-struct ManifestDependencyOverride<F: MoveFlavor> {
+pub struct ManifestDependencyOverride<F: MoveFlavor> {
     #[serde(flatten, default)]
     dependency: Option<ManifestDependency<F>>,
 
@@ -127,5 +128,23 @@ impl<F: MoveFlavor> Manifest<F> {
         )?;
 
         Ok(())
+    }
+
+    /// Return the dependency set of this manifest, including overrides.
+    pub fn dependencies(&self) -> DependencySet<ManifestDependencyInfo<F>> {
+        let mut deps = DependencySet::new();
+
+        for (name, dep) in &self.dependencies {
+            deps.insert(None, name.clone(), dep.dependency_info.clone());
+        }
+
+        for (env, overrides) in &self.dep_overrides {
+            for (name, dep) in overrides {
+                if let Some(dep) = &dep.dependency {
+                    deps.insert(Some(env.clone()), name.clone(), dep.dependency_info.clone());
+                }
+            }
+        }
+        deps
     }
 }
