@@ -130,6 +130,14 @@ interface IObject {
 	"""
 	objectBcs: Base64
 	"""
+	Paginate all versions of this object after this one.
+	"""
+	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
+	"""
+	Paginate all versions of this object before this one.
+	"""
+	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
+	"""
 	The transaction that created this version of the object
 	"""
 	previousTransaction: Transaction
@@ -156,6 +164,14 @@ type MovePackage implements IAddressable & IObject {
 	The Base64-encoded BCS serialization of this package, as an `Object`.
 	"""
 	objectBcs: Base64
+	"""
+	Paginate all versions of this package treated as an object, after this one.
+	"""
+	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	"""
+	Paginate all versions of this package treated as an object, before this one.
+	"""
+	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
 	"""
 	The Base64-encoded BCS serialization of this package, as a `MovePackage`.
 	"""
@@ -192,6 +208,14 @@ type Object implements IAddressable & IObject {
 	The Base64-encoded BCS serialization of this object, as an `Object`.
 	"""
 	objectBcs: Base64
+	"""
+	Paginate all versions of this object after this one.
+	"""
+	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	"""
+	Paginate all versions of this object before this one.
+	"""
+	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
 	"""
 	The transaction that created this version of the object.
 	"""
@@ -244,6 +268,35 @@ type ObjectChangeEdge {
 	The item at the end of the edge
 	"""
 	node: ObjectChange!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+type ObjectConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ObjectEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Object!]!
+}
+
+"""
+An edge in a connection.
+"""
+type ObjectEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Object!
 	"""
 	A cursor for use in pagination
 	"""
@@ -438,6 +491,10 @@ type Query {
 	Returns `null` if an object cannot be found that meets this criteria.
 	"""
 	object(address: SuiAddress!, version: UInt53, rootVersion: UInt53, atCheckpoint: UInt53): Object
+	"""
+	Paginate all versions of an object at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
+	"""
+	objectVersions(first: Int, after: String, last: Int, before: String, address: SuiAddress!, filter: VersionFilter): ObjectConnection
 	"""
 	Fetch a package by its address.
 	
@@ -635,6 +692,20 @@ type TransactionEffects {
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
 """
 scalar UInt53
+
+"""
+Filter for paginating the history of an Object or MovePackage.
+"""
+input VersionFilter {
+	"""
+	Filter to versions that are strictly newer than this one, defaults to fetching from the earliest version known to this RPC (this could be the initial version, or some later version if the initial version has been pruned).
+	"""
+	afterVersion: UInt53
+	"""
+	Filter to versions that are strictly older than this one, defaults to fetching up to the latest version (inclusive).
+	"""
+	beforeVersion: UInt53
+}
 
 directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT

@@ -4,7 +4,12 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{dataloader::DataLoader, Context, InputObject, Interface, Object};
+use async_graphql::{
+    connection::{Connection, Edge},
+    dataloader::DataLoader,
+    Context, InputObject, Interface, Object,
+};
+use diesel::{ExpressionMethods, QueryDsl};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer_alt_reader::{
     kv_loader::KvLoader,
@@ -14,7 +19,7 @@ use sui_indexer_alt_reader::{
     },
     pg_reader::PgReader,
 };
-use sui_indexer_alt_schema::objects::StoredObjVersion;
+use sui_indexer_alt_schema::{objects::StoredObjVersion, schema::obj_versions};
 use sui_types::{
     base_types::{SequenceNumber, SuiAddress as NativeSuiAddress},
     digests::ObjectDigest,
@@ -23,8 +28,10 @@ use sui_types::{
 use tokio::join;
 
 use crate::{
-    api::scalars::{base64::Base64, sui_address::SuiAddress, uint53::UInt53},
+    api::scalars::{base64::Base64, cursor::JsonCursor, sui_address::SuiAddress, uint53::UInt53},
     error::{bad_user_input, RpcError},
+    intersect,
+    pagination::{Page, PaginationConfig},
     scope::Scope,
 };
 
@@ -35,6 +42,7 @@ use super::{
 };
 
 /// Interface implemented by versioned on-chain values that are addressable by an ID (also referred to as its address). This includes Move objects and packages.
+#[allow(clippy::duplicated_attributes)]
 #[derive(Interface)]
 #[graphql(
     name = "IObject",
@@ -52,6 +60,26 @@ use super::{
         name = "object_bcs",
         ty = "Result<Option<Base64>, RpcError>",
         desc = "The Base64-encoded BCS serialization of this object, as an `Object`."
+    ),
+    field(
+        name = "object_versions_after",
+        arg(name = "first", ty = "Option<u64>"),
+        arg(name = "after", ty = "Option<CVersion>"),
+        arg(name = "last", ty = "Option<u64>"),
+        arg(name = "before", ty = "Option<CVersion>"),
+        arg(name = "filter", ty = "Option<VersionFilter>"),
+        ty = "Result<Option<Connection<CVersion, Object>>, RpcError<Error>>",
+        desc = "Paginate all versions of this object after this one."
+    ),
+    field(
+        name = "object_versions_before",
+        arg(name = "first", ty = "Option<u64>"),
+        arg(name = "after", ty = "Option<CVersion>"),
+        arg(name = "last", ty = "Option<u64>"),
+        arg(name = "before", ty = "Option<CVersion>"),
+        arg(name = "filter", ty = "Option<VersionFilter>"),
+        ty = "Result<Option<Connection<CVersion, Object>>, RpcError<Error>>",
+        desc = "Paginate all versions of this object before this one."
     ),
     field(
         name = "previous_transaction",
@@ -100,11 +128,23 @@ pub(crate) struct ObjectKey {
     pub(crate) at_checkpoint: Option<UInt53>,
 }
 
+/// Filter for paginating the history of an Object or MovePackage.
+#[derive(InputObject, Default, Debug)]
+pub(crate) struct VersionFilter {
+    /// Filter to versions that are strictly newer than this one, defaults to fetching from the earliest version known to this RPC (this could be the initial version, or some later version if the initial version has been pruned).
+    after_version: Option<UInt53>,
+
+    /// Filter to versions that are strictly older than this one, defaults to fetching up to the latest version (inclusive).
+    before_version: Option<UInt53>,
+}
+
 #[derive(thiserror::Error, Debug, Clone)]
 pub(crate) enum Error {
     #[error("At most one of a version, a root version, or a checkpoint bound can be specified when fetching an object")]
     OneBound,
 }
+
+pub(crate) type CVersion = JsonCursor<u64>;
 
 /// An Object on Sui is either a typed value (a Move Object) or a Package (modules containing functions and types).
 ///
@@ -137,6 +177,36 @@ impl Object {
     /// The Base64-encoded BCS serialization of this object, as an `Object`.
     async fn object_bcs(&self, ctx: &Context<'_>) -> Result<Option<Base64>, RpcError<Error>> {
         ObjectImpl::from(self).object_bcs(ctx).await
+    }
+
+    /// Paginate all versions of this object after this one.
+    async fn object_versions_after(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CVersion>,
+        last: Option<u64>,
+        before: Option<CVersion>,
+        filter: Option<VersionFilter>,
+    ) -> Result<Connection<CVersion, Object>, RpcError<Error>> {
+        ObjectImpl::from(self)
+            .object_versions_after(ctx, first, after, last, before, filter)
+            .await
+    }
+
+    /// Paginate all versions of this object before this one.
+    async fn object_versions_before(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CVersion>,
+        last: Option<u64>,
+        before: Option<CVersion>,
+        filter: Option<VersionFilter>,
+    ) -> Result<Connection<CVersion, Object>, RpcError<Error>> {
+        ObjectImpl::from(self)
+            .object_versions_before(ctx, first, after, last, before, filter)
+            .await
     }
 
     /// The transaction that created this version of the object.
@@ -313,6 +383,80 @@ impl Object {
         )))
     }
 
+    /// Paginate through versions of an object (identified by its address).
+    pub(crate) async fn paginate_by_version(
+        ctx: &Context<'_>,
+        scope: Scope,
+        page: Page<CVersion>,
+        address: NativeSuiAddress,
+        filter: VersionFilter,
+    ) -> Result<Connection<CVersion, Object>, RpcError<Error>> {
+        use obj_versions::dsl as v;
+
+        let mut conn = Connection::new(false, false);
+
+        let pg_reader: &PgReader = ctx.data()?;
+        let mut query = v::obj_versions
+            .filter(v::cp_sequence_number.le(scope.checkpoint_viewed_at() as i64))
+            .filter(v::object_id.eq(address.to_vec()))
+            .limit(page.limit() as i64 + 2)
+            .into_boxed();
+
+        if let Some(after_version) = filter.after_version {
+            query = query.filter(v::object_version.gt(i64::from(after_version)));
+        }
+
+        if let Some(before_version) = filter.before_version {
+            query = query.filter(v::object_version.lt(i64::from(before_version)));
+        }
+
+        query = if page.is_from_front() {
+            query
+                .order_by(v::cp_sequence_number)
+                .then_order_by(v::object_version)
+        } else {
+            query
+                .order_by(v::cp_sequence_number.desc())
+                .then_order_by(v::object_version.desc())
+        };
+
+        if let Some(after) = page.after() {
+            query = query.filter(v::object_version.ge(**after as i64));
+        }
+
+        if let Some(before) = page.before() {
+            query = query.filter(v::object_version.le(**before as i64));
+        }
+
+        let mut c = pg_reader
+            .connect()
+            .await
+            .context("Failed to connect to database")?;
+
+        let mut results: Vec<StoredObjVersion> = c
+            .results(query)
+            .await
+            .context("Failed to read from database")?;
+
+        if !page.is_from_front() {
+            results.reverse();
+        }
+
+        let (prev, next, results) =
+            page.paginate_results(results, |v| JsonCursor::new(v.object_version as u64));
+
+        conn.has_previous_page = prev;
+        conn.has_next_page = next;
+
+        for (cursor, stored) in results {
+            if let Some(object) = Self::from_stored_version(scope.clone(), stored)? {
+                conn.edges.push(Edge::new(cursor, object));
+            }
+        }
+
+        Ok(conn)
+    }
+
     /// Returns a copy of this object but with its contents pre-fetched.
     pub(crate) async fn inflated(&self, ctx: &Context<'_>) -> Result<Self, RpcError<Error>> {
         Ok(Self {
@@ -358,6 +502,70 @@ impl ObjectImpl<'_> {
         Ok(Some(Base64(bytes)))
     }
 
+    pub(crate) async fn object_versions_after(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CVersion>,
+        last: Option<u64>,
+        before: Option<CVersion>,
+        filter: Option<VersionFilter>,
+    ) -> Result<Connection<CVersion, Object>, RpcError<Error>> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("IObject", "objectVersionsAfter");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        // Apply any filter that was supplied to the query, but add an additional version
+        // lowerbound constraint.
+        let Some(filter) = filter.unwrap_or_default().intersect(VersionFilter {
+            after_version: Some(self.0.version.value().into()),
+            ..VersionFilter::default()
+        }) else {
+            return Ok(Connection::new(false, false));
+        };
+
+        Object::paginate_by_version(
+            ctx,
+            self.0.super_.scope.clone(),
+            page,
+            self.0.super_.address,
+            filter,
+        )
+        .await
+    }
+
+    pub(crate) async fn object_versions_before(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CVersion>,
+        last: Option<u64>,
+        before: Option<CVersion>,
+        filter: Option<VersionFilter>,
+    ) -> Result<Connection<CVersion, Object>, RpcError<Error>> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("IObject", "objectVersionsBefore");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        // Apply any filter that was supplied to the query, but add an additional version
+        // upperbound constraint.
+        let Some(filter) = filter.unwrap_or_default().intersect(VersionFilter {
+            before_version: Some(self.0.version.value().into()),
+            ..VersionFilter::default()
+        }) else {
+            return Ok(Connection::new(false, false));
+        };
+
+        Object::paginate_by_version(
+            ctx,
+            self.0.super_.scope.clone(),
+            page,
+            self.0.super_.address,
+            filter,
+        )
+        .await
+    }
+
     pub(crate) async fn previous_transaction(
         &self,
         ctx: &Context<'_>,
@@ -370,6 +578,29 @@ impl ObjectImpl<'_> {
             self.0.super_.scope.clone(),
             object.as_ref().previous_transaction,
         )))
+    }
+}
+
+impl VersionFilter {
+    /// Try to create a filter whose results are the intersection of `self`'s results and `other`'s
+    /// results. This may not be possible if the resulting filter is inconsistent (guaranteed to
+    /// produce no results).
+    pub(crate) fn intersect(self, other: Self) -> Option<Self> {
+        let a = intersect::field(self.after_version, other.after_version, intersect::by_max)?;
+        let b = intersect::field(self.before_version, other.before_version, intersect::by_min)?;
+
+        match (a.map(u64::from), b.map(u64::from)) {
+            // There are no versions strictly before version 0
+            (_, Some(0)) => None,
+
+            // If `before` is not at least two away from `after`, the interval is empty
+            (Some(a), Some(b)) if b.saturating_sub(a) <= 1 => None,
+
+            _ => Some(Self {
+                after_version: a,
+                before_version: b,
+            }),
+        }
     }
 }
 
