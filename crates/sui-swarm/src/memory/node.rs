@@ -106,11 +106,7 @@ impl Node {
         }
 
         if is_validator {
-            let network_address = self
-                .config()
-                .network_address()
-                .clone()
-                .rewrite_http_to_https();
+            let network_address = self.config().network_address().clone();
             let tls_config = sui_tls::create_rustls_client_config(
                 self.config().network_key_pair().public().to_owned(),
                 sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
