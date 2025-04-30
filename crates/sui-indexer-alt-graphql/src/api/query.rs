@@ -1,11 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{Context, Object};
+use async_graphql::{connection::Connection, Context, Object};
 use futures::future::try_join_all;
 use sui_types::digests::ChainIdentifier;
 
-use crate::{error::RpcError, scope::Scope};
+use crate::{
+    error::RpcError,
+    pagination::{Page, PaginationConfig},
+    scope::Scope,
+};
 
 use super::{
     scalars::{digest::Digest, sui_address::SuiAddress, uint53::UInt53},
@@ -13,7 +17,7 @@ use super::{
         checkpoint::Checkpoint,
         epoch::Epoch,
         move_package::{self, MovePackage, PackageKey},
-        object::{self, Object, ObjectKey},
+        object::{self, CVersion, Object, ObjectKey, VersionFilter},
         protocol_configs::ProtocolConfigs,
         service_config::ServiceConfig,
         transaction::Transaction,
@@ -195,6 +199,33 @@ impl Query {
             },
         )
         .await
+    }
+
+    /// Paginate all versions of an object at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
+    async fn object_versions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<object::CVersion>,
+        last: Option<u64>,
+        before: Option<object::CVersion>,
+        address: SuiAddress,
+        filter: Option<VersionFilter>,
+    ) -> Result<Option<Connection<CVersion, Object>>, RpcError<object::Error>> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Query", "objectVersions");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        Ok(Some(
+            Object::paginate_by_version(
+                ctx,
+                self.scope(ctx)?,
+                page,
+                address.into(),
+                filter.unwrap_or_default(),
+            )
+            .await?,
+        ))
     }
 
     /// Fetch a package by its address.

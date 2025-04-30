@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use async_graphql::{
-    connection::{Connection, Edge, EmptyFields},
+    connection::{Connection, CursorType, Edge, EmptyFields},
     registry::MetaField,
 };
 
@@ -184,6 +184,101 @@ impl Page<JsonCursor<usize>> {
     }
 }
 
+impl<C: CursorType + Eq + PartialEq + Clone> Page<C> {
+    /// Process the results of a paginated query.
+    ///
+    /// `results` is expected to be the result of a query modified to fetch the page indicated by
+    /// `self`. This function determines whether those results are consistent with the cursors for
+    /// this page, and whether there are more results in the set being paginated, before or after
+    /// the current page.
+    ///
+    /// `results` should contain the elements of the page, in order, as well as at least one record
+    /// either side of the page, if there is one.
+    ///
+    /// Returns two booleans indicating whether there is a previous or next page, followed by an
+    /// iterator of values in the current page, accompanied by their cursors.
+    pub(crate) fn paginate_results<T>(
+        &self,
+        results: Vec<T>,
+        cursor: impl Fn(&T) -> C,
+    ) -> (bool, bool, impl Iterator<Item = (C, T)>) {
+        let edges: Vec<_> = results.into_iter().map(|r| (cursor(&r), r)).collect();
+        let first = edges.first().map(|(c, _)| c.clone());
+        let last = edges.last().map(|(c, _)| c.clone());
+
+        let (prev, next, prefix, suffix) =
+            match (self.after(), first, last, self.before(), self.end) {
+                // Results came back empty, despite supposedly including the `after` and `before`
+                // cursors, so the bounds must have been invalid, no matter which end the page was
+                // drawn from.
+                (_, None, _, _, _) | (_, _, None, _, _) => {
+                    return (false, false, vec![].into_iter());
+                }
+
+                // Page drawn from the front, and the cursor for the first element does not match
+                // `after`. This absence implies the bound was invalid, so we return an empty
+                // result.
+                (Some(a), Some(f), _, _, End::Front) if f != *a => {
+                    return (false, false, vec![].into_iter());
+                }
+
+                // Similar to above case, but for back of results.
+                (_, _, Some(l), Some(b), End::Back) if l != *b => {
+                    return (false, false, vec![].into_iter());
+                }
+
+                // From here onwards, we know that the results are non-empty. In the forward
+                // pagination scenario, the presence of a previous page is determined by whether a
+                // cursor supplied on the end the page is being drawn from is found in the first
+                // position. The presence of a next page is determined by whether we have more
+                // results than the provided limit, and/ or if the end cursor element appears in
+                // the result set.
+                (after, Some(f), Some(l), before, End::Front) => {
+                    let has_previous_page = after.is_some_and(|a| *a == f);
+                    let prefix = has_previous_page as usize;
+
+                    // If results end with the before cursor, we will at least need to trim one
+                    // element from the suffix and we trim more off the end if there is more after
+                    // applying the limit.
+                    let mut suffix = before.is_some_and(|b| *b == l) as usize;
+                    suffix += edges.len().saturating_sub(self.limit() + prefix + suffix);
+                    let has_next_page = suffix > 0;
+
+                    (has_previous_page, has_next_page, prefix, suffix)
+                }
+
+                // Symmetric to the previous case, but drawing from the back.
+                (after, Some(f), Some(l), before, End::Back) => {
+                    let has_next_page = before.is_some_and(|b| *b == l);
+                    let suffix = has_next_page as usize;
+
+                    let mut prefix = after.is_some_and(|a| *a == f) as usize;
+                    prefix += edges.len().saturating_sub(self.limit() + prefix + suffix);
+                    let has_previous_page = prefix > 0;
+
+                    (has_previous_page, has_next_page, prefix, suffix)
+                }
+            };
+
+        // If there are no elements left after trimming, then forget whether there's a previous or
+        // next page, because there will be no start or end cursor for this page to anchor on.
+        if edges.len() == prefix + suffix {
+            return (false, false, vec![].into_iter());
+        }
+
+        // We finally made it -- trim the prefix and suffix edges from the result and send it!
+        let mut edges = edges.into_iter();
+        if prefix > 0 {
+            edges.nth(prefix - 1);
+        }
+        if suffix > 0 {
+            edges.nth_back(suffix - 1);
+        }
+
+        (prev, next, edges)
+    }
+}
+
 /// Decides whether the field's return type is paginated.
 pub(crate) fn is_connection(field: &MetaField) -> bool {
     let type_ = field.ty.as_str();
@@ -297,5 +392,144 @@ mod tests {
                 max: 100,
             })
         ));
+    }
+
+    #[test]
+    fn test_paginate_results() {
+        let limits = PageLimits {
+            default: 5,
+            max: 100,
+        };
+
+        let page: Page<usize> = Page::from_params(&limits, None, None, None, None).unwrap();
+        let results = vec![0, 1, 2, 3, 4];
+        let expect = vec![(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)];
+
+        let (prev, next, results) = page.paginate_results(results.clone(), |r| *r);
+        let actual: Vec<_> = results.collect();
+
+        assert!(!prev);
+        assert!(!next);
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn test_paginate_results_not_enough() {
+        let limits = PageLimits {
+            default: 5,
+            max: 10,
+        };
+
+        let page: Page<usize> = Page::from_params(&limits, None, None, None, None).unwrap();
+
+        let results = vec![0, 1, 2];
+        let expect = vec![(0, 0), (1, 1), (2, 2)];
+
+        let (prev, next, results) = page.paginate_results(results.clone(), |r| *r);
+        let actual: Vec<_> = results.collect();
+
+        assert!(!prev);
+        assert!(!next);
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn test_paginate_results_limited() {
+        let limits = PageLimits {
+            default: 5,
+            max: 10,
+        };
+
+        let page: Page<usize> = Page::from_params(&limits, None, None, None, None).unwrap();
+        let results = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        let expect: Vec<_> = vec![(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)];
+
+        let (prev, next, results) = page.paginate_results(results.clone(), |r| *r);
+        let actual: Vec<_> = results.collect();
+
+        assert!(!prev);
+        assert!(next);
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn test_paginate_results_backward_limited() {
+        let limits = PageLimits {
+            default: 5,
+            max: 10,
+        };
+
+        let page: Page<usize> =
+            Page::from_params(&limits, None, None, Some(limits.default as u64), None).unwrap();
+
+        let results = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        let expect: Vec<_> = vec![(5, 5), (6, 6), (7, 7), (8, 8), (9, 9)];
+
+        let (prev, next, results) = page.paginate_results(results.clone(), |r| *r);
+        let actual: Vec<_> = results.collect();
+
+        assert!(prev);
+        assert!(!next);
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn test_paginate_results_with_cursors() {
+        let limits = PageLimits {
+            default: 5,
+            max: 10,
+        };
+
+        let page: Page<usize> = Page::from_params(&limits, Some(5), Some(2), None, None).unwrap();
+
+        let results = vec![2, 3, 4, 5, 6, 7, 8, 9];
+        let expect = vec![(3, 3), (4, 4), (5, 5), (6, 6), (7, 7)];
+
+        let (prev, next, results) = page.paginate_results(results.clone(), |r| *r);
+        let actual: Vec<_> = results.collect();
+
+        assert!(prev);
+        assert!(next);
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn test_paginate_results_inconsistent_cursor() {
+        let limits = PageLimits {
+            default: 5,
+            max: 10,
+        };
+
+        let page: Page<usize> = Page::from_params(&limits, None, Some(2), None, None).unwrap();
+
+        let results = vec![4, 5];
+        let expect: Vec<(usize, usize)> = vec![];
+
+        let (prev, next, results) = page.paginate_results(results.clone(), |r| *r);
+        let actual: Vec<_> = results.collect();
+
+        assert!(!prev);
+        assert!(!next);
+        assert_eq!(expect, actual);
+    }
+
+    #[test]
+    fn test_paginate_results_empty() {
+        let limits = PageLimits {
+            default: 5,
+            max: 10,
+        };
+
+        let page: Page<usize> = Page::from_params(&limits, None, Some(2), None, Some(3)).unwrap();
+
+        let results = vec![2, 3];
+        let expect: Vec<(usize, usize)> = vec![];
+
+        let (prev, next, results) = page.paginate_results(results.clone(), |r| *r);
+        let actual: Vec<_> = results.collect();
+
+        assert!(!prev);
+        assert!(!next);
+        assert_eq!(expect, actual);
     }
 }
