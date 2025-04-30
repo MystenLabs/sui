@@ -98,28 +98,6 @@ pub fn convert_txn_args(args: &[TransactionArgument]) -> Vec<Vec<u8>> {
         .collect()
 }
 
-/// Struct for encoding vector<vector<u8>> arguments for script functions
-#[derive(Clone, Hash, Eq, PartialEq, Deserialize)]
-pub struct VecBytes(Vec<serde_bytes::ByteBuf>);
-
-impl VecBytes {
-    pub fn from(vec_bytes: Vec<Vec<u8>>) -> Self {
-        VecBytes(
-            vec_bytes
-                .into_iter()
-                .map(serde_bytes::ByteBuf::from)
-                .collect(),
-        )
-    }
-
-    pub fn into_vec(self) -> Vec<Vec<u8>> {
-        self.0
-            .into_iter()
-            .map(|byte_buf| byte_buf.into_vec())
-            .collect()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::convert::{From, TryInto};
