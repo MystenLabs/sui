@@ -150,9 +150,9 @@ datatest_stable::harness!(
     "tests/data",
     r".*\.parsed$",
     run_test,
-    "tests/data/lockfile_parsing_valid",
+    "tests/data",
     r".*\.locked$",
     run_test,
-    "tests/data/pinning",
+    "tests/data",
     r".*\.pinned$",
 );

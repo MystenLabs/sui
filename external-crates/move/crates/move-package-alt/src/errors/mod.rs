@@ -7,6 +7,9 @@ mod manifest_error;
 use append_only_vec::AppendOnlyVec;
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::files::SimpleFiles;
+mod git_error;
+pub use git_error::GitError;
+pub use git_error::GitErrorKind;
 pub use lockfile_error::LockfileError;
 pub use manifest_error::ManifestError;
 pub use manifest_error::ManifestErrorKind;
@@ -43,6 +46,9 @@ pub enum PackageError {
     Io(#[from] std::io::Error),
 
     #[error(transparent)]
+    FromUTF8(#[from] std::string::FromUtf8Error),
+
+    #[error(transparent)]
     Manifest(#[from] ManifestError),
 
     #[error(transparent)]
@@ -50,6 +56,9 @@ pub enum PackageError {
 
     #[error("{0}")]
     Generic(String),
+
+    #[error(transparent)]
+    Git(#[from] GitError),
 
     #[error(transparent)]
     Toml(#[from] toml_edit::de::Error),
