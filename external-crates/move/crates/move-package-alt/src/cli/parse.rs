@@ -1,4 +1,5 @@
 use crate::{
+    errors::PackageResult,
     flavor::Vanilla,
     package::{lockfile::Lockfile, manifest::Manifest},
 };
@@ -31,7 +32,7 @@ pub struct Parse {
 }
 
 impl Parse {
-    pub fn execute(&self) {
+    pub fn execute(&self) -> PackageResult<()> {
         let manifest = &self.manifest;
         let lockfile = &self.lockfile;
         let path = &self.path;
@@ -89,5 +90,6 @@ impl Parse {
                 }
             }
         }
+        Ok(())
     }
 }

@@ -4,6 +4,7 @@
 
 use std::path::PathBuf;
 
+use crate::{errors::PackageResult, flavor::Vanilla, package::Package};
 use clap::{Command, Parser, Subcommand};
 
 /// Build the package
@@ -15,8 +16,11 @@ pub struct Build {
 }
 
 impl Build {
-    pub fn execute(&self) {
+    pub async fn execute(&self) -> PackageResult<()> {
         let path = self.path.clone().unwrap_or_else(|| PathBuf::from("."));
-        println!("Building package at {:?}", path);
+
+        let package = Package::<Vanilla>::load(path, &Vanilla {}).await?;
+
+        Ok(())
     }
 }

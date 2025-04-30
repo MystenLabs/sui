@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::{Parser, Subcommand};
-use move_package_alt::cli::{Build, Parse};
+use move_package_alt::{
+    cli::{Build, Parse},
+    errors::PackageResult,
+};
 
 #[derive(Debug, Parser, Clone)]
 #[command(version, about, long_about = None)]
@@ -15,8 +18,6 @@ pub struct Cli {
 #[derive(Debug, Clone, Subcommand)]
 pub enum Commands {
     Build(Build),
-    /// Compile the package
-    Compile,
     /// Run tests for the package
     Test,
     /// Parse a manifest or lockfile, or both
@@ -24,14 +25,12 @@ pub enum Commands {
 }
 
 impl Commands {
-    pub fn execute(&self) {
+    pub async fn execute(&self) -> PackageResult<()> {
         match self {
-            Commands::Build(b) => b.execute(),
-            Commands::Compile => {
-                println!("Compiling package");
-            }
+            Commands::Build(b) => b.execute().await,
             Commands::Test => {
                 println!("Running tests for package");
+                Ok(())
             }
             Commands::Parse(p) => p.execute(),
         }
@@ -39,12 +38,13 @@ impl Commands {
 }
 
 impl Cli {
-    pub fn execute(&self) {
-        self.command.execute();
+    pub async fn execute(&self) -> PackageResult<()> {
+        self.command.execute().await
     }
 }
 
-fn main() {
+#[tokio::main]
+async fn main() -> PackageResult<()> {
     let cli = Cli::parse();
-    cli.execute();
+    cli.execute().await
 }

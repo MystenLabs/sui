@@ -31,7 +31,7 @@ pub struct Manifest<F: MoveFlavor> {
     package: PackageMetadata<F>,
     pub environments: BTreeMap<EnvironmentName, F::EnvironmentID>,
     #[serde(default)]
-    pub dependencies: BTreeMap<PackageName, ManifestDependency<F>>,
+    dependencies: BTreeMap<PackageName, ManifestDependency<F>>,
     #[serde(default)]
     pub dep_overrides:
         BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyOverride<F>>>,

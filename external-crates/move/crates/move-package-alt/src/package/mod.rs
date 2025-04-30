@@ -38,7 +38,7 @@ impl<F: MoveFlavor> Package<F> {
     /// Makes a best effort to translate old-style packages into the current format,
     ///
     /// Fails if [path] does not exist, or if it doesn't contain a manifest
-    pub fn load(path: impl AsRef<Path>) -> PackageResult<Self> {
+    pub async fn load(path: impl AsRef<Path>, flavor: &F) -> PackageResult<Self> {
         let move_toml_path = path.as_ref().join("Move.toml");
         debug!(
             "Checking if there's a move toml file in path: {:?}",
@@ -48,17 +48,9 @@ impl<F: MoveFlavor> Package<F> {
         let manifest = Manifest::<F>::read_from(&move_toml_path)?;
 
         // check if there's a lockfile, and if it is not, we add one
-        let lockfiles = Lockfile::read_from(&path)?;
+        let mut lockfiles = Lockfile::read_from(&path)?;
 
-        // iterate through each dependency and pin it. This will be later used to verify that the
-        // dependencies match exactly to the ones in the lockfile.
-        manifest
-            .dependencies
-            .iter()
-            .for_each(|(name, manifest_dep)| {
-                debug!("Dependency: {:?}", name);
-                debug!("Dependency info: {:?}", manifest_dep);
-            });
+        lockfiles.update_lockfile(flavor, &manifest).await?;
 
         Ok(Self {
             manifest,
@@ -74,7 +66,7 @@ impl<F: MoveFlavor> Package<F> {
     }
 
     /// Return the metadata for the most recent published version in the given environment.
-    pub fn publication_for(&self, env: &EnvironmentName) -> Option<Publication<F>> { 
+    pub fn publication_for(&self, env: &EnvironmentName) -> Option<Publication<F>> {
         self.lockfiles.published_for_env(env)
     }
 
