@@ -47,7 +47,7 @@ impl AnalyticsHandler<TransactionBCSEntry> for TransactionBCSHandler {
     async fn process_checkpoint(
         &self,
         checkpoint_data: Arc<CheckpointData>,
-    ) -> Result<Box<dyn Iterator<Item = TransactionBCSEntry>>> {
+    ) -> Result<Box<dyn Iterator<Item = TransactionBCSEntry> + Send + Sync>> {
         let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
         Ok(Box::new(results.into_iter()))
     }

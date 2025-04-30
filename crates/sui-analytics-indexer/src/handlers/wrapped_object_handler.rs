@@ -97,7 +97,7 @@ impl AnalyticsHandler<WrappedObjectEntry> for WrappedObjectHandler {
     async fn process_checkpoint(
         &self,
         checkpoint_data: Arc<CheckpointData>,
-    ) -> Result<Box<dyn Iterator<Item = WrappedObjectEntry>>> {
+    ) -> Result<Box<dyn Iterator<Item = WrappedObjectEntry> + Send + Sync>> {
         wait_for_cache(&checkpoint_data, &self.package_cache).await;
         let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
         Ok(Box::new(results.into_iter()))

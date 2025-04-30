@@ -53,7 +53,7 @@ impl AnalyticsHandler<MoveCallEntry> for MoveCallHandler {
     async fn process_checkpoint(
         &self,
         checkpoint_data: Arc<CheckpointData>,
-    ) -> Result<Box<dyn Iterator<Item = MoveCallEntry>>> {
+    ) -> Result<Box<dyn Iterator<Item = MoveCallEntry> + Send + Sync>> {
         let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
         Ok(Box::new(results.into_iter()))
     }

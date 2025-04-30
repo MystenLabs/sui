@@ -43,10 +43,8 @@ pub trait AnalyticsHandler<S>: Send + Sync {
     /// This function is invoked by the analytics processor for each checkpoint.
     async fn process_checkpoint(
         &self,
-        checkpoint: Arc<CheckpointData>,
-    ) -> Result<Box<dyn Iterator<Item = S>>>
-    where
-        S: Send + Sync;
+        checkpoint_data: Arc<CheckpointData>,
+    ) -> Result<Box<dyn Iterator<Item = S> + Send + Sync>>;
     fn name(&self) -> &'static str;
 }
 

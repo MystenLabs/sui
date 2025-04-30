@@ -20,7 +20,7 @@ impl AnalyticsHandler<CheckpointEntry> for CheckpointHandler {
     async fn process_checkpoint(
         &self,
         checkpoint_data: Arc<CheckpointData>,
-    ) -> Result<Box<dyn Iterator<Item = CheckpointEntry>>> {
+    ) -> Result<Box<dyn Iterator<Item = CheckpointEntry> + Send + Sync>> {
         let checkpoint_entry = process_checkpoint_data(&checkpoint_data);
         Ok(Box::new(vec![checkpoint_entry].into_iter()))
     }
