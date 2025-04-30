@@ -9,11 +9,7 @@ use crate::{
 use move_binary_format::CompiledModule;
 use move_bytecode_source_map::utils::serialize_to_json_string;
 use move_command_line_common::files::MOVE_BYTECODE_EXTENSION;
-use move_core_types::{
-    account_address::AccountAddress,
-    language_storage::{ModuleId, StructTag},
-    resolver::{ModuleResolver, ResourceResolver},
-};
+use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
 use move_trace_format::format::MoveTraceBuilder;
@@ -370,21 +366,6 @@ impl ParentSync for ReplayStore<'_> {
         unreachable!(
             "unexpected ParentSync::get_latest_parent_entry_ref_deprecated({})",
             object_id,
-        )
-    }
-}
-
-impl ResourceResolver for ReplayStore<'_> {
-    type Error = ReplayError;
-
-    fn get_resource(
-        &self,
-        address: &AccountAddress,
-        typ: &StructTag,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
-        unreachable!(
-            "unexpected ResourceResolver::get_resource({}, {})",
-            address, typ
         )
     }
 }
