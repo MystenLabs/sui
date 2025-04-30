@@ -110,11 +110,7 @@ async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String>
         .try_init();
     let manifest = Manifest::<Vanilla>::read_from(input_path).unwrap();
 
-    let deps: DependencySet<ManifestDependencyInfo<Vanilla>> = manifest
-        .dependencies
-        .into_iter()
-        .map(|(package, dep)| (None, package, dep.dependency_info))
-        .collect();
+    let deps: DependencySet<ManifestDependencyInfo<Vanilla>> = manifest.dependencies();
 
     add_bindir();
     let pinned = dependency::pin(&Vanilla, &deps, &manifest.environments).await;

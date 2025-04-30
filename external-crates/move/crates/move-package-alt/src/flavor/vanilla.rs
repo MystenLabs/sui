@@ -28,7 +28,7 @@ use super::MoveFlavor;
 #[derive(Debug)]
 pub struct Vanilla;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum VanillaDep {}
 
 impl MoveFlavor for Vanilla {
