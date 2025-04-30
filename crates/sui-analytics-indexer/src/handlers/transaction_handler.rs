@@ -33,8 +33,7 @@ impl AnalyticsHandler<TransactionEntry> for TransactionHandler {
         &self,
         checkpoint_data: Arc<CheckpointData>,
     ) -> Result<Vec<TransactionEntry>> {
-        let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
-        Ok(results)
+        Ok(process_transactions(checkpoint_data, Arc::new(self.clone())).await?)
     }
 
     fn file_type(&self) -> Result<FileType> {

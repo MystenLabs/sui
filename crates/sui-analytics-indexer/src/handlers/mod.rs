@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::package_store::PackageCache;
 use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
 use crate::FileType;
 use anyhow::{anyhow, Result};
@@ -41,10 +42,7 @@ const WRAPPED_INDEXING_DISALLOW_LIST: [&str; 4] = [
 pub trait AnalyticsHandler<S>: Send + Sync {
     /// Process a checkpoint and return an iterator over the rows.
     /// This function is invoked by the analytics processor for each checkpoint.
-    async fn process_checkpoint(
-        &self,
-        checkpoint_data: Arc<CheckpointData>,
-    ) -> Result<Vec<S>>
+    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<Vec<S>>
     where
         S: Send + Sync;
     /// Type of data being written by this processor i.e. checkpoint, object, etc
@@ -340,6 +338,11 @@ fn parse_struct_field(
         }
         _ => {}
     }
+}
+
+pub async fn wait_for_cache(checkpoint_data: &CheckpointData, package_cache: &PackageCache) {
+    let sequence_number = *checkpoint_data.checkpoint_summary.sequence_number();
+    package_cache.coordinator.wait(sequence_number).await;
 }
 
 #[cfg(test)]

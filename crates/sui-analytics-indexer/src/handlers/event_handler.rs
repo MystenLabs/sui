@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use move_core_types::annotated_value::MoveValue;
-use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 
 use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
 use crate::package_store::PackageCache;
@@ -14,6 +13,8 @@ use crate::FileType;
 use sui_json_rpc_types::type_and_fields_from_move_event_data;
 use sui_types::event::Event;
 use sui_types::full_checkpoint_content::CheckpointData;
+
+use super::wait_for_cache;
 
 #[derive(Clone)]
 pub struct EventHandler {
@@ -32,22 +33,8 @@ impl AnalyticsHandler<EventEntry> for EventHandler {
         &self,
         checkpoint_data: Arc<CheckpointData>,
     ) -> Result<Vec<EventEntry>> {
-        // Run parallel processing
-        let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
-
-        // If end of epoch, evict package store
-        if checkpoint_data
-            .checkpoint_summary
-            .end_of_epoch_data
-            .is_some()
-        {
-            self.package_cache
-                .resolver
-                .package_store()
-                .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
-        }
-
-        Ok(results)
+        wait_for_cache(&checkpoint_data, &self.package_cache).await;
+        Ok(process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?)
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -67,11 +54,6 @@ impl TransactionProcessor<EventEntry> for EventHandler {
         checkpoint: &CheckpointData,
     ) -> Result<Vec<EventEntry>> {
         let transaction = &checkpoint.transactions[tx_idx];
-
-        for object in transaction.output_objects.iter() {
-            self.package_cache.update(object)?;
-        }
-
         if let Some(events) = &transaction.events {
             let epoch = checkpoint.checkpoint_summary.epoch;
             let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
@@ -89,7 +71,7 @@ impl TransactionProcessor<EventEntry> for EventHandler {
                 } = event;
                 let layout = self
                     .package_cache
-                    .resolver
+                    .resolver_for_epoch(epoch)
                     .type_layout(move_core_types::language_storage::TypeTag::Struct(
                         Box::new(type_.clone()),
                     ))

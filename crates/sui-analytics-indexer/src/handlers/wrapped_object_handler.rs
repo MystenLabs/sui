@@ -4,18 +4,18 @@
 use anyhow::Result;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 
 use sui_types::full_checkpoint_content::CheckpointData;
 
 use crate::handlers::{
     get_move_struct, parse_struct, process_transactions, AnalyticsHandler, TransactionProcessor,
 };
-use crate::AnalyticsMetrics;
+use crate::{AnalyticsMetrics, FileType};
 
 use crate::package_store::PackageCache;
 use crate::tables::WrappedObjectEntry;
-use crate::FileType;
+
+use super::wait_for_cache;
 
 const NAME: &str = "wrapped_object";
 #[derive(Clone)]
@@ -39,20 +39,8 @@ impl AnalyticsHandler<WrappedObjectEntry> for WrappedObjectHandler {
         &self,
         checkpoint_data: Arc<CheckpointData>,
     ) -> Result<Vec<WrappedObjectEntry>> {
-        let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
-
-        if checkpoint_data
-            .checkpoint_summary
-            .end_of_epoch_data
-            .is_some()
-        {
-            self.package_cache
-                .resolver
-                .package_store()
-                .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
-        }
-
-        Ok(results)
+        wait_for_cache(&checkpoint_data, &self.package_cache).await;
+        Ok(process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?)
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -72,10 +60,6 @@ impl TransactionProcessor<WrappedObjectEntry> for WrappedObjectHandler {
         checkpoint: &CheckpointData,
     ) -> Result<Vec<WrappedObjectEntry>> {
         let transaction = &checkpoint.transactions[tx_idx];
-        for object in transaction.output_objects.iter() {
-            self.package_cache.update(object)?;
-        }
-
         let epoch = checkpoint.checkpoint_summary.epoch;
         let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
         let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
@@ -86,7 +70,13 @@ impl TransactionProcessor<WrappedObjectEntry> for WrappedObjectHandler {
                 .struct_tag()
                 .and_then(|tag| object.data.try_as_move().map(|mo| (tag, mo.contents())))
             {
-                match get_move_struct(&tag, contents, &self.package_cache.resolver).await {
+                match get_move_struct(
+                    &tag,
+                    contents,
+                    &self.package_cache.resolver_for_epoch(epoch),
+                )
+                .await
+                {
                     Ok(move_struct) => Some(move_struct),
                     Err(err)
                         if err

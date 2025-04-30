@@ -29,8 +29,7 @@ impl AnalyticsHandler<MoveCallEntry> for MoveCallHandler {
         &self,
         checkpoint_data: Arc<CheckpointData>,
     ) -> Result<Vec<MoveCallEntry>> {
-        let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
-        Ok(results)
+        Ok(process_transactions(checkpoint_data, Arc::new(self.clone())).await?)
     }
 
     fn file_type(&self) -> Result<FileType> {
