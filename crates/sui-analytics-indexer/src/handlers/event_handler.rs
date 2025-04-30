@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use move_core_types::annotated_value::MoveValue;
-use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 
 use crate::handlers::AnalyticsHandler;
 use crate::package_store::PackageCache;
@@ -14,6 +13,8 @@ use crate::FileType;
 use sui_json_rpc_types::type_and_fields_from_move_event_data;
 use sui_types::event::Event;
 use sui_types::full_checkpoint_content::CheckpointData;
+
+use super::wait_for_cache;
 
 #[derive(Clone)]
 pub struct EventHandler {
@@ -93,21 +94,8 @@ impl AnalyticsHandler<EventEntry> for EventHandler {
         &self,
         checkpoint_data: &CheckpointData,
     ) -> Result<Vec<EventEntry>> {
-        let results = self.process_transactions(checkpoint_data).await?;
-
-        // If end of epoch, evict package store
-        if checkpoint_data
-            .checkpoint_summary
-            .end_of_epoch_data
-            .is_some()
-        {
-            self.package_cache
-                .resolver
-                .package_store()
-                .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
-        }
-
-        Ok(results)
+        wait_for_cache(checkpoint_data, &self.package_cache).await;
+        self.process_transactions(checkpoint_data).await
     }
 
     fn file_type(&self) -> Result<FileType> {

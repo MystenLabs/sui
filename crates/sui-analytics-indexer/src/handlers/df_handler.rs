@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use sui_indexer::errors::IndexerError;
 use sui_types::object::bounded_visitor::BoundedVisitor;
-use sui_types::{TypeTag, SYSTEM_PACKAGE_ADDRESSES};
+use sui_types::TypeTag;
 use tap::tap::TapFallible;
 use tracing::warn;
 
@@ -23,6 +23,8 @@ use crate::handlers::AnalyticsHandler;
 use crate::package_store::PackageCache;
 use crate::tables::DynamicFieldEntry;
 use crate::FileType;
+
+use super::wait_for_cache;
 
 #[derive(Clone)]
 pub struct DynamicFieldHandler {
@@ -92,7 +94,7 @@ impl DynamicFieldHandler {
 
         let layout = self
             .package_cache
-            .resolver
+            .resolver_for_epoch(epoch)
             .type_layout(move_object.type_().clone().into())
             .await?;
         let object_id = object.id();
@@ -169,21 +171,8 @@ impl AnalyticsHandler<DynamicFieldEntry> for DynamicFieldHandler {
         &self,
         checkpoint_data: &CheckpointData,
     ) -> Result<Vec<DynamicFieldEntry>> {
-        let results = self.process_transactions(checkpoint_data).await?;
-
-        // If end of epoch, evict package store
-        if checkpoint_data
-            .checkpoint_summary
-            .end_of_epoch_data
-            .is_some()
-        {
-            self.package_cache
-                .resolver
-                .package_store()
-                .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
-        }
-
-        Ok(results)
+        wait_for_cache(checkpoint_data, &self.package_cache).await;
+        self.process_transactions(checkpoint_data).await
     }
 
     fn file_type(&self) -> Result<FileType> {
