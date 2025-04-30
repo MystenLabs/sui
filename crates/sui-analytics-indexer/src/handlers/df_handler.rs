@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use sui_indexer::errors::IndexerError;
 use sui_types::object::bounded_visitor::BoundedVisitor;
-use sui_types::{TypeTag, SYSTEM_PACKAGE_ADDRESSES};
+use sui_types::TypeTag;
 use tap::tap::TapFallible;
 use tracing::warn;
 
@@ -22,7 +22,8 @@ use sui_types::object::Object;
 use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
 use crate::package_store::PackageCache;
 use crate::tables::DynamicFieldEntry;
-use crate::FileType;
+
+use super::wait_for_cache;
 
 #[derive(Clone)]
 pub struct DynamicFieldHandler {
@@ -37,10 +38,6 @@ impl TransactionProcessor<DynamicFieldEntry> for DynamicFieldHandler {
         checkpoint: &CheckpointData,
     ) -> Result<Vec<DynamicFieldEntry>> {
         let checkpoint_transaction = &checkpoint.transactions[tx_idx];
-        for object in checkpoint_transaction.output_objects.iter() {
-            self.package_cache.update(object)?;
-        }
-
         let all_objects: HashMap<_, _> = checkpoint_transaction
             .output_objects
             .iter()
@@ -73,26 +70,9 @@ impl AnalyticsHandler<DynamicFieldEntry> for DynamicFieldHandler {
         &self,
         checkpoint_data: Arc<CheckpointData>,
     ) -> Result<Box<dyn Iterator<Item = DynamicFieldEntry>>> {
-        // Run parallel processing
+        wait_for_cache(&checkpoint_data, &self.package_cache).await;
         let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
-
-        // If end of epoch, evict package store
-        if checkpoint_data
-            .checkpoint_summary
-            .end_of_epoch_data
-            .is_some()
-        {
-            self.package_cache
-                .resolver
-                .package_store()
-                .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
-        }
-
         Ok(Box::new(results.into_iter()))
-    }
-
-    fn file_type(&self) -> Result<FileType> {
-        Ok(FileType::DynamicField)
     }
 
     fn name(&self) -> &'static str {

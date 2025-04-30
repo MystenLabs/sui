@@ -4,7 +4,6 @@
 use anyhow::Result;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 
 use sui_types::full_checkpoint_content::CheckpointData;
 
@@ -15,7 +14,8 @@ use crate::AnalyticsMetrics;
 
 use crate::package_store::PackageCache;
 use crate::tables::WrappedObjectEntry;
-use crate::FileType;
+
+use super::wait_for_cache;
 
 const NAME: &str = "wrapped_object";
 #[derive(Clone)]
@@ -32,10 +32,6 @@ impl TransactionProcessor<WrappedObjectEntry> for WrappedObjectHandler {
         checkpoint: &CheckpointData,
     ) -> Result<Vec<WrappedObjectEntry>> {
         let transaction = &checkpoint.transactions[tx_idx];
-        for object in transaction.output_objects.iter() {
-            self.package_cache.update(object)?;
-        }
-
         let epoch = checkpoint.checkpoint_summary.epoch;
         let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
         let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
@@ -102,24 +98,9 @@ impl AnalyticsHandler<WrappedObjectEntry> for WrappedObjectHandler {
         &self,
         checkpoint_data: Arc<CheckpointData>,
     ) -> Result<Box<dyn Iterator<Item = WrappedObjectEntry>>> {
+        wait_for_cache(&checkpoint_data, &self.package_cache).await;
         let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
-
-        if checkpoint_data
-            .checkpoint_summary
-            .end_of_epoch_data
-            .is_some()
-        {
-            self.package_cache
-                .resolver
-                .package_store()
-                .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
-        }
-
         Ok(Box::new(results.into_iter()))
-    }
-
-    fn file_type(&self) -> Result<FileType> {
-        Ok(FileType::WrappedObject)
     }
 
     fn name(&self) -> &'static str {

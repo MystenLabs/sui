@@ -13,7 +13,6 @@ use crate::handlers::{
     TransactionProcessor,
 };
 use crate::tables::TransactionObjectEntry;
-use crate::FileType;
 
 #[derive(Clone)]
 pub struct TransactionObjectsHandler {}
@@ -88,10 +87,6 @@ impl AnalyticsHandler<TransactionObjectEntry> for TransactionObjectsHandler {
     ) -> Result<Box<dyn Iterator<Item = TransactionObjectEntry>>> {
         let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
         Ok(Box::new(results.into_iter()))
-    }
-
-    fn file_type(&self) -> Result<FileType> {
-        Ok(FileType::TransactionObjects)
     }
 
     fn name(&self) -> &'static str {

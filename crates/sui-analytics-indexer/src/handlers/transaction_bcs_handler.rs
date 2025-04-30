@@ -10,7 +10,6 @@ use sui_types::full_checkpoint_content::CheckpointData;
 
 use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
 use crate::tables::TransactionBCSEntry;
-use crate::FileType;
 
 #[derive(Clone)]
 pub struct TransactionBCSHandler {}
@@ -51,10 +50,6 @@ impl AnalyticsHandler<TransactionBCSEntry> for TransactionBCSHandler {
     ) -> Result<Box<dyn Iterator<Item = TransactionBCSEntry>>> {
         let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
         Ok(Box::new(results.into_iter()))
-    }
-
-    fn file_type(&self) -> Result<FileType> {
-        Ok(FileType::TransactionBCS)
     }
 
     fn name(&self) -> &'static str {

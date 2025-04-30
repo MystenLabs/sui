@@ -8,7 +8,6 @@ use sui_types::full_checkpoint_content::CheckpointData;
 
 use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
 use crate::tables::MovePackageEntry;
-use crate::FileType;
 
 #[derive(Clone)]
 pub struct PackageHandler {}
@@ -57,10 +56,6 @@ impl AnalyticsHandler<MovePackageEntry> for PackageHandler {
     ) -> Result<Box<dyn Iterator<Item = MovePackageEntry>>> {
         let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
         Ok(Box::new(results.into_iter()))
-    }
-
-    fn file_type(&self) -> Result<FileType> {
-        Ok(FileType::MovePackage)
     }
 
     fn name(&self) -> &'static str {

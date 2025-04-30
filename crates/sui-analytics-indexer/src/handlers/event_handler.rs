@@ -5,15 +5,15 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use move_core_types::annotated_value::MoveValue;
-use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 
 use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
 use crate::package_store::PackageCache;
 use crate::tables::EventEntry;
-use crate::FileType;
 use sui_json_rpc_types::type_and_fields_from_move_event_data;
 use sui_types::event::Event;
 use sui_types::full_checkpoint_content::CheckpointData;
+
+use super::wait_for_cache;
 
 #[derive(Clone)]
 pub struct EventHandler {
@@ -28,11 +28,6 @@ impl TransactionProcessor<EventEntry> for EventHandler {
         checkpoint: &CheckpointData,
     ) -> Result<Vec<EventEntry>> {
         let transaction = &checkpoint.transactions[tx_idx];
-
-        for object in transaction.output_objects.iter() {
-            self.package_cache.update(object)?;
-        }
-
         if let Some(events) = &transaction.events {
             let epoch = checkpoint.checkpoint_summary.epoch;
             let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
@@ -87,26 +82,9 @@ impl AnalyticsHandler<EventEntry> for EventHandler {
         &self,
         checkpoint_data: Arc<CheckpointData>,
     ) -> Result<Box<dyn Iterator<Item = EventEntry>>> {
-        // Run parallel processing
+        wait_for_cache(&checkpoint_data, &self.package_cache).await;
         let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
-
-        // If end of epoch, evict package store
-        if checkpoint_data
-            .checkpoint_summary
-            .end_of_epoch_data
-            .is_some()
-        {
-            self.package_cache
-                .resolver
-                .package_store()
-                .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
-        }
-
         Ok(Box::new(results.into_iter()))
-    }
-
-    fn file_type(&self) -> Result<FileType> {
-        Ok(FileType::Event)
     }
 
     fn name(&self) -> &'static str {

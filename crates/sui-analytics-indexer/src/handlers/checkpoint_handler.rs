@@ -12,10 +12,8 @@ use sui_types::transaction::TransactionDataAPI;
 
 use crate::handlers::AnalyticsHandler;
 use crate::tables::CheckpointEntry;
-use crate::FileType;
 
 pub struct CheckpointHandler {}
-
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<CheckpointEntry> for CheckpointHandler {
@@ -25,10 +23,6 @@ impl AnalyticsHandler<CheckpointEntry> for CheckpointHandler {
     ) -> Result<Box<dyn Iterator<Item = CheckpointEntry>>> {
         let checkpoint_entry = process_checkpoint_data(&checkpoint_data);
         Ok(Box::new(vec![checkpoint_entry].into_iter()))
-    }
-
-    fn file_type(&self) -> Result<FileType> {
-        Ok(FileType::Checkpoint)
     }
 
     fn name(&self) -> &'static str {

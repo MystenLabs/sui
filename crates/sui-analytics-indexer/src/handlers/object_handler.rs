@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use sui_types::{TypeTag, SYSTEM_PACKAGE_ADDRESSES};
+use sui_types::TypeTag;
 
 use sui_json_rpc_types::SuiMoveStruct;
 use sui_types::base_types::ObjectID;
@@ -18,7 +18,8 @@ use crate::handlers::{
 use crate::package_store::PackageCache;
 use crate::tables::{ObjectEntry, ObjectStatus};
 use crate::AnalyticsMetrics;
-use crate::FileType;
+
+use super::wait_for_cache;
 
 const NAME: &str = "object";
 
@@ -37,10 +38,6 @@ impl TransactionProcessor<ObjectEntry> for ObjectHandler {
         checkpoint_data: &CheckpointData,
     ) -> Result<Vec<ObjectEntry>> {
         let checkpoint_transaction = &checkpoint_data.transactions[tx_idx];
-
-        for object in checkpoint_transaction.output_objects.iter() {
-            self.package_cache.update(object)?;
-        }
 
         let epoch = checkpoint_data.checkpoint_summary.epoch;
         let checkpoint = checkpoint_data.checkpoint_summary.sequence_number;
@@ -98,26 +95,9 @@ impl AnalyticsHandler<ObjectEntry> for ObjectHandler {
         &self,
         checkpoint_data: Arc<CheckpointData>,
     ) -> Result<Box<dyn Iterator<Item = ObjectEntry>>> {
-        // Run parallel processing
+        wait_for_cache(&checkpoint_data, &self.package_cache).await;
         let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
-
-        // If end of epoch, evict package store
-        if checkpoint_data
-            .checkpoint_summary
-            .end_of_epoch_data
-            .is_some()
-        {
-            self.package_cache
-                .resolver
-                .package_store()
-                .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
-        }
-
         Ok(Box::new(results.into_iter()))
-    }
-
-    fn file_type(&self) -> Result<FileType> {
-        Ok(FileType::Object)
     }
 
     fn name(&self) -> &'static str {

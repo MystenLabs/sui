@@ -16,7 +16,6 @@ use sui_types::transaction::{Command, TransactionDataAPI, TransactionKind};
 
 use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
 use crate::tables::TransactionEntry;
-use crate::FileType;
 
 #[derive(Clone)]
 pub struct TransactionHandler {}
@@ -177,10 +176,6 @@ impl AnalyticsHandler<TransactionEntry> for TransactionHandler {
     ) -> Result<Box<dyn Iterator<Item = TransactionEntry>>> {
         let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
         Ok(Box::new(results.into_iter()))
-    }
-
-    fn file_type(&self) -> Result<FileType> {
-        Ok(FileType::Transaction)
     }
 
     fn name(&self) -> &'static str {

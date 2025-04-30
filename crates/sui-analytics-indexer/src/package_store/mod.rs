@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
+use cache_coordinator::CacheReadyCoordinator;
 use move_core_types::account_address::AccountAddress;
 #[cfg(not(test))]
 use std::collections::HashMap;
@@ -22,6 +23,9 @@ use tokio::sync::RwLock;
 use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::DBMapUtils;
 use typed_store::{Map, TypedStoreError};
+
+pub mod cache_coordinator;
+pub mod package_cache_worker;
 
 const STORE: &str = "RocksDB";
 
@@ -152,6 +156,7 @@ impl PackageStore for LocalDBPackageStore {
 pub struct PackageCache {
     package_store: LocalDBPackageStore,
     pub resolver: Resolver<PackageStoreWithLruCache<LocalDBPackageStore>>,
+    pub coordinator: CacheReadyCoordinator,
 }
 
 impl PackageCache {
@@ -160,6 +165,7 @@ impl PackageCache {
         Self {
             package_store: package_store.clone(),
             resolver: Resolver::new(PackageStoreWithLruCache::new(package_store)),
+            coordinator: CacheReadyCoordinator::new(),
         }
     }
 

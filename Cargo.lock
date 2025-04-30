@@ -13223,6 +13223,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "chrono",
+ "crossbeam",
  "csv",
  "eyre",
  "fastcrypto",

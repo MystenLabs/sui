@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::package_store::PackageCache;
 use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
-use crate::FileType;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use futures::stream::{self, StreamExt};
@@ -47,8 +47,6 @@ pub trait AnalyticsHandler<S>: Send + Sync {
     ) -> Result<Box<dyn Iterator<Item = S>>>
     where
         S: Send + Sync;
-    /// Type of data being written by this processor i.e. checkpoint, object, etc
-    fn file_type(&self) -> Result<FileType>;
     fn name(&self) -> &'static str;
 }
 
@@ -340,6 +338,12 @@ fn parse_struct_field(
         }
         _ => {}
     }
+}
+
+pub async fn wait_for_cache(checkpoint_data: &CheckpointData, package_cache: &PackageCache) {
+    let epoch = checkpoint_data.checkpoint_summary.epoch();
+    let number = *checkpoint_data.checkpoint_summary.sequence_number();
+    package_cache.coordinator.wait(epoch, number).await;
 }
 
 #[cfg(test)]

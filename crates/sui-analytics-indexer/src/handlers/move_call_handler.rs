@@ -10,7 +10,6 @@ use sui_types::transaction::TransactionDataAPI;
 
 use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
 use crate::tables::MoveCallEntry;
-use crate::FileType;
 
 #[derive(Clone)]
 pub struct MoveCallHandler {}
@@ -57,10 +56,6 @@ impl AnalyticsHandler<MoveCallEntry> for MoveCallHandler {
     ) -> Result<Box<dyn Iterator<Item = MoveCallEntry>>> {
         let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
         Ok(Box::new(results.into_iter()))
-    }
-
-    fn file_type(&self) -> Result<FileType> {
-        Ok(FileType::MoveCall)
     }
 
     fn name(&self) -> &'static str {
