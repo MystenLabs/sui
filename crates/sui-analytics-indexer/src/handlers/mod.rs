@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::package_store::PackageCache;
 use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
 use crate::FileType;
+use crate::ASYNC_TRANSACTIONS_TO_BUFFER;
 use anyhow::{anyhow, Result};
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout, MoveValue};
 use move_core_types::language_storage::{StructTag, TypeTag};
@@ -282,6 +284,11 @@ fn parse_struct_field(
         }
         _ => {}
     }
+}
+
+pub async fn wait_for_cache(checkpoint_data: &CheckpointData, package_cache: &PackageCache) {
+    let sequence_number = *checkpoint_data.checkpoint_summary.sequence_number();
+    package_cache.coordinator.wait(sequence_number).await;
 }
 
 #[cfg(test)]
