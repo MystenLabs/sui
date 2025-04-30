@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use anyhow::Context;
 use anyhow::Result;
 use object_store::path::Path;
 use object_store::DynObjectStore;
@@ -34,6 +34,7 @@ struct State<S: Serialize + ParquetSchema + Send + Sync> {
     last_commit_instant: Instant,
     num_checkpoint_iterations: u64,
     writer: Box<dyn AnalyticsWriter<S>>,
+    buffered_checkpoints: BTreeMap<u64, Vec<S>>,
 }
 
 pub struct AnalyticsProcessor<S: Serialize + ParquetSchema + Send + Sync> {
@@ -52,52 +53,63 @@ const CHECK_FILE_SIZE_ITERATION_CYCLE: u64 = 50;
 #[async_trait::async_trait]
 impl<S: Serialize + ParquetSchema + Send + Sync + 'static> Worker for AnalyticsProcessor<S> {
     type Result = ();
+
     async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
-        // get epoch id, checkpoint sequence number and timestamp, those are important
-        // indexes when operating on data
-        let epoch: u64 = checkpoint_data.checkpoint_summary.epoch();
-        let checkpoint_num: u64 = *checkpoint_data.checkpoint_summary.sequence_number();
-        let timestamp: u64 = checkpoint_data.checkpoint_summary.data().timestamp_ms;
-        info!("Processing checkpoint {checkpoint_num}, epoch {epoch}, timestamp {timestamp}");
-        let mut state = self.state.lock().await;
-        if epoch > state.current_epoch {
-            self.cut(&mut state).await?;
-            self.update_to_next_epoch(epoch, &mut state);
-            self.create_epoch_dirs(&state)?;
-            self.reset(&mut state)?;
-        }
+        let epoch = checkpoint_data.checkpoint_summary.epoch();
+        let checkpoint_num = *checkpoint_data.checkpoint_summary.sequence_number();
+        let timestamp = checkpoint_data.checkpoint_summary.data().timestamp_ms;
 
-        assert_eq!(epoch, state.current_epoch);
+        info!("Received checkpoint {checkpoint_num}, epoch {epoch}, timestamp {timestamp}");
 
-        assert_eq!(checkpoint_num, state.current_checkpoint_range.end);
-
-        let num_checkpoints_processed =
-            state.current_checkpoint_range.end - state.current_checkpoint_range.start;
-        let cut_new_files = (num_checkpoints_processed
-            >= self.task_context.config.checkpoint_interval)
-            || (state.last_commit_instant.elapsed().as_secs()
-                > self.task_context.config.time_interval_s)
-            || (state.num_checkpoint_iterations % CHECK_FILE_SIZE_ITERATION_CYCLE == 0
-                && state.writer.file_size()?.unwrap_or(0)
-                    > self.task_context.config.max_file_size_mb * 1024 * 1024)
-            || (state.writer.rows()? >= self.task_context.config.max_row_count);
-        if cut_new_files {
-            self.cut(&mut state).await?;
-            self.reset(&mut state)?;
-        }
-        self.task_context
-            .metrics
-            .total_received
-            .with_label_values(&[self.name()])
-            .inc();
         let rows = self.handler.process_checkpoint(checkpoint_data).await?;
-        state.writer.write(&rows)?;
-        state.current_checkpoint_range.end = state
-            .current_checkpoint_range
-            .end
-            .checked_add(1)
-            .context("Checkpoint sequence num overflow")?;
-        state.num_checkpoint_iterations += 1;
+
+        let mut state = self.state.lock().await;
+
+        // Buffer the checkpoint result
+        state.buffered_checkpoints.insert(checkpoint_num, rows);
+
+        // Process buffered checkpoints in order
+        while let Some(rows) = {
+            let next_checkpoint = state.current_checkpoint_range.end;
+            state.buffered_checkpoints.remove(&next_checkpoint)
+        } {
+            if epoch > state.current_epoch {
+                self.cut(&mut state).await?;
+                self.update_to_next_epoch(epoch, &mut state);
+                self.create_epoch_dirs(&state)?;
+                self.reset(&mut state)?;
+            }
+
+            assert_eq!(epoch, state.current_epoch);
+
+            let num_checkpoints_processed =
+                state.current_checkpoint_range.end - state.current_checkpoint_range.start;
+
+            let cut_new_files = (num_checkpoints_processed
+                >= self.task_context.config.checkpoint_interval)
+                || (state.last_commit_instant.elapsed().as_secs()
+                    > self.task_context.config.time_interval_s)
+                || (state.num_checkpoint_iterations % CHECK_FILE_SIZE_ITERATION_CYCLE == 0
+                    && state.writer.file_size()?.unwrap_or(0)
+                        > self.task_context.config.max_file_size_mb * 1024 * 1024)
+                || (state.writer.rows()? >= self.task_context.config.max_row_count);
+
+            if cut_new_files {
+                self.cut(&mut state).await?;
+                self.reset(&mut state)?;
+            }
+
+            state.writer.write(&rows)?;
+            state.current_checkpoint_range.end += 1;
+            state.num_checkpoint_iterations += 1;
+
+            self.task_context
+                .metrics
+                .total_received
+                .with_label_values(&[self.name()])
+                .inc();
+        }
+
         Ok(())
     }
 }
@@ -110,21 +122,33 @@ impl<S: Serialize + ParquetSchema + Send + Sync + 'static> AnalyticsProcessor<S>
         next_checkpoint_seq_num: CheckpointSequenceNumber,
         task_context: TaskContext,
     ) -> Result<Self> {
+        let state = State {
+            current_epoch: 0,
+            current_checkpoint_range: next_checkpoint_seq_num..next_checkpoint_seq_num,
+            last_commit_instant: Instant::now(),
+            num_checkpoint_iterations: 0,
+            writer,
+            buffered_checkpoints: BTreeMap::new(),
+        };
+
         let local_store_config = ObjectStoreConfig {
             directory: Some(task_context.checkpoint_dir_path().to_path_buf()),
             object_store: Some(ObjectStoreType::File),
             ..Default::default()
         };
+
         let local_object_store = local_store_config.make()?;
         let remote_object_store = task_context.job_config.remote_store_config.make()?;
         let (kill_sender, kill_receiver) = oneshot::channel::<()>();
         let (sender, receiver) = mpsc::channel::<FileMetadata>(100);
+
         let name: String = handler.name().parse()?;
         let checkpoint_dir = task_context.checkpoint_dir_path();
         let cloned_metrics = task_context.metrics.clone();
+
         tokio::task::spawn(Self::start_syncing_with_remote(
             remote_object_store,
-            local_object_store.clone(),
+            local_object_store,
             checkpoint_dir.to_path_buf(),
             task_context.config.remote_store_path_prefix()?,
             receiver,
@@ -132,6 +156,7 @@ impl<S: Serialize + ParquetSchema + Send + Sync + 'static> AnalyticsProcessor<S>
             cloned_metrics,
             name.clone(),
         ));
+
         let (max_checkpoint_sender, max_checkpoint_receiver) = oneshot::channel::<()>();
         tokio::task::spawn(Self::setup_max_checkpoint_metrics_updates(
             max_checkpoint_reader,
@@ -139,13 +164,7 @@ impl<S: Serialize + ParquetSchema + Send + Sync + 'static> AnalyticsProcessor<S>
             max_checkpoint_receiver,
             name,
         ));
-        let state = State {
-            current_epoch: 0,
-            current_checkpoint_range: next_checkpoint_seq_num..next_checkpoint_seq_num,
-            last_commit_instant: Instant::now(),
-            num_checkpoint_iterations: 0,
-            writer,
-        };
+
         Ok(Self {
             handler,
             state: Mutex::new(state),
