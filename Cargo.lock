@@ -13228,6 +13228,7 @@ dependencies = [
  "fastcrypto",
  "futures",
  "gcp-bigquery-client",
+ "lru 0.10.0",
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",

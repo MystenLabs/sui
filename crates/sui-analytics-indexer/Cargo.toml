@@ -56,6 +56,7 @@ snowflake-api.workspace = true
 tap.workspace = true
 serde_yaml.workspace = true
 num_cpus.workspace = true
+lru.workspace = true
 
 [dev-dependencies]
 

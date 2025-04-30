@@ -177,7 +177,7 @@ impl JobConfig {
     pub async fn create_checkpoint_processors(
         self,
         metrics: AnalyticsMetrics,
-    ) -> Result<Vec<Processor>> {
+    ) -> Result<(Vec<Processor>, Arc<PackageCache>)> {
         let package_cache = Arc::new(PackageCache::new(&self.package_cache_path, &self.rest_url));
         let job_config = Arc::new(self);
         let mut processors = Vec::with_capacity(job_config.task_configs.len());
@@ -205,7 +205,7 @@ impl JobConfig {
             processors.push(task_context.create_analytics_processor().await?);
         }
 
-        Ok(processors)
+        Ok((processors, package_cache))
     }
 
     // Convenience method to get task configs for compatibility
@@ -795,6 +795,7 @@ pub struct Processor {
     pub processor: Box<dyn Worker<Result = ()>>,
     pub starting_checkpoint_seq_num: CheckpointSequenceNumber,
     pub task_name: String,
+    pub file_type: FileType,
 }
 
 #[async_trait::async_trait]
@@ -816,6 +817,7 @@ impl Processor {
         task: TaskContext,
     ) -> Result<Self> {
         let task_name = task.config.task_name.clone();
+        let file_type = task.config.file_type;
         let processor = Box::new(
             AnalyticsProcessor::new(
                 handler,
@@ -831,6 +833,7 @@ impl Processor {
             processor,
             starting_checkpoint_seq_num,
             task_name,
+            file_type,
         })
     }
 

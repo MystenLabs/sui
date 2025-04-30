@@ -4,7 +4,11 @@
 use anyhow::Result;
 use prometheus::Registry;
 use std::{collections::HashMap, env};
-use sui_analytics_indexer::{analytics_metrics::AnalyticsMetrics, JobConfig};
+use sui_analytics_indexer::{
+    analytics_metrics::AnalyticsMetrics,
+    package_store::package_cache_worker::{PackageCacheWorker, PACKAGE_CACHE_WORKER_NAME},
+    JobConfig,
+};
 use sui_data_ingestion_core::{
     DataIngestionMetrics, IndexerExecutor, ReaderOptions, ShimIndexerProgressStore, WorkerPool,
 };
@@ -43,16 +47,24 @@ async fn main() -> Result<()> {
     let data_limit = config.data_limit;
     let timeout_secs = config.remote_store_timeout_secs;
 
-    let processors = config.create_checkpoint_processors(metrics).await?;
+    let (processors, package_cache) = config.create_checkpoint_processors(metrics).await?;
 
     let mut watermarks = HashMap::new();
+    let mut min_watermark = processors
+        .iter()
+        .peekable()
+        .peek()
+        .map(|p| p.starting_checkpoint_seq_num)
+        .unwrap_or(0);
     for processor in processors.iter() {
         let watermark = processor
             .last_committed_checkpoint()
             .map(|seq_num| seq_num + 1)
             .unwrap_or(0);
+        min_watermark = watermark.min(min_watermark);
         watermarks.insert(processor.task_name.clone(), watermark);
     }
+    watermarks.insert(PACKAGE_CACHE_WORKER_NAME.to_string(), min_watermark);
 
     let progress_store = ShimIndexerProgressStore::new(watermarks);
     let mut executor = IndexerExecutor::new(
@@ -60,6 +72,15 @@ async fn main() -> Result<()> {
         processors.len(),
         DataIngestionMetrics::new(&registry),
     );
+
+    let worker = PackageCacheWorker::new(package_cache);
+    executor
+        .register(WorkerPool::new(
+            worker,
+            PACKAGE_CACHE_WORKER_NAME.to_string(),
+            1,
+        ))
+        .await?;
 
     for processor in processors {
         let task_name = processor.task_name.clone();
