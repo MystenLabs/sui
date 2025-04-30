@@ -3,6 +3,7 @@
 
 use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use anyhow::Result;
 use sui_types::digests::TransactionDigest;
@@ -13,7 +14,7 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::transaction::{Command, TransactionDataAPI, TransactionKind};
 
-use crate::handlers::AnalyticsHandler;
+use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
 use crate::tables::TransactionEntry;
 use crate::FileType;
 
@@ -24,27 +25,33 @@ impl TransactionHandler {
     pub fn new() -> Self {
         TransactionHandler {}
     }
+}
 
-    async fn process_transactions(
+#[async_trait::async_trait]
+impl AnalyticsHandler<TransactionEntry> for TransactionHandler {
+    async fn process_checkpoint(
         &self,
-        checkpoint_data: &CheckpointData,
+        checkpoint_data: Arc<CheckpointData>,
     ) -> Result<Vec<TransactionEntry>> {
-        let txn_len = checkpoint_data.transactions.len();
-        let mut transactions = Vec::with_capacity(txn_len);
-
-        for idx in 0..txn_len {
-            let transaction = self.process_transaction(idx, checkpoint_data).await?;
-            transactions.push(transaction);
-        }
-
-        Ok(transactions)
+        Ok(process_transactions(checkpoint_data, Arc::new(self.clone())).await?)
     }
 
+    fn file_type(&self) -> Result<FileType> {
+        Ok(FileType::Transaction)
+    }
+
+    fn name(&self) -> &'static str {
+        "transaction"
+    }
+}
+
+#[async_trait::async_trait]
+impl TransactionProcessor<TransactionEntry> for TransactionHandler {
     async fn process_transaction(
         &self,
         tx_idx: usize,
         checkpoint: &CheckpointData,
-    ) -> Result<TransactionEntry> {
+    ) -> Result<Vec<TransactionEntry>> {
         let transaction = &checkpoint.transactions[tx_idx];
         let epoch = checkpoint.checkpoint_summary.epoch;
         let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
@@ -182,26 +189,7 @@ impl TransactionHandler {
             events_bcs_length,
             signatures_bcs_length,
         };
-        Ok(entry)
-    }
-}
-
-#[async_trait::async_trait]
-impl AnalyticsHandler<TransactionEntry> for TransactionHandler {
-    async fn process_checkpoint(
-        &self,
-        checkpoint_data: &CheckpointData,
-    ) -> Result<Vec<TransactionEntry>> {
-        let transactions = self.process_transactions(checkpoint_data).await?;
-        Ok(transactions)
-    }
-
-    fn file_type(&self) -> Result<FileType> {
-        Ok(FileType::Transaction)
-    }
-
-    fn name(&self) -> &'static str {
-        "transaction"
+        Ok(vec![entry])
     }
 }
 
@@ -222,6 +210,7 @@ mod tests {
     use crate::handlers::transaction_handler::TransactionHandler;
     use crate::handlers::AnalyticsHandler;
     use simulacrum::Simulacrum;
+    use std::sync::Arc;
     use sui_types::base_types::SuiAddress;
     use sui_types::storage::ReadStore;
 
@@ -243,7 +232,9 @@ mod tests {
                 .unwrap(),
         )?;
         let txn_handler = TransactionHandler::new();
-        let transaction_entries = txn_handler.process_checkpoint(&checkpoint_data).await?;
+        let transaction_entries = txn_handler
+            .process_checkpoint(Arc::new(checkpoint_data))
+            .await?;
         assert_eq!(transaction_entries.len(), 1);
         let db_txn = transaction_entries.first().unwrap();
 

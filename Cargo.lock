@@ -13236,6 +13236,7 @@ dependencies = [
  "num_cpus",
  "num_enum 0.6.1",
  "object_store",
+ "once_cell",
  "parquet",
  "prometheus",
  "serde",

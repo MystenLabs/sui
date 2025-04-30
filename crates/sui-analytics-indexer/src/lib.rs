@@ -71,6 +71,27 @@ const DYNAMIC_FIELD_PREFIX: &str = "dynamic_field";
 
 const WRAPPED_OBJECT_PREFIX: &str = "wrapped_object";
 
+const ASYNC_TRANSACTIONS_TO_BUFFER_VAR_NAME: &str = "ASYNC_TRANSACTIONS_TO_BUFFER";
+const DEFAULT_ASYNC_TRANSACTIONS_TO_BUFFER: usize = 64;
+pub static ASYNC_TRANSACTIONS_TO_BUFFER: Lazy<usize> = Lazy::new(|| {
+    let async_transactions_opt = std::env::var(ASYNC_TRANSACTIONS_TO_BUFFER_VAR_NAME)
+        .ok()
+        .and_then(|s| s.parse().ok());
+    if let Some(async_transactions) = async_transactions_opt {
+        info!(
+            "Using custom value for '{}' max checkpoints in progress: {}",
+            ASYNC_TRANSACTIONS_TO_BUFFER_VAR_NAME, async_transactions
+        );
+        async_transactions
+    } else {
+        info!(
+            "Using default value for '{}' -- max checkpoints in progress: {}",
+            ASYNC_TRANSACTIONS_TO_BUFFER_VAR_NAME, DEFAULT_ASYNC_TRANSACTIONS_TO_BUFFER
+        );
+        DEFAULT_ASYNC_TRANSACTIONS_TO_BUFFER
+    }
+});
+
 fn default_client_metric_host() -> String {
     "127.0.0.1".to_string()
 }
@@ -831,8 +852,8 @@ impl Worker for Processor {
     type Result = ();
 
     #[inline]
-    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
-        self.processor.process_checkpoint(checkpoint_data).await
+    async fn process_checkpoint_arc(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
+        self.processor.process_checkpoint_arc(checkpoint_data).await
     }
 }
 
