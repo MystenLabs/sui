@@ -1,7 +1,11 @@
 /// Implementation of the types and protocol for JSON RPC 2.0
 use std::collections::BTreeMap;
 
-use serde::{de::DeserializeOwned, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{
+    de::{DeserializeOwned, Visitor},
+    Deserialize, Deserializer, Serialize, Serializer,
+};
+use serde_json::json;
 use thiserror::Error;
 use tokio::io::{
     AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, BufWriter,
@@ -25,7 +29,6 @@ pub struct Request<A> {
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Response<R> {
     pub jsonrpc: TwoPointZero,
     pub id: RequestID,
@@ -34,14 +37,14 @@ pub struct Response<R> {
     pub result: JsonRpcResult<R>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(untagged)]
 pub enum JsonRpcResult<R> {
     Ok { result: R },
     Err { error: RemoteError },
 }
 
-#[derive(Serialize, Deserialize, Error, Debug, Clone)]
+#[derive(Serialize, Deserialize, Error, Debug, Clone, PartialEq)]
 #[error("Remote endpoint returned error {code}: {message}")]
 pub struct RemoteError {
     pub code: i32,
@@ -89,7 +92,7 @@ impl<'de> Deserialize<'de> for TwoPointZero {
                 f.write_str("The string '2.0'")
             }
 
-            fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
@@ -103,4 +106,17 @@ impl<'de> Deserialize<'de> for TwoPointZero {
 
         deserializer.deserialize_string(Visitor)
     }
+}
+
+#[test]
+fn deserialize() {
+    let value = json!({"result": 0});
+    let x: JsonRpcResult<i32> = JsonRpcResult::deserialize(value).expect("foo");
+    let JsonRpcResult::Ok { result } = x else {
+        panic!()
+    };
+    assert_eq!(result, 0);
+
+    let v2 = json!({"jsonrpc": "2.0", "id": 0, "result": 0});
+    let response: Response<i32> = Response::deserialize(v2).expect("bar");
 }

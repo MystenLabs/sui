@@ -11,11 +11,7 @@
 //! the external resolver protocol.
 //!
 
-use std::{
-    collections::BTreeMap,
-    env,
-    io::{read_to_string, stdin},
-};
+use std::{collections::BTreeMap, env, io::stdin};
 
 use move_package_alt::{
     dependency::external::{RESOLVE_ARG, RESOLVE_METHOD},
@@ -81,18 +77,20 @@ pub fn main() {
         .map(|(id, request)| process_request(id, request))
         .collect();
 
-    println!(
-        "{}",
-        serde_json::to_string(&responses).expect("response can be serialized")
-    );
+    let output = serde_json::to_string(&responses).expect("response can be serialized");
+    let debug_out = serde_json::to_string_pretty(&responses).expect("response can be serialized");
+    debug!("Returning\n{debug_out}");
+    println!("{output}");
 }
 
 /// Read a [Request] from [stdin]
 fn parse_input() -> BTreeMap<RequestID, ResolveRequest> {
-    let stdin = read_to_string(stdin()).expect("Stdin can be read");
-    debug!("resolver stdin:\n{stdin}");
+    let mut line = String::new();
+    stdin().read_line(&mut line).expect("stdin can be read");
 
-    let batch: BatchRequest<ResolveRequest> = serde_json::from_str(&stdin)
+    debug!("resolver stdin:\n{line}");
+
+    let batch: BatchRequest<ResolveRequest> = serde_json::from_str(&line)
         .expect("External resolver must be passed a JSON RPC batch request");
 
     batch

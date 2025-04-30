@@ -283,8 +283,8 @@ impl<T> Extend<(Option<EnvironmentName>, PackageName, T)> for DependencySet<T> {
 
 impl<T: Serialize> fmt::Debug for DependencySet<T> {
     /// Format [self] as toml for easy reading and diffing
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let toml = toml_edit::ser::to_string_pretty(self).expect("dependency set should serialize");
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let toml = serde_json::to_string_pretty(self).expect("dependency set should serialize");
         write!(f, "{toml}")
     }
 }
