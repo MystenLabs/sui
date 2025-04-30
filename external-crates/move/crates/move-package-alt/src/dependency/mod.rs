@@ -10,19 +10,24 @@ mod local;
 pub use dependency_set::DependencySet;
 pub mod external_protocol;
 
-use std::{collections::BTreeMap, fmt::Debug, path::PathBuf};
+use std::{
+    collections::BTreeMap,
+    fmt::Debug,
+    path::PathBuf,
+    process::{Command, Stdio},
+};
 
 use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    errors::{PackageResult, ResolverError},
+    errors::{GitError, PackageError, PackageResult, ResolverError},
     flavor::MoveFlavor,
     package::{EnvironmentName, PackageName},
 };
 
 use external::ExternalDependency;
-use git::GitDependency;
+use git::{GitRepo, PinnedGitDependency, UnpinnedGitDependency};
 use local::LocalDependency;
 
 /// Phantom type to represent pinned dependencies (see [PinnedDependency])
@@ -44,7 +49,7 @@ pub struct Unpinned;
 #[derive_where(Clone)]
 #[serde(untagged)]
 pub enum ManifestDependencyInfo<F: MoveFlavor> {
-    Git(GitDependency<Unpinned>),
+    Git(UnpinnedGitDependency),
     External(ExternalDependency),
     Local(LocalDependency),
     FlavorSpecific(F::FlavorDependency<Unpinned>),
@@ -63,7 +68,7 @@ pub enum ManifestDependencyInfo<F: MoveFlavor> {
 #[derive_where(Clone)]
 #[serde(untagged)]
 pub enum PinnedDependencyInfo<F: MoveFlavor + ?Sized> {
-    Git(GitDependency<Pinned>),
+    Git(PinnedGitDependency),
     Local(LocalDependency),
     FlavorSpecific(F::FlavorDependency<Pinned>),
 }
@@ -73,7 +78,7 @@ pub enum PinnedDependencyInfo<F: MoveFlavor + ?Sized> {
 fn split<F: MoveFlavor>(
     deps: &DependencySet<ManifestDependencyInfo<F>>,
 ) -> (
-    DependencySet<GitDependency<Unpinned>>,
+    DependencySet<UnpinnedGitDependency>,
     DependencySet<ExternalDependency>,
     DependencySet<LocalDependency>,
     DependencySet<F::FlavorDependency<Unpinned>>,
@@ -115,8 +120,19 @@ pub async fn pin<F: MoveFlavor>(
     locs.extend(resolved_locs);
     flav.extend(resolved_flav);
 
+    // Check first if git is installed
+    if Command::new("git")
+        .arg("--version")
+        .stdin(Stdio::null())
+        .output()
+        .is_err()
+    {
+        return Err(PackageError::Git(GitError::not_found()));
+    }
+
     // pinning
-    let pinned_gits: DependencySet<PinnedDependencyInfo<F>> = GitDependency::pin(gits)?
+    let pinned_gits: DependencySet<PinnedDependencyInfo<F>> = UnpinnedGitDependency::pin(gits)
+        .await?
         .into_iter()
         .map(|(env, package, dep)| (env, package, PinnedDependencyInfo::Git::<F>(dep)))
         .collect();
@@ -160,5 +176,40 @@ fn add_implicit_deps<F: MoveFlavor>(
 fn fetch<F: MoveFlavor>(
     deps: DependencySet<PinnedDependencyInfo<F>>,
 ) -> PackageResult<DependencySet<PathBuf>> {
+    // TODO: check if dependency is a Move project.
+
     todo!()
 }
+
+// Check dependency is a Move project
+// fn check_is_move_project<F: MoveFlavor>(
+//     deps: DependencySet<PinnedDependencyInfo<F>>,
+// ) -> PackageResult<()> {
+//     for (defaults, overrides) in deps.iter() {
+//         for (env, dep) in overrides {
+//             check_is_move_project_impl::<F>(defaults, env, dep)?;
+//         }
+//     }
+//     let move_toml_path = repo_fs_path.join(path).join("Move.toml");
+//     debug!("Move toml path: {:?}", move_toml_path.display());
+//     let cmd = Command::new("git")
+//         .current_dir(&repo_fs_path)
+//         .arg("ls-tree")
+//         .arg("HEAD")
+//         .arg(&move_toml_path)
+//         .stdin(Stdio::null())
+//         .output()
+//         .map_err(|e| {
+//             PackageError::Git(GitError::generic(
+//                 "Failed to call git ls-tree: {e}".to_string(),
+//             ))
+//         })?;
+//
+//     if cmd.stdout.is_empty() {
+//         return Err(PackageError::Git(GitError::not_move_project(
+//             &self.repo_url,
+//         )));
+//     }
+//
+//     Ok(())
+// }
