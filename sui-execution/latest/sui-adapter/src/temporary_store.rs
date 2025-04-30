@@ -2,9 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::gas_charger::GasCharger;
-use move_core_types::account_address::AccountAddress;
-use move_core_types::language_storage::StructTag;
-use move_core_types::resolver::ResourceResolver;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -26,11 +23,10 @@ use sui_types::{
     SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     effects::EffectsObjectChange,
-    error::{ExecutionError, SuiError, SuiResult},
-    fp_bail,
+    error::{ExecutionError, SuiResult},
     gas::GasCostSummary,
+    object::Object,
     object::Owner,
-    object::{Data, Object},
     storage::{BackingPackageStore, ChildObjectResolver, ParentSync, Storage},
     transaction::InputObjects,
 };
@@ -1081,44 +1077,6 @@ impl BackingPackageStore for TemporaryStore<'_> {
                     }
                 }
             })
-        }
-    }
-}
-
-impl ResourceResolver for TemporaryStore<'_> {
-    type Error = SuiError;
-
-    fn get_resource(
-        &self,
-        address: &AccountAddress,
-        struct_tag: &StructTag,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
-        let object = match self.read_object(&ObjectID::from(*address)) {
-            Some(x) => x,
-            None => match self.read_object(&ObjectID::from(*address)) {
-                None => return Ok(None),
-                Some(x) => {
-                    if !x.is_immutable() {
-                        fp_bail!(SuiError::ExecutionInvariantViolation);
-                    }
-                    x
-                }
-            },
-        };
-
-        match &object.data {
-            Data::Move(m) => {
-                assert!(
-                    m.is_type(struct_tag),
-                    "Invariant violation: ill-typed object in storage \
-                    or bad object request from caller"
-                );
-                Ok(Some(m.contents().to_vec()))
-            }
-            other => unimplemented!(
-                "Bad object lookup: expected Move object, but got {:?}",
-                other
-            ),
         }
     }
 }

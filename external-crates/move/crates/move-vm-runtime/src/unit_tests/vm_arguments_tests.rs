@@ -18,8 +18,8 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
-    language_storage::{ModuleId, StructTag, TypeTag},
-    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
+    language_storage::{ModuleId, TypeTag},
+    resolver::{LinkageResolver, ModuleResolver},
     runtime_value::{MoveValue, serialize_values},
     u256::U256,
     vm_status::{StatusCode, StatusType},
@@ -155,18 +155,6 @@ impl ModuleResolver for RemoteStore {
     type Error = VMError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(self.modules.get(module_id).cloned())
-    }
-}
-
-impl ResourceResolver for RemoteStore {
-    type Error = VMError;
-
-    fn get_resource(
-        &self,
-        _address: &AccountAddress,
-        _tag: &StructTag,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
-        Ok(None)
     }
 }
 
