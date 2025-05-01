@@ -26,12 +26,11 @@ impl PackageCacheWorker {
 impl Worker for PackageCacheWorker {
     type Result = ();
 
-    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
+    async fn process_checkpoint_arc(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
         let sequence_number = *checkpoint_data.checkpoint_summary.sequence_number();
 
         let txn_len = checkpoint_data.transactions.len();
-        let cache = self.package_cache.clone(); // <-- clone once
-
+        let cache = self.package_cache.clone();
         let mut stream = stream::iter(0..txn_len)
             .map(move |idx| {
                 // move clones into the task
