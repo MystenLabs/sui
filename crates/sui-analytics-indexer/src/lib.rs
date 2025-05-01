@@ -803,8 +803,8 @@ impl Worker for Processor {
     type Result = ();
 
     #[inline]
-    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
-        self.processor.process_checkpoint(checkpoint_data).await
+    async fn process_checkpoint_arc(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
+        self.processor.process_checkpoint_arc(checkpoint_data).await
     }
 }
 

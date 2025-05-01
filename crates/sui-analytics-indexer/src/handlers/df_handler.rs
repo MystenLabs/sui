@@ -19,7 +19,7 @@ use sui_types::dynamic_field::{DynamicFieldName, DynamicFieldType};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::object::Object;
 
-use crate::handlers::AnalyticsHandler;
+use crate::handlers::{process_transactions, AnalyticsHandler, TransactionProcessor};
 use crate::package_store::PackageCache;
 use crate::tables::DynamicFieldEntry;
 use crate::FileType;
@@ -34,47 +34,6 @@ pub struct DynamicFieldHandler {
 impl DynamicFieldHandler {
     pub fn new(package_cache: Arc<PackageCache>) -> Self {
         Self { package_cache }
-    }
-
-    async fn process_transactions(
-        &self,
-        checkpoint_data: &CheckpointData,
-    ) -> Result<Vec<DynamicFieldEntry>> {
-        let txn_len = checkpoint_data.transactions.len();
-        let mut entries = Vec::new();
-
-        for idx in 0..txn_len {
-            let transaction = &checkpoint_data.transactions[idx];
-
-            // Update package cache with output objects
-            for object in transaction.output_objects.iter() {
-                self.package_cache.update(object)?;
-            }
-
-            let all_objects: HashMap<_, _> = transaction
-                .output_objects
-                .iter()
-                .map(|x| (x.id(), x.clone()))
-                .collect();
-
-            // Process each output object for dynamic fields
-            for object in transaction.output_objects.iter() {
-                if let Some(entry) = self
-                    .process_dynamic_field(
-                        checkpoint_data.checkpoint_summary.epoch,
-                        checkpoint_data.checkpoint_summary.sequence_number,
-                        checkpoint_data.checkpoint_summary.timestamp_ms,
-                        object,
-                        &all_objects,
-                    )
-                    .await?
-                {
-                    entries.push(entry);
-                }
-            }
-        }
-
-        Ok(entries)
     }
     async fn process_dynamic_field(
         &self,
@@ -169,10 +128,10 @@ impl DynamicFieldHandler {
 impl AnalyticsHandler<DynamicFieldEntry> for DynamicFieldHandler {
     async fn process_checkpoint(
         &self,
-        checkpoint_data: &CheckpointData,
+        checkpoint_data: Arc<CheckpointData>,
     ) -> Result<Vec<DynamicFieldEntry>> {
-        wait_for_cache(checkpoint_data, &self.package_cache).await;
-        self.process_transactions(checkpoint_data).await
+        wait_for_cache(&checkpoint_data, &self.package_cache).await;
+        Ok(process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?)
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -181,5 +140,43 @@ impl AnalyticsHandler<DynamicFieldEntry> for DynamicFieldHandler {
 
     fn name(&self) -> &'static str {
         "dynamic_field"
+    }
+}
+
+#[async_trait::async_trait]
+impl TransactionProcessor<DynamicFieldEntry> for DynamicFieldHandler {
+    async fn process_transaction(
+        &self,
+        tx_idx: usize,
+        checkpoint: &CheckpointData,
+    ) -> Result<Vec<DynamicFieldEntry>> {
+        let checkpoint_transaction = &checkpoint.transactions[tx_idx];
+        for object in checkpoint_transaction.output_objects.iter() {
+            self.package_cache.update(object)?;
+        }
+
+        let all_objects: HashMap<_, _> = checkpoint_transaction
+            .output_objects
+            .iter()
+            .map(|x| (x.id(), x.clone()))
+            .collect();
+
+        let mut entries = Vec::new();
+        for object in checkpoint_transaction.output_objects.iter() {
+            if let Some(entry) = self
+                .process_dynamic_field(
+                    checkpoint.checkpoint_summary.epoch,
+                    checkpoint.checkpoint_summary.sequence_number,
+                    checkpoint.checkpoint_summary.timestamp_ms,
+                    object,
+                    &all_objects,
+                )
+                .await?
+            {
+                entries.push(entry);
+            }
+        }
+
+        Ok(entries)
     }
 }

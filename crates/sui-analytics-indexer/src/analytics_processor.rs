@@ -54,7 +54,7 @@ const CHECK_FILE_SIZE_ITERATION_CYCLE: u64 = 50;
 impl<S: Serialize + ParquetSchema + Send + Sync + 'static> Worker for AnalyticsProcessor<S> {
     type Result = ();
 
-    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
+    async fn process_checkpoint_arc(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
         let epoch = checkpoint_data.checkpoint_summary.epoch();
         let checkpoint_num = *checkpoint_data.checkpoint_summary.sequence_number();
         let timestamp = checkpoint_data.checkpoint_summary.data().timestamp_ms;
