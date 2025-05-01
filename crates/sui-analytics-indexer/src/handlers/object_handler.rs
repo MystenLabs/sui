@@ -231,10 +231,6 @@ impl TransactionProcessor<ObjectEntry> for ObjectHandler {
     ) -> Result<Vec<ObjectEntry>> {
         let checkpoint_transaction = &checkpoint_data.transactions[tx_idx];
 
-        for object in checkpoint_transaction.output_objects.iter() {
-            self.package_cache.update(object)?;
-        }
-
         let epoch = checkpoint_data.checkpoint_summary.epoch;
         let checkpoint = checkpoint_data.checkpoint_summary.sequence_number;
         let timestamp_ms = checkpoint_data.checkpoint_summary.timestamp_ms;

@@ -151,10 +151,6 @@ impl TransactionProcessor<DynamicFieldEntry> for DynamicFieldHandler {
         checkpoint: &CheckpointData,
     ) -> Result<Vec<DynamicFieldEntry>> {
         let checkpoint_transaction = &checkpoint.transactions[tx_idx];
-        for object in checkpoint_transaction.output_objects.iter() {
-            self.package_cache.update(object)?;
-        }
-
         let all_objects: HashMap<_, _> = checkpoint_transaction
             .output_objects
             .iter()
