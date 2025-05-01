@@ -77,7 +77,7 @@ async fn main() -> Result<()> {
     executor
         .register(WorkerPool::new(
             worker,
-            "package_cache_manager".to_string(),
+            PACKAGE_CACHE_WORKER_NAME.to_string(),
             1,
         ))
         .await?;
