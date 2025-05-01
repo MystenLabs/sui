@@ -218,7 +218,13 @@ impl PackageCache {
         Ok(())
     }
 
+    #[cfg(not(test))]
     pub async fn get_original_package_id(&self, id: AccountAddress) -> Result<ObjectID> {
         Ok(self.base_store.get_original_package_id(id).await?)
+    }
+
+    #[cfg(test)]
+    pub async fn get_original_package_id(&self, id: AccountAddress) -> Result<ObjectID> {
+        Ok(id.into())
     }
 }
