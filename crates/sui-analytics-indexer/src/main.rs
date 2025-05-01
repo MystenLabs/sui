@@ -64,7 +64,7 @@ async fn main() -> Result<()> {
         min_watermark = watermark.min(min_watermark);
         watermarks.insert(processor.task_name.clone(), watermark);
     }
-    watermarks.insert(PACKAGE_CACHE_WORKER_NAME.to_string(), min_watermark);
+    // watermarks.insert(PACKAGE_CACHE_WORKER_NAME.to_string(), min_watermark);
 
     let progress_store = ShimIndexerProgressStore::new(watermarks);
     let mut executor = IndexerExecutor::new(
@@ -73,14 +73,14 @@ async fn main() -> Result<()> {
         DataIngestionMetrics::new(&registry),
     );
 
-    let worker = PackageCacheWorker::new(package_cache);
-    executor
-        .register(WorkerPool::new(
-            worker,
-            PACKAGE_CACHE_WORKER_NAME.to_string(),
-            1,
-        ))
-        .await?;
+    // let worker = PackageCacheWorker::new(package_cache);
+    // executor
+    //     .register(WorkerPool::new(
+    //         worker,
+    //         PACKAGE_CACHE_WORKER_NAME.to_string(),
+    //         1,
+    //     ))
+    //     .await?;
 
     for processor in processors {
         let task_name = processor.task_name.clone();

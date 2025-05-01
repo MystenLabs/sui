@@ -342,8 +342,8 @@ fn parse_struct_field(
 }
 
 pub async fn wait_for_cache(checkpoint_data: &CheckpointData, package_cache: &PackageCache) {
-    let sequence_number = *checkpoint_data.checkpoint_summary.sequence_number();
-    package_cache.coordinator.wait(sequence_number).await;
+    // let sequence_number = *checkpoint_data.checkpoint_summary.sequence_number();
+    // package_cache.coordinator.wait(sequence_number).await;
 }
 
 #[cfg(test)]
