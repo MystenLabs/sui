@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use futures::{stream, StreamExt};
 use std::sync::Arc;
-use sui_types::full_checkpoint_content::CheckpointData;
+use sui_types::{full_checkpoint_content::CheckpointData, object::Object};
 
 use crate::{package_store::PackageCache, Worker, ASYNC_TRANSACTIONS_TO_BUFFER};
 
@@ -28,30 +28,17 @@ impl Worker for PackageCacheWorker {
 
     async fn process_checkpoint_arc(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
         let sequence_number = *checkpoint_data.checkpoint_summary.sequence_number();
-
-        let txn_len = checkpoint_data.transactions.len();
         let cache = self.package_cache.clone();
-        let mut stream = stream::iter(0..txn_len)
-            .map(move |idx| {
-                // move clones into the task
-                let checkpoint_data = checkpoint_data.clone();
-                let cache = cache.clone();
 
-                tokio::spawn(async move {
-                    let transaction = &checkpoint_data.transactions[idx];
-                    cache.update_batch(&transaction.output_objects)?;
-                    Ok(())
-                })
-            })
-            .buffered(*ASYNC_TRANSACTIONS_TO_BUFFER);
-
-        while let Some(join_res) = stream.next().await {
-            match join_res {
-                Ok(Ok(())) => {}
-                Ok(Err(e)) => return Err(e),
-                Err(e) => return Err(anyhow!(format!("task join error: {e}"))),
-            }
-        }
+        tokio::task::spawn_blocking(move || {
+            let all_objects = checkpoint_data
+                .transactions
+                .iter()
+                .flat_map(|txn| txn.output_objects.iter());
+            cache.update_batch(all_objects)?;
+            Ok::<(), anyhow::Error>(())
+        })
+        .await??;
 
         self.package_cache.coordinator.mark_ready(sequence_number);
         Ok(())
