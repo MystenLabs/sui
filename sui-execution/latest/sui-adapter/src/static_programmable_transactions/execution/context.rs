@@ -8,11 +8,8 @@ use crate::{
     gas_charger::GasCharger,
     static_programmable_transactions::{
         env::Env,
-        execution::values::{
-            borrow_value, coin_subtract_balance, load_value, InputObjectMetadata, InputObjectValue,
-            InputValue,
-        },
-        typing::ast as T,
+        execution::values::{self, ByteValue, InputObjectMetadata, InputObjectValue, InputValue},
+        typing::ast::{self as T, Type},
     },
 };
 use move_binary_format::errors::Location;
@@ -27,6 +24,25 @@ use sui_types::{
     metrics::LimitsMetrics,
 };
 use tracing::instrument;
+
+macro_rules! unwrap {
+    ($e:expr, $($args:expr),* $(,)?) => {
+        match $e {
+            Some(v) => v,
+            None => {
+                invariant_violation!("Unexpected none: {}", format!($($args),*))
+            }
+        }
+
+    };
+}
+
+#[derive(Copy, Clone)]
+enum UsageKind {
+    Move,
+    Copy,
+    Borrow(/* mut */ bool),
+}
 
 /// Maintains all runtime state specific to programmable transactions
 pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
@@ -77,10 +93,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 let Some(gas_ref) = gas.value.as_ref() else {
                     invariant_violation!("Gas object should be a populated coin")
                 };
-                let gas_ref = borrow_value(gas_ref)?;
+                let gas_ref = values::borrow_value(gas_ref)?;
                 // We have already checked that the gas balance is enough to cover the gas budget
                 let max_gas_in_balance = gas_charger.gas_budget();
-                coin_subtract_balance(gas_ref, max_gas_in_balance)?;
+                values::coin_subtract_balance(gas_ref, max_gas_in_balance)?;
                 Some(gas)
             }
             None => None,
@@ -116,6 +132,83 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             .get::<ObjectRuntime>()
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))
     }
+
+    fn location(
+        &mut self,
+        usage: UsageKind,
+        location: T::Location,
+        ty: Type,
+    ) -> Result<Value, ExecutionError> {
+        let value_opt = match location {
+            T::Location::GasCoin => {
+                todo!("better error here? How do we handle if there is no gas coin?");
+                let gas = unwrap!(self.gas.as_mut(), "Gas coin not provided");
+                &mut gas.value
+            }
+            T::Location::Result(i, j) => {
+                let result = unwrap!(self.results.get_mut(i as usize), "bounds already verified");
+                let v = unwrap!(result.get_mut(j as usize), "bounds already verified");
+                v
+            }
+            T::Location::Input(i) => {
+                let v = unwrap!(self.inputs.get_mut(i as usize), "bounds already verified");
+                match v {
+                    InputValue::Object(v) => &mut v.value,
+                    InputValue::Fixed(v) => v,
+                    InputValue::Bytes(bytes) => match usage {
+                        UsageKind::Move | UsageKind::Borrow(true) => {
+                            let value = load_byte_value(self.env, bytes, ty)?;
+                            *v = InputValue::Fixed(Some(value));
+                            match v {
+                                InputValue::Fixed(v) => v,
+                                _ => invariant_violation!("Expected fixed value"),
+                            }
+                        }
+                        UsageKind::Copy | UsageKind::Borrow(false) => {
+                            return load_byte_value(self.env, bytes, ty);
+                        }
+                    },
+                }
+            }
+        };
+        Ok(match usage {
+            UsageKind::Move => unwrap!(value_opt.take(), "use after move"),
+            UsageKind::Copy => {
+                let value = unwrap!(value_opt.as_ref(), "use after move");
+                todo!("charge gas");
+                values::copy_value(value)?
+            }
+            UsageKind::Borrow(_) => {
+                let value = unwrap!(value_opt.as_ref(), "use after move");
+                values::borrow_value(value)?
+            }
+        })
+    }
+
+    fn location_usage(&mut self, usage: T::Usage, ty: Type) -> Result<Value, ExecutionError> {
+        match usage {
+            T::Usage::Move(location) => self.location(UsageKind::Move, location, ty),
+            T::Usage::Copy { location, .. } => self.location(UsageKind::Copy, location, ty),
+        }
+    }
+
+    pub fn argument(&mut self, (arg_, ty): T::Argument) -> Result<Value, ExecutionError> {
+        match arg_ {
+            T::Argument_::Use(usage) => self.location_usage(usage, ty),
+            T::Argument_::Borrow(is_mut, location) => {
+                let ty = match ty {
+                    Type::Reference(_, inner) => (*inner).clone(),
+                    _ => invariant_violation!("Expected reference type"),
+                };
+                self.location(UsageKind::Borrow(is_mut), location, ty)
+            }
+            T::Argument_::Read(usage) => {
+                let value = self.location_usage(usage, ty)?;
+                todo!("charge gas");
+                values::read_ref(value)
+            }
+        }
+    }
 }
 
 fn load_input_arg(
@@ -125,8 +218,10 @@ fn load_input_arg(
     ty: T::InputType,
 ) -> Result<InputValue, ExecutionError> {
     Ok(match arg {
-        T::InputArg::Pure(bytes) => InputValue::Pure(bytes),
-        T::InputArg::Receiving((id, version, _)) => InputValue::Receiving { id, version },
+        T::InputArg::Pure(bytes) => InputValue::Bytes(ByteValue::Pure(bytes)),
+        T::InputArg::Receiving((id, version, _)) => {
+            InputValue::Bytes(ByteValue::Receiving { id, version })
+        }
         T::InputArg::Object(arg) => {
             let T::InputType::Fixed(ty) = ty else {
                 invariant_violation!("Expected fixed type for object arg");
@@ -185,11 +280,20 @@ fn load_object_arg_impl(
         },
     );
 
-    let v = load_value(env, move_obj.contents(), ty)?;
+    let v = values::load_value(env, move_obj.contents(), ty)?;
     let input_object_value = InputObjectValue {
         object_metadata,
         value: Some(v),
     };
 
     Ok(input_object_value)
+}
+
+fn load_byte_value(env: &Env, value: &ByteValue, ty: Type) -> Result<Value, ExecutionError> {
+    let loaded = match value {
+        ByteValue::Pure(bytes) => values::load_value(env, bytes, ty)?,
+        ByteValue::Receiving { id, version } => values::receiving(*id, *version),
+    };
+    todo!("charge gas");
+    Ok(loaded)
 }

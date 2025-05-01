@@ -1,22 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::atomic::AtomicU64;
+
 use crate::static_programmable_transactions::{env::Env, typing::ast::Type};
 use move_binary_format::errors::PartialVMError;
-use move_vm_types::values::{self, VMValueCast, Value};
+use move_core_types::account_address::AccountAddress;
+use move_trace_format::value;
+use move_vm_types::values::{self, Struct, VMValueCast, Value};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     error::ExecutionError,
     object::Owner,
 };
-
 pub enum InputValue {
+    Bytes(ByteValue),
+    Fixed(Option<Value>),
+    Object(InputObjectValue),
+}
+
+pub enum ByteValue {
     Pure(Vec<u8>),
     Receiving {
         id: ObjectID,
         version: SequenceNumber,
     },
-    Object(InputObjectValue),
 }
 
 #[derive(Clone, Debug)]
@@ -38,6 +46,27 @@ pub fn load_value(_env: &Env, _bytes: &[u8], _ty: Type) -> Result<Value, Executi
 
 pub fn borrow_value(_value: &Value) -> Result<Value, ExecutionError> {
     todo!("RUNTIME")
+}
+
+pub fn copy_value(value: &Value) -> Result<Value, ExecutionError> {
+    value.copy_value().map_err(iv("copy"))
+}
+
+pub fn read_ref(value: Value) -> Result<Value, ExecutionError> {
+    let value: values::Reference = value.cast().map_err(iv("cast"))?;
+    value.read_ref().map_err(iv("read ref"))
+}
+
+//**************************************************************************************************
+// Construction
+//**************************************************************************************************
+
+pub fn uid(address: AccountAddress) -> Value {
+    Value::struct_(Struct::pack([Value::address(address)]))
+}
+
+pub fn receiving(id: ObjectID, version: SequenceNumber) -> Value {
+    Value::struct_(Struct::pack([uid(id.into()), Value::u64(version.into())]))
 }
 
 //**************************************************************************************************

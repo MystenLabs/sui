@@ -4,14 +4,19 @@
 use crate::{
     execution_value::ExecutionState,
     gas_charger::GasCharger,
-    static_programmable_transactions::{env::Env, execution::context::Context, typing::ast as T},
+    static_programmable_transactions::{
+        env::Env,
+        execution::{context::Context, values},
+        typing::ast as T,
+    },
 };
 use move_trace_format::format::MoveTraceBuilder;
+use move_vm_types::values::Value;
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Instant};
 use sui_move_natives::object_runtime::ObjectRuntime;
 use sui_types::{
     base_types::TxContext,
-    error::ExecutionError,
+    error::{ExecutionError, ExecutionErrorKind},
     execution::{ExecutionTiming, ResultWithTimings},
     metrics::LimitsMetrics,
 };
@@ -107,13 +112,44 @@ fn execute_command(
     result_tys: T::ResultType,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
 ) -> Result<(), ExecutionError> {
-    match command {
+    let result = match command {
         T::Command::MoveCall(move_call) => todo!(),
         T::Command::TransferObjects(items, _) => todo!(),
-        T::Command::SplitCoins(_, _, items) => todo!(),
+        T::Command::SplitCoins(_, coin, amounts) => {
+            let coin_ref: Value = context.argument(coin)?;
+            let amount_values: Vec<u64> = context.arguments(amounts)?;
+            let total: u64 = 0;
+            for amount in &amount_values {
+                let Some(new_total) = total.checked_add(amount) else {
+                    return Err(ExecutionError::from_kind(
+                        ExecutionErrorKind::CoinBalanceOverflow,
+                    ));
+                };
+                total = new_total;
+                // fp_ensure!(
+                //     self.value >= amount,
+                //     ExecutionError::new_with_source(
+                //         ExecutionErrorKind::InsufficientCoinBalance,
+                //         format!("balance: {} required: {}", self.value, amount)
+                //     )
+                // );
+            }
+            let coin_value = values::coin_value(context.copy_value(&coin_ref))?;
+            fp_ensure!(
+                coin_value >= total,
+                ExecutionError::new_with_source(
+                    ExecutionErrorKind::InsufficientCoinBalance,
+                    format!("balance: {coin_value} required: {total}")
+                )
+            );
+            let coins = amounts.into_iter().map(|a| context.new_coin(a)).collect();
+            coins
+        }
         T::Command::MergeCoins(_, _, items) => todo!(),
         T::Command::MakeMoveVec(_, items) => todo!(),
         T::Command::Publish(items, object_ids) => todo!("RUNTIME"),
         T::Command::Upgrade(items, object_ids, object_id, _) => todo!("RUNTIME"),
-    }
+    };
+    context.result(result);
+    Ok(())
 }
