@@ -84,7 +84,7 @@ async fn main() -> Result<()> {
 
     for processor in processors {
         let task_name = processor.task_name.clone();
-        let worker_pool = WorkerPool::new(processor, task_name, num_cpus::get());
+        let worker_pool = WorkerPool::new(processor, task_name, 1);
         executor.register(worker_pool).await?;
     }
 
