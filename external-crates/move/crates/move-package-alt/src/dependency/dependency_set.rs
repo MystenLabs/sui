@@ -1,8 +1,13 @@
+// Copyright (c) The Diem Core Contributors
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! Conveniences for managing the entire collection of dependencies (including overrides) for a
 //! package
+
 use std::{
     collections::{BTreeMap, btree_map},
-    fmt::Display,
+    fmt::{self, Display},
 };
 
 use serde::{Deserialize, Serialize};
@@ -15,13 +20,12 @@ use crate::package::{EnvironmentName, PackageName};
 /// Iterating over a dependency set produces Option<[EnvironmentName]>, [PackageName], T) tuples for
 /// all declared dependencies (an environment name of `None` represents the default environment).
 ///
-/// Note that this doesn't do any merging or inheritance - default dependencies are returned with
-/// the environment `None`, and the only dependencies returned with `Some(e)` are
+/// Note that most operations do not do any merging or inheritance - default dependencies are
+/// returned with the environment `None`, and the only dependencies returned with `Some(e)` are
 /// those that were explicitly added with `Some(e)`.
 ///
 /// To get the correctly merged set of dependencies for a given environment, see [Self::default_deps],
 /// [Self::deps_for_env], and [Self::deps_for].
-///
 #[derive(Clone, Serialize, Deserialize)]
 pub struct DependencySet<T> {
     #[serde(flatten)]
@@ -239,9 +243,9 @@ impl<T> Extend<(Option<EnvironmentName>, PackageName, T)> for DependencySet<T> {
     }
 }
 
-impl<T: Serialize> std::fmt::Debug for DependencySet<T> {
+impl<T: Serialize> fmt::Debug for DependencySet<T> {
     /// Format [self] as toml for easy reading and diffing
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let toml = toml_edit::ser::to_string_pretty(self).expect("dependency set should serialize");
         write!(f, "{toml}")
     }

@@ -28,10 +28,7 @@ impl Commands {
     pub async fn execute(&self) -> PackageResult<()> {
         match self {
             Commands::Build(b) => b.execute().await,
-            Commands::Test => {
-                println!("Running tests for package");
-                Ok(())
-            }
+            Commands::Test => todo!(),
             Commands::Parse(p) => p.execute(),
         }
     }

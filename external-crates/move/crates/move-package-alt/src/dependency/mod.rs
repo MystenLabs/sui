@@ -35,7 +35,7 @@ use local::LocalDependency;
 pub struct Pinned;
 
 /// Phantom type to represent unpinned dependencies (see [ManifestDependencyInfo])
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub struct Unpinned;
 
 /// [ManifestDependencyInfo]s contain the dependency-type-specific things that users write in their
@@ -46,7 +46,7 @@ pub struct Unpinned;
 /// are not serialized to the Lock file. See [crate::package::manifest] for the full representation
 /// of an entry in the `dependencies` table.
 #[derive(Debug, Serialize, Deserialize)]
-#[derive_where(Clone, PartialEq, Eq)]
+#[derive_where(Clone, PartialEq)]
 #[serde(untagged)]
 pub enum ManifestDependencyInfo<F: MoveFlavor> {
     Git(UnpinnedGitDependency),
@@ -119,16 +119,6 @@ pub async fn pin<F: MoveFlavor>(
     gits.extend(resolved_gits);
     locs.extend(resolved_locs);
     flav.extend(resolved_flav);
-
-    // Check first if git is installed
-    if Command::new("git")
-        .arg("--version")
-        .stdin(Stdio::null())
-        .output()
-        .is_err()
-    {
-        return Err(PackageError::Git(GitError::not_found()));
-    }
 
     // pinning
     let pinned_gits: DependencySet<PinnedDependencyInfo<F>> = UnpinnedGitDependency::pin(gits)

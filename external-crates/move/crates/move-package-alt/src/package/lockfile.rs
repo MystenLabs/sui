@@ -172,6 +172,7 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
     }
 
     /// Return the pinned dependencies in the lockfile, including the overrides dependencies.
+    // TODO: This needs to be fixed after we finalize the new design
     fn pinned_deps(&self) -> DependencySet<PinnedDependencyInfo<F>> {
         let mut dep_set = DependencySet::new();
 
@@ -189,6 +190,7 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
     }
 
     /// Return the unpinned dependencies in the lockfile, including the overrides dependencies.
+    // TODO: This needs to be fixed after we finalize the new design
     fn unpinned_deps(&self) -> DependencySet<ManifestDependencyInfo<F>> {
         let mut dep_set = DependencySet::new();
 
@@ -206,7 +208,7 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
     }
 
     /// Compares the unpinned dependencies in the lockfile to [`deps`] and re-pins if they changed.
-    /// TODO: this only works for non-transitive dependencies.
+    // TODO: This needs to be fixed after we finalize the new design
     pub async fn update_lockfile(
         &mut self,
         flavor: &F,
@@ -238,11 +240,12 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
         }
 
         // pin the deps that need to be pinned
-        let mut pinned_deps = pin(flavor, &to_pin, &manifest.environments).await?;
+        let mut pinned_deps = pin(flavor, &to_pin, manifest.environments()).await?;
         pinned_deps.extend(pinned_dep_infos);
 
         // convert now from `DependencySet<PinnedDependencyInfo<F>>` to unpublished pinned
         // dependencies
+        // TODO: probably we want a DependencySet instead of UnpublishedTable in the Lockfile types.
         self.unpublished = UnpublishedTable::from_deps(pinned_deps, manifest.dependencies());
 
         Ok(())
@@ -273,6 +276,7 @@ impl<F: MoveFlavor + fmt::Debug> Publication<F> {
     }
 }
 
+// TODO: probably we want a DependencySet instead of UnpublishedTable in the Lockfile types.
 impl<F: MoveFlavor> UnpublishedTable<F> {
     pub fn from_deps(
         pinned_deps: DependencySet<PinnedDependencyInfo<F>>,
@@ -310,7 +314,7 @@ impl<F: MoveFlavor> UnpublishedTable<F> {
                         .unpinned
                         .insert(pkg, dep);
                 }
-                // update default pinned deps
+                // update default unpinned deps
                 None => {
                     dependencies.unpinned.insert(pkg, dep);
                 }
