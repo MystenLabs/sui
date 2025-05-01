@@ -15,6 +15,7 @@ use handlers::transaction_bcs_handler::TransactionBCSHandler;
 use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
 use object_store::path::Path;
+use once_cell::sync::Lazy;
 use package_store::PackageCache;
 use serde::{Deserialize, Serialize};
 use snowflake_api::{QueryResult, SnowflakeApi};
@@ -70,6 +71,32 @@ const MOVE_PACKAGE_PREFIX: &str = "move_package";
 const DYNAMIC_FIELD_PREFIX: &str = "dynamic_field";
 
 const WRAPPED_OBJECT_PREFIX: &str = "wrapped_object";
+
+/// Environment variable to override the default maximum number of checkpoints that can be processed concurrently.
+const ASYNC_TRANSACTIONS_TO_BUFFER_VAR_NAME: &str = "ASYNC_TRANSACTIONS_TO_BUFFER";
+
+/// Default maximum number of checkpoints in progress.
+const DEFAULT_ASYNC_TRANSACTIONS_TO_BUFFER: usize = 64;
+
+/// Maximum number of transactions per checkpoint that can be queued for processing.
+pub static ASYNC_TRANSACTIONS_TO_BUFFER: Lazy<usize> = Lazy::new(|| {
+    let max_checkpoints_opt = std::env::var(ASYNC_TRANSACTIONS_TO_BUFFER_VAR_NAME)
+        .ok()
+        .and_then(|s| s.parse().ok());
+    if let Some(max_checkpoints) = max_checkpoints_opt {
+        info!(
+            "Using custom value for '{}' max checkpoints in progress: {}",
+            ASYNC_TRANSACTIONS_TO_BUFFER_VAR_NAME, max_checkpoints
+        );
+        max_checkpoints
+    } else {
+        info!(
+            "Using default value for '{}' -- max checkpoints in progress: {}",
+            ASYNC_TRANSACTIONS_TO_BUFFER_VAR_NAME, DEFAULT_ASYNC_TRANSACTIONS_TO_BUFFER
+        );
+        DEFAULT_ASYNC_TRANSACTIONS_TO_BUFFER
+    }
+});
 
 fn default_client_metric_host() -> String {
     "127.0.0.1".to_string()
