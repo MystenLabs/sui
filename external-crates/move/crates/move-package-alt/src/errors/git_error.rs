@@ -22,14 +22,10 @@ use super::FileHandle;
 #[error("Invalid manifest: {kind}")]
 pub struct GitError {
     pub kind: GitErrorKind,
-    pub span: Option<Range<usize>>,
-    pub handle: Option<FileHandle>,
 }
 
 #[derive(Error, Debug)]
 pub enum GitErrorKind {
-    #[error("repo {repo} does not contain a Move.toml file")]
-    NotMoveProject { repo: String },
     #[error(
         "{repo} repo is dirty. Please clean it up before proceeding or pass the `--allow-dirty` flag"
     )]
@@ -57,31 +53,18 @@ impl GitError {
             kind: GitErrorKind::Dirty {
                 repo: repo.to_string(),
             },
-            span: None,
-            handle: None,
         }
     }
-    pub fn not_move_project(repo: &str) -> Self {
-        Self {
-            kind: GitErrorKind::NotMoveProject {
-                repo: repo.to_string(),
-            },
-            span: None,
-            handle: None,
-        }
-    }
+
     pub fn generic(msg: String) -> Self {
         Self {
             kind: GitErrorKind::Generic(msg),
-            span: None,
-            handle: None,
         }
     }
+
     pub fn not_found() -> Self {
         Self {
             kind: GitErrorKind::GitNotFound,
-            span: None,
-            handle: None,
         }
     }
 
@@ -91,16 +74,12 @@ impl GitError {
                 repo: repo.to_string(),
                 sha: sha.to_string(),
             },
-            span: None,
-            handle: None,
         }
     }
 
     pub fn command_error(error: String) -> Self {
         Self {
             kind: GitErrorKind::CommandError { error },
-            span: None,
-            handle: None,
         }
     }
 
@@ -110,8 +89,6 @@ impl GitError {
                 repo: repo.to_string(),
                 rev: rev.to_string(),
             },
-            span: None,
-            handle: None,
         }
     }
 }

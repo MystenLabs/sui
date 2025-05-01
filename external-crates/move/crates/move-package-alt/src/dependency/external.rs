@@ -36,10 +36,10 @@ type ResolverName = String;
 #[serde(try_from = "RField", into = "RField")]
 pub struct ExternalDependency {
     /// The `<res>` in `{ r.<res> = <data> }`
-    pub resolver: ResolverName,
+    resolver: ResolverName,
 
     /// the `<data>` in `{ r.<res> = <data> }`
-    pub data: toml::Value,
+    data: toml::Value,
 }
 
 /// Convenience type for serializing/deserializing external deps
@@ -118,8 +118,6 @@ impl<F: MoveFlavor> TryFrom<QueryResult> for ManifestDependencyInfo<F> {
         }
     }
 }
-
-impl Eq for ExternalDependency {}
 
 /// Resolve the dependencies in [dep_data] with the external resolver [resolver]; requests are
 /// performed for all environments in [envs]. Ensures that the returned dependency set contains no

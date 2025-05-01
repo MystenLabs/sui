@@ -32,8 +32,6 @@ pub enum ManifestErrorKind {
     EmptyPackageName,
     #[error("unsupported edition '{edition}', expected one of '{valid}'")]
     InvalidEdition { edition: String, valid: String },
-    #[error(transparent)]
-    NoManifest(#[from] std::io::Error),
 }
 
 impl ManifestError {

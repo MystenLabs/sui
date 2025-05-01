@@ -29,12 +29,11 @@ const ALLOWED_EDITIONS: &[&str] = &["2024", "2024.beta", "legacy"];
 #[serde(bound = "")]
 pub struct Manifest<F: MoveFlavor> {
     package: PackageMetadata<F>,
-    pub environments: BTreeMap<EnvironmentName, F::EnvironmentID>,
+    environments: BTreeMap<EnvironmentName, F::EnvironmentID>,
     #[serde(default)]
     dependencies: BTreeMap<PackageName, ManifestDependency<F>>,
     #[serde(default)]
-    pub dep_overrides:
-        BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyOverride<F>>>,
+    dep_overrides: BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyOverride<F>>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -52,7 +51,7 @@ struct PackageMetadata<F: MoveFlavor> {
 #[serde(rename_all = "kebab-case")]
 pub struct ManifestDependency<F: MoveFlavor> {
     #[serde(flatten)]
-    pub dependency_info: ManifestDependencyInfo<F>,
+    dependency_info: ManifestDependencyInfo<F>,
 
     #[serde(rename = "override", default)]
     is_override: bool,
@@ -146,5 +145,9 @@ impl<F: MoveFlavor> Manifest<F> {
             }
         }
         deps
+    }
+
+    pub fn environments(&self) -> &BTreeMap<EnvironmentName, F::EnvironmentID> {
+        &self.environments
     }
 }

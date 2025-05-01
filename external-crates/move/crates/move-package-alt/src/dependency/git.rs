@@ -38,7 +38,7 @@ type Sha = String;
 
 /// A git dependency that is unpinned. The `rev` field can be either empty, a branch, or a sha. To
 /// resolve this into a [`PinnedGitDependency`], call `pin_one` function.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct UnpinnedGitDependency {
     /// The repository containing the dependency
     #[serde(rename = "git")]
@@ -53,7 +53,7 @@ pub struct UnpinnedGitDependency {
     path: PathBuf,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct PinnedGitDependency {
     /// The repository containing the dependency
     #[serde(rename = "git")]
@@ -107,7 +107,6 @@ impl UnpinnedGitDependency {
     async fn pin_one(&self) -> PackageResult<PinnedGitDependency> {
         let git: GitRepo = self.clone().into();
         let sha = git.find_sha().await?;
-        let pinned_git_dep = git.fetch().await?;
 
         Ok(PinnedGitDependency {
             repo: self.repo.clone(),
