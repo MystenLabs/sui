@@ -26,6 +26,7 @@ ENV RUSTFLAGS="-C codegen-units=1"
 ENV RUSTFLAGS="${RUSTFLAGS} -C target-feature=+crt-static"
 ENV RUSTFLAGS="${RUSTFLAGS} -C linker=/usr/bin/clang"
 ENV RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld -C link-arg=-Wl,--threads=1 -C link-arg=-L/opt/cross/x86_64-linux-gnu/lib"
+ENV RUSTFLAGS="${RUSTFLAGS} -C link-arg=-Wl,-z,nostart-stop-gc"
 
 COPY . .
 RUN cargo fetch
