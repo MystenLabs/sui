@@ -1,18 +1,13 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use futures::{stream, StreamExt};
 use std::sync::Arc;
 use sui_types::full_checkpoint_content::CheckpointData;
 
-use crate::{package_store::PackageCache, Worker}; // your ingestion trait
+use crate::{package_store::PackageCache, Worker};
 
 pub const PACKAGE_CACHE_WORKER_NAME: &str = "package_cache_manager";
 
-/// First stage of the analytics pipeline: make sure `PackageCache` contains
-/// every object for the checkpoint and broadcast that fact.
-/// Assumes it's concurrency is set to 1 so every checkpoint is processed serially.
 pub struct PackageCacheWorker {
     package_cache: Arc<PackageCache>,
 }
@@ -34,15 +29,34 @@ impl Worker for PackageCacheWorker {
     async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
         let sequence_number = *checkpoint_data.checkpoint_summary.sequence_number();
 
-        // Update / insert every output object from this checkpoint.
-        for tx in &checkpoint_data.transactions {
-            for object in &tx.output_objects {
-                self.package_cache.update(object)?;
+        let txn_len = checkpoint_data.transactions.len();
+        let cache = self.package_cache.clone(); // <-- clone once
+
+        let mut stream = stream::iter(0..txn_len)
+            .map(move |idx| {
+                // move clones into the task
+                let checkpoint_data = checkpoint_data.clone();
+                let cache = cache.clone();
+
+                tokio::spawn(async move {
+                    let transaction = &checkpoint_data.transactions[idx];
+                    for object in &transaction.output_objects {
+                        cache.update(object)?;
+                    }
+                    Ok(())
+                })
+            })
+            .buffered(num_cpus::get());
+
+        while let Some(join_res) = stream.next().await {
+            match join_res {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => return Err(e),
+                Err(e) => return Err(anyhow!(format!("task join error: {e}"))),
             }
         }
 
         self.package_cache.coordinator.mark_ready(sequence_number);
-
         Ok(())
     }
 
