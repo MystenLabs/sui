@@ -336,7 +336,9 @@ impl TaskContext {
         }
     }
 
-    async fn create_processor_for_handler<T: Serialize + Clone + ParquetSchema + 'static>(
+    async fn create_processor_for_handler<
+        T: Serialize + Clone + ParquetSchema + Send + Sync + 'static,
+    >(
         self,
         handler: Box<dyn AnalyticsHandler<T>>,
     ) -> Result<Processor> {
@@ -806,7 +808,7 @@ impl Worker for Processor {
 }
 
 impl Processor {
-    pub async fn new<S: Serialize + ParquetSchema + 'static>(
+    pub async fn new<S: Serialize + ParquetSchema + Send + Sync + 'static>(
         handler: Box<dyn AnalyticsHandler<S>>,
         writer: Box<dyn AnalyticsWriter<S>>,
         max_checkpoint_reader: Box<dyn MaxCheckpointReader>,

@@ -28,7 +28,7 @@ use crate::{
     join_paths, FileMetadata, MaxCheckpointReader, ParquetSchema, TaskContext, EPOCH_DIR_PREFIX,
 };
 
-struct State<S: Serialize + ParquetSchema> {
+struct State<S: Serialize + ParquetSchema + Send + Sync> {
     current_epoch: u64,
     current_checkpoint_range: Range<u64>,
     last_commit_instant: Instant,
@@ -36,7 +36,7 @@ struct State<S: Serialize + ParquetSchema> {
     writer: Box<dyn AnalyticsWriter<S>>,
 }
 
-pub struct AnalyticsProcessor<S: Serialize + ParquetSchema> {
+pub struct AnalyticsProcessor<S: Serialize + ParquetSchema + Send + Sync> {
     handler: Box<dyn AnalyticsHandler<S>>,
     state: Mutex<State<S>>,
     task_context: TaskContext,
@@ -50,7 +50,7 @@ pub struct AnalyticsProcessor<S: Serialize + ParquetSchema> {
 const CHECK_FILE_SIZE_ITERATION_CYCLE: u64 = 50;
 
 #[async_trait::async_trait]
-impl<S: Serialize + ParquetSchema + 'static> Worker for AnalyticsProcessor<S> {
+impl<S: Serialize + ParquetSchema + Send + Sync + 'static> Worker for AnalyticsProcessor<S> {
     type Result = ();
     async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
         // get epoch id, checkpoint sequence number and timestamp, those are important
@@ -90,8 +90,7 @@ impl<S: Serialize + ParquetSchema + 'static> Worker for AnalyticsProcessor<S> {
             .total_received
             .with_label_values(&[self.name()])
             .inc();
-        self.handler.process_checkpoint(checkpoint_data).await?;
-        let rows = self.handler.read().await?;
+        let rows = self.handler.process_checkpoint(checkpoint_data).await?;
         state.writer.write(&rows)?;
         state.current_checkpoint_range.end = state
             .current_checkpoint_range
@@ -103,7 +102,7 @@ impl<S: Serialize + ParquetSchema + 'static> Worker for AnalyticsProcessor<S> {
     }
 }
 
-impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
+impl<S: Serialize + ParquetSchema + Send + Sync + 'static> AnalyticsProcessor<S> {
     pub async fn new(
         handler: Box<dyn AnalyticsHandler<S>>,
         writer: Box<dyn AnalyticsWriter<S>>,
