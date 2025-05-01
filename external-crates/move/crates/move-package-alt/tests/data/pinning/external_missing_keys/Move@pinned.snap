@@ -1,4 +1,4 @@
 ---
 source: crates/move-package-alt/tests/pinning_tests.rs
 ---
-mock-resolver did not follow the external resolver protocol: it didn't resolve "(Some("mainnet"), missing_env)"
+mock-resolver did not follow the external resolver protocol: Received wrong set of responses

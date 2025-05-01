@@ -25,7 +25,7 @@ pub enum JsonRpcError {
     #[error("Received wrong set of responses")]
     IncorrectQueryResults,
 
-    #[error(transparent)]
+    #[error("TODO: couldn't deserialize something")]
     SerializationError(#[from] serde_json::Error),
 }
 

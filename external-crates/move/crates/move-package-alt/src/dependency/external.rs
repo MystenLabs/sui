@@ -227,6 +227,7 @@ async fn resolve_single<F: MoveFlavor>(
         serde_json::to_string_pretty(&reqs).unwrap_or("serialization error".to_string())
     );
 
+    // TODO
     let resps = endpoint
         .batch_call("resolve", reqs)
         .await
@@ -245,6 +246,8 @@ async fn resolve_single<F: MoveFlavor>(
         )
     }
 
+    // TODO: check for exit code
+
     let result: DependencySet<ManifestDependencyInfo<F>> = izip!(envs, pkgs, resps?).collect();
 
     // ensure no externally resolved responses
@@ -252,7 +255,7 @@ async fn resolve_single<F: MoveFlavor>(
         if let ManifestDependencyInfo::External(_) = dep {
             return Err(ResolverError::bad_resolver(
                 &resolver,
-                "resolver returned unresolved dependency",
+                "resolvers must return resolved dependencies",
             )
             .into());
         }

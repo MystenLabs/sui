@@ -1,5 +1,0 @@
----
-source: crates/move-package-alt/tests/pinning_tests.rs
-assertion_line: 36
----
-mock-resolver did not follow the external resolver protocol: unknown field `result` at line 1 column 58

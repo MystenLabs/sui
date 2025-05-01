@@ -2,13 +2,23 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! A mock resolver that simply returns the data passed to it as a dependency resolution
+//! A mock resolver that can return a few different response types depending on its argument.
 //!
-//! If there are any inputs with an stdout field then the standard output will be whatever string
-//! is input on the first one of them and the other inputs are ignored.
+//! ```toml
 //!
-//! If none of the inputs have a stdout field, then the result fields are all returned according to
-//! the external resolver protocol.
+//! [dependencies._.r.mock-resolver]
+//! # halt immediately with the following stdout/stderr/exit code:
+//! stdout = "..."
+//! stderr = "..."
+//! exit_code = ...
+//!
+//!
+//! [dependencies._.r.mock-resolver]
+//! # respond with the given JSON RPC Result values, and print stderr
+//! output.mainnet-id.result = { local = "." } # Dependency
+//! output.default.error = { code = ... , message = "...", data = ... } # JSON RPC error
+//! stderr = "..."
+//! ```
 //!
 
 use std::{collections::BTreeMap, env, io::stdin};
@@ -117,6 +127,7 @@ fn process_request(id: RequestID, request: ResolveRequest) -> Response<serde_jso
                 eprintln!("{line}");
             };
             print!("{}", exit.stdout);
+            debug!("Stdout:\n{}", exit.stdout);
 
             std::process::exit(exit.exit_code.unwrap_or(0))
         }

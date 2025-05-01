@@ -10,10 +10,8 @@ authors = ["Move Team"]
 mainnet = "35834a8a"
 
 [dependencies.missing_env.r.mock-resolver]
-stdout = """
-# missing a response for the mainnet environment
-[responses."(None, missing_env)"]
-resolved = { local = "." }
-warnings = []
-"""
+# only one response for two queries
 stderr = "stderr output"
+stdout = """\
+[ { "jsonrpc": "2.0", "id": 1, "result": { "local": "for_mainnet" } } ]
+"""
