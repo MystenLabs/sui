@@ -12,11 +12,17 @@ use crate::{
         typing::ast::{self as T, Type},
     },
 };
-use move_binary_format::errors::Location;
-use move_core_types::language_storage::{ModuleId, StructTag};
+use move_binary_format::{
+    errors::Location,
+    file_format::{CodeOffset, FunctionDefinitionIndex},
+};
+use move_core_types::{
+    account_address::AccountAddress,
+    language_storage::{ModuleId, StructTag},
+};
 use move_vm_runtime::native_extensions::NativeContextExtensions;
-use move_vm_types::values::Value;
-use sui_move_natives::object_runtime::{self, get_all_uids, ObjectRuntime};
+use move_vm_types::values::{VMValueCast, Value};
+use sui_move_natives::object_runtime::{self, get_all_uids, max_event_error, ObjectRuntime};
 use sui_types::{
     base_types::{ObjectID, TxContext},
     error::ExecutionError,
@@ -35,6 +41,15 @@ macro_rules! unwrap {
         }
 
     };
+}
+
+macro_rules! object_runtime_mut {
+    ($context:ident) => {{
+        $context
+            .native_extensions
+            .get_mut::<ObjectRuntime>()
+            .map_err(|e| $context.env.convert_vm_error(e.finish(Location::Undefined)))
+    }};
 }
 
 #[derive(Copy, Clone)]
@@ -133,6 +148,40 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))
     }
 
+    pub fn take_user_events(
+        &mut self,
+        module_id: &ModuleId,
+        function: FunctionDefinitionIndex,
+        last_offset: CodeOffset,
+    ) -> Result<(), ExecutionError> {
+        let events = object_runtime_mut!(self)?.take_user_events();
+        let num_events = self.user_events.len() + events.len();
+        let max_events = self.env.protocol_config.max_num_event_emit();
+        if num_events as u64 > max_events {
+            let err = max_event_error(max_events)
+                .at_code_offset(function, last_offset)
+                .finish(Location::Module(module_id.clone()));
+            return Err(self.env.convert_vm_error(err));
+        }
+        let new_events = events
+            .into_iter()
+            .map(|(ty, tag, value)| {
+                let layout = self
+                    .env
+                    .vm
+                    .get_runtime()
+                    .type_to_type_layout(&ty)
+                    .map_err(|e| self.env.convert_vm_error(e))?;
+                let Some(bytes) = value.simple_serialize(&layout) else {
+                    invariant_violation!("Failed to deserialize already serialized Move value");
+                };
+                Ok((module_id.clone(), tag, bytes))
+            })
+            .collect::<Result<Vec<_>, ExecutionError>>()?;
+        self.user_events.extend(new_events);
+        Ok(())
+    }
+
     fn location(
         &mut self,
         usage: UsageKind,
@@ -175,8 +224,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             UsageKind::Move => unwrap!(value_opt.take(), "use after move"),
             UsageKind::Copy => {
                 let value = unwrap!(value_opt.as_ref(), "use after move");
-                todo!("charge gas");
-                values::copy_value(value)?
+                copy_value(value)?
             }
             UsageKind::Borrow(_) => {
                 let value = unwrap!(value_opt.as_ref(), "use after move");
@@ -192,7 +240,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         }
     }
 
-    pub fn argument(&mut self, (arg_, ty): T::Argument) -> Result<Value, ExecutionError> {
+    fn argument_value(&mut self, (arg_, ty): T::Argument) -> Result<Value, ExecutionError> {
         match arg_ {
             T::Argument_::Use(usage) => self.location_usage(usage, ty),
             T::Argument_::Borrow(is_mut, location) => {
@@ -208,6 +256,84 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 values::read_ref(value)
             }
         }
+    }
+
+    pub fn argument<V>(&mut self, arg: T::Argument) -> Result<V, ExecutionError>
+    where
+        Value: VMValueCast<V>,
+    {
+        let value = self.argument_value(arg)?;
+        let value: V = values::cast(value)?;
+        Ok(value)
+    }
+
+    pub fn arguments<V>(&mut self, args: Vec<T::Argument>) -> Result<Vec<V>, ExecutionError>
+    where
+        Value: VMValueCast<V>,
+    {
+        args.into_iter().map(|arg| self.argument(arg)).collect()
+    }
+
+    pub fn result(&mut self, result: Vec<Value>) -> Result<(), ExecutionError> {
+        self.results.push(result.into_iter().map(Some).collect());
+        Ok(())
+    }
+
+    pub fn vm_move_call(
+        &mut self,
+        function: T::LoadedFunction,
+        args: Vec<Value>,
+    ) -> Result<Vec<Value>, ExecutionError> {
+        let storage_id = &function.storage_id;
+        let (index, last_instr) = {
+            &function;
+            // access FunctionDefinitionIndex and last instruction CodeOffset
+            todo!("LOADING")
+        };
+        let result = {
+            function;
+            todo!("RUNTIME")
+        };
+        self.take_user_events(storage_id, index, last_instr)?;
+        Ok(result)
+    }
+
+    pub fn transfer_object(
+        &mut self,
+        recipient: AccountAddress,
+        ty: Type,
+        object: Value,
+    ) -> Result<(), ExecutionError> {
+        let ty = {
+            ty;
+            // ty to vm type
+            todo!("LOADING")
+        };
+        let owner = sui_types::object::Owner::AddressOwner(recipient.into());
+        object_runtime_mut!(self)?
+            .transfer(owner, ty, object)
+            .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
+    }
+
+    pub fn copy_value(&self, value: &Value) -> Result<Value, ExecutionError> {
+        todo!("charge gas");
+        values::copy_value(value)
+    }
+
+    pub fn new_coin(&mut self, amount: u64) -> Result<Value, ExecutionError> {
+        let id = self.tx_context.borrow_mut().fresh_id();
+        object_runtime_mut!(self)?
+            .new_id(id)
+            .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
+        Ok(values::coin(id, amount))
+    }
+
+    pub fn destroy_coin(&mut self, coin: Value) -> Result<u64, ExecutionError> {
+        let (id, amount) = values::unpack_coin(coin)?;
+        object_runtime_mut!(self)?
+            .delete_id(id)
+            .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
+        Ok(amount)
     }
 }
 
@@ -296,4 +422,9 @@ fn load_byte_value(env: &Env, value: &ByteValue, ty: Type) -> Result<Value, Exec
     };
     todo!("charge gas");
     Ok(loaded)
+}
+
+fn copy_value(value: &Value) -> Result<Value, ExecutionError> {
+    todo!("charge gas");
+    values::copy_value(value)
 }

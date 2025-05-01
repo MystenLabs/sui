@@ -1,12 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::atomic::AtomicU64;
-
 use crate::static_programmable_transactions::{env::Env, typing::ast::Type};
 use move_binary_format::errors::PartialVMError;
 use move_core_types::account_address::AccountAddress;
-use move_trace_format::value;
 use move_vm_types::values::{self, Struct, VMValueCast, Value};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
@@ -57,21 +54,65 @@ pub fn read_ref(value: Value) -> Result<Value, ExecutionError> {
     value.read_ref().map_err(iv("read ref"))
 }
 
+/// This function will invariant violation on an invalid cast
+pub fn cast<V>(value: Value) -> Result<V, ExecutionError>
+where
+    Value: VMValueCast<V>,
+{
+    value.cast().map_err(iv("cast"))
+}
+
 //**************************************************************************************************
 // Construction
 //**************************************************************************************************
 
 pub fn uid(address: AccountAddress) -> Value {
-    Value::struct_(Struct::pack([Value::address(address)]))
+    // UID { ID { address } }
+    Value::struct_(Struct::pack([Value::struct_(Struct::pack([
+        Value::address(address),
+    ]))]))
 }
 
 pub fn receiving(id: ObjectID, version: SequenceNumber) -> Value {
     Value::struct_(Struct::pack([uid(id.into()), Value::u64(version.into())]))
 }
 
+pub fn balance(amount: u64) -> Value {
+    // Balance { amount }
+    Value::struct_(Struct::pack([Value::u64(amount)]))
+}
+
+/// The uid _must_ be registered by the object runtime before being called
+pub fn coin(id: ObjectID, amount: u64) -> Value {
+    Value::struct_(Struct::pack([uid(id.into()), balance(amount)]))
+}
+
+pub fn vec_pack(ty: Type, values: Vec<Value>) -> Result<Value, ExecutionError> {
+    let ty = {
+        ty;
+        // ty to vm type
+        todo!("LOADING")
+    };
+    let vec = values::Vector::pack(&ty, values).map_err(iv("pack"))?;
+    Ok(Value::struct_(Struct::pack([vec])))
+}
+
 //**************************************************************************************************
 // Coin Functions
 //**************************************************************************************************
+
+pub fn unpack_coin(coin: Value) -> Result<(ObjectID, u64), ExecutionError> {
+    let [id, balance] = unpack(coin)?;
+    // unpack UID
+    let [id] = unpack(id)?;
+    // unpack ID
+    let [id] = unpack(id)?;
+    let id: AccountAddress = id.cast().map_err(iv("cast"))?;
+    // unpack Balance
+    let [balance] = unpack(balance)?;
+    let balance: u64 = balance.cast().map_err(iv("cast"))?;
+    Ok((ObjectID::from(id), balance))
+}
 
 pub fn coin_value(coin_ref: Value) -> Result<u64, ExecutionError> {
     let balance_value_ref = borrow_coin_balance_value(coin_ref)?;
@@ -129,6 +170,13 @@ fn borrow_coin_balance_value(coin_ref: Value) -> Result<Value, ExecutionError> {
     let balance = coin_ref.borrow_field(1).map_err(iv("borrow field"))?;
     let balance: values::StructRef = balance.cast().map_err(iv("cast"))?;
     balance.borrow_field(0).map_err(iv("borrow field"))
+}
+
+fn unpack<const N: usize>(value: Value) -> Result<[Value; N], ExecutionError> {
+    let value: values::Struct = value.cast().map_err(iv("cast"))?;
+    let unpacked = value.unpack().map_err(iv("unpack"))?.collect::<Vec<_>>();
+    assert_invariant!(unpacked.len() == N, "Expected {N} fields, got {unpacked:?}");
+    Ok(unpacked.try_into().unwrap())
 }
 
 const fn iv(case: &str) -> impl FnOnce(PartialVMError) -> ExecutionError + use<'_> {

@@ -1476,6 +1476,12 @@ macro_rules! impl_vm_value_cast_boxed {
     };
 }
 
+impl VMValueCast<Value> for Value {
+    fn cast(self) -> PartialVMResult<Value> {
+        Ok(self)
+    }
+}
+
 impl_vm_value_cast!(u8, U8);
 impl_vm_value_cast!(u16, U16);
 impl_vm_value_cast!(u32, U32);

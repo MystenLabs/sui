@@ -10,10 +10,10 @@ use crate::{
         typing::ast as T,
     },
 };
+use move_core_types::account_address::AccountAddress;
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_types::values::Value;
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Instant};
-use sui_move_natives::object_runtime::ObjectRuntime;
 use sui_types::{
     base_types::TxContext,
     error::{ExecutionError, ExecutionErrorKind},
@@ -84,7 +84,7 @@ where
         timings.push(ExecutionTiming::Success(start.elapsed()));
     }
     // Save loaded objects table in case we fail in post execution
-    let object_runtime: &ObjectRuntime = context.object_runtime()?;
+    let object_runtime = context.object_runtime()?;
     // We still need to record the loaded child objects for replay
     // Record the objects loaded at runtime (dynamic fields + received) for
     // storage rebate calculation.
@@ -109,32 +109,46 @@ where
 fn execute_command(
     context: &mut Context,
     command: T::Command,
-    result_tys: T::ResultType,
+    _result_tys: T::ResultType,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
 ) -> Result<(), ExecutionError> {
     let result = match command {
-        T::Command::MoveCall(move_call) => todo!(),
-        T::Command::TransferObjects(items, _) => todo!(),
+        T::Command::MoveCall(move_call) => {
+            let T::MoveCall {
+                function,
+                arguments,
+            } = *move_call;
+            let arguments = context.arguments(arguments)?;
+            context.vm_move_call(function, arguments)?
+        }
+        T::Command::TransferObjects(objects, recipient) => {
+            let object_tys = objects.iter().map(|(_, ty)| ty.clone()).collect::<Vec<_>>();
+            let object_values: Vec<Value> = context.arguments(objects)?;
+            let recipient: AccountAddress = context.argument(recipient)?;
+            assert_invariant!(
+                object_values.len() == object_tys.len(),
+                "object values and types mismatch"
+            );
+            for (object_value, ty) in object_values.into_iter().zip(object_tys) {
+                // TODO should we just call a Move function?
+                context.transfer_object(recipient, ty, object_value)?;
+            }
+            vec![]
+        }
         T::Command::SplitCoins(_, coin, amounts) => {
+            // TODO should we just call a Move function?
             let coin_ref: Value = context.argument(coin)?;
             let amount_values: Vec<u64> = context.arguments(amounts)?;
-            let total: u64 = 0;
+            let mut total: u64 = 0;
             for amount in &amount_values {
-                let Some(new_total) = total.checked_add(amount) else {
+                let Some(new_total) = total.checked_add(*amount) else {
                     return Err(ExecutionError::from_kind(
                         ExecutionErrorKind::CoinBalanceOverflow,
                     ));
                 };
                 total = new_total;
-                // fp_ensure!(
-                //     self.value >= amount,
-                //     ExecutionError::new_with_source(
-                //         ExecutionErrorKind::InsufficientCoinBalance,
-                //         format!("balance: {} required: {}", self.value, amount)
-                //     )
-                // );
             }
-            let coin_value = values::coin_value(context.copy_value(&coin_ref))?;
+            let coin_value = values::coin_value(context.copy_value(&coin_ref)?)?;
             fp_ensure!(
                 coin_value >= total,
                 ExecutionError::new_with_source(
@@ -142,14 +156,45 @@ fn execute_command(
                     format!("balance: {coin_value} required: {total}")
                 )
             );
-            let coins = amounts.into_iter().map(|a| context.new_coin(a)).collect();
+            values::coin_subtract_balance(coin_ref, total)?;
+            let coins = amount_values
+                .into_iter()
+                .map(|a| context.new_coin(a))
+                .collect::<Result<_, _>>()?;
             coins
         }
-        T::Command::MergeCoins(_, _, items) => todo!(),
-        T::Command::MakeMoveVec(_, items) => todo!(),
-        T::Command::Publish(items, object_ids) => todo!("RUNTIME"),
-        T::Command::Upgrade(items, object_ids, object_id, _) => todo!("RUNTIME"),
+        T::Command::MergeCoins(_, target, coins) => {
+            // TODO should we just call a Move function?
+            let target_ref: Value = context.argument(target)?;
+            let coins = context.arguments(coins)?;
+            let amounts = coins
+                .into_iter()
+                .map(|coin| context.destroy_coin(coin))
+                .collect::<Result<Vec<_>, _>>()?;
+            let mut additional: u64 = 0;
+            for amount in amounts {
+                let Some(new_additional) = additional.checked_add(amount) else {
+                    return Err(ExecutionError::from_kind(
+                        ExecutionErrorKind::CoinBalanceOverflow,
+                    ));
+                };
+                additional = new_additional;
+            }
+            let target_value = values::coin_value(context.copy_value(&target_ref)?)?;
+            fp_ensure!(
+                target_value.checked_add(additional).is_some(),
+                ExecutionError::from_kind(ExecutionErrorKind::CoinBalanceOverflow,)
+            );
+            values::coin_add_balance(target_ref, additional)?;
+            vec![]
+        }
+        T::Command::MakeMoveVec(ty, items) => {
+            let items: Vec<Value> = context.arguments(items)?;
+            vec![values::vec_pack(ty, items)?]
+        }
+        T::Command::Publish(..) => todo!("RUNTIME"),
+        T::Command::Upgrade(..) => todo!("RUNTIME"),
     };
-    context.result(result);
+    context.result(result)?;
     Ok(())
 }
