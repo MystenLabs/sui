@@ -5,90 +5,56 @@ use std::collections::BTreeSet;
 use std::collections::HashMap;
 
 use anyhow::Result;
-use sui_data_ingestion_core::Worker;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointContents;
-use tokio::sync::Mutex;
 use tracing::error;
 
-use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::transaction::{Command, TransactionDataAPI, TransactionKind};
 
 use crate::handlers::AnalyticsHandler;
 use crate::tables::TransactionEntry;
 use crate::FileType;
 
-pub struct TransactionHandler {
-    pub(crate) state: Mutex<State>,
-}
-
-pub(crate) struct State {
-    pub(crate) transactions: Vec<TransactionEntry>,
-}
-
-#[async_trait::async_trait]
-impl Worker for TransactionHandler {
-    type Result = ();
-
-    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
-        let CheckpointData {
-            checkpoint_summary,
-            transactions: checkpoint_transactions,
-            checkpoint_contents,
-            ..
-        } = checkpoint_data;
-        let transaction_positions = compute_transaction_positions(checkpoint_contents);
-        let mut state = self.state.lock().await;
-        for checkpoint_transaction in checkpoint_transactions {
-            self.process_transaction(
-                checkpoint_summary.epoch,
-                checkpoint_summary.sequence_number,
-                checkpoint_summary.timestamp_ms,
-                checkpoint_transaction,
-                &checkpoint_transaction.effects,
-                &transaction_positions,
-                &mut state,
-            )?;
-        }
-        Ok(())
-    }
-}
-
-#[async_trait::async_trait]
-impl AnalyticsHandler<TransactionEntry> for TransactionHandler {
-    async fn read(&self) -> Result<Vec<TransactionEntry>> {
-        let mut state = self.state.lock().await;
-        Ok(std::mem::take(&mut state.transactions))
-    }
-
-    fn file_type(&self) -> Result<FileType> {
-        Ok(FileType::Transaction)
-    }
-
-    fn name(&self) -> &str {
-        "transaction"
-    }
-}
+#[derive(Clone)]
+pub struct TransactionHandler {}
 
 impl TransactionHandler {
     pub fn new() -> Self {
-        let state = Mutex::new(State {
-            transactions: vec![],
-        });
-        TransactionHandler { state }
+        TransactionHandler {}
     }
-    fn process_transaction(
+
+    async fn process_transactions(
         &self,
-        epoch: u64,
-        checkpoint: u64,
-        timestamp_ms: u64,
-        checkpoint_transaction: &CheckpointTransaction,
-        effects: &TransactionEffects,
-        transaction_positions: &HashMap<TransactionDigest, usize>,
-        state: &mut State,
-    ) -> Result<()> {
+        checkpoint_data: &CheckpointData,
+    ) -> Result<Vec<TransactionEntry>> {
+        let txn_len = checkpoint_data.transactions.len();
+        let mut transactions = Vec::with_capacity(txn_len);
+
+        for idx in 0..txn_len {
+            let transaction = self.process_transaction(idx, checkpoint_data).await?;
+            transactions.push(transaction);
+        }
+
+        Ok(transactions)
+    }
+
+    async fn process_transaction(
+        &self,
+        tx_idx: usize,
+        checkpoint: &CheckpointData,
+    ) -> Result<TransactionEntry> {
+        let transaction = &checkpoint.transactions[tx_idx];
+        let epoch = checkpoint.checkpoint_summary.epoch;
+        let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
+        let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
+
+        let transaction_positions = compute_transaction_positions(&checkpoint.checkpoint_contents);
+
+        let checkpoint_transaction = transaction;
+        let effects = &transaction.effects;
+
         let transaction = &checkpoint_transaction.transaction;
         let txn_data = transaction.transaction_data();
         let gas_object = effects.gas_object();
@@ -164,7 +130,7 @@ impl TransactionHandler {
         let effects_json = serde_json::to_string(&checkpoint_transaction.effects)?;
         let entry = TransactionEntry {
             transaction_digest,
-            checkpoint,
+            checkpoint: checkpoint_seq,
             epoch,
             timestamp_ms,
 
@@ -216,8 +182,26 @@ impl TransactionHandler {
             events_bcs_length,
             signatures_bcs_length,
         };
-        state.transactions.push(entry);
-        Ok(())
+        Ok(entry)
+    }
+}
+
+#[async_trait::async_trait]
+impl AnalyticsHandler<TransactionEntry> for TransactionHandler {
+    async fn process_checkpoint(
+        &self,
+        checkpoint_data: &CheckpointData,
+    ) -> Result<Vec<TransactionEntry>> {
+        let transactions = self.process_transactions(checkpoint_data).await?;
+        Ok(transactions)
+    }
+
+    fn file_type(&self) -> Result<FileType> {
+        Ok(FileType::Transaction)
+    }
+
+    fn name(&self) -> &'static str {
+        "transaction"
     }
 }
 
@@ -236,8 +220,8 @@ fn compute_transaction_positions(
 #[cfg(test)]
 mod tests {
     use crate::handlers::transaction_handler::TransactionHandler;
+    use crate::handlers::AnalyticsHandler;
     use simulacrum::Simulacrum;
-    use sui_data_ingestion_core::Worker;
     use sui_types::base_types::SuiAddress;
     use sui_types::storage::ReadStore;
 
@@ -259,8 +243,7 @@ mod tests {
                 .unwrap(),
         )?;
         let txn_handler = TransactionHandler::new();
-        txn_handler.process_checkpoint(&checkpoint_data).await?;
-        let transaction_entries = txn_handler.state.lock().await.transactions.clone();
+        let transaction_entries = txn_handler.process_checkpoint(&checkpoint_data).await?;
         assert_eq!(transaction_entries.len(), 1);
         let db_txn = transaction_entries.first().unwrap();
 

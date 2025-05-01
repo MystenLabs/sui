@@ -7,132 +7,114 @@ use anyhow::Result;
 use move_core_types::annotated_value::MoveValue;
 use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 
-use sui_data_ingestion_core::Worker;
-use tokio::sync::Mutex;
-
 use crate::handlers::AnalyticsHandler;
 use crate::package_store::PackageCache;
 use crate::tables::EventEntry;
 use crate::FileType;
 use sui_json_rpc_types::type_and_fields_from_move_event_data;
-use sui_types::digests::TransactionDigest;
-use sui_types::effects::TransactionEvents;
 use sui_types::event::Event;
 use sui_types::full_checkpoint_content::CheckpointData;
 
+#[derive(Clone)]
 pub struct EventHandler {
-    state: Mutex<State>,
     package_cache: Arc<PackageCache>,
 }
 
-struct State {
-    events: Vec<EventEntry>,
-}
+impl EventHandler {
+    pub fn new(package_cache: Arc<PackageCache>) -> Self {
+        Self { package_cache }
+    }
 
-#[async_trait::async_trait]
-impl Worker for EventHandler {
-    type Result = ();
+    async fn process_transactions(
+        &self,
+        checkpoint_data: &CheckpointData,
+    ) -> Result<Vec<EventEntry>> {
+        let txn_len = checkpoint_data.transactions.len();
+        let mut entries = Vec::new();
 
-    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
-        let CheckpointData {
-            checkpoint_summary,
-            transactions: checkpoint_transactions,
-            ..
-        } = checkpoint_data;
-        let mut state = self.state.lock().await;
-        for checkpoint_transaction in checkpoint_transactions {
-            for object in checkpoint_transaction.output_objects.iter() {
+        for idx in 0..txn_len {
+            let transaction = &checkpoint_data.transactions[idx];
+
+            // Update package cache with output objects
+            for object in transaction.output_objects.iter() {
                 self.package_cache.update(object)?;
             }
-            if let Some(events) = &checkpoint_transaction.events {
-                self.process_events(
-                    checkpoint_summary.epoch,
-                    checkpoint_summary.sequence_number,
-                    checkpoint_transaction.transaction.digest(),
-                    checkpoint_summary.timestamp_ms,
-                    events,
-                    &mut state,
-                )
-                .await?;
-            }
-            if checkpoint_summary.end_of_epoch_data.is_some() {
-                self.package_cache
-                    .resolver
-                    .package_store()
-                    .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
+
+            if let Some(events) = &transaction.events {
+                let epoch = checkpoint_data.checkpoint_summary.epoch;
+                let checkpoint_seq = checkpoint_data.checkpoint_summary.sequence_number;
+                let timestamp_ms = checkpoint_data.checkpoint_summary.timestamp_ms;
+                let digest = transaction.transaction.digest();
+
+                for (idx, event) in events.data.iter().enumerate() {
+                    let Event {
+                        package_id,
+                        transaction_module,
+                        sender,
+                        type_,
+                        contents,
+                    } = event;
+                    let layout = self
+                        .package_cache
+                        .resolver
+                        .type_layout(move_core_types::language_storage::TypeTag::Struct(
+                            Box::new(type_.clone()),
+                        ))
+                        .await?;
+                    let move_value = MoveValue::simple_deserialize(contents, &layout)?;
+                    let (_, event_json) = type_and_fields_from_move_event_data(move_value)?;
+                    let entry = EventEntry {
+                        transaction_digest: digest.base58_encode(),
+                        event_index: idx as u64,
+                        checkpoint: checkpoint_seq,
+                        epoch,
+                        timestamp_ms,
+                        sender: sender.to_string(),
+                        package: package_id.to_string(),
+                        module: transaction_module.to_string(),
+                        event_type: type_.to_string(),
+                        bcs: "".to_string(),
+                        bcs_length: contents.len() as u64,
+                        event_json: event_json.to_string(),
+                    };
+
+                    entries.push(entry);
+                }
             }
         }
-        Ok(())
+
+        Ok(entries)
     }
 }
 
 #[async_trait::async_trait]
 impl AnalyticsHandler<EventEntry> for EventHandler {
-    async fn read(&self) -> Result<Vec<EventEntry>> {
-        let mut state = self.state.lock().await;
-        Ok(std::mem::take(&mut state.events))
+    async fn process_checkpoint(
+        &self,
+        checkpoint_data: &CheckpointData,
+    ) -> Result<Vec<EventEntry>> {
+        let results = self.process_transactions(checkpoint_data).await?;
+
+        // If end of epoch, evict package store
+        if checkpoint_data
+            .checkpoint_summary
+            .end_of_epoch_data
+            .is_some()
+        {
+            self.package_cache
+                .resolver
+                .package_store()
+                .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
+        }
+
+        Ok(results)
     }
 
     fn file_type(&self) -> Result<FileType> {
         Ok(FileType::Event)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "event"
-    }
-}
-
-impl EventHandler {
-    pub fn new(package_cache: Arc<PackageCache>) -> Self {
-        let state = State { events: vec![] };
-        Self {
-            state: Mutex::new(state),
-            package_cache,
-        }
-    }
-    async fn process_events(
-        &self,
-        epoch: u64,
-        checkpoint: u64,
-        digest: &TransactionDigest,
-        timestamp_ms: u64,
-        events: &TransactionEvents,
-        state: &mut State,
-    ) -> Result<()> {
-        for (idx, event) in events.data.iter().enumerate() {
-            let Event {
-                package_id,
-                transaction_module,
-                sender,
-                type_,
-                contents,
-            } = event;
-            let layout = self
-                .package_cache
-                .resolver
-                .type_layout(move_core_types::language_storage::TypeTag::Struct(
-                    Box::new(type_.clone()),
-                ))
-                .await?;
-            let move_value = MoveValue::simple_deserialize(contents, &layout)?;
-            let (_, event_json) = type_and_fields_from_move_event_data(move_value)?;
-            let entry = EventEntry {
-                transaction_digest: digest.base58_encode(),
-                event_index: idx as u64,
-                checkpoint,
-                epoch,
-                timestamp_ms,
-                sender: sender.to_string(),
-                package: package_id.to_string(),
-                module: transaction_module.to_string(),
-                event_type: type_.to_string(),
-                bcs: "".to_string(),
-                bcs_length: contents.len() as u64,
-                event_json: event_json.to_string(),
-            };
-
-            state.events.push(entry);
-        }
-        Ok(())
     }
 }

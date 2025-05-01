@@ -5,12 +5,10 @@ use anyhow::Result;
 use fastcrypto::encoding::{Base64, Encoding};
 use std::collections::HashMap;
 use std::sync::Arc;
-use sui_data_ingestion_core::Worker;
 use sui_indexer::errors::IndexerError;
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::{TypeTag, SYSTEM_PACKAGE_ADDRESSES};
 use tap::tap::TapFallible;
-use tokio::sync::Mutex;
 use tracing::warn;
 
 use sui_indexer::types::owner_to_owner_info;
@@ -18,7 +16,7 @@ use sui_json_rpc_types::SuiMoveValue;
 use sui_types::base_types::ObjectID;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::dynamic_field::{DynamicFieldName, DynamicFieldType};
-use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::object::Object;
 
 use crate::handlers::AnalyticsHandler;
@@ -26,76 +24,55 @@ use crate::package_store::PackageCache;
 use crate::tables::DynamicFieldEntry;
 use crate::FileType;
 
+#[derive(Clone)]
 pub struct DynamicFieldHandler {
-    state: Mutex<State>,
     package_cache: Arc<PackageCache>,
-}
-
-struct State {
-    dynamic_fields: Vec<DynamicFieldEntry>,
-}
-
-#[async_trait::async_trait]
-impl Worker for DynamicFieldHandler {
-    type Result = ();
-
-    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
-        let CheckpointData {
-            checkpoint_summary,
-            transactions: checkpoint_transactions,
-            ..
-        } = checkpoint_data;
-        let mut state = self.state.lock().await;
-        for checkpoint_transaction in checkpoint_transactions {
-            for object in checkpoint_transaction.output_objects.iter() {
-                self.package_cache.update(object)?;
-            }
-            self.process_transaction(
-                checkpoint_summary.epoch,
-                checkpoint_summary.sequence_number,
-                checkpoint_summary.timestamp_ms,
-                checkpoint_transaction,
-                &mut state,
-            )
-            .await?;
-            if checkpoint_summary.end_of_epoch_data.is_some() {
-                self.package_cache
-                    .resolver
-                    .package_store()
-                    .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
-            }
-        }
-        Ok(())
-    }
-}
-
-#[async_trait::async_trait]
-impl AnalyticsHandler<DynamicFieldEntry> for DynamicFieldHandler {
-    async fn read(&self) -> Result<Vec<DynamicFieldEntry>> {
-        let mut state = self.state.lock().await;
-        let cloned = state.dynamic_fields.clone();
-        state.dynamic_fields.clear();
-        Ok(cloned)
-    }
-
-    fn file_type(&self) -> Result<FileType> {
-        Ok(FileType::DynamicField)
-    }
-
-    fn name(&self) -> &str {
-        "dynamic_field"
-    }
 }
 
 impl DynamicFieldHandler {
     pub fn new(package_cache: Arc<PackageCache>) -> Self {
-        let state = State {
-            dynamic_fields: vec![],
-        };
-        Self {
-            state: Mutex::new(state),
-            package_cache,
+        Self { package_cache }
+    }
+
+    async fn process_transactions(
+        &self,
+        checkpoint_data: &CheckpointData,
+    ) -> Result<Vec<DynamicFieldEntry>> {
+        let txn_len = checkpoint_data.transactions.len();
+        let mut entries = Vec::new();
+
+        for idx in 0..txn_len {
+            let transaction = &checkpoint_data.transactions[idx];
+
+            // Update package cache with output objects
+            for object in transaction.output_objects.iter() {
+                self.package_cache.update(object)?;
+            }
+
+            let all_objects: HashMap<_, _> = transaction
+                .output_objects
+                .iter()
+                .map(|x| (x.id(), x.clone()))
+                .collect();
+
+            // Process each output object for dynamic fields
+            for object in transaction.output_objects.iter() {
+                if let Some(entry) = self
+                    .process_dynamic_field(
+                        checkpoint_data.checkpoint_summary.epoch,
+                        checkpoint_data.checkpoint_summary.sequence_number,
+                        checkpoint_data.checkpoint_summary.timestamp_ms,
+                        object,
+                        &all_objects,
+                    )
+                    .await?
+                {
+                    entries.push(entry);
+                }
+            }
         }
+
+        Ok(entries)
     }
     async fn process_dynamic_field(
         &self,
@@ -104,15 +81,13 @@ impl DynamicFieldHandler {
         timestamp_ms: u64,
         object: &Object,
         all_written_objects: &HashMap<ObjectID, Object>,
-        state: &mut State,
-    ) -> Result<()> {
+    ) -> Result<Option<DynamicFieldEntry>> {
         let move_obj_opt = object.data.try_as_move();
-        // Skip if not a move object
         let Some(move_object) = move_obj_opt else {
-            return Ok(());
+            return Ok(None);
         };
         if !move_object.type_().is_dynamic_field() {
-            return Ok(());
+            return Ok(None);
         }
 
         let layout = self
@@ -139,7 +114,7 @@ impl DynamicFieldHandler {
         let name_json = serde_json::to_string(&name)?;
         let (_owner_type, owner_id) = owner_to_owner_info(&object.owner);
         let Some(parent_id) = owner_id else {
-            return Ok(());
+            return Ok(None);
         };
         let entry = match type_ {
             DynamicFieldType::DynamicField => DynamicFieldEntry {
@@ -184,34 +159,38 @@ impl DynamicFieldHandler {
                 }
             }
         };
-        state.dynamic_fields.push(entry);
-        Ok(())
+        Ok(Some(entry))
+    }
+}
+
+#[async_trait::async_trait]
+impl AnalyticsHandler<DynamicFieldEntry> for DynamicFieldHandler {
+    async fn process_checkpoint(
+        &self,
+        checkpoint_data: &CheckpointData,
+    ) -> Result<Vec<DynamicFieldEntry>> {
+        let results = self.process_transactions(checkpoint_data).await?;
+
+        // If end of epoch, evict package store
+        if checkpoint_data
+            .checkpoint_summary
+            .end_of_epoch_data
+            .is_some()
+        {
+            self.package_cache
+                .resolver
+                .package_store()
+                .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
+        }
+
+        Ok(results)
     }
 
-    async fn process_transaction(
-        &self,
-        epoch: u64,
-        checkpoint: u64,
-        timestamp_ms: u64,
-        checkpoint_transaction: &CheckpointTransaction,
-        state: &mut State,
-    ) -> Result<()> {
-        let all_objects: HashMap<_, _> = checkpoint_transaction
-            .output_objects
-            .iter()
-            .map(|x| (x.id(), x.clone()))
-            .collect();
-        for object in checkpoint_transaction.output_objects.iter() {
-            self.process_dynamic_field(
-                epoch,
-                checkpoint,
-                timestamp_ms,
-                object,
-                &all_objects,
-                state,
-            )
-            .await?;
-        }
-        Ok(())
+    fn file_type(&self) -> Result<FileType> {
+        Ok(FileType::DynamicField)
+    }
+
+    fn name(&self) -> &'static str {
+        "dynamic_field"
     }
 }
