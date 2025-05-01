@@ -41,8 +41,6 @@ impl AnalyticsHandler<CheckpointEntry> for CheckpointHandler {
     }
 }
 
-// Since checkpoint processing is basically a reduction over all transactions
-// and only produces a single entry, we don't need to use the parallel processing framework
 fn process_checkpoint_data(checkpoint_data: &CheckpointData) -> CheckpointEntry {
     let CheckpointSummary {
         epoch,
