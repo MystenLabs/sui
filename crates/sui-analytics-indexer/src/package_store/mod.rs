@@ -10,6 +10,7 @@ use std::ops::Deref;
 use std::path::Path;
 use std::result::Result as StdResult;
 use std::sync::Arc;
+use std::sync::Mutex;
 use sui_package_resolver::{
     error::Error as ResolverError, Package, PackageStore, PackageStoreWithLruCache, Resolver,
     Result,
@@ -21,7 +22,6 @@ use sui_types::{
     SYSTEM_PACKAGE_ADDRESSES,
 };
 use thiserror::Error;
-use tokio::sync::Mutex;
 use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::{DBMapUtils, Map, TypedStoreError};
 
@@ -157,12 +157,12 @@ pub struct CompositeStore {
 
 impl CompositeStore {
     /// Lazily obtain (or create) the cache for the current epoch.
-    async fn epoch_cache(&self) -> Arc<PackageStoreWithLruCache<LocalDBPackageStore>> {
-        let mut caches = self.epochs.lock().await;
+    fn epoch_cache(&self) -> Arc<PackageStoreWithLruCache<LocalDBPackageStore>> {
+        let mut caches = self.epochs.lock().unwrap();
         if let Some(cache) = caches.get(&self.epoch) {
             return cache.clone();
         }
-        // Not present – create a fresh cache backed by the same LocalDB store.
+        // Not present — create a fresh cache backed by the same LocalDB store.
         let cache = Arc::new(PackageStoreWithLruCache::new(self.base.clone()));
         caches.put(self.epoch, cache.clone());
         cache
@@ -173,7 +173,7 @@ impl CompositeStore {
 impl PackageStore for CompositeStore {
     async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
         if SYSTEM_PACKAGE_ADDRESSES.contains(&id) {
-            let cache = self.epoch_cache().await;
+            let cache = self.epoch_cache();
             return cache.fetch(id).await;
         }
         self.global.fetch(id).await
