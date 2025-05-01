@@ -196,12 +196,12 @@ pub struct DependencyGraphBuilder<Progress: Write> {
     /// Logger
     pub progress_output: Progress,
     /// A chain of visited dependencies used for cycle detection
-    visited_dependencies: VecDeque<(PackageIdentifier, PM::InternalDependency)>,
+    pub visited_dependencies: VecDeque<(PackageIdentifier, PM::InternalDependency)>,
     /// Installation directory for compiled artifacts (from BuildConfig).
-    install_dir: PathBuf,
+    pub install_dir: PathBuf,
     /// Set of implicit dependencies to add to every package
     /// Invariant: all dependencies are Internal deps with dep_override set
-    implicit_deps: Dependencies,
+    pub implicit_deps: Dependencies,
 }
 
 impl<Progress: Write> DependencyGraphBuilder<Progress> {
