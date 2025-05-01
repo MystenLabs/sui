@@ -12,13 +12,17 @@ pub mod external_protocol;
 
 use std::{
     collections::BTreeMap,
-    fmt::Debug,
+    fmt::{self, Debug},
+    marker::PhantomData,
     path::PathBuf,
     process::{Command, Stdio},
 };
 
 use derive_where::derive_where;
-use serde::{Deserialize, Serialize};
+use serde::{
+    de::{self, MapAccess, SeqAccess, Visitor},
+    Deserialize, Deserializer, Serialize,
+};
 
 use crate::{
     errors::{GitError, PackageError, PackageResult, ResolverError},
@@ -31,7 +35,7 @@ use git::{GitRepo, PinnedGitDependency, UnpinnedGitDependency};
 use local::LocalDependency;
 
 /// Phantom type to represent pinned dependencies (see [PinnedDependency])
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Pinned;
 
 /// Phantom type to represent unpinned dependencies (see [ManifestDependencyInfo])
@@ -45,10 +49,9 @@ pub struct Unpinned;
 /// that are not part of the ManifestDependencyInfo. We separate these partly because these things
 /// are not serialized to the Lock file. See [crate::package::manifest] for the full representation
 /// of an entry in the `dependencies` table.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 #[derive_where(Clone, PartialEq)]
-#[serde(untagged)]
-pub enum ManifestDependencyInfo<F: MoveFlavor> {
+pub enum ManifestDependencyInfo<F: MoveFlavor + ?Sized> {
     Git(UnpinnedGitDependency),
     External(ExternalDependency),
     Local(LocalDependency),
@@ -64,13 +67,97 @@ pub enum ManifestDependencyInfo<F: MoveFlavor> {
 /// development, because the developer would expect to use the latest code without having to
 /// explicitly repin, but we need to convert them to persistent dependencies when we publish since
 /// we want to retain that information for source verification.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 #[derive_where(Clone)]
-#[serde(untagged)]
 pub enum PinnedDependencyInfo<F: MoveFlavor + ?Sized> {
     Git(PinnedGitDependency),
     Local(LocalDependency),
     FlavorSpecific(F::FlavorDependency<Pinned>),
+}
+
+// UNPINNED
+impl<'de, F> Deserialize<'de> for ManifestDependencyInfo<F>
+where
+    F: MoveFlavor + ?Sized,
+    F::FlavorDependency<Unpinned>: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let data = toml::value::Value::deserialize(deserializer)?;
+
+        if let Some(tbl) = data.as_table() {
+            if tbl.contains_key("git") {
+                let dep: UnpinnedGitDependency = toml::value::Value::deserialize(data)
+                    .map_err(de::Error::custom)?
+                    .try_into()
+                    .map_err(de::Error::custom)?;
+                Ok(ManifestDependencyInfo::Git(dep))
+            } else if tbl.contains_key("r") {
+                let dep = toml::Value::try_from(data)
+                    .map_err(de::Error::custom)?
+                    .try_into()
+                    .map_err(de::Error::custom)?;
+                Ok(ManifestDependencyInfo::External(dep))
+            } else if tbl.contains_key("local") {
+                let dep = toml::Value::try_from(data)
+                    .map_err(de::Error::custom)?
+                    .try_into()
+                    .map_err(de::Error::custom)?;
+                Ok(ManifestDependencyInfo::Local(dep))
+            } else {
+                let dep = toml::Value::try_from(data)
+                    .map_err(de::Error::custom)?
+                    .try_into()
+                    .map_err(de::Error::custom)?;
+
+                Ok(ManifestDependencyInfo::FlavorSpecific(dep))
+            }
+        } else {
+            Err(de::Error::custom("Manifest dependency must be a table"))
+        }
+    }
+}
+
+// PINNED
+
+impl<'de, F> Deserialize<'de> for PinnedDependencyInfo<F>
+where
+    F: MoveFlavor + ?Sized,
+    F::FlavorDependency<Pinned>: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let data = toml::value::Value::deserialize(deserializer)?;
+
+        if let Some(tbl) = data.as_table() {
+            if tbl.contains_key("git") {
+                let dep: PinnedGitDependency = toml::value::Value::deserialize(data)
+                    .map_err(de::Error::custom)?
+                    .try_into()
+                    .map_err(de::Error::custom)?;
+                Ok(PinnedDependencyInfo::Git(dep))
+            } else if tbl.contains_key("local") {
+                let dep = toml::Value::try_from(data)
+                    .map_err(de::Error::custom)?
+                    .try_into()
+                    .map_err(de::Error::custom)?;
+                Ok(PinnedDependencyInfo::Local(dep))
+            } else {
+                let dep = toml::Value::try_from(data)
+                    .map_err(de::Error::custom)?
+                    .try_into()
+                    .map_err(de::Error::custom)?;
+
+                Ok(PinnedDependencyInfo::FlavorSpecific(dep))
+            }
+        } else {
+            Err(de::Error::custom("Manifest dependency must be a table"))
+        }
+    }
 }
 
 /// Split up deps into kinds. The union of the output sets is the same as [deps]
@@ -170,36 +257,3 @@ fn fetch<F: MoveFlavor>(
 
     todo!()
 }
-
-// Check dependency is a Move project
-// fn check_is_move_project<F: MoveFlavor>(
-//     deps: DependencySet<PinnedDependencyInfo<F>>,
-// ) -> PackageResult<()> {
-//     for (defaults, overrides) in deps.iter() {
-//         for (env, dep) in overrides {
-//             check_is_move_project_impl::<F>(defaults, env, dep)?;
-//         }
-//     }
-//     let move_toml_path = repo_fs_path.join(path).join("Move.toml");
-//     debug!("Move toml path: {:?}", move_toml_path.display());
-//     let cmd = Command::new("git")
-//         .current_dir(&repo_fs_path)
-//         .arg("ls-tree")
-//         .arg("HEAD")
-//         .arg(&move_toml_path)
-//         .stdin(Stdio::null())
-//         .output()
-//         .map_err(|e| {
-//             PackageError::Git(GitError::generic(
-//                 "Failed to call git ls-tree: {e}".to_string(),
-//             ))
-//         })?;
-//
-//     if cmd.stdout.is_empty() {
-//         return Err(PackageError::Git(GitError::not_move_project(
-//             &self.repo_url,
-//         )));
-//     }
-//
-//     Ok(())
-// }

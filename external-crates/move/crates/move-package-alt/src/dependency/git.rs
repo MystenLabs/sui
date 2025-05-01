@@ -83,7 +83,7 @@ pub struct GitRepo {
 
 // Custom error type for SHA validation
 #[derive(Debug)]
-enum ShaError {
+pub enum ShaError {
     InvalidLength(usize),
     InvalidCharacters,
 }
