@@ -126,6 +126,10 @@ interface IObject {
 	"""
 	digest: String!
 	"""
+	Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
+	"""
+	objectAt(version: UInt53, rootVersion: UInt53, checkpoint: UInt53): Object
+	"""
 	The Base64-encoded BCS serialization of this object, as an `Object`.
 	"""
 	objectBcs: Base64
@@ -160,6 +164,12 @@ type MovePackage implements IAddressable & IObject {
 	32-byte hash that identifies the package's contents, encoded in Base58.
 	"""
 	digest: String!
+	"""
+	Fetch the package as an object with the same ID, at a different version, root version bound, or checkpoint.
+	
+	If no additional bound is provided, the latest version of this object is fetched at the latest checkpoint.
+	"""
+	objectAt(version: UInt53, rootVersion: UInt53, checkpoint: UInt53): Object
 	"""
 	The Base64-encoded BCS serialization of this package, as an `Object`.
 	"""
@@ -204,6 +214,12 @@ type Object implements IAddressable & IObject {
 	Attempts to convert the object into a MovePackage.
 	"""
 	asMovePackage: MovePackage
+	"""
+	Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
+	
+	If no additional bound is provided, the latest version of this object is fetched at the latest checkpoint.
+	"""
+	objectAt(version: UInt53, rootVersion: UInt53, checkpoint: UInt53): Object
 	"""
 	The Base64-encoded BCS serialization of this object, as an `Object`.
 	"""
