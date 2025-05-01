@@ -172,66 +172,6 @@ mod tests {
 
     type HarnessEndpoint = Endpoint<ReadHalf<SimplexStream>, WriteHalf<SimplexStream>>;
 
-    fn create_harness() -> (HarnessEndpoint, impl AsyncBufRead, impl AsyncWrite) {
-        tracing_subscriber::fmt::fmt()
-            .with_env_filter(EnvFilter::from_default_env())
-            .without_time()
-            .try_init();
-
-        let (mut endpoint_input, mut output) = simplex(4096);
-        let (mut input, mut endpoint_output) = simplex(4096);
-        (
-            Endpoint::new(input, output),
-            BufReader::new(endpoint_input),
-            endpoint_output,
-        )
-    }
-
-    struct TestHarness {
-        endpoint: Option<HarnessEndpoint>,
-        endpoint_input: ReadHalf<SimplexStream>,
-        endpoint_output: WriteHalf<SimplexStream>,
-    }
-
-    impl TestHarness {
-        fn new() -> Self {
-            let (mut endpoint_input, mut output) = simplex(4096);
-            let (mut input, mut endpoint_output) = simplex(4096);
-            Self {
-                endpoint: Some(Endpoint::new(input, output)),
-                endpoint_input,
-                endpoint_output,
-            }
-        }
-
-        /// Calls `self.endpoint.call(method, data)` in the background and returns the result;
-        /// consumes self.endpoint
-        async fn call(
-            &mut self,
-            method: impl AsRef<str>,
-            data: TestData1,
-        ) -> Result<TestData2, JsonRpcError> {
-            todo!()
-        }
-
-        /// Calls `self.endpoint.batch_call(method, data)` and returns the result; consumes self.endpoint
-        async fn batch_call(
-            &mut self,
-            method: impl AsRef<str>,
-            data: Vec<TestData1>,
-        ) -> Result<Vec<TestData2>, JsonRpcError> {
-            todo!()
-        }
-
-        async fn receive(&mut self) -> std::io::Result<String> {
-            todo!()
-        }
-
-        async fn send(&mut self, data: String) -> std::io::Result<()> {
-            todo!()
-        }
-    }
-
     #[derive(Serialize, Deserialize, PartialEq, Eq)]
     struct TestData1 {
         data1: String,
@@ -258,12 +198,61 @@ mod tests {
         }
     }
 
-    /// Read a line from [output] and decode it as a json value
+    fn create_harness() -> (HarnessEndpoint, impl AsyncBufRead, impl AsyncWrite) {
+        tracing_subscriber::fmt::fmt()
+            .with_env_filter(EnvFilter::from_default_env())
+            .without_time()
+            .try_init();
+
+        let (mut endpoint_input, mut output) = simplex(4096);
+        let (mut input, mut endpoint_output) = simplex(4096);
+        (
+            Endpoint::new(input, output),
+            BufReader::new(endpoint_input),
+            endpoint_output,
+        )
+    }
+
+    /// Spawn a task to call `endpoint.call(method, data)`
+    async fn call(
+        mut endpoint: HarnessEndpoint,
+        method: &'static str,
+        data: TestData1,
+    ) -> Result<TestData2, JsonRpcError> {
+        tokio::spawn(async move {
+            debug!("calling");
+            endpoint
+                .call::<TestData1, TestData2>(method.to_string(), data)
+                .await
+        })
+        .await
+        .unwrap()
+    }
+
+    /// Spawn a task to execute `endpoint.batch_call(method, data)`
+    async fn batch_call(
+        mut endpoint: HarnessEndpoint,
+        method: &'static str,
+        data: Vec<TestData1>,
+    ) -> Result<Vec<TestData2>, JsonRpcError> {
+        tokio::spawn(async move {
+            debug!("calling");
+            endpoint
+                .batch_call::<TestData1, TestData2>(method.to_string(), data)
+                .await
+                .map(|it| it.into_iter().collect())
+        })
+        .await
+        .unwrap()
+    }
+
+    /// Read a line from [output] and compare it to [expected]
     async fn expect_request(
         mut output: impl AsyncBufRead + Unpin + Send + 'static,
         expected: serde_json::Value,
     ) {
         tokio::spawn(async move {
+            debug!("reading");
             let mut line = String::new();
             output.read_line(&mut line).await.unwrap();
             let json: serde_json::Value = serde_json::from_str(&line).unwrap();
@@ -273,10 +262,15 @@ mod tests {
         .unwrap();
     }
 
-    async fn respond(mut input: impl AsyncWrite + Unpin + Send, value: serde_json::Value) {
+    /// Send [value] on [input]
+    async fn respond(
+        mut input: impl AsyncWrite + Unpin + Send + 'static,
+        value: serde_json::Value,
+    ) {
         let mut output = value.to_string();
         output.push('\n');
 
+        debug!("writing {output}");
         input.write_all(output.as_bytes()).await.unwrap();
     }
 
@@ -285,25 +279,17 @@ mod tests {
     async fn test_call_normal() {
         let (mut endpoint, mut output, mut input) = create_harness();
 
-        let call = endpoint.call::<TestData1, TestData2>("method_name", TestData1::new());
+        let call = call(endpoint, "method_name", TestData1::new());
         expect_request(
             output,
-            json!({
-                "jsonrpc": "2.0",
-                "method": "method_name",
-                "id": 0,
-                "params": TestData1::new()
-            }),
+            json!({"jsonrpc": "2.0", "method": "method_name", "id": 0, "params": TestData1::new()}),
         );
 
         respond(
             input,
-            json!({
-                "jsonrpc": "2.0",
-                "id": 0,
-                "result": TestData2::new()
-            }),
-        );
+            json!({ "jsonrpc": "2.0", "id": 0, "result": TestData2::new() }),
+        )
+        .await;
         assert_eq!(call.await.unwrap(), TestData2::new());
     }
 
@@ -312,63 +298,180 @@ mod tests {
     async fn test_call_error() {
         let (mut endpoint, mut output, mut input) = create_harness();
 
-        let call = endpoint.call::<TestData1, TestData2>("method_name", TestData1::new());
-
+        let call = call(endpoint, "method_name", TestData1::new());
         respond(
             input,
-            json!({
-                "jsonrpc": "2.0",
-                "id": 0,
-                "error": { "code": 1, "message": "error message", "data": null },
-            }),
-        );
+            json!({"jsonrpc":"2.0","id":0,"error":{"code": 2, "message": "error message", "data": {}}}),
+        )
+        .await;
 
-        let Err(JsonRpcError::RemoteError(error)) = call.await else {
-            panic!()
-        };
-        assert_eq!(
-            error,
-            RemoteError {
-                code: 1,
-                message: "error message".to_string(),
-                data: None
-            }
-        );
+        call.await.unwrap_err();
     }
 
     /// [Endpoint::batch_call] has correct end-to-end behavior with only normal responses (in
     /// unsorted order)
     #[tokio::test]
     async fn test_batch_call_normal() {
-        let response = json!([
-            {"jsonrpc":"2.0","id":0,"result":{"local":"for default"}},
-            {"jsonrpc":"2.0","id":1,"result":{"local":"for mainnet"}}
-        ]);
-        todo!()
+        let (mut endpoint, mut output, mut input) = create_harness();
+
+        let data: Vec<TestData1> = vec![
+            TestData1 {
+                data1: "v0".to_string(),
+            },
+            TestData1 {
+                data1: "v1".to_string(),
+            },
+        ];
+
+        let call = batch_call(endpoint, "method_name", data);
+        expect_request(
+            output,
+            json!([
+                { "jsonrpc": "2.0", "method": "method_name", "id": 0, "params": { "data1": "v0" }},
+                { "jsonrpc": "2.0", "method": "method_name", "id": 1, "params": { "data1": "v1" }},
+            ]),
+        );
+
+        respond(
+            input,
+            json!([
+                // Note: out of order; should be ok
+                { "jsonrpc": "2.0", "id": 1, "result": { "data2": "r1" }},
+                { "jsonrpc": "2.0", "id": 0, "result": { "data2": "r0" }},
+            ]),
+        )
+        .await;
+
+        let expected: Vec<TestData2> = vec![
+            TestData2 {
+                data2: "r0".to_string(),
+            },
+            TestData2 {
+                data2: "r1".to_string(),
+            },
+        ];
+
+        assert_eq!(call.await.unwrap(), expected);
     }
 
     /// [Endpoint::batch_call] has correct end-to-end behavior with a mix of normal and error
     /// responses
     #[tokio::test]
     async fn test_batch_call_error() {
-        todo!()
+        let (mut endpoint, mut output, mut input) = create_harness();
+
+        let call = batch_call(
+            endpoint,
+            "method_name",
+            vec![TestData1::new(), TestData1::new()],
+        );
+
+        let error = RemoteError {
+            code: 4,
+            message: "error message".to_string(),
+            data: None,
+        };
+
+        respond(
+            input,
+            json!([
+                { "jsonrpc": "2.0", "id": 0, "result": TestData2::new()},
+                { "jsonrpc": "2.0", "id": 1, "error": error},
+            ]),
+        )
+        .await;
+
+        let JsonRpcError::RemoteError(received_error) = call.await.unwrap_err() else {
+            panic!("expected error")
+        };
+
+        assert_eq!(received_error, error);
     }
 
     /// [Endpoint::batch_call] fails gracefully with an incomplete batch response
     #[tokio::test]
     async fn test_batch_missing_results() {
-        todo!()
+        let (mut endpoint, mut output, mut input) = create_harness();
+
+        let call = batch_call(
+            endpoint,
+            "method_name",
+            vec![TestData1::new(), TestData1::new()],
+        );
+
+        respond(
+            input,
+            json!([
+                { "jsonrpc": "2.0", "id": 0, "result": TestData2::new()},
+            ]),
+        )
+        .await;
+
+        let JsonRpcError::IncorrectQueryResults = call.await.unwrap_err() else {
+            panic!("expected incorrect query result response")
+        };
     }
 
     /// [Endpoint::call] fails gracefully with incorrectly serialized responses
     #[tokio::test]
     async fn test_call_bad_data() {
-        todo!()
+        let (mut endpoint, mut output, mut input) = create_harness();
+
+        let call = call(endpoint, "method_name", TestData1::new());
+        respond(
+            input,
+            json!({"jsonrpc":"some garbage","id":0,"result":TestData2::new()}),
+        )
+        .await;
+
+        let JsonRpcError::SerializationError(_) = call.await.unwrap_err() else {
+            panic!("expected deserialization failure")
+        };
     }
 
     /// [Endpoint::batch_call] fails gracefully with incorrectly serialized responses
     #[tokio::test]
     async fn test_batch_bad_data() {
-        todo!()
+        let (mut endpoint, mut output, mut input) = create_harness();
+
+        let call = batch_call(
+            endpoint,
+            "method_name",
+            vec![TestData1::new(), TestData1::new()],
+        );
+        respond(
+            input,
+            json!({"jsonrpc":"2.0","id":0,"result":TestData2::new()}),
+        )
+        .await;
+
+        let JsonRpcError::SerializationError(_) = call.await.unwrap_err() else {
+            panic!("expected deserialization failure")
+        };
+    }
+
+    /// [Endpoint::batch_call] fails gracefully with duplicate reponses
+    #[tokio::test]
+    async fn test_batch_duplicate_results() {
+        let (mut endpoint, mut output, mut input) = create_harness();
+
+        let call = batch_call(
+            endpoint,
+            "method_name",
+            vec![TestData1::new(), TestData1::new()],
+        );
+
+        respond(
+            input,
+            json!([
+                { "jsonrpc": "2.0", "id": 1, "result": { "data2": "r1" }},
+                { "jsonrpc": "2.0", "id": 1, "result": { "data2": "extra" }},
+            ]),
+        )
+        .await;
+
+        let JsonRpcError::IncorrectQueryResults = call.await.unwrap_err() else {
+            panic!("expected incorrect results error")
+        };
     }
 }
