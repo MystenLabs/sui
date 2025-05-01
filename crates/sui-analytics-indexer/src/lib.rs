@@ -336,7 +336,9 @@ impl TaskContext {
         }
     }
 
-    async fn create_processor_for_handler<T: Serialize + Clone + ParquetSchema + Send + Sync + 'static>(
+    async fn create_processor_for_handler<
+        T: Serialize + Clone + ParquetSchema + Send + Sync + 'static,
+    >(
         self,
         handler: Box<dyn AnalyticsHandler<T>>,
     ) -> Result<Processor> {
