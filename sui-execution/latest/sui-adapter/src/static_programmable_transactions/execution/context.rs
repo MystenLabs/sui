@@ -6,6 +6,7 @@ use std::{cell::RefCell, collections::BTreeMap, rc::Rc, sync::Arc};
 use crate::{
     adapter::new_native_extensions,
     gas_charger::GasCharger,
+    gas_meter::SuiGasMeter,
     static_programmable_transactions::{
         env::Env,
         execution::values::{self, ByteValue, InputObjectMetadata, InputObjectValue, InputValue},
@@ -21,7 +22,10 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag},
 };
 use move_vm_runtime::native_extensions::NativeContextExtensions;
-use move_vm_types::values::{VMValueCast, Value};
+use move_vm_types::{
+    gas::GasMeter,
+    values::{VMValueCast, Value},
+};
 use sui_move_natives::object_runtime::{self, get_all_uids, max_event_error, ObjectRuntime};
 use sui_types::{
     base_types::{ObjectID, TxContext},
@@ -49,6 +53,20 @@ macro_rules! object_runtime_mut {
             .native_extensions
             .get_mut::<ObjectRuntime>()
             .map_err(|e| $context.env.convert_vm_error(e.finish(Location::Undefined)))
+    }};
+}
+
+macro_rules! charge_gas_ {
+    ($gas_charger:expr, $env:expr, $case:ident, $value_view:expr) => {{
+        SuiGasMeter($gas_charger.move_gas_status_mut())
+            .$case($value_view)
+            .map_err(|e| $env.convert_vm_error(e.finish(Location::Undefined)))
+    }};
+}
+
+macro_rules! charge_gas {
+    ($context:ident, $case:ident, $value_view:expr) => {{
+        charge_gas_!($context.gas_charger, $context.env, $case, $value_view)
     }};
 }
 
@@ -99,12 +117,19 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let mut input_object_map = BTreeMap::new();
         let inputs = inputs
             .into_iter()
-            .map(|(arg, ty)| load_input_arg(&env, &mut input_object_map, arg, ty))
+            .map(|(arg, ty)| load_input_arg(gas_charger, env, &mut input_object_map, arg, ty))
             .collect::<Result<Vec<_>, ExecutionError>>()?;
         let gas = match gas_charger.gas_coin() {
             Some(gas_coin) => {
                 let ty = env.gas_coin_type()?;
-                let gas = load_object_arg_impl(&env, &mut input_object_map, gas_coin, true, ty)?;
+                let gas = load_object_arg_impl(
+                    gas_charger,
+                    env,
+                    &mut input_object_map,
+                    gas_coin,
+                    true,
+                    ty,
+                )?;
                 let Some(gas_ref) = gas.value.as_ref() else {
                     invariant_violation!("Gas object should be a populated coin")
                 };
@@ -206,7 +231,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                     InputValue::Fixed(v) => v,
                     InputValue::Bytes(bytes) => match usage {
                         UsageKind::Move | UsageKind::Borrow(true) => {
-                            let value = load_byte_value(self.env, bytes, ty)?;
+                            let value = load_byte_value(self.gas_charger, self.env, bytes, ty)?;
                             *v = InputValue::Fixed(Some(value));
                             match v {
                                 InputValue::Fixed(v) => v,
@@ -214,7 +239,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                             }
                         }
                         UsageKind::Copy | UsageKind::Borrow(false) => {
-                            return load_byte_value(self.env, bytes, ty);
+                            return load_byte_value(self.gas_charger, self.env, bytes, ty);
                         }
                     },
                 }
@@ -224,7 +249,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             UsageKind::Move => unwrap!(value_opt.take(), "use after move"),
             UsageKind::Copy => {
                 let value = unwrap!(value_opt.as_ref(), "use after move");
-                copy_value(value)?
+                copy_value(self.gas_charger, self.env, value)?
             }
             UsageKind::Borrow(_) => {
                 let value = unwrap!(value_opt.as_ref(), "use after move");
@@ -251,9 +276,9 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 self.location(UsageKind::Borrow(is_mut), location, ty)
             }
             T::Argument_::Read(usage) => {
-                let value = self.location_usage(usage, ty)?;
-                todo!("charge gas");
-                values::read_ref(value)
+                let reference = self.location_usage(usage, ty)?;
+                charge_gas!(self, charge_read_ref, &reference)?;
+                values::read_ref(reference)
             }
         }
     }
@@ -315,9 +340,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
     }
 
-    pub fn copy_value(&self, value: &Value) -> Result<Value, ExecutionError> {
-        todo!("charge gas");
-        values::copy_value(value)
+    pub fn copy_value(&mut self, value: &Value) -> Result<Value, ExecutionError> {
+        copy_value(self.gas_charger, self.env, value)
     }
 
     pub fn new_coin(&mut self, amount: u64) -> Result<Value, ExecutionError> {
@@ -338,6 +362,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
 }
 
 fn load_input_arg(
+    meter: &mut GasCharger,
     env: &Env,
     input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     arg: T::InputArg,
@@ -352,12 +377,13 @@ fn load_input_arg(
             let T::InputType::Fixed(ty) = ty else {
                 invariant_violation!("Expected fixed type for object arg");
             };
-            InputValue::Object(load_object_arg(env, input_object_map, arg, ty)?)
+            InputValue::Object(load_object_arg(meter, env, input_object_map, arg, ty)?)
         }
     })
 }
 
 fn load_object_arg(
+    meter: &mut GasCharger,
     env: &Env,
     input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     arg: T::ObjectArg,
@@ -365,10 +391,11 @@ fn load_object_arg(
 ) -> Result<InputObjectValue, ExecutionError> {
     let id = arg.id();
     let is_mutable_input = arg.is_mutable();
-    load_object_arg_impl(env, input_object_map, id, is_mutable_input, ty)
+    load_object_arg_impl(meter, env, input_object_map, id, is_mutable_input, ty)
 }
 
 fn load_object_arg_impl(
+    meter: &mut GasCharger,
     env: &Env,
     input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     id: ObjectID,
@@ -406,7 +433,9 @@ fn load_object_arg_impl(
         },
     );
 
+    todo!("should we charge gas here?");
     let v = values::load_value(env, move_obj.contents(), ty)?;
+    charge_gas_!(meter, env, charge_copy_loc, &v)?;
     let input_object_value = InputObjectValue {
         object_metadata,
         value: Some(v),
@@ -415,16 +444,21 @@ fn load_object_arg_impl(
     Ok(input_object_value)
 }
 
-fn load_byte_value(env: &Env, value: &ByteValue, ty: Type) -> Result<Value, ExecutionError> {
+fn load_byte_value(
+    meter: &mut GasCharger,
+    env: &Env,
+    value: &ByteValue,
+    ty: Type,
+) -> Result<Value, ExecutionError> {
     let loaded = match value {
         ByteValue::Pure(bytes) => values::load_value(env, bytes, ty)?,
         ByteValue::Receiving { id, version } => values::receiving(*id, *version),
     };
-    todo!("charge gas");
+    charge_gas_!(meter, env, charge_copy_loc, &loaded)?;
     Ok(loaded)
 }
 
-fn copy_value(value: &Value) -> Result<Value, ExecutionError> {
-    todo!("charge gas");
+fn copy_value(meter: &mut GasCharger, env: &Env, value: &Value) -> Result<Value, ExecutionError> {
+    charge_gas_!(meter, env, charge_copy_loc, value)?;
     values::copy_value(value)
 }
