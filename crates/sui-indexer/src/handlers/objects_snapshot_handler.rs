@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use std::sync::Arc;
 use mysten_metrics::get_metrics;
 use mysten_metrics::metered_channel::Sender;
 use mysten_metrics::spawn_monitored_task;
+use std::sync::Arc;
 use sui_data_ingestion_core::Worker;
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio_util::sync::CancellationToken;

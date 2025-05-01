@@ -3,7 +3,6 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use std::sync::Arc;
 use diesel::{dsl::sql, BoolExpressionMethods, ExpressionMethods};
 use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
 use dotenvy::dotenv;
@@ -11,6 +10,7 @@ use mysten_service::metrics::start_basic_prometheus_server;
 use prometheus::Registry;
 use std::env;
 use std::path::PathBuf;
+use std::sync::Arc;
 use sui_data_ingestion_core::{
     DataIngestionMetrics, FileProgressStore, IndexerExecutor, ReaderOptions, Worker, WorkerPool,
 };

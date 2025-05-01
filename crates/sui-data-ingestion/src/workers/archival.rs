@@ -10,8 +10,8 @@ use object_store::path::Path;
 use object_store::ObjectStore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::sync::Arc;
 use std::io::Cursor;
+use std::sync::Arc;
 use sui_archival::{
     create_file_metadata_from_bytes, finalize_manifest, read_manifest_from_bytes, FileType,
     Manifest, CHECKPOINT_FILE_MAGIC, SUMMARY_FILE_MAGIC,
