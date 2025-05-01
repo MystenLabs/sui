@@ -1,24 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
-
+use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
+use crate::FileType;
 use anyhow::{anyhow, Result};
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout, MoveValue};
 use move_core_types::language_storage::{StructTag, TypeTag};
-use sui_data_ingestion_core::Worker;
-
+use std::collections::{BTreeMap, BTreeSet};
 use sui_package_resolver::{PackageStore, Resolver};
 use sui_types::base_types::ObjectID;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::object::{Object, Owner};
 use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionDataAPI;
-
-use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
-use crate::FileType;
 
 pub mod checkpoint_handler;
 pub mod df_handler;
@@ -38,14 +35,15 @@ const WRAPPED_INDEXING_DISALLOW_LIST: [&str; 4] = [
 ];
 
 #[async_trait::async_trait]
-pub trait AnalyticsHandler<S>: Worker<Result = ()> {
-    /// Read back rows which are ready to be persisted. This function
-    /// will be invoked by the analytics processor after every call to
-    /// process_checkpoint
-    async fn read(&self) -> Result<Vec<S>>;
+pub trait AnalyticsHandler<S>: Send + Sync {
+    /// Process a checkpoint and return an iterator over the rows.
+    /// This function is invoked by the analytics processor for each checkpoint.
+    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<Vec<S>>
+    where
+        S: Send + Sync;
     /// Type of data being written by this processor i.e. checkpoint, object, etc
     fn file_type(&self) -> Result<FileType>;
-    fn name(&self) -> &str;
+    fn name(&self) -> &'static str;
 }
 
 fn initial_shared_version(object: &Object) -> Option<u64> {
