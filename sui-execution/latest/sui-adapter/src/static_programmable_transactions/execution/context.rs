@@ -28,7 +28,7 @@ use move_vm_types::{
 };
 use sui_move_natives::object_runtime::{self, get_all_uids, max_event_error, ObjectRuntime};
 use sui_types::{
-    base_types::{ObjectID, TxContext},
+    base_types::{ObjectID, TxContext, TxContextKind},
     error::ExecutionError,
     execution::ExecutionResults,
     metrics::LimitsMetrics,
@@ -307,8 +307,14 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     pub fn vm_move_call(
         &mut self,
         function: T::LoadedFunction,
-        args: Vec<Value>,
+        mut args: Vec<Value>,
     ) -> Result<Vec<Value>, ExecutionError> {
+        match function.tx_context {
+            TxContextKind::None => (),
+            TxContextKind::Mutable | TxContextKind::Immutable => {
+                args.push(values::tx_context(self.tx_context.borrow().digest())?)
+            }
+        }
         let storage_id = &function.storage_id;
         let (index, last_instr) = {
             &function;

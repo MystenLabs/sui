@@ -7,6 +7,7 @@ use move_core_types::account_address::AccountAddress;
 use move_vm_types::values::{self, Struct, VMValueCast, Value};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
+    digests::TransactionDigest,
     error::ExecutionError,
     object::Owner,
 };
@@ -95,6 +96,26 @@ pub fn vec_pack(ty: Type, values: Vec<Value>) -> Result<Value, ExecutionError> {
     };
     let vec = values::Vector::pack(&ty, values).map_err(iv("pack"))?;
     Ok(Value::struct_(Struct::pack([vec])))
+}
+
+pub fn tx_context(digest: TransactionDigest) -> Result<Value, ExecutionError> {
+    // public struct TxContext has drop {
+    //     sender: address,
+    //     tx_hash: vector<u8>,
+    //     epoch: u64,
+    //     epoch_timestamp_ms: u64,
+    //     ids_created: u64,
+    // }
+    Ok(Value::struct_(Struct::pack([
+        Value::address(AccountAddress::ZERO),
+        vec_pack(
+            Type::U8,
+            digest.inner().iter().copied().map(Value::u8).collect(),
+        )?,
+        Value::u64(0),
+        Value::u64(0),
+        Value::u64(0),
+    ])))
 }
 
 //**************************************************************************************************
