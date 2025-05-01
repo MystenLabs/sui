@@ -42,3 +42,6 @@ path = "src/mocks/mock-resolver-2.rs"
 [[test]]
 name = "test_runner"
 harness = false
+
+[[test]]
+name = "jsonrpc_tests"

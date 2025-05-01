@@ -11,13 +11,8 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use thiserror::Error;
 use tokio::io::{AsyncRead, AsyncWrite, BufReader, BufWriter};
 
-mod client;
-mod server;
+pub mod client;
+pub mod server;
 pub mod types;
 
 pub use client::Endpoint;
-
-#[cfg(test)]
-mod test {
-    // TODO
-}

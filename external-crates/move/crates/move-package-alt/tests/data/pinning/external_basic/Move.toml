@@ -1,0 +1,13 @@
+[package]
+name = "example"
+edition = "2024.beta"
+license = "Apache-2.0"
+authors = ["Move Team"]
+
+[environments]
+mainnet = "mainnet-id"
+
+[dependencies.mock.r.mock-resolver]
+stderr = "foo"
+output.mainnet-id.result = { local = "for_mainnet" }
+output.default.result = { local = "for_default" }
