@@ -39,9 +39,7 @@ impl Worker for PackageCacheWorker {
 
                 tokio::spawn(async move {
                     let transaction = &checkpoint_data.transactions[idx];
-                    for object in &transaction.output_objects {
-                        cache.update(object)?;
-                    }
+                    cache.update_batch(&transaction.output_objects)?;
                     Ok(())
                 })
             })

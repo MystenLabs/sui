@@ -64,8 +64,16 @@ impl PackageStoreTables {
     }
 
     fn update(&self, object: &Object) -> StdResult<(), Error> {
+        self.update_batch(std::iter::once(object))
+    }
+
+    fn update_batch<'a, I>(&self, objects: I) -> StdResult<(), Error>
+    where
+        I: IntoIterator<Item = &'a Object>,
+    {
         let mut batch = self.packages.batch();
-        batch.insert_batch(&self.packages, std::iter::once((object.id(), object)))?;
+        batch.insert_batch(&self.packages, objects.into_iter().map(|o| (o.id(), o)))?;
+
         batch.write()?;
         Ok(())
     }
@@ -89,6 +97,18 @@ impl LocalDBPackageStore {
         if object.data.try_as_package().is_some() {
             self.tables.update(object)?;
         }
+        Ok(())
+    }
+
+    fn update_batch<'a, I>(&self, objects: I) -> StdResult<(), Error>
+    where
+        I: IntoIterator<Item = &'a Object>,
+    {
+        let filtered = objects
+            .into_iter()
+            .filter(|o| o.data.try_as_package().is_some());
+
+        self.tables.update_batch(filtered)?;
         Ok(())
     }
 
@@ -215,6 +235,14 @@ impl PackageCache {
 
     pub fn update(&self, object: &Object) -> Result<()> {
         self.base_store.update(object)?;
+        Ok(())
+    }
+
+    fn update_batch<'a, I>(&self, objects: I) -> Result<()>
+    where
+        I: IntoIterator<Item = &'a Object>,
+    {
+        self.base_store.update_batch(objects)?;
         Ok(())
     }
 
