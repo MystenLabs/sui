@@ -57,6 +57,14 @@ use super::{
         desc = "32-byte hash that identifies the object's contents, encoded in Base58.",
     ),
     field(
+        name = "object_at",
+        arg(name = "version", ty = "Option<UInt53>"),
+        arg(name = "root_version", ty = "Option<UInt53>"),
+        arg(name = "checkpoint", ty = "Option<UInt53>"),
+        ty = "Result<Option<Object>, RpcError<Error>>",
+        desc = "Fetch the object with the same ID, at a different version, root version bound, or checkpoint.",
+    ),
+    field(
         name = "object_bcs",
         ty = "Result<Option<Base64>, RpcError>",
         desc = "The Base64-encoded BCS serialization of this object, as an `Object`."
@@ -172,6 +180,21 @@ impl Object {
         ctx: &Context<'_>,
     ) -> Result<Option<MovePackage>, RpcError<Error>> {
         MovePackage::from_object(self, ctx).await
+    }
+
+    /// Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
+    ///
+    /// If no additional bound is provided, the latest version of this object is fetched at the latest checkpoint.
+    async fn object_at(
+        &self,
+        ctx: &Context<'_>,
+        version: Option<UInt53>,
+        root_version: Option<UInt53>,
+        checkpoint: Option<UInt53>,
+    ) -> Result<Option<Self>, RpcError<Error>> {
+        ObjectImpl::from(self)
+            .object_at(ctx, version, root_version, checkpoint)
+            .await
     }
 
     /// The Base64-encoded BCS serialization of this object, as an `Object`.
@@ -488,6 +511,23 @@ impl ObjectImpl<'_> {
 
     pub(crate) fn digest(&self) -> String {
         Base58::encode(self.0.digest.inner())
+    }
+
+    pub(crate) async fn object_at(
+        &self,
+        ctx: &Context<'_>,
+        version: Option<UInt53>,
+        root_version: Option<UInt53>,
+        checkpoint: Option<UInt53>,
+    ) -> Result<Option<Object>, RpcError<Error>> {
+        let key = ObjectKey {
+            address: self.0.super_.address.into(),
+            version,
+            root_version,
+            at_checkpoint: checkpoint,
+        };
+
+        Object::by_key(ctx, self.0.super_.scope.clone(), key).await
     }
 
     pub(crate) async fn object_bcs(

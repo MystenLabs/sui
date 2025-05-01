@@ -80,6 +80,21 @@ impl MovePackage {
         ObjectImpl::from(&self.super_).digest()
     }
 
+    /// Fetch the package as an object with the same ID, at a different version, root version bound, or checkpoint.
+    ///
+    /// If no additional bound is provided, the latest version of this object is fetched at the latest checkpoint.
+    pub(crate) async fn object_at(
+        &self,
+        ctx: &Context<'_>,
+        version: Option<UInt53>,
+        root_version: Option<UInt53>,
+        checkpoint: Option<UInt53>,
+    ) -> Result<Option<Object>, RpcError<object::Error>> {
+        ObjectImpl::from(&self.super_)
+            .object_at(ctx, version, root_version, checkpoint)
+            .await
+    }
+
     /// The Base64-encoded BCS serialization of this package, as an `Object`.
     pub(crate) async fn object_bcs(
         &self,
