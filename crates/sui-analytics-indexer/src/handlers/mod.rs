@@ -82,7 +82,7 @@ where
             let processor = processor.clone();
             tokio::spawn(async move { processor.process_transaction(idx, &checkpoint).await })
         })
-        .buffered(num_cpus::get());
+        .buffered(num_cpus::get() * 4);
 
     while let Some(join_res) = stream.next().await {
         match join_res {

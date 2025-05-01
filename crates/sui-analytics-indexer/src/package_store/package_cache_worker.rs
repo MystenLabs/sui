@@ -46,7 +46,7 @@ impl Worker for PackageCacheWorker {
                     Ok(())
                 })
             })
-            .buffered(num_cpus::get());
+            .buffered(num_cpus::get() * 4);
 
         while let Some(join_res) = stream.next().await {
             match join_res {
