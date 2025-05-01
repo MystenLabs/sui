@@ -69,7 +69,7 @@ where
     let mut context = Context::new(env, metrics, tx_context, gas_charger, inputs)?;
     for (idx, (command, tys)) in commands.into_iter().enumerate() {
         let start = Instant::now();
-        if let Err(err) = execute_command(&mut context, command, tys, trace_builder_opt) {
+        if let Err(err) = execute_command(&mut context, command, tys, trace_builder_opt.as_mut()) {
             let object_runtime = context.object_runtime()?;
             // We still need to record the loaded child objects for replay
             let loaded_runtime_objects = object_runtime.loaded_runtime_objects();
@@ -110,7 +110,7 @@ fn execute_command(
     context: &mut Context,
     command: T::Command,
     _result_tys: T::ResultType,
-    trace_builder_opt: &mut Option<MoveTraceBuilder>,
+    trace_builder_opt: Option<&mut MoveTraceBuilder>,
 ) -> Result<(), ExecutionError> {
     let result = match command {
         T::Command::MoveCall(move_call) => {
@@ -119,7 +119,7 @@ fn execute_command(
                 arguments,
             } = *move_call;
             let arguments = context.arguments(arguments)?;
-            context.vm_move_call(function, arguments)?
+            context.vm_move_call(function, arguments, trace_builder_opt)?
         }
         T::Command::TransferObjects(objects, recipient) => {
             let object_tys = objects.iter().map(|(_, ty)| ty.clone()).collect::<Vec<_>>();

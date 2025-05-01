@@ -21,6 +21,7 @@ use move_core_types::{
     account_address::AccountAddress,
     language_storage::{ModuleId, StructTag},
 };
+use move_trace_format::format::MoveTraceBuilder;
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 use move_vm_types::{
     gas::GasMeter,
@@ -308,6 +309,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         &mut self,
         function: T::LoadedFunction,
         mut args: Vec<Value>,
+        trace_builder_opt: Option<&mut MoveTraceBuilder>,
     ) -> Result<Vec<Value>, ExecutionError> {
         match function.tx_context {
             TxContextKind::None => (),
