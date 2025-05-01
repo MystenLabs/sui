@@ -407,7 +407,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
 
     /// Given all dependencies from the parent manifest file, collects all the sub-graphs
     /// representing these dependencies (both internally and externally resolved).
-    fn collect_graphs(
+    pub fn collect_graphs(
         &mut self,
         parent: &PM::DependencyKind,
         parent_pkg_id: PackageIdentifier,
@@ -584,7 +584,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
 
     /// Computes a digest of all dependencies in a manifest file (or digest of empty list if there
     /// are no dependencies).
-    fn dependency_digest(
+    pub fn dependency_digest(
         &mut self,
         dep_lock_files: Vec<LockFile>,
         dev_dep_lock_files: Vec<LockFile>,
@@ -604,7 +604,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
 
 impl DependencyGraph {
     /// Main driver from sub-graph pruning based on information about overrides.
-    fn prune_subgraph(
+    pub fn prune_subgraph(
         &mut self,
         root_package_name: PM::PackageName,
         dep_id: PackageIdentifier,
@@ -1567,7 +1567,7 @@ impl DependencyGraph {
 
     /// Checks that there isn't a cycle between packages in the dependency graph.  Returns `Ok(())`
     /// if there is not, or an error describing the cycle if there is.
-    fn check_acyclic(&self) -> Result<()> {
+    pub fn check_acyclic(&self) -> Result<()> {
         let mut cyclic_components = algo::kosaraju_scc(&self.package_graph)
             .into_iter()
             .filter(|scc| scc.len() != 1 || self.package_graph.contains_edge(scc[0], scc[0]));
@@ -1587,7 +1587,7 @@ impl DependencyGraph {
     /// Adds the transitive closure of `DependencyMode::Always` edges reachable from the root package
     /// to the `always_deps` set.  Assumes that if a package is already in the graph's `always_deps`
     /// set, then the sub-graph reachable from it has already been explored.
-    fn discover_always_deps(&mut self) {
+    pub fn discover_always_deps(&mut self) {
         let mut frontier = vec![self.root_package_id];
         while let Some(package) = frontier.pop() {
             let new_frontier = self.always_deps.insert(package);
