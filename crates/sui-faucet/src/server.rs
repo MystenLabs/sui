@@ -79,11 +79,10 @@ pub fn create_wallet_context(
 ) -> Result<WalletContext, anyhow::Error> {
     let wallet_conf = config_dir.join(SUI_CLIENT_CONFIG);
     info!("Initialize wallet from config path: {:?}", wallet_conf);
-    WalletContext::new(
-        &wallet_conf,
-        Some(Duration::from_secs(timeout_secs)),
-        Some(1000),
-    )
+    WalletContext::new(&wallet_conf).map(|ctx| {
+        ctx.with_request_timeout(Duration::from_secs(timeout_secs))
+            .with_max_concurrent_requests(1000)
+    })
 }
 
 async fn handle_error(error: BoxError) -> impl IntoResponse {

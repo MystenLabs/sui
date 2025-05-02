@@ -140,6 +140,17 @@ impl IndexerArgs {
     }
 }
 
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
+pub struct SuiEnvConfig {
+    /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
+    #[clap(long = "client.config")]
+    config: Option<PathBuf>,
+    /// The Sui environment to use. This must be present in the current config file.
+    #[clap(long = "client.env")]
+    env: Option<String>,
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -280,9 +291,8 @@ pub enum SuiCommand {
     /// Client for interacting with the Sui network.
     #[clap(name = "client")]
     Client {
-        /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
-        #[clap(long = "client.config")]
-        config: Option<PathBuf>,
+        #[clap(flatten)]
+        config: SuiEnvConfig,
         #[clap(subcommand)]
         cmd: Option<SuiClientCommands>,
         /// Return command outputs in json format.
@@ -312,10 +322,8 @@ pub enum SuiCommand {
         /// Path to a package which the command should be run with respect to.
         #[clap(long = "path", short = 'p', global = true)]
         package_path: Option<PathBuf>,
-        /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
-        /// Only used when the `--dump-bytecode-as-base64` is set.
-        #[clap(long = "client.config")]
-        config: Option<PathBuf>,
+        #[clap(flatten)]
+        config: SuiEnvConfig,
         /// Package build options
         #[clap(flatten)]
         build_config: BuildConfig,
@@ -440,10 +448,15 @@ impl SuiCommand {
                 json,
                 accept_defaults,
             } => {
-                let config_path = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
+                let config_path = config
+                    .config
+                    .unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config_path, accept_defaults).await?;
                 if let Some(cmd) = cmd {
-                    let mut context = WalletContext::new(&config_path, None, None)?;
+                    let mut context = WalletContext::new(&config_path)?;
+                    if let Some(env_override) = config.env {
+                        context = context.with_env_override(env_override);
+                    }
                     if let Ok(client) = context.get_client().await {
                         if let Err(e) = client.check_api_version() {
                             eprintln!("{}", format!("[warning] {e}").yellow().bold());
@@ -466,7 +479,7 @@ impl SuiCommand {
             } => {
                 let config_path = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config_path, accept_defaults).await?;
-                let mut context = WalletContext::new(&config_path, None, None)?;
+                let mut context = WalletContext::new(&config_path)?;
                 if let Some(cmd) = cmd {
                     if let Ok(client) = context.get_client().await {
                         if let Err(e) = client.check_api_version() {
@@ -500,13 +513,22 @@ impl SuiCommand {
                             // for tests it's useful to ignore the chain id!
                             (None, None)
                         } else {
-                            let config =
-                                client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
+                            let config = client_config
+                                .config
+                                .unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                             prompt_if_no_config(&config, false).await?;
-                            let context = WalletContext::new(&config, None, None)?;
+                            let mut context = WalletContext::new(&config)?;
+
+                            if let Some(env_override) = client_config.env {
+                                context = context.with_env_override(env_override);
+                            }
 
                             let Ok(client) = context.get_client().await else {
-                                bail!("`sui move build --dump-bytecode-as-base64` requires a connection to the network. Current active network is {} but failed to connect to it.", context.config.active_env.as_ref().unwrap());
+                                bail!(
+                                    "`sui move build --dump-bytecode-as-base64` requires a connection to the network. \
+                                     Current active network is {} but failed to connect to it.", 
+                                     context.get_active_env()?.alias
+                                );
                             };
 
                             if let Err(e) = client.check_api_version() {
@@ -594,14 +616,14 @@ impl SuiCommand {
 
                 let config_path =
                     client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-                let mut context = WalletContext::new(&config_path, None, None)?;
+                let mut context = WalletContext::new(&config_path)?;
                 if let Ok(client) = context.get_client().await {
                     if let Err(e) = client.check_api_version() {
                         eprintln!("{}", format!("[warning] {e}").yellow().bold());
                     }
                 }
                 let rgp = context.get_reference_gas_price().await?;
-                let rpc_url = &context.config.get_active_env()?.rpc;
+                let rpc_url = &context.get_active_env()?.rpc;
                 println!("rpc_url: {}", rpc_url);
                 let bridge_metrics = Arc::new(BridgeMetrics::new_for_testing());
                 let sui_bridge_client = SuiBridgeClient::new(rpc_url, bridge_metrics).await?;
