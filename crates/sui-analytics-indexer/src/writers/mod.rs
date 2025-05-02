@@ -13,7 +13,7 @@ pub trait AnalyticsWriter<S: Serialize + ParquetSchema>: Send + Sync + 'static {
     /// File format i.e. csv, parquet, etc
     fn file_format(&self) -> Result<FileFormat>;
     /// Persist given rows into a file
-    fn write(&mut self, rows: &[S]) -> Result<()>;
+    fn write(&mut self, rows: Box<dyn Iterator<Item = S> + Send + Sync>) -> Result<()>;
     /// Flush the current file
     fn flush(&mut self, end_checkpoint_seq_num: u64) -> Result<bool>;
     /// Reset internal state with given epoch and checkpoint sequence number
