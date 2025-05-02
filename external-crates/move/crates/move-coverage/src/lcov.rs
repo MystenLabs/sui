@@ -4,6 +4,7 @@
 use lcov::record::Record as LRecord;
 use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
 use move_binary_format::file_format::FunctionDefinitionIndex;
+use move_compiler::unit_test::filter_test_members::{STDLIB_ADDRESS_NAME, UNIT_TEST_MODULE_NAME};
 use move_compiler::{
     compiled_unit::CompiledUnit, shared::files::MappedFiles,
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
@@ -251,46 +252,43 @@ impl FileRecordKeeper {
             },
         ];
 
-        for f in functions_found.iter() {
+        for (function_name, &start_line) in functions_found {
             records.push(LRecord::FunctionName {
-                name: f.0.clone(),
-                start_line: *f.1 as u32,
+                name: function_name.to_owned(),
+                start_line: start_line as u32,
             });
         }
 
-        for fh in functions_hit.iter() {
+        for (function_name, &hit_count) in functions_hit {
             records.push(LRecord::FunctionData {
-                name: fh.0.clone(),
-                count: *fh.1 as u64,
+                name: function_name.to_owned(),
+                count: hit_count as u64,
             });
         }
 
-        for (line_number, hit_count) in line_entries.iter() {
+        for (&line_number, &hit_count) in line_entries {
             records.push(LRecord::LineData {
-                line: *line_number as u32,
-                count: *hit_count as u64,
+                line: line_number as u32,
+                count: hit_count as u64,
                 checksum: None,
             });
         }
 
-        for (
-            _,
-            BranchInfo {
-                line_no,
-                block_id,
-                branches,
-            },
-        ) in branches.iter()
+        for BranchInfo {
+            line_no,
+            block_id,
+            branches,
+        } in branches.values()
         {
-            for (branch_id, hit_count) in branches.iter() {
+            for (&branch_id, &hit_count) in branches {
                 records.push(LRecord::BranchData {
                     line: *line_no as u32,
                     block: *block_id as u32,
-                    branch: *branch_id as u32,
-                    taken: if *hit_count == 0 {
+                    branch: branch_id as u32,
+                    taken: if hit_count == 0 {
                         None
                     } else {
-                        Some(*hit_count as u64)
+                        Some(hit_count as u64)
                     },
                 });
             }
@@ -323,7 +321,13 @@ impl FileRecordKeeper {
                 .identifier_at(self.unit.module.function_handle_at(fdef.function).name)
                 .to_string();
 
-            if UNIT_TEST_POISON_FUN_NAME.as_str() == name {
+            if self.unit.module.self_id().name().as_str() == UNIT_TEST_MODULE_NAME.as_str()
+                && self
+                    .unit
+                    .address_name()
+                    .is_some_and(|name| name.value == STDLIB_ADDRESS_NAME)
+                && UNIT_TEST_POISON_FUN_NAME.as_str() == name
+            {
                 continue;
             }
 
@@ -350,16 +354,16 @@ impl FileRecordKeeper {
                 }
 
                 let cfg = self.build_control_flow_graph(index as u16);
-                for cfg_block_id in cfg.blocks().iter() {
-                    let block_end = cfg.block_end(*cfg_block_id);
+                for cfg_block_id in cfg.blocks() {
+                    let block_end = cfg.block_end(cfg_block_id);
                     let loc = f_source_map.get_code_location(block_end).unwrap();
                     let line_no = file_mapping.start_position(&loc).line_offset() + 1;
                     block_id += 1;
-                    for o in cfg.successors(*cfg_block_id) {
+                    for &o in cfg.successors(cfg_block_id) {
                         self.branches
                             .entry((index as u16, block_end))
                             .or_insert_with(|| BranchInfo::new(line_no, block_id - 1))
-                            .add_branch(*o);
+                            .add_branch(o);
                     }
                 }
             }
