@@ -115,7 +115,7 @@ pub struct Parameter {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AbilitySet(BTreeSet<Ability>);
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Ability {
     Copy,
     Drop,
@@ -688,12 +688,10 @@ impl Fields {
             N::StructFields::Native(_) => return,
         };
         self.positional_fields = is_positional;
-        let pos_name_of = |sym| {
-            if self.positional_fields {
-                Symbol::from(format!("pos{}", sym))
-            } else {
-                sym
-            }
+        let pos_name_of = if self.positional_fields {
+            |sym| Symbol::from(format!("pos{}", sym))
+        } else {
+            |sym| sym
         };
         for (name, (_, (doc, _))) in fields.key_cloned_iter() {
             let field = self.fields.get_mut(&pos_name_of(name.0.value)).unwrap();
@@ -709,12 +707,10 @@ impl Fields {
             N::VariantFields::Empty => return,
         };
         self.positional_fields = is_positional;
-        let pos_name_of = |sym| {
-            if self.positional_fields {
-                Symbol::from(format!("pos{}", sym))
-            } else {
-                sym
-            }
+        let pos_name_of = if self.positional_fields {
+            |sym| Symbol::from(format!("pos{}", sym))
+        } else {
+            |sym| sym
         };
         for (name, (_, (doc, ty))) in fields.key_cloned_iter() {
             let field = self.fields.get_mut(&pos_name_of(name.0.value)).unwrap();

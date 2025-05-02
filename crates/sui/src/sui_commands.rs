@@ -1415,10 +1415,12 @@ fn read_line() -> Result<String, anyhow::Error> {
 }
 
 async fn get_chain_id_and_client(
-    client_config: Option<PathBuf>,
+    client_config: SuiEnvConfig,
     command_err_string: &str,
 ) -> anyhow::Result<(Option<String>, Option<SuiClient>)> {
-    let config = client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
+    let config = client_config
+        .config
+        .unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
     prompt_if_no_config(&config, false).await?;
     let mut context = WalletContext::new(&config)?;
 

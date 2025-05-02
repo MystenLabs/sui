@@ -14,6 +14,7 @@ ls -1 data/move_package/package_summaries/sui
 ls -1 data/move_package/package_summaries/std
 # NB: Not root_package_metadata for source packages as these are not generated w.r.t. a specific network.
 cat data/move_package/package_summaries/root_package_metadata.json
+echo
 # This will contain the address mapping for the package from the literal value
 # of the address to the named value of the address (which is what the source
 # package metadata uses for storage).
@@ -112,7 +113,8 @@ u8.json
 uq32_32.json
 uq64_64.json
 vector.json
-{}{
+{}
+{
   "0x0000000000000000000000000000000000000000000000000000000000000000": "move_package",
   "0x0000000000000000000000000000000000000000000000000000000000000001": "std",
   "0x0000000000000000000000000000000000000000000000000000000000000002": "sui",
