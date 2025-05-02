@@ -88,8 +88,8 @@ impl FilterContext for Context<'_> {
 // Filtering of test-annotated module members
 //***************************************************************************
 
-const UNIT_TEST_MODULE_NAME: Symbol = symbol!("unit_test");
-const STDLIB_ADDRESS_NAME: Symbol = symbol!("std");
+pub const UNIT_TEST_MODULE_NAME: Symbol = symbol!("unit_test");
+pub const STDLIB_ADDRESS_NAME: Symbol = symbol!("std");
 pub const UNIT_TEST_POISON_FUN_NAME: Symbol = symbol!("unit_test_poison");
 
 // This filters out all test, and test-only annotated module member from `prog` if the `test` flag
