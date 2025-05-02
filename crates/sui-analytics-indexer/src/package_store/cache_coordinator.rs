@@ -28,11 +28,11 @@ impl CacheReadyCoordinator {
 
     pub fn mark_ready(&self, checkpoint: u64) {
         let prev = self.latest.swap(checkpoint, Ordering::SeqCst);
-        if checkpoint > prev {
+        if prev == 0 || checkpoint == prev + 1 {
             let _ = self.tx.send_replace(checkpoint);
         } else {
             // Should never happen since concurrency is set to 1.
-            panic!("Package cache coordinator saw checkpoints out of order.");
+            panic!("Package cache coordinator saw checkpoints out of order. Previous: {prev}. Current: {checkpoint}");
         }
     }
 
