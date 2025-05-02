@@ -65,7 +65,7 @@ impl Test<'_> {
             "parsed" => {
                 let manifest = Manifest::<Vanilla>::read_from(self.toml_path);
                 let contents = match manifest.as_ref() {
-                    Ok(m) => format!("{:?}", m),
+                    Ok(m) => format!("{:#?}", m),
                     Err(_) => {
                         let mut mapped_files = SimpleFiles::new();
                         mapped_files.add(

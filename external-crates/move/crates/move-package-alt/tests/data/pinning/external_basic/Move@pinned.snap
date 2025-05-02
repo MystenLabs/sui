@@ -1,14 +1,14 @@
 ---
 source: crates/move-package-alt/tests/test_runner.rs
 ---
-[mock]
+[mock.Local]
 local = "."
 
-[mock2]
+[mock2.Local]
 local = ".."
 
-[overrides.mainnet.mock]
+[overrides.mainnet.mock.Local]
 local = "."
 
-[overrides.mainnet.mock2]
+[overrides.mainnet.mock2.Local]
 local = ".."
