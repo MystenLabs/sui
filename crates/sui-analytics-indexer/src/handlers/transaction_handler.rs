@@ -32,8 +32,8 @@ impl AnalyticsHandler<TransactionEntry> for TransactionHandler {
     async fn process_checkpoint(
         &self,
         checkpoint_data: &Arc<CheckpointData>,
-    ) -> Result<Vec<TransactionEntry>> {
-        Ok(process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?)
+    ) -> Result<Box<dyn Iterator<Item = TransactionEntry> + Send + Sync>> {
+        process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -51,7 +51,7 @@ impl TransactionProcessor<TransactionEntry> for TransactionHandler {
         &self,
         tx_idx: usize,
         checkpoint: &CheckpointData,
-    ) -> Result<Vec<TransactionEntry>> {
+    ) -> Result<Box<dyn Iterator<Item = TransactionEntry> + Send + Sync>> {
         let transaction = &checkpoint.transactions[tx_idx];
         let epoch = checkpoint.checkpoint_summary.epoch;
         let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
@@ -189,7 +189,8 @@ impl TransactionProcessor<TransactionEntry> for TransactionHandler {
             events_bcs_length,
             signatures_bcs_length,
         };
-        Ok(vec![entry])
+
+        Ok(Box::new(std::iter::once(entry)))
     }
 }
 
@@ -232,9 +233,10 @@ mod tests {
                 .unwrap(),
         )?;
         let txn_handler = TransactionHandler::new();
-        let transaction_entries = txn_handler
+        let transaction_entries: Vec<_> = txn_handler
             .process_checkpoint(&Arc::new(checkpoint_data))
-            .await?;
+            .await?
+            .collect();
         assert_eq!(transaction_entries.len(), 1);
         let db_txn = transaction_entries.first().unwrap();
 

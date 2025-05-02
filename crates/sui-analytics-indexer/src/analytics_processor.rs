@@ -97,10 +97,10 @@ impl<S: Serialize + ParquetSchema + Send + Sync + 'static> Worker for AnalyticsP
             .with_label_values(&[self.name()])
             .inc();
 
-        let rows = self.handler.process_checkpoint(checkpoint_data).await?;
+        let iter = self.handler.process_checkpoint(&checkpoint_data).await?;
         {
             let mut writer = state.writer.lock().unwrap();
-            writer.write(&rows)?;
+            writer.write(iter)?;
         }
 
         state.current_checkpoint_range.end = state
@@ -248,11 +248,10 @@ impl<S: Serialize + ParquetSchema + Send + Sync + 'static> AnalyticsProcessor<S>
 
     fn reset(&self, state: &mut State<S>) -> Result<()> {
         self.reset_checkpoint_range(state);
-        state
-            .writer
-            .lock()
-            .unwrap()
-            .reset(state.current_epoch, state.current_checkpoint_range.start)?;
+        {
+            let mut writer = state.writer.lock().unwrap();
+            writer.reset(state.current_epoch, state.current_checkpoint_range.start)?;
+        }
         self.reset_last_commit_ts(state);
         Ok(())
     }
