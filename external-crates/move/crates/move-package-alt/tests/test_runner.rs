@@ -7,7 +7,7 @@ use move_command_line_common::testing::insta_assert;
 
 use codespan_reporting::{
     files::SimpleFiles,
-    term::{self, termcolor::Buffer, Config},
+    term::{self, Config, termcolor::Buffer},
 };
 use move_package_alt::{
     dependency::{self, DependencySet, ManifestDependencyInfo},
@@ -88,11 +88,9 @@ impl Test<'_> {
                 contents
             }
             "locked" => {
-                println!("self: {:?}", self);
-                println!("Self parent: {:?}", self.toml_path.parent());
                 let lockfile = Lockfile::<Vanilla>::read_from(self.toml_path.parent().unwrap());
                 match lockfile {
-                    Ok(l) => format!("{:?}", l),
+                    Ok(l) => format!("{:#?}", l),
                     Err(e) => e.to_string(),
                 }
             }
@@ -135,10 +133,16 @@ fn add_bindir() {
         .parent()
         .unwrap()
         .to_string_lossy();
-    std::env::set_var(
-        "PATH",
-        format!("{}:{}", std::env::var("PATH").unwrap(), bindir),
-    );
+
+    // TODO: replace this with different logic
+    // SAFETY: this is safe because it's run under cargo nextest run. See:
+    // `https://nexte.st/docs/configuration/env-vars/`
+    unsafe {
+        std::env::set_var(
+            "PATH",
+            format!("{}:{}", std::env::var("PATH").unwrap(), bindir),
+        );
+    }
 }
 
 datatest_stable::harness!(

@@ -75,7 +75,7 @@ impl<F: MoveFlavor> Package<F> {
         &mut self,
         env: EnvironmentName,
         metadata: Publication<F>,
-    ) -> anyhow::Result<()> {
+    ) -> PackageResult<()> {
         // TODO: we'll have to update the local dependencies here
         todo!()
     }

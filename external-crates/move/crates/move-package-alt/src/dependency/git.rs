@@ -26,7 +26,7 @@ use std::{
 
 use derive_where::derive_where;
 use serde::de::Error;
-use serde::{de, Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
 use tokio::process::Command;
 use tracing::debug;
 
@@ -446,12 +446,10 @@ mod tests {
     use std::env;
     use std::fs;
     use std::path::Path;
-    use tempfile::{tempdir, TempDir};
+    use tempfile::{TempDir, tempdir};
 
     fn setup_temp_dir() -> TempDir {
         let temp_dir = tempdir().unwrap();
-        // Set MOVE_HOME to the temp directory
-        env::set_var("MOVE_HOME", temp_dir.path());
         temp_dir
     }
 
@@ -560,7 +558,6 @@ mod tests {
     #[tokio::test]
     async fn test_sparse_checkout_folder() {
         let (temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project().await;
-        let temp_dir = setup_temp_dir();
         let fs_repo = fs_repo.to_str().unwrap();
 
         // Pass in a branch name
@@ -597,7 +594,6 @@ mod tests {
     #[tokio::test]
     async fn test_wrong_sha() {
         let (_temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project().await;
-        let temp_dir = setup_temp_dir();
         let fs_repo = fs_repo.to_str().unwrap();
 
         let git_dep = GitRepo {
@@ -614,7 +610,6 @@ mod tests {
     #[tokio::test]
     async fn test_wrong_branch_name() {
         let (_temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project().await;
-        let temp_dir = setup_temp_dir();
         let fs_repo = fs_repo.to_str().unwrap();
 
         let git_dep = GitRepo {
@@ -631,7 +626,6 @@ mod tests {
     #[tokio::test]
     async fn test_repo_is_dirty() {
         let (_temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project().await;
-        let temp_dir = setup_temp_dir();
         let fs_repo = fs_repo.to_str().unwrap();
 
         let git_dep = GitRepo {

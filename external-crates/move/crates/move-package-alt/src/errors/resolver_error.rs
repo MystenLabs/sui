@@ -35,7 +35,7 @@ pub enum ResolverError {
         code: ExitStatus,
     },
 
-    /// This indicates that the resolver executed sucessfully but returned an error
+    /// This indicates that the resolver executed successfully but returned an error
     #[error("{resolver} couldn't resolve {dep} in {env_str}: {message}")]
     ResolverFailed {
         resolver: ResolverName,

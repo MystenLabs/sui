@@ -61,6 +61,12 @@ impl<T> Located<T> {
         self.value.into_inner()
     }
 
+    pub fn destructure(self) -> (T, FileHandle, Range<usize>) {
+        let span = self.value.span();
+        let value = self.value.into_inner();
+        (value, self.file, span)
+    }
+
     pub fn get_ref(&self) -> &T {
         self.value.get_ref()
     }

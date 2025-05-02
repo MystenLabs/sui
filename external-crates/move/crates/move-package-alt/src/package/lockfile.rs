@@ -10,7 +10,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::bail;
 use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
 use serde_spanned::Spanned;
@@ -117,7 +116,7 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
         &self,
         path: impl AsRef<Path>,
         envs: BTreeMap<EnvironmentName, F::EnvironmentID>,
-    ) -> anyhow::Result<()> {
+    ) -> PackageResult<()> {
         let mut output: Lockfile<F> = self.clone();
         let (pubs, locals): (BTreeMap<_, _>, BTreeMap<_, _>) = output
             .published

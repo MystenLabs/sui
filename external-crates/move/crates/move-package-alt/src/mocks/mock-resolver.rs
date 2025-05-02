@@ -1,3 +1,7 @@
+// Copyright (c) The Diem Core Contributors
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 //! A mock resolver that simply returns the data passed to it as a dependency resolution
 //!
 //! If there are any inputs with an stdout field then the standard output will be whatever string
@@ -19,7 +23,7 @@ use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
 use move_package_alt::dependency::external_protocol::{
-    QueryID, QueryResult, Request, Response, RESOLVE_ARG,
+    QueryID, QueryResult, RESOLVE_ARG, Request, Response,
 };
 
 #[derive(Deserialize)]

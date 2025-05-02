@@ -4,9 +4,14 @@
 
 //! Types and methods for external dependencies (of the form `{ r.<res> = data }`).
 
-use std::{collections::BTreeMap, fmt::Debug, iter::once, path::Path};
+use std::{
+    collections::BTreeMap,
+    fmt::Debug,
+    iter::once,
+    ops::Range,
+    path::{Path, PathBuf},
+};
 
-use anyhow::bail;
 use futures::future::try_join_all;
 use serde::{
     Deserialize, Serialize,
@@ -17,7 +22,8 @@ use tracing::warn;
 
 use crate::{
     errors::{
-        self, Located, ManifestError, ManifestErrorKind, PackageError, PackageResult, ResolverError,
+        self, FileHandle, Located, ManifestError, ManifestErrorKind, PackageError, PackageResult,
+        ResolverError,
     },
     flavor::MoveFlavor,
     package::{EnvironmentName, PackageName},
@@ -40,13 +46,13 @@ pub struct ExternalDependency {
     resolver: ResolverName,
 
     /// the `<data>` in `{ r.<res> = <data> }`
-    data: toml::Value,
+    data: Located<toml::Value>,
 }
 
 /// Convenience type for serializing/deserializing external deps
 #[derive(Serialize, Deserialize)]
 struct RField {
-    r: BTreeMap<String, toml::Value>,
+    r: Located<BTreeMap<String, toml::Value>>,
 }
 
 impl ExternalDependency {
@@ -64,10 +70,11 @@ impl ExternalDependency {
         // split by resolver
         let mut sorted: BTreeMap<ResolverName, DependencySet<toml::Value>> = BTreeMap::new();
         for (env, package_name, dep) in deps.into_iter() {
-            sorted
-                .entry(dep.resolver)
-                .or_default()
-                .insert(env, package_name, dep.data);
+            sorted.entry(dep.resolver).or_default().insert(
+                env,
+                package_name,
+                dep.data.into_inner(),
+            );
         }
 
         // run the resolvers
@@ -82,18 +89,24 @@ impl ExternalDependency {
 }
 
 impl TryFrom<RField> for ExternalDependency {
-    type Error = anyhow::Error;
+    type Error = PackageError;
 
     fn try_from(value: RField) -> Result<Self, Self::Error> {
-        if value.r.len() != 1 {
-            bail!("Externally resolved dependencies must have exactly one resolver field")
+        if value.r.as_ref().len() != 1 {
+            return Err(PackageError::Manifest(ManifestError {
+                kind: ManifestErrorKind::BadExternalDependency,
+                span: Some(value.r.span()),
+                handle: value.r.file(),
+            }));
         }
 
-        let (resolver, data) = value
-            .r
+        let (r, file, span) = value.r.destructure();
+
+        let (resolver, data) = r
             .into_iter()
             .next()
             .expect("iterator of length 1 structure is nonempty");
+        let data = Located::new(data, file, span);
 
         Ok(Self { resolver, data })
     }
@@ -101,21 +114,38 @@ impl TryFrom<RField> for ExternalDependency {
 
 impl From<ExternalDependency> for RField {
     fn from(value: ExternalDependency) -> Self {
-        Self {
-            r: BTreeMap::from([(value.resolver, value.data)]),
+        let ExternalDependency { resolver, data } = value;
+        let (content, file, span) = data.destructure();
+
+        RField {
+            r: Located::new(BTreeMap::from([(resolver, content)]), file, span),
         }
     }
 }
 
 impl<F: MoveFlavor> TryFrom<QueryResult> for ManifestDependencyInfo<F> {
-    type Error = anyhow::Error;
+    type Error = PackageError;
 
-    fn try_from(value: QueryResult) -> anyhow::Result<Self> {
+    fn try_from(value: QueryResult) -> PackageResult<Self> {
         match value {
             // TODO: errors!
-            QueryResult::Error { error } => bail!("External resolver failed!"),
+            QueryResult::Error { error } => {
+                return Err(PackageError::Resolver(ResolverError::resolver_failed(
+                    "resolver".to_string(),
+                    PackageName::default(),
+                    None,
+                    error.clone(),
+                )));
+            }
             // TODO: warnings!
-            QueryResult::Success { warnings, resolved } => Ok(Self::deserialize(resolved)?),
+            QueryResult::Success { warnings, resolved } => {
+                Self::deserialize(resolved).map_err(|e| {
+                    PackageError::Resolver(ResolverError::bad_resolver(
+                        &"".to_string(),
+                        format!("{e}"),
+                    ))
+                })
+            }
         }
     }
 }

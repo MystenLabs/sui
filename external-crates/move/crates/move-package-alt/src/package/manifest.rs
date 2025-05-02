@@ -120,7 +120,7 @@ impl<F: MoveFlavor> Manifest<F> {
         Ok(())
     }
 
-    fn write_template(path: impl AsRef<Path>, name: &PackageName) -> anyhow::Result<()> {
+    fn write_template(path: impl AsRef<Path>, name: &PackageName) -> PackageResult<()> {
         std::fs::write(
             path,
             r###"
