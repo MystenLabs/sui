@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use sui_types::{TypeTag, SYSTEM_PACKAGE_ADDRESSES};
+use sui_types::TypeTag;
 
 use sui_json_rpc_types::SuiMoveStruct;
 use sui_types::base_types::ObjectID;
@@ -17,8 +17,9 @@ use crate::handlers::{
 };
 use crate::package_store::PackageCache;
 use crate::tables::{ObjectEntry, ObjectStatus};
-use crate::AnalyticsMetrics;
-use crate::FileType;
+use crate::{AnalyticsMetrics, FileType};
+
+use super::wait_for_cache;
 
 const NAME: &str = "object";
 
@@ -172,7 +173,13 @@ impl ObjectHandler {
             .struct_tag()
             .and_then(|tag| object.data.try_as_move().map(|mo| (tag, mo.contents())))
         {
-            match get_move_struct(&tag, contents, &self.package_cache.resolver).await {
+            match get_move_struct(
+                &tag,
+                contents,
+                &self.package_cache.resolver_for_epoch(epoch),
+            )
+            .await
+            {
                 Ok(move_struct) => Some(move_struct),
                 Err(err)
                     if err
@@ -271,21 +278,8 @@ impl AnalyticsHandler<ObjectEntry> for ObjectHandler {
         &self,
         checkpoint_data: &CheckpointData,
     ) -> Result<Vec<ObjectEntry>> {
-        let results = self.process_transactions(checkpoint_data).await?;
-
-        // If end of epoch, evict package store
-        if checkpoint_data
-            .checkpoint_summary
-            .end_of_epoch_data
-            .is_some()
-        {
-            self.package_cache
-                .resolver
-                .package_store()
-                .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
-        }
-
-        Ok(results)
+        wait_for_cache(checkpoint_data, &self.package_cache).await;
+        self.process_transactions(checkpoint_data).await
     }
 
     fn file_type(&self) -> Result<FileType> {

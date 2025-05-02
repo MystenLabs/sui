@@ -4,16 +4,16 @@
 use anyhow::Result;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 
 use sui_types::full_checkpoint_content::CheckpointData;
 
 use crate::handlers::{get_move_struct, parse_struct, AnalyticsHandler};
-use crate::AnalyticsMetrics;
+use crate::{AnalyticsMetrics, FileType};
 
 use crate::package_store::PackageCache;
 use crate::tables::WrappedObjectEntry;
-use crate::FileType;
+
+use super::wait_for_cache;
 
 const NAME: &str = "wrapped_object";
 #[derive(Clone)]
@@ -114,20 +114,8 @@ impl AnalyticsHandler<WrappedObjectEntry> for WrappedObjectHandler {
         &self,
         checkpoint_data: &CheckpointData,
     ) -> Result<Vec<WrappedObjectEntry>> {
-        let results = self.process_transactions(checkpoint_data).await?;
-
-        if checkpoint_data
-            .checkpoint_summary
-            .end_of_epoch_data
-            .is_some()
-        {
-            self.package_cache
-                .resolver
-                .package_store()
-                .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
-        }
-
-        Ok(results)
+        wait_for_cache(checkpoint_data, &self.package_cache).await;
+        self.process_transactions(checkpoint_data).await
     }
 
     fn file_type(&self) -> Result<FileType> {
