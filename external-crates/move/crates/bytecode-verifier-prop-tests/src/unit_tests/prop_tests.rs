@@ -165,9 +165,9 @@ proptest! {
 /// There are some potentially tricky edge cases around ranges that are captured here.
 #[test]
 fn valid_bounds_no_members() {
-    let mut gen = CompiledModuleStrategyGen::new(20);
-    gen.zeros_all();
-    proptest!(|(_module in gen.generate())| {
+    let mut r#gen = CompiledModuleStrategyGen::new(20);
+    r#gen.zeros_all();
+    proptest!(|(_module in r#gen.generate())| {
         // gen.generate() will panic if there are any bounds check issues.
     });
 }

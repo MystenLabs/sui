@@ -300,7 +300,7 @@ pub fn bytecode_generation(
             }
             Err(e) => {
                 error!("{}", e);
-                let uid = rng.gen::<u64>();
+                let uid = rng.r#gen::<u64>();
                 output_error_case(module.clone(), output_path.clone(), uid, tid);
                 if EXECUTE_UNVERIFIED_MODULE {
                     Some(module.clone())
@@ -324,7 +324,7 @@ pub fn bytecode_generation(
                         }
                         _ => {
                             error!("{}", e);
-                            let uid = rng.gen::<u64>();
+                            let uid = rng.r#gen::<u64>();
                             output_error_case(module.clone(), output_path.clone(), uid, tid);
                         }
                     },

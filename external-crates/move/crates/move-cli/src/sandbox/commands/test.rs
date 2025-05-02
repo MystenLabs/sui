@@ -11,10 +11,10 @@ use move_command_line_common::{
 use move_compiler::command_line::COLOR_MODE_ENV_VAR;
 use move_coverage::coverage_map::{CoverageMap, ExecCoverageMapWithModules};
 use move_package::{
+    BuildConfig,
     compilation::{compiled_package::OnDiskCompiledPackage, package_layout::CompiledPackageLayout},
     resolution::resolution_graph::ResolvedGraph,
     source_package::{layout::SourcePackageLayout, manifest_parser::parse_move_manifest_from_file},
-    BuildConfig,
 };
 use std::{
     collections::{BTreeMap, HashMap},
@@ -223,7 +223,7 @@ pub fn run_one(
     };
 
     // Disable colors in error reporting from the Move compiler
-    env::set_var(COLOR_MODE_ENV_VAR, "NONE");
+    unsafe { env::set_var(COLOR_MODE_ENV_VAR, "NONE") };
     for args_line in args_file {
         let args_line = args_line?;
 
@@ -267,9 +267,9 @@ pub fn run_one(
                 //   1. we run with move-cli test <path-to-args-A.txt> --track-cov, and
                 //   2. in this <args-A.txt>, there is another command: test <args-B.txt>
                 // then, when running <args-B.txt>, coverage will not be tracked nor printed
-                env::remove_var(MOVE_VM_TRACING_ENV_VAR_NAME);
+                unsafe { env::remove_var(MOVE_VM_TRACING_ENV_VAR_NAME) };
             }
-            Some(path) => env::set_var(MOVE_VM_TRACING_ENV_VAR_NAME, path.as_os_str()),
+            Some(path) => unsafe { env::set_var(MOVE_VM_TRACING_ENV_VAR_NAME, path.as_os_str()) },
         }
 
         let cmd_output = cli_command_template().args(args_iter).output()?;

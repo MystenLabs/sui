@@ -26,9 +26,9 @@ mod checked {
     use crate::type_resolver::TypeTagResolver;
     use crate::{adapter::new_native_extensions, execution_value::SizeBound};
     use move_binary_format::{
+        CompiledModule,
         errors::{Location, PartialVMError, PartialVMResult, VMError, VMResult},
         file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
-        CompiledModule,
     };
     use move_core_types::resolver::ModuleResolver;
     use move_core_types::vm_status::StatusCode;
@@ -47,7 +47,7 @@ mod checked {
     use move_vm_types::loaded_data::runtime_types::Type;
     use mysten_common::debug_fatal;
     use sui_move_natives::object_runtime::{
-        self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
+        self, LoadedRuntimeObject, ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::storage::{DenyListResult, PackageObject};
@@ -774,7 +774,7 @@ mod checked {
                                     result_idx: i as u16,
                                     secondary_idx: j as u16,
                                 }
-                                .into())
+                                .into());
                             }
                             Some(Value::Raw(RawValueType::Any, _)) => (),
                             Some(Value::Raw(RawValueType::Loaded { abilities, .. }, _)) => {
@@ -960,7 +960,9 @@ mod checked {
                         // Already verified in pre-execution checks that tx sender is the object owner.
                         // SingleOwner is allowed to do anything with the object.
                         if ref_context.borrow().sender() != *owner {
-                            debug_fatal!("transaction with a singly owned input object where the tx sender is not the owner should never be executed");
+                            debug_fatal!(
+                                "transaction with a singly owned input object where the tx sender is not the owner should never be executed"
+                            );
                             return Err(ExecutionError::new(
                                 ExecutionErrorKind::SharedObjectOperationNotAllowed,
                                 Some(
@@ -1395,7 +1397,7 @@ mod checked {
                 Type::Vector(Box::new(load_type(vm, linkage_view, new_packages, inner)?))
             }
             TypeTag::Struct(struct_tag) => {
-                return load_type_from_struct(vm, linkage_view, new_packages, struct_tag)
+                return load_type_from_struct(vm, linkage_view, new_packages, struct_tag);
             }
         })
     }
@@ -1698,13 +1700,15 @@ mod checked {
             TypeTag::Struct(inner) => *inner,
             _ => invariant_violation!("Non struct type for object"),
         };
-        MoveObject::new_from_execution(
-            struct_tag.into(),
-            has_public_transfer,
-            old_obj_ver.unwrap_or_default(),
-            contents,
-            protocol_config,
-        )
+        unsafe {
+            MoveObject::new_from_execution(
+                struct_tag.into(),
+                has_public_transfer,
+                old_obj_ver.unwrap_or_default(),
+                contents,
+                protocol_config,
+            )
+        }
     }
 
     // Implementation of the `DataStore` trait for the Move VM.

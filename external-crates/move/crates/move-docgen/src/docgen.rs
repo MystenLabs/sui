@@ -18,9 +18,8 @@ use move_compiler::{
 use move_core_types::{account_address::AccountAddress, runtime_value::MoveValue};
 use move_ir_types::location::*;
 use move_model_2::{
-    display as model_display,
+    ModuleId, QualifiedMemberId, TModuleId, display as model_display,
     source_model::{self, Model},
-    ModuleId, QualifiedMemberId, TModuleId,
 };
 use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
@@ -215,7 +214,7 @@ impl<'env> Docgen<'env> {
     }
 
     /// Generate document contents, returning pairs of output file names and generated contents.
-    pub fn gen(mut self, env: &Model) -> anyhow::Result<Vec<(String, String)>> {
+    pub fn generate(mut self, env: &Model) -> anyhow::Result<Vec<(String, String)>> {
         // If there is a root templates, parse them.
         let root_templates = self
             .options

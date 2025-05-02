@@ -8,7 +8,8 @@ use crate::{
     session::LoadedFunctionInstantiation,
 };
 use move_binary_format::{
-    errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
+    IndexKind,
+    errors::{Location, PartialVMError, PartialVMResult, VMResult, verification_error},
     file_format::{
         AbilitySet, Bytecode, CompiledModule, Constant, ConstantPoolIndex,
         EnumDefInstantiationIndex, EnumDefinitionIndex, FieldHandleIndex, FieldInstantiationIndex,
@@ -18,7 +19,6 @@ use move_binary_format::{
         VariantHandle, VariantHandleIndex, VariantInstantiationHandle,
         VariantInstantiationHandleIndex, VariantJumpTable, VariantTag,
     },
-    IndexKind,
 };
 use move_bytecode_verifier::{self, cyclic_dependencies, dependencies};
 use move_core_types::{
@@ -40,7 +40,7 @@ use move_vm_types::{
 };
 use parking_lot::RwLock;
 use std::{
-    collections::{btree_map::Entry, BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, btree_map::Entry},
     fmt::Debug,
     hash::Hash,
     sync::Arc,
@@ -355,11 +355,11 @@ impl ModuleCache {
             .zip(self.datatypes.binaries.iter_mut().rev())
         {
             match Arc::get_mut(cached_type) {
-                Some(ref mut x) => match (&mut x.datatype_info, field_info) {
-                    (Datatype::Enum(ref mut enum_type), FieldTypeInfo::Enum(field_info)) => {
+                Some(x) => match (&mut x.datatype_info, field_info) {
+                    (Datatype::Enum(enum_type), FieldTypeInfo::Enum(field_info)) => {
                         enum_type.variants = field_info;
                     }
-                    (Datatype::Struct(ref mut struct_type), FieldTypeInfo::Struct(field_info)) => {
+                    (Datatype::Struct(struct_type), FieldTypeInfo::Struct(field_info)) => {
                         struct_type.fields = field_info;
                     }
                     _ => {
