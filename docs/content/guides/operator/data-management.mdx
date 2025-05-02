@@ -54,7 +54,7 @@ Sui Full nodes support more than 40 RPC types that includes the following catego
 
 A Sui archive instance stores the full Sui transaction history since genesis in a database agnostic format. This includes information about transactions (with client authentication), effects, events, and checkpoints. As such, archival storage can be used for data auditing and for replaying historic transactions.
 
-A Full Node that starts from scratch can replay (and thus re-verify) transactions that occurred since Sui genesis from the given archive via [configuring Archival Fallback](./sui-full-node.mdx#archival-fallback) in the `fullnode.yaml` configuration file to point to the S3 bucket that stores the archive.
+A Full Node that starts from scratch can replay (and thus re-verify) transactions that occurred since Sui genesis from the given archive via [configuring Archival Fallback](./archives.mdx##set-up-archival-fallback) in the `fullnode.yaml` configuration file to point to the cloud bucket that stores the archive.
 
 A Sui Full node that fails to retrieve checkpoints from its peers via state sync protocol falls back to downloading the missing checkpoints from its pre-configured archive. This fallback enables a Full node to catch up with the rest of the system regardless of the pruning policies of its peers.
 
