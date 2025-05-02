@@ -24,9 +24,8 @@ impl AnalyticsHandler<MovePackageEntry> for PackageHandler {
     async fn process_checkpoint(
         &self,
         checkpoint_data: &Arc<CheckpointData>,
-    ) -> Result<Vec<MovePackageEntry>> {
-        let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
-        Ok(results)
+    ) -> Result<Box<dyn Iterator<Item = MovePackageEntry> + Send + Sync>> {
+        process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -44,7 +43,7 @@ impl TransactionProcessor<MovePackageEntry> for PackageHandler {
         &self,
         tx_idx: usize,
         checkpoint: &CheckpointData,
-    ) -> Result<Vec<MovePackageEntry>> {
+    ) -> Result<Box<dyn Iterator<Item = MovePackageEntry> + Send + Sync>> {
         let transaction = &checkpoint.transactions[tx_idx];
         let epoch = checkpoint.checkpoint_summary.epoch;
         let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
@@ -70,6 +69,6 @@ impl TransactionProcessor<MovePackageEntry> for PackageHandler {
                 packages.push(package);
             }
         }
-        Ok(packages)
+        Ok(Box::new(packages.into_iter()))
     }
 }

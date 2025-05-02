@@ -129,9 +129,9 @@ impl AnalyticsHandler<DynamicFieldEntry> for DynamicFieldHandler {
     async fn process_checkpoint(
         &self,
         checkpoint_data: &Arc<CheckpointData>,
-    ) -> Result<Vec<DynamicFieldEntry>> {
-        wait_for_cache(&checkpoint_data, &self.package_cache).await;
-        Ok(process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?)
+    ) -> Result<Box<dyn Iterator<Item = DynamicFieldEntry> + Send + Sync>> {
+        wait_for_cache(checkpoint_data, &self.package_cache).await;
+        process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -149,7 +149,7 @@ impl TransactionProcessor<DynamicFieldEntry> for DynamicFieldHandler {
         &self,
         tx_idx: usize,
         checkpoint: &CheckpointData,
-    ) -> Result<Vec<DynamicFieldEntry>> {
+    ) -> Result<Box<dyn Iterator<Item = DynamicFieldEntry> + Send + Sync>> {
         let checkpoint_transaction = &checkpoint.transactions[tx_idx];
         for object in checkpoint_transaction.output_objects.iter() {
             self.package_cache.update(object)?;
@@ -177,6 +177,6 @@ impl TransactionProcessor<DynamicFieldEntry> for DynamicFieldHandler {
             }
         }
 
-        Ok(entries)
+        Ok(Box::new(entries.into_iter()))
     }
 }

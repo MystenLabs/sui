@@ -38,9 +38,9 @@ impl AnalyticsHandler<WrappedObjectEntry> for WrappedObjectHandler {
     async fn process_checkpoint(
         &self,
         checkpoint_data: &Arc<CheckpointData>,
-    ) -> Result<Vec<WrappedObjectEntry>> {
-        wait_for_cache(&checkpoint_data, &self.package_cache).await;
-        Ok(process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?)
+    ) -> Result<Box<dyn Iterator<Item = WrappedObjectEntry> + Send + Sync>> {
+        wait_for_cache(checkpoint_data, &self.package_cache).await;
+        process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -58,7 +58,7 @@ impl TransactionProcessor<WrappedObjectEntry> for WrappedObjectHandler {
         &self,
         tx_idx: usize,
         checkpoint: &CheckpointData,
-    ) -> Result<Vec<WrappedObjectEntry>> {
+    ) -> Result<Box<dyn Iterator<Item = WrappedObjectEntry> + Send + Sync>> {
         let transaction = &checkpoint.transactions[tx_idx];
         let epoch = checkpoint.checkpoint_summary.epoch;
         let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
@@ -122,6 +122,6 @@ impl TransactionProcessor<WrappedObjectEntry> for WrappedObjectHandler {
             }
         }
 
-        Ok(wrapped_objects)
+        Ok(Box::new(wrapped_objects.into_iter()))
     }
 }

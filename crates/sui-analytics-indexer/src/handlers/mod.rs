@@ -41,9 +41,12 @@ const WRAPPED_INDEXING_DISALLOW_LIST: [&str; 4] = [
 
 #[async_trait::async_trait]
 pub trait AnalyticsHandler<S>: Send + Sync {
-    /// Process a checkpoint and return an iterator over the rows.
+    /// Process a checkpoint and return a boxed iterator over the rows.
     /// This function is invoked by the analytics processor for each checkpoint.
-    async fn process_checkpoint(&self, checkpoint_data: &Arc<CheckpointData>) -> Result<Vec<S>>
+    async fn process_checkpoint(
+        &self,
+        checkpoint_data: &Arc<CheckpointData>,
+    ) -> Result<Box<dyn Iterator<Item = S> + Send + Sync>>
     where
         S: Send + Sync;
     /// Type of data being written by this processor i.e. checkpoint, object, etc
@@ -55,27 +58,27 @@ pub trait AnalyticsHandler<S>: Send + Sync {
 /// Implementations will extract and transform transaction data into structured rows for analytics.
 #[async_trait]
 pub trait TransactionProcessor<Row>: Send + Sync + 'static {
-    /// Process a single transaction at the given index and return the rows to be stored.
+    /// Process a single transaction at the given index and return a boxed iterator over the rows.
     /// The implementation should handle extracting the transaction from the checkpoint.
     async fn process_transaction(
         &self,
         tx_idx: usize,
         checkpoint: &CheckpointData,
-    ) -> Result<Vec<Row>>;
+    ) -> Result<Box<dyn Iterator<Item = Row> + Send + Sync>>;
 }
 
 /// Run transaction processing in parallel across all transactions in a checkpoint.
 pub async fn process_transactions<Row, P>(
     checkpoint: Arc<CheckpointData>,
     processor: Arc<P>,
-) -> Result<Vec<Row>>
+) -> Result<Box<dyn Iterator<Item = Row> + Send + Sync>>
 where
-    Row: Send + 'static,
+    Row: Send + Sync + 'static,
     P: TransactionProcessor<Row>,
 {
     // Process transactions in parallel using buffered stream for ordered execution
     let txn_len = checkpoint.transactions.len();
-    let mut entries = Vec::new();
+    let mut entries_vec = Vec::with_capacity(txn_len);
 
     let mut stream = stream::iter(0..txn_len)
         .map(|idx| {
@@ -88,7 +91,8 @@ where
     while let Some(join_res) = stream.next().await {
         match join_res {
             Ok(Ok(tx_entries)) => {
-                entries.extend(tx_entries);
+                // Store the iterator for later flattening
+                entries_vec.push(tx_entries);
             }
             Ok(Err(e)) => {
                 // Task executed but application logic returned an error
@@ -100,7 +104,9 @@ where
             }
         }
     }
-    Ok(entries)
+
+    let flattened_iter = entries_vec.into_iter().flatten();
+    Ok(Box::new(flattened_iter))
 }
 
 fn initial_shared_version(object: &Object) -> Option<u64> {

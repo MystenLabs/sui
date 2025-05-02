@@ -29,8 +29,8 @@ impl AnalyticsHandler<TransactionObjectEntry> for TransactionObjectsHandler {
     async fn process_checkpoint(
         &self,
         checkpoint_data: &Arc<CheckpointData>,
-    ) -> Result<Vec<TransactionObjectEntry>> {
-        Ok(process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?)
+    ) -> Result<Box<dyn Iterator<Item = TransactionObjectEntry> + Send + Sync>> {
+        process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -48,7 +48,7 @@ impl TransactionProcessor<TransactionObjectEntry> for TransactionObjectsHandler 
         &self,
         tx_idx: usize,
         checkpoint: &CheckpointData,
-    ) -> Result<Vec<TransactionObjectEntry>> {
+    ) -> Result<Box<dyn Iterator<Item = TransactionObjectEntry> + Send + Sync>> {
         let transaction = &checkpoint.transactions[tx_idx];
         let epoch = checkpoint.checkpoint_summary.epoch;
         let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
@@ -100,6 +100,6 @@ impl TransactionProcessor<TransactionObjectEntry> for TransactionObjectsHandler 
             transaction_objects.push(entry);
         }
 
-        Ok(transaction_objects)
+        Ok(Box::new(transaction_objects.into_iter()))
     }
 }

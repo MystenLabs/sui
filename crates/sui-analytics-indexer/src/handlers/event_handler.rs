@@ -32,9 +32,9 @@ impl AnalyticsHandler<EventEntry> for EventHandler {
     async fn process_checkpoint(
         &self,
         checkpoint_data: &Arc<CheckpointData>,
-    ) -> Result<Vec<EventEntry>> {
-        wait_for_cache(&checkpoint_data, &self.package_cache).await;
-        Ok(process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?)
+    ) -> Result<Box<dyn Iterator<Item = EventEntry> + Send + Sync>> {
+        wait_for_cache(checkpoint_data, &self.package_cache).await;
+        process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -52,7 +52,7 @@ impl TransactionProcessor<EventEntry> for EventHandler {
         &self,
         tx_idx: usize,
         checkpoint: &CheckpointData,
-    ) -> Result<Vec<EventEntry>> {
+    ) -> Result<Box<dyn Iterator<Item = EventEntry> + Send + Sync>> {
         let transaction = &checkpoint.transactions[tx_idx];
         if let Some(events) = &transaction.events {
             let epoch = checkpoint.checkpoint_summary.epoch;
@@ -95,9 +95,9 @@ impl TransactionProcessor<EventEntry> for EventHandler {
 
                 entries.push(entry);
             }
-            Ok(entries)
+            Ok(Box::new(entries.into_iter()))
         } else {
-            Ok(Vec::new())
+            Ok(Box::new(std::iter::empty()))
         }
     }
 }

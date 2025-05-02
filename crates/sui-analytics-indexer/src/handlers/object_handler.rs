@@ -208,9 +208,9 @@ impl AnalyticsHandler<ObjectEntry> for ObjectHandler {
     async fn process_checkpoint(
         &self,
         checkpoint_data: &Arc<CheckpointData>,
-    ) -> Result<Vec<ObjectEntry>> {
-        wait_for_cache(&checkpoint_data, &self.package_cache).await;
-        Ok(process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?)
+    ) -> Result<Box<dyn Iterator<Item = ObjectEntry> + Send + Sync>> {
+        wait_for_cache(checkpoint_data, &self.package_cache).await;
+        process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -228,7 +228,7 @@ impl TransactionProcessor<ObjectEntry> for ObjectHandler {
         &self,
         tx_idx: usize,
         checkpoint_data: &CheckpointData,
-    ) -> Result<Vec<ObjectEntry>> {
+    ) -> Result<Box<dyn Iterator<Item = ObjectEntry> + Send + Sync>> {
         let checkpoint_transaction = &checkpoint_data.transactions[tx_idx];
 
         for object in checkpoint_transaction.output_objects.iter() {
@@ -281,7 +281,7 @@ impl TransactionProcessor<ObjectEntry> for ObjectHandler {
             };
             vec.push(object_entry);
         }
-        Ok(vec)
+        Ok(Box::new(vec.into_iter()))
     }
 }
 
