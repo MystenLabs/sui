@@ -54,15 +54,7 @@ Sui Full nodes support more than 40 RPC types that includes the following catego
 
 A Sui archive instance stores the full Sui transaction history since genesis in a database agnostic format. This includes information about transactions (with client authentication), effects, events, and checkpoints. As such, archival storage can be used for data auditing and for replaying historic transactions.
 
-:::info
-
-The current archival storage format doesn't include historic object versions. 
-
-:::
-
-As a Full node operator, you can [enable archival fallback for your Full node](./sui-full-node.mdx#set-up-archival-fallback) by specifying the URL to upload archival data. Currently, Mysten Labs manages a Sui archive and stores it in AWS S3. To ensure a healthy network, we encourage the Sui community to set  up additional archives to ensure archival data availability across the network. In a typical configuration, an archive trails behind the latest checkpoint by approximately 10 minutes.
-
-A Full Node that starts from scratch can replay (and thus re-verify) transactions that occurred since Sui genesis from the given archive via [configuring Archival Fallback](./sui-full-node.mdx#archival-fallback) in the `fullnode.yaml` configuration file to point to the S3 bucket that stores the archive.
+A Full node that starts from scratch can replay (and thus re-verify) transactions that occurred since Sui genesis from the given archive via [configuring Archival Fallback](./archives.mdx#set-up-archival-fallback) in the `fullnode.yaml` configuration file to point to the cloud bucket that stores the archive.
 
 A Sui Full node that fails to retrieve checkpoints from its peers via state sync protocol falls back to downloading the missing checkpoints from its pre-configured archive. This fallback enables a Full node to catch up with the rest of the system regardless of the pruning policies of its peers.
 
@@ -81,10 +73,6 @@ Keeping some history (5 epochs) provides better RPC performance as it allows mor
 :::
 
 To learn more about transaction pruning policies, see [Transaction pruning](#transaction-pruning). To configure transaction pruning, specify the `num-epochs-to-retain-for-checkpoints: X` config option. The checkpoints, including their transactions, effects and events are pruned up to X epochs ago. We suggest setting transaction pruning to 2 epochs.
-
-### Set an archiving watermark
-
-In case your Full node is configured to upload committed information to an archive, you should ensure that pruning doesn't occur until after the corresponding data is uploaded. To do so, set the `use-for-pruning-watermark: true` in the Fullnode.yaml file as described in [Archival fallback](./sui-full-node.mdx#archival-fallback).
 
 ## Sui Full node key-value store backup
 
