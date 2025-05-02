@@ -28,8 +28,8 @@ impl AnalyticsHandler<MoveCallEntry> for MoveCallHandler {
     async fn process_checkpoint(
         &self,
         checkpoint_data: &Arc<CheckpointData>,
-    ) -> Result<Vec<MoveCallEntry>> {
-        Ok(process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?)
+    ) -> Result<Box<dyn Iterator<Item = MoveCallEntry> + Send + Sync>> {
+        process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -47,7 +47,7 @@ impl TransactionProcessor<MoveCallEntry> for MoveCallHandler {
         &self,
         tx_idx: usize,
         checkpoint: &CheckpointData,
-    ) -> Result<Vec<MoveCallEntry>> {
+    ) -> Result<Box<dyn Iterator<Item = MoveCallEntry> + Send + Sync>> {
         let transaction = &checkpoint.transactions[tx_idx];
         let move_calls = transaction.transaction.transaction_data().move_calls();
         let epoch = checkpoint.checkpoint_summary.epoch;
@@ -69,6 +69,6 @@ impl TransactionProcessor<MoveCallEntry> for MoveCallHandler {
             entries.push(entry);
         }
 
-        Ok(entries)
+        Ok(Box::new(entries.into_iter()))
     }
 }
