@@ -133,6 +133,27 @@ impl MovePackage {
             .await
     }
 
+    /// Fetch the package with the same original ID, at a different version, root version bound, or checkpoint.
+    ///
+    /// If no additional bound is provided, the latest version of this package is fetched at the latest checkpoint.
+    async fn package_at(
+        &self,
+        ctx: &Context<'_>,
+        version: Option<UInt53>,
+        checkpoint: Option<UInt53>,
+    ) -> Result<Option<MovePackage>, RpcError<Error>> {
+        MovePackage::by_key(
+            ctx,
+            self.super_.super_.scope.clone(),
+            PackageKey {
+                address: self.super_.super_.address.into(),
+                version,
+                at_checkpoint: checkpoint,
+            },
+        )
+        .await
+    }
+
     /// The Base64-encoded BCS serialization of this package, as a `MovePackage`.
     async fn package_bcs(&self) -> Result<Option<Base64>, RpcError> {
         let bytes = bcs::to_bytes(&self.contents).context("Failed to serialize MovePackage")?;
