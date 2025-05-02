@@ -6,7 +6,7 @@ description: The archive is a historical record of all transactions on Sui. Enab
 A Sui archive is a history of all transaction data on Sui. In some cases, peer nodes may not catch up with all transactions and effects through synchronization if they lag behind the current epoch by more than the latest few epochs. In such cases, instead of relying on synchronization, peer nodes can fallback to downloading the relevant information from an archive.
 
 :::info
-Starting with the 1.49 release, the existing special archive format is being deprecated in favor of a generic data ingestion format. Please migrate your configs using the configuration example listed below. The deprecation configuration is mentioned below for reference, but will be removed after a few releases.
+Starting with the 1.49 release, the existing special archive format is being deprecated in favor of a generic data ingestion format. Please migrate your configs using the configuration example that follows. The deprecated configuration is currently included for reference, but will be removed after a few releases.
 :::
 
 ## Set up archival fallback(latest) {#set-up-archival-fallback}
