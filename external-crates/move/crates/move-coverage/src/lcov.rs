@@ -4,7 +4,6 @@
 use lcov::record::Record as LRecord;
 use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
 use move_binary_format::file_format::FunctionDefinitionIndex;
-use move_compiler::unit_test::filter_test_members::{STDLIB_ADDRESS_NAME, UNIT_TEST_MODULE_NAME};
 use move_compiler::{
     compiled_unit::CompiledUnit, shared::files::MappedFiles,
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
@@ -321,13 +320,7 @@ impl FileRecordKeeper {
                 .identifier_at(self.unit.module.function_handle_at(fdef.function).name)
                 .to_string();
 
-            if self.unit.module.self_id().name().as_str() == UNIT_TEST_MODULE_NAME.as_str()
-                && self
-                    .unit
-                    .address_name()
-                    .is_some_and(|name| name.value == STDLIB_ADDRESS_NAME)
-                && UNIT_TEST_POISON_FUN_NAME.as_str() == name
-            {
+            if UNIT_TEST_POISON_FUN_NAME.as_str() == name {
                 continue;
             }
 
