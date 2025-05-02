@@ -96,31 +96,37 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
         Ok(FileFormat::PARQUET)
     }
 
-    fn write(&mut self, rows: &[S]) -> Result<()> {
-        if rows.is_empty() {
+    fn write(&mut self, rows: Box<dyn Iterator<Item = S> + Send + Sync>) -> Result<()> {
+        // Make the iterator peekable
+        let mut row_iter = rows.peekable();
+
+        // Check if iterator is empty
+        if row_iter.peek().is_none() {
             return Ok(());
         }
 
-        self.row_count += rows.len();
-
-        //  Lazily sample the first row to infer the schema and decide which concrete builder to instantiate.
+        // Lazily sample the first row to infer the schema and decide which concrete builder to instantiate
         if self.builders.is_empty() {
-            for col_idx in 0..S::schema().len() {
-                let value = rows[0].get_column(col_idx);
-                self.builders.push(match value {
-                    ParquetValue::U64(_) | ParquetValue::OptionU64(_) => {
-                        ColumnBuilder::U64(UInt64Builder::new())
-                    }
-                    ParquetValue::I64(_) => ColumnBuilder::I64(Int64Builder::new()),
-                    ParquetValue::Bool(_) => ColumnBuilder::Bool(BooleanBuilder::new()),
-                    ParquetValue::Str(_) | ParquetValue::OptionStr(_) => {
-                        ColumnBuilder::Str(StrBuilder::new())
-                    }
-                });
+            if let Some(first_row) = row_iter.peek() {
+                for col_idx in 0..S::schema().len() {
+                    let value = first_row.get_column(col_idx);
+                    self.builders.push(match value {
+                        ParquetValue::U64(_) | ParquetValue::OptionU64(_) => {
+                            ColumnBuilder::U64(UInt64Builder::new())
+                        }
+                        ParquetValue::I64(_) => ColumnBuilder::I64(Int64Builder::new()),
+                        ParquetValue::Bool(_) => ColumnBuilder::Bool(BooleanBuilder::new()),
+                        ParquetValue::Str(_) | ParquetValue::OptionStr(_) => {
+                            ColumnBuilder::Str(StrBuilder::new())
+                        }
+                    });
+                }
             }
         }
 
-        for row in rows {
+        let mut count = 0;
+        for row in row_iter {
+            count += 1;
             for (col_idx, value) in (0..S::schema().len()).map(|i| (i, row.get_column(i))) {
                 match (&mut self.builders[col_idx], value) {
                     (ColumnBuilder::U64(b), ParquetValue::U64(v)) => b.append_value(v),
@@ -142,6 +148,7 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
             }
         }
 
+        self.row_count += count;
         Ok(())
     }
 
