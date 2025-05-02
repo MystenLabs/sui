@@ -12,7 +12,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
     dependency::{DependencySet, Pinned, PinnedDependencyInfo, Unpinned},

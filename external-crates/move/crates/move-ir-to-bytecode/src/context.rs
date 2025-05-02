@@ -2,8 +2,9 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{bail, format_err, Result};
+use anyhow::{Result, bail, format_err};
 use move_binary_format::{
+    CompiledModule,
     file_format::{
         AbilitySet, AddressIdentifierIndex, CodeOffset, Constant, ConstantPoolIndex,
         DatatypeHandle, DatatypeHandleIndex, DatatypeTyParameter, EnumDefInstantiation,
@@ -15,7 +16,6 @@ use move_binary_format::{
         TableIndex, VariantHandle, VariantHandleIndex, VariantInstantiationHandle,
         VariantInstantiationHandleIndex,
     },
-    CompiledModule,
 };
 use move_bytecode_source_map::source_map::SourceMap;
 use move_core_types::{

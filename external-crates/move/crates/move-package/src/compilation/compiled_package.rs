@@ -3,15 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    BuildConfig,
     compilation::package_layout::CompiledPackageLayout,
     resolution::resolution_graph::{Package, Renaming, ResolvedGraph, ResolvedTable},
     source_package::{
-        layout::{SourcePackageLayout, REFERENCE_TEMPLATE_FILENAME},
+        layout::{REFERENCE_TEMPLATE_FILENAME, SourcePackageLayout},
         parsed_manifest::{FileName, PackageDigest, PackageName},
     },
-    BuildConfig,
 };
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use colored::Colorize;
 use itertools::{Either, Itertools};
 use move_binary_format::file_format::CompiledModule;
@@ -20,19 +20,19 @@ use move_bytecode_source_map::utils::{
 };
 use move_bytecode_utils::Modules;
 use move_command_line_common::files::{
-    extension_equals, find_filenames, try_exists, FileHash, DEBUG_INFO_EXTENSION,
-    MOVE_BYTECODE_EXTENSION, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION,
+    DEBUG_INFO_EXTENSION, FileHash, MOVE_BYTECODE_EXTENSION, MOVE_COMPILED_EXTENSION,
+    MOVE_EXTENSION, extension_equals, find_filenames, try_exists,
 };
 use move_compiler::{
+    Compiler,
     compiled_unit::{AnnotatedCompiledUnit, CompiledUnit, NamedCompiledModule},
     editions::Flavor,
     linters,
     shared::{
-        files::MappedFiles, NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths,
-        SaveFlag, SaveHook,
+        NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths, SaveFlag, SaveHook,
+        files::MappedFiles,
     },
     sui_mode::{self},
-    Compiler,
 };
 use move_disassembler::disassembler::Disassembler;
 use move_docgen::{Docgen, DocgenFlags, DocgenOptions};
@@ -725,7 +725,8 @@ impl CompiledPackage {
             })
             .collect::<Vec<_>>();
         if !errs.is_empty() {
-            anyhow::bail!("Module and/or script names found that would cause failures on case insensitive \
+            anyhow::bail!(
+                "Module and/or script names found that would cause failures on case insensitive \
                 file systems when compiling package '{}':\n{}\nPlease rename these scripts and/or modules to resolve these conflicts.",
                 self.compiled_package_info.package_name,
                 errs.join("\n"),
@@ -844,7 +845,7 @@ impl CompiledPackage {
             flags: docgen_flags,
         };
         let docgen = Docgen::new(model, &doc_options);
-        docgen.gen(model)
+        docgen.generate(model)
     }
 }
 

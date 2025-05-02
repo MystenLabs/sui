@@ -7,7 +7,7 @@ use move_proc_macros::growing_stack;
 use crate::{
     cfgir::{
         ast::remap_labels,
-        cfg::{MutForwardCFG, CFG},
+        cfg::{CFG, MutForwardCFG},
     },
     diagnostics::DiagnosticReporter,
     expansion::ast::Mutability,

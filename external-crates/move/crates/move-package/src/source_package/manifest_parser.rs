@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{package_hooks, source_package::parsed_manifest as PM};
-use anyhow::{anyhow, bail, format_err, Context, Result};
+use anyhow::{Context, Result, anyhow, bail, format_err};
 use move_compiler::editions::{Edition, Flavor};
 use move_core_types::account_address::{AccountAddress, AccountAddressParseError};
 use move_symbol_pool::symbol::Symbol;
@@ -292,8 +292,11 @@ pub fn parse_dev_addresses(tval: TV) -> Result<PM::DevAddressDeclarations> {
                 match entry.as_str() {
                     Some(entry_str) => {
                         if entry_str == EMPTY_ADDR_STR {
-                            bail!("Found uninstantiated named address '{}'. All addresses in the '{}' field must be instantiated.",
-                            ident, DEV_ADDRESSES_NAME);
+                            bail!(
+                                "Found uninstantiated named address '{}'. All addresses in the '{}' field must be instantiated.",
+                                ident,
+                                DEV_ADDRESSES_NAME
+                            );
                         } else if addresses
                             .insert(
                                 ident,
@@ -338,7 +341,9 @@ fn parse_external_resolver_name(resolver_val: &TV) -> Result<Option<Symbol>> {
     };
 
     if table.len() != 1 {
-        bail!("Malformed external resolver declaration for dependency {EXTERNAL_RESOLVER_PREFIX}.{resolver_val}",);
+        bail!(
+            "Malformed external resolver declaration for dependency {EXTERNAL_RESOLVER_PREFIX}.{resolver_val}",
+        );
     }
 
     let key = table
@@ -352,7 +357,9 @@ fn parse_external_resolver_name(resolver_val: &TV) -> Result<Option<Symbol>> {
     })?;
 
     if !key_value.is_str() {
-        bail!("Malformed external resolver declaration for dependency {EXTERNAL_RESOLVER_PREFIX}.{resolver_val}",);
+        bail!(
+            "Malformed external resolver declaration for dependency {EXTERNAL_RESOLVER_PREFIX}.{resolver_val}",
+        );
     }
 
     Ok(Some(Symbol::from(key)))

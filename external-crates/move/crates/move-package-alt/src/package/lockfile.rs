@@ -14,13 +14,13 @@ use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
 use serde_spanned::Spanned;
 use toml_edit::{
-    visit_mut::{visit_table_like_kv_mut, visit_table_mut, VisitMut},
     DocumentMut, InlineTable, Item, KeyMut, Table, Value,
+    visit_mut::{VisitMut, visit_table_like_kv_mut, visit_table_mut},
 };
 
 use crate::{
     dependency::{ManifestDependencyInfo, PinnedDependencyInfo},
-    errors::{with_file, Located, LockfileError, PackageError, PackageResult},
+    errors::{Located, LockfileError, PackageError, PackageResult, with_file},
     flavor::MoveFlavor,
 };
 

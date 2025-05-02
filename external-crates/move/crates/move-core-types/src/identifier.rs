@@ -28,7 +28,7 @@
 //! * do cross-module lookups while executing transactions
 
 use crate::gas_algebra::AbstractMemorySize;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest::prelude::*;
 use ref_cast::RefCast;

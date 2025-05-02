@@ -86,12 +86,9 @@ pub trait MoveResolver:
 }
 
 impl<
-        E: Debug,
-        T: LinkageResolver<Error = E>
-            + ModuleResolver<Error = E>
-            + ResourceResolver<Error = E>
-            + ?Sized,
-    > MoveResolver for T
+    E: Debug,
+    T: LinkageResolver<Error = E> + ModuleResolver<Error = E> + ResourceResolver<Error = E> + ?Sized,
+> MoveResolver for T
 {
     type Err = E;
 }

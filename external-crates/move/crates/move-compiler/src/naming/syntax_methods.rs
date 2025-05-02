@@ -288,8 +288,7 @@ fn valid_return_type(
                 valid_index_return_type(context, loc, ty)
             } else if valid_mut_ref(ty) {
                 let msg = format!("Invalid {} annotation", SyntaxAttribute::SYNTAX);
-                let tmsg =
-                    "This syntax method must return an immutable reference to match its subject type";
+                let tmsg = "This syntax method must return an immutable reference to match its subject type";
                 context.add_diag(diag!(
                     Declarations::InvalidSyntaxMethod,
                     (*loc, msg),

@@ -13,8 +13,8 @@
 use crate::symbols;
 use lsp_server::Notification;
 use lsp_types::{
-    notification::Notification as _, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, DidSaveTextDocumentParams,
+    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
+    DidSaveTextDocumentParams, notification::Notification as _,
 };
 use std::{io::Write, path::PathBuf};
 use vfs::VfsPath;

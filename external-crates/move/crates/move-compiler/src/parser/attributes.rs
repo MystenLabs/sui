@@ -8,15 +8,15 @@ use crate::{
     diagnostics::Diagnostic,
     parser::{
         ast::{
-            self as P, Attribute, AttributeValue, AttributeValue_, Attribute_, ExpectedFailureKind,
+            self as P, Attribute, Attribute_, AttributeValue, AttributeValue_, ExpectedFailureKind,
             ExpectedFailureKind_, NameAccessChain, ParsedAttribute, ParsedAttribute_,
         },
         format_one_of,
         syntax::Context,
     },
     shared::{
-        known_attributes::{self as KA, TestingAttribute, DEPRECATED_EXPECTED_KEYS},
         Name,
+        known_attributes::{self as KA, DEPRECATED_EXPECTED_KEYS, TestingAttribute},
     },
 };
 

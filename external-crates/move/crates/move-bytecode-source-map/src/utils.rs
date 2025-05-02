@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::source_map::SourceMap;
-use anyhow::{format_err, Result};
+use anyhow::{Result, format_err};
 use move_ir_types::location::Loc;
 use std::{
     fs::File,

@@ -6,8 +6,8 @@ use crate::{
     diagnostics::warning_filters::{WarningFilters, WarningFiltersTable},
     parser::ast::{
         self as P, Ability, Ability_, BinOp, BlockLabel, ConstantName, DatatypeName, DocComment,
-        Field, FunctionName, ModuleName, QuantKind, UnaryOp, Var, VariantName, ENTRY_MODIFIER,
-        MACRO_MODIFIER, NATIVE_MODIFIER,
+        ENTRY_MODIFIER, Field, FunctionName, MACRO_MODIFIER, ModuleName, NATIVE_MODIFIER,
+        QuantKind, UnaryOp, Var, VariantName,
     },
     shared::{
         ast_debug::*,

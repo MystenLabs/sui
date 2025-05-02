@@ -7,10 +7,10 @@
 
 use crate::compiler::{compile_modules_in_file, expect_modules, serialize_module_at_max_version};
 use move_binary_format::{
-    file_format::{
-        empty_module, AddressIdentifierIndex, IdentifierIndex, ModuleHandle, TableIndex,
-    },
     CompiledModule,
+    file_format::{
+        AddressIdentifierIndex, IdentifierIndex, ModuleHandle, TableIndex, empty_module,
+    },
 };
 use move_compiler::Compiler;
 use move_core_types::{

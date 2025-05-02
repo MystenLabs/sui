@@ -14,8 +14,8 @@ use crate::{
     naming::ast as N,
     parser::ast::FunctionName,
     shared::{
-        known_attributes::{AttributeKind_, BytecodeInstructionAttribute},
         Identifier,
+        known_attributes::{AttributeKind_, BytecodeInstructionAttribute},
     },
 };
 use move_ir_types::ast as IR;

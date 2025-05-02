@@ -7,7 +7,7 @@ use crate::{
     diagnostics::warning_filters::WarningFilter,
     expansion::ast as E,
     hlir::ast::{BaseType_, SingleType, SingleType_},
-    linters::{LintLevel, LinterDiagnosticCategory, ALLOW_ATTR_CATEGORY, LINT_WARNING_PREFIX},
+    linters::{ALLOW_ATTR_CATEGORY, LINT_WARNING_PREFIX, LintLevel, LinterDiagnosticCategory},
     typing::visitor::TypingVisitor,
 };
 use move_ir_types::location::Loc;

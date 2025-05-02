@@ -3,10 +3,10 @@
 
 use crate::{
     symbols::{
-        add_member_use_def, ignored_function, parsed_address,
-        parsing_leading_and_mod_names_to_map_key, parsing_mod_def_to_map_key,
         AutoImportInsertionInfo, AutoImportInsertionKind, CallInfo, CursorContext,
         CursorDefinition, CursorPosition, DefMap, ModuleDefs, References, UseDef, UseDefMap,
+        add_member_use_def, ignored_function, parsed_address,
+        parsing_leading_and_mod_names_to_map_key, parsing_mod_def_to_map_key,
     },
     utils::{loc_end_to_lsp_position_opt, loc_start_to_lsp_position_opt},
 };
@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 
 use move_compiler::{
     parser::ast as P,
-    shared::{files::MappedFiles, Identifier, Name, NamedAddressMap, NamedAddressMaps},
+    shared::{Identifier, Name, NamedAddressMap, NamedAddressMaps, files::MappedFiles},
 };
 use move_ir_types::location::*;
 

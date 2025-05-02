@@ -18,9 +18,9 @@ use crate::{
 };
 use move_abstract_interpreter::absint::FunctionContext;
 use move_binary_format::{
+    CompiledModule,
     errors::{PartialVMError, PartialVMResult},
     file_format::{CodeOffset, CodeUnit, FunctionDefinition, FunctionDefinitionIndex},
-    CompiledModule,
 };
 use move_bytecode_verifier_meter::Meter;
 use move_core_types::vm_status::StatusCode;

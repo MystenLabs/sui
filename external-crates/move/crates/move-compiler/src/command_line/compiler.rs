@@ -18,17 +18,17 @@ use crate::{
     expansion, hlir, interface_generator, naming,
     parser::{self, *},
     shared::{
-        files::{FilesSourceText, MappedFiles},
         CompilationEnv, Flags, IndexedPhysicalPackagePath, IndexedVfsPackagePath, NamedAddressMap,
         NamedAddressMaps, NumericalAddress, PackageConfig, PackagePaths, SaveFlag, SaveHook,
+        files::{FilesSourceText, MappedFiles},
     },
     to_bytecode,
     typing::{self, visitor::TypingVisitorObj},
     unit_test,
 };
 use move_command_line_common::files::{
-    extension_equals, find_filenames_and_keep_specified, DEBUG_INFO_EXTENSION,
-    MOVE_COMPILED_EXTENSION, MOVE_EXTENSION,
+    DEBUG_INFO_EXTENSION, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, extension_equals,
+    find_filenames_and_keep_specified,
 };
 use move_core_types::language_storage::ModuleId as CompiledModuleId;
 use move_proc_macros::growing_stack;
@@ -41,9 +41,9 @@ use std::{
     sync::Arc,
 };
 use vfs::{
+    VfsPath,
     impls::{memory::MemoryFS, physical::PhysicalFS},
     path::VfsFileType,
-    VfsPath,
 };
 
 //**************************************************************************************************

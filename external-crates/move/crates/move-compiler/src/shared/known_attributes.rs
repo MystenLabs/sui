@@ -4,7 +4,7 @@
 use crate::{
     expansion::ast::{Address, ModuleAccess, ModuleIdent, Value},
     shared::Name,
-    shared::{ast_debug::AstWriter, unique_map::UniqueMap, AstDebug, TName},
+    shared::{AstDebug, TName, ast_debug::AstWriter, unique_map::UniqueMap},
 };
 
 use move_core_types::vm_status::StatusCode;

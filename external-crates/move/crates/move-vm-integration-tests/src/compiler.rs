@@ -4,7 +4,7 @@
 
 use anyhow::Result;
 use move_binary_format::{file_format::CompiledModule, file_format_common::VERSION_MAX};
-use move_compiler::{compiled_unit::AnnotatedCompiledUnit, Compiler as MoveCompiler};
+use move_compiler::{Compiler as MoveCompiler, compiled_unit::AnnotatedCompiledUnit};
 use std::{fs::File, io::Write, path::Path};
 use tempfile::tempdir;
 

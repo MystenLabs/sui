@@ -14,9 +14,9 @@ use move_abstract_interpreter::{
     control_flow_graph::{BlockId, ControlFlowGraph},
 };
 use move_binary_format::{
+    CompiledModule,
     errors::{PartialVMError, PartialVMResult},
     file_format::{Bytecode, CodeUnit, FunctionDefinitionIndex, Signature, StructFieldInformation},
-    CompiledModule,
 };
 use move_bytecode_verifier_meter::Meter;
 use move_core_types::vm_status::StatusCode;
