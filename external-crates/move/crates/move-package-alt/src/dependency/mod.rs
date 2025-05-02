@@ -86,8 +86,12 @@ where
         D: Deserializer<'de>,
     {
         let data = toml::value::Value::deserialize(deserializer)?;
+        let expected_keys = vec!["git", "r", "local"];
 
         if let Some(tbl) = data.as_table() {
+            if tbl.is_empty() {
+                return Err(de::Error::custom("dependency has no fields"));
+            }
             if tbl.contains_key("git") {
                 let dep: UnpinnedGitDependency = toml::value::Value::deserialize(data)
                     .map_err(de::Error::custom)?
@@ -110,7 +114,12 @@ where
                 let dep = toml::Value::try_from(data)
                     .map_err(de::Error::custom)?
                     .try_into()
-                    .map_err(de::Error::custom)?;
+                    .map_err(|_| {
+                        de::Error::custom(format!(
+                            "expected a dependency type of {}, or flavor specific, but did not find any",
+                            expected_keys.join(", ")
+                        ))
+                    })?;
 
                 Ok(ManifestDependencyInfo::FlavorSpecific(dep))
             }
@@ -132,8 +141,12 @@ where
         D: Deserializer<'de>,
     {
         let data = toml::value::Value::deserialize(deserializer)?;
+        let expected_keys = vec!["git", "local"];
 
         if let Some(tbl) = data.as_table() {
+            if tbl.is_empty() {
+                return Err(de::Error::custom("Dependency has no fields"));
+            }
             if tbl.contains_key("git") {
                 let dep: PinnedGitDependency = toml::value::Value::deserialize(data)
                     .map_err(de::Error::custom)?
@@ -150,7 +163,12 @@ where
                 let dep = toml::Value::try_from(data)
                     .map_err(de::Error::custom)?
                     .try_into()
-                    .map_err(de::Error::custom)?;
+                    .map_err(|_| {
+                        de::Error::custom(format!(
+                            "expected a dependency type of {}, or flavor specific, but did not find any",
+                            expected_keys.join(", ")
+                        ))
+                    })?;
 
                 Ok(PinnedDependencyInfo::FlavorSpecific(dep))
             }
