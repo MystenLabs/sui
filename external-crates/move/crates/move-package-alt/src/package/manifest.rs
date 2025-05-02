@@ -4,6 +4,7 @@
 
 use std::{
     collections::BTreeMap,
+    fmt,
     fmt::{Debug, Display, Formatter},
 };
 

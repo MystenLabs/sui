@@ -5,4 +5,4 @@ error: TOML parse error at line 6, column 5
   |
 6 | A = { }
   |     ^^^
-data did not match any variant of untagged enum ManifestDependencyInfo
+dependency has no fields

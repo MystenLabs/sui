@@ -1,8 +1,8 @@
 ---
-source: crates/move-package-alt/tests/pinning_tests.rs
+source: crates/move-package-alt/tests/test_runner.rs
 ---
-[mock]
+[mock.Local]
 local = "default resolution"
 
-[overrides.mainnet.mock]
+[overrides.mainnet.mock.Local]
 local = "mainnet resolution"
