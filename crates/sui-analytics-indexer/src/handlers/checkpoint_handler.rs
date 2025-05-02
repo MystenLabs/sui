@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use fastcrypto::traits::EncodeDecodeBase64;
+use std::sync::Arc;
 
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::CheckpointData;
@@ -25,9 +26,9 @@ impl CheckpointHandler {
 impl AnalyticsHandler<CheckpointEntry> for CheckpointHandler {
     async fn process_checkpoint(
         &self,
-        checkpoint_data: &CheckpointData,
+        checkpoint_data: Arc<CheckpointData>,
     ) -> Result<Vec<CheckpointEntry>> {
-        let checkpoint_entry = process_checkpoint_data(checkpoint_data);
+        let checkpoint_entry = process_checkpoint_data(&checkpoint_data);
         Ok(vec![checkpoint_entry])
     }
 

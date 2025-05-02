@@ -12,8 +12,8 @@ use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::object::Object;
 
 use crate::handlers::{
-    get_move_struct, get_owner_address, get_owner_type, initial_shared_version, AnalyticsHandler,
-    ObjectStatusTracker,
+    get_move_struct, get_owner_address, get_owner_type, initial_shared_version,
+    process_transactions, AnalyticsHandler, ObjectStatusTracker, TransactionProcessor,
 };
 use crate::package_store::PackageCache;
 use crate::tables::{ObjectEntry, ObjectStatus};
@@ -43,75 +43,6 @@ impl ObjectHandler {
             metrics,
             package_cache,
         }
-    }
-
-    async fn process_transactions(
-        &self,
-        checkpoint_data: &CheckpointData,
-    ) -> Result<Vec<ObjectEntry>> {
-        let txn_len = checkpoint_data.transactions.len();
-        let mut entries = Vec::new();
-
-        for idx in 0..txn_len {
-            let transaction = &checkpoint_data.transactions[idx];
-
-            // Update package cache with output objects
-            for object in transaction.output_objects.iter() {
-                self.package_cache.update(object)?;
-            }
-
-            let epoch = checkpoint_data.checkpoint_summary.epoch;
-            let checkpoint = checkpoint_data.checkpoint_summary.sequence_number;
-            let timestamp_ms = checkpoint_data.checkpoint_summary.timestamp_ms;
-            let effects = &transaction.effects;
-
-            let object_status_tracker = ObjectStatusTracker::new(effects);
-
-            // Process output objects
-            for object in transaction.output_objects.iter() {
-                if let Some(object_entry) = self
-                    .process_object(
-                        epoch,
-                        checkpoint,
-                        timestamp_ms,
-                        object,
-                        &object_status_tracker,
-                    )
-                    .await?
-                {
-                    entries.push(object_entry);
-                }
-            }
-
-            // Process removed objects
-            for (object_ref, _) in effects.all_removed_objects().iter() {
-                let object_entry = ObjectEntry {
-                    object_id: object_ref.0.to_string(),
-                    digest: object_ref.2.to_string(),
-                    version: u64::from(object_ref.1),
-                    type_: None,
-                    checkpoint,
-                    epoch,
-                    timestamp_ms,
-                    owner_type: None,
-                    owner_address: None,
-                    object_status: ObjectStatus::Deleted,
-                    initial_shared_version: None,
-                    previous_transaction: transaction.transaction.digest().base58_encode(),
-                    has_public_transfer: false,
-                    storage_rebate: None,
-                    bcs: "".to_string(),
-                    coin_type: None,
-                    coin_balance: None,
-                    struct_tag: None,
-                    object_json: None,
-                    bcs_length: 0,
-                };
-                entries.push(object_entry);
-            }
-        }
-
-        Ok(entries)
     }
 
     async fn check_type_hierarchy(
@@ -276,10 +207,10 @@ impl ObjectHandler {
 impl AnalyticsHandler<ObjectEntry> for ObjectHandler {
     async fn process_checkpoint(
         &self,
-        checkpoint_data: &CheckpointData,
+        checkpoint_data: Arc<CheckpointData>,
     ) -> Result<Vec<ObjectEntry>> {
-        wait_for_cache(checkpoint_data, &self.package_cache).await;
-        self.process_transactions(checkpoint_data).await
+        wait_for_cache(&checkpoint_data, &self.package_cache).await;
+        Ok(process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?)
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -288,6 +219,69 @@ impl AnalyticsHandler<ObjectEntry> for ObjectHandler {
 
     fn name(&self) -> &'static str {
         NAME
+    }
+}
+
+#[async_trait::async_trait]
+impl TransactionProcessor<ObjectEntry> for ObjectHandler {
+    async fn process_transaction(
+        &self,
+        tx_idx: usize,
+        checkpoint_data: &CheckpointData,
+    ) -> Result<Vec<ObjectEntry>> {
+        let checkpoint_transaction = &checkpoint_data.transactions[tx_idx];
+
+        for object in checkpoint_transaction.output_objects.iter() {
+            self.package_cache.update(object)?;
+        }
+
+        let epoch = checkpoint_data.checkpoint_summary.epoch;
+        let checkpoint = checkpoint_data.checkpoint_summary.sequence_number;
+        let timestamp_ms = checkpoint_data.checkpoint_summary.timestamp_ms;
+        let effects = &checkpoint_transaction.effects;
+
+        let object_status_tracker = ObjectStatusTracker::new(effects);
+        let mut vec = Vec::new();
+        for object in checkpoint_transaction.output_objects.iter() {
+            if let Some(object_entry) = self
+                .process_object(
+                    epoch,
+                    checkpoint,
+                    timestamp_ms,
+                    object,
+                    &object_status_tracker,
+                )
+                .await?
+            {
+                vec.push(object_entry);
+            }
+        }
+        for (object_ref, _) in effects.all_removed_objects().iter() {
+            let object_entry = ObjectEntry {
+                object_id: object_ref.0.to_string(),
+                digest: object_ref.2.to_string(),
+                version: u64::from(object_ref.1),
+                type_: None,
+                checkpoint,
+                epoch,
+                timestamp_ms,
+                owner_type: None,
+                owner_address: None,
+                object_status: ObjectStatus::Deleted,
+                initial_shared_version: None,
+                previous_transaction: checkpoint_transaction.transaction.digest().base58_encode(),
+                has_public_transfer: false,
+                storage_rebate: None,
+                bcs: "".to_string(),
+                coin_type: None,
+                coin_balance: None,
+                struct_tag: None,
+                object_json: None,
+                bcs_length: 0,
+            };
+            vec.push(object_entry);
+        }
+        Ok(vec)
     }
 }
 
