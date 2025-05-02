@@ -7,11 +7,11 @@ use crate::{
     expansion::ast::{self as E, ModuleIdent},
     ice,
     shared::{
+        CompilationEnv, Name,
         known_attributes::{
             AttributeKind_, AttributePosition, DeprecationAttribute, KnownAttribute,
         },
         program_info::NamingProgramInfo,
-        CompilationEnv, Name,
     },
 };
 use move_ir_types::location::Loc;

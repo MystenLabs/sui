@@ -16,7 +16,7 @@
 //! serialization errors.
 
 use crate::{file_format::*, file_format_common::*};
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, metadata::Metadata,
 };

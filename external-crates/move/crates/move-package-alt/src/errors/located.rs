@@ -10,7 +10,7 @@ use std::{
 };
 
 use codespan_reporting::files::SimpleFiles;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_spanned::Spanned;
 
 use super::{FileHandle, PackageResult};

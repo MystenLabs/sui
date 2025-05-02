@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use hex::FromHex;
-use rand::{rngs::OsRng, Rng};
-use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
+use rand::{Rng, rngs::OsRng};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 use std::{convert::TryFrom, fmt, str::FromStr};
 
 use crate::gas_algebra::AbstractMemorySize;

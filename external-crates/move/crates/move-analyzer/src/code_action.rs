@@ -8,8 +8,8 @@ use crate::{
     },
     context::Context,
     symbols::{
-        get_compiled_pkg, ChainInfo, CompiledPkgInfo, CursorContext, PrecomputedPkgInfo,
-        SymbolicatorRunner, Symbols,
+        ChainInfo, CompiledPkgInfo, CursorContext, PrecomputedPkgInfo, SymbolicatorRunner, Symbols,
+        get_compiled_pkg,
     },
     utils::loc_start_to_lsp_position_opt,
 };

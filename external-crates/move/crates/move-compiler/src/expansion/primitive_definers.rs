@@ -2,17 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diag,
+    FullyCompiledProgram, diag,
     diagnostics::DiagnosticReporter,
     expansion::ast::{ModuleDefinition, ModuleIdent},
     ice,
     naming::ast::BuiltinTypeName_,
     shared::{
+        CompilationEnv,
         known_attributes::{AttributeKind_, DefinesPrimitiveAttribute, KnownAttribute},
         unique_map::UniqueMap,
-        CompilationEnv,
     },
-    FullyCompiledProgram,
 };
 use std::{collections::BTreeMap, sync::Arc};
 

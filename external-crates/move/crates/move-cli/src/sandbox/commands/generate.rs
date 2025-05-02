@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::sandbox::utils::on_disk_state_view::OnDiskStateView;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use move_bytecode_utils::layout::{SerdeLayoutBuilder, SerdeLayoutConfig};
 use move_core_types::{
     identifier::Identifier,
@@ -46,7 +46,9 @@ pub fn generate_struct_layouts(
             state.save_struct_layouts(&layout)?;
             println!("{}", layout);
         } else {
-            unimplemented!("Generating layout for all structs in a module. Use the --module and --struct options")
+            unimplemented!(
+                "Generating layout for all structs in a module. Use the --module and --struct options"
+            )
         }
         Ok(())
     } else {

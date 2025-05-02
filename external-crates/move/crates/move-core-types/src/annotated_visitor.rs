@@ -4,11 +4,11 @@
 use std::io::{Cursor, Read};
 
 use crate::{
+    VARIANT_COUNT_MAX,
     account_address::AccountAddress,
     annotated_value::{MoveEnumLayout, MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
     identifier::IdentStr,
     u256::U256,
-    VARIANT_COUNT_MAX,
 };
 
 /// Visitors can be used for building values out of a serialized Move struct or value.
@@ -788,7 +788,7 @@ fn visit_variant<'c, 'b, 'l, V: Visitor<'b, 'l> + ?Sized>(
         inner,
         layout,
         variant_layout.1,
-        &variant_layout.0 .0,
+        &variant_layout.0.0,
         tag as u16,
     );
     let res = visitor.visit_variant(&mut driver)?;

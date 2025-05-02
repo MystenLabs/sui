@@ -13,9 +13,9 @@ use move_binary_format::{
     proptest_types::CompiledModuleStrategyGen,
 };
 use move_bytecode_verifier::{
+    DuplicationChecker, InstructionConsistency, RecursiveDataDefChecker, SignatureChecker,
     ability_cache::AbilityCache, ability_field_requirements, constants,
-    instantiation_loops::InstantiationLoopChecker, DuplicationChecker, InstructionConsistency,
-    RecursiveDataDefChecker, SignatureChecker,
+    instantiation_loops::InstantiationLoopChecker,
 };
 use move_bytecode_verifier_meter::dummy::DummyMeter;
 use move_core_types::{

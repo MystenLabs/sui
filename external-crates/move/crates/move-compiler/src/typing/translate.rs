@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diag,
-    diagnostics::{codes::*, Diagnostic},
+    FullyCompiledProgram, diag,
+    diagnostics::{Diagnostic, codes::*},
     editions::{FeatureGate, Flavor},
     expansion::ast::{
         AbilitySet, DottedUsage, Fields, Friend, ModuleAccess_, ModuleIdent, ModuleIdent_,
@@ -13,7 +13,7 @@ use crate::{
     ice, ice_assert,
     naming::ast::{
         self as N, BlockLabel, DatatypeTypeParameter, IndexSyntaxMethods, ResolvedUseFuns, TParam,
-        TParamID, Type, TypeName, TypeName_, Type_,
+        TParamID, Type, Type_, TypeName, TypeName_,
     },
     parser::ast::{
         Ability_, BinOp, BinOp_, ConstantName, DatatypeName, DocComment, Field, FunctionName,
@@ -34,14 +34,13 @@ use crate::{
     typing::{
         ast::{self as T},
         core::{
-            self, global_use_funs, public_testing_visibility, report_visibility_error, Context,
-            ModuleContext, PublicForTesting, ResolvedFunctionType, Subst,
+            self, Context, ModuleContext, PublicForTesting, ResolvedFunctionType, Subst,
+            global_use_funs, public_testing_visibility, report_visibility_error,
         },
         dependency_ordering, expand, infinite_instantiations, macro_expand, match_analysis,
         recursive_datatypes,
         syntax_methods::validate_syntax_methods,
     },
-    FullyCompiledProgram,
 };
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
@@ -1926,11 +1925,16 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             if !context.is_current_module(&m) {
                 report_visibility_error(
                     context,
-                    (eloc, format!("Struct '{m}::{n}' can only be instantiated within its defining module '{m}'")),
+                    (
+                        eloc,
+                        format!(
+                            "Struct '{m}::{n}' can only be instantiated within its defining module '{m}'"
+                        ),
+                    ),
                     (
                         context.struct_declared_loc(&m, &n),
-                        format!("Struct defined in module '{m}'")
-                    )
+                        format!("Struct defined in module '{m}'"),
+                    ),
                 );
             }
             (bt, TE::Pack(m, n, targs, tfields))
@@ -1963,11 +1967,16 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             if !context.is_current_module(&m) {
                 report_visibility_error(
                     context,
-                    (eloc, format!("Enum variant '{m}::{e}::{v}' can only be instantiated within its defining module '{m}'")),
+                    (
+                        eloc,
+                        format!(
+                            "Enum variant '{m}::{e}::{v}' can only be instantiated within its defining module '{m}'"
+                        ),
+                    ),
                     (
                         context.enum_declared_loc(&m, &e),
-                        format!("Enum defined in module '{m}'")
-                    )
+                        format!("Enum defined in module '{m}'"),
+                    ),
                 );
             }
             (bt, TE::PackVariant(m, e, v, targs, tfields))
@@ -2376,11 +2385,16 @@ fn match_pattern_(
             if !context.is_current_module(&m) {
                 report_visibility_error(
                     context,
-                    (loc, format!("Enum variant '{m}::{enum_}::{variant}' can only be matched within its defining module '{m}'")),
+                    (
+                        loc,
+                        format!(
+                            "Enum variant '{m}::{enum_}::{variant}' can only be matched within its defining module '{m}'"
+                        ),
+                    ),
                     (
                         context.enum_declared_loc(&m, &enum_),
-                        format!("Enum defined in module '{m}'")
-                    )
+                        format!("Enum defined in module '{m}'"),
+                    ),
                 );
             }
             let bt = rtype!(bt);
@@ -2851,10 +2865,15 @@ fn lvalue(
             if !context.is_current_module(&m) {
                 report_visibility_error(
                     context,
-                    (loc, format!("Struct '{m}::{n}' can only be used in deconstruction {verb} within its defining module '{m}'")),
+                    (
+                        loc,
+                        format!(
+                            "Struct '{m}::{n}' can only be used in deconstruction {verb} within its defining module '{m}'"
+                        ),
+                    ),
                     (
                         context.struct_declared_loc(&m, &n),
-                        format!("Struct defined in module '{m}'")
+                        format!("Struct defined in module '{m}'"),
                     ),
                 );
             }
@@ -2901,8 +2920,8 @@ fn check_mutation(context: &mut Context, loc: Loc, given_ref: Type, rvalue_ty: &
 //**************************************************************************************************
 
 fn resolve_field(context: &mut Context, loc: Loc, ty: Type, field: &Field) -> Type {
-    use TypeName_::*;
     use Type_::*;
+    use TypeName_::*;
     const UNINFERRED_MSG: &str =
         "Could not infer the type before field access. Try annotating here";
     let msg = || format!("Unbound field '{}'", field);
@@ -3785,8 +3804,8 @@ fn exp_to_borrow_(
     base_type: Type,
     warn_on_constant: bool,
 ) -> Box<T::Exp> {
-    use Type_::*;
     use T::UnannotatedExp_ as TE;
+    use Type_::*;
     if warn_on_constant {
         warn_on_constant_borrow(context, eb.exp.loc, &eb)
     };
@@ -3942,8 +3961,8 @@ fn type_to_type_name_(
     error_msg: String,
     report_error: bool,
 ) -> Option<TypeName> {
-    use TypeName_ as TN;
     use Type_ as Ty;
+    use TypeName_ as TN;
     match &ty.value {
         Ty::Apply(_, tn @ sp!(_, TN::ModuleType(_, _) | TN::Builtin(_)), _) => Some(*tn),
         t => {

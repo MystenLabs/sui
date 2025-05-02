@@ -4,7 +4,7 @@
 
 use core::fmt;
 use std::{
-    collections::{btree_map::Entry as MapEntry, BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, btree_map::Entry as MapEntry},
     fmt::Formatter,
     fs,
 };

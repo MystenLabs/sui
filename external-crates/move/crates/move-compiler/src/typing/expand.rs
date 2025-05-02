@@ -7,7 +7,7 @@ use crate::{
     editions::FeatureGate,
     expansion::ast::Value_,
     ice,
-    naming::ast::{BuiltinTypeName_, FunctionSignature, Type, TypeName_, Type_},
+    naming::ast::{BuiltinTypeName_, FunctionSignature, Type, Type_, TypeName_},
     parser::ast::Ability_,
     shared::{ide::IDEAnnotation, string_utils::debug_print},
     typing::{

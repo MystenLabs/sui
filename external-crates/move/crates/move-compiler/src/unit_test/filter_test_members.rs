@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_ir_types::location::{sp, Loc};
+use move_ir_types::location::{Loc, sp};
 use move_symbol_pool::Symbol;
 
 use crate::{
@@ -11,11 +11,11 @@ use crate::{
     diagnostics::DiagnosticReporter,
     parser::{
         ast::{self as P, DocComment, NamePath, PathEntry},
-        filter::{filter_program, FilterContext},
+        filter::{FilterContext, filter_program},
     },
     shared::{
-        known_attributes::{self, AttributeKind_},
         CompilationEnv,
+        known_attributes::{self, AttributeKind_},
     },
 };
 

@@ -9,8 +9,8 @@ use std::{collections::BTreeMap, fmt::Debug, path::Path};
 use anyhow::bail;
 use futures::future::try_join_all;
 use serde::{
-    de::{MapAccess, Visitor},
     Deserialize, Serialize,
+    de::{MapAccess, Visitor},
 };
 use serde_spanned::Spanned;
 
@@ -22,7 +22,7 @@ use crate::{
 
 use external_resolver::{Query, QueryID, QueryResult, Request};
 
-use super::{pin, DependencySet, ManifestDependencyInfo, PinnedDependencyInfo};
+use super::{DependencySet, ManifestDependencyInfo, PinnedDependencyInfo, pin};
 
 type ResolverName = String;
 

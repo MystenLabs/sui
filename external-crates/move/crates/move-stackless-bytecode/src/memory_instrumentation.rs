@@ -8,7 +8,7 @@ use move_binary_format::file_format::CodeOffset;
 use move_model::{
     exp_generator::ExpGenerator,
     model::{FunctionEnv, StructEnv},
-    ty::{Type, BOOL_TYPE},
+    ty::{BOOL_TYPE, Type},
 };
 
 use crate::{

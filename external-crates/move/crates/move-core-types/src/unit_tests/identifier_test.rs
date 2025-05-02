@@ -4,7 +4,7 @@
 
 use crate::{
     gas_algebra::AbstractMemorySize,
-    identifier::{IdentStr, Identifier, ALLOWED_IDENTIFIERS, ALLOWED_NO_SELF_IDENTIFIERS},
+    identifier::{ALLOWED_IDENTIFIERS, ALLOWED_NO_SELF_IDENTIFIERS, IdentStr, Identifier},
 };
 use bcs::test_helpers::assert_canonical_encode_decode;
 use once_cell::sync::Lazy;

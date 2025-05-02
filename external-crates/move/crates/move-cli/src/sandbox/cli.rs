@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    DEFAULT_BUILD_DIR, Move, NativeFunctionRecord,
     sandbox::{
         self,
-        utils::{on_disk_state_view::OnDiskStateView, PackageContext},
+        utils::{PackageContext, on_disk_state_view::OnDiskStateView},
     },
-    Move, NativeFunctionRecord, DEFAULT_BUILD_DIR,
 };
 use anyhow::Result;
 use clap::Parser;

@@ -5,16 +5,16 @@
 use crate::{
     cfgir::ast as G,
     diag,
-    diagnostics::{warning_filters::WarningFilters, Diagnostic, DiagnosticReporter, Diagnostics},
+    diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, warning_filters::WarningFilters},
     expansion::ast::{Address, Attributes, ModuleIdent, ModuleIdent_},
     hlir::ast as HA,
     ice, ice_assert,
     naming::ast as NA,
     parser::ast::ConstantName,
     shared::{
+        CompilationEnv, Identifier, NumericalAddress,
         known_attributes::{self as KA, AttributeKind_, KnownAttribute, TestingAttribute},
         unique_map::UniqueMap,
-        CompilationEnv, Identifier, NumericalAddress,
     },
     unit_test::{ExpectedMoveError, ModuleTestPlan, MoveErrorType, TestArgument, TestCase},
 };

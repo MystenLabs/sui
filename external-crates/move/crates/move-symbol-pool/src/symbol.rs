@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    pool::Entry,
-    static_symbols::{STATIC_SYMBOLS, STATIC_SYMBOL_IDX},
     SYMBOL_POOL,
+    pool::Entry,
+    static_symbols::{STATIC_SYMBOL_IDX, STATIC_SYMBOLS},
 };
 use serde::{de::Deserialize, ser::Serialize};
 use std::{borrow::Cow, cmp::Ordering, fmt, num::NonZeroU64, ops::Deref};
@@ -306,9 +306,9 @@ macro_rules! static_symbols {
 #[cfg(test)]
 mod tests {
     use crate::{
-        static_symbols::{STATIC_SYMBOLS, STATIC_SYMBOL_IDX},
-        symbol::{Tag, MAX_INLINE_LEN},
         Symbol,
+        static_symbols::{STATIC_SYMBOL_IDX, STATIC_SYMBOLS},
+        symbol::{MAX_INLINE_LEN, Tag},
     };
 
     use std::mem::size_of;

@@ -4,7 +4,7 @@
 use crate::base::reroot_path;
 use clap::*;
 use move_binary_format::CompiledModule;
-use move_command_line_common::files::{extension_equals, find_filenames, MOVE_COMPILED_EXTENSION};
+use move_command_line_common::files::{MOVE_COMPILED_EXTENSION, extension_equals, find_filenames};
 use move_model_2 as M2;
 use move_package::BuildConfig;
 use std::{collections::BTreeMap, path::Path};

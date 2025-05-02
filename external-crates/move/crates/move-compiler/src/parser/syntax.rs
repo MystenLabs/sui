@@ -8,7 +8,7 @@
 
 use crate::{
     diag,
-    diagnostics::{codes::Category, Diagnostic, DiagnosticReporter, Diagnostics},
+    diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, codes::Category},
     editions::{Edition, FeatureGate, UPGRADE_NOTE},
     parser::{ast::*, attributes::to_known_attributes, format_one_of, lexer::*, token_set::*},
     shared::{string_utils::*, *},
@@ -17,7 +17,7 @@ use crate::{
 use move_command_line_common::files::FileHash;
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
-use move_symbol_pool::{symbol, Symbol};
+use move_symbol_pool::{Symbol, symbol};
 
 pub(crate) struct Context<'env, 'lexer, 'input> {
     current_package: Option<Symbol>,
@@ -1304,9 +1304,11 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
     // The item description specified here should include the special case above for
     // variable names, because if the current context cannot be parsed as a struct name
     // it is possible that the user intention was to use a variable name.
-    let ty = parse_name_access_chain_with_tyarg_whitespace(context, /* macros */ false, || {
-        "a variable or struct name"
-    })?;
+    let ty = parse_name_access_chain_with_tyarg_whitespace(
+        context,
+        /* macros */ false,
+        || "a variable or struct name",
+    )?;
     let args = if context.tokens.peek() == Tok::LParen {
         let current_loc = current_token_loc(context.tokens);
         context.check_feature(FeatureGate::PositionalFields, current_loc);
@@ -4253,8 +4255,7 @@ fn parse_use_decl(
         }
         _ => {
             if let Some(vis) = visibility {
-                let msg =
-                    "Invalid use declaration. Non-'use fun' declarations cannot have visibility \
+                let msg = "Invalid use declaration. Non-'use fun' declarations cannot have visibility \
                            modifiers as they are always internal";
                 context.add_diag(diag!(Syntax::InvalidModifier, (vis.loc().unwrap(), msg)));
             }

@@ -11,12 +11,12 @@ pub mod package_hooks;
 pub mod resolution;
 pub mod source_package;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use clap::*;
 use lock_file::LockFile;
 use move_compiler::{
-    editions::{Edition, Flavor},
     Flags,
+    editions::{Edition, Flavor},
 };
 use move_core_types::account_address::AccountAddress;
 use move_model_2::source_model;

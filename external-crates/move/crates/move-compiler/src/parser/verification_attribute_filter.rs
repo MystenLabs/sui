@@ -10,9 +10,9 @@ use crate::{
     diagnostics::DiagnosticReporter,
     parser::{
         ast as P,
-        filter::{filter_program, FilterContext},
+        filter::{FilterContext, filter_program},
     },
-    shared::{known_attributes, CompilationEnv},
+    shared::{CompilationEnv, known_attributes},
 };
 
 struct Context<'env> {

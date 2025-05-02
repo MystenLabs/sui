@@ -15,8 +15,8 @@ pub(crate) mod verification_attribute_filter;
 use crate::{
     parser::{self, ast::PackageDefinition, syntax::parse_file_string},
     shared::{
-        files::MappedFiles, CompilationEnv, IndexedVfsPackagePath, NamedAddressMapIndex,
-        NamedAddressMaps,
+        CompilationEnv, IndexedVfsPackagePath, NamedAddressMapIndex, NamedAddressMaps,
+        files::MappedFiles,
     },
 };
 use anyhow::anyhow;

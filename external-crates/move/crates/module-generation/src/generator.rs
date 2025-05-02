@@ -9,7 +9,7 @@ use move_core_types::account_address::AccountAddress;
 use move_ir_to_bytecode::compiler::compile_module;
 use move_ir_types::{ast::*, location::*};
 use move_symbol_pool::Symbol;
-use rand::{rngs::StdRng, Rng};
+use rand::{Rng, rngs::StdRng};
 use std::{
     collections::{BTreeSet, VecDeque},
     iter::FromIterator,

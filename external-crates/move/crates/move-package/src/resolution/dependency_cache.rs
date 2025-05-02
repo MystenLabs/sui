@@ -235,12 +235,12 @@ impl DependencyCache {
 
                     if !status.success() {
                         return Err(anyhow::anyhow!(
-                        "Failed to reset to latest Git state '{}' for package '{}', to skip set \
+                            "Failed to reset to latest Git state '{}' for package '{}', to skip set \
                          --skip-fetch-latest-git-deps | Exit status: {}",
-                        git_rev,
-                        dep_name,
-                        status
-                    ));
+                            git_rev,
+                            dep_name,
+                            status
+                        ));
                     }
                 }
 

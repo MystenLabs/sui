@@ -197,12 +197,13 @@ impl<Loc: Copy, Lbl: Clone + Ord> BorrowGraph<Loc, Lbl> {
         }
 
         for child_id in cleanup_ids {
-            assert!(self
-                .0
-                .get_mut(child_id)
-                .unwrap()
-                .borrows_from
-                .remove(&parent_id));
+            assert!(
+                self.0
+                    .get_mut(child_id)
+                    .unwrap()
+                    .borrows_from
+                    .remove(&parent_id)
+            );
         }
 
         for (child_id, parent_to_child_edge) in needs_factored {

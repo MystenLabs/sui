@@ -1,14 +1,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use colored::Colorize;
 use move_symbol_pool::Symbol;
-use petgraph::{algo, prelude::DiGraphMap, visit::Dfs, Direction};
+use petgraph::{Direction, algo, prelude::DiGraphMap, visit::Dfs};
 
 use std::io::BufRead;
 use std::{
-    collections::{btree_map::Entry, BTreeMap, BTreeSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque, btree_map::Entry},
     fmt::{self, Write as _},
     fs::File,
     io::{BufReader, Read, Write},
@@ -18,8 +18,8 @@ use std::{
 
 use crate::source_package::parsed_manifest::Dependencies;
 use crate::{
-    lock_file::{schema, LockFile},
-    package_hooks::{custom_resolve_pkg_id, resolve_version, PackageIdentifier},
+    lock_file::{LockFile, schema},
+    package_hooks::{PackageIdentifier, custom_resolve_pkg_id, resolve_version},
     source_package::{
         layout::SourcePackageLayout,
         manifest_parser::{
@@ -278,7 +278,11 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 disabled for your package because you have explicitly included dependencies on {}. Consider \
                 removing these dependencies from {}.",
                 "note".bold().yellow(),
-                move_compiler::format_oxford_list!("and", "{}", self.implicit_deps.keys().collect::<Vec<_>>()),
+                move_compiler::format_oxford_list!(
+                    "and",
+                    "{}",
+                    self.implicit_deps.keys().collect::<Vec<_>>()
+                ),
                 move_compiler::format_oxford_list!("and", "{}", explicit_implicits),
                 SourcePackageLayout::Manifest.location_str(),
             );

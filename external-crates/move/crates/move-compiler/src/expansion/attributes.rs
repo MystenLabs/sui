@@ -11,11 +11,11 @@ use crate::{
     ice, ice_assert,
     parser::ast as P,
     shared::{
+        Name,
         known_attributes::{
             self as A, AttributeKind_, AttributePosition, KnownAttribute, TestingAttribute,
         },
         unique_map::UniqueMap,
-        Name,
     },
 };
 

@@ -12,7 +12,7 @@ pub use manifest_error::ManifestError;
 pub use manifest_error::ManifestErrorKind;
 
 mod located;
-pub use located::{with_file, Located};
+pub use located::{Located, with_file};
 
 mod files;
 pub use files::FileHandle;

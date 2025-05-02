@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    CompiledModule,
     binary_config::{BinaryConfig, TableConfig},
     errors::BinaryLoaderResult,
     file_format::*,
-    CompiledModule,
 };
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,

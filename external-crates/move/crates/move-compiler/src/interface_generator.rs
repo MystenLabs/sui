@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::shared::{NumberFormat, NumericalAddress};
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use move_binary_format::file_format::{
     Ability, AbilitySet, CompiledModule, DatatypeHandleIndex, DatatypeTyParameter,
     FunctionDefinition, ModuleHandle, SignatureToken, StructDefinition, StructFieldInformation,

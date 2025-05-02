@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::verifier::{VerifierConfig, DEFAULT_MAX_CONSTANT_VECTOR_LEN};
+use crate::verifier::{DEFAULT_MAX_CONSTANT_VECTOR_LEN, VerifierConfig};
 use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::file_format_common::VERSION_MAX;
 #[cfg(feature = "tracing")]
