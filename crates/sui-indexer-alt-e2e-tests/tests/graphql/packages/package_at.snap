@@ -1,0 +1,71 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-9:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5092000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 11-14:
+//# upgrade --package P1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5092000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3, line 16:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 18-21:
+//# upgrade --package P2 --upgrade-capability 1,1 --sender A
+created: object(4,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5092000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 5, line 23:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 6, lines 25-41:
+//# run-graphql
+Response: {
+  "data": {
+    "p1": {
+      "address": "0x37c66e5033ffe07f458c76432c64848275451aaeb5d6d4420e14818318b93759",
+      "version": 1
+    },
+    "p2": {
+      "address": "0x57bf7d91755b58a6b82e41e490bd2f03e803d1c081fe85747312eb016f39314e",
+      "version": 2
+    },
+    "p3": {
+      "address": "0x50592365811b6d08409158a0917066ca3e822a4c49dd6ae4465150f8aeb9a1da",
+      "version": 3
+    }
+  }
+}
+
+task 7, lines 43-59:
+//# run-graphql
+Response: {
+  "data": {
+    "package": {
+      "address": "0x50592365811b6d08409158a0917066ca3e822a4c49dd6ae4465150f8aeb9a1da",
+      "version": 3,
+      "initial": {
+        "address": "0x37c66e5033ffe07f458c76432c64848275451aaeb5d6d4420e14818318b93759",
+        "version": 1
+      },
+      "byCheckpoint": {
+        "address": "0x57bf7d91755b58a6b82e41e490bd2f03e803d1c081fe85747312eb016f39314e",
+        "version": 2
+      }
+    }
+  }
+}

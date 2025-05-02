@@ -179,6 +179,12 @@ type MovePackage implements IAddressable & IObject {
 	"""
 	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
 	"""
+	Fetch the package with the same original ID, at a different version, root version bound, or checkpoint.
+	
+	If no additional bound is provided, the latest version of this package is fetched at the latest checkpoint.
+	"""
+	packageAt(version: UInt53, checkpoint: UInt53): MovePackage
+	"""
 	The Base64-encoded BCS serialization of this package, as a `MovePackage`.
 	"""
 	packageBcs: Base64
