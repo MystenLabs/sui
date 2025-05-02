@@ -84,11 +84,13 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for CSVWriter {
         Ok(FileFormat::CSV)
     }
 
-    fn write(&mut self, rows: &[S]) -> Result<()> {
+    fn write(&mut self, rows: Box<dyn Iterator<Item = S> + Send + Sync>) -> Result<()> {
+        let mut count = 0;
         for row in rows {
             self.writer.serialize(row)?;
+            count += 1;
         }
-        self.row_count += rows.len();
+        self.row_count += count;
         Ok(())
     }
 
