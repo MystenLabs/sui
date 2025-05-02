@@ -12,7 +12,7 @@ use rand::{Rng, SeedableRng, rngs::StdRng};
 ///////////////////////////////////////////////////////////////////////////
 
 pub struct Pad {
-    r#gen: StdRng,
+    rng: StdRng,
     table_size: usize,
     options: ModuleGeneratorOptions,
 }
@@ -21,7 +21,7 @@ impl Pad {
     pub fn pad(table_size: usize, module: &mut CompiledModule, options: ModuleGeneratorOptions) {
         let seed: [u8; 32] = [1; 32];
         let mut slf = Self {
-            r#gen: StdRng::from_seed(seed),
+            rng: StdRng::from_seed(seed),
             table_size,
             options,
         };
@@ -40,8 +40,8 @@ impl Pad {
     fn pad_identifier_table(&mut self, module: &mut CompiledModule) {
         module.identifiers = (0..(self.table_size + module.identifiers.len()))
             .map(|_| {
-                let len = self.r#gen.gen_range(10..self.options.max_string_size);
-                Identifier::new(random_string(&mut self.r#gen, len)).unwrap()
+                let len = self.rng.gen_range(10..self.options.max_string_size);
+                Identifier::new(random_string(&mut self.rng, len)).unwrap()
             })
             .collect()
     }

@@ -82,17 +82,17 @@ pub fn generate_verified_modules(
 pub struct ModuleGenerator<'a> {
     options: ModuleGeneratorOptions,
     current_module: ModuleDefinition,
-    r#gen: &'a mut StdRng,
+    rng: &'a mut StdRng,
 }
 
 impl<'a> ModuleGenerator<'a> {
     fn index(&mut self, bound: usize) -> usize {
-        self.r#gen.gen_range(0..bound)
+        self.rng.gen_range(0..bound)
     }
 
     fn identifier(&mut self) -> String {
-        let len = self.r#gen.gen_range(10..self.options.max_string_size);
-        random_string(self.r#gen, len)
+        let len = self.rng.gen_range(10..self.options.max_string_size);
+        random_string(self.rng, len)
     }
 
     fn base_type(&mut self, ty_param_context: &[&TypeVar]) -> Type {
@@ -156,8 +156,8 @@ impl<'a> ModuleGenerator<'a> {
         // TODO: Always change the base type to a reference if it's resource type. Then we can
         // allow functions to take resources.
         // if typ.is_nominal_resource { .... }
-        if self.options.references_allowed && self.r#gen.gen_bool(0.25) {
-            let is_mutable = self.r#gen.gen_bool(0.25);
+        if self.options.references_allowed && self.rng.gen_bool(0.25) {
+            let is_mutable = self.rng.gen_bool(0.25);
             Spanned::unsafe_no_loc(Type_::Reference(is_mutable, Box::new(typ)))
         } else {
             typ
@@ -222,7 +222,7 @@ impl<'a> ModuleGenerator<'a> {
 
     fn struct_fields(&mut self, ty_params: &[DatatypeTypeParameter]) -> StructDefinitionFields {
         let num_fields = self
-            .r#gen
+            .rng
             .gen_range(self.options.min_fields..self.options.max_fields);
         let fields: Fields<Type> = init!(num_fields, {
             (
@@ -290,7 +290,7 @@ impl<'a> ModuleGenerator<'a> {
             .collect()
     }
 
-    fn r#gen(mut self) -> ModuleDefinition {
+    fn rng(mut self) -> ModuleDefinition {
         let num_structs = self.index(self.options.max_structs) + 1;
         let num_functions = self.index(self.options.max_functions) + 1;
         // TODO: the order of generation here means that functions can't take resources as arguments.
@@ -319,14 +319,14 @@ impl<'a> ModuleGenerator<'a> {
     }
 
     pub fn create(
-        r#gen: &'a mut StdRng,
+        rng: &'a mut StdRng,
         options: ModuleGeneratorOptions,
         callable_modules: &Set<Symbol>,
     ) -> ModuleDefinition {
         // TODO: Generation of struct and function handles to the `callable_modules`
         let module_name = {
-            let len = r#gen.gen_range(10..options.max_string_size);
-            random_string(r#gen, len)
+            let len = rng.gen_range(10..options.max_string_size);
+            random_string(rng, len)
         };
         let current_module = ModuleDefinition {
             specified_version: None,
@@ -346,8 +346,8 @@ impl<'a> ModuleGenerator<'a> {
         Self {
             options,
             current_module,
-            r#gen,
+            rng,
         }
-        .r#gen()
+        .rng()
     }
 }
