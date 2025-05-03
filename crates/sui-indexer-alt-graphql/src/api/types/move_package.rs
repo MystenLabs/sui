@@ -4,22 +4,29 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{connection::Connection, dataloader::DataLoader, Context, InputObject, Object};
+use async_graphql::{
+    connection::{Connection, Edge},
+    dataloader::DataLoader,
+    Context, InputObject, Object,
+};
+use diesel::{ExpressionMethods, QueryDsl};
 use sui_indexer_alt_reader::{
     packages::{
         CheckpointBoundedOriginalPackageKey, PackageOriginalIdKey, VersionedOriginalPackageKey,
     },
     pg_reader::PgReader,
 };
-use sui_indexer_alt_schema::packages::StoredPackage;
+use sui_indexer_alt_schema::{packages::StoredPackage, schema::kv_packages};
 use sui_types::{
-    base_types::ObjectID, move_package::MovePackage as NativeMovePackage,
+    base_types::{ObjectID, SuiAddress as NativeSuiAddress},
+    move_package::MovePackage as NativeMovePackage,
     object::Object as NativeObject,
 };
 
 use crate::{
-    api::scalars::{base64::Base64, sui_address::SuiAddress, uint53::UInt53},
+    api::scalars::{base64::Base64, cursor::JsonCursor, sui_address::SuiAddress, uint53::UInt53},
     error::{bad_user_input, RpcError},
+    pagination::{Page, PaginationConfig},
     scope::Scope,
 };
 
@@ -160,6 +167,72 @@ impl MovePackage {
         Ok(Some(Base64(bytes)))
     }
 
+    /// Paginate all versions of this package after this one.
+    async fn package_versions_after(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CVersion>,
+        last: Option<u64>,
+        before: Option<CVersion>,
+        filter: Option<VersionFilter>,
+    ) -> Result<Connection<CVersion, MovePackage>, RpcError<Error>> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("MovePackage", "packageVersionsAfter");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        // Apply any filter that was supplied to the query, but add an additional version
+        // lowerbound constraint.
+        let Some(filter) = filter.unwrap_or_default().intersect(VersionFilter {
+            after_version: Some(self.super_.version.value().into()),
+            ..VersionFilter::default()
+        }) else {
+            return Ok(Connection::new(false, false));
+        };
+
+        MovePackage::paginate_by_version(
+            ctx,
+            self.super_.super_.scope.clone(),
+            page,
+            self.super_.super_.address,
+            filter,
+        )
+        .await
+    }
+
+    /// Paginate all versions of this package before this one.
+    async fn package_versions_before(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CVersion>,
+        last: Option<u64>,
+        before: Option<CVersion>,
+        filter: Option<VersionFilter>,
+    ) -> Result<Connection<CVersion, MovePackage>, RpcError<Error>> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("MovePackage", "packageVersionsBefore");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        // Apply any filter that was supplied to the query, but add an additional version
+        // upperbound constraint.
+        let Some(filter) = filter.unwrap_or_default().intersect(VersionFilter {
+            before_version: Some(self.super_.version.value().into()),
+            ..VersionFilter::default()
+        }) else {
+            return Ok(Connection::new(false, false));
+        };
+
+        MovePackage::paginate_by_version(
+            ctx,
+            self.super_.super_.scope.clone(),
+            page,
+            self.super_.super_.address,
+            filter,
+        )
+        .await
+    }
+
     /// The transaction that created this version of the object.
     pub(crate) async fn previous_transaction(
         &self,
@@ -298,5 +371,98 @@ impl MovePackage {
 
         let super_ = Object::from_contents(scope, Arc::new(native));
         Ok(Some(Self { super_, contents }))
+    }
+
+    /// Paginate through versions of a package, identified by its original ID. `address` points to
+    /// any package on-chain that has that original ID.
+    pub(crate) async fn paginate_by_version(
+        ctx: &Context<'_>,
+        scope: Scope,
+        page: Page<CVersion>,
+        address: NativeSuiAddress,
+        filter: VersionFilter,
+    ) -> Result<Connection<CVersion, MovePackage>, RpcError<Error>> {
+        use kv_packages::dsl as p;
+
+        let mut conn = Connection::new(false, false);
+
+        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+        let pg_reader: &PgReader = ctx.data()?;
+
+        let Some(original_id) = pg_loader
+            .load_one(PackageOriginalIdKey(address.into()))
+            .await
+            .with_context(|| format!("Failed to fetch original package ID for {address}"))?
+        else {
+            // No original ID record for this package, so it either doesn't exist on chain, or it
+            // is not a package.
+            return Ok(conn);
+        };
+
+        // The original ID record exists but points to a package that is not visible at the
+        // checkpoint being viewed.
+        if original_id.cp_sequence_number as u64 > scope.checkpoint_viewed_at() {
+            return Ok(conn);
+        }
+
+        let mut query = p::kv_packages
+            .filter(p::cp_sequence_number.le(scope.checkpoint_viewed_at() as i64))
+            .filter(p::original_id.eq(original_id.original_id))
+            .limit(page.limit() as i64 + 2)
+            .into_boxed();
+
+        if let Some(after_version) = filter.after_version {
+            query = query.filter(p::package_version.gt(i64::from(after_version)));
+        }
+
+        if let Some(before_version) = filter.before_version {
+            query = query.filter(p::package_version.lt(i64::from(before_version)));
+        }
+
+        query = if page.is_from_front() {
+            query
+                .order_by(p::cp_sequence_number)
+                .then_order_by(p::package_version)
+        } else {
+            query
+                .order_by(p::cp_sequence_number.desc())
+                .then_order_by(p::package_version.desc())
+        };
+
+        if let Some(after) = page.after() {
+            query = query.filter(p::package_version.ge(**after as i64));
+        }
+
+        if let Some(before) = page.before() {
+            query = query.filter(p::package_version.le(**before as i64));
+        }
+
+        let mut c = pg_reader
+            .connect()
+            .await
+            .context("Failed to connect to database")?;
+
+        let mut results: Vec<StoredPackage> = c
+            .results(query)
+            .await
+            .context("Failed to read from database")?;
+
+        if !page.is_from_front() {
+            results.reverse();
+        }
+
+        let (prev, next, results) =
+            page.paginate_results(results, |p| JsonCursor::new(p.package_version as u64));
+
+        conn.has_previous_page = prev;
+        conn.has_next_page = next;
+
+        for (cursor, stored) in results {
+            if let Some(object) = Self::from_stored(scope.clone(), stored)? {
+                conn.edges.push(Edge::new(cursor, object));
+            }
+        }
+
+        Ok(conn)
     }
 }

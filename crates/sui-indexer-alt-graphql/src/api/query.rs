@@ -258,6 +258,35 @@ impl Query {
         .await
     }
 
+    /// Paginate all versions of a package at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
+    ///
+    /// Different versions of a package will have different object IDs, unless they are system packages, but will share the same original ID.
+    async fn package_versions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<object::CVersion>,
+        last: Option<u64>,
+        before: Option<object::CVersion>,
+        address: SuiAddress,
+        filter: Option<VersionFilter>,
+    ) -> Result<Option<Connection<CVersion, MovePackage>>, RpcError<move_package::Error>> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Query", "packageVersions");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        Ok(Some(
+            MovePackage::paginate_by_version(
+                ctx,
+                self.scope(ctx)?,
+                page,
+                address.into(),
+                filter.unwrap_or_default(),
+            )
+            .await?,
+        ))
+    }
+
     /// Fetch the protocol config by protocol version, or the latest protocol config used on chain if no version is provided.
     async fn protocol_configs(
         &self,
