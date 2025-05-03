@@ -189,9 +189,46 @@ type MovePackage implements IAddressable & IObject {
 	"""
 	packageBcs: Base64
 	"""
+	Paginate all versions of this package after this one.
+	"""
+	packageVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): MovePackageConnection!
+	"""
+	Paginate all versions of this package before this one.
+	"""
+	packageVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): MovePackageConnection!
+	"""
 	The transaction that created this version of the object.
 	"""
 	previousTransaction: Transaction
+}
+
+type MovePackageConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [MovePackageEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MovePackage!]!
+}
+
+"""
+An edge in a connection.
+"""
+type MovePackageEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: MovePackage!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
 }
 
 """
@@ -527,6 +564,12 @@ type Query {
 	Note that this interpretation of `version` and "latest" differs from the one used by `Query.object`, because non-system package upgrades generate objects with different IDs. To fetch a package using the versioning semantics of objects, use `Object.asMovePackage` nested under `Query.object`.
 	"""
 	package(address: SuiAddress!, version: UInt53, atCheckpoint: UInt53): MovePackage
+	"""
+	Paginate all versions of a package at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
+	
+	Different versions of a package will have different object IDs, unless they are system packages, but will share the same original ID.
+	"""
+	packageVersions(first: Int, after: String, last: Int, before: String, address: SuiAddress!, filter: VersionFilter): MovePackageConnection
 	"""
 	Fetch the protocol config by protocol version, or the latest protocol config used on chain if no version is provided.
 	"""

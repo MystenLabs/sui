@@ -22,4 +22,5 @@ pub struct StoredPackage {
 pub struct StoredPackageOriginalId {
     pub package_id: Vec<u8>,
     pub original_id: Vec<u8>,
+    pub cp_sequence_number: i64,
 }
