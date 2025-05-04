@@ -111,7 +111,7 @@ async fn make_clients(
             None,
         );
         let channel = net_config
-            .connect_lazy(&net_addr, Some(tls_config))
+            .connect_lazy(&net_addr, tls_config)
             .map_err(|err| anyhow!(err.to_string()))?;
         let client = NetworkAuthorityClient::new(channel);
         let public_key_bytes =

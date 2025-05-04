@@ -1532,7 +1532,7 @@ impl SuiNode {
 
         Ok(SpawnOnce::new(ready_rx, async move {
             let server = server_builder
-                .bind(&network_address, Some(tls_config))
+                .bind(&network_address, tls_config)
                 .await
                 .unwrap_or_else(|err| panic!("Failed to bind to {network_address}: {err}"));
             let local_addr = server.local_addr();

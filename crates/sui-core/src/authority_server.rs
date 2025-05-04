@@ -152,7 +152,7 @@ impl AuthorityServer {
                 self.consensus_adapter,
                 self.metrics,
             )))
-            .bind(&address, Some(tls_config))
+            .bind(&address, tls_config)
             .await
             .unwrap();
         let local_addr = server.local_addr().to_owned();
