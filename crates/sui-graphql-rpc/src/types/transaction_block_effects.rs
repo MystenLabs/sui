@@ -1,22 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{
-    balance_change::BalanceChange,
-    base64::Base64,
-    checkpoint::{Checkpoint, CheckpointId},
-    cursor::{JsonCursor, Page},
-    date_time::DateTime,
-    digest::Digest,
-    epoch::Epoch,
-    event::Event,
-    gas::GasEffects,
-    object_change::ObjectChange,
-    transaction_block::{TransactionBlock, TransactionBlockInner},
-    uint53::UInt53,
-    unchanged_shared_object::UnchangedSharedObject,
-};
-use crate::types::big_int::BigInt;
 use crate::{
     consistency::ConsistentIndexCursor, data::package_resolver::PackageResolver, error::Error,
 };
@@ -40,6 +24,23 @@ use sui_types::{
         TransactionData as NativeTransactionData, TransactionDataAPI,
         TransactionKind as NativeTransactionKind,
     },
+};
+
+use super::{
+    balance_change::BalanceChange,
+    base64::Base64,
+    big_int::BigInt,
+    checkpoint::{Checkpoint, CheckpointId},
+    cursor::{JsonCursor, Page},
+    date_time::DateTime,
+    digest::Digest,
+    epoch::Epoch,
+    event::Event,
+    gas::GasEffects,
+    object_change::ObjectChange,
+    transaction_block::{TransactionBlock, TransactionBlockInner},
+    uint53::UInt53,
+    unchanged_shared_object::UnchangedSharedObject,
 };
 
 /// Wraps the actual transaction block effects data with the checkpoint sequence number at which the
