@@ -8,10 +8,10 @@ use sui::event;
 use sui::url::{Self, Url};
 
 /// An example soulbound NFT that can be minted by anybody
-/// 
-/// Removing the `store` ablity prevents this NFT 
+///
+/// Removing the `store` ablity prevents this NFT
 /// from being transferred unless this module provides
-/// a transfer function. 
+/// a transfer function.
 public struct TestnetSoulboundNFT has key {
     id: UID,
     /// Name for the token
