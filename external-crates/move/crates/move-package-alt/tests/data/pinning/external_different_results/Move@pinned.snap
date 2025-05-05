@@ -1,8 +1,0 @@
----
-source: crates/move-package-alt/tests/test_runner.rs
----
-[mock.Local]
-local = "default resolution"
-
-[overrides.mainnet.mock.Local]
-local = "mainnet resolution"

@@ -1,14 +1,15 @@
 ---
-source: crates/move-package-alt/tests/test_runner.rs
+source: crates/move-package-alt/tests/pinning_tests.rs
 ---
-[mock.Local]
-local = "."
-
-[mock2.Local]
-local = ".."
-
-[overrides.mainnet.mock.Local]
-local = "."
-
-[overrides.mainnet.mock2.Local]
-local = ".."
+{
+  "mock": {
+    "local": "for_default"
+  },
+  "overrides": {
+    "mainnet": {
+      "mock": {
+        "local": "for_mainnet"
+      }
+    }
+  }
+}

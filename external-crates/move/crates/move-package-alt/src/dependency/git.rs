@@ -453,6 +453,15 @@ mod tests {
         temp_dir
     }
 
+    pub async fn run_git_cmd(args: &[&str], repo_path: &PathBuf) -> Output {
+        Command::new("git")
+            .args(args)
+            .current_dir(repo_path)
+            .output()
+            .await
+            .unwrap()
+    }
+
     /// Sets up a test Move project with git repository
     /// It returns the temporary directory, the root path of the project, the first commit sha, and
     /// and the second commit sha.
@@ -466,26 +475,13 @@ mod tests {
         fs::create_dir_all(&root_path).unwrap();
 
         // Initialize git repository with main as default branch
-        Command::new("git")
-            .args(["init", "--initial-branch=main"])
-            .current_dir(&root_path)
-            .output()
-            .await
-            .unwrap();
+        run_git_cmd(&["init", "--initial-branch=main"], &root_path).await;
 
-        // Configure git user for commits
-        Command::new("git")
-            .args(["config", "user.name", "Test User"])
-            .current_dir(&root_path)
-            .output()
-            .await
-            .unwrap();
-        Command::new("git")
-            .args(["config", "user.email", "test@example.com"])
-            .current_dir(&root_path)
-            .output()
-            .await
-            .unwrap();
+        fs::copy(
+            "tests/data/basic_move_project/config",
+            root_path.join(".git").join("config"),
+        )
+        .unwrap();
 
         // Create directory structure
         let pkg_a_path = root_path.join("packages").join("pkg_a");
@@ -498,18 +494,8 @@ mod tests {
         .unwrap();
 
         // Initial commit
-        Command::new("git")
-            .args(["add", "."])
-            .current_dir(&root_path)
-            .output()
-            .await
-            .unwrap();
-        Command::new("git")
-            .args(["commit", "-m", "Initial commit", "."])
-            .current_dir(&root_path)
-            .output()
-            .await
-            .unwrap();
+        run_git_cmd(&["add", "."], &root_path).await;
+        run_git_cmd(&["commit", "-m", "Initial commit"], &root_path).await;
 
         fs::create_dir_all(&pkg_b_path).unwrap();
         fs::copy(
@@ -517,35 +503,19 @@ mod tests {
             pkg_b_path.join("Move.toml"),
         )
         .unwrap();
+
         // Commit updates
-        Command::new("git")
-            .args(["add", "."])
-            .current_dir(&root_path)
-            .output()
-            .await
-            .unwrap();
-        Command::new("git")
-            .args(["commit", "-m", "Add dependencies", "."])
-            .current_dir(&root_path)
-            .output()
-            .await
-            .unwrap();
+        run_git_cmd(&["add", "."], &root_path).await;
+        run_git_cmd(&["commit", "-m", "Second commit"], &root_path).await;
+
         // Get commits SHA
-        let commits = Command::new("git")
-            .args(["log", "--pretty=format:%H"])
-            .current_dir(&root_path)
-            .output()
-            .await
-            .unwrap();
+        let output = run_git_cmd(&["log"], &root_path).await;
+        eprintln!("{output:?}");
+        let commits = run_git_cmd(&["log", "--pretty=format:%H"], &root_path).await;
         let commits = String::from_utf8_lossy(&commits.stdout);
         let commits: Vec<_> = commits.lines().collect();
 
-        let branch = Command::new("git")
-            .args(["rev-parse", "--abbrev-ref", "HEAD"])
-            .current_dir(&root_path)
-            .output()
-            .await
-            .unwrap();
+        let branch = run_git_cmd(&["rev-parse", "--abbrev-ref", "HEAD"], &root_path).await;
 
         (
             temp_dir,

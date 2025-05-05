@@ -239,7 +239,7 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
         }
 
         // pin the deps that need to be pinned
-        let mut pinned_deps = pin(flavor, &to_pin, manifest.environments()).await?;
+        let mut pinned_deps = pin(flavor, to_pin, manifest.environments()).await?;
         pinned_deps.extend(pinned_dep_infos);
 
         // convert now from `DependencySet<PinnedDependencyInfo<F>>` to unpublished pinned

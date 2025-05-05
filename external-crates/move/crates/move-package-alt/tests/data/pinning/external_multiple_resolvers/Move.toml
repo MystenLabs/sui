@@ -1,0 +1,11 @@
+[package]
+name = "example"
+edition = "2024.beta"
+license = "Apache-2.0"
+authors = ["Move Team"]
+
+[dependencies.mock1.r.mock-resolver]
+output.default.result = { local = "for-res-1" }
+
+[dependencies.mock2.r.mock-resolver]
+output.default.result = { local = "for-res-2" }
