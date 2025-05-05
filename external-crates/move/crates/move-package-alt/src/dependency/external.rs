@@ -14,7 +14,7 @@ use std::{
 
 use anyhow::bail;
 use futures::future::{join_all, try_join_all};
-use itertools::{izip, Itertools};
+use itertools::{Itertools, izip};
 use serde::{
     Deserialize, Serialize,
     de::{MapAccess, Visitor},
@@ -33,11 +33,7 @@ use crate::{
     package::{EnvironmentName, PackageName},
 };
 
-use super::{
-    DependencySet, ManifestDependencyInfo, PinnedDependencyInfo,
-    external_protocol::{Query, QueryID, QueryResult, Request, Response},
-    pin,
-};
+use super::{DependencySet, ManifestDependencyInfo, PinnedDependencyInfo, pin};
 
 pub type ResolverName = String;
 
@@ -172,34 +168,6 @@ impl From<ExternalDependency> for RField {
     }
 }
 
-<<<<<<< HEAD
-impl<F: MoveFlavor> TryFrom<QueryResult> for ManifestDependencyInfo<F> {
-    type Error = PackageError;
-
-    fn try_from(value: QueryResult) -> PackageResult<Self> {
-        match value {
-            // TODO: errors!
-            QueryResult::Error { error } => {
-                return Err(PackageError::Resolver(ResolverError::resolver_failed(
-                    "resolver".to_string(),
-                    PackageName::default(),
-                    None,
-                    error.clone(),
-                )));
-            }
-            // TODO: warnings!
-            QueryResult::Success { warnings, resolved } => {
-                Self::deserialize(resolved).map_err(|e| {
-                    PackageError::Resolver(ResolverError::bad_resolver(
-                        &"".to_string(),
-                        format!("{e}"),
-                    ))
-                })
-            }
-        }
-    }
-}
-
 /// Resolve the dependencies in [dep_data] with the external resolver [resolver]; requests are
 /// performed for all environments in [envs]. Ensures that the returned dependency set contains no
 /// externally resolved dependencies.
@@ -246,7 +214,9 @@ async fn resolve_single<F: MoveFlavor>(
         )
     }
 
-    // TODO: check for exit code
+    if !output.status.success() {
+        return Err(ResolverError::nonzero_exit(&resolver, output.status).into());
+    }
 
     let result: DependencySet<ManifestDependencyInfo<F>> = izip!(envs, pkgs, resps?).collect();
 

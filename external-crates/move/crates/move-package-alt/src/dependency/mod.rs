@@ -18,8 +18,6 @@ use std::{
 };
 use tracing::debug;
 
-use std::{collections::BTreeMap, fmt::Debug, path::PathBuf};
-
 use derive_where::derive_where;
 use serde::{
     Deserialize, Deserializer, Serialize,
@@ -53,6 +51,7 @@ pub struct Unpinned;
 /// of an entry in the `dependencies` table.
 #[derive(Debug, Serialize)]
 #[derive_where(Clone, PartialEq)]
+#[serde(untagged)]
 pub enum ManifestDependencyInfo<F: MoveFlavor + ?Sized> {
     Git(UnpinnedGitDependency),
     External(ExternalDependency),
@@ -71,6 +70,7 @@ pub enum ManifestDependencyInfo<F: MoveFlavor + ?Sized> {
 /// we want to retain that information for source verification.
 #[derive(Debug, Serialize)]
 #[derive_where(Clone)]
+#[serde(untagged)]
 pub enum PinnedDependencyInfo<F: MoveFlavor + ?Sized> {
     Git(PinnedGitDependency),
     Local(LocalDependency),
@@ -224,7 +224,8 @@ pub async fn pin<F: MoveFlavor>(
     let (mut gits, exts, mut locs, mut flav) = split(&deps);
     assert!(exts.is_empty(), "resolve must remove external dependencies");
 
-    let pinned_gits: DependencySet<PinnedDependencyInfo<F>> = UnpinnedGitDependency::pin(gits)?
+    let pinned_gits: DependencySet<PinnedDependencyInfo<F>> = UnpinnedGitDependency::pin(gits)
+        .await?
         .into_iter()
         .map(|(env, package, dep)| (env, package, PinnedDependencyInfo::Git::<F>(dep)))
         .collect();
