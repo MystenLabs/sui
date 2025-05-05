@@ -104,7 +104,7 @@ For example, you can create a new `Sword` object defined in the package by calli
 $ sui client ptb \
 	--assign forge @<FORGE-ID> \
 	--assign to_address @<TO-ADDRESS> \
-	--move-call <PACKAGE-ID>::my_module::new_sword forge 3 3 \
+	--move-call <PACKAGE-ID>::example::new_sword forge 3 3 \
 	--assign sword \
 	--transfer-objects "[sword]" to_address \
 	--gas-budget 20000000
