@@ -282,10 +282,10 @@ fn command(
             consume_values(context, vs)?;
             vec![Value::NonRef]
         }
-        T::Command_::Publish(_, _) => {
+        T::Command_::Publish(_, _, _) => {
             vec![]
         }
-        T::Command_::Upgrade(_, _, _, x) => {
+        T::Command_::Upgrade(_, _, _, x, _) => {
             let v = argument(context, x)?;
             consume_value(context, v)?;
             vec![]
