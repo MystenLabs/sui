@@ -611,7 +611,7 @@ impl ArchiveReader {
                         std::cmp::Ordering::Equal
                     }
                 })
-                .expect("Archive does not contain checkpoint {checkpoint}");
+                .unwrap_or_else(|_| panic!("Archive does not contain checkpoint {checkpoint}"));
             summaries_filtered.push(summary_files[index].clone());
         }
 

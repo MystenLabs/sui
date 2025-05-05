@@ -169,7 +169,10 @@ impl Manifest {
                     .iter()
                     .find(|f| f.epoch_num > epoch_num)
                     .map(|f| f.checkpoint_seq_range.start)
-                    .unwrap_or(u64::MAX)
+                    .unwrap_or(panic!(
+                        "Manifest does not contain summary files for epoch {}",
+                        epoch_num
+                    ))
             }
         }
     }
