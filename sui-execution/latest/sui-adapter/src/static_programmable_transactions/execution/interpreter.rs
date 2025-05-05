@@ -4,6 +4,7 @@
 use crate::{
     execution_value::ExecutionState,
     gas_charger::GasCharger,
+    sp,
     static_programmable_transactions::{
         env::Env,
         execution::{context::Context, values},
@@ -68,7 +69,7 @@ where
     let state_view: *mut dyn ExecutionState = env.state_view;
     let T::Transaction { inputs, commands } = ast;
     let mut context = Context::new(env, metrics, tx_context, gas_charger, inputs)?;
-    for (idx, (command, tys)) in commands.into_iter().enumerate() {
+    for (sp!(idx, command), tys) in commands {
         let start = Instant::now();
         if let Err(err) = execute_command(&mut context, command, tys, trace_builder_opt.as_mut()) {
             let object_runtime = context.object_runtime()?;
@@ -81,7 +82,7 @@ where
             let state_view: &mut dyn ExecutionState = unsafe { state_view.as_mut().unwrap() };
             state_view.save_loaded_runtime_objects(loaded_runtime_objects);
             timings.push(ExecutionTiming::Abort(start.elapsed()));
-            return Err(err.with_command_index(idx));
+            return Err(err.with_command_index(idx as usize));
         };
         timings.push(ExecutionTiming::Success(start.elapsed()));
     }
@@ -110,12 +111,12 @@ where
 #[instrument(level = "trace", skip_all)]
 fn execute_command(
     context: &mut Context,
-    command: T::Command,
+    command: T::Command_,
     _result_tys: T::ResultType,
     trace_builder_opt: Option<&mut MoveTraceBuilder>,
 ) -> Result<(), ExecutionError> {
     let result = match command {
-        T::Command::MoveCall(move_call) => {
+        T::Command_::MoveCall(move_call) => {
             let T::MoveCall {
                 function,
                 arguments,
@@ -123,8 +124,11 @@ fn execute_command(
             let arguments = context.arguments(arguments)?;
             context.vm_move_call(function, arguments, trace_builder_opt)?
         }
-        T::Command::TransferObjects(objects, recipient) => {
-            let object_tys = objects.iter().map(|(_, ty)| ty.clone()).collect::<Vec<_>>();
+        T::Command_::TransferObjects(objects, recipient) => {
+            let object_tys = objects
+                .iter()
+                .map(|sp!(_, (_, ty))| ty.clone())
+                .collect::<Vec<_>>();
             let object_values: Vec<Value> = context.arguments(objects)?;
             let recipient: AccountAddress = context.argument(recipient)?;
             assert_invariant!(
@@ -138,7 +142,7 @@ fn execute_command(
             }
             vec![]
         }
-        T::Command::SplitCoins(_, coin, amounts) => {
+        T::Command_::SplitCoins(_, coin, amounts) => {
             // TODO should we just call a Move function?
             let coin_ref: Value = context.argument(coin)?;
             let amount_values: Vec<u64> = context.arguments(amounts)?;
@@ -166,7 +170,7 @@ fn execute_command(
                 .collect::<Result<_, _>>()?;
             coins
         }
-        T::Command::MergeCoins(_, target, coins) => {
+        T::Command_::MergeCoins(_, target, coins) => {
             // TODO should we just call a Move function?
             let target_ref: Value = context.argument(target)?;
             let coins = context.arguments(coins)?;
@@ -191,12 +195,12 @@ fn execute_command(
             values::coin_add_balance(target_ref, additional)?;
             vec![]
         }
-        T::Command::MakeMoveVec(ty, items) => {
+        T::Command_::MakeMoveVec(ty, items) => {
             let items: Vec<Value> = context.arguments(items)?;
             vec![values::vec_pack(ty, items)?]
         }
-        T::Command::Publish(..) => todo!("RUNTIME"),
-        T::Command::Upgrade(..) => todo!("RUNTIME"),
+        T::Command_::Publish(..) => todo!("RUNTIME"),
+        T::Command_::Upgrade(..) => todo!("RUNTIME"),
     };
     context.result(result)?;
     Ok(())

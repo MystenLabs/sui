@@ -1,16 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::programmable_transactions::execution::{bcs_argument_validate, PrimitiveArgumentLayout};
-
-use crate::static_programmable_transactions::{
-    env::Env,
-    loading::ast::Type,
-    typing::ast::{self as T, InputArg, ObjectArg},
+use crate::{
+    programmable_transactions::execution::{PrimitiveArgumentLayout, bcs_argument_validate},
+    sp,
+    static_programmable_transactions::{
+        env::Env,
+        loading::ast::Type,
+        typing::ast::{self as T, InputArg, ObjectArg},
+    },
 };
 use sui_types::{
     base_types::{RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
-    error::{command_argument_error, ExecutionError, ExecutionErrorKind},
+    error::{ExecutionError, ExecutionErrorKind, command_argument_error},
     execution_status::CommandArgumentError,
     id::RESOLVED_SUI_ID,
     transfer::RESOLVED_RECEIVING_STRUCT,
@@ -70,8 +72,8 @@ pub fn verify(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
         }
     }
     let context = &mut Context::new(inputs);
-    for (i, (c, _t)) in commands.iter().enumerate() {
-        command(context, c).map_err(|e| e.with_command_index(i))?;
+    for (c, _t) in commands {
+        command(context, c).map_err(|e| e.with_command_index(c.idx as usize))?;
     }
     Ok(())
 }
@@ -182,37 +184,37 @@ fn check_receiving(command_arg_idx: u16, constraint: &Type) -> Result<(), Execut
 // Object usage
 //**************************************************************************************************
 
-fn command(context: &mut Context, command: &T::Command) -> Result<(), ExecutionError> {
+fn command(context: &mut Context, sp!(_, command): &T::Command) -> Result<(), ExecutionError> {
     match command {
-        T::Command::MoveCall(mc) => {
-            check_obj_usages(context, 0, &mc.arguments)?;
-            check_gas_by_values(0, &mc.arguments)?;
+        T::Command_::MoveCall(mc) => {
+            check_obj_usages(context, &mc.arguments)?;
+            check_gas_by_values(&mc.arguments)?;
         }
-        T::Command::TransferObjects(objects, recipient) => {
-            check_obj_usages(context, 0, objects)?;
-            check_obj_usage(context, objects.len(), recipient)?;
+        T::Command_::TransferObjects(objects, recipient) => {
+            check_obj_usages(context, objects)?;
+            check_obj_usage(context, recipient)?;
             // gas can be used by value in TransferObjects
         }
-        T::Command::SplitCoins(_, coin, amounts) => {
-            check_obj_usage(context, 0, coin)?;
-            check_obj_usages(context, 1, amounts)?;
-            check_gas_by_value(0, coin)?;
-            check_gas_by_values(1, amounts)?;
+        T::Command_::SplitCoins(_, coin, amounts) => {
+            check_obj_usage(context, coin)?;
+            check_obj_usages(context, amounts)?;
+            check_gas_by_value(coin)?;
+            check_gas_by_values(amounts)?;
         }
-        T::Command::MergeCoins(_, target, coins) => {
-            check_obj_usage(context, 0, target)?;
-            check_obj_usages(context, 1, coins)?;
-            check_gas_by_value(0, target)?;
-            check_gas_by_values(1, coins)?;
+        T::Command_::MergeCoins(_, target, coins) => {
+            check_obj_usage(context, target)?;
+            check_obj_usages(context, coins)?;
+            check_gas_by_value(target)?;
+            check_gas_by_values(coins)?;
         }
-        T::Command::MakeMoveVec(_, xs) => {
-            check_obj_usages(context, 0, xs)?;
-            check_gas_by_values(0, xs)?;
+        T::Command_::MakeMoveVec(_, xs) => {
+            check_obj_usages(context, xs)?;
+            check_gas_by_values(xs)?;
         }
-        T::Command::Publish(_, _) => (),
-        T::Command::Upgrade(_, _, _, x) => {
-            check_obj_usage(context, 0, x)?;
-            check_gas_by_value(0, x)?;
+        T::Command_::Publish(_, _) => (),
+        T::Command_::Upgrade(_, _, _, x) => {
+            check_obj_usage(context, x)?;
+            check_gas_by_value(x)?;
         }
     }
     Ok(())
@@ -221,33 +223,28 @@ fn command(context: &mut Context, command: &T::Command) -> Result<(), ExecutionE
 // Checks for valid by-mut-ref and by-value usage of input objects
 fn check_obj_usages(
     context: &mut Context,
-    start: usize,
     arguments: &[T::Argument],
 ) -> Result<(), ExecutionError> {
-    for (i, arg) in arguments.iter().enumerate() {
-        check_obj_usage(context, start + i, arg)?;
+    for arg in arguments {
+        check_obj_usage(context, arg)?;
     }
     Ok(())
 }
 
-fn check_obj_usage(
-    context: &mut Context,
-    arg_idx: usize,
-    arg: &T::Argument,
-) -> Result<(), ExecutionError> {
-    match &arg.0 {
-        T::Argument_::Borrow(true, l) => check_obj_by_mut_ref(context, arg_idx, l),
-        T::Argument_::Use(T::Usage::Move(l)) => check_by_value_ref(context, arg_idx, l),
-        T::Argument_::Borrow(false, _)
-        | T::Argument_::Use(T::Usage::Copy { .. })
-        | T::Argument_::Read(_) => Ok(()),
+fn check_obj_usage(context: &mut Context, arg: &T::Argument) -> Result<(), ExecutionError> {
+    match &arg.value.0 {
+        T::Argument__::Borrow(true, l) => check_obj_by_mut_ref(context, arg.idx, l),
+        T::Argument__::Use(T::Usage::Move(l)) => check_by_value_ref(context, arg.idx, l),
+        T::Argument__::Borrow(false, _)
+        | T::Argument__::Use(T::Usage::Copy { .. })
+        | T::Argument__::Read(_) => Ok(()),
     }
 }
 
 // Checks for valid by-mut-ref usage of input objects
 fn check_obj_by_mut_ref(
     context: &mut Context,
-    arg_idx: usize,
+    arg_idx: u16,
     location: &T::Location,
 ) -> Result<(), ExecutionError> {
     match location {
@@ -263,7 +260,7 @@ fn check_obj_by_mut_ref(
                 ..
             }) => Err(command_argument_error(
                 CommandArgumentError::InvalidObjectByMutRef,
-                arg_idx,
+                arg_idx as usize,
             )),
         },
     }
@@ -272,7 +269,7 @@ fn check_obj_by_mut_ref(
 // Checks for valid by-value usage of input objects
 fn check_by_value_ref(
     context: &mut Context,
-    arg_idx: usize,
+    arg_idx: u16,
     location: &T::Location,
 ) -> Result<(), ExecutionError> {
     match location {
@@ -288,34 +285,34 @@ fn check_by_value_ref(
                 ..
             }) => Err(command_argument_error(
                 CommandArgumentError::InvalidObjectByValue,
-                arg_idx,
+                arg_idx as usize,
             )),
         },
     }
 }
 
 // Checks for no by value usage of gas
-fn check_gas_by_values(start: usize, arguments: &[T::Argument]) -> Result<(), ExecutionError> {
-    for (i, arg) in arguments.iter().enumerate() {
-        check_gas_by_value(start + i, arg)?;
+fn check_gas_by_values(arguments: &[T::Argument]) -> Result<(), ExecutionError> {
+    for arg in arguments {
+        check_gas_by_value(arg)?;
     }
     Ok(())
 }
 
-fn check_gas_by_value(arg_idx: usize, arg: &T::Argument) -> Result<(), ExecutionError> {
-    match &arg.0 {
-        T::Argument_::Use(T::Usage::Move(l)) => check_gas_by_value_loc(arg_idx, l),
-        T::Argument_::Borrow(_, _)
-        | T::Argument_::Use(T::Usage::Copy { .. })
-        | T::Argument_::Read(_) => Ok(()),
+fn check_gas_by_value(arg: &T::Argument) -> Result<(), ExecutionError> {
+    match &arg.value.0 {
+        T::Argument__::Use(T::Usage::Move(l)) => check_gas_by_value_loc(arg.idx, l),
+        T::Argument__::Borrow(_, _)
+        | T::Argument__::Use(T::Usage::Copy { .. })
+        | T::Argument__::Read(_) => Ok(()),
     }
 }
 
-fn check_gas_by_value_loc(arg_idx: usize, location: &T::Location) -> Result<(), ExecutionError> {
+fn check_gas_by_value_loc(idx: u16, location: &T::Location) -> Result<(), ExecutionError> {
     match location {
         T::Location::GasCoin => Err(command_argument_error(
             CommandArgumentError::InvalidGasCoinUsage,
-            arg_idx,
+            idx as usize,
         )),
         T::Location::Input(_) | T::Location::Result(_, _) => Ok(()),
     }

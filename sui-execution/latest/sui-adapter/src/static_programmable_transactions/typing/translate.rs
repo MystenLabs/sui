@@ -4,13 +4,16 @@
 use super::{ast as T, env::Env};
 use crate::{
     programmable_transactions::context::EitherError,
-    static_programmable_transactions::loading::ast::{self as L, InputArg, ObjectArg, Type},
+    static_programmable_transactions::{
+        loading::ast::{self as L, InputArg, Type},
+        spanned::sp,
+    },
 };
 use std::collections::BTreeMap;
 use sui_types::{
     base_types::TxContextKind,
     coin::RESOLVED_COIN_STRUCT,
-    error::{command_argument_error, ExecutionError},
+    error::{ExecutionError, command_argument_error},
     execution_status::CommandArgumentError,
 };
 
@@ -109,10 +112,12 @@ pub fn transaction(env: &Env, lt: L::Transaction) -> Result<T::Transaction, Exec
         .into_iter()
         .enumerate()
         .map(|(i, c)| {
-            context.current_command = i as u16;
-            command(env, &mut context, c).map_err(|e| e.with_command_index(i))
+            let idx = i as u16;
+            context.current_command = idx;
+            let (c, tys) = command(env, &mut context, c).map_err(|e| e.with_command_index(i))?;
+            Ok((sp(idx, c), tys))
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>, ExecutionError>>()?;
     let inputs = context.finish();
     let mut ast = T::Transaction { inputs, commands };
     // mark the last usage of references as Move instead of Copy
@@ -124,7 +129,7 @@ fn command(
     env: &Env,
     context: &mut Context,
     command: L::Command,
-) -> Result<(T::Command, T::ResultType), ExecutionError> {
+) -> Result<(T::Command_, T::ResultType), ExecutionError> {
     Ok(match command {
         L::Command::MoveCall(lmc) => {
             let L::MoveCall {
@@ -142,7 +147,7 @@ fn command(
             let args = arguments(env, context, 0, arg_locs, parameter_tys.iter().cloned())?;
             let result = function.signature.return_.clone();
             (
-                T::Command::MoveCall(Box::new(T::MoveCall {
+                T::Command_::MoveCall(Box::new(T::MoveCall {
                     function,
                     arguments: args,
                 })),
@@ -157,13 +162,13 @@ fn command(
                 Ok(abilities.has_copy() && abilities.has_key())
             })?;
             let address = argument(env, context, objects.len(), address_loc, Type::Address)?;
-            (T::Command::TransferObjects(objects, address), vec![])
+            (T::Command_::TransferObjects(objects, address), vec![])
         }
         L::Command::SplitCoins(lcoin, lamounts) => {
             let coin_loc = one_location(context, 0, lcoin)?;
             let amount_locs = locations(context, 1, lamounts)?;
             let coin = coin_mut_ref_argument(env, context, 0, coin_loc)?;
-            let coin_type = match &coin.1 {
+            let coin_type = match &coin.value.1 {
                 Type::Reference(true, ty) => (**ty).clone(),
                 _ => invariant_violation!("coin must be a mutable reference"),
             };
@@ -175,13 +180,13 @@ fn command(
                 std::iter::repeat_with(|| Type::U64),
             )?;
             let result = vec![coin_type.clone(); amounts.len()];
-            (T::Command::SplitCoins(coin_type, coin, amounts), result)
+            (T::Command_::SplitCoins(coin_type, coin, amounts), result)
         }
         L::Command::MergeCoins(ltarget, lcoins) => {
             let target_loc = one_location(context, 0, ltarget)?;
             let coin_locs = locations(context, 1, lcoins)?;
             let target = coin_mut_ref_argument(env, context, 0, target_loc)?;
-            let coin_type = match &target.1 {
+            let coin_type = match &target.value.1 {
                 Type::Reference(true, ty) => (**ty).clone(),
                 _ => invariant_violation!("target must be a mutable reference"),
             };
@@ -192,7 +197,7 @@ fn command(
                 coin_locs,
                 std::iter::repeat_with(|| coin_type.clone()),
             )?;
-            (T::Command::MergeCoins(coin_type, target, coins), vec![])
+            (T::Command_::MergeCoins(coin_type, target, coins), vec![])
         }
         L::Command::MakeMoveVec(Some(ty), lelems) => {
             let elem_locs = locations(context, 0, lelems)?;
@@ -204,7 +209,7 @@ fn command(
                 std::iter::repeat_with(|| ty.clone()),
             )?;
             (
-                T::Command::MakeMoveVec(ty.clone(), elems),
+                T::Command_::MakeMoveVec(ty.clone(), elems),
                 vec![env.vector_type(ty)?],
             )
         }
@@ -235,18 +240,18 @@ fn command(
                 std::iter::repeat_with(|| first_ty.clone()),
             )?;
             (
-                T::Command::MakeMoveVec(first_ty.clone(), elems),
+                T::Command_::MakeMoveVec(first_ty.clone(), elems),
                 vec![env.vector_type(first_ty)?],
             )
         }
-        L::Command::Publish(items, object_ids) => (T::Command::Publish(items, object_ids), vec![]),
+        L::Command::Publish(items, object_ids) => (T::Command_::Publish(items, object_ids), vec![]),
         L::Command::Upgrade(items, object_ids, object_id, la) => {
             let location = one_location(context, 0, la)?;
             let expected_ty = env.upgrade_ticket_type()?;
             let a = argument(env, context, 0, location, expected_ty)?;
             let res = env.upgrade_receipt_type()?;
             (
-                T::Command::Upgrade(items, object_ids, object_id, a),
+                T::Command_::Upgrade(items, object_ids, object_id, a),
                 vec![res.clone()],
             )
         }
@@ -354,9 +359,10 @@ fn argument(
     location: T::Location,
     expected_ty: Type,
 ) -> Result<T::Argument, ExecutionError> {
-    let arg_ = argument_(env, context, command_arg_idx, location, &expected_ty)
+    let arg__ = argument_(env, context, command_arg_idx, location, &expected_ty)
         .map_err(|e| e.into_execution_error(command_arg_idx))?;
-    Ok((arg_, expected_ty))
+    let arg_ = (arg__, expected_ty);
+    Ok(sp(command_arg_idx as u16, arg_))
 }
 
 fn argument_(
@@ -365,7 +371,7 @@ fn argument_(
     command_arg_idx: usize,
     location: T::Location,
     expected_ty: &Type,
-) -> Result<T::Argument_, EitherError> {
+) -> Result<T::Argument__, EitherError> {
     let command_and_arg_idx = (context.current_command, command_arg_idx as u16);
     let actual_ty = context.location_type(env, location)?;
     Ok(match (actual_ty, expected_ty) {
@@ -376,7 +382,7 @@ fn argument_(
             debug_assert!(!a_is_mut || *b_is_mut);
             debug_assert!(expected_ty.abilities().has_copy());
             check_type(command_and_arg_idx, LocationType::Fixed((*a).clone()), b)?;
-            T::Argument_::new_copy(location)
+            T::Argument__::new_copy(location)
         }
         (LocationType::Fixed(Type::Reference(_, a)), b) => {
             check_type(command_and_arg_idx, LocationType::Fixed((*a).clone()), b)?;
@@ -384,7 +390,7 @@ fn argument_(
                 // TODO this should be a different error for missing copy
                 return Err(CommandArgumentError::TypeMismatch.into());
             }
-            T::Argument_::Read(T::Usage::new_copy(location))
+            T::Argument__::Read(T::Usage::new_copy(location))
         }
 
         // Non reference location types
@@ -395,11 +401,11 @@ fn argument_(
                 actual_ty,
                 inner,
             )?;
-            T::Argument_::Borrow(/* mut */ false, location)
+            T::Argument__::Borrow(/* mut */ false, location)
         }
         (actual_ty, _) => {
             check_type(command_and_arg_idx, actual_ty, expected_ty)?;
-            T::Argument_::Use(if expected_ty.abilities().has_copy() {
+            T::Argument__::Use(if expected_ty.abilities().has_copy() {
                 T::Usage::new_copy(location)
             } else {
                 T::Usage::new_move(location)
@@ -470,8 +476,9 @@ fn constrained_argument<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     location: T::Location,
     is_valid: &mut P,
 ) -> Result<T::Argument, ExecutionError> {
-    constrained_argument_(env, context, location, is_valid)
-        .map_err(|e| e.into_execution_error(command_arg_idx))
+    let arg_ = constrained_argument_(env, context, location, is_valid)
+        .map_err(|e| e.into_execution_error(command_arg_idx))?;
+    Ok(sp(command_arg_idx as u16, arg_))
 }
 
 fn constrained_argument_<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
@@ -479,9 +486,9 @@ fn constrained_argument_<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     context: &mut Context,
     location: T::Location,
     is_valid: &mut P,
-) -> Result<T::Argument, EitherError> {
+) -> Result<T::Argument_, EitherError> {
     if let Some(ty) = constrained_type(env, context, location, is_valid)? {
-        Ok((T::Argument_::Use(T::Usage::Move(location)), ty))
+        Ok((T::Argument__::Use(T::Usage::Move(location)), ty))
     } else {
         Err(CommandArgumentError::TypeMismatch.into())
     }
@@ -505,28 +512,29 @@ fn coin_mut_ref_argument(
     command_arg_idx: usize,
     location: T::Location,
 ) -> Result<T::Argument, ExecutionError> {
-    coin_mut_ref_argument_(env, context, location)
-        .map_err(|e| e.into_execution_error(command_arg_idx))
+    let arg_ = coin_mut_ref_argument_(env, context, location)
+        .map_err(|e| e.into_execution_error(command_arg_idx))?;
+    Ok(sp(command_arg_idx as u16, arg_))
 }
 
 fn coin_mut_ref_argument_(
     env: &Env,
     context: &mut Context,
     location: T::Location,
-) -> Result<T::Argument, EitherError> {
+) -> Result<T::Argument_, EitherError> {
     let actual_ty = context.location_type(env, location)?;
 
     Ok(match &actual_ty {
         LocationType::Fixed(Type::Reference(is_mut, ty)) if *is_mut => {
             check_coin_type(ty)?;
             (
-                T::Argument_::new_copy(location),
+                T::Argument__::new_copy(location),
                 Type::Reference(*is_mut, ty.clone()),
             )
         }
         LocationType::Fixed(ty) => {
             check_coin_type(ty)?;
-            (T::Argument_::Borrow(/* mut */ true, location), ty.clone())
+            (T::Argument__::Borrow(/* mut */ true, location), ty.clone())
         }
         LocationType::Bytes(_, _) => {
             // TODO we do not currently bytes in any mode as that would require additional type
@@ -554,7 +562,10 @@ fn check_coin_type(ty: &Type) -> Result<(), EitherError> {
 //**************************************************************************************************
 
 mod scope_references {
-    use crate::static_programmable_transactions::typing::ast::{self as T, Type};
+    use crate::{
+        sp,
+        static_programmable_transactions::typing::ast::{self as T, Type},
+    };
     use std::collections::BTreeSet;
 
     /// To mimic proper scoping of references, the last usage of a reference is made a Move instead
@@ -566,24 +577,24 @@ mod scope_references {
         }
     }
 
-    fn command(used: &mut BTreeSet<(u16, u16)>, command: &mut T::Command) {
+    fn command(used: &mut BTreeSet<(u16, u16)>, sp!(_, command): &mut T::Command) {
         match command {
-            T::Command::MoveCall(mc) => arguments(used, &mut mc.arguments),
-            T::Command::TransferObjects(objects, recipient) => {
+            T::Command_::MoveCall(mc) => arguments(used, &mut mc.arguments),
+            T::Command_::TransferObjects(objects, recipient) => {
                 argument(used, recipient);
                 arguments(used, objects);
             }
-            T::Command::SplitCoins(_, coin, amounts) => {
+            T::Command_::SplitCoins(_, coin, amounts) => {
                 arguments(used, amounts);
                 argument(used, coin);
             }
-            T::Command::MergeCoins(_, target, coins) => {
+            T::Command_::MergeCoins(_, target, coins) => {
                 arguments(used, coins);
                 argument(used, target);
             }
-            T::Command::MakeMoveVec(_, xs) => arguments(used, xs),
-            T::Command::Publish(_, _) => (),
-            T::Command::Upgrade(_, _, _, x) => argument(used, x),
+            T::Command_::MakeMoveVec(_, xs) => arguments(used, xs),
+            T::Command_::Publish(_, _) => (),
+            T::Command_::Upgrade(_, _, _, x) => argument(used, x),
         }
     }
 
@@ -593,10 +604,10 @@ mod scope_references {
         }
     }
 
-    fn argument(used: &mut BTreeSet<(u16, u16)>, (arg_, ty): &mut T::Argument) {
+    fn argument(used: &mut BTreeSet<(u16, u16)>, sp!(_, (arg_, ty)): &mut T::Argument) {
         let usage = match arg_ {
-            T::Argument_::Use(u) | T::Argument_::Read(u) => u,
-            T::Argument_::Borrow(_, _) => return,
+            T::Argument__::Use(u) | T::Argument__::Read(u) => u,
+            T::Argument__::Borrow(_, _) => return,
         };
         match (&usage, ty) {
             (T::Usage::Move(T::Location::Result(i, j)), Type::Reference(_, _)) => {

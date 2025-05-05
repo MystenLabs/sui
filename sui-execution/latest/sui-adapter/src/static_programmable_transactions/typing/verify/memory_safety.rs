@@ -6,13 +6,16 @@ use std::{
     collections::{BTreeMap, BTreeSet},
 };
 
-use crate::static_programmable_transactions::{
-    env::Env,
-    typing::ast::{self as T, Type},
+use crate::{
+    sp,
+    static_programmable_transactions::{
+        env::Env,
+        typing::ast::{self as T, Type},
+    },
 };
 use move_regex_borrow_graph::references::Ref;
 use sui_types::{
-    error::{command_argument_error, ExecutionError},
+    error::{ExecutionError, command_argument_error},
     execution_status::CommandArgumentError,
 };
 
@@ -204,8 +207,8 @@ impl Context {
 pub fn verify(_env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
     let mut context = Context::new(ast)?;
     let commands = &ast.commands;
-    for (i, (c, _t)) in commands.iter().enumerate() {
-        let result = command(&mut context, c).map_err(|e| e.with_command_index(i))?;
+    for (c, _t) in commands {
+        let result = command(&mut context, c).map_err(|e| e.with_command_index(c.idx as usize))?;
         assert_invariant!(result.len() == _t.len(), "result length mismatch");
         context.results.push(result.into_iter().map(Some).collect());
     }
@@ -239,48 +242,51 @@ pub fn verify(_env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
     Ok(())
 }
 
-fn command(context: &mut Context, command: &T::Command) -> Result<Vec<Value>, ExecutionError> {
+fn command(
+    context: &mut Context,
+    sp!(_, command): &T::Command,
+) -> Result<Vec<Value>, ExecutionError> {
     Ok(match command {
-        T::Command::MoveCall(mc) => {
+        T::Command_::MoveCall(mc) => {
             let T::MoveCall {
                 function,
                 arguments: args,
             } = &**mc;
             let return_ = &function.signature.return_;
-            let arg_values = arguments(context, 0, args)?;
+            let arg_values = arguments(context, args)?;
             call(context, arg_values, return_)?
         }
-        T::Command::TransferObjects(objects, recipient) => {
-            let object_values = arguments(context, 0, objects)?;
-            let recipient_value = argument(context, objects.len(), recipient)?;
+        T::Command_::TransferObjects(objects, recipient) => {
+            let object_values = arguments(context, objects)?;
+            let recipient_value = argument(context, recipient)?;
             consume_values(context, object_values)?;
             consume_value(context, recipient_value)?;
             vec![]
         }
-        T::Command::SplitCoins(_, coin, amounts) => {
-            let coin_value = argument(context, 0, coin)?;
-            let amount_values = arguments(context, 1, amounts)?;
+        T::Command_::SplitCoins(_, coin, amounts) => {
+            let coin_value = argument(context, coin)?;
+            let amount_values = arguments(context, amounts)?;
             consume_values(context, amount_values)?;
             write_ref(context, 0, coin_value)?;
             (0..amounts.len()).map(|_| Value::NonRef).collect()
         }
-        T::Command::MergeCoins(_, target, coins) => {
-            let target_value = argument(context, 0, target)?;
-            let coin_values = arguments(context, 1, coins)?;
+        T::Command_::MergeCoins(_, target, coins) => {
+            let target_value = argument(context, target)?;
+            let coin_values = arguments(context, coins)?;
             consume_values(context, coin_values)?;
             write_ref(context, 0, target_value)?;
             vec![Value::NonRef]
         }
-        T::Command::MakeMoveVec(_, xs) => {
-            let vs = arguments(context, 0, xs)?;
+        T::Command_::MakeMoveVec(_, xs) => {
+            let vs = arguments(context, xs)?;
             consume_values(context, vs)?;
             vec![Value::NonRef]
         }
-        T::Command::Publish(_, _) => {
+        T::Command_::Publish(_, _) => {
             vec![]
         }
-        T::Command::Upgrade(_, _, _, x) => {
-            let v = argument(context, 0, x)?;
+        T::Command_::Upgrade(_, _, _, x) => {
+            let v = argument(context, x)?;
             consume_value(context, v)?;
             vec![]
         }
@@ -315,37 +321,32 @@ fn consume_value(context: &mut Context, value: Value) -> Result<(), ExecutionErr
     }
 }
 
-fn arguments(
-    context: &mut Context,
-    start: usize,
-    xs: &[T::Argument],
-) -> Result<Vec<Value>, ExecutionError> {
-    xs.iter()
-        .enumerate()
-        .map(|(i, x)| argument(context, start + i, x))
-        .collect()
+fn arguments(context: &mut Context, xs: &[T::Argument]) -> Result<Vec<Value>, ExecutionError> {
+    xs.iter().map(|x| argument(context, x)).collect()
 }
 
-fn argument(context: &mut Context, idx: usize, x: &T::Argument) -> Result<Value, ExecutionError> {
-    match &x.0 {
-        T::Argument_::Use(T::Usage::Move(location)) => move_value(context, idx, *location),
-        T::Argument_::Use(T::Usage::Copy { location, borrowed }) => {
-            copy_value(context, idx, *location, borrowed)
+fn argument(context: &mut Context, x: &T::Argument) -> Result<Value, ExecutionError> {
+    match &x.value.0 {
+        T::Argument__::Use(T::Usage::Move(location)) => move_value(context, x.idx, *location),
+        T::Argument__::Use(T::Usage::Copy { location, borrowed }) => {
+            copy_value(context, x.idx, *location, borrowed)
         }
-        T::Argument_::Borrow(is_mut, location) => borrow_location(context, idx, *is_mut, *location),
-        T::Argument_::Read(usage) => read_ref(context, idx, usage),
+        T::Argument__::Borrow(is_mut, location) => {
+            borrow_location(context, x.idx, *is_mut, *location)
+        }
+        T::Argument__::Read(usage) => read_ref(context, x.idx, usage),
     }
 }
 
 fn move_value(
     context: &mut Context,
-    arg_idx: usize,
+    arg_idx: u16,
     l: T::Location,
 ) -> Result<Value, ExecutionError> {
     let Some(value) = context.location(l).take() else {
         return Err(command_argument_error(
             CommandArgumentError::InvalidValueUsage,
-            arg_idx,
+            arg_idx as usize,
         ));
     };
     Ok(value)
@@ -353,7 +354,7 @@ fn move_value(
 
 fn copy_value(
     context: &mut Context,
-    arg_idx: usize,
+    arg_idx: u16,
     l: T::Location,
     borrowed: &OnceCell<bool>,
 ) -> Result<Value, ExecutionError> {
@@ -366,7 +367,7 @@ fn copy_value(
         // TODO more specific error
         return Err(command_argument_error(
             CommandArgumentError::InvalidValueUsage,
-            arg_idx,
+            arg_idx as usize,
         ));
     };
     Ok(match value {
@@ -382,7 +383,7 @@ fn copy_value(
 
 fn borrow_location(
     context: &mut Context,
-    arg_idx: usize,
+    arg_idx: u16,
     is_mut: bool,
     l: T::Location,
 ) -> Result<Value, ExecutionError> {
@@ -391,7 +392,7 @@ fn borrow_location(
         // TODO more specific error
         return Err(command_argument_error(
             CommandArgumentError::InvalidValueUsage,
-            arg_idx,
+            arg_idx as usize,
         ));
     };
     assert_invariant!(
@@ -402,7 +403,7 @@ fn borrow_location(
     Ok(Value::Ref(new_r))
 }
 
-fn read_ref(context: &mut Context, arg_idx: usize, u: &T::Usage) -> Result<Value, ExecutionError> {
+fn read_ref(context: &mut Context, arg_idx: u16, u: &T::Usage) -> Result<Value, ExecutionError> {
     let value = match u {
         T::Usage::Move(l) => move_value(context, arg_idx, *l)?,
         T::Usage::Copy { location, borrowed } => copy_value(context, arg_idx, *location, borrowed)?,

@@ -14,7 +14,10 @@ pub fn refine_and_verify(env: &Env, ast: &mut T::Transaction) -> Result<(), Exec
 }
 
 mod refine {
-    use crate::static_programmable_transactions::typing::ast::{self as T};
+    use crate::{
+        sp,
+        static_programmable_transactions::typing::ast::{self as T},
+    };
     use std::collections::BTreeSet;
 
     /// After memory safety, we can switch the last usage of a `Copy` to a `Move` if it is not
@@ -26,24 +29,24 @@ mod refine {
         }
     }
 
-    fn command(used: &mut BTreeSet<T::Location>, command: &mut T::Command) {
+    fn command(used: &mut BTreeSet<T::Location>, sp!(_, command): &mut T::Command) {
         match command {
-            T::Command::MoveCall(mc) => arguments(used, &mut mc.arguments),
-            T::Command::TransferObjects(objects, recipient) => {
+            T::Command_::MoveCall(mc) => arguments(used, &mut mc.arguments),
+            T::Command_::TransferObjects(objects, recipient) => {
                 argument(used, recipient);
                 arguments(used, objects);
             }
-            T::Command::SplitCoins(_, coin, amounts) => {
+            T::Command_::SplitCoins(_, coin, amounts) => {
                 arguments(used, amounts);
                 argument(used, coin);
             }
-            T::Command::MergeCoins(_, target, coins) => {
+            T::Command_::MergeCoins(_, target, coins) => {
                 arguments(used, coins);
                 argument(used, target);
             }
-            T::Command::MakeMoveVec(_, xs) => arguments(used, xs),
-            T::Command::Publish(_, _) => (),
-            T::Command::Upgrade(_, _, _, x) => argument(used, x),
+            T::Command_::MakeMoveVec(_, xs) => arguments(used, xs),
+            T::Command_::Publish(_, _) => (),
+            T::Command_::Upgrade(_, _, _, x) => argument(used, x),
         }
     }
 
@@ -54,9 +57,9 @@ mod refine {
     }
 
     fn argument(used: &mut BTreeSet<T::Location>, arg: &mut T::Argument) {
-        let usage = match &mut arg.0 {
-            T::Argument_::Use(u) | T::Argument_::Read(u) => u,
-            T::Argument_::Borrow(_, _) => return,
+        let usage = match &mut arg.value.0 {
+            T::Argument__::Use(u) | T::Argument__::Read(u) => u,
+            T::Argument__::Borrow(_, _) => return,
         };
         match &usage {
             T::Usage::Move(loc) => {
@@ -76,9 +79,12 @@ mod refine {
 }
 
 mod verify {
-    use crate::static_programmable_transactions::{
-        env::Env,
-        typing::ast::{self as T, Type},
+    use crate::{
+        sp,
+        static_programmable_transactions::{
+            env::Env,
+            typing::ast::{self as T, Type},
+        },
     };
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
 
@@ -115,8 +121,9 @@ mod verify {
     pub fn transaction(_env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
         let mut context = Context::new(ast)?;
         let commands = &ast.commands;
-        for (i, (c, _t)) in commands.iter().enumerate() {
-            let result = command(&mut context, c).map_err(|e| e.with_command_index(i))?;
+        for (c, _t) in commands {
+            let result =
+                command(&mut context, c).map_err(|e| e.with_command_index(c.idx as usize))?;
             assert_invariant!(result.len() == _t.len(), "result length mismatch");
             context.results.push(result.into_iter().map(Some).collect());
         }
@@ -139,9 +146,12 @@ mod verify {
         Ok(())
     }
 
-    fn command(context: &mut Context, command: &T::Command) -> Result<Vec<Value>, ExecutionError> {
+    fn command(
+        context: &mut Context,
+        sp!(_, command): &T::Command,
+    ) -> Result<Vec<Value>, ExecutionError> {
         Ok(match command {
-            T::Command::MoveCall(mc) => {
+            T::Command_::MoveCall(mc) => {
                 let T::MoveCall {
                     function,
                     arguments: args,
@@ -151,36 +161,36 @@ mod verify {
                 consume_values(arg_values);
                 (0..return_.len()).map(|_| Value).collect()
             }
-            T::Command::TransferObjects(objects, recipient) => {
+            T::Command_::TransferObjects(objects, recipient) => {
                 let object_values = arguments(context, objects)?;
                 let recipient_value = argument(context, recipient)?;
                 consume_values(object_values);
                 consume_value(recipient_value);
                 vec![]
             }
-            T::Command::SplitCoins(_, coin, amounts) => {
+            T::Command_::SplitCoins(_, coin, amounts) => {
                 let coin_value = argument(context, coin)?;
                 let amount_values = arguments(context, amounts)?;
                 consume_values(amount_values);
                 consume_value(coin_value);
                 (0..amounts.len()).map(|_| Value).collect()
             }
-            T::Command::MergeCoins(_, target, coins) => {
+            T::Command_::MergeCoins(_, target, coins) => {
                 let target_value = argument(context, target)?;
                 let coin_values = arguments(context, coins)?;
                 consume_values(coin_values);
                 consume_value(target_value);
                 vec![Value]
             }
-            T::Command::MakeMoveVec(_, xs) => {
+            T::Command_::MakeMoveVec(_, xs) => {
                 let vs = arguments(context, xs)?;
                 consume_values(vs);
                 vec![Value]
             }
-            T::Command::Publish(_, _) => {
+            T::Command_::Publish(_, _) => {
                 vec![]
             }
-            T::Command::Upgrade(_, _, _, x) => {
+            T::Command_::Upgrade(_, _, _, x) => {
                 let v = argument(context, x)?;
                 consume_value(v);
                 vec![]
@@ -223,12 +233,12 @@ mod verify {
         xs.iter().map(|x| argument(context, x)).collect()
     }
 
-    fn argument(context: &mut Context, x: &T::Argument) -> Result<Value, ExecutionError> {
+    fn argument(context: &mut Context, sp!(_, x): &T::Argument) -> Result<Value, ExecutionError> {
         match &x.0 {
-            T::Argument_::Use(T::Usage::Move(location)) => move_value(context, *location),
-            T::Argument_::Use(T::Usage::Copy { location, .. }) => copy_value(context, *location),
-            T::Argument_::Borrow(_, location) => borrow_location(context, *location),
-            T::Argument_::Read(usage) => read_ref(context, usage),
+            T::Argument__::Use(T::Usage::Move(location)) => move_value(context, *location),
+            T::Argument__::Use(T::Usage::Copy { location, .. }) => copy_value(context, *location),
+            T::Argument__::Borrow(_, location) => borrow_location(context, *location),
+            T::Argument__::Read(usage) => read_ref(context, usage),
         }
     }
 

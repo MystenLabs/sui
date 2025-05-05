@@ -13,6 +13,7 @@ use crate::{
     gas_charger::GasCharger,
     gas_meter::SuiGasMeter,
     programmable_transactions::context::finish,
+    sp,
     static_programmable_transactions::{
         env::Env,
         execution::values::{
@@ -448,17 +449,17 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         }
     }
 
-    fn argument_value(&mut self, (arg_, ty): T::Argument) -> Result<Value, ExecutionError> {
+    fn argument_value(&mut self, sp!(_, (arg_, ty)): T::Argument) -> Result<Value, ExecutionError> {
         match arg_ {
-            T::Argument_::Use(usage) => self.location_usage(usage, ty),
-            T::Argument_::Borrow(is_mut, location) => {
+            T::Argument__::Use(usage) => self.location_usage(usage, ty),
+            T::Argument__::Borrow(is_mut, location) => {
                 let ty = match ty {
                     Type::Reference(_, inner) => (*inner).clone(),
                     _ => invariant_violation!("Expected reference type"),
                 };
                 self.location(UsageKind::Borrow(is_mut), location, ty)
             }
-            T::Argument_::Read(usage) => {
+            T::Argument__::Read(usage) => {
                 let reference = self.location_usage(usage, ty)?;
                 charge_gas!(self, charge_read_ref, &reference)?;
                 values::read_ref(reference)

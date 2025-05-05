@@ -5,9 +5,9 @@ use crate::programmable_transactions::execution::check_private_generics;
 
 use crate::static_programmable_transactions::typing::ast::InputArg;
 use crate::static_programmable_transactions::{env::Env, loading::ast::Type, typing::ast as T};
-use move_binary_format::{file_format::Visibility, CompiledModule};
+use move_binary_format::{CompiledModule, file_format::Visibility};
 use sui_types::{
-    error::{command_argument_error, ExecutionError, ExecutionErrorKind},
+    error::{ExecutionError, ExecutionErrorKind, command_argument_error},
     execution_status::CommandArgumentError,
 };
 
@@ -45,8 +45,8 @@ impl Context {
 
     // check if dirty, and mark it as fixed if mutably borrowing a pure input
     fn is_dirty(&mut self, arg: &T::Argument) -> bool {
-        match &arg.0 {
-            T::Argument_::Borrow(/* mut */ true, T::Location::Input(i)) => {
+        match &arg.value.0 {
+            T::Argument__::Borrow(/* mut */ true, T::Location::Input(i)) => {
                 match &mut self.inputs[*i as usize] {
                     input @ IsDirty::NotFixed => {
                         *input = IsDirty::Fixed { is_dirty: false };
@@ -55,7 +55,7 @@ impl Context {
                     IsDirty::Fixed { is_dirty } => *is_dirty,
                 }
             }
-            _ => self.is_loc_dirty(arg.0.location()),
+            _ => self.is_loc_dirty(arg.value.0.location()),
         }
     }
 
@@ -68,7 +68,7 @@ impl Context {
     }
 
     fn mark_dirty(&mut self, arg: &T::Argument) {
-        self.mark_loc_dirty(arg.0.location())
+        self.mark_loc_dirty(arg.value.0.location())
     }
 
     fn mark_loc_dirty(&mut self, location: T::Location) {
@@ -115,19 +115,19 @@ fn command(
     command: &T::Command,
     result: &T::ResultType,
 ) -> Result<(), ExecutionError> {
-    match command {
-        T::Command::MoveCall(call) => {
+    match &command.value {
+        T::Command_::MoveCall(call) => {
             let result_dirties = move_call(env, context, call, result)?;
             debug_assert!(result_dirties.len() == result.len());
             context.results.push(result_dirties);
         }
-        T::Command::TransferObjects(objs, recipient) => {
+        T::Command_::TransferObjects(objs, recipient) => {
             arguments(env, context, objs);
             argument(env, context, recipient);
             debug_assert!(result.is_empty());
             context.results.push(vec![]);
         }
-        T::Command::SplitCoins(_, coin, amounts) => {
+        T::Command_::SplitCoins(_, coin, amounts) => {
             let amounts_are_dirty = arguments(env, context, amounts);
             let coin_is_dirty = argument(env, context, coin);
             debug_assert!(!amounts_are_dirty);
@@ -137,7 +137,7 @@ fn command(
                 .results
                 .push(vec![IsDirty::Fixed { is_dirty }; result.len()]);
         }
-        T::Command::MergeCoins(_, target, coins) => {
+        T::Command_::MergeCoins(_, target, coins) => {
             let is_dirty = arguments(env, context, coins);
             argument(env, context, target);
             if is_dirty {
@@ -146,16 +146,16 @@ fn command(
             debug_assert!(result.is_empty());
             context.results.push(vec![]);
         }
-        T::Command::MakeMoveVec(_, args) => {
+        T::Command_::MakeMoveVec(_, args) => {
             let is_dirty = arguments(env, context, args);
             debug_assert!(result.len() == 1);
             context.results.push(vec![IsDirty::Fixed { is_dirty }]);
         }
-        T::Command::Publish(_, _) => {
+        T::Command_::Publish(_, _) => {
             debug_assert!(result.is_empty());
             context.results.push(vec![]);
         }
-        T::Command::Upgrade(_, _, _, ticket) => {
+        T::Command_::Upgrade(_, _, _, ticket) => {
             argument(env, context, ticket);
             debug_assert!(result.is_empty());
             context.results.push(vec![]);

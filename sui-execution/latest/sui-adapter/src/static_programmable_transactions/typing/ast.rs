@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::static_programmable_transactions::loading::ast as L;
+use crate::static_programmable_transactions::{loading::ast as L, spanned::Spanned};
 use std::{cell::OnceCell, collections::BTreeMap, fmt};
 use sui_types::base_types::ObjectID;
 
@@ -33,7 +33,9 @@ pub enum InputType {
 }
 pub type ResultType = Vec<Type>;
 
-pub enum Command {
+pub type Command = Spanned<Command_>;
+
+pub enum Command_ {
     MoveCall(Box<MoveCall>),
     TransferObjects(Vec<Argument>, Argument),
     SplitCoins(/* Coin<T> */ Type, Argument, Vec<Argument>),
@@ -71,10 +73,11 @@ pub enum Usage {
     },
 }
 
-pub type Argument = (Argument_, Type);
+pub type Argument = Spanned<Argument_>;
+pub type Argument_ = (Argument__, Type);
 
 #[derive(Clone)]
-pub enum Argument_ {
+pub enum Argument__ {
     Use(Usage),
     Borrow(/* mut */ bool, Location),
     Read(Usage),
@@ -104,19 +107,19 @@ impl Usage {
     }
 }
 
-impl Argument_ {
-    pub fn new_move(location: Location) -> Argument_ {
-        Argument_::Use(Usage::new_move(location))
+impl Argument__ {
+    pub fn new_move(location: Location) -> Self {
+        Self::Use(Usage::new_move(location))
     }
 
-    pub fn new_copy(location: Location) -> Argument_ {
-        Argument_::Use(Usage::new_copy(location))
+    pub fn new_copy(location: Location) -> Self {
+        Self::Use(Usage::new_copy(location))
     }
 
     pub fn location(&self) -> Location {
         match self {
-            Argument_::Use(usage) | Argument_::Read(usage) => usage.location(),
-            Argument_::Borrow(_, location) => *location,
+            Self::Use(usage) | Self::Read(usage) => usage.location(),
+            Self::Borrow(_, location) => *location,
         }
     }
 }

@@ -17,6 +17,7 @@ pub use crate::programmable_transactions::linkage_view::LinkageView;
 pub mod env;
 pub mod execution;
 pub mod loading;
+pub mod spanned;
 pub mod typing;
 
 pub fn execute<'pc, 'vm, 'state, 'linkage>(
