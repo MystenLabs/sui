@@ -477,6 +477,12 @@ mod tests {
         // Initialize git repository with main as default branch
         run_git_cmd(&["init", "--initial-branch=main"], &root_path).await;
 
+        fs::copy(
+            "tests/data/basic_move_project/config",
+            root_path.join(".git").join("config"),
+        )
+        .unwrap();
+
         // Create directory structure
         let pkg_a_path = root_path.join("packages").join("pkg_a");
         let pkg_b_path = root_path.join("packages").join("pkg_b");
@@ -489,16 +495,7 @@ mod tests {
 
         // Initial commit
         run_git_cmd(&["add", "."], &root_path).await;
-        run_git_cmd(
-            &[
-                "commit",
-                "-m",
-                "Initial commit",
-                "--author=\"Test <test@example.com>\"",
-            ],
-            &root_path,
-        )
-        .await;
+        run_git_cmd(&["commit", "-m", "Initial commit"], &root_path).await;
 
         fs::create_dir_all(&pkg_b_path).unwrap();
         fs::copy(
@@ -506,18 +503,11 @@ mod tests {
             pkg_b_path.join("Move.toml"),
         )
         .unwrap();
+
         // Commit updates
         run_git_cmd(&["add", "."], &root_path).await;
-        run_git_cmd(
-            &[
-                "commit",
-                "-m",
-                "Initial commit",
-                "--author=\"Test <test@example.com>\"",
-            ],
-            &root_path,
-        )
-        .await;
+        run_git_cmd(&["commit", "-m", "Second commit"], &root_path).await;
+
         // Get commits SHA
         let commits = run_git_cmd(&["log", "--pretty=format:%H"], &root_path).await;
         let commits = String::from_utf8_lossy(&commits.stdout);
