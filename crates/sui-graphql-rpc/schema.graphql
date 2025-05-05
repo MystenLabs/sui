@@ -4299,7 +4299,7 @@ type TransactionBlockEffects {
 	"""
 	errors: String
 	"""
-	Move abort code if the transaction failed with an abort.
+	The error code of the Move abort, populated if this transaction failed with a Move abort.
 	"""
 	abortCode: BigInt
 	"""
