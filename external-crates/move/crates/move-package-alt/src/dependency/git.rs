@@ -139,6 +139,10 @@ impl GitRepo {
 
     /// Ensures that the repo is checked out at the specified sha.
     pub async fn fetch(&self) -> PackageResult<PathBuf> {
+        self.fetch_impl(None).await
+    }
+
+    async fn fetch_impl(&self, fetch_to_folder: Option<PathBuf>) -> PackageResult<PathBuf> {
         let sha = self.find_sha().await?;
 
         if !check_is_commit_sha(&sha) {
@@ -149,13 +153,18 @@ impl GitRepo {
         }
         debug!("git repo: {:?}", self);
 
-        let repo_fs_path = format_repo_to_fs_path(&self.repo_url, &sha);
+        let repo_fs_path = format_repo_to_fs_path(&self.repo_url, &sha, fetch_to_folder);
         debug!("Repo path on disk: {:?}", repo_fs_path.display());
 
         // Check out the repo at the given sha
         self.checkout_repo(&repo_fs_path, &sha).await?;
 
         Ok(repo_fs_path)
+    }
+
+    /// Used for testing to be able to specify which folder to fetch to. Use `fetch` for all other needs.
+    pub async fn fetch_to_folder(&self, fetch_to_folder: PathBuf) -> PackageResult<PathBuf> {
+        self.fetch_impl(Some(fetch_to_folder)).await
     }
 
     /// Checkout the repository using a sparse checkout. It will try to clone without checkout, set
@@ -415,12 +424,11 @@ where
 }
 
 /// Format the repository URL to a filesystem name based on the SHA
-pub fn format_repo_to_fs_path(repo: &str, sha: &str) -> PathBuf {
-    PathBuf::from(format!(
-        "{}/{}_{sha}",
-        *move_command_line_common::env::MOVE_HOME,
-        url_to_file_name(repo)
-    ))
+pub fn format_repo_to_fs_path(repo: &str, sha: &str, root_path: Option<PathBuf>) -> PathBuf {
+    let root_path = root_path
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|| (*move_command_line_common::env::MOVE_HOME).to_string());
+    PathBuf::from(format!("{}/{}_{}", root_path, url_to_file_name(repo), sha))
 }
 
 /// Check if the given string is a valid commit SHA, i.e., 40 character long with only
@@ -467,8 +475,7 @@ mod tests {
     pub async fn setup_test_move_project() -> (TempDir, PathBuf, String, String) {
         // Create a temporary directory
         let temp_dir = tempdir().unwrap();
-        let mut root_path = temp_dir.path().to_path_buf();
-        root_path.push("test_move_project");
+        let root_path = temp_dir.path().to_path_buf();
 
         // Create the root directory for the Move project
         fs::create_dir_all(&root_path).unwrap();
@@ -537,13 +544,16 @@ mod tests {
         };
 
         // Fetch the dependency
-        let checkout_path = git_repo.fetch().await.unwrap();
+        let checkout_path = git_repo
+            .fetch_to_folder(temp_folder.into_path())
+            .await
+            .unwrap();
 
         // Verify only packages/pkg_a was checked out
         assert!(checkout_path.join("packages/pkg_a").exists());
         assert!(!checkout_path.join("packages/pkg_b").exists());
 
-        let (_temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project().await;
+        let (temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project().await;
         let fs_repo = fs_repo.to_str().unwrap();
         // Pass in a commit SHA
         let git_dep = GitRepo {
@@ -553,7 +563,10 @@ mod tests {
         };
 
         // Fetch the dependency
-        let checkout_path = git_dep.fetch().await.unwrap();
+        let checkout_path = git_dep
+            .fetch_to_folder(temp_folder.into_path())
+            .await
+            .unwrap();
 
         // Verify only packages/pkg_b was checked out
         assert!(checkout_path.join("packages/pkg_b").exists());
@@ -562,7 +575,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_wrong_sha() {
-        let (_temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project().await;
+        let (temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project().await;
         let fs_repo = fs_repo.to_str().unwrap();
 
         let git_dep = GitRepo {
@@ -572,13 +585,13 @@ mod tests {
         };
 
         // Fetch the dependency
-        let result = git_dep.fetch().await;
+        let result = git_dep.fetch_to_folder(temp_folder.into_path()).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn test_wrong_branch_name() {
-        let (_temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project().await;
+        let (temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project().await;
         let fs_repo = fs_repo.to_str().unwrap();
 
         let git_dep = GitRepo {
@@ -588,13 +601,13 @@ mod tests {
         };
 
         // Fetch the dependency
-        let result = git_dep.fetch().await;
+        let result = git_dep.fetch_to_folder(temp_folder.into_path()).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn test_repo_is_dirty() {
-        let (_temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project().await;
+        let (temp_folder, fs_repo, first_sha, second_sha) = setup_test_move_project().await;
         let fs_repo = fs_repo.to_str().unwrap();
 
         let git_dep = GitRepo {
@@ -603,7 +616,10 @@ mod tests {
             path: PathBuf::from("packages/pkg_a"),
         };
 
-        let checkout_path = git_dep.fetch().await.unwrap();
+        let checkout_path = git_dep
+            .fetch_to_folder(temp_folder.into_path())
+            .await
+            .unwrap();
         // Delete a file in the repo to make it dirty
         let move_toml_path = checkout_path.join("packages/pkg_a").join("Move.toml");
         fs::remove_file(move_toml_path).unwrap();

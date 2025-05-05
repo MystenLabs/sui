@@ -8167,12 +8167,9 @@ dependencies = [
  "codespan-reporting",
  "derive-where",
  "futures",
-<<<<<<< HEAD
+ "itertools 0.10.5",
  "move-command-line-common",
  "regex",
-=======
- "itertools 0.10.5",
->>>>>>> 50d8db1ba1 (progress)
  "serde",
  "serde_json",
  "serde_spanned",
