@@ -1,0 +1,35 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E10003]: invalid attribute value
+  ┌─ tests/move_2024/parser/clever_assertion_invalid_annotations.move:4:18
+  │
+4 │     #[error(code=1024)]
+  │                  ^^^^ Error code must be a u8
+
+error[E02015]: invalid attribute
+  ┌─ tests/move_2024/parser/clever_assertion_invalid_annotations.move:7:7
+  │
+7 │     #[error(code=5, code=6)]
+  │       ^^^^^^^^^^^^^^^^^^^^^ Attribute error requires exactly one argument representing the error code, but 2 were provided.
+
+error[E10003]: invalid attribute value
+   ┌─ tests/move_2024/parser/clever_assertion_invalid_annotations.move:13:18
+   │
+13 │     #[error(code=18u16)]
+   │                  ^^^^^ Error code must be a u8
+
+error[E04035]: invalid constant usage in error context
+   ┌─ tests/move_2024/parser/clever_assertion_invalid_annotations.move:21:24
+   │
+ 8 │     const Foo: vector<u8> = b"Foo";
+   │           --- 'Foo' defined here with no '#[error]' annotation
+   ·
+21 │         assert!(false, Foo);
+   │                        ^^^ Invalid error code for assertion, expected a u64 or constant declared with '#[error]' annotation
+   │
+   = Non-u64 constants can only be used as error codes if the '#[error]' attribute is added to them.

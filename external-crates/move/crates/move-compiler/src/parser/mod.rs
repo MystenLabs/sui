@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod ast;
+pub(crate) mod attributes;
 pub mod comments;
 pub(crate) mod filter;
 pub mod keywords;
@@ -14,8 +15,8 @@ pub(crate) mod verification_attribute_filter;
 use crate::{
     parser::{self, ast::PackageDefinition, syntax::parse_file_string},
     shared::{
-        files::MappedFiles, CompilationEnv, IndexedVfsPackagePath, NamedAddressMapIndex,
-        NamedAddressMaps,
+        CompilationEnv, IndexedVfsPackagePath, NamedAddressMapIndex, NamedAddressMaps,
+        files::MappedFiles,
     },
 };
 use anyhow::anyhow;
@@ -204,4 +205,27 @@ fn parse_file(
         hash: file_hash,
         text: source_str,
     })
+}
+
+/// Format the provided items into a "one-of" list.
+pub(crate) fn format_one_of<I, T>(items: I) -> String
+where
+    I: IntoIterator<Item = T>,
+    T: ToString,
+{
+    let formatted: Vec<String> = items
+        .into_iter()
+        .map(|item| format!("'{}'", item.to_string()))
+        .collect();
+
+    match formatted.len() {
+        0 => String::new(),
+        1 => formatted[0].clone(),
+        2 => format!("one of: {} or {}", formatted[0], formatted[1]),
+        _ => {
+            let all_but_last = &formatted[..formatted.len() - 1];
+            let last = &formatted[formatted.len() - 1];
+            format!("one of: {}, or {}", all_but_last.join(", "), last)
+        }
+    }
 }

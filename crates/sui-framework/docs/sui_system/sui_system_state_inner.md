@@ -67,6 +67,7 @@ title: Module `sui_system::sui_system_state_inner`
 -  [Function `active_validator_addresses`](#sui_system_sui_system_state_inner_active_validator_addresses)
 -  [Function `extract_coin_balance`](#sui_system_sui_system_state_inner_extract_coin_balance)
 -  [Function `store_execution_time_estimates`](#sui_system_sui_system_state_inner_store_execution_time_estimates)
+-  [Macro function `mul_div`](#sui_system_sui_system_state_inner_mul_div)
 
 
 <pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
@@ -88,7 +89,6 @@ title: Module `sui_system::sui_system_state_inner`
 <b>use</b> <a href="../sui/event.md#sui_event">sui::event</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
-<b>use</b> <a href="../sui/pay.md#sui_pay">sui::pay</a>;
 <b>use</b> <a href="../sui/priority_queue.md#sui_priority_queue">sui::priority_queue</a>;
 <b>use</b> <a href="../sui/sui.md#sui_sui">sui::sui</a>;
 <b>use</b> <a href="../sui/table.md#sui_table">sui::table</a>;
@@ -618,51 +618,6 @@ the epoch advancement transaction.
 ## Constants
 
 
-<a name="sui_system_sui_system_state_inner_ACTIVE_VALIDATOR_ONLY"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ACTIVE_VALIDATOR_ONLY">ACTIVE_VALIDATOR_ONLY</a>: u8 = 1;
-</code></pre>
-
-
-
-<a name="sui_system_sui_system_state_inner_ACTIVE_OR_PENDING_VALIDATOR"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ACTIVE_OR_PENDING_VALIDATOR">ACTIVE_OR_PENDING_VALIDATOR</a>: u8 = 2;
-</code></pre>
-
-
-
-<a name="sui_system_sui_system_state_inner_ANY_VALIDATOR"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ANY_VALIDATOR">ANY_VALIDATOR</a>: u8 = 3;
-</code></pre>
-
-
-
-<a name="sui_system_sui_system_state_inner_SYSTEM_STATE_VERSION_V1"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SYSTEM_STATE_VERSION_V1">SYSTEM_STATE_VERSION_V1</a>: u64 = 1;
-</code></pre>
-
-
-
-<a name="sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>: u64 = 0;
-</code></pre>
-
-
-
 <a name="sui_system_sui_system_state_inner_ENotValidator"></a>
 
 
@@ -739,7 +694,52 @@ the epoch advancement transaction.
 
 
 
-<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>: u128 = 10000;
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>: u64 = 10000;
+</code></pre>
+
+
+
+<a name="sui_system_sui_system_state_inner_ACTIVE_VALIDATOR_ONLY"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ACTIVE_VALIDATOR_ONLY">ACTIVE_VALIDATOR_ONLY</a>: u8 = 1;
+</code></pre>
+
+
+
+<a name="sui_system_sui_system_state_inner_ACTIVE_OR_PENDING_VALIDATOR"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ACTIVE_OR_PENDING_VALIDATOR">ACTIVE_OR_PENDING_VALIDATOR</a>: u8 = 2;
+</code></pre>
+
+
+
+<a name="sui_system_sui_system_state_inner_ANY_VALIDATOR"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ANY_VALIDATOR">ANY_VALIDATOR</a>: u8 = 3;
+</code></pre>
+
+
+
+<a name="sui_system_sui_system_state_inner_SYSTEM_STATE_VERSION_V1"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SYSTEM_STATE_VERSION_V1">SYSTEM_STATE_VERSION_V1</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>: u64 = 0;
 </code></pre>
 
 
@@ -912,7 +912,7 @@ This function will be called only once in genesis.
         safe_mode_storage_rebates,
         safe_mode_non_refundable_storage_fee,
         <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch_start_timestamp_ms">epoch_start_timestamp_ms</a>,
-        extra_fields: state_extra_fields
+        extra_fields: state_extra_fields,
     }
 }
 </code></pre>
@@ -976,7 +976,7 @@ To produce a valid PoP, run [fn test_proof_of_possession].
         worker_address,
         gas_price,
         commission_rate,
-        ctx
+        ctx,
     );
     self.validators.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_add_validator_candidate">request_add_validator_candidate</a>(<a href="../sui_system/validator.md#sui_system_validator">validator</a>, ctx);
 }
@@ -1034,10 +1034,7 @@ epoch has already reached the maximum.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_add_validator">request_add_validator</a>(
-    self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
-    ctx: &TxContext,
-) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>, ctx: &TxContext) {
     <b>assert</b>!(
         self.validators.next_epoch_validator_count() &lt; self.parameters.max_validator_count,
         <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ELimitExceeded">ELimitExceeded</a>,
@@ -1070,10 +1067,7 @@ of the validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_remove_validator">request_remove_validator</a>(
-    self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
-    ctx: &TxContext,
-) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_remove_validator">request_remove_validator</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>, ctx: &TxContext) {
     // Only check min <a href="../sui_system/validator.md#sui_system_validator">validator</a> condition <b>if</b> the current number of validators satisfy the constraint.
     // This is so that <b>if</b> we somehow already are in a state where we have less than min validators, it no longer matters
     // and is ok to stay so. This is useful <b>for</b> a test setup.
@@ -1115,7 +1109,9 @@ used for the reference gas price calculation at the end of the epoch.
 ) {
     // Verify the represented <b>address</b> is an active or pending <a href="../sui_system/validator.md#sui_system_validator">validator</a>, and the capability is still valid.
     <b>let</b> verified_cap = self.validators.verify_cap(cap, <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ACTIVE_OR_PENDING_VALIDATOR">ACTIVE_OR_PENDING_VALIDATOR</a>);
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.validators.get_validator_mut_with_verified_cap(&verified_cap, <b>false</b> /* include_candidate */);
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self
+        .validators
+        .get_validator_mut_with_verified_cap(&verified_cap, <b>false</b> /* include_candidate */);
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_set_gas_price">request_set_gas_price</a>(verified_cap, new_gas_price);
 }
 </code></pre>
@@ -1147,7 +1143,9 @@ This function is used to set new gas price for candidate validators
 ) {
     // Verify the represented <b>address</b> is an active or pending <a href="../sui_system/validator.md#sui_system_validator">validator</a>, and the capability is still valid.
     <b>let</b> verified_cap = self.validators.verify_cap(cap, <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ANY_VALIDATOR">ANY_VALIDATOR</a>);
-    <b>let</b> candidate = self.validators.get_validator_mut_with_verified_cap(&verified_cap, <b>true</b> /* include_candidate */);
+    <b>let</b> candidate = self
+        .validators
+        .get_validator_mut_with_verified_cap(&verified_cap, <b>true</b> /* include_candidate */);
     candidate.set_candidate_gas_price(verified_cap, new_gas_price)
 }
 </code></pre>
@@ -1178,10 +1176,12 @@ the epoch.
     new_commission_rate: u64,
     ctx: &TxContext,
 ) {
-    self.validators.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_set_commission_rate">request_set_commission_rate</a>(
-        new_commission_rate,
-        ctx
-    )
+    self
+        .validators
+        .<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_set_commission_rate">request_set_commission_rate</a>(
+            new_commission_rate,
+            ctx,
+        )
 }
 </code></pre>
 
@@ -1241,11 +1241,13 @@ Add stake to a validator's staking pool.
     validator_address: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ): StakedSui {
-    self.validators.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_add_stake">request_add_stake</a>(
-        validator_address,
-        stake.into_balance(),
-        ctx,
-    )
+    self
+        .validators
+        .<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_add_stake">request_add_stake</a>(
+            validator_address,
+            stake.into_balance(),
+            ctx,
+        )
 }
 </code></pre>
 
@@ -1530,10 +1532,7 @@ validator and registers it. The original object is thus revoked.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_rotate_operation_cap">rotate_operation_cap</a>(
-    self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
-    ctx: &<b>mut</b> TxContext,
-) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_rotate_operation_cap">rotate_operation_cap</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>, ctx: &<b>mut</b> TxContext) {
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.new_unverified_validator_operation_cap_and_transfer(ctx);
 }
@@ -1687,7 +1686,7 @@ The change will only take effects starting from the next epoch.
 ) {
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.validators.get_validator_mut_with_ctx(ctx);
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.update_next_epoch_network_address(network_address);
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> :&Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Force immutability <b>for</b> the following call
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Force immutability <b>for</b> the following call
     self.validators.assert_no_pending_or_active_duplicates(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
 }
 </code></pre>
@@ -1750,7 +1749,7 @@ The change will only take effects starting from the next epoch.
 ) {
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.validators.get_validator_mut_with_ctx(ctx);
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.update_next_epoch_p2p_address(p2p_address);
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> :&Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Force immutability <b>for</b> the following call
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Force immutability <b>for</b> the following call
     self.validators.assert_no_pending_or_active_duplicates(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
 }
 </code></pre>
@@ -1936,7 +1935,7 @@ The change will only take effects starting from the next epoch.
 ) {
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.validators.get_validator_mut_with_ctx(ctx);
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.update_next_epoch_protocol_pubkey(protocol_pubkey, proof_of_possession);
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> :&Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Force immutability <b>for</b> the following call
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Force immutability <b>for</b> the following call
     self.validators.assert_no_pending_or_active_duplicates(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
 }
 </code></pre>
@@ -2000,7 +1999,7 @@ The change will only take effects starting from the next epoch.
 ) {
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.validators.get_validator_mut_with_ctx(ctx);
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.update_next_epoch_worker_pubkey(worker_pubkey);
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> :&Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Force immutability <b>for</b> the following call
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Force immutability <b>for</b> the following call
     self.validators.assert_no_pending_or_active_duplicates(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
 }
 </code></pre>
@@ -2063,7 +2062,7 @@ The change will only take effects starting from the next epoch.
 ) {
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.validators.get_validator_mut_with_ctx(ctx);
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.update_next_epoch_network_pubkey(network_pubkey);
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> :&Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Force immutability <b>for</b> the following call
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Force immutability <b>for</b> the following call
     self.validators.assert_no_pending_or_active_duplicates(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
 }
 </code></pre>
@@ -2133,18 +2132,18 @@ gas coins.
     <b>mut</b> storage_rebate_amount: u64,
     <b>mut</b> non_refundable_storage_fee_amount: u64,
     storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
-                                        // into storage fund, in basis point.
+    // into storage fund, in basis point.
     reward_slashing_rate: u64, // how much rewards are slashed to punish a <a href="../sui_system/validator.md#sui_system_validator">validator</a>, in bps.
     <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch_start_timestamp_ms">epoch_start_timestamp_ms</a>: u64, // Timestamp of the <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch">epoch</a> start
     ctx: &<b>mut</b> TxContext,
 ): Balance&lt;SUI&gt; {
     <b>let</b> prev_epoch_start_timestamp = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch_start_timestamp_ms">epoch_start_timestamp_ms</a>;
     self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch_start_timestamp_ms">epoch_start_timestamp_ms</a> = <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch_start_timestamp_ms">epoch_start_timestamp_ms</a>;
-    <b>let</b> bps_denominator_u64 = <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a> <b>as</b> u64;
+    <b>let</b> bps_denominator = <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
     // Rates can't be higher than 100%.
     <b>assert</b>!(
-        storage_fund_reinvest_rate &lt;= bps_denominator_u64
-        && reward_slashing_rate &lt;= bps_denominator_u64,
+        storage_fund_reinvest_rate &lt;= bps_denominator
+        && reward_slashing_rate &lt;= bps_denominator,
         <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EBpsTooLarge">EBpsTooLarge</a>,
     );
     // TODO: remove this in later upgrade.
@@ -2158,7 +2157,8 @@ gas coins.
     computation_reward.join(safe_mode_computation_rewards);
     storage_rebate_amount = storage_rebate_amount + self.safe_mode_storage_rebates;
     self.safe_mode_storage_rebates = 0;
-    non_refundable_storage_fee_amount = non_refundable_storage_fee_amount + self.safe_mode_non_refundable_storage_fee;
+    non_refundable_storage_fee_amount =
+        non_refundable_storage_fee_amount + self.safe_mode_non_refundable_storage_fee;
     self.safe_mode_non_refundable_storage_fee = 0;
     <b>let</b> total_validators_stake = self.validators.total_stake();
     <b>let</b> storage_fund_balance = self.<a href="../sui_system/storage_fund.md#sui_system_storage_fund">storage_fund</a>.total_balance();
@@ -2171,9 +2171,10 @@ gas coins.
     // Include stake subsidy in the rewards given out to validators and stakers.
     // Delay distributing any stake subsidies until after `stake_subsidy_start_epoch`.
     // And <b>if</b> this <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch">epoch</a> is shorter than the regular <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch">epoch</a> duration, don't distribute any stake subsidy.
-    <b>if</b> (old_epoch &gt;= self.parameters.stake_subsidy_start_epoch  &&
-        <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch_start_timestamp_ms">epoch_start_timestamp_ms</a> &gt;= prev_epoch_start_timestamp + self.parameters.epoch_duration_ms)
-    {
+    <b>if</b> (
+        old_epoch &gt;= self.parameters.stake_subsidy_start_epoch  &&
+        <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch_start_timestamp_ms">epoch_start_timestamp_ms</a> &gt;= prev_epoch_start_timestamp + self.parameters.epoch_duration_ms
+    ) {
         // special case <b>for</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch">epoch</a> 560 -&gt; 561 change bug. add extra subsidies <b>for</b> "safe mode"
         // where reward distribution was skipped. <b>use</b> distribution counter and <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch">epoch</a> check to
         // avoiding affecting devnet and testnet
@@ -2191,33 +2192,42 @@ gas coins.
     };
     <b>let</b> stake_subsidy_amount = <a href="../sui_system/stake_subsidy.md#sui_system_stake_subsidy">stake_subsidy</a>.value();
     computation_reward.join(<a href="../sui_system/stake_subsidy.md#sui_system_stake_subsidy">stake_subsidy</a>);
-    <b>let</b> total_stake_u128 = total_stake <b>as</b> u128;
-    <b>let</b> computation_charge_u128 = computation_charge <b>as</b> u128;
-    <b>let</b> storage_fund_reward_amount = storage_fund_balance <b>as</b> u128 * computation_charge_u128 / total_stake_u128;
+    <b>let</b> storage_fund_reward_amount = <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_mul_div">mul_div</a>!(
+        storage_fund_balance,
+        computation_charge,
+        total_stake,
+    );
     <b>let</b> <b>mut</b> storage_fund_reward = computation_reward.split(storage_fund_reward_amount <b>as</b> u64);
-    <b>let</b> storage_fund_reinvestment_amount =
-        storage_fund_reward_amount * (storage_fund_reinvest_rate <b>as</b> u128) / <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
+    <b>let</b> storage_fund_reinvestment_amount = <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_mul_div">mul_div</a>!(
+        storage_fund_reward_amount,
+        storage_fund_reinvest_rate,
+        <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>,
+    );
     <b>let</b> storage_fund_reinvestment = storage_fund_reward.split(
-        storage_fund_reinvestment_amount <b>as</b> u64,
+        storage_fund_reinvestment_amount,
     );
     self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch">epoch</a> = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch">epoch</a> + 1;
     // Sanity check to make sure we are advancing to the right <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch">epoch</a>.
     <b>assert</b>!(new_epoch == self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch">epoch</a>, <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EAdvancedToWrongEpoch">EAdvancedToWrongEpoch</a>);
     <b>let</b> computation_reward_amount_before_distribution = computation_reward.value();
     <b>let</b> storage_fund_reward_amount_before_distribution = storage_fund_reward.value();
-    self.validators.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_advance_epoch">advance_epoch</a>(
-        &<b>mut</b> computation_reward,
-        &<b>mut</b> storage_fund_reward,
-        &<b>mut</b> self.validator_report_records,
-        reward_slashing_rate,
-        self.parameters.validator_low_stake_grace_period,
-        ctx,
-    );
+    self
+        .validators
+        .<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_advance_epoch">advance_epoch</a>(
+            &<b>mut</b> computation_reward,
+            &<b>mut</b> storage_fund_reward,
+            &<b>mut</b> self.validator_report_records,
+            reward_slashing_rate,
+            self.parameters.validator_low_stake_grace_period,
+            ctx,
+        );
     <b>let</b> new_total_stake = self.validators.total_stake();
     <b>let</b> computation_reward_amount_after_distribution = computation_reward.value();
     <b>let</b> storage_fund_reward_amount_after_distribution = storage_fund_reward.value();
-    <b>let</b> computation_reward_distributed = computation_reward_amount_before_distribution - computation_reward_amount_after_distribution;
-    <b>let</b> storage_fund_reward_distributed = storage_fund_reward_amount_before_distribution - storage_fund_reward_amount_after_distribution;
+    <b>let</b> computation_reward_distributed =
+        computation_reward_amount_before_distribution - computation_reward_amount_after_distribution;
+    <b>let</b> storage_fund_reward_distributed =
+        storage_fund_reward_amount_before_distribution - storage_fund_reward_amount_after_distribution;
     self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_protocol_version">protocol_version</a> = next_protocol_version;
     // Derive the reference gas price <b>for</b> the new <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch">epoch</a>
     self.reference_gas_price = self.validators.derive_reference_gas_price();
@@ -2227,35 +2237,37 @@ gas coins.
     <b>let</b> <b>mut</b> leftover_staking_rewards = storage_fund_reward;
     leftover_staking_rewards.join(computation_reward);
     <b>let</b> leftover_storage_fund_inflow = leftover_staking_rewards.value();
-    <b>let</b> refunded_storage_rebate =
-        self.<a href="../sui_system/storage_fund.md#sui_system_storage_fund">storage_fund</a>.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_advance_epoch">advance_epoch</a>(
+    <b>let</b> refunded_storage_rebate = self
+        .<a href="../sui_system/storage_fund.md#sui_system_storage_fund">storage_fund</a>
+        .<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_advance_epoch">advance_epoch</a>(
             storage_reward,
             storage_fund_reinvestment,
             leftover_staking_rewards,
             storage_rebate_amount,
             non_refundable_storage_fee_amount,
         );
-    event::emit(
-        <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SystemEpochInfoEvent">SystemEpochInfoEvent</a> {
-            <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch">epoch</a>: self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch">epoch</a>,
-            <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_protocol_version">protocol_version</a>: self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_protocol_version">protocol_version</a>,
-            reference_gas_price: self.reference_gas_price,
-            total_stake: new_total_stake,
-            storage_charge,
-            storage_fund_reinvestment: storage_fund_reinvestment_amount <b>as</b> u64,
-            storage_rebate: storage_rebate_amount,
-            storage_fund_balance: self.<a href="../sui_system/storage_fund.md#sui_system_storage_fund">storage_fund</a>.total_balance(),
-            stake_subsidy_amount,
-            total_gas_fees: computation_charge,
-            total_stake_rewards_distributed: computation_reward_distributed + storage_fund_reward_distributed,
-            leftover_storage_fund_inflow,
-        }
-    );
+    event::emit(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SystemEpochInfoEvent">SystemEpochInfoEvent</a> {
+        <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch">epoch</a>: self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch">epoch</a>,
+        <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_protocol_version">protocol_version</a>: self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_protocol_version">protocol_version</a>,
+        reference_gas_price: self.reference_gas_price,
+        total_stake: new_total_stake,
+        storage_charge,
+        storage_fund_reinvestment: storage_fund_reinvestment_amount <b>as</b> u64,
+        storage_rebate: storage_rebate_amount,
+        storage_fund_balance: self.<a href="../sui_system/storage_fund.md#sui_system_storage_fund">storage_fund</a>.total_balance(),
+        stake_subsidy_amount,
+        total_gas_fees: computation_charge,
+        total_stake_rewards_distributed: computation_reward_distributed + storage_fund_reward_distributed,
+        leftover_storage_fund_inflow,
+    });
     self.safe_mode = <b>false</b>;
     // Double check that the gas from safe mode <b>has</b> been processed.
-    <b>assert</b>!(self.safe_mode_storage_rebates == 0
+    <b>assert</b>!(
+        self.safe_mode_storage_rebates == 0
         && self.safe_mode_storage_rewards.value() == 0
-        && self.safe_mode_computation_rewards.value() == 0, <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ESafeModeGasNotProcessed">ESafeModeGasNotProcessed</a>);
+        && self.safe_mode_computation_rewards.value() == 0,
+        <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ESafeModeGasNotProcessed">ESafeModeGasNotProcessed</a>,
+    );
     // Return the storage rebate split from storage fund that's already refunded to the transaction senders.
     // This will be burnt at the last step of <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch">epoch</a> change programmable transaction.
     refunded_storage_rebate
@@ -2408,7 +2420,10 @@ Aborts if <code>validator_addr</code> is not an active validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validator_stake_amount">validator_stake_amount</a>(self: &<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>, validator_addr: <b>address</b>): u64 {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validator_stake_amount">validator_stake_amount</a>(
+    self: &<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
+    validator_addr: <b>address</b>,
+): u64 {
     self.validators.validator_total_stake_amount(validator_addr)
 }
 </code></pre>
@@ -2434,14 +2449,15 @@ Aborts if <code>validator_addr</code> is not an active validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_active_validator_voting_powers">active_validator_voting_powers</a>(self: &<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>): VecMap&lt;<b>address</b>, u64&gt; {
-    <b>let</b> <b>mut</b> active_validators = <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_active_validator_addresses">active_validator_addresses</a>(self);
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_active_validator_voting_powers">active_validator_voting_powers</a>(
+    self: &<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
+): VecMap&lt;<b>address</b>, u64&gt; {
+    <b>let</b> active_validators = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_active_validator_addresses">active_validator_addresses</a>();
     <b>let</b> <b>mut</b> voting_powers = vec_map::empty();
-    <b>while</b> (!vector::is_empty(&active_validators)) {
-        <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = vector::pop_back(&<b>mut</b> active_validators);
-        <b>let</b> <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> = <a href="../sui_system/validator_set.md#sui_system_validator_set_validator_voting_power">validator_set::validator_voting_power</a>(&self.validators, <a href="../sui_system/validator.md#sui_system_validator">validator</a>);
-        vec_map::insert(&<b>mut</b> voting_powers, <a href="../sui_system/validator.md#sui_system_validator">validator</a>, <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a>);
-    };
+    active_validators.destroy!(|<a href="../sui_system/validator.md#sui_system_validator">validator</a>| {
+        <b>let</b> <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> = self.validators.validator_voting_power(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
+        voting_powers.insert(<a href="../sui_system/validator.md#sui_system_validator">validator</a>, <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a>);
+    });
     voting_powers
 }
 </code></pre>
@@ -2467,7 +2483,10 @@ Aborts if <code>validator_addr</code> is not an active validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validator_staking_pool_id">validator_staking_pool_id</a>(self: &<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>, validator_addr: <b>address</b>): ID {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validator_staking_pool_id">validator_staking_pool_id</a>(
+    self: &<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
+    validator_addr: <b>address</b>,
+): ID {
     self.validators.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validator_staking_pool_id">validator_staking_pool_id</a>(validator_addr)
 }
 </code></pre>
@@ -2492,7 +2511,9 @@ Returns reference to the staking pool mappings that map pool ids to active valid
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validator_staking_pool_mappings">validator_staking_pool_mappings</a>(self: &<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>): &Table&lt;ID, <b>address</b>&gt; {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validator_staking_pool_mappings">validator_staking_pool_mappings</a>(
+    self: &<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
+): &Table&lt;ID, <b>address</b>&gt; {
     self.validators.staking_pool_mappings()
 }
 </code></pre>
@@ -2518,11 +2539,8 @@ Returns all the validators who are currently reporting <code>addr</code>
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_get_reporters_of">get_reporters_of</a>(self: &<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>, addr: <b>address</b>): VecSet&lt;<b>address</b>&gt; {
-    <b>if</b> (self.validator_report_records.contains(&addr)) {
-        self.validator_report_records[&addr]
-    } <b>else</b> {
-        vec_set::empty()
-    }
+    <b>if</b> (self.validator_report_records.contains(&addr)) self.validator_report_records[&addr]
+    <b>else</b> vec_set::empty()
 }
 </code></pre>
 
@@ -2593,7 +2611,10 @@ Returns all the validators who are currently reporting <code>addr</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validator_address_by_pool_id">validator_address_by_pool_id</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>, pool_id: &ID): <b>address</b> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validator_address_by_pool_id">validator_address_by_pool_id</a>(
+    self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
+    pool_id: &ID,
+): <b>address</b> {
     self.validators.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validator_address_by_pool_id">validator_address_by_pool_id</a>(pool_id)
 }
 </code></pre>
@@ -2619,10 +2640,9 @@ Returns all the validators who are currently reporting <code>addr</code>
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_pool_exchange_rates">pool_exchange_rates</a>(
     self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
-    pool_id: &ID
-): &Table&lt;u64, PoolTokenExchangeRate&gt;  {
-    <b>let</b> validators = &<b>mut</b> self.validators;
-    validators.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_pool_exchange_rates">pool_exchange_rates</a>(pool_id)
+    pool_id: &ID,
+): &Table&lt;u64, PoolTokenExchangeRate&gt; {
+    self.validators.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_pool_exchange_rates">pool_exchange_rates</a>(pool_id)
 }
 </code></pre>
 
@@ -2646,8 +2666,7 @@ Returns all the validators who are currently reporting <code>addr</code>
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_active_validator_addresses">active_validator_addresses</a>(self: &<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>): vector&lt;<b>address</b>&gt; {
-    <b>let</b> <a href="../sui_system/validator_set.md#sui_system_validator_set">validator_set</a> = &self.validators;
-    <a href="../sui_system/validator_set.md#sui_system_validator_set">validator_set</a>.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_active_validator_addresses">active_validator_addresses</a>()
+    self.validators.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_active_validator_addresses">active_validator_addresses</a>()
 }
 </code></pre>
 
@@ -2671,10 +2690,14 @@ Extract required Balance from vector of Coin<SUI>, transfer the remainder back t
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extract_coin_balance">extract_coin_balance</a>(<b>mut</b> coins: vector&lt;Coin&lt;SUI&gt;&gt;, amount: option::Option&lt;u64&gt;, ctx: &<b>mut</b> TxContext): Balance&lt;SUI&gt; {
-    <b>let</b> <b>mut</b> merged_coin = coins.pop_back();
-    merged_coin.join_vec(coins);
-    <b>let</b> <b>mut</b> total_balance = merged_coin.into_balance();
+<pre><code><b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extract_coin_balance">extract_coin_balance</a>(
+    <b>mut</b> coins: vector&lt;Coin&lt;SUI&gt;&gt;,
+    amount: option::Option&lt;u64&gt;,
+    ctx: &<b>mut</b> TxContext,
+): Balance&lt;SUI&gt; {
+    <b>let</b> acc = coins.pop_back();
+    <b>let</b> merged = coins.fold!(acc, |<b>mut</b> acc, coin| { acc.join(coin); acc });
+    <b>let</b> <b>mut</b> total_balance = merged.into_balance();
     // <b>return</b> the full amount <b>if</b> amount is not specified
     <b>if</b> (amount.is_some()) {
         <b>let</b> amount = amount.destroy_some();
@@ -2711,11 +2734,39 @@ Extract required Balance from vector of Coin<SUI>, transfer the remainder back t
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_store_execution_time_estimates">store_execution_time_estimates</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>, estimates: vector&lt;u8&gt;) {
-    <b>if</b> (bag::contains(&self.extra_fields, <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>)) {
-        <b>let</b> _: vector&lt;u8&gt; = bag::remove(&<b>mut</b> self.extra_fields, <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>);
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_store_execution_time_estimates">store_execution_time_estimates</a>(
+    self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
+    estimates: vector&lt;u8&gt;,
+) {
+    <b>let</b> key = <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>;
+    <b>if</b> (self.extra_fields.contains(key)) {
+        self.extra_fields.remove&lt;_, vector&lt;u8&gt;&gt;(key);
     };
-    bag::add(&<b>mut</b> self.extra_fields, <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>, estimates);
+    self.extra_fields.add(key, estimates);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_sui_system_state_inner_mul_div"></a>
+
+## Macro function `mul_div`
+
+
+
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_mul_div">mul_div</a>($a: u64, $b: u64, $c: u64): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_mul_div">mul_div</a>($a: u64, $b: u64, $c: u64): u64 {
+    (($a <b>as</b> u128) * ($b <b>as</b> u128) / ($c <b>as</b> u128)) <b>as</b> u64
 }
 </code></pre>
 

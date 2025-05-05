@@ -1,0 +1,134 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 11-13:
+//# programmable --sender A --inputs 12 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 15-17:
+//# programmable --sender A --inputs 34 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 19:
+//# view-object 1,0
+Owner: Account Address ( A )
+Version: 2
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(1,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 12u64,
+    },
+}
+
+task 4, line 21:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 34u64,
+    },
+}
+
+task 5, line 23:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 6, lines 25-29:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "data": [
+      {
+        "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+        "coinObjectId": "0x2834d85dbfefdcd66f04811231ba818893793e83a895d53402fd99e132e36562",
+        "version": "3",
+        "digest": "BGqvhSkz3SYePbLs4rwrKCGSjmZCQi98wj5XmPEZ3KAF",
+        "balance": "299999995026074",
+        "previousTransaction": "AasjzjtKdtrQeZqXEquUBDp3Wb8mbLziGxg6np4mhf56"
+      },
+      {
+        "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+        "coinObjectId": "0x57f42279a1d36e456374da161a332ad4f4fe7919fdb44dba456447a6f4d25e8e",
+        "version": "3",
+        "digest": "5edeWFmMJatCEtNanqj2Qx91HcBGyq9F1EzbCnbZtY69",
+        "balance": "34",
+        "previousTransaction": "AasjzjtKdtrQeZqXEquUBDp3Wb8mbLziGxg6np4mhf56"
+      },
+      {
+        "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+        "coinObjectId": "0x25c9a04c7ccfe4bba96596c73d14363121e0d6a6c979e65893877266f7f82074",
+        "version": "2",
+        "digest": "3xXGpcHsghX2BCcmWQ8CspNsWP8sD93LRdzzstTMt1Dx",
+        "balance": "12",
+        "previousTransaction": "Cuu9udTB5hRGQd5o37gNxaq4BjCU5qJiQEQzbuD7U6Y6"
+      }
+    ],
+    "nextCursor": "ICXJoEx8z+S7qWWWxz0UNjEh4NamyXnmWJOHcmb3+CB0AQAAAAAAAAABAAAAAAAAAA==",
+    "hasNextPage": false
+  }
+}
+
+task 7, lines 31-32:
+//# programmable --sender A --inputs object(1,0) object(2,0)
+//> 0: MergeCoins(Input(0), [Input(1)]);
+mutated: object(0,0), object(1,0)
+deleted: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 2934360, non_refundable_storage_fee: 29640
+
+task 8, line 34:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 9, lines 36-40:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "data": [
+      {
+        "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+        "coinObjectId": "0x2834d85dbfefdcd66f04811231ba818893793e83a895d53402fd99e132e36562",
+        "version": "4",
+        "digest": "89vdJGrEidfnSQRpDXBTCzwcfueKzgbS9pvZKwP9zBzW",
+        "balance": "299999994984434",
+        "previousTransaction": "CftuBvsnseqKfCCcxHGX3bXPhzRJvvcLo16QTsgL3xPv"
+      },
+      {
+        "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+        "coinObjectId": "0x25c9a04c7ccfe4bba96596c73d14363121e0d6a6c979e65893877266f7f82074",
+        "version": "4",
+        "digest": "BCyJEa2eY66tdAiJsQi1z2bCkhNrJiUy2bhqzFrhTQnN",
+        "balance": "46",
+        "previousTransaction": "CftuBvsnseqKfCCcxHGX3bXPhzRJvvcLo16QTsgL3xPv"
+      }
+    ],
+    "nextCursor": "ICXJoEx8z+S7qWWWxz0UNjEh4NamyXnmWJOHcmb3+CB0AQAAAAAAAAABAAAAAAAAAA==",
+    "hasNextPage": false
+  }
+}

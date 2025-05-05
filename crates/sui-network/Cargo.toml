@@ -24,6 +24,7 @@ sui-config.workspace = true
 sui-swarm-config.workspace = true
 sui-simulator.workspace = true
 sui-protocol-config.workspace = true
+sui-data-ingestion-core.workspace = true
 
 arc-swap.workspace = true
 bcs.workspace = true

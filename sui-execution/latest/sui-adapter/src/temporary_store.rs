@@ -2,9 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::gas_charger::GasCharger;
-use move_core_types::account_address::AccountAddress;
-use move_core_types::language_storage::StructTag;
-use move_core_types::resolver::ResourceResolver;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -21,20 +18,19 @@ use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::storage::{BackingStore, DenyListResult, PackageObject};
-use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
+use sui_types::sui_system_state::{AdvanceEpochParams, get_sui_system_state_wrapper};
 use sui_types::{
+    SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     effects::EffectsObjectChange,
-    error::{ExecutionError, SuiError, SuiResult},
-    fp_bail,
+    error::{ExecutionError, SuiResult},
     gas::GasCostSummary,
+    object::Object,
     object::Owner,
-    object::{Data, Object},
     storage::{BackingPackageStore, ChildObjectResolver, ParentSync, Storage},
     transaction::InputObjects,
-    SUI_DENY_LIST_OBJECT_ID,
 };
-use sui_types::{is_system_package, SUI_SYSTEM_STATE_OBJECT_ID};
+use sui_types::{SUI_SYSTEM_STATE_OBJECT_ID, is_system_package};
 
 pub struct TemporaryStore<'backing> {
     // The backing store for retrieving Move packages onchain.
@@ -91,17 +87,19 @@ impl<'backing> TemporaryStore<'backing> {
         #[cfg(debug_assertions)]
         {
             // Ensure that input objects and receiving objects must not overlap.
-            assert!(objects
-                .keys()
-                .collect::<HashSet<_>>()
-                .intersection(
-                    &receiving_objects
-                        .iter()
-                        .map(|oref| &oref.0)
-                        .collect::<HashSet<_>>()
-                )
-                .next()
-                .is_none());
+            assert!(
+                objects
+                    .keys()
+                    .collect::<HashSet<_>>()
+                    .intersection(
+                        &receiving_objects
+                            .iter()
+                            .map(|oref| &oref.0)
+                            .collect::<HashSet<_>>()
+                    )
+                    .next()
+                    .is_none()
+            );
         }
         Self {
             store,
@@ -977,14 +975,18 @@ impl ChildObjectResolver for TemporaryStore<'_> {
     ) -> SuiResult<Option<Object>> {
         // You should never be able to try and receive an object after deleting it or writing it in the same
         // transaction since `Receiving` doesn't have copy.
-        debug_assert!(!self
-            .execution_results
-            .written_objects
-            .contains_key(receiving_object_id));
-        debug_assert!(!self
-            .execution_results
-            .deleted_object_ids
-            .contains(receiving_object_id));
+        debug_assert!(
+            !self
+                .execution_results
+                .written_objects
+                .contains_key(receiving_object_id)
+        );
+        debug_assert!(
+            !self
+                .execution_results
+                .deleted_object_ids
+                .contains(receiving_object_id)
+        );
         self.store.get_object_received_at_version(
             owner,
             receiving_object_id,
@@ -1075,44 +1077,6 @@ impl BackingPackageStore for TemporaryStore<'_> {
                     }
                 }
             })
-        }
-    }
-}
-
-impl ResourceResolver for TemporaryStore<'_> {
-    type Error = SuiError;
-
-    fn get_resource(
-        &self,
-        address: &AccountAddress,
-        struct_tag: &StructTag,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
-        let object = match self.read_object(&ObjectID::from(*address)) {
-            Some(x) => x,
-            None => match self.read_object(&ObjectID::from(*address)) {
-                None => return Ok(None),
-                Some(x) => {
-                    if !x.is_immutable() {
-                        fp_bail!(SuiError::ExecutionInvariantViolation);
-                    }
-                    x
-                }
-            },
-        };
-
-        match &object.data {
-            Data::Move(m) => {
-                assert!(
-                    m.is_type(struct_tag),
-                    "Invariant violation: ill-typed object in storage \
-                    or bad object request from caller"
-                );
-                Ok(Some(m.contents().to_vec()))
-            }
-            other => unimplemented!(
-                "Bad object lookup: expected Move object, but got {:?}",
-                other
-            ),
         }
     }
 }

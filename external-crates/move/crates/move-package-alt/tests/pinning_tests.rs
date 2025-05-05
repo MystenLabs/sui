@@ -50,10 +50,12 @@ fn add_bindir() {
         .parent()
         .unwrap()
         .to_string_lossy();
-    std::env::set_var(
-        "PATH",
-        format!("{}:{}", std::env::var("PATH").unwrap(), bindir),
-    );
+    unsafe {
+        std::env::set_var(
+            "PATH",
+            format!("{}:{}", std::env::var("PATH").unwrap(), bindir),
+        )
+    };
 }
 
 datatest_stable::harness!(run_pinning_wrapper, "tests/data", r"pinning.*\.toml$",);

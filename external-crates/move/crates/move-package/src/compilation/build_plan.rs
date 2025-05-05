@@ -3,21 +3,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    compilation::compiled_package::{make_deps_for_compiler_internal, CompiledPackage},
+    compilation::compiled_package::{CompiledPackage, make_deps_for_compiler_internal},
     resolution::resolution_graph::Package,
     resolution::resolution_graph::ResolvedGraph,
     source_package::{
-        manifest_parser::{resolve_move_manifest_path, EDITION_NAME, PACKAGE_NAME},
+        manifest_parser::{EDITION_NAME, PACKAGE_NAME, resolve_move_manifest_path},
         parsed_manifest::PackageName,
     },
 };
 use anyhow::Result;
 use move_compiler::{
-    compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::{report_diagnostics_to_buffer_with_env_color, Migration},
-    editions::Edition,
-    shared::{files::MappedFiles, PackagePaths},
     Compiler,
+    compiled_unit::AnnotatedCompiledUnit,
+    diagnostics::{Migration, report_diagnostics_to_buffer_with_env_color},
+    editions::Edition,
+    shared::{PackagePaths, files::MappedFiles},
 };
 use move_symbol_pool::Symbol;
 use std::{
@@ -25,7 +25,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
-use toml_edit::{value, DocumentMut};
+use toml_edit::{DocumentMut, value};
 use vfs::VfsPath;
 
 use super::{

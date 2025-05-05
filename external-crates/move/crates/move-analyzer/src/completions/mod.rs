@@ -7,7 +7,7 @@ use crate::{
         dot::dot_completions,
         name_chain::{name_chain_completions, use_decl_completions},
         snippets::{init_completion, object_completion},
-        utils::{completion_item, PRIMITIVE_TYPE_COMPLETIONS},
+        utils::{PRIMITIVE_TYPE_COMPLETIONS, completion_item},
     },
     context::Context,
     symbols::{self, CursorContext, PrecomputedPkgInfo, SymbolicatorRunner, Symbols},

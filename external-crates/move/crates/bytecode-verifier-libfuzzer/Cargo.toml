@@ -4,7 +4,7 @@ version = "0.0.0"
 authors = ["Diem Association <opensource@diem.com>"]
 license = "Apache-2.0"
 publish = false
-edition = "2018"
+edition = "2024"
 
 [package.metadata]
 cargo-fuzz = true

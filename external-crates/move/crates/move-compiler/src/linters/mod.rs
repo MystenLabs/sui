@@ -7,7 +7,7 @@ use crate::{
     cfgir::visitor::CFGIRVisitor,
     command_line::compiler::Visitor,
     diagnostics::{
-        codes::{custom, DiagnosticInfo, Severity},
+        codes::{DiagnosticInfo, Severity, custom},
         warning_filters::WarningFilter,
     },
     typing::visitor::TypingVisitor,

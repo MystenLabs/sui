@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    compatibility::{compare_ord_iters, Compatibility, InclusionCheck, Mark},
+    compatibility::{Compatibility, InclusionCheck, Mark, compare_ord_iters},
     file_format::*,
     normalized::{self, RcIdentifier, RcPool, Type},
 };
@@ -679,9 +679,11 @@ fn mk_module_with_defs(
 fn deprecated_unchanged_script_visibility() {
     let pool = &mut RcPool::new();
     let script_module = mk_module(pool, Visibility::DEPRECATED_SCRIPT);
-    assert!(Compatibility::full_check()
-        .check(&script_module, &script_module)
-        .is_ok(),);
+    assert!(
+        Compatibility::full_check()
+            .check(&script_module, &script_module)
+            .is_ok(),
+    );
 }
 
 #[test]
@@ -690,19 +692,25 @@ fn deprecated_remove_script_visibility() {
     let script_module = mk_module(pool, Visibility::DEPRECATED_SCRIPT);
     // script -> private, not allowed
     let private_module = mk_module(pool, Visibility::Private as u8);
-    assert!(Compatibility::full_check()
-        .check(&script_module, &private_module)
-        .is_err());
+    assert!(
+        Compatibility::full_check()
+            .check(&script_module, &private_module)
+            .is_err()
+    );
     // script -> public, not allowed
     let public_module = mk_module(pool, Visibility::Public as u8);
-    assert!(Compatibility::full_check()
-        .check(&script_module, &public_module)
-        .is_err());
+    assert!(
+        Compatibility::full_check()
+            .check(&script_module, &public_module)
+            .is_err()
+    );
     // script -> friend, not allowed
     let friend_module = mk_module(pool, Visibility::Friend as u8);
-    assert!(Compatibility::full_check()
-        .check(&script_module, &friend_module)
-        .is_err());
+    assert!(
+        Compatibility::full_check()
+            .check(&script_module, &friend_module)
+            .is_err()
+    );
 }
 
 #[test]
@@ -711,19 +719,25 @@ fn deprecated_add_script_visibility() {
     let script_module = mk_module(pool, Visibility::DEPRECATED_SCRIPT);
     // private -> script, allowed
     let private_module = mk_module(pool, Visibility::Private as u8);
-    assert!(Compatibility::full_check()
-        .check(&private_module, &script_module)
-        .is_ok());
+    assert!(
+        Compatibility::full_check()
+            .check(&private_module, &script_module)
+            .is_ok()
+    );
     // public -> script, not allowed
     let public_module = mk_module(pool, Visibility::Public as u8);
-    assert!(Compatibility::full_check()
-        .check(&public_module, &script_module)
-        .is_err());
+    assert!(
+        Compatibility::full_check()
+            .check(&public_module, &script_module)
+            .is_err()
+    );
     // friend -> script, not allowed
     let friend_module = mk_module(pool, Visibility::Friend as u8);
-    assert!(Compatibility::full_check()
-        .check(&friend_module, &script_module)
-        .is_err());
+    assert!(
+        Compatibility::full_check()
+            .check(&friend_module, &script_module)
+            .is_err()
+    );
 }
 
 #[test]
@@ -731,13 +745,17 @@ fn private_entry_to_public_entry_allowed() {
     let pool = &mut RcPool::new();
     let private_module = max_version(mk_module_entry(pool, Visibility::Private as u8, true));
     let public_module = max_version(mk_module_entry(pool, Visibility::Public as u8, true));
-    assert!(Compatibility::full_check()
-        .check(&private_module, &public_module)
-        .is_ok());
+    assert!(
+        Compatibility::full_check()
+            .check(&private_module, &public_module)
+            .is_ok()
+    );
 
-    assert!(Compatibility::full_check()
-        .check(&public_module, &private_module)
-        .is_err());
+    assert!(
+        Compatibility::full_check()
+            .check(&public_module, &private_module)
+            .is_err()
+    );
 }
 
 #[test]
@@ -745,13 +763,17 @@ fn public_loses_entry() {
     let pool = &mut RcPool::new();
     let public_entry = max_version(mk_module_entry(pool, Visibility::Public as u8, true));
     let public = max_version(mk_module_entry(pool, Visibility::Public as u8, false));
-    assert!(Compatibility::full_check()
-        .check(&public, &public_entry)
-        .is_ok());
+    assert!(
+        Compatibility::full_check()
+            .check(&public, &public_entry)
+            .is_ok()
+    );
 
-    assert!(Compatibility::full_check()
-        .check(&public_entry, &public)
-        .is_err());
+    assert!(
+        Compatibility::full_check()
+            .check(&public_entry, &public)
+            .is_err()
+    );
 }
 
 #[test]
@@ -770,27 +792,33 @@ fn private_entry_signature_change_allowed() {
     *function_ref = new_function;
 
     // allow updating signatures of private entry functions
-    assert!(Compatibility {
-        check_datatype_layout: true,
-        check_private_entry_linking: false,
-        disallowed_new_abilities: AbilitySet::EMPTY,
-    }
-    .check(&module, &updated_module)
-    .is_ok());
+    assert!(
+        Compatibility {
+            check_datatype_layout: true,
+            check_private_entry_linking: false,
+            disallowed_new_abilities: AbilitySet::EMPTY,
+        }
+        .check(&module, &updated_module)
+        .is_ok()
+    );
 
     // allow updating signatures of private entry functions
-    assert!(Compatibility {
-        check_datatype_layout: true,
-        check_private_entry_linking: false,
-        disallowed_new_abilities: AbilitySet::EMPTY,
-    }
-    .check(&updated_module, &module)
-    .is_ok());
+    assert!(
+        Compatibility {
+            check_datatype_layout: true,
+            check_private_entry_linking: false,
+            disallowed_new_abilities: AbilitySet::EMPTY,
+        }
+        .check(&updated_module, &module)
+        .is_ok()
+    );
 
     // disallow updating signatures of private entry functions
-    assert!(Compatibility::full_check()
-        .check(&module, &updated_module)
-        .is_err());
+    assert!(
+        Compatibility::full_check()
+            .check(&module, &updated_module)
+            .is_err()
+    );
 }
 
 #[test]
@@ -862,13 +890,15 @@ fn entry_fun_compat_tests() {
 
     // Every valid combo is valid under `check_private_entry_linking = false`
     for (prev, new) in valid_combos.into_iter() {
-        assert!(Compatibility {
-            check_datatype_layout: true,
-            check_private_entry_linking: false,
-            disallowed_new_abilities: AbilitySet::EMPTY,
-        }
-        .check(prev, new)
-        .is_ok());
+        assert!(
+            Compatibility {
+                check_datatype_layout: true,
+                check_private_entry_linking: false,
+                disallowed_new_abilities: AbilitySet::EMPTY,
+            }
+            .check(prev, new)
+            .is_ok()
+        );
     }
 
     // Every
@@ -878,23 +908,27 @@ fn entry_fun_compat_tests() {
 
     // Every valid combo is valid under `check_private_entry_linking = false`
     for (prev, new) in valid_entry_fun_changes_with_friend_api_breakage.into_iter() {
-        assert!(Compatibility {
-            check_datatype_layout: true,
-            check_private_entry_linking: false,
-            disallowed_new_abilities: AbilitySet::EMPTY,
-        }
-        .check(prev, new)
-        .is_ok());
+        assert!(
+            Compatibility {
+                check_datatype_layout: true,
+                check_private_entry_linking: false,
+                disallowed_new_abilities: AbilitySet::EMPTY,
+            }
+            .check(prev, new)
+            .is_ok()
+        );
     }
 
     for (prev, new) in invalid_combos.into_iter() {
-        assert!(Compatibility {
-            check_datatype_layout: true,
-            check_private_entry_linking: false,
-            disallowed_new_abilities: AbilitySet::EMPTY,
-        }
-        .check(prev, new)
-        .is_err());
+        assert!(
+            Compatibility {
+                check_datatype_layout: true,
+                check_private_entry_linking: false,
+                disallowed_new_abilities: AbilitySet::EMPTY,
+            }
+            .check(prev, new)
+            .is_err()
+        );
     }
 }
 
@@ -913,29 +947,35 @@ fn public_entry_signature_change_disallowed() {
     *function_ref = new_function;
     // Update the signature of the entry fun to now take a u64 argument.
 
-    assert!(Compatibility {
-        check_datatype_layout: true,
-        check_private_entry_linking: false,
-        disallowed_new_abilities: AbilitySet::EMPTY,
-    }
-    .check(&module, &updated_module)
-    .is_err());
+    assert!(
+        Compatibility {
+            check_datatype_layout: true,
+            check_private_entry_linking: false,
+            disallowed_new_abilities: AbilitySet::EMPTY,
+        }
+        .check(&module, &updated_module)
+        .is_err()
+    );
 
-    assert!(Compatibility {
-        check_datatype_layout: true,
-        check_private_entry_linking: false,
-        disallowed_new_abilities: AbilitySet::EMPTY,
-    }
-    .check(&updated_module, &module)
-    .is_err());
+    assert!(
+        Compatibility {
+            check_datatype_layout: true,
+            check_private_entry_linking: false,
+            disallowed_new_abilities: AbilitySet::EMPTY,
+        }
+        .check(&updated_module, &module)
+        .is_err()
+    );
 
-    assert!(Compatibility {
-        check_datatype_layout: true,
-        check_private_entry_linking: true,
-        disallowed_new_abilities: AbilitySet::EMPTY,
-    }
-    .check(&module, &updated_module)
-    .is_err());
+    assert!(
+        Compatibility {
+            check_datatype_layout: true,
+            check_private_entry_linking: true,
+            disallowed_new_abilities: AbilitySet::EMPTY,
+        }
+        .check(&module, &updated_module)
+        .is_err()
+    );
 }
 
 #[test]
@@ -952,21 +992,25 @@ fn friend_entry_signature_change_allowed() {
     };
     *function_ref = new_function;
 
-    assert!(Compatibility {
-        check_datatype_layout: true,
-        check_private_entry_linking: false,
-        disallowed_new_abilities: AbilitySet::EMPTY,
-    }
-    .check(&module, &updated_module)
-    .is_ok());
+    assert!(
+        Compatibility {
+            check_datatype_layout: true,
+            check_private_entry_linking: false,
+            disallowed_new_abilities: AbilitySet::EMPTY,
+        }
+        .check(&module, &updated_module)
+        .is_ok()
+    );
 
-    assert!(Compatibility {
-        check_datatype_layout: true,
-        check_private_entry_linking: true,
-        disallowed_new_abilities: AbilitySet::EMPTY,
-    }
-    .check(&module, &updated_module)
-    .is_err());
+    assert!(
+        Compatibility {
+            check_datatype_layout: true,
+            check_private_entry_linking: true,
+            disallowed_new_abilities: AbilitySet::EMPTY,
+        }
+        .check(&module, &updated_module)
+        .is_err()
+    );
 }
 
 #[test]

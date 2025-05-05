@@ -3,13 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::{
-    errors::{bounds_error, PartialVMError},
+    IndexKind,
+    errors::{PartialVMError, bounds_error},
     file_format::{
         AddressIdentifierIndex, CompiledModule, DatatypeHandleIndex, FunctionHandleIndex,
         IdentifierIndex, ModuleHandleIndex, SignatureIndex, StructDefinitionIndex, TableIndex,
     },
     internals::ModuleIndex,
-    IndexKind,
 };
 use move_core_types::vm_status::StatusCode;
 use proptest::{

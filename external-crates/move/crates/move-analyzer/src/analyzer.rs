@@ -6,11 +6,11 @@ use anyhow::Result;
 use crossbeam::channel::{bounded, select};
 use lsp_server::{Connection, Message, Notification, Request, Response};
 use lsp_types::{
-    notification::Notification as _, request::Request as _, CodeActionKind, CodeActionOptions,
-    CodeActionProviderCapability, CompletionOptions, Diagnostic, HoverProviderCapability,
-    InlayHintOptions, InlayHintServerCapabilities, OneOf, SaveOptions, TextDocumentSyncCapability,
-    TextDocumentSyncKind, TextDocumentSyncOptions, TypeDefinitionProviderCapability,
-    WorkDoneProgressOptions,
+    CodeActionKind, CodeActionOptions, CodeActionProviderCapability, CompletionOptions, Diagnostic,
+    HoverProviderCapability, InlayHintOptions, InlayHintServerCapabilities, OneOf, SaveOptions,
+    TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
+    TypeDefinitionProviderCapability, WorkDoneProgressOptions, notification::Notification as _,
+    request::Request as _,
 };
 use move_compiler::linters::LintLevel;
 use move_package::source_package::parsed_manifest::Dependencies;
@@ -25,7 +25,7 @@ use crate::{
     vfs::on_text_document_sync_notification,
 };
 use url::Url;
-use vfs::{impls::memory::MemoryFS, VfsPath};
+use vfs::{VfsPath, impls::memory::MemoryFS};
 
 const LINT_NONE: &str = "none";
 const LINT_DEFAULT: &str = "default";

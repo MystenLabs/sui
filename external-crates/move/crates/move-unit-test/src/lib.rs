@@ -8,17 +8,16 @@ pub mod test_reporter;
 pub mod test_runner;
 
 use crate::test_runner::TestRunner;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use clap::*;
 use move_binary_format::CompiledModule;
 use move_command_line_common::files::verify_and_create_named_address_mapping;
 use move_compiler::{
-    self,
+    self, Compiler, Flags, PASS_CFGIR,
     compiled_unit::NamedCompiledModule,
     diagnostics,
     shared::{self, NumericalAddress},
     unit_test::{self, TestPlan},
-    Compiler, Flags, PASS_CFGIR,
 };
 use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::native_functions::NativeFunctionTable;

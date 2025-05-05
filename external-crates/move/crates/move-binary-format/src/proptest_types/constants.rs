@@ -6,7 +6,7 @@ use crate::file_format::{Constant, SignatureToken};
 use move_core_types::account_address::AccountAddress;
 use proptest::{
     arbitrary::any,
-    collection::{btree_set, vec, SizeRange},
+    collection::{SizeRange, btree_set, vec},
     strategy::Strategy,
 };
 

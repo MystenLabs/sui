@@ -5,6 +5,7 @@
 use anyhow::bail;
 use move_command_line_common::testing::insta_assert;
 use move_package::{
+    BuildConfig,
     compilation::{build_plan::BuildPlan, compiled_package::CompiledPackageInfo},
     package_hooks::{self, PackageHooks, PackageIdentifier},
     resolution::resolution_graph::Package,
@@ -12,14 +13,13 @@ use move_package::{
         manifest_parser::parse_dependencies,
         parsed_manifest::{Dependencies, OnChainInfo, PackageDigest, SourceManifest},
     },
-    BuildConfig,
 };
 use move_symbol_pool::Symbol;
 use std::{
     fs,
     path::{Path, PathBuf},
 };
-use tempfile::{tempdir, TempDir};
+use tempfile::{TempDir, tempdir};
 
 /// Resolve the package contained in the same directory as [path], and snapshot a value based
 /// on the extension of [path]:

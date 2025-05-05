@@ -5,16 +5,16 @@
 use crate::{
     diagnostics::warning_filters::{WarningFilters, WarningFiltersTable},
     expansion::ast::{
-        ability_modifiers_ast_debug, AbilitySet, Attributes, Friend, ModuleIdent, Mutability,
+        AbilitySet, Attributes, Friend, ModuleIdent, Mutability, ability_modifiers_ast_debug,
     },
     naming::ast::{BuiltinTypeName, BuiltinTypeName_, DatatypeTypeParameter, TParam},
     parser::ast::{
-        self as P, BinOp, ConstantName, DatatypeName, Field, FunctionName, TargetKind, UnaryOp,
-        VariantName, ENTRY_MODIFIER,
+        self as P, BinOp, ConstantName, DatatypeName, ENTRY_MODIFIER, Field, FunctionName,
+        TargetKind, UnaryOp, VariantName,
     },
     shared::{
-        ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap, Name,
-        NumericalAddress, TName,
+        Name, NumericalAddress, TName, ast_debug::*, program_info::TypingProgramInfo,
+        unique_map::UniqueMap,
     },
 };
 use move_ir_types::location::*;

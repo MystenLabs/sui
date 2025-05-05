@@ -27,7 +27,7 @@ use std::{
 use codespan::{ByteIndex, ByteOffset, ColumnOffset, FileId, Files, LineOffset, Location, Span};
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label, Severity},
-    term::{emit, termcolor::WriteColor, Config},
+    term::{Config, emit, termcolor::WriteColor},
 };
 use itertools::Itertools;
 #[allow(unused_imports)]
@@ -37,13 +37,13 @@ use num::BigUint;
 
 pub use move_binary_format::file_format::{AbilitySet, Visibility as FunctionVisibility};
 use move_binary_format::{
+    CompiledModule,
     file_format::{
         AddressIdentifierIndex, Bytecode, Constant as VMConstant, ConstantPoolIndex,
         DatatypeHandleIndex, EnumDefinitionIndex, FunctionDefinition, FunctionDefinitionIndex,
         FunctionHandleIndex, SignatureIndex, SignatureToken, StructDefinitionIndex,
         StructFieldInformation, VariantJumpTable, Visibility,
     },
-    CompiledModule,
 };
 use move_bytecode_source_map::{mapping::SourceMapping, source_map::SourceMap};
 use move_command_line_common::files::FileHash;
@@ -1025,7 +1025,7 @@ impl GlobalEnv {
                 .make(module.identifier_at(variant.variant_name).as_str());
             let loc = match enum_smap {
                 None => Loc::default(),
-                Some(smap) => self.to_loc(&smap.variants[tag].0 .1),
+                Some(smap) => self.to_loc(&smap.variants[tag].0.1),
             };
             variant_data.insert(
                 VariantId(variant_name),

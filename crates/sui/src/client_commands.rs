@@ -550,6 +550,10 @@ pub enum SuiClientCommands {
         profile_output: Option<PathBuf>,
     },
 
+    /// Remove an existing address by its alias or hexadecimal string.
+    #[clap(name = "remove-address")]
+    RemoveAddress { alias_or_address: String },
+
     /// Replay a given transaction to view transaction effects. Set environment variable MOVE_VM_STEP=1 to debug.
     #[clap(name = "replay-transaction")]
     ReplayTransaction {
@@ -714,7 +718,7 @@ impl SuiClientCommands {
                     profile_output,
                     config_objects: None,
                 };
-                let rpc = context.config.get_active_env()?.rpc.clone();
+                let rpc = context.get_active_env()?.rpc.clone();
                 let _command_result =
                     sui_replay::execute_replay_command(Some(rpc), false, false, None, None, cmd)
                         .await?;
@@ -736,7 +740,7 @@ impl SuiClientCommands {
                     config_objects: None,
                 };
 
-                let rpc = context.config.get_active_env()?.rpc.clone();
+                let rpc = context.get_active_env()?.rpc.clone();
                 let _command_result =
                     sui_replay::execute_replay_command(Some(rpc), false, false, None, None, cmd)
                         .await?;
@@ -753,7 +757,7 @@ impl SuiClientCommands {
                     num_tasks: 16,
                     persist_path: None,
                 };
-                let rpc = context.config.get_active_env()?.rpc.clone();
+                let rpc = context.get_active_env()?.rpc.clone();
                 let _command_result =
                     sui_replay::execute_replay_command(Some(rpc), false, false, None, None, cmd)
                         .await?;
@@ -771,7 +775,7 @@ impl SuiClientCommands {
                     terminate_early,
                     max_tasks: 16,
                 };
-                let rpc = context.config.get_active_env()?.rpc.clone();
+                let rpc = context.get_active_env()?.rpc.clone();
                 let _command_result =
                     sui_replay::execute_replay_command(Some(rpc), false, false, None, None, cmd)
                         .await?;
@@ -926,11 +930,7 @@ impl SuiClientCommands {
                 } else {
                     None
                 };
-                let env_alias = context
-                    .config
-                    .get_active_env()
-                    .map(|e| e.alias.clone())
-                    .ok();
+                let env_alias = context.get_active_env().map(|e| e.alias.clone()).ok();
                 let verify =
                     check_dep_verification_flags(skip_dependency_verification, verify_deps)?;
 
@@ -1495,6 +1495,23 @@ impl SuiClientCommands {
                     recovery_phrase: phrase,
                 })
             }
+
+            SuiClientCommands::RemoveAddress { alias_or_address } => {
+                let address: SuiAddress = match context
+                    .config
+                    .keystore
+                    .get_address_by_alias(alias_or_address.clone())
+                {
+                    Ok(addr) => *addr,
+                    Err(_) => SuiAddress::from_str(&alias_or_address)
+                        .map_err(|e| anyhow!("Invalid address or alias: {}", e))?,
+                };
+
+                context.config.keystore.remove_key(address)?;
+
+                SuiClientCommandResult::RemoveAddress(RemoveAddressOutput { alias_or_address })
+            }
+
             SuiClientCommands::Gas { address } => {
                 let address = get_identity_address(address, context)?;
                 let coins = context
@@ -1515,15 +1532,15 @@ impl SuiClientCommands {
                     );
                     url
                 } else {
-                    let active_env = context.config.get_active_env();
+                    let active_env = context.get_active_env();
 
                     if let Ok(env) = active_env {
                         let network = match env.rpc.as_str() {
-                            SUI_DEVNET_URL => "https://faucet.devnet.sui.io/v1/gas",
+                            SUI_DEVNET_URL => "https://faucet.devnet.sui.io/v2/gas",
                             SUI_TESTNET_URL => {
                                 bail!("For testnet tokens, please use the Web UI: https://faucet.sui.io/?address={address}");
                             }
-                            SUI_LOCAL_NETWORK_URL | SUI_LOCAL_NETWORK_URL_0 => "http://127.0.0.1:9123/gas",
+                            SUI_LOCAL_NETWORK_URL | SUI_LOCAL_NETWORK_URL_0 => "http://127.0.0.1:9123/v2/gas",
                             _ => bail!("Cannot recognize the active network. Please provide the gas faucet full URL.")
                         };
                         network.to_string()
@@ -1674,12 +1691,12 @@ impl SuiClientCommands {
                 context.config.save()?;
                 SuiClientCommandResult::NewEnv(env)
             }
-            SuiClientCommands::ActiveEnv => {
-                SuiClientCommandResult::ActiveEnv(context.config.active_env.clone())
-            }
+            SuiClientCommands::ActiveEnv => SuiClientCommandResult::ActiveEnv(
+                context.get_active_env().ok().map(|e| e.alias.clone()),
+            ),
             SuiClientCommands::Envs => SuiClientCommandResult::Envs(
                 context.config.envs.clone(),
-                context.config.active_env.clone(),
+                context.get_active_env().ok().map(|e| e.alias.clone()),
             ),
             SuiClientCommands::VerifySource {
                 package_path,
@@ -2164,6 +2181,25 @@ impl Display for SuiClientCommandResult {
 
                 write!(f, "{}", table)?
             }
+            SuiClientCommandResult::RemoveAddress(remove_address) => {
+                let mut builder = TableBuilder::default();
+                builder.push_record(vec![remove_address.alias_or_address.as_str()]);
+
+                let mut table = builder.build();
+                table.with(TableStyle::rounded());
+                table.with(TablePanel::header("removed the keypair from keystore."));
+
+                table.with(
+                    TableModify::new(TableCell::new(0, 0))
+                        .with(TableBorder::default().corner_bottom_right('┬')),
+                );
+                table.with(
+                    TableModify::new(TableCell::new(0, 0))
+                        .with(TableBorder::default().corner_top_right('─')),
+                );
+
+                write!(f, "{}", table)?
+            }
             SuiClientCommandResult::Object(object_read) => match object_read.object() {
                 Ok(obj) => {
                     let object = ObjectOutput::from(obj);
@@ -2473,6 +2509,7 @@ impl SuiClientCommandResult {
             | SuiClientCommandResult::NoOutput
             | SuiClientCommandResult::Object(_)
             | SuiClientCommandResult::Objects(_)
+            | SuiClientCommandResult::RemoveAddress(_)
             | SuiClientCommandResult::RawObject(_)
             | SuiClientCommandResult::SerializedSignedTransaction(_)
             | SuiClientCommandResult::SerializedUnsignedTransaction(_)
@@ -2507,6 +2544,12 @@ pub struct NewAddressOutput {
     pub address: SuiAddress,
     pub key_scheme: SignatureScheme,
     pub recovery_phrase: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoveAddressOutput {
+    pub alias_or_address: String,
 }
 
 #[derive(Serialize)]
@@ -2624,6 +2667,7 @@ pub enum SuiClientCommandResult {
     Object(SuiObjectResponse),
     Objects(Vec<SuiObjectResponse>),
     RawObject(SuiObjectResponse),
+    RemoveAddress(RemoveAddressOutput),
     SerializedSignedTransaction(SenderSignedData),
     SerializedUnsignedTransaction(TransactionData),
     Switch(SwitchResponse),

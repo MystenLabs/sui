@@ -1430,11 +1430,7 @@ impl Frame {
             for instruction in &code[self.pc as usize..] {
                 trace!(
                     &self.function,
-                    &self.locals,
-                    self.pc,
-                    instruction,
-                    resolver,
-                    interpreter
+                    &self.locals, self.pc, instruction, resolver, interpreter
                 );
 
                 fail_point!("move_vm::interpreter_loop", |_| {
@@ -1563,11 +1559,15 @@ impl Frame {
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message("Struct Definition not resolved".to_string())
                 })?;
-                check_depth!(struct_type
-                    .depth
-                    .as_ref()
-                    .ok_or_else(|| { PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED) })?
-                    .solve(&[])?)
+                check_depth!(
+                    struct_type
+                        .depth
+                        .as_ref()
+                        .ok_or_else(|| {
+                            PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED)
+                        })?
+                        .solve(&[])?
+                )
             }
             Type::DatatypeInstantiation(inst) => {
                 let (si, ty_args) = &**inst;
@@ -1583,18 +1583,22 @@ impl Frame {
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message("Struct Definition not resolved".to_string())
                 })?;
-                check_depth!(struct_type
-                    .depth
-                    .as_ref()
-                    .ok_or_else(|| { PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED) })?
-                    .solve(&ty_arg_depths)?)
+                check_depth!(
+                    struct_type
+                        .depth
+                        .as_ref()
+                        .ok_or_else(|| {
+                            PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED)
+                        })?
+                        .solve(&ty_arg_depths)?
+                )
             }
             // NB: substitution must be performed before calling this function
             Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message("Type parameter should be fully resolved".to_string()),
-                )
+                );
             }
         };
 

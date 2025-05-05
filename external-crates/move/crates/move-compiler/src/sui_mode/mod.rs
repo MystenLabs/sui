@@ -4,7 +4,7 @@
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 
-use crate::diagnostics::codes::{custom, DiagnosticInfo, Severity};
+use crate::diagnostics::codes::{DiagnosticInfo, Severity, custom};
 
 pub mod id_leak;
 pub mod info;

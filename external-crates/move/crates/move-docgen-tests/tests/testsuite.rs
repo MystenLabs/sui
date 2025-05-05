@@ -3,8 +3,8 @@
 
 use move_command_line_common::testing::insta_assert;
 use move_docgen::{Docgen, DocgenFlags, DocgenOptions};
-use move_package::compilation::model_builder;
 use move_package::BuildConfig;
+use move_package::compilation::model_builder;
 use std::path::Path;
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -59,7 +59,7 @@ fn test_impl(toml_path: &Path, flags: DocgenFlags, test_case: &str) -> datatest_
     };
     let options = options(root_doc_template, flags);
     let docgen = Docgen::new(&model, &options);
-    let file_contents = docgen.gen(&model)?;
+    let file_contents = docgen.generate(&model)?;
     let [(path, contents)] = file_contents
         .iter()
         .filter(|(path, _contents)| !path.contains("dependencies"))

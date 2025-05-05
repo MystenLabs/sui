@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     dependency::ManifestDependencyInfo,
-    errors::{with_file, FileHandle, Located, ManifestError, ManifestErrorKind, PackageResult},
+    errors::{FileHandle, Located, ManifestError, ManifestErrorKind, PackageResult, with_file},
     flavor::{MoveFlavor, Vanilla},
 };
 

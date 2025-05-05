@@ -205,6 +205,16 @@ pub struct ListOwnedObjectsRequest {
     /// Required. The address of the account that owns the objects.
     #[prost(string, optional, tag = "1")]
     pub owner: ::core::option::Option<::prost::alloc::string::String>,
+    /// Optional type filter to limit the types of objects listed.
+    ///
+    /// Providing an object type with no type params will return objects of that
+    /// type with any type parameter, e.g. `0x2::coin::Coin` will return all
+    /// `Coin<T>` objects regardless of the type parameter `T`. Providing a type
+    /// with a type param will retrict the returned objects to only those objects
+    /// that match the provided type parameters, e.g.
+    /// `0x2::coin::Coin<0x2::sui::SUI>` will only return `Coin<SUI>` objects.
+    #[prost(string, optional, tag = "4")]
+    pub object_type: ::core::option::Option<::prost::alloc::string::String>,
     /// The maximum number of entries return. The service may return fewer than this value.
     /// If unspecified, at most `50` entries will be returned.
     /// The maximum value is `1000`; values above `1000` will be coerced to `1000`.
@@ -240,6 +250,9 @@ pub struct OwnedObject {
     pub owner: ::core::option::Option<super::v2beta::Owner>,
     #[prost(string, optional, tag = "6")]
     pub object_type: ::core::option::Option<::prost::alloc::string::String>,
+    /// Current balance if this object is a `0x2::coin::Coin<T>`
+    #[prost(uint64, optional, tag = "200")]
+    pub balance: ::core::option::Option<u64>,
 }
 /// Generated client implementations.
 pub mod live_data_service_client {

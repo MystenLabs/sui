@@ -3,8 +3,9 @@
 
 use crate::{
     model::{self, PackageData},
-    normalized, serializable_signatures,
+    normalized,
     source_kind::{Uninit, WithoutSource},
+    summary,
 };
 use move_binary_format::CompiledModule;
 use move_core_types::account_address::AccountAddress;
@@ -49,7 +50,7 @@ impl Model {
             info: Uninit::new(),
             compiled,
             packages,
-            serializable_signatures: OnceCell::new(),
+            summary: OnceCell::new(),
             _phantom: std::marker::PhantomData,
         };
         model.compute_dependencies();
@@ -58,9 +59,9 @@ impl Model {
         model
     }
 
-    pub fn serializable_signatures(&self) -> &serializable_signatures::Packages {
-        self.serializable_signatures
-            .get_or_init(|| serializable_signatures::Packages::from(&self.compiled))
+    pub fn summary_without_source(&self) -> &summary::Packages {
+        self.summary
+            .get_or_init(|| summary::Packages::from(&self.compiled))
     }
 }
 

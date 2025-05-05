@@ -6,7 +6,7 @@ use std::{
     io::{read_to_string, stdin},
 };
 
-use external_resolver::{QueryID, QueryResult, Request, Response, RESOLVE_ARG};
+use external_resolver::{QueryID, QueryResult, RESOLVE_ARG, Request, Response};
 use serde::Deserialize;
 
 pub fn main() {

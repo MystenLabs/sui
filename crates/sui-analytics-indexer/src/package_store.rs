@@ -7,6 +7,7 @@ use move_core_types::account_address::AccountAddress;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
+use sui_package_resolver::Resolver;
 use sui_package_resolver::{
     error::Error as PackageResolverError, Package, PackageStore, PackageStoreWithLruCache, Result,
 };
@@ -87,7 +88,7 @@ impl LocalDBPackageStore {
         }
     }
 
-    pub fn update(&self, object: &Object) -> Result<()> {
+    fn update(&self, object: &Object) -> Result<()> {
         let Some(_package) = object.data.try_as_package() else {
             return Ok(());
         };
@@ -117,7 +118,7 @@ impl LocalDBPackageStore {
 
     /// Gets the original package id for the given package id.
     #[cfg(not(test))]
-    pub async fn get_original_package_id(&self, id: AccountAddress) -> Result<ObjectID> {
+    async fn get_original_package_id(&self, id: AccountAddress) -> Result<ObjectID> {
         if let Some(&original_id) = self.original_id_cache.read().await.get(&id) {
             return Ok(original_id);
         }
@@ -135,7 +136,7 @@ impl LocalDBPackageStore {
     }
 
     #[cfg(test)]
-    pub async fn get_original_package_id(&self, id: AccountAddress) -> Result<ObjectID> {
+    async fn get_original_package_id(&self, id: AccountAddress) -> Result<ObjectID> {
         Ok(id.into())
     }
 }
@@ -148,4 +149,25 @@ impl PackageStore for LocalDBPackageStore {
     }
 }
 
-pub(crate) type PackageCache = PackageStoreWithLruCache<LocalDBPackageStore>;
+pub struct PackageCache {
+    package_store: LocalDBPackageStore,
+    pub resolver: Resolver<PackageStoreWithLruCache<LocalDBPackageStore>>,
+}
+
+impl PackageCache {
+    pub fn new(path: &Path, rest_url: &str) -> Self {
+        let package_store = LocalDBPackageStore::new(path, rest_url);
+        Self {
+            package_store: package_store.clone(),
+            resolver: Resolver::new(PackageStoreWithLruCache::new(package_store)),
+        }
+    }
+
+    pub fn update(&self, object: &Object) -> Result<()> {
+        self.package_store.update(object)
+    }
+
+    pub async fn get_original_package_id(&self, id: AccountAddress) -> Result<ObjectID> {
+        self.package_store.get_original_package_id(id).await
+    }
+}

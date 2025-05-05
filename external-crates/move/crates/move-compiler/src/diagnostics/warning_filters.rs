@@ -3,10 +3,10 @@
 
 use crate::{
     diagnostics::{
-        codes::{Category, DiagnosticInfo, ExternalPrefix, Severity, UnusedItem},
         Diagnostic, DiagnosticCode,
+        codes::{Category, DiagnosticInfo, ExternalPrefix, Severity, UnusedItem},
     },
-    shared::{known_attributes, AstDebug},
+    shared::{AstDebug, known_attributes},
 };
 use move_symbol_pool::Symbol;
 use std::{

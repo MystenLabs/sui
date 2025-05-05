@@ -1,0 +1,363 @@
+"""
+String containing Base64-encoded binary data.
+"""
+scalar Base64
+
+
+
+
+
+"""
+An Object on Sui is either a typed value (a Move Object) or a Package (modules containing functions and types).
+
+Every object on Sui is identified by a unique address, and has a version number that increases with every modification. Objects also hold metadata detailing their current owner (who can sign for access to the object and whether that access can modify and/or delete the object), and the digest of the last transaction that modified the object.
+"""
+type Object {
+	"""
+	The Object's ID.
+	"""
+	address: SuiAddress!
+	"""
+	The version of this object that this content comes from.
+	"""
+	version: UInt53!
+	"""
+	32-byte hash that identifies the object's contents, encoded in Base58.
+	"""
+	digest: String!
+	"""
+	The Base64-encoded BCS serialization of this object, as an `Object`.
+	"""
+	objectBcs: Base64
+	"""
+	The transaction that created this version of the object.
+	"""
+	previousTransaction: Transaction
+}
+
+type ObjectChange {
+	"""
+	The address of the object that has changed.
+	"""
+	address: SuiAddress!
+	"""
+	The contents of the object immediately before the transaction.
+	"""
+	inputState: Object
+	"""
+	The contents of the object immediately after the transaction.
+	"""
+	outputState: Object
+	"""
+	Whether the ID was created in this transaction.
+	"""
+	idCreated: Boolean
+	"""
+	Whether the ID was deleted in this transaction.
+	"""
+	idDeleted: Boolean
+}
+
+type ObjectChangeConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ObjectChangeEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [ObjectChange!]!
+}
+
+"""
+An edge in a connection.
+"""
+type ObjectChangeEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: ObjectChange!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
+Identifies a specific version of an object.
+
+The `address` field must be specified, as well as exactly one of `version` or `rootVersion`.
+"""
+input ObjectKey {
+	"""
+	The object's ID.
+	"""
+	address: SuiAddress!
+	"""
+	If specified, tries to fetch the object at this exact version.
+	"""
+	version: UInt53
+	"""
+	If specified, tries to fetch the latest version of the object at or before this version.
+	
+	This can be used to fetch a child or ancestor object bounded by its root object's version. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
+	
+	- The root object of the object it is wrapped in, if it is wrapped.
+	- The root object of its owner, if it is owned by another object.
+	- The object itself, if it is not object-owned or wrapped.
+	"""
+	rootVersion: UInt53
+	"""
+	If specified, tries to fetch the latest version as of this checkpoint.
+	"""
+	atCheckpoint: UInt53
+}
+
+"""
+Information about pagination in a connection
+"""
+type PageInfo {
+	"""
+	When paginating backwards, are there more items?
+	"""
+	hasPreviousPage: Boolean!
+	"""
+	When paginating forwards, are there more items?
+	"""
+	hasNextPage: Boolean!
+	"""
+	When paginating backwards, the cursor to continue.
+	"""
+	startCursor: String
+	"""
+	When paginating forwards, the cursor to continue.
+	"""
+	endCursor: String
+}
+
+type Query {
+	"""
+	First four bytes of the network's genesis checkpoint digest (uniquely identifies the network), hex-encoded.
+	"""
+	chainIdentifier: String!
+	"""
+	Fetch objects by their keys.
+	
+	Returns a list of objects that is guaranteed to be the same length as `keys`. If an object in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the object never existed, or because it was pruned.
+	"""
+	multiGetObjects(keys: [ObjectKey!]!): [Object]!
+	"""
+	Fetch transactions by their digests.
+	
+	Returns a list of transactions that is guaranteed to be the same length as `keys`. If a digest in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the transaction never existed, or because it was pruned.
+	"""
+	multiGetTransactions(keys: [String!]!): [Transaction]!
+	"""
+	Fetch transaction effects by their transactions' digests.
+	
+	Returns a list of transaction effects that is guaranteed to be the same length as `keys`. If a digest in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the transaction effects never existed, or because it was pruned.
+	"""
+	multiGetTransactionEffects(keys: [String!]!): [TransactionEffects]!
+	"""
+	Fetch an object by its address.
+	
+	If `version` is specified, the object will be fetched at that exact version.
+	
+	If `rootVersion` is specified, the object will be fetched at the latest version at or before this version. This can be used to fetch a child or ancestor object bounded by its root object's version. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
+	
+	- The root object of the object it is wrapped in, if it is wrapped.
+	- The root object of its owner, if it is owned by another object.
+	- The object itself, if it is not object-owned or wrapped.
+	
+	If `atCheckpoint` is specified, the object will be fetched at the latest version as of this checkpoint.
+	
+	It is an error to specify both `version` and `rootVersion`, or to specify neither.
+	
+	Returns `null` if an object cannot be found that meets this criteria.
+	"""
+	object(address: SuiAddress!, version: UInt53, rootVersion: UInt53, atCheckpoint: UInt53): Object
+	"""
+	Configuration for this RPC service.
+	"""
+	serviceConfig: ServiceConfig!
+	"""
+	Fetch a transaction by its digest.
+	
+	Returns `null` if the transaction does not exist in the store, either because it never existed or because it was pruned.
+	"""
+	transaction(digest: String!): Transaction
+	"""
+	Fetch transaction effects by its transaction's digest.
+	
+	Returns `null` if the transaction effects do not exist in the store, either because that transaction was not executed, or it was pruned.
+	"""
+	transactionEffects(digest: String!): TransactionEffects
+}
+
+type ServiceConfig {
+	"""
+	Maximum time in milliseconds spent waiting for a response from fullnode after issuing a transaction to execute. Note that the transaction may still succeed even in the case of a timeout. Transactions are idempotent, so a transaction that times out should be re-submitted until the network returns a definite response (success or failure, not timeout).
+	"""
+	mutationTimeoutMs: Int
+	"""
+	Maximum time in milliseconds that will be spent to serve one query request.
+	"""
+	queryTimeoutMs: Int
+	"""
+	Maximum depth of a GraphQL query that can be accepted by this service.
+	"""
+	maxQueryDepth: Int
+	"""
+	The maximum number of nodes (field names) the service will accept in a single query.
+	"""
+	maxQueryNodes: Int
+	"""
+	Maximum number of estimated output nodes in a GraphQL response.
+	
+	The estimate is an upperbound of how many nodes there would be in the output assuming every requested field is present, paginated requests return full page sizes, and multi-get queries find all requested keys. Below is a worked example query:
+	
+	```graphql
+	|  0: query {                            # 514 = total
+	|  1:   checkpoint {                     # 1
+	|  2:     sequenceNumber                 # 1
+	|  3:   }
+	|  4:
+	|  5:   multiGetObjects([$a, $b, $c]) {  # 1 (* 3)
+	|  6:     address                        # 3
+	|  7:     digest                         # 3
+	|  8:   }
+	|  9:
+	| 10:   # default page size is 20
+	| 11:   transactions {                   # 1 (* 20)
+	| 12:     pageInfo {                     # 1
+	| 13:       hasNextPage                  # 1
+	| 14:       endCursor                    # 1
+	| 15:     }
+	| 16:
+	| 17:     nodes                          # 1
+	| 18:     {                              # 20
+	| 19:       digest                       # 20
+	| 20:       effects {                    # 20
+	| 21:         objectChanges(first: 10) { # 20 (* 10)
+	| 22:           nodes                    # 20
+	| 23:           {                        # 200
+	| 24:             address                # 200
+	| 25:           }
+	| 26:         }
+	| 27:       }
+	| 28:     }
+	| 29:   }
+	| 30: }
+	```
+	"""
+	maxOutputNodes: Int
+	"""
+	Maximum size in bytes allowed for the `txBytes` and `signatures` parameters of an `executeTransaction` or `simulateTransaction` field, or the `bytes` and `signature` parameters of a `verifyZkLoginSignature` field.
+	
+	This is cumulative across all matching fields in a single GraphQL request.
+	"""
+	maxTransactionPayloadSize: Int
+	"""
+	Maximum size in bytes of a single GraphQL request, excluding the elements covered by `maxTransactionPayloadSize`.
+	"""
+	maxQueryPayloadSize: Int
+	"""
+	Number of elements a paginated connection will return if a page size is not supplied.
+	
+	Accepts `type` and `field` arguments which identify the connection that is being queried. If the field in question is paginated, its default page size is returned. If it does not exist or is not paginated, `null` is returned.
+	"""
+	defaultPageSize(type: String!, field: String!): Int
+	"""
+	Maximum number of elements that can be requested from a paginated connection. A request to fetch more elements will result in an error.
+	
+	Accepts `type` and `field` arguments which identify the connection that is being queried. If the field in question is paginated, its max page size is returned. If it does not exist or is not paginated, `null` is returned.
+	"""
+	maxPageSize(type: String!, field: String!): Int
+	"""
+	Maximum number of elements that can be requested from a multi-get query. A request to fetch more keys will result in an error.
+	"""
+	maxMultiGetSize: Int
+	"""
+	Maximum amount of nesting among type arguments (type arguments nest when a type argument is itself generic and has arguments).
+	"""
+	maxTypeArgumentDepth: Int
+	"""
+	Maximum number of type parameters a type can have.
+	"""
+	maxTypeArgumentWidth: Int
+	"""
+	Maximum number of datatypes that need to be processed when calculating the layout of a single type.
+	"""
+	maxTypeNodes: Int
+	"""
+	Maximum nesting allowed in datatype fields when calculating the layout of a single type.
+	"""
+	maxMoveValueDepth: Int
+}
+
+
+"""
+String containing 32 byte hex-encoded address, with a leading '0x'. Leading zeroes can be omitted on input but will always appear in outputs (SuiAddress in output is guaranteed to be 66 characters long).
+"""
+scalar SuiAddress
+
+"""
+Description of a transaction, the unit of activity on Sui.
+"""
+type Transaction {
+	"""
+	A 32-byte hash that uniquely identifies the transaction contents, encoded in Base58.
+	"""
+	digest: String!
+	"""
+	The results to the chain of executing this transaction.
+	"""
+	effects: TransactionEffects
+	"""
+	The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
+	"""
+	transactionBcs: Base64
+}
+
+"""
+The results of executing a transaction.
+"""
+type TransactionEffects {
+	"""
+	A 32-byte hash that uniquely identifies the transaction contents, encoded in Base58.
+	
+	Note that this is different from the execution digest, which is the unique hash of the transaction effects.
+	"""
+	digest: String!
+	"""
+	The transaction that ran to produce these effects.
+	"""
+	transaction: Transaction
+	"""
+	The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
+	"""
+	effectsBcs: Base64
+	"""
+	A 32-byte hash that uniquely identifies the effects contents, encoded in Base58.
+	"""
+	effectsDigest: String
+	"""
+	The before and after state of objects that were modified by this transaction.
+	"""
+	objectChanges(first: Int, after: String, last: Int, before: String): ObjectChangeConnection
+}
+
+"""
+An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
+"""
+scalar UInt53
+
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+schema {
+	query: Query
+}

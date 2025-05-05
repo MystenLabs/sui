@@ -6,10 +6,8 @@ use crate::programmable_transactions::{
     context::load_type,
     linkage_view::{LinkageInfo, LinkageView},
 };
-use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value as A;
 use move_core_types::language_storage::{StructTag, TypeTag};
-use move_core_types::resolver::ResourceResolver;
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
 use sui_types::base_types::ObjectID;
 use sui_types::error::SuiResult;
@@ -62,17 +60,5 @@ impl LayoutResolver for TypeLayoutResolver<'_, '_> {
 impl BackingPackageStore for NullSuiResolver<'_> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         self.0.get_package_object(package_id)
-    }
-}
-
-impl ResourceResolver for NullSuiResolver<'_> {
-    type Error = SuiError;
-
-    fn get_resource(
-        &self,
-        _address: &AccountAddress,
-        _typ: &StructTag,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
-        Ok(None)
     }
 }

@@ -3,14 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::module_cache::GetModule;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use move_binary_format::{
+    CompiledModule,
     file_format::{
         DatatypeHandleIndex, DatatypeTyParameter, EnumDefinition, SignatureToken, StructDefinition,
         StructFieldInformation,
     },
     normalized::{self, Datatype, RcIdentifier, RcPool},
-    CompiledModule,
 };
 use move_core_types::{
     account_address::AccountAddress,

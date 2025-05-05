@@ -1,6 +1,6 @@
 //! Conveniences for managing the entire collection of dependencies (including overrides) for a
 //! package
-use std::collections::{btree_map, BTreeMap};
+use std::collections::{BTreeMap, btree_map};
 
 use serde::{Deserialize, Serialize};
 

@@ -124,8 +124,11 @@ members = [
   "crates/sui-indexer-alt",
   "crates/sui-indexer-alt-e2e-tests",
   "crates/sui-indexer-alt-framework",
+  "crates/sui-indexer-alt-framework-store-traits",
+  "crates/sui-indexer-alt-graphql",
   "crates/sui-indexer-alt-jsonrpc",
   "crates/sui-indexer-alt-metrics",
+  "crates/sui-indexer-alt-reader",
   "crates/sui-indexer-alt-restorer",
   "crates/sui-indexer-alt-schema",
   "crates/sui-indexer-builder",
@@ -215,7 +218,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.48.0"
+version = "1.49.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -371,6 +374,7 @@ governor = "0.6.0"
 gcp_auth = "0.12.3"
 hashbrown = "0.12"
 hdrhistogram = "7.5.1"
+headers = "0.4.0"
 hex = "0.4.3"
 hex-literal = "0.3.4"
 http = "1"
@@ -586,6 +590,8 @@ zeroize = "1.6.0"
 versions = "4.1.0"
 linked-hash-map = "0.5.6"
 shlex = "1.3.0"
+starlark = "0.13.0"
+
 
 # Move dependencies
 move-binary-format = { path = "external-crates/move/crates/move-binary-format" }
@@ -665,7 +671,7 @@ sui-benchmark = { path = "crates/sui-benchmark" }
 sui-bridge = { path = "crates/sui-bridge" }
 sui-cluster-test = { path = "crates/sui-cluster-test" }
 sui-config = { path = "crates/sui-config" }
-sui-core = { path = "crates/sui-core" }
+sui-core = { path = "crates/sui-core", features = ["rocksdb"] }
 sui-cost = { path = "crates/sui-cost" }
 sui-data-ingestion = { path = "crates/sui-data-ingestion" }
 sui-data-ingestion-core = { path = "crates/sui-data-ingestion-core" }
@@ -687,8 +693,11 @@ sui-http = { path = "crates/sui-http" }
 sui-indexer = { path = "crates/sui-indexer" }
 sui-indexer-alt = { path = "crates/sui-indexer-alt" }
 sui-indexer-alt-framework = { path = "crates/sui-indexer-alt-framework", default-features = false }
+sui-indexer-alt-framework-store-traits = { path = "crates/sui-indexer-alt-framework-store-traits" }
+sui-indexer-alt-graphql = { path = "crates/sui-indexer-alt-graphql" }
 sui-indexer-alt-jsonrpc = { path = "crates/sui-indexer-alt-jsonrpc" }
 sui-indexer-alt-metrics = { path = "crates/sui-indexer-alt-metrics" }
+sui-indexer-alt-reader = { path = "crates/sui-indexer-alt-reader" }
 sui-indexer-alt-restorer = { path = "crates/sui-indexer-alt-restorer" }
 sui-indexer-alt-schema = { path = "crates/sui-indexer-alt-schema" }
 sui-indexer-builder = { path = "crates/sui-indexer-builder" }

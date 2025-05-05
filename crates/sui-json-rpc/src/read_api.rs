@@ -25,6 +25,7 @@ use sui_json_rpc_types::ZkLoginIntentScope;
 use sui_types::base_types::SuiAddress;
 use sui_types::signature::{GenericSignature, VerifyParams};
 use sui_types::signature_verification::VerifiedDigestCache;
+use sui_types::storage::ObjectKey;
 use tap::TapFallible;
 use tracing::{debug, error, instrument, trace, warn};
 
@@ -384,8 +385,41 @@ impl ReadApi {
             }
         }
 
-        let object_cache =
+        let mut object_cache =
             ObjectProviderCache::new((self.state.clone(), self.transaction_kv_store.clone()));
+
+        // Prefetch the objects if we need to show balance or object changes
+        if opts.show_balance_changes || opts.show_object_changes {
+            let mut keys = vec![];
+            for resp in temp_response.values() {
+                let effects = resp.effects.as_ref().ok_or_else(|| {
+                    SuiRpcInputError::GenericNotFound(
+                        "unable to derive balance/object changes because effect is empty"
+                            .to_string(),
+                    )
+                })?;
+
+                for change in effects.object_changes() {
+                    if let Some(input_version) = change.input_version {
+                        keys.push(ObjectKey(change.id, input_version));
+                    }
+                    if let Some(output_version) = change.output_version {
+                        keys.push(ObjectKey(change.id, output_version));
+                    }
+                }
+            }
+
+            let objects = self
+                .transaction_kv_store
+                .multi_get_objects(&keys)
+                .await?
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>();
+
+            object_cache.insert_objects_into_cache(objects);
+        }
+
         if opts.show_balance_changes {
             trace!("getting balance changes");
 

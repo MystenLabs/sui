@@ -15,13 +15,14 @@ use abstract_state::{AbstractState, AbstractValue};
 use move_abstract_interpreter::absint::{AbstractInterpreter, FunctionContext, TransferFunctions};
 use move_abstract_stack::AbstractStack;
 use move_binary_format::{
+    CompiledModule,
     errors::{PartialVMError, PartialVMResult},
     file_format::{
         Bytecode, CodeOffset, FunctionDefinitionIndex, FunctionHandle, IdentifierIndex,
         SignatureIndex, SignatureToken, StructDefinition, StructFieldInformation,
         VariantDefinition,
     },
-    safe_assert, safe_unwrap, safe_unwrap_err, CompiledModule,
+    safe_assert, safe_unwrap, safe_unwrap_err,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;

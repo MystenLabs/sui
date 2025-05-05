@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::file_format::{
-    empty_module, Bytecode::*, CodeUnit, Constant, ConstantPoolIndex, FunctionDefinition,
-    FunctionHandle, FunctionHandleIndex, IdentifierIndex, Signature, SignatureIndex,
-    SignatureToken::*, Visibility,
+    Bytecode::*, CodeUnit, Constant, ConstantPoolIndex, FunctionDefinition, FunctionHandle,
+    FunctionHandleIndex, IdentifierIndex, Signature, SignatureIndex, SignatureToken::*, Visibility,
+    empty_module,
 };
 use move_core_types::{account_address::AccountAddress, vm_status::StatusCode};
 use move_vm_runtime::move_vm::MoveVM;
-use move_vm_test_utils::{gas_schedule::GasStatus, InMemoryStorage};
+use move_vm_test_utils::{InMemoryStorage, gas_schedule::GasStatus};
 
 use crate::compiler::serialize_module_at_max_version;
 

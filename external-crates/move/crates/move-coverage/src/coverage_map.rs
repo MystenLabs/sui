@@ -4,7 +4,7 @@
 
 #![forbid(unsafe_code)]
 
-use anyhow::{format_err, Result};
+use anyhow::{Result, format_err};
 use move_binary_format::file_format::{CodeOffset, CompiledModule};
 use move_core_types::{
     account_address::AccountAddress,
