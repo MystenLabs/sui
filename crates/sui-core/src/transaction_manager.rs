@@ -12,11 +12,15 @@ use lru::LruCache;
 use mysten_common::{fatal, random_util::randomize_cache_capacity_in_tests};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
+use std::time::Instant;
 use sui_types::{
     base_types::{FullObjectID, SequenceNumber, TransactionDigest},
     committee::EpochId,
     digests::TransactionEffectsDigest,
     error::{SuiError, SuiResult},
+    executable_transaction::{
+        PendingCertificate, PendingCertificateStats, PendingExecutableCertificate,
+    },
     fp_ensure,
     message_envelope::Message,
     storage::InputKey,
@@ -24,7 +28,6 @@ use sui_types::{
 };
 use sui_types::{executable_transaction::VerifiedExecutableTransaction, fp_bail};
 use tokio::sync::mpsc::UnboundedSender;
-use tokio::time::Instant;
 use tracing::{error, info, instrument, trace, warn};
 
 use crate::{
@@ -58,28 +61,6 @@ pub struct TransactionManager {
     // before the inner lock (for read or write) can be acquired. During reconfiguration, we acquire
     // the outer lock for write, to ensure that no other threads can be running while we reconfigure.
     inner: RwLock<RwLock<Inner>>,
-}
-
-#[derive(Clone, Debug)]
-pub struct PendingCertificateStats {
-    // The time this certificate enters transaction manager.
-    #[allow(unused)]
-    pub enqueue_time: Instant,
-    // The time this certificate becomes ready for execution.
-    pub ready_time: Option<Instant>,
-}
-
-#[derive(Clone, Debug)]
-pub struct PendingCertificate {
-    // Certified transaction to be executed.
-    pub certificate: VerifiedExecutableTransaction,
-    // When executing from checkpoint, the certified effects digest is provided, so that forks can
-    // be detected prior to committing the transaction.
-    pub expected_effects_digest: Option<TransactionEffectsDigest>,
-    // The input object this certificate is waiting for to become available in order to be executed.
-    pub waiting_input_objects: BTreeSet<InputKey>,
-    // Stores stats about this transaction.
-    pub stats: PendingCertificateStats,
 }
 
 struct CacheInner {
@@ -553,10 +534,12 @@ impl TransactionManager {
         let mut pending = Vec::new();
         let pending_cert_enqueue_time = Instant::now();
 
-        for (cert, expected_effects_digest, input_object_keys) in certs {
+        for (certificate, expected_effects_digest, input_object_keys) in certs {
             pending.push(PendingCertificate {
-                certificate: cert,
-                expected_effects_digest,
+                executable_certificate: PendingExecutableCertificate::new_with_info(
+                    certificate,
+                    expected_effects_digest,
+                ),
                 waiting_input_objects: input_object_keys,
                 stats: PendingCertificateStats {
                     enqueue_time: pending_cert_enqueue_time,
@@ -571,12 +554,13 @@ impl TransactionManager {
             // from recovery log and pending certificates table. The transaction will still only
             // execute once, because tx lock is acquired in execution driver and executed effects
             // table is consulted. So this behavior is benigh.
-            let digest = *pending_cert.certificate.digest();
+            let digest = *pending_cert.digest();
 
-            if inner.epoch != pending_cert.certificate.epoch() {
+            if inner.epoch != pending_cert.epoch() {
                 warn!(
                     "Ignoring enqueued certificate from wrong epoch. Expected={} Certificate={:?}",
-                    inner.epoch, pending_cert.certificate
+                    inner.epoch,
+                    pending_cert.certificate()
                 );
                 continue;
             }
@@ -762,12 +746,15 @@ impl TransactionManager {
 
     /// Sends the ready certificate for execution.
     fn certificate_ready(&self, inner: &mut Inner, pending_certificate: PendingCertificate) {
-        trace!(tx_digest = ?pending_certificate.certificate.digest(), "certificate ready");
+        trace!(tx_digest = ?pending_certificate.executable_certificate.certificate.digest(), "certificate ready");
         assert_eq!(pending_certificate.waiting_input_objects.len(), 0);
         // Record as an executing certificate.
-        assert!(inner
-            .executing_certificates
-            .insert(*pending_certificate.certificate.digest()));
+        assert!(inner.executing_certificates.insert(
+            *pending_certificate
+                .executable_certificate
+                .certificate
+                .digest()
+        ));
         self.metrics.txn_ready_rate_tracker.lock().record();
         let _ = self.tx_ready_certificates.send(pending_certificate);
         self.metrics.transaction_manager_num_ready.inc();

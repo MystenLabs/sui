@@ -3,8 +3,9 @@
 
 use std::{time::Duration, vec};
 
+use std::time::Instant;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::executable_transaction::{PendingCertificate, VerifiedExecutableTransaction};
 use sui_types::object::Owner;
 use sui_types::transaction::VerifiedTransaction;
 use sui_types::{
@@ -15,7 +16,6 @@ use sui_types::{
     transaction::{CallArg, ObjectArg},
     SUI_FRAMEWORK_PACKAGE_ID,
 };
-use tokio::time::Instant;
 use tokio::{
     sync::mpsc::{error::TryRecvError, unbounded_channel, UnboundedReceiver},
     time::sleep,
@@ -23,7 +23,7 @@ use tokio::{
 
 use crate::{
     authority::{authority_tests::init_state_with_objects, AuthorityState},
-    transaction_manager::{PendingCertificate, TransactionManager},
+    transaction_manager::TransactionManager,
 };
 
 #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
@@ -347,9 +347,24 @@ async fn transaction_manager_object_dependency() {
     );
 
     // TM should output the 3 transactions that are only waiting for this object.
-    let tx_0 = rx_ready_certificates.recv().await.unwrap().certificate;
-    let tx_1 = rx_ready_certificates.recv().await.unwrap().certificate;
-    let tx_2 = rx_ready_certificates.recv().await.unwrap().certificate;
+    let tx_0 = rx_ready_certificates
+        .recv()
+        .await
+        .unwrap()
+        .certificate()
+        .clone();
+    let tx_1 = rx_ready_certificates
+        .recv()
+        .await
+        .unwrap()
+        .certificate()
+        .clone();
+    let tx_2 = rx_ready_certificates
+        .recv()
+        .await
+        .unwrap()
+        .certificate()
+        .clone();
     {
         let mut want_digests = vec![
             transaction_read_0.digest(),
@@ -384,7 +399,12 @@ async fn transaction_manager_object_dependency() {
     );
 
     // Now, the transaction waiting for both shared objects can be executed.
-    let tx_3 = rx_ready_certificates.recv().await.unwrap().certificate;
+    let tx_3 = rx_ready_certificates
+        .recv()
+        .await
+        .unwrap()
+        .certificate()
+        .clone();
     assert_eq!(transaction_read_2.digest(), tx_3.digest());
 
     sleep(Duration::from_secs(1)).await;
@@ -867,7 +887,12 @@ async fn transaction_manager_with_cancelled_transactions() {
     );
 
     // TM should output the transaction as soon as the owned object is available.
-    let available_txn = rx_ready_certificates.recv().await.unwrap().certificate;
+    let available_txn = rx_ready_certificates
+        .recv()
+        .await
+        .unwrap()
+        .certificate()
+        .clone();
     assert_eq!(available_txn.digest(), cancelled_transaction.digest());
 
     sleep(Duration::from_secs(1)).await;

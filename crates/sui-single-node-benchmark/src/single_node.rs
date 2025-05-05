@@ -21,7 +21,9 @@ use sui_types::base_types::{AuthorityName, ObjectRef, SuiAddress, TransactionDig
 use sui_types::committee::Committee;
 use sui_types::crypto::{AccountKeyPair, AuthoritySignature, Signer};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
-use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::executable_transaction::{
+    PendingExecutableCertificate, VerifiedExecutableTransaction,
+};
 use sui_types::messages_checkpoint::{VerifiedCheckpoint, VerifiedCheckpointContents};
 use sui_types::messages_grpc::HandleTransactionResponse;
 use sui_types::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
@@ -117,7 +119,10 @@ impl SingleValidator {
         );
         let effects = self
             .get_validator()
-            .try_execute_immediately(&executable, None, &self.epoch_store)
+            .try_execute_immediately(
+                &PendingExecutableCertificate::new(executable),
+                &self.epoch_store,
+            )
             .await
             .unwrap()
             .0;
@@ -149,7 +154,10 @@ impl SingleValidator {
                     VerifiedCertificate::new_unchecked(cert),
                 );
                 self.get_validator()
-                    .try_execute_immediately(&cert, None, &self.epoch_store)
+                    .try_execute_immediately(
+                        &PendingExecutableCertificate::new(cert),
+                        &self.epoch_store,
+                    )
                     .await
                     .unwrap()
                     .0

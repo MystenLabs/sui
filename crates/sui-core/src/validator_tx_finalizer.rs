@@ -296,7 +296,9 @@ mod tests {
     use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
     use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
     use sui_types::error::SuiError;
-    use sui_types::executable_transaction::VerifiedExecutableTransaction;
+    use sui_types::executable_transaction::{
+        PendingExecutableCertificate, VerifiedExecutableTransaction,
+    };
     use sui_types::messages_checkpoint::{
         CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
     };
@@ -356,10 +358,11 @@ mod tests {
             let (effects, _) = self
                 .authority
                 .try_execute_immediately(
-                    &VerifiedExecutableTransaction::new_from_certificate(
-                        VerifiedCertificate::new_unchecked(certificate),
+                    &PendingExecutableCertificate::new(
+                        VerifiedExecutableTransaction::new_from_certificate(
+                            VerifiedCertificate::new_unchecked(certificate),
+                        ),
                     ),
-                    None,
                     &epoch_store,
                 )
                 .await?;
