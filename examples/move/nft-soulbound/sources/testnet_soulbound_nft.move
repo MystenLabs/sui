@@ -78,6 +78,13 @@ public fun mint_to_sender(
     transfer::transfer(nft, sender);
 }
 
+/// Transfer `nft` to `recipient`
+/// Do not include this if you want the NFT fully soulbound
+public fun transfer(nft: TestnetSoulboundNFT, recipient: address, _: &mut TxContext) {
+    // Add custom logic for transferring the NFT
+    transfer::transfer(nft, recipient)
+}
+
 /// Update the `description` of `nft` to `new_description`
 public fun update_description(
     nft: &mut TestnetSoulboundNFT,
