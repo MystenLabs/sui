@@ -31,7 +31,7 @@ These definitions can be used to generate client libraries in various programmin
 
 :::info
 
-There are some proto files in the folder `sui/rpc/v2alpha` as well. Those are are in alpha because they are early experimental versions that are subject to change and not recommended for production use.
+There are some proto files in the folder `sui/rpc/v2alpha` as well. Those are in alpha because they are early experimental versions that are subject to change and not recommended for production use.
 
 :::
 
@@ -239,7 +239,7 @@ require (
 
 **Generate Golang code from proto files**
 
-Assuming you have the the proto files from [Github v2beta](https://github.com/MystenLabs/sui/tree/main/crates/sui-rpc-api/proto), run:
+Assuming you have the proto files from [Github v2beta](https://github.com/MystenLabs/sui/tree/main/crates/sui-rpc-api/proto), run:
 
 ```shell
 protoc --proto_path=./protos --go_out=. --go-grpc_out=. protos/sui/rpc/v2beta/ledger_service.proto
@@ -336,7 +336,7 @@ pip install grpcio grpcio-tools protobuf
 
 **Generate Python code from proto files**
 
-Assuming you have the the proto files from [Github v2beta](https://github.com/MystenLabs/sui/tree/main/crates/sui-rpc-api/proto), run:
+Assuming you have the proto files from [Github v2beta](https://github.com/MystenLabs/sui/tree/main/crates/sui-rpc-api/proto), run:
 
 ```shell
 python -m grpc_tools.protoc -I./protos --python_out=. --grpc_python_out=. ./protos/sui/rpc/v2beta/ledger_service.proto
