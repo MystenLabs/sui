@@ -93,7 +93,6 @@ impl DependencyCache {
                         .args([
                             OsStr::new("clone"),
                             OsStr::new("--depth=1"),
-                            OsStr::new("--single-branch"),
                             os_git_url,
                             git_path.as_os_str(),
                         ])
