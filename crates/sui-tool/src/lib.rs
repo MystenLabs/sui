@@ -102,16 +102,15 @@ async fn make_clients(
         .active_validators;
 
     for validator in active_validators {
-        let net_addr = Multiaddr::try_from(validator.net_address)
-            .unwrap()
-            .rewrite_http_to_https();
-        let tls_config = sui_tls::create_rustls_client_config(
-            sui_types::crypto::NetworkPublicKey::from_bytes(&validator.network_pubkey_bytes)?,
-            sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
-            None,
-        );
+        let net_addr = Multiaddr::try_from(validator.net_address).unwrap();
+        // TODO: Enable TLS on this interface with below config, once support is rolled out to validators.
+        // let tls_config = sui_tls::create_rustls_client_config(
+        //     sui_types::crypto::NetworkPublicKey::from_bytes(&validator.network_pubkey_bytes)?,
+        //     sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
+        //     None,
+        // );
         let channel = net_config
-            .connect_lazy(&net_addr, Some(tls_config))
+            .connect_lazy(&net_addr, None)
             .map_err(|err| anyhow!(err.to_string()))?;
         let client = NetworkAuthorityClient::new(channel);
         let public_key_bytes =
