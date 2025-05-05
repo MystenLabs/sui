@@ -1,0 +1,8 @@
+---
+source: crates/move-package-alt/tests/test_runner.rs
+---
+error: package name cannot be empty
+  ┌─ tests/data/package_name_empty/Move.toml:2:8
+  │
+2 │ name = ""
+  │        ^^

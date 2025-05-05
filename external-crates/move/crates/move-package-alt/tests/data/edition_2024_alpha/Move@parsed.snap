@@ -1,0 +1,8 @@
+---
+source: crates/move-package-alt/tests/test_runner.rs
+---
+error: unsupported edition '2024.alpha', expected one of '2024, 2024.beta, legacy'
+  ┌─ tests/data/edition_2024_alpha/Move.toml:3:11
+  │
+3 │ edition = "2024.alpha"
+  │           ^^^^^^^^^^^^
