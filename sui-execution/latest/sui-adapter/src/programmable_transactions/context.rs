@@ -8,8 +8,9 @@ mod checked {
     use crate::{
         adapter::new_native_extensions,
         data_store::{
-            PackageStore, cached_data_store::CachedPackageStore, linkage_view::LinkageView,
-            sui_data_store::SuiDataStore,
+            PackageStore,
+            cached_package_store::CachedPackageStore,
+            legacy::{linkage_view::LinkageView, sui_data_store::SuiDataStore},
         },
         error::convert_vm_error,
         execution_mode::ExecutionMode,

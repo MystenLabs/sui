@@ -244,14 +244,16 @@ fn command(
                 vec![env.vector_type(first_ty)?],
             )
         }
-        L::Command::Publish(items, object_ids) => (T::Command_::Publish(items, object_ids), vec![]),
-        L::Command::Upgrade(items, object_ids, object_id, la) => {
+        L::Command::Publish(items, object_ids, linkage) => {
+            (T::Command_::Publish(items, object_ids, linkage), vec![])
+        }
+        L::Command::Upgrade(items, object_ids, object_id, la, linkage) => {
             let location = one_location(context, 0, la)?;
             let expected_ty = env.upgrade_ticket_type()?;
             let a = argument(env, context, 0, location, expected_ty)?;
             let res = env.upgrade_receipt_type()?;
             (
-                T::Command_::Upgrade(items, object_ids, object_id, a),
+                T::Command_::Upgrade(items, object_ids, object_id, a, linkage),
                 vec![res.clone()],
             )
         }
@@ -593,8 +595,8 @@ mod scope_references {
                 argument(used, target);
             }
             T::Command_::MakeMoveVec(_, xs) => arguments(used, xs),
-            T::Command_::Publish(_, _) => (),
-            T::Command_::Upgrade(_, _, _, x) => argument(used, x),
+            T::Command_::Publish(_, _, _) => (),
+            T::Command_::Upgrade(_, _, _, x, _) => argument(used, x),
         }
     }
 

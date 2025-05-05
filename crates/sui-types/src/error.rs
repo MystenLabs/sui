@@ -60,7 +60,7 @@ macro_rules! make_invariant_violation {
         if cfg!(debug_assertions) {
             panic!($($args),*)
         }
-        ExecutionError::invariant_violation(format!($($args),*))
+        $crate::error::ExecutionError::invariant_violation(format!($($args),*))
     }}
 }
 

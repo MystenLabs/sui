@@ -7,7 +7,7 @@ pub use checked::*;
 mod checked {
     use crate::{
         adapter::substitute_package_id,
-        data_store::sui_data_store::SuiDataStore,
+        data_store::legacy::sui_data_store::SuiDataStore,
         execution_mode::ExecutionMode,
         execution_value::{
             CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
@@ -1179,6 +1179,8 @@ mod checked {
         let LoadedFunctionInstantiation {
             parameters,
             return_,
+            instruction_length,
+            definition_index,
         } = signature;
         let parameters = parameters
             .into_iter()
@@ -1193,6 +1195,8 @@ mod checked {
         Ok(LoadedFunctionInstantiation {
             parameters,
             return_,
+            instruction_length,
+            definition_index,
         })
     }
 

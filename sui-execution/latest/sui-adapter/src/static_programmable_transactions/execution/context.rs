@@ -1,16 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    cell::RefCell,
-    collections::{BTreeMap, BTreeSet},
-    rc::Rc,
-    sync::Arc,
-};
-
 use crate::{
     adapter,
     data_store::sui_data_store::SuiDataStore,
+    data_store::linked_data_store::LinkedDataStore,
     execution_mode::ExecutionMode,
     gas_charger::GasCharger,
     gas_meter::SuiGasMeter,
@@ -42,12 +36,18 @@ use move_vm_types::{
     gas::GasMeter,
     values::{VMValueCast, Value as VMValue},
 };
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet},
+    rc::Rc,
+    sync::Arc,
+};
 use sui_move_natives::object_runtime::{
     self, LoadedRuntimeObject, ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
 };
 use sui_types::{
     TypeTag,
-    base_types::{ObjectID, TxContext, TxContextKind},
+    base_types::{MoveObjectType, ObjectID, TxContext, TxContextKind},
     error::{ExecutionError, ExecutionErrorKind},
     execution::ExecutionResults,
     execution_config_utils::to_binary_config,
@@ -283,10 +283,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         }
 
         for (id, (recipient, ty, value)) in writes {
-            let ty: Type = {
-                let _ = ty;
-                better_todo!("OBJECT RUNTIME TYPETAG")
-            };
+            let ty: Type = env.load_type_from_struct(&ty.clone().into())?;
             let abilities = ty.abilities();
             let has_public_transfer = abilities.has_store();
             let Some(bytes) = value.serialize() else {
@@ -369,20 +366,15 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))
     }
 
-    pub fn take_user_events(
-        &mut self,
-        module_id: &ModuleId,
-        function: FunctionDefinitionIndex,
-        last_offset: CodeOffset,
-    ) -> Result<(), ExecutionError> {
+    pub fn take_user_events(&mut self, function: &T::LoadedFunction) -> Result<(), ExecutionError> {
         let events = object_runtime_mut!(self)?.take_user_events();
         let num_events = self.user_events.len() + events.len();
         let max_events = self.env.protocol_config.max_num_event_emit();
         if num_events as u64 > max_events {
             let err = max_event_error(max_events)
-                .at_code_offset(function, last_offset)
-                .finish(Location::Module(module_id.clone()));
-            return Err(self.env.convert_vm_error(err));
+                .at_code_offset(function.definition_index, function.instruction_length)
+                .finish(Location::Module(function.storage_id.clone()));
+            return Err(self.env.convert_linked_vm_error(err, &function.linkage));
         }
         let new_events = events
             .into_iter()
@@ -390,7 +382,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 let Some(bytes) = value.serialize() else {
                     invariant_violation!("Failed to serialize Move event");
                 };
-                Ok((module_id.clone(), tag, bytes))
+                Ok((function.storage_id.clone(), tag, bytes))
             })
             .collect::<Result<Vec<_>, ExecutionError>>()?;
         self.user_events.extend(new_events);
@@ -588,46 +580,33 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 Value::tx_context(self.tx_context.borrow().digest())?,
             )),
         }
-        let (index, last_instr) = {
-            let _ = &function;
-            // access FunctionDefinitionIndex and last instruction CodeOffset
-            better_todo!("LOADING")
-        };
         let result = self
-            .execute_function_bypass_visibility(
-                &function.runtime_id,
-                &function.name,
-                function.type_arguments,
-                args,
-                trace_builder_opt,
-            )
+            .execute_function_bypass_visibility(&function, args, trace_builder_opt)
             .map_err(|e| self.env.convert_vm_error(e))?;
-        self.take_user_events(&function.storage_id, index, last_instr)?;
+        self.take_user_events(&function)?;
         Ok(result)
     }
 
     pub fn execute_function_bypass_visibility(
         &mut self,
-        module: &ModuleId,
-        function_name: &IdentStr,
-        ty_args: Vec<Type>,
+        function: &T::LoadedFunction,
         args: Vec<CtxValue>,
         tracer: Option<&mut MoveTraceBuilder>,
     ) -> VMResult<Vec<CtxValue>> {
         let ty_args = {
             // load type arguments for VM
-            let _ = ty_args;
+            let _ = function.type_arguments;
             better_todo!("LOADING")
         };
         let gas_status = self.gas_charger.move_gas_status_mut();
-        let mut data_store = SuiDataStore::new(self.env.linkage_view, &self.new_packages);
+        let mut data_store = LinkedDataStore::new(&function.linkage, self.env.linkable_store);
         let values = self
             .env
             .vm
             .get_runtime()
             .execute_function_with_values_bypass_visibility(
-                module,
-                function_name,
+                &function.storage_id,
+                &function.name,
                 ty_args,
                 args.into_iter().map(|v| v.0.into()).collect(),
                 &mut data_store,
@@ -870,11 +849,12 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         ty: Type,
         object: CtxValue,
     ) -> Result<(), ExecutionError> {
-        let ty = {
-            let _ = ty;
-            // ty to vm type
-            better_todo!("OBJECT RUNTIME TYPETAG")
+        let tag = TypeTag::try_from(ty)
+            .map_err(|_| make_invariant_violation!("Unable to convert Type to TypeTag"))?;
+        let TypeTag::Struct(tag) = tag else {
+            invariant_violation!("Expected struct type tag");
         };
+        let ty = MoveObjectType::from(*tag);
         object_runtime_mut!(self)?
             .transfer(recipient, ty, object.0.into())
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
