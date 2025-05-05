@@ -25,6 +25,7 @@ mod checked {
     use crate::programmable_transactions::linkage_view::LinkageView;
     use crate::type_resolver::TypeTagResolver;
     use crate::{adapter::new_native_extensions, execution_value::SizeBound};
+    use indexmap::IndexSet;
     use move_binary_format::{
         CompiledModule,
         errors::{Location, PartialVMError, PartialVMResult, VMError, VMResult},
@@ -798,8 +799,7 @@ mod checked {
                         }
                     }
                 }
-            }
-            // add transfers from TransferObjects command
+            } // add transfers from TransferObjects command
             for (recipient, object_value) in additional_transfers {
                 let owner = Owner::AddressOwner(recipient);
                 add_additional_write(&mut additional_writes, owner, object_value)?;
@@ -1296,6 +1296,126 @@ mod checked {
                 ))
                 .finish(Location::Undefined)),
         }
+    }
+
+    pub fn finish(
+        protocol_config: &ProtocolConfig,
+        state_view: &dyn ExecutionState,
+        gas_charger: &mut GasCharger,
+        tx_context: &TxContext,
+        by_value_shared_objects: &BTreeSet<ObjectID>,
+        authenticator_objects: &BTreeMap<ObjectID, Owner>,
+        loaded_runtime_objects: BTreeMap<ObjectID, LoadedRuntimeObject>,
+        written_objects: BTreeMap<ObjectID, Object>,
+        created_object_ids: IndexSet<ObjectID>,
+        deleted_object_ids: IndexSet<ObjectID>,
+        user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
+    ) -> Result<ExecutionResults, ExecutionError> {
+        // Before finishing, ensure that any shared object taken by value by the transaction is either:
+        // 1. Mutated (and still has a shared ownership); or
+        // 2. Deleted.
+        // Otherwise, the shared object operation is not allowed and we fail the transaction.
+        for id in by_value_shared_objects {
+            // If it's been written it must have been reshared so must still have an ownership
+            // of `Shared`.
+            if let Some(obj) = written_objects.get(id) {
+                if !obj.is_shared() {
+                    return Err(ExecutionError::new(
+                        ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                        Some(
+                            format!(
+                                "Shared object operation on {} not allowed: \
+                                 cannot be frozen, transferred, or wrapped",
+                                id
+                            )
+                            .into(),
+                        ),
+                    ));
+                }
+            } else {
+                // If it's not in the written objects, the object must have been deleted. Otherwise
+                // it's an error.
+                if !deleted_object_ids.contains(id) {
+                    return Err(ExecutionError::new(
+                        ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                        Some(
+                            format!(
+                                "Shared object operation on {} not allowed: \
+                                     shared objects used by value must be re-shared if not deleted",
+                                id
+                            )
+                            .into(),
+                        ),
+                    ));
+                }
+            }
+        }
+
+        // Before finishing, enforce restrictions on transfer and deletion for objects configured
+        // with authenticators.
+        for (id, original_owner) in authenticator_objects {
+            let authenticator = original_owner.authenticator().expect(
+                "verified before adding to `authenticator_objects` that these have authenticators",
+            );
+
+            match authenticator {
+                Authenticator::SingleOwner(owner) => {
+                    // Already verified in pre-execution checks that tx sender is the object owner.
+                    // SingleOwner is allowed to do anything with the object.
+                    if tx_context.sender() != *owner {
+                        debug_fatal!(
+                            "transaction with a singly owned input object where the tx sender is not the owner should never be executed"
+                        );
+                        return Err(ExecutionError::new(
+                            ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                            Some(
+                                format!("Shared object operation on {} not allowed: \
+                                         transaction with singly owned input object must be sent by the owner", id).into(),
+                            ),
+                        ));
+                    }
+                } // Future authenticators with fewer permissions should be checked here. For
+                  // example, transfers and wraps can be detected by comparing `original_owner`
+                  // with:
+                  // let new_owner = written_objects.get(&id).map(|obj| obj.owner);
+                  //
+                  // Deletions can be detected with:
+                  // let deleted = deleted_object_ids.contains(&id);
+            }
+        }
+
+        if protocol_config.enable_coin_deny_list_v2() {
+            let DenyListResult {
+                result,
+                num_non_gas_coin_owners,
+            } = state_view.check_coin_deny_list(&written_objects);
+            gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
+            result?;
+        }
+
+        let user_events = user_events
+            .into_iter()
+            .map(|(module_id, tag, contents)| {
+                Event::new(
+                    module_id.address(),
+                    module_id.name(),
+                    tx_context.sender(),
+                    tag,
+                    contents,
+                )
+            })
+            .collect();
+
+        Ok(ExecutionResults::V2(ExecutionResultsV2 {
+            written_objects,
+            modified_objects: loaded_runtime_objects
+                .into_iter()
+                .filter_map(|(id, loaded)| loaded.is_modified.then_some(id))
+                .collect(),
+            created_object_ids: created_object_ids.into_iter().collect(),
+            deleted_object_ids: deleted_object_ids.into_iter().collect(),
+            user_events,
+        }))
     }
 
     pub fn load_type_from_struct(

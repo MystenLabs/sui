@@ -19,6 +19,7 @@ use sui_types::{
     error::{ExecutionError, ExecutionErrorKind},
     execution::{ExecutionTiming, ResultWithTimings},
     metrics::LimitsMetrics,
+    object::Owner,
 };
 use tracing::instrument;
 
@@ -75,7 +76,8 @@ where
             let loaded_runtime_objects = object_runtime.loaded_runtime_objects();
             // we do not save the wrapped objects since on error, they should not be modified
             drop(context);
-            // TODO wtf is going on with the borrow checker here
+            // TODO wtf is going on with the borrow checker here. 'state is bound into the object
+            // runtime, but its since been dropped. what gives with this error?
             let state_view: &mut dyn ExecutionState = unsafe { state_view.as_mut().unwrap() };
             state_view.save_loaded_runtime_objects(loaded_runtime_objects);
             timings.push(ExecutionTiming::Abort(start.elapsed()));
@@ -131,6 +133,7 @@ fn execute_command(
             );
             for (object_value, ty) in object_values.into_iter().zip(object_tys) {
                 // TODO should we just call a Move function?
+                let recipient = Owner::AddressOwner(recipient.into());
                 context.transfer_object(recipient, ty, object_value)?;
             }
             vec![]

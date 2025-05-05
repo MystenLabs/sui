@@ -5,11 +5,13 @@ use std::rc::Rc;
 
 use move_binary_format::file_format::AbilitySet;
 use move_core_types::{
-    account_address::AccountAddress, identifier::IdentStr, language_storage::ModuleId,
+    account_address::AccountAddress,
+    identifier::IdentStr,
+    language_storage::{ModuleId, StructTag},
 };
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SequenceNumber, TxContextKind, RESOLVED_TX_CONTEXT},
-    Identifier,
+    Identifier, TypeTag,
+    base_types::{ObjectID, ObjectRef, RESOLVED_TX_CONTEXT, SequenceNumber, TxContextKind},
 };
 
 //**************************************************************************************************
@@ -174,6 +176,58 @@ impl Datatype {
             self.module.name(),
             self.name.as_ident_str(),
         )
+    }
+}
+
+//**************************************************************************************************
+// Traits
+//**************************************************************************************************
+
+impl TryFrom<Type> for TypeTag {
+    type Error = &'static str;
+    fn try_from(ty: Type) -> Result<Self, Self::Error> {
+        Ok(match ty {
+            Type::Bool => TypeTag::Bool,
+            Type::U8 => TypeTag::U8,
+            Type::U16 => TypeTag::U16,
+            Type::U32 => TypeTag::U32,
+            Type::U64 => TypeTag::U64,
+            Type::U128 => TypeTag::U128,
+            Type::U256 => TypeTag::U256,
+            Type::Address => TypeTag::Address,
+            Type::Signer => TypeTag::Signer,
+            Type::Vector(inner) => {
+                let Vector { element_type, .. } = &*inner;
+                TypeTag::Vector(Box::new(element_type.clone().try_into()?))
+            }
+            Type::Datatype(dt) => {
+                let dt: &Datatype = &*dt;
+                TypeTag::Struct(Box::new(dt.try_into()?))
+            }
+            Type::Reference(_, _) => return Err("unexpected reference type"),
+        })
+    }
+}
+
+impl TryFrom<&Datatype> for StructTag {
+    type Error = &'static str;
+
+    fn try_from(dt: &Datatype) -> Result<Self, Self::Error> {
+        let Datatype {
+            module,
+            name,
+            type_arguments,
+            ..
+        } = dt;
+        Ok(StructTag {
+            address: *module.address(),
+            module: module.name().to_owned(),
+            name: name.to_owned(),
+            type_params: type_arguments
+                .iter()
+                .map(|t| t.clone().try_into())
+                .collect::<Result<Vec<TypeTag>, _>>()?,
+        })
     }
 }
 

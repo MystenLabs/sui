@@ -31,6 +31,7 @@ pub struct InputObjectMetadata {
     pub is_mutable_input: bool,
     pub owner: Owner,
     pub version: SequenceNumber,
+    pub type_: Type,
 }
 
 pub struct InputObjectValue {

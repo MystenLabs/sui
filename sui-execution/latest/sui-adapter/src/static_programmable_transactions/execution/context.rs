@@ -1,18 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{cell::RefCell, collections::BTreeMap, rc::Rc, sync::Arc};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet},
+    rc::Rc,
+    sync::Arc,
+};
 
 use crate::{
     adapter::new_native_extensions,
     gas_charger::GasCharger,
     gas_meter::SuiGasMeter,
+    programmable_transactions::context::finish,
     static_programmable_transactions::{
         env::Env,
-        execution::values::{self, ByteValue, InputObjectMetadata, InputObjectValue, InputValue},
+        execution::values::{
+            self, ByteValue, InputObjectMetadata, InputObjectValue, InputValue, borrow_value,
+        },
         typing::ast::{self as T, Type},
     },
 };
+use indexmap::IndexMap;
 use move_binary_format::{
     errors::Location,
     file_format::{CodeOffset, FunctionDefinitionIndex},
@@ -27,12 +36,20 @@ use move_vm_types::{
     gas::GasMeter,
     values::{VMValueCast, Value},
 };
-use sui_move_natives::object_runtime::{self, get_all_uids, max_event_error, ObjectRuntime};
+use mysten_common::debug_fatal;
+use sui_move_natives::object_runtime::{
+    self, LoadedRuntimeObject, ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
+};
 use sui_types::{
+    TypeTag,
     base_types::{ObjectID, TxContext, TxContextKind},
-    error::ExecutionError,
-    execution::ExecutionResults,
+    error::{ExecutionError, ExecutionErrorKind},
+    event::Event,
+    execution::{ExecutionResults, ExecutionResultsV2},
     metrics::LimitsMetrics,
+    move_package::MovePackage,
+    object::{Authenticator, MoveObject, Object, Owner},
+    storage::DenyListResult,
 };
 use tracing::instrument;
 
@@ -66,9 +83,7 @@ macro_rules! charge_gas_ {
 }
 
 macro_rules! charge_gas {
-    ($context:ident, $case:ident, $value_view:expr) => {{
-        charge_gas_!($context.gas_charger, $context.env, $case, $value_view)
-    }};
+    ($context:ident, $case:ident, $value_view:expr) => {{ charge_gas_!($context.gas_charger, $context.env, $case, $value_view) }};
 }
 
 #[derive(Copy, Clone)]
@@ -89,6 +104,8 @@ pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
     pub tx_context: Rc<RefCell<TxContext>>,
     /// The gas charger used for metering
     pub gas_charger: &'gas mut GasCharger,
+    /// Newly published packages
+    new_packages: Vec<MovePackage>,
     /// User events are claimed after each Move call
     user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
     // runtime data
@@ -146,7 +163,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             env.state_view.as_child_resolver(),
             input_object_map,
             !gas_charger.is_unmetered(),
-            &env.protocol_config,
+            env.protocol_config,
             metrics.clone(),
             tx_context.clone(),
         );
@@ -157,6 +174,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             native_extensions,
             tx_context,
             gas_charger,
+            new_packages: vec![],
             user_events: vec![],
             gas,
             inputs,
@@ -164,8 +182,172 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         })
     }
 
-    pub fn finish(self) -> Result<ExecutionResults, ExecutionError> {
-        todo!()
+    pub fn finish(mut self) -> Result<ExecutionResults, ExecutionError> {
+        let gas = std::mem::take(&mut self.gas);
+        let inputs = std::mem::take(&mut self.inputs);
+        let gas_id_opt = gas.as_ref().map(|v| v.object_metadata.id);
+        let mut loaded_runtime_objects = BTreeMap::new();
+        let mut by_value_shared_objects = BTreeSet::new();
+        let mut authenticator_objects = BTreeMap::new();
+        let input_objects = inputs.into_iter().filter_map(|v| match v {
+            InputValue::Bytes(_) | InputValue::Fixed(_) => None,
+            InputValue::Object(v) => Some(v),
+        });
+        for input in input_objects.chain(gas) {
+            let InputObjectValue {
+                object_metadata:
+                    InputObjectMetadata {
+                        id,
+                        is_mutable_input,
+                        owner,
+                        version,
+                        type_,
+                    },
+                value,
+            } = input;
+            loaded_runtime_objects.insert(
+                id,
+                LoadedRuntimeObject {
+                    version,
+                    is_modified: true,
+                },
+            );
+            if let Some(object) = value {
+                self.transfer_object(owner, type_, object)?;
+            } else if owner.is_shared() {
+                by_value_shared_objects.insert(id);
+            } else if owner.authenticator().is_some() {
+                authenticator_objects.insert(id, owner.clone());
+            }
+        }
+
+        let Self {
+            env,
+            mut native_extensions,
+            tx_context,
+            gas_charger,
+            new_packages,
+            results,
+            user_events,
+            ..
+        } = self;
+        let ref_context: &RefCell<TxContext> = &*tx_context;
+        let tx_context: &TxContext = &ref_context.borrow();
+        let tx_digest = ref_context.borrow().digest();
+
+        // check for unused values
+        // disable this check for dev inspect
+        assert!(false, "todo modes");
+
+        let object_runtime: ObjectRuntime = native_extensions
+            .remove()
+            .map_err(|e| env.convert_vm_error(e.finish(Location::Undefined)))?;
+
+        let RuntimeResults {
+            mut writes,
+            user_events: remaining_events,
+            loaded_child_objects,
+            mut created_object_ids,
+            deleted_object_ids,
+        } = object_runtime.finish()?;
+        assert_invariant!(
+            remaining_events.is_empty(),
+            "Events should be taken after every Move call"
+        );
+        // Refund unused gas
+        if let Some(gas_id) = gas_id_opt {
+            refund_max_gas_budget(&mut writes, gas_charger, gas_id)?;
+        }
+
+        loaded_runtime_objects.extend(loaded_child_objects);
+
+        let mut written_objects = BTreeMap::new();
+        for package in new_packages {
+            let package_obj = Object::new_from_package(package, tx_digest);
+            let id = package_obj.id();
+            created_object_ids.insert(id);
+            written_objects.insert(id, package_obj);
+        }
+
+        for (id, (recipient, ty, value)) in writes {
+            let ty: Type = {
+                todo!("LOADING");
+                ty;
+            };
+            let abilities = ty.abilities();
+            let has_public_transfer = abilities.has_store();
+            let layout = { todo!("LOADING") };
+            let Some(bytes) = value.simple_serialize(&layout) else {
+                invariant_violation!("Failed to deserialize already serialized Move value");
+            };
+            // safe because has_public_transfer has been determined by the abilities
+            let move_object = unsafe {
+                create_written_object(
+                    env,
+                    &loaded_runtime_objects,
+                    id,
+                    ty,
+                    has_public_transfer,
+                    bytes,
+                )?
+            };
+            let object = Object::new_move(move_object, recipient, tx_digest);
+            written_objects.insert(id, object);
+        }
+
+        // Before finishing, ensure that any shared object taken by value by the transaction is either:
+        // 1. Mutated (and still has a shared ownership); or
+        // 2. Deleted.
+        // Otherwise, the shared object operation is not allowed and we fail the transaction.
+        for id in &by_value_shared_objects {
+            // If it's been written it must have been reshared so must still have an ownership
+            // of `Shared`.
+            if let Some(obj) = written_objects.get(id) {
+                if !obj.is_shared() {
+                    return Err(ExecutionError::new(
+                        ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                        Some(
+                            format!(
+                                "Shared object operation on {} not allowed: \
+                                 cannot be frozen, transferred, or wrapped",
+                                id
+                            )
+                            .into(),
+                        ),
+                    ));
+                }
+            } else {
+                // If it's not in the written objects, the object must have been deleted. Otherwise
+                // it's an error.
+                if !deleted_object_ids.contains(id) {
+                    return Err(ExecutionError::new(
+                        ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                        Some(
+                            format!(
+                                "Shared object operation on {} not allowed: \
+                                     shared objects used by value must be re-shared if not deleted",
+                                id
+                            )
+                            .into(),
+                        ),
+                    ));
+                }
+            }
+        }
+
+        finish(
+            env.protocol_config,
+            env.state_view,
+            gas_charger,
+            tx_context,
+            &by_value_shared_objects,
+            &authenticator_objects,
+            loaded_runtime_objects,
+            written_objects,
+            created_object_ids,
+            deleted_object_ids,
+            user_events,
+        )
     }
 
     pub fn object_runtime(&self) -> Result<&ObjectRuntime, ExecutionError> {
@@ -333,7 +515,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
 
     pub fn transfer_object(
         &mut self,
-        recipient: AccountAddress,
+        recipient: Owner,
         ty: Type,
         object: Value,
     ) -> Result<(), ExecutionError> {
@@ -342,9 +524,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             // ty to vm type
             todo!("LOADING")
         };
-        let owner = sui_types::object::Owner::AddressOwner(recipient.into());
         object_runtime_mut!(self)?
-            .transfer(owner, ty, object)
+            .transfer(recipient, ty, object)
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
     }
 
@@ -418,6 +599,7 @@ fn load_object_arg_impl(
         is_mutable_input,
         owner: owner.clone(),
         version,
+        type_: ty.clone(),
     };
     let sui_types::object::ObjectInner {
         data: sui_types::object::Data::Move(move_obj),
@@ -469,4 +651,68 @@ fn load_byte_value(
 fn copy_value(meter: &mut GasCharger, env: &Env, value: &Value) -> Result<Value, ExecutionError> {
     charge_gas_!(meter, env, charge_copy_loc, value)?;
     values::copy_value(value)
+}
+
+/// The max budget was deducted from the gas coin at the beginning of the transaction,
+/// now we return exactly that amount. Gas will be charged by the execution engine
+fn refund_max_gas_budget<OType>(
+    writes: &mut IndexMap<ObjectID, (Owner, OType, Value)>,
+    gas_charger: &mut GasCharger,
+    gas_id: ObjectID,
+) -> Result<(), ExecutionError> {
+    let Some((_, _, value)) = writes.get_mut(&gas_id) else {
+        invariant_violation!("Gas object cannot be wrapped or destroyed")
+    };
+    // NOTE we probably won't be able to actually call values::borrow_value here and might need
+    // to make a new "local" like we would for Result
+    let coin_value = values::coin_value(values::borrow_value(&value)?)?;
+    let additional = gas_charger.gas_budget();
+    let Some(new_balance) = coin_value.checked_add(additional) else {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::CoinBalanceOverflow,
+            "Gas coin too large after returning the max gas budget",
+        ));
+    };
+    values::coin_add_balance(values::borrow_value(value)?, additional)?;
+    Ok(())
+}
+
+/// Generate an MoveObject given an updated/written object
+/// # Safety
+///
+/// This function assumes proper generation of has_public_transfer, either from the abilities of
+/// the StructTag, or from the runtime correctly propagating from the inputs
+unsafe fn create_written_object(
+    env: &Env,
+    objects_modified_at: &BTreeMap<ObjectID, LoadedRuntimeObject>,
+    id: ObjectID,
+    type_: Type,
+    has_public_transfer: bool,
+    contents: Vec<u8>,
+) -> Result<MoveObject, ExecutionError> {
+    debug_assert_eq!(
+        id,
+        MoveObject::id_opt(&contents).expect("object contents should start with an id")
+    );
+    let old_obj_ver = objects_modified_at
+        .get(&id)
+        .map(|obj: &LoadedRuntimeObject| obj.version);
+
+    let Ok(type_tag): Result<TypeTag, _> = type_.try_into() else {
+        invariant_violation!("unable to generate type tag from type")
+    };
+
+    let struct_tag = match type_tag {
+        TypeTag::Struct(inner) => *inner,
+        _ => invariant_violation!("Non struct type for object"),
+    };
+    unsafe {
+        MoveObject::new_from_execution(
+            struct_tag.into(),
+            has_public_transfer,
+            old_obj_ver.unwrap_or_default(),
+            contents,
+            &env.protocol_config,
+        )
+    }
 }
