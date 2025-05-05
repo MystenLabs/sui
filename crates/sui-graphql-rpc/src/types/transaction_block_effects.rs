@@ -1,30 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    consistency::ConsistentIndexCursor, data::package_resolver::PackageResolver, error::Error,
-};
-use async_graphql::{
-    connection::{Connection, ConnectionNameType, CursorType, Edge, EdgeNameType, EmptyFields},
-    *,
-};
-use fastcrypto::encoding::{Base64 as FBase64, Encoding};
-use sui_indexer::models::transactions::StoredTransaction;
-use sui_package_resolver::{CleverError, ErrorConstants};
-use sui_types::{
-    effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
-    event::Event as NativeEvent,
-    execution_status::{
-        ExecutionFailureStatus, ExecutionStatus as NativeExecutionStatus, MoveLocation,
-        MoveLocationOpt,
-    },
-    transaction::{
-        Command, ProgrammableTransaction, SenderSignedData as NativeSenderSignedData,
-        TransactionData as NativeTransactionData, TransactionDataAPI,
-        TransactionKind as NativeTransactionKind,
-    },
-};
-
 use super::{
     balance_change::BalanceChange,
     base64::Base64,
@@ -39,6 +15,31 @@ use super::{
     transaction_block::{TransactionBlock, TransactionBlockInner},
     uint53::UInt53,
     unchanged_shared_object::UnchangedSharedObject,
+};
+use crate::types::big_int::BigInt;
+use crate::{
+    consistency::ConsistentIndexCursor, data::package_resolver::PackageResolver, error::Error,
+};
+use async_graphql::{
+    connection::{Connection, ConnectionNameType, CursorType, Edge, EdgeNameType, EmptyFields},
+    *,
+};
+use fastcrypto::encoding::{Base64 as FBase64, Encoding};
+use std::str::FromStr;
+use sui_indexer::models::transactions::StoredTransaction;
+use sui_package_resolver::{CleverError, ErrorConstants};
+use sui_types::{
+    effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
+    event::Event as NativeEvent,
+    execution_status::{
+        ExecutionFailureStatus, ExecutionStatus as NativeExecutionStatus, MoveLocation,
+        MoveLocationOpt,
+    },
+    transaction::{
+        Command, ProgrammableTransaction, SenderSignedData as NativeSenderSignedData,
+        TransactionData as NativeTransactionData, TransactionDataAPI,
+        TransactionKind as NativeTransactionKind,
+    },
 };
 
 /// Wraps the actual transaction block effects data with the checkpoint sequence number at which the
@@ -200,6 +201,29 @@ impl TransactionBlockEffects {
                 };
                 Ok(Some(format!("Error in {command}{suffix} command, {error}")))
             }
+        }
+    }
+
+    async fn abort_code(&self, ctx: &Context<'_>) -> Result<Option<BigInt>> {
+        let resolver: &PackageResolver = ctx.data_unchecked();
+        let status = self.resolve_native_status_impl(resolver).await?;
+        match status {
+            NativeExecutionStatus::Success => Ok(None),
+            NativeExecutionStatus::Failure { error, .. } => match error {
+                ExecutionFailureStatus::MoveAbort(loc, code) => {
+                    Ok(Some(BigInt::from_str(&match resolver
+                        .resolve_clever_error(loc.module.clone(), code)
+                        .await
+                    {
+                        Some(CleverError {
+                            error_code: Some(clever_error_code),
+                            ..
+                        }) => clever_error_code.to_string(),
+                        _ => code.to_string(),
+                    })?))
+                }
+                _ => Ok(None),
+            },
         }
     }
 

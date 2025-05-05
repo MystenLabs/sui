@@ -4291,6 +4291,10 @@ type TransactionBlockEffects {
 	possible, otherwise it will fall back to displaying the abort code and location.
 	"""
 	errors: String
+    """
+    Move abort code if the transaction failed with an abort.
+    """
+    abortCode: BigInt
 	"""
 	Transactions whose outputs this transaction depends upon.
 	"""
