@@ -2,8 +2,8 @@
 use std::collections::BTreeMap;
 
 use serde::{
-    de::{DeserializeOwned, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
+    de::{DeserializeOwned, Visitor},
 };
 use serde_json::json;
 use thiserror::Error;
@@ -85,7 +85,7 @@ impl<'de> Deserialize<'de> for TwoPointZero {
         D: serde::Deserializer<'de>,
     {
         struct Visitor;
-        impl<'de> serde::de::Visitor<'de> for Visitor {
+        impl serde::de::Visitor<'_> for Visitor {
             type Value = TwoPointZero;
 
             fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {

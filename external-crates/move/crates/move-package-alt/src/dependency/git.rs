@@ -449,8 +449,7 @@ mod tests {
     use tempfile::{TempDir, tempdir};
 
     fn setup_temp_dir() -> TempDir {
-        let temp_dir = tempdir().unwrap();
-        temp_dir
+        tempdir().unwrap()
     }
 
     pub async fn run_git_cmd(args: &[&str], repo_path: &PathBuf) -> Output {

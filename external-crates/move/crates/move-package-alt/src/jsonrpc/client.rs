@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use thiserror::Error;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tracing::debug;
@@ -127,7 +127,7 @@ pub async fn batch_call<A: Serialize, R: DeserializeOwned>(
     for req in requests {
         let response = resp_by_id
             .remove(&req.id)
-            .ok_or_else(|| JsonRpcError::IncorrectQueryResults)?;
+            .ok_or(JsonRpcError::IncorrectQueryResults)?;
 
         result.push(response.result.get::<JsonRpcError>()?);
     }
