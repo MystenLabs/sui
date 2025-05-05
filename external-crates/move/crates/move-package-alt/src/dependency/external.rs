@@ -10,6 +10,7 @@ use std::{
     iter::once,
     ops::Range,
     path::{Path, PathBuf},
+    process::Stdio,
 };
 
 use anyhow::bail;
@@ -106,7 +107,7 @@ impl ExternalDependency {
                     pkg.clone(),
                     ResolveRequest {
                         env: env_id,
-                        data: dep.data.clone(),
+                        data: dep.data.clone().into_inner(),
                     },
                 );
             }
