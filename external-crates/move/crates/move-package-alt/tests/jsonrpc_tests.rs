@@ -3,8 +3,8 @@ mod jsonrpc_tests {
     use serde_json::json;
     use tokio::{
         io::{
-            simplex, AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader, ReadHalf,
-            SimplexStream, WriteHalf,
+            AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader, ReadHalf,
+            SimplexStream, WriteHalf, simplex,
         },
         join,
     };
