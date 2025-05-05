@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use consensus_config::Committee;
+use consensus_config::{Committee, Stake};
 use mysten_common::debug_fatal;
 use mysten_metrics::monitored_mpsc::UnboundedSender;
 use parking_lot::RwLock;
@@ -136,11 +136,8 @@ impl TransactionCertifier {
         }
     }
 
-    /// Retrieves votes on transactions from the peer blocks.
-    pub(crate) fn get_block_transaction_votes(
-        &self,
-        block_refs: Vec<BlockRef>,
-    ) -> Vec<BlockTransactionVotes> {
+    /// Retrieves own votes on peer block transactions.
+    pub(crate) fn get_own_votes(&self, block_refs: Vec<BlockRef>) -> Vec<BlockTransactionVotes> {
         let mut votes = vec![];
         let certifier_state = self.certifier_state.read();
         for block_ref in block_refs {
@@ -160,9 +157,30 @@ impl TransactionCertifier {
         votes
     }
 
+    /// Retrieves transactions in the block that have received reject votes, and the total stake of the votes.
+    /// Returns None if no information is found for the block.
+    pub(crate) fn get_reject_votes(
+        &self,
+        block_ref: &BlockRef,
+    ) -> Option<Vec<(TransactionIndex, Stake)>> {
+        let mut reject_votes = vec![];
+        for (transaction_index, stake_agg) in self
+            .certifier_state
+            .read()
+            .votes
+            .get(block_ref)?
+            .reject_txn_votes
+            .iter()
+        {
+            if stake_agg.stake() > 0 {
+                reject_votes.push((*transaction_index, stake_agg.stake()));
+            }
+        }
+        Some(reject_votes)
+    }
+
     /// Runs garbage collection on the internal state and updates the GC round for the certifier.
-    pub(crate) fn run_gc(&self) {
-        let gc_round = self.dag_state.read().gc_round();
+    pub(crate) fn run_gc(&self, gc_round: Round) {
         let mut certifier_state = self.certifier_state.write();
         certifier_state.update_gc_round(gc_round);
     }
@@ -323,7 +341,7 @@ struct VoteInfo {
     own_reject_txn_votes: Vec<TransactionIndex>,
     // Accumulates implicit accept votes for the block and all transactions.
     accept_block_votes: StakeAggregator<QuorumThreshold>,
-    // Accumulates reject votes per transaction.
+    // Accumulates reject votes per transaction in this block.
     reject_txn_votes: BTreeMap<TransactionIndex, StakeAggregator<QuorumThreshold>>,
     // Whether this block has been certified already.
     is_certified: bool,
