@@ -50,13 +50,13 @@ pub struct ExternalDependency {
     pub resolver: ResolverName,
 
     /// the `<data>` in `{ r.<res> = <data> }`
-    data: Located<toml::Value>,
+    data: toml::Value,
 }
 
 /// Convenience type for serializing/deserializing external deps
 #[derive(Serialize, Deserialize)]
 struct RField {
-    r: Located<BTreeMap<String, toml::Value>>,
+    r: BTreeMap<String, toml::Value>,
 }
 
 /// Requests from the package mananger to the external resolver
@@ -107,7 +107,7 @@ impl ExternalDependency {
                     pkg.clone(),
                     ResolveRequest {
                         env: env_id,
-                        data: dep.data.clone().into_inner(),
+                        data: dep.data.clone(),
                     },
                 );
             }
@@ -138,21 +138,21 @@ impl TryFrom<RField> for ExternalDependency {
     type Error = PackageError;
 
     fn try_from(value: RField) -> Result<Self, Self::Error> {
-        if value.r.as_ref().len() != 1 {
-            return Err(PackageError::Manifest(ManifestError {
-                kind: ManifestErrorKind::BadExternalDependency,
-                span: Some(value.r.span()),
-                handle: value.r.file(),
-            }));
+        debug!("try_from: {:?}", value.r);
+        if value.r.len() != 1 {
+            return Err(PackageError::Generic("TODO".to_string()));
+            //            return Err(PackageError::Manifest(ManifestError {
+            //                kind: ManifestErrorKind::BadExternalDependency,
+            //                span: Some(value.r.span()),
+            //                handle: value.r.file(),
+            //            }));
         }
 
-        let (r, file, span) = value.r.destructure();
-
-        let (resolver, data) = r
+        let (resolver, data) = value
+            .r
             .into_iter()
             .next()
             .expect("iterator of length 1 structure is nonempty");
-        let data = Located::new(data, file, span);
 
         Ok(Self { resolver, data })
     }
@@ -161,10 +161,9 @@ impl TryFrom<RField> for ExternalDependency {
 impl From<ExternalDependency> for RField {
     fn from(value: ExternalDependency) -> Self {
         let ExternalDependency { resolver, data } = value;
-        let (content, file, span) = data.destructure();
 
         RField {
-            r: Located::new(BTreeMap::from([(resolver, content)]), file, span),
+            r: BTreeMap::from([(resolver, data)]),
         }
     }
 }

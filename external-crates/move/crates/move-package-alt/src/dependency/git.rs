@@ -509,6 +509,8 @@ mod tests {
         run_git_cmd(&["commit", "-m", "Second commit"], &root_path).await;
 
         // Get commits SHA
+        let output = run_git_cmd(&["log"], &root_path).await;
+        eprintln!("{output:?}");
         let commits = run_git_cmd(&["log", "--pretty=format:%H"], &root_path).await;
         let commits = String::from_utf8_lossy(&commits.stdout);
         let commits: Vec<_> = commits.lines().collect();

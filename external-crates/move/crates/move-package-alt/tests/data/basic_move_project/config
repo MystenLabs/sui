@@ -10,3 +10,5 @@
   name = MoveUser
   email = test@example.com
 
+[commit]
+  gpgsign = false

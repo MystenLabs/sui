@@ -23,6 +23,12 @@ use tracing_subscriber::EnvFilter;
 ///  - ".locked": the contents of the lockfile
 ///  - ".pinned": the contents of the pinned dependencies
 pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
+    let _ = tracing_subscriber::fmt::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .without_time()
+        .with_target(false)
+        .try_init();
+
     if path.iter().any(|part| part == "deps_only") {
         return Ok(());
     }
@@ -101,11 +107,6 @@ impl Test<'_> {
 }
 
 async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String> {
-    let _ = tracing_subscriber::fmt::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .without_time()
-        .with_target(false)
-        .try_init();
     let manifest = Manifest::<Vanilla>::read_from(input_path).unwrap();
 
     let deps: DependencySet<ManifestDependencyInfo<Vanilla>> = manifest.dependencies();
