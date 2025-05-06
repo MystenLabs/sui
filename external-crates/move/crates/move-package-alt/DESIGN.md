@@ -393,6 +393,7 @@ graph.
 
 2. recursively repin everything
     - explode the manifest dependencies so that there is a dep for every environment
+        - note that we will need to pay attention to `use-environment` here
     - resolve all direct external dependencies into internal dependencies
     - fetch all direct dependencies
         - note that the lockfiles of the dependencies are ignored
