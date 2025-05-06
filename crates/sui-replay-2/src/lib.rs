@@ -3,14 +3,16 @@
 
 use clap::Parser;
 use similar::{ChangeTag, TextDiff};
+use std::collections::BTreeSet;
 use std::str::FromStr;
-use sui_types::{effects::TransactionEffects, supported_protocol_versions::Chain};
+use sui_types::base_types::ObjectID;
+use sui_types::{effects::TransactionEffects, supported_protocol_versions::Chain, TypeTag};
 
 pub mod data_store;
-pub mod environment;
 pub mod errors;
 pub mod execution;
 pub mod gql_queries;
+pub mod replay_interface;
 pub mod replay_txn;
 
 #[derive(Parser, Clone, Debug)]
@@ -89,4 +91,29 @@ pub fn diff_effects(
     }
 
     res.join("")
+}
+
+// get the package info from the type tag and insert the packages of the type tags (if any)
+// in `packages`
+pub fn packages_from_type_tag(typ: &TypeTag, packages: &mut BTreeSet<ObjectID>) {
+    match typ {
+        TypeTag::Struct(struct_tag) => {
+            packages.insert(struct_tag.address.into());
+            for ty in struct_tag.type_params.iter() {
+                packages_from_type_tag(ty, packages);
+            }
+        }
+        TypeTag::Vector(type_tag) => {
+            packages_from_type_tag(type_tag, packages);
+        }
+        TypeTag::Bool
+        | TypeTag::U8
+        | TypeTag::U64
+        | TypeTag::U128
+        | TypeTag::Address
+        | TypeTag::Signer
+        | TypeTag::U16
+        | TypeTag::U32
+        | TypeTag::U256 => (),
+    }
 }

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    environment::{is_framework_package, ReplayEnvironment},
     errors::ReplayError,
+    replay_interface::{EpochStore, ObjectStore},
     replay_txn::ReplayTransaction,
 };
 use move_binary_format::CompiledModule;
@@ -20,6 +20,7 @@ use std::{
     sync::Arc,
 };
 use sui_execution::Executor;
+use sui_types::digests::TransactionDigest;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
     committee::EpochId,
@@ -28,11 +29,10 @@ use sui_types::{
     gas::SuiGasStatus,
     metrics::LimitsMetrics,
     object::{Data, Object},
-    storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, PackageObject, ParentSync},
+    storage::{BackingPackageStore, ChildObjectResolver, PackageObject, ParentSync},
     supported_protocol_versions::ProtocolConfig,
     transaction::{CheckedInputObjects, TransactionDataAPI},
 };
-use sui_types::{digests::TransactionDigest, error::SuiError};
 
 const DEFAULT_TRACE_OUTPUT_DIR: &str = "replay";
 
@@ -51,7 +51,8 @@ pub struct ReplayExecutor {
 
 pub fn execute_transaction_to_effects(
     txn: ReplayTransaction,
-    env: &ReplayEnvironment,
+    epoch_store: &dyn EpochStore,
+    object_store: &dyn ObjectStore,
     trace_execution: Option<Option<String>>,
 ) -> Result<
     (
@@ -71,24 +72,28 @@ pub fn execute_transaction_to_effects(
         effects: expected_effects,
         executor,
         input_objects,
+        objects: _,
     } = txn;
 
     let protocol_config = &executor.protocol_config;
     let epoch = expected_effects.executed_epoch();
-    let epoch_start_timestamp = env.epoch_timestamp(epoch)?;
+    let epoch_data = epoch_store.epoch_info(epoch)?;
+    let epoch_start_timestamp = epoch_data.start_timestamp;
     let gas_status = if txn_data.kind().is_system_tx() {
         SuiGasStatus::new_unmetered()
     } else {
-        let reference_gas_price = env.rgp(epoch)?;
         SuiGasStatus::new(
             txn_data.gas_data().budget,
             txn_data.gas_data().price,
-            reference_gas_price,
+            epoch_data.rgp,
             protocol_config,
         )
         .expect("Failed to create gas status")
     };
-    let store: ReplayStore<'_> = ReplayStore { env, epoch };
+    let store: ReplayStore<'_> = ReplayStore {
+        epoch,
+        store: object_store,
+    };
     let mut trace_builder_opt = if trace_execution.is_some() {
         Some(MoveTraceBuilder::new())
     } else {
@@ -115,7 +120,7 @@ pub fn execute_transaction_to_effects(
     if let Some(trace_builder) = trace_builder_opt {
         // unwrap is safe if trace_builder_opt.is_some() holds
         let output_path = get_trace_output_path(trace_execution.unwrap())?;
-        save_trace_output(&output_path, digest, trace_builder, env)?;
+        save_trace_output(&output_path, digest, trace_builder, &[])?;
     }
     Ok((result, effects, gas_status, expected_effects))
 }
@@ -171,7 +176,7 @@ fn save_trace_output(
     output_path: &Path,
     digest: TransactionDigest,
     trace_builder: MoveTraceBuilder,
-    env: &ReplayEnvironment,
+    pkgs: &[Object],
 ) -> Result<(), ReplayError> {
     let txn_output_path = output_path.join(digest.to_string());
     if txn_output_path.exists() {
@@ -204,9 +209,9 @@ fn save_trace_output(
             bcode_dir, e
         ),
     })?;
-    for (obj_id, obj) in env.package_objects().iter() {
+    for obj in pkgs.iter() {
         if let Data::Package(pkg) = &obj.data {
-            let pkg_addr = format!("{:?}", obj_id);
+            let pkg_addr = format!("{:?}", obj.id());
             let bcode_pkg_dir = bcode_dir.join(&pkg_addr);
             fs::create_dir(&bcode_pkg_dir).map_err(|e| ReplayError::TracingError {
                 err: format!("Failed to create bytecode package directory: {:?}", e),
@@ -307,57 +312,48 @@ impl ReplayExecutor {
 //
 
 struct ReplayStore<'a> {
-    env: &'a ReplayEnvironment,
+    store: &'a dyn ObjectStore,
     epoch: u64,
 }
 
 impl BackingPackageStore for ReplayStore<'_> {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
-        let pkg_obj = if is_framework_package(package_id) {
-            self.env.get_system_package_object(package_id, self.epoch)
-        } else {
-            self.env.get_package_object(package_id)
-        };
-        let pkg_obj = pkg_obj
-            .map(|pkg| PackageObject::new(pkg.clone()))
-            .map_err(|e| SuiError::Storage(e.to_string()))?;
-
-        Ok(Some(pkg_obj))
+    // must resolve locally
+    fn get_package_object(&self, _package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
+        panic!("TBI: get_package_object");
     }
 }
 
-impl ObjectStore for ReplayStore<'_> {
-    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
-        self.env.get_object(object_id)
+impl sui_types::storage::ObjectStore for ReplayStore<'_> {
+    // must resolve locally
+    fn get_object(&self, _object_id: &ObjectID) -> Option<Object> {
+        panic!("TBI: get_package_object");
     }
 
-    fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
-        self.env.get_object_at_version(object_id, version.value())
+    // must resolve locally?
+    fn get_object_by_key(&self, _object_id: &ObjectID, _version: VersionNumber) -> Option<Object> {
+        panic!("TBI: get_package_object");
     }
 }
 
 impl ChildObjectResolver for ReplayStore<'_> {
     fn read_child_object(
         &self,
-        parent: &ObjectID,
-        child: &ObjectID,
-        child_version_upper_bound: SequenceNumber,
+        _parent: &ObjectID,
+        _child: &ObjectID,
+        _child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        self.env
-            .read_child_object(parent, child, child_version_upper_bound)
-            .map_err(|e| SuiError::DynamicFieldReadError(e.to_string()))
+        panic!("TBI: get_package_object");
     }
 
+    // must resolve locally?
     fn get_object_received_at_version(
         &self,
         _owner: &ObjectID,
-        receiving_object_id: &ObjectID,
-        receive_object_at_version: SequenceNumber,
+        _receiving_object_id: &ObjectID,
+        _receive_object_at_version: SequenceNumber,
         _epoch_id: EpochId,
     ) -> SuiResult<Option<Object>> {
-        Ok(self
-            .env
-            .get_object_at_version(receiving_object_id, receive_object_at_version.value()))
+        panic!("TBI: get_package_object");
     }
 }
 

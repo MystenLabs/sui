@@ -4,14 +4,13 @@
 use clap::*;
 use core::panic;
 use sui_replay_2::{
-    data_store::DataStore, diff_effects, environment::ReplayEnvironment,
-    execution::execute_transaction_to_effects, replay_txn::ReplayTransaction, ReplayConfig,
+    data_store::DataStore, diff_effects, execution::execute_transaction_to_effects,
+    replay_txn::ReplayTransaction, ReplayConfig,
 };
 use sui_types::{effects::TransactionEffects, gas::SuiGasStatus};
 use tracing::debug;
 
-#[tokio::main]
-async fn main() {
+fn main() {
     let _guard = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
@@ -27,34 +26,31 @@ async fn main() {
     } = config;
 
     //
-    // create DataStore and EpochStore
+    // create DataStore whih implements `TransactionStore`, `EpochStore` and `ObjectStore`
+    debug!("Start stores creation");
     let data_store =
-        // TODO: use `new` instead of `new_eager` once we have the indexer new schema available
-        // DataStore::new(node).unwrap_or_else(|e| panic!("Failed to create data store: {:?}", e));
-        DataStore::new_eager(node).await.unwrap_or_else(|e| panic!("Failed to create data store: {:?}", e));
-
-    //
-    // create ReplayEnvironment
-    let mut env = ReplayEnvironment::new(data_store)
-        .await
-        .unwrap_or_else(|e| panic!("Failed to create replay environment: {:?}", e));
+        DataStore::new(node).unwrap_or_else(|e| panic!("Failed to create data store: {:?}", e));
+    debug!("End stores creation");
 
     //
     // load transaction input
-    let replay_txn = ReplayTransaction::load(&mut env, &tx_digest)
-        .await
+    debug!("Start load transaction");
+    let replay_txn = ReplayTransaction::load(&tx_digest, &data_store, &data_store, &data_store)
         .unwrap_or_else(|e: sui_replay_2::errors::ReplayError| {
             panic!("Failed to get transaction data: {:?}", e)
         });
+    debug!("End load transaction");
 
     //
     // replay transaction
-    debug!("Start execute_transaction_to_effects");
+    debug!("Start execution");
     let (result, effects, gas_status, expected_effects) =
-        execute_transaction_to_effects(replay_txn, &env, trace_execution)
+        execute_transaction_to_effects(replay_txn, &data_store, &data_store, trace_execution)
             .unwrap_or_else(|e| panic!("Error running a transaction: {:?}", e));
-    debug!("End execute_transaction_to_effects");
+    debug!("End execution");
 
+    //
+    // show results
     println!("\n** TRANSACTION RESULT -> {:?}", result);
     if show_effects {
         print_txn_effects(&effects, &gas_status);

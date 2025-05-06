@@ -10,26 +10,17 @@ pub enum ReplayError {
     #[error("Generic Error: {:?}", err)]
     GenericError { err: String },
 
-    #[error("BCS Conversion Error: {:?}", err)]
-    BCSConversionError { err: String },
+    #[error("Data Conversion Error (bsc or from/to error): {}", err)]
+    DataConversionError { err: String },
+    #[error("Failed RPC request: {}", err)]
+    RPCError { err: String },
 
-    #[error("Failed to parse transaction digest {}: {}", digest, err)]
-    FailedToParseDigest { digest: String, err: String },
-    #[error("Failed to load transaction {}: {}", digest, err)]
-    FailedToLoadTransaction { digest: String, err: String },
     #[error("Transaction {} not found on {:?}", digest, node)]
     TransactionNotFound { digest: String, node: Node },
-    #[error("Failed to load transaction effects for {}: {}", digest, err)]
-    FailedToLoadTransactionEffects { digest: String, err: String },
-    #[error("Transaction effects {} not found on {:?}", digest, node)]
-    TransactionEffectsNotFound { digest: String, node: Node },
-    #[error("Failed to retrieve change epoch events: {}", err)]
-    ChangeEpochEventsFailure { err: String },
+    #[error("Missing epoch data for epoch {}", epoch)]
+    MissingEpochData { epoch: u64 },
 
     // EpochStore errors
-    #[error("Missing {} for epoch {}", data, epoch)]
-    MissingDataForEpoch { data: String, epoch: u64 },
-
     #[error("Missing system package {} at version {}", pkg, epoch)]
     MissingSystemPackage { pkg: String, epoch: u64 },
     #[error("Cannot find epoch for package {} at epoch {}", pkg, epoch)]

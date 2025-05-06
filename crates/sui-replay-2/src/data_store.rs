@@ -3,13 +3,17 @@
 
 use crate::{
     errors::ReplayError,
-    gql_queries::{dynamic_field_at_version, package_versions_for_replay, EpochData},
+    gql_queries::epoch_data::query,
+    replay_interface::{
+        EpochData, EpochStore, ObjectKey, ObjectStore, TransactionStore, VersionQuery,
+    },
     Node,
 };
 
-use std::collections::{BTreeMap, BTreeSet};
-use sui_graphql_client::{Client, Direction, PaginationFilter};
-use sui_sdk_types::Address;
+use cynic::GraphQlResponse;
+use cynic::Operation;
+use std::{cell::RefCell, collections::BTreeMap};
+use sui_types::{digests::TransactionDigest};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     committee::ProtocolVersion,
@@ -18,60 +22,107 @@ use sui_types::{
     supported_protocol_versions::{Chain, ProtocolConfig},
     transaction::TransactionData,
 };
-use tracing::{debug, trace};
+use tokio::runtime::Runtime;
+use tracing::debug;
+
+//
+// DataStore and traits implementations
+//
+
+type EpochId = u64;
 
 // Wrapper around the GQL client.
 pub struct DataStore {
-    client: Client,
+    rpc: reqwest::Url,
+    client: reqwest::Client,
+    rt: Runtime,
     node: Node,
-    epoch_store: EpochStore,
+    epoch_map: RefCell<BTreeMap<EpochId, EpochData>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd)]
-pub struct InputObject {
-    pub object_id: ObjectID,
-    pub version: Option<u64>,
+impl TransactionStore for DataStore {
+    fn transaction_data_and_effects(
+        &self,
+        tx_digest: &str,
+    ) -> Result<(TransactionData, TransactionEffects), ReplayError> {
+        let digest = tx_digest.parse().map_err(|e| {
+            let err = format!("{:?}", e);
+            ReplayError::DataConversionError { err }
+        })?;
+        debug!("Start transaction_data_and_effects");
+        let txn_data_and_effects = self.rt.block_on(async {
+            tokio::try_join!(
+                self.transaction_data(digest),
+                self.transaction_effects(digest)
+            )
+        });
+        debug!("End transaction_data_and_effects");
+        txn_data_and_effects
+    }
+}
+
+impl EpochStore for DataStore {
+    fn epoch_info(&self, epoch: u64) -> Result<EpochData, ReplayError> {
+        println!("DARIO: epoch_info({})", epoch);
+        if let Some(epoch_data) = self.epoch_map.borrow().get(&epoch) {
+            println!("DARIO: epoch_info found {:?}", epoch_data);
+            return Ok(epoch_data.clone());
+        }
+        let epoch_data = self.rt.block_on(self.epoch(epoch))?;
+        println!("DARIO: epoch_info loaded {:?}", epoch_data);
+        self.epoch_map.borrow_mut().insert(epoch, epoch_data.clone());
+        Ok(epoch_data)
+    }
+
+    // Get the protocol config for an epoch
+    fn protocol_config(&self, epoch: u64) -> Result<ProtocolConfig, ReplayError> {
+        let epoch = self.epoch_info(epoch)?;
+        Ok(ProtocolConfig::get_for_version(
+            ProtocolVersion::new(epoch.protocol_version),
+            self.chain(),
+        ))
+    }
+}
+
+impl ObjectStore for DataStore {
+    fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Object>, ReplayError> {
+        // TODO: rewire to the new schema once there
+        keys.into_iter()
+            .map(|key| match key.version_query {
+                VersionQuery::Version(version) => self
+                    .rt
+                    .block_on(self.get_object_at_version(key.object_id, version)),
+                VersionQuery::RootVersion(root_version) => self
+                    .rt
+                    .block_on(self.get_object_at_root_version(key.object_id, root_version)),
+                VersionQuery::AtCheckpoint(checkpoint) => self
+                    .rt
+                    .block_on(self.get_object_at_checkpoint(key.object_id, checkpoint)),
+                VersionQuery::ImmutableOrLatest => {
+                    self.rt.block_on(self.get_latest_object(key.object_id))
+                }
+            })
+            .collect()
+    }
 }
 
 impl DataStore {
     pub fn new(node: Node) -> Result<Self, ReplayError> {
-        let client = match &node {
-            Node::Mainnet => Client::new_mainnet(),
-            Node::Testnet => Client::new_testnet(),
-            Node::Devnet => Client::new_devnet(),
-            Node::Custom(host) => {
-                Client::new(host).map_err(|e| ReplayError::ClientCreationError {
-                    host: format!("{:?}", &host),
-                    err: format!("{:?}", e),
-                })?
-            }
+        let rpc = if let Node::Custom(ref url) = node {
+            reqwest::Url::parse(url).map_err(|err| ReplayError::DataConversionError {
+                err: format!("Failed to parse custom RPC URL: {}", err),
+            })?
+        } else {
+            panic!("yeah yeah yeah")
         };
-        let epoch_store = EpochStore::lazy();
-        Ok(Self {
-            client,
-            node,
-            epoch_store,
-        })
-    }
+        let client = reqwest::Client::new();
 
-    pub async fn new_eager(node: Node) -> Result<Self, ReplayError> {
-        let client = match &node {
-            Node::Mainnet => Client::new_mainnet(),
-            Node::Testnet => Client::new_testnet(),
-            Node::Devnet => Client::new_devnet(),
-            Node::Custom(host) => {
-                Client::new(host).map_err(|e| ReplayError::ClientCreationError {
-                    host: format!("{:?}", &host),
-                    err: format!("{:?}", e),
-                })?
-            }
-        };
-        let data = Self::epochs_gql_table(&client).await?;
-        let epoch_store = EpochStore::eager(data);
         Ok(Self {
             client,
+            rt: Runtime::new().unwrap(),
             node,
-            epoch_store,
+            epoch_map: RefCell::new(BTreeMap::new()),
+            rpc,
         })
     }
 
@@ -83,259 +134,133 @@ impl DataStore {
         self.node.chain()
     }
 
-    pub fn protocol_config(&self, epoch: u64, chain: Chain) -> Result<ProtocolConfig, ReplayError> {
-        self.epoch_store
-            .protocol_config(epoch, chain)
-            .map_err(|_err| todo!("hook epoch table lookup"))
-    }
-
-    pub fn epoch_timestamp(&self, epoch: u64) -> Result<u64, ReplayError> {
-        self.epoch_store
-            .epoch_timestamp(epoch)
-            .map_err(|_err| todo!("hook epoch table lookup"))
-    }
-
-    pub fn rgp(&self, epoch: u64) -> Result<u64, ReplayError> {
-        self.epoch_store
-            .rgp(epoch)
-            .map_err(|_err| todo!("hook epoch table lookup"))
-    }
-
-    /// Load all versions of a system package with the given id.
-    pub async fn load_system_package(
+    // internal API
+    pub async fn run_query<T, V>(
         &self,
-        pkg_id: ObjectID,
-    ) -> Result<Vec<(Object, u64)>, ReplayError> {
-        debug!("Start load system package: {}", pkg_id);
-        let pkg_address = Address::new(pkg_id.into_bytes());
-        let mut packages = vec![];
-        let mut pagination = PaginationFilter {
-            direction: Direction::Forward,
-            cursor: None,
-            limit: None,
-        };
-        loop {
-            debug!("Start load system package pagination");
-            let pkg_versions =
-                package_versions_for_replay(&self.client, pkg_address, pagination, None, None)
-                    .await
-                    .map_err(|e| ReplayError::PackagesRetrievalError {
-                        pkg: pkg_address.to_string(),
-                        err: format!("{:?}", e),
-                    })?;
-            let (page_info, data) = pkg_versions.into_parts();
-            for (pkg, pkg_version, epoch) in data {
-                let package_obj = pkg.ok_or_else(|| ReplayError::PackageNotFound {
-                    pkg: pkg_address.to_string(),
-                })?;
-                let package_obj = Object::try_from(package_obj).map_err(|e| {
-                    ReplayError::ObjectConversionError {
-                        id: pkg_address.to_string(),
-                        err: format!("{:?}", e),
-                    }
-                })?;
-
-                trace!(
-                    "Collecting system package: {}[{} - {}], {:?}",
-                    package_obj.id(),
-                    package_obj.version(),
-                    pkg_version,
-                    epoch,
-                );
-                // TODO: fix this. If epoch is missing come up with something....
-                let epoch = epoch.unwrap_or(0);
-                // epoch.ok_or_else(|| ReplayError::MissingPackageEpoch {
-                //     pkg: pkg_address.to_string(),
-                // })? as u64;
-                packages.push((package_obj, epoch));
-            }
-            if page_info.has_next_page {
-                pagination = PaginationFilter {
-                    direction: Direction::Forward,
-                    cursor: page_info.end_cursor.clone(),
-                    limit: None,
-                };
-            } else {
-                break;
-            }
-        }
-        debug!("End load system package");
-        Ok(packages)
-    }
-
-    /// Load all versions of all system packages
-    pub async fn load_system_packages(
-        &self,
-    ) -> Result<BTreeMap<ObjectID, BTreeMap<u64, Object>>, ReplayError> {
-        debug!("Start load system packages");
-        let mut system_packages = BTreeMap::new();
-        for pkg_id in sui_framework::BuiltInFramework::all_package_ids() {
-            let packages = self.load_system_package(pkg_id).await?;
-            let all_versions = packages
-                .into_iter()
-                .map(|(pkg, epoch)| {
-                    trace!("{}[{}] - {}", pkg.id(), pkg.version(), epoch);
-                    (epoch, pkg)
-                })
-                .collect();
-            system_packages.insert(pkg_id, all_versions);
-        }
-        debug!("End load system packages");
-        Ok(system_packages)
-    }
-
-    // Load a set of (ObjectId, version) objects
-    pub async fn load_objects(
-        &self,
-        object_inputs: &BTreeSet<InputObject>,
-    ) -> Result<Vec<(ObjectID, Option<u64>, Object)>, ReplayError> {
-        debug!("Start load objects");
-        let mut objects = vec![];
-        for object_input in object_inputs {
-            let InputObject {
-                object_id, version, ..
-            } = object_input;
-            let address = Address::new((*object_id).into_bytes());
-            debug!("Start load object: {}", address);
-            let object_data = self
-                .client
-                .object(address, *version)
-                .await
-                .map_err(|e| ReplayError::ObjectLoadError {
-                    address: address.to_string(),
-                    version: *version,
-                    err: format!("{:?}", e),
-                })?
-                .ok_or_else(|| ReplayError::ObjectNotFound {
-                    address: address.to_string(),
-                    version: *version,
-                })?;
-            let object =
-                Object::try_from(object_data).map_err(|e| ReplayError::ObjectConversionError {
-                    id: object_id.to_string(),
-                    err: format!("{:?}", e),
-                })?;
-            objects.push((*object_id, *version, object));
-        }
-        debug!("End load objects");
-        Ok(objects)
+        operation: &Operation<T, V>,
+    ) -> Result<GraphQlResponse<T>, ReplayError>
+    where
+        T: serde::de::DeserializeOwned,
+        V: serde::Serialize,
+    {
+        println!("DARIO: run_query()");
+        let res = self
+            .client
+            .post(self.rpc.clone());
+        println!("DARIO: run_query() after post");
+        let res = res
+            .json(&operation);
+        println!("DARIO: run_query() after post/json");
+        let res = res
+            .send()
+            .await
+            .map_err(|err| ReplayError::RPCError {
+                err: format!("Failed to send request: {}", err),
+            })?;
+        println!("DARIO: run_query() after post/json/send");
+        println!("DARIO: run_query() response.status() = {:?}", res.status());
+        println!("DARIO: run_query() response.text() = {:?}", res.text().await.unwrap());
+        panic!("AAAARRRRRGGGGGHHHHHH");
+        // let res = res
+        //     .json::<GraphQlResponse<T>>()
+        //     .await
+        //     .map_err(|err| ReplayError::RPCError {
+        //         err: format!("Failed to parse response: {}", err),
+        //     })?;
+        // println!("DARIO: run_query() after post/json/send/json");
+        // // let res = self
+        // //     .client
+        // //     .post(self.rpc.clone())
+        // //     .json(&operation)
+        // //     .send()
+        // //     .await
+        // //     .map_err(|err| ReplayError::RPCError {
+        // //         err: format!("Failed to send request: {}", err),
+        // //     })?
+        // //     .json::<GraphQlResponse<T>>()
+        // //     .await
+        // //     .map_err(|err| ReplayError::RPCError {
+        // //         err: format!("Failed to parse response: {}", err),
+        // //     })?;
+        // Ok(res)
     }
 
     //
     // Transaction data and effects
     //
 
-    // get transaction data and effects
-    pub async fn transaction_data_and_effects(
+    async fn transaction_data(
         &self,
-        tx_digest: &str,
-    ) -> Result<(TransactionData, TransactionEffects), ReplayError> {
-        let txn_data = self.transaction_data(tx_digest).await?;
-        let txn_effects = self.transaction_effects(tx_digest).await?;
-        Ok((txn_data, txn_effects))
-    }
-
-    async fn transaction_data(&self, tx_digest: &str) -> Result<TransactionData, ReplayError> {
-        debug!("Start transaction data");
-        let digest = tx_digest.parse().map_err(|e| {
-            let err = format!("{:?}", e);
-            let digest = tx_digest.to_string();
-            ReplayError::FailedToParseDigest { digest, err }
-        })?;
-        let tx = self
-            .client
-            .transaction(digest)
-            .await
-            .map_err(|e| {
-                let err = format!("{:?}", e);
-                let digest = tx_digest.to_string();
-                ReplayError::FailedToLoadTransaction { digest, err }
-            })?
-            .ok_or(ReplayError::TransactionNotFound {
-                digest: tx_digest.to_string(),
-                node: self.node.clone(),
-            })?;
-        let txn_data = TransactionData::try_from(tx.transaction).map_err(|e| {
-            ReplayError::TransactionConversionError {
-                id: tx_digest.to_string(),
-                err: format!("{:?}", e),
-            }
-        })?;
-        debug!("End transaction data");
-        Ok(txn_data)
+        _digest: TransactionDigest,
+    ) -> Result<TransactionData, ReplayError> {
+        todo!()
     }
 
     async fn transaction_effects(
         &self,
-        tx_digest: &str,
+        _digest: TransactionDigest,
     ) -> Result<TransactionEffects, ReplayError> {
-        debug!("Start transaction effects");
-        let digest = tx_digest.parse().map_err(|e| {
-            let err = format!("{:?}", e);
-            let digest = tx_digest.to_string();
-            ReplayError::FailedToParseDigest { digest, err }
-        })?;
-        let effects = self
-            .client
-            .transaction_effects(digest)
-            .await
-            .map_err(|e| {
-                let err = format!("{:?}", e);
-                let digest = tx_digest.to_string();
-                ReplayError::FailedToLoadTransactionEffects { digest, err }
-            })?
-            .ok_or(ReplayError::TransactionEffectsNotFound {
-                digest: tx_digest.to_string(),
-                node: self.node.clone(),
-            })?;
-        let effects = TransactionEffects::try_from(effects).map_err(|e| {
-            ReplayError::TransactionEffectsConversionError {
-                id: tx_digest.to_string(),
-                err: format!("{:?}", e),
-            }
-        })?;
-        debug!("End transaction effects");
-        Ok(effects)
+        todo!()
     }
 
     //
-    // Epoch table eager load
+    // Epoch table API
     //
-    async fn epochs_gql_table(client: &Client) -> Result<BTreeMap<u64, EpochData>, ReplayError> {
-        debug!("Start load epoch table");
-        let mut pag_filter = PaginationFilter {
-            direction: Direction::Backward,
-            cursor: None,
-            limit: None,
-        };
 
-        let mut epochs_data = BTreeMap::<u64, EpochData>::new();
-        loop {
-            debug!("Start load epoch table pagination");
-            let paged_epochs = crate::gql_queries::epochs(client, pag_filter)
-                .await
-                .map_err(|e| {
-                    let err = format!("{:?}", e);
-                    ReplayError::GenericError { err }
-                })
-                .unwrap();
-            let (page_info, data) = paged_epochs.into_parts();
-            for epoch in data {
-                epochs_data.insert(epoch.epoch_id, epoch.try_into()?);
-            }
-            if page_info.has_previous_page {
-                pag_filter = PaginationFilter {
-                    direction: Direction::Backward,
-                    cursor: page_info.start_cursor,
-                    limit: None,
-                };
-            } else {
-                break;
-            }
-        }
+    // load the entire epoch table at once
+    async fn epoch_table(&self) -> Result<(), ReplayError> {
+        todo!()
+    }
 
-        debug!("End load epoch table");
-        Ok(epochs_data)
+    async fn epoch(&self, epoch_id: u64) -> Result<EpochData, ReplayError> {
+        query(epoch_id, self).await
+    }
+
+    //
+    // Object loading API
+    //
+
+    async fn get_object_at_version(
+        &self,
+        _object_id: ObjectID,
+        _version: u64,
+    ) -> Result<Object, ReplayError> {
+        todo!()
+    }
+
+    async fn get_object_at_root_version(
+        &self,
+        _object_id: ObjectID,
+        _root_version: u64,
+    ) -> Result<Object, ReplayError> {
+        todo!()
+    }
+
+    async fn get_object_at_checkpoint(
+        &self,
+        _object_id: ObjectID,
+        _checkpoint: u64,
+    ) -> Result<Object, ReplayError> {
+        todo!()
+    }
+
+    async fn get_latest_object(&self, _object_id: ObjectID) -> Result<Object, ReplayError> {
+        todo!()
+    }
+
+    /// Load all versions of a system package with the given id.
+    pub async fn load_system_package(
+        &self,
+        _pkg_id: ObjectID,
+    ) -> Result<Vec<(Object, u64)>, ReplayError> {
+        todo!()
+    }
+
+    /// Load all versions of all system packages
+    pub async fn load_system_packages(
+        &self,
+    ) -> Result<BTreeMap<ObjectID, BTreeMap<u64, Object>>, ReplayError> {
+        todo!()
     }
 
     //
@@ -345,85 +270,9 @@ impl DataStore {
     pub fn read_child_object(
         &self,
         _parent: &ObjectID,
-        child: &ObjectID,
-        child_version_upper_bound: SequenceNumber,
+        _child: &ObjectID,
+        _child_version_upper_bound: SequenceNumber,
     ) -> Result<Option<Object>, ReplayError> {
-        #[allow(clippy::disallowed_methods)]
-        let obj = futures::executor::block_on(dynamic_field_at_version(
-            &self.client,
-            *child,
-            child_version_upper_bound.value(),
-        ))
-        .map_err(|e| ReplayError::DynamicFieldError { err: e.to_string() })?;
-        match obj {
-            None => Ok(None),
-            Some(obj) => {
-                let obj = Object::try_from(obj)
-                    .map_err(|e| ReplayError::DynamicFieldError { err: e.to_string() })?;
-                Ok(Some(obj))
-            }
-        }
-    }
-}
-
-type EpochId = u64;
-
-// Eager loading of the epoch table from GQL.
-// Maps an epoch to data vital to trascation execution:
-// framework versions, protocol version, RGP, epoch start timestamp
-#[derive(Debug)]
-pub struct EpochStore {
-    data: BTreeMap<EpochId, EpochData>,
-}
-
-impl EpochStore {
-    fn eager(data: BTreeMap<EpochId, EpochData>) -> Self {
-        Self { data }
-    }
-
-    // TODO: implement `lazy` once the data is available in the indexer
-    fn lazy() -> Self {
-        Self {
-            data: BTreeMap::new(),
-        }
-    }
-
-    // Get the protocol config for an epoch
-    fn protocol_config(&self, epoch: u64, chain: Chain) -> Result<ProtocolConfig, ReplayError> {
-        let epoch = self
-            .data
-            .get(&epoch)
-            .ok_or(ReplayError::MissingDataForEpoch {
-                data: "ProtocolConfig".to_string(),
-                epoch,
-            })?;
-        Ok(ProtocolConfig::get_for_version(
-            ProtocolVersion::new(epoch.protocol_version),
-            chain,
-        ))
-    }
-
-    // Get the RGP for an epoch
-    fn rgp(&self, epoch: u64) -> Result<u64, ReplayError> {
-        let epoch = self
-            .data
-            .get(&epoch)
-            .ok_or(ReplayError::MissingDataForEpoch {
-                data: "RGP".to_string(),
-                epoch,
-            })?;
-        Ok(epoch.rgp)
-    }
-
-    // Get the start timestamp for an epoch
-    fn epoch_timestamp(&self, epoch: u64) -> Result<u64, ReplayError> {
-        let epoch = self
-            .data
-            .get(&epoch)
-            .ok_or(ReplayError::MissingDataForEpoch {
-                data: "timestamp".to_string(),
-                epoch,
-            })?;
-        Ok(epoch.start_timestamp)
+        todo!()
     }
 }
