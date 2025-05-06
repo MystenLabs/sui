@@ -5,7 +5,7 @@
 /// a 32-bit fractional part.
 #[
     deprecated(
-        note = b"Use `std::uq32_32` instead. If you need to convert from a `FixedPoint32` to a `UQ32_32`, you can use the `std::fixed_point32::get_raw_value` with `std::uq32_32::from_raw_value`.",
+        note = b"Use `std::uq32_32` instead. If you need to convert from a `FixedPoint32` to a `UQ32_32`, you can use the `std::fixed_point32::get_raw_value` with `std::uq32_32::from_raw`.",
     ),
 ]
 module std::fixed_point32;
