@@ -20,7 +20,6 @@ use fastcrypto::hash::MultisetHash;
 use itertools::Itertools;
 use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::CompiledModule;
-use move_command_line_common::error_bitset::ErrorBitset;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::ModuleId;
 use mysten_common::fatal;
@@ -57,7 +56,7 @@ use sui_types::crypto::RandomnessRound;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution::ExecutionTiming;
-use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
+use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::PackageStoreWithFallback;
 use sui_types::layout_resolver::into_struct_layout;
 use sui_types::layout_resolver::LayoutResolver;
@@ -85,9 +84,9 @@ use sui_config::genesis::Genesis;
 use sui_config::node::{DBCheckpointConfig, ExpensiveSafetyCheckConfig};
 use sui_framework::{BuiltInFramework, SystemPackage};
 use sui_json_rpc_types::{
-    Abort, AdditionalErrorInfo, DevInspectResults, DryRunTransactionBlockResponse, EventFilter,
-    SuiEvent, SuiMoveValue, SuiObjectDataFilter, SuiTransactionBlockData,
-    SuiTransactionBlockEffects, SuiTransactionBlockEvents, TransactionFilter,
+    DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent, SuiMoveValue,
+    SuiObjectDataFilter, SuiTransactionBlockData, SuiTransactionBlockEffects,
+    SuiTransactionBlockEvents, TransactionFilter,
 };
 use sui_macros::{fail_point, fail_point_async, fail_point_if};
 use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
@@ -121,6 +120,7 @@ use sui_types::messages_grpc::{
     ObjectInfoResponse, TransactionInfoRequest, TransactionInfoResponse, TransactionStatus,
 };
 use sui_types::metrics::{BytecodeVerifierMetrics, LimitsMetrics};
+use sui_types::move_package::Abort;
 use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
 use sui_types::storage::{
     BackingPackageStore, BackingStore, ObjectKey, ObjectOrTombstone, ObjectStore, WriteKind,
@@ -1954,29 +1954,6 @@ impl AuthorityState {
             .err()
             .and_then(|e| e.source().as_ref().map(|e| e.to_string()));
 
-        let abort_error = match &effects {
-            TransactionEffects::V2(effects) => match effects.status() {
-                ExecutionStatus::Failure {
-                    error: ExecutionFailureStatus::MoveAbort(move_location, code),
-                    ..
-                } => {
-                    let module = move_location.module.to_canonical_string(true);
-                    let (error_code, line) = match ErrorBitset::from_u64(*code) {
-                        Some(c) => (c.error_code().map(|c| c as u64), c.line_number()),
-                        None => (Some(*code), None),
-                    };
-                    Some(Abort {
-                        module_id: Some(module),
-                        function: move_location.function_name.clone(),
-                        line,
-                        error_code,
-                    })
-                }
-                _ => None,
-            },
-            _ => None,
-        };
-
         Ok((
             DryRunTransactionBlockResponse {
                 suggested_gas_price: self
@@ -2001,10 +1978,7 @@ impl AuthorityState {
                 )?,
                 object_changes,
                 balance_changes,
-                additional_error_info: AdditionalErrorInfo {
-                    abort_error,
-                    execution_error_source,
-                },
+                execution_error_source,
             },
             written_with_kind,
             effects,
