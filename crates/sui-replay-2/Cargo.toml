@@ -7,12 +7,15 @@ publish = false
 edition = "2021"
 
 [dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
 base64ct = "1.6.0"
 bcs.workspace = true
 clap.workspace = true
 chrono.workspace = true
 cynic.workspace = true
 cynic-codegen.workspace = true
+fastcrypto.workspace = true
 futures.workspace = true
 move-binary-format.workspace = true
 move-bytecode-source-map.workspace = true
@@ -22,22 +25,19 @@ move-disassembler.workspace = true
 move-ir-types.workspace = true
 move-trace-format.workspace = true
 prometheus.workspace = true
+reqwest = { workspace = true, features = ["json"] }
+serde.workspace = true
 similar.workspace = true
 sui-execution.workspace = true
-sui-graphql-client.workspace = true
 sui-framework.workspace = true
-sui-sdk-types.workspace = true
 sui-types.workspace = true
 telemetry-subscribers.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 
-[build-dependencies]
-sui-graphql-client-build.workspace = true
-
-[features]
-tracing = [
-    "sui-types/tracing",
-    "sui-execution/tracing",
-]
+# [features]
+# tracing = [
+#     "sui-types/tracing",
+#     "sui-execution/tracing",
+# ]
