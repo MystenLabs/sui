@@ -1,6 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
+
 use std::{
     collections::BTreeMap,
     ffi::OsString,
@@ -9,7 +10,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::bail;
 use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
 use serde_spanned::Spanned;
@@ -19,12 +19,12 @@ use toml_edit::{
 };
 
 use crate::{
-    dependency::{ManifestDependencyInfo, PinnedDependencyInfo},
+    dependency::{DependencySet, ManifestDependencyInfo, PinnedDependencyInfo, pin},
     errors::{Located, LockfileError, PackageError, PackageResult, with_file},
     flavor::MoveFlavor,
 };
 
-use super::{EnvironmentName, PackageName};
+use super::{EnvironmentName, PackageName, manifest::Manifest};
 
 #[derive(fmt::Debug, Serialize, Deserialize)]
 #[derive_where(Clone, Default)]
@@ -116,7 +116,7 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
         &self,
         path: impl AsRef<Path>,
         envs: BTreeMap<EnvironmentName, F::EnvironmentID>,
-    ) -> anyhow::Result<()> {
+    ) -> PackageResult<()> {
         let mut output: Lockfile<F> = self.clone();
         let (pubs, locals): (BTreeMap<_, _>, BTreeMap<_, _>) = output
             .published
@@ -169,6 +169,96 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
 
         toml.to_string()
     }
+
+    /// Return the pinned dependencies in the lockfile, including the overrides dependencies.
+    // TODO: This needs to be fixed after we finalize the new design
+    fn pinned_deps(&self) -> DependencySet<PinnedDependencyInfo<F>> {
+        let mut dep_set = DependencySet::new();
+
+        for (pkg_name, dep_info) in self.unpublished.dependencies.pinned.iter() {
+            dep_set.insert(None, pkg_name.clone(), dep_info.clone());
+        }
+
+        for (env, deps) in &self.unpublished.dep_overrides {
+            for (pkg_name, dep_info) in deps.pinned.iter() {
+                dep_set.insert(Some(env.clone()), pkg_name.clone(), dep_info.clone());
+            }
+        }
+
+        dep_set
+    }
+
+    /// Return the unpinned dependencies in the lockfile, including the overrides dependencies.
+    // TODO: This needs to be fixed after we finalize the new design
+    fn unpinned_deps(&self) -> DependencySet<ManifestDependencyInfo<F>> {
+        let mut dep_set = DependencySet::new();
+
+        for (pkg_name, dep_info) in self.unpublished.dependencies.unpinned.iter() {
+            dep_set.insert(None, pkg_name.clone(), dep_info.clone());
+        }
+
+        for (env, deps) in &self.unpublished.dep_overrides {
+            for (pkg_name, dep_info) in deps.unpinned.iter() {
+                dep_set.insert(Some(env.clone()), pkg_name.clone(), dep_info.clone());
+            }
+        }
+
+        dep_set
+    }
+
+    /// Compares the unpinned dependencies in the lockfile to [`deps`] and re-pins if they changed.
+    // TODO: This needs to be fixed after we finalize the new design
+    pub async fn update_lockfile(
+        &mut self,
+        flavor: &F,
+        manifest: &Manifest<F>,
+    ) -> PackageResult<()> {
+        let lockfile_deps = &self.unpinned_deps();
+        let lockfile_pinned_deps = &self.pinned_deps();
+
+        let mut to_pin: DependencySet<ManifestDependencyInfo<F>> = DependencySet::new();
+        let mut pinned_dep_infos: DependencySet<PinnedDependencyInfo<F>> = DependencySet::new();
+        // find the dependencies that need to be pinned
+        for (env, pkg, manifest_dep) in manifest.dependencies() {
+            let lockfile_dep = lockfile_deps.get(&env, &pkg);
+            if let Some(lockfile_dep) = lockfile_dep {
+                if lockfile_dep != &manifest_dep {
+                    to_pin.insert(env.clone(), pkg.clone(), manifest_dep.clone());
+                } else {
+                    // TODO: handle error with proper span and file path
+                    let Some(pinned_dep_info) = lockfile_pinned_deps.get(&env, &pkg) else {
+                        return Err(PackageError::Generic(format!(
+                            "Broken lockfile. It does not contain pinned dependency for {env:?} {pkg:?}"
+                        )));
+                    };
+                    pinned_dep_infos.insert(env.clone(), pkg.clone(), pinned_dep_info.clone());
+                }
+            } else {
+                to_pin.insert(env.clone(), pkg.clone(), manifest_dep.clone());
+            }
+        }
+
+        // pin the deps that need to be pinned
+        let mut pinned_deps = pin(flavor, to_pin, manifest.environments()).await?;
+        pinned_deps.extend(pinned_dep_infos);
+
+        // convert now from `DependencySet<PinnedDependencyInfo<F>>` to unpublished pinned
+        // dependencies
+        // TODO: probably we want a DependencySet instead of UnpublishedTable in the Lockfile types.
+        self.unpublished = UnpublishedTable::from_deps(pinned_deps, manifest.dependencies());
+
+        Ok(())
+    }
+
+    /// Return the published metadata for all environments.
+    fn published(&self) -> &BTreeMap<EnvironmentName, Publication<F>> {
+        &self.published
+    }
+
+    /// Return the published metadata for a specific environment.
+    pub fn published_for_env(&self, env: &EnvironmentName) -> Option<Publication<F>> {
+        self.published.get(env).cloned()
+    }
 }
 
 impl<F: MoveFlavor + fmt::Debug> Publication<F> {
@@ -182,6 +272,58 @@ impl<F: MoveFlavor + fmt::Debug> Publication<F> {
             "# Generated by move; do not edit\n# This file should not be checked in\n\n",
         );
         toml.to_string()
+    }
+}
+
+// TODO: probably we want a DependencySet instead of UnpublishedTable in the Lockfile types.
+impl<F: MoveFlavor> UnpublishedTable<F> {
+    pub fn from_deps(
+        pinned_deps: DependencySet<PinnedDependencyInfo<F>>,
+        unpinned_deps: DependencySet<ManifestDependencyInfo<F>>,
+    ) -> Self {
+        let mut dependencies = UnpublishedDependencies::default();
+
+        let mut dep_overrides: BTreeMap<EnvironmentName, UnpublishedDependencies<F>> =
+            BTreeMap::new();
+
+        for (env, pkg, dep) in pinned_deps {
+            match env {
+                // update dep overrides if there's an env
+                Some(env) => {
+                    dep_overrides
+                        .entry(env)
+                        .or_default()
+                        .pinned
+                        .insert(pkg, dep);
+                }
+                // update default pinned deps
+                None => {
+                    dependencies.pinned.insert(pkg, dep);
+                }
+            }
+        }
+
+        for (env, pkg, dep) in unpinned_deps {
+            match env {
+                // update dep overrides if there's an env
+                Some(env) => {
+                    dep_overrides
+                        .entry(env)
+                        .or_default()
+                        .unpinned
+                        .insert(pkg, dep);
+                }
+                // update default unpinned deps
+                None => {
+                    dependencies.unpinned.insert(pkg, dep);
+                }
+            }
+        }
+
+        Self {
+            dependencies,
+            dep_overrides,
+        }
     }
 }
 

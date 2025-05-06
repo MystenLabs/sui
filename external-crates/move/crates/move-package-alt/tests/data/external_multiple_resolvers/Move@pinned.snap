@@ -1,0 +1,12 @@
+---
+source: crates/move-package-alt/tests/pinning_tests.rs
+---
+{
+  "mock1": {
+    "local": "for-res-1"
+  },
+  "mock2": {
+    "local": "for-res-2"
+  },
+  "overrides": {}
+}

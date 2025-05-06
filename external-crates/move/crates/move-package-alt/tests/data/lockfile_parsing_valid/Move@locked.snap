@@ -1,0 +1,102 @@
+---
+source: crates/move-package-alt/tests/test_runner.rs
+---
+Lockfile {
+    unpublished: UnpublishedTable {
+        dependencies: UnpublishedDependencies {
+            pinned: {
+                "bar": Git(
+                    PinnedGitDependency {
+                        repo: "",
+                        rev: "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0",
+                        path: "",
+                    },
+                ),
+                "foo": Local(
+                    LocalDependency {
+                        local: "../foo",
+                    },
+                ),
+            },
+            unpinned: {
+                "bar": External(
+                    ExternalDependency {
+                        resolver: "mvr",
+                        data: String(
+                            "@protocol/bar",
+                        ),
+                    },
+                ),
+                "foo": Local(
+                    LocalDependency {
+                        local: "../foo",
+                    },
+                ),
+            },
+        },
+        dep_overrides: {
+            "mainnet": UnpublishedDependencies {
+                pinned: {
+                    "foo": Git(
+                        PinnedGitDependency {
+                            repo: "",
+                            rev: "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0",
+                            path: "",
+                        },
+                    ),
+                    "std": Git(
+                        PinnedGitDependency {
+                            repo: "",
+                            rev: "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0",
+                            path: "",
+                        },
+                    ),
+                },
+                unpinned: {
+                    "foo": Git(
+                        UnpinnedGitDependency {
+                            repo: "",
+                            rev: Some(
+                                "rev",
+                            ),
+                            path: "",
+                        },
+                    ),
+                },
+            },
+        },
+    },
+    published: {
+        "mainnet": Publication {
+            metadata: (),
+            dependencies: {
+                "std": Git(
+                    PinnedGitDependency {
+                        repo: "",
+                        rev: "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0",
+                        path: "",
+                    },
+                ),
+            },
+        },
+        "testnet": Publication {
+            metadata: (),
+            dependencies: {
+                "std": Git(
+                    PinnedGitDependency {
+                        repo: "",
+                        rev: "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0",
+                        path: "",
+                    },
+                ),
+                "sui": Git(
+                    PinnedGitDependency {
+                        repo: "",
+                        rev: "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0",
+                        path: "",
+                    },
+                ),
+            },
+        },
+    },
+}
