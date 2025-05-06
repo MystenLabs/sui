@@ -2,6 +2,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+mod dependency_set;
+// TODO: this shouldn't be pub; need to move resolver error into resolver module
+pub mod external;
+mod git;
+mod local;
+
+pub use dependency_set::DependencySet;
+
 use std::{
     collections::BTreeMap,
     fmt::{self, Debug},
@@ -27,14 +35,6 @@ use crate::{
 use external::ExternalDependency;
 use git::{GitRepo, PinnedGitDependency, UnpinnedGitDependency};
 use local::LocalDependency;
-
-mod dependency_set;
-// TODO: this shouldn't be pub; need to move resolver error into resolver module
-pub mod external;
-mod git;
-mod local;
-
-pub use dependency_set::DependencySet;
 
 // TODO (potential refactor): consider using objects for manifest dependencies (i.e. `Box<dyn UnpinnedDependency>`).
 //      part of the complexity here would be deserialization - probably need a flavor-specific
@@ -261,14 +261,28 @@ fn add_implicit_deps<F: MoveFlavor>(
     todo!()
 }
 
-/// Ensure that all dependencies are stored locally and return the paths to their contents. The
-/// returned map is guaranteed to have the same keys as [deps].
-fn fetch<F: MoveFlavor>(
+/// Fetch and ensure that all dependencies are stored locally and return the paths to their
+/// contents. The returned map is guaranteed to have the same keys as [deps].
+async fn fetch<F: MoveFlavor>(
     deps: DependencySet<PinnedDependencyInfo<F>>,
 ) -> PackageResult<DependencySet<PathBuf>> {
-    // TODO: check if dependency is a Move project.
+    use PinnedDependencyInfo as P;
 
-    todo!()
+    let mut paths = DependencySet::new();
+
+    for (env, package_name, dep) in deps.into_iter() {
+        let path = match dep {
+            P::Git(dep) => {
+                let repo = GitRepo::from(dep);
+                repo.fetch().await?
+            }
+            P::Local(dep) => dep.path(),
+            P::FlavorSpecific(dep) => dep.fetch(),
+        };
+        paths.insert(env, package_name, path);
+    }
+
+    Ok(paths)
 }
 
 // TODO: unit tests
