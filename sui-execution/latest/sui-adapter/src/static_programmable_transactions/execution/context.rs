@@ -19,7 +19,7 @@ use crate::{
         execution::values::{
             self, ByteValue, InputObjectMetadata, InputObjectValue, InputValue, borrow_value,
         },
-        typing::ast::{self as T, Type},
+        typing::ast::{self as T, Argument, Type},
     },
 };
 use indexmap::IndexMap;
@@ -87,6 +87,11 @@ macro_rules! charge_gas {
     ($context:ident, $case:ident, $value_view:expr) => {{ charge_gas_!($context.gas_charger, $context.env, $case, $value_view) }};
 }
 
+enum LocationValue<'a> {
+    Loaded(&'a mut Option<Value>),
+    Bytes(&'a mut InputValue, Type),
+}
+
 #[derive(Copy, Clone)]
 enum UsageKind {
     Move,
@@ -99,7 +104,7 @@ pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
     pub env: &'env Env<'pc, 'vm, 'state, 'linkage>,
     /// Metrics for reporting exceeded limits
     pub metrics: Arc<LimitsMetrics>,
-    pub native_extensions: NativeContextExtensions<'state>,
+    pub native_extensions: NativeContextExtensions<'env>,
     /// A shared transaction context, contains transaction digest information and manages the
     /// creation of new object IDs
     pub tx_context: Rc<RefCell<TxContext>>,
@@ -131,7 +136,6 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     ) -> Result<Self, ExecutionError>
     where
         'pc: 'state,
-        'env: 'state,
     {
         let mut input_object_map = BTreeMap::new();
         let inputs = inputs
@@ -391,49 +395,79 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         Ok(())
     }
 
+    /// NOTE! This does not charge gas and should not be used directly. It is exposed for
+    /// dev-inspect
+    fn location_value<'a>(
+        &'a mut self,
+        location: T::Location,
+        ty: Type,
+    ) -> Result<
+        (
+            &'a mut GasCharger,
+            &'env Env<'pc, 'vm, 'state, 'linkage>,
+            LocationValue<'a>,
+        ),
+        ExecutionError,
+    > {
+        let v = match location {
+            T::Location::GasCoin => {
+                todo!("better error here? How do we handle if there is no gas coin?");
+                let gas = unwrap!(self.gas.as_mut(), "Gas coin not provided");
+                LocationValue::Loaded(&mut gas.value)
+            }
+            T::Location::Result(i, j) => {
+                let result = unwrap!(self.results.get_mut(i as usize), "bounds already verified");
+                let v = unwrap!(result.get_mut(j as usize), "bounds already verified");
+                LocationValue::Loaded(v)
+            }
+            T::Location::Input(i) => {
+                let v = unwrap!(self.inputs.get_mut(i as usize), "bounds already verified");
+                match v {
+                    InputValue::Object(v) => LocationValue::Loaded(&mut v.value),
+                    InputValue::Fixed(v) => LocationValue::Loaded(v),
+                    InputValue::Bytes(_) => LocationValue::Bytes(v, ty),
+                }
+            }
+        };
+        Ok((self.gas_charger, self.env, v))
+    }
+
     fn location(
         &mut self,
         usage: UsageKind,
         location: T::Location,
         ty: Type,
     ) -> Result<Value, ExecutionError> {
-        let value_opt = match location {
-            T::Location::GasCoin => {
-                todo!("better error here? How do we handle if there is no gas coin?");
-                let gas = unwrap!(self.gas.as_mut(), "Gas coin not provided");
-                &mut gas.value
-            }
-            T::Location::Result(i, j) => {
-                let result = unwrap!(self.results.get_mut(i as usize), "bounds already verified");
-                let v = unwrap!(result.get_mut(j as usize), "bounds already verified");
-                v
-            }
-            T::Location::Input(i) => {
-                let v = unwrap!(self.inputs.get_mut(i as usize), "bounds already verified");
-                match v {
-                    InputValue::Object(v) => &mut v.value,
-                    InputValue::Fixed(v) => v,
-                    InputValue::Bytes(bytes) => match usage {
-                        UsageKind::Move | UsageKind::Borrow(true) => {
-                            let value = load_byte_value(self.gas_charger, self.env, bytes, ty)?;
-                            *v = InputValue::Fixed(Some(value));
-                            match v {
-                                InputValue::Fixed(v) => v,
-                                _ => invariant_violation!("Expected fixed value"),
-                            }
-                        }
-                        UsageKind::Copy | UsageKind::Borrow(false) => {
-                            return load_byte_value(self.gas_charger, self.env, bytes, ty);
-                        }
-                    },
+        let (gas_charger, env, lv) = self.location_value(location, ty)?;
+        let value_opt = match lv {
+            LocationValue::Loaded(v) => v,
+            LocationValue::Bytes(v, ty) => match usage {
+                UsageKind::Move | UsageKind::Borrow(true) => {
+                    let bytes = match v {
+                        InputValue::Bytes(bytes) => bytes,
+                        _ => invariant_violation!("Expected bytes"),
+                    };
+                    let value = load_byte_value(gas_charger, env, bytes, ty)?;
+                    *v = InputValue::Fixed(Some(value));
+                    match v {
+                        InputValue::Fixed(v) => v,
+                        _ => invariant_violation!("Expected fixed value"),
+                    }
                 }
-            }
+                UsageKind::Copy | UsageKind::Borrow(false) => {
+                    let bytes = match v {
+                        InputValue::Bytes(bytes) => bytes,
+                        _ => invariant_violation!("Expected bytes"),
+                    };
+                    return load_byte_value(gas_charger, env, bytes, ty);
+                }
+            },
         };
         Ok(match usage {
             UsageKind::Move => unwrap!(value_opt.take(), "use after move"),
             UsageKind::Copy => {
                 let value = unwrap!(value_opt.as_ref(), "use after move");
-                copy_value(self.gas_charger, self.env, value)?
+                copy_value(gas_charger, env, value)?
             }
             UsageKind::Borrow(_) => {
                 let value = unwrap!(value_opt.as_ref(), "use after move");
@@ -548,6 +582,91 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             .delete_id(id)
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
         Ok(amount)
+    }
+
+    pub fn location_updates(
+        &self,
+        args: Vec<(T::Location, Type)>,
+    ) -> Result<Vec<(sui_types::transaction::Argument, Vec<u8>, TypeTag)>, ExecutionError> {
+        args.into_iter()
+            .filter_map(|(location, ty)| self.location_update(location, ty).transpose())
+            .collect()
+    }
+
+    fn location_update(
+        &self,
+        location: T::Location,
+        ty: Type,
+    ) -> Result<Option<(sui_types::transaction::Argument, Vec<u8>, TypeTag)>, ExecutionError> {
+        use sui_types::transaction::Argument as TxArgument;
+        let ty = match ty {
+            Type::Reference(_, inner) => (*inner).clone(),
+            ty => ty,
+        };
+        let Ok(tag): Result<TypeTag, _> = ty.try_into() else {
+            invariant_violation!("unable to generate type tag from type")
+        };
+        let layout = { todo!("LOADING") };
+        let (_, _, lv) = self.location_value(location, ty)?;
+        let value = match lv {
+            LocationValue::Loaded(v) => match v.as_ref() {
+                Some(v) => v,
+                None => return Ok(None),
+            },
+            LocationValue::Bytes(_, _) => return Ok(None),
+        };
+        let Some(bytes) = value.simple_serialize(&layout) else {
+            invariant_violation!("Failed to serialize Move value");
+        };
+        let arg = match location {
+            T::Location::GasCoin => TxArgument::GasCoin,
+            T::Location::Input(i) => TxArgument::Input(i),
+            T::Location::Result(i, j) => TxArgument::NestedResult(i, j),
+        };
+        Ok(Some((arg, bytes, tag)))
+    }
+
+    pub fn tracked_results(
+        &self,
+        results: &[Value],
+        result_tys: &T::ResultType,
+    ) -> Result<Vec<(Vec<u8>, TypeTag)>, ExecutionError> {
+        assert_invariant!(
+            results.len() == result_tys.len(),
+            "results and result types should match"
+        );
+        results
+            .iter()
+            .zip(result_tys)
+            .map(|(v, ty)| self.tracked_result(v, ty.clone()))
+            .collect()
+    }
+
+    fn tracked_result(
+        &self,
+        result: &Value,
+        ty: Type,
+    ) -> Result<(Vec<u8>, TypeTag), ExecutionError> {
+        let layout = todo!("LOADING");
+        let (bytes, ty) = match ty {
+            Type::Reference(_, inner) => {
+                let v = values::read_ref(values::copy_value(result)?)?;
+                let Some(bytes) = result.simple_serialize(&layout) else {
+                    invariant_violation!("Failed to serialize Move value");
+                };
+                (bytes, (*inner).clone())
+            }
+            _ => {
+                let Some(bytes) = result.simple_serialize(&layout) else {
+                    invariant_violation!("Failed to serialize Move value");
+                };
+                (bytes, ty)
+            }
+        };
+        let Ok(tag): Result<TypeTag, _> = ty.try_into() else {
+            invariant_violation!("unable to generate type tag from type")
+        };
+        Ok((bytes, tag))
     }
 }
 

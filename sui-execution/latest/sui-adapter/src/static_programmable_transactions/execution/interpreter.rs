@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    execution_value::ExecutionState,
+    execution_mode::ExecutionMode,
     gas_charger::GasCharger,
     sp,
     static_programmable_transactions::{
@@ -24,20 +24,20 @@ use sui_types::{
 };
 use tracing::instrument;
 
-pub fn execute<'env, 'pc, 'vm, 'state, 'linkage>(
+pub fn execute<'env, 'pc, 'vm, 'state, 'linkage, Mode: ExecutionMode>(
     env: &'env mut Env<'pc, 'vm, 'state, 'linkage>,
     metrics: Arc<LimitsMetrics>,
     tx_context: Rc<RefCell<TxContext>>,
     gas_charger: &mut GasCharger,
     ast: T::Transaction,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
-) -> ResultWithTimings<(), ExecutionError>
+) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError>
 where
     'pc: 'state,
     'env: 'state,
 {
     let mut timings = vec![];
-    let result = execute_inner(
+    let result = execute_inner::<Mode>(
         &mut timings,
         env,
         metrics,
@@ -53,7 +53,7 @@ where
     }
 }
 
-pub fn execute_inner<'env, 'pc, 'vm, 'state, 'linkage>(
+pub fn execute_inner<'env, 'pc, 'vm, 'state, 'linkage, Mode: ExecutionMode>(
     timings: &mut Vec<ExecutionTiming>,
     env: &'env mut Env<'pc, 'vm, 'state, 'linkage>,
     metrics: Arc<LimitsMetrics>,
@@ -61,17 +61,22 @@ pub fn execute_inner<'env, 'pc, 'vm, 'state, 'linkage>(
     gas_charger: &mut GasCharger,
     ast: T::Transaction,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
-) -> Result<(), ExecutionError>
+) -> Result<Mode::ExecutionResults, ExecutionError>
 where
     'pc: 'state,
-    'env: 'state,
 {
-    let state_view: *mut dyn ExecutionState = env.state_view;
     let T::Transaction { inputs, commands } = ast;
     let mut context = Context::new(env, metrics, tx_context, gas_charger, inputs)?;
+    let mut mode_results = Mode::empty_results();
     for (sp!(idx, command), tys) in commands {
         let start = Instant::now();
-        if let Err(err) = execute_command(&mut context, command, tys, trace_builder_opt.as_mut()) {
+        if let Err(err) = execute_command::<Mode>(
+            &mut context,
+            &mut mode_results,
+            command,
+            tys,
+            trace_builder_opt.as_mut(),
+        ) {
             let object_runtime = context.object_runtime()?;
             // We still need to record the loaded child objects for replay
             let loaded_runtime_objects = object_runtime.loaded_runtime_objects();
@@ -79,8 +84,8 @@ where
             drop(context);
             // TODO wtf is going on with the borrow checker here. 'state is bound into the object
             // runtime, but its since been dropped. what gives with this error?
-            let state_view: &mut dyn ExecutionState = unsafe { state_view.as_mut().unwrap() };
-            state_view.save_loaded_runtime_objects(loaded_runtime_objects);
+            env.state_view
+                .save_loaded_runtime_objects(loaded_runtime_objects);
             timings.push(ExecutionTiming::Abort(start.elapsed()));
             return Err(err.with_command_index(idx as usize));
         };
@@ -98,29 +103,39 @@ where
 
     // apply changes
     let finished = context.finish();
-    // TODO wtf is going on with the borrow checker here
-    let state_view: &mut dyn ExecutionState = unsafe { state_view.as_mut().unwrap() };
     // Save loaded objects for debug. We dont want to lose the info
-    state_view.save_loaded_runtime_objects(loaded_runtime_objects);
-    state_view.save_wrapped_object_containers(wrapped_object_containers);
-    state_view.record_execution_results(finished?);
-    Ok(())
+    env.state_view
+        .save_loaded_runtime_objects(loaded_runtime_objects);
+    env.state_view
+        .save_wrapped_object_containers(wrapped_object_containers);
+    env.state_view.record_execution_results(finished?);
+    Ok(mode_results)
 }
 
 /// Execute a single command
 #[instrument(level = "trace", skip_all)]
-fn execute_command(
+fn execute_command<Mode: ExecutionMode>(
     context: &mut Context,
+    mode_results: &mut Mode::ExecutionResults,
     command: T::Command_,
-    _result_tys: T::ResultType,
+    result_tys: T::ResultType,
     trace_builder_opt: Option<&mut MoveTraceBuilder>,
 ) -> Result<(), ExecutionError> {
+    let mut args_to_update = vec![];
     let result = match command {
         T::Command_::MoveCall(move_call) => {
             let T::MoveCall {
                 function,
                 arguments,
             } = *move_call;
+            if Mode::TRACK_EXECUTION {
+                args_to_update.extend(
+                    arguments
+                        .iter()
+                        .filter(|arg| matches!(&arg.value.1, T::Type::Reference(/* mut */ true, _)))
+                        .map(|sp!(_, (arg, ty))| (arg.location(), ty.clone())),
+                )
+            }
             let arguments = context.arguments(arguments)?;
             context.vm_move_call(function, arguments, trace_builder_opt)?
         }
@@ -144,6 +159,9 @@ fn execute_command(
         }
         T::Command_::SplitCoins(_, coin, amounts) => {
             // TODO should we just call a Move function?
+            if Mode::TRACK_EXECUTION {
+                args_to_update.push((coin.value.0.location(), coin.value.1.clone()));
+            }
             let coin_ref: Value = context.argument(coin)?;
             let amount_values: Vec<u64> = context.arguments(amounts)?;
             let mut total: u64 = 0;
@@ -172,6 +190,9 @@ fn execute_command(
         }
         T::Command_::MergeCoins(_, target, coins) => {
             // TODO should we just call a Move function?
+            if Mode::TRACK_EXECUTION {
+                args_to_update.push((target.value.0.location(), target.value.1.clone()));
+            }
             let target_ref: Value = context.argument(target)?;
             let coins = context.arguments(coins)?;
             let amounts = coins
@@ -202,6 +223,11 @@ fn execute_command(
         T::Command_::Publish(..) => todo!("RUNTIME"),
         T::Command_::Upgrade(..) => todo!("RUNTIME"),
     };
+    if Mode::TRACK_EXECUTION {
+        let argument_updates = context.location_updates(args_to_update)?;
+        let command_result = context.tracked_results(&result, &result_tys)?;
+        Mode::finish_command_v2(mode_results, argument_updates, command_result)?;
+    }
     context.result(result)?;
     Ok(())
 }

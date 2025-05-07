@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{execution_value::ExecutionState, gas_charger::GasCharger};
+use crate::{
+    execution_mode::ExecutionMode, execution_value::ExecutionState, gas_charger::GasCharger,
+};
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_runtime::move_vm::MoveVM;
 use std::{cell::RefCell, rc::Rc, sync::Arc};
@@ -20,7 +22,7 @@ pub mod loading;
 pub mod spanned;
 pub mod typing;
 
-pub fn execute<'pc, 'vm, 'state, 'linkage>(
+pub fn execute<'pc, 'vm, 'state, 'linkage, Mode: ExecutionMode>(
     protocol_config: &'pc ProtocolConfig,
     vm: &'vm MoveVM,
     state_view: &'state mut dyn ExecutionState,
@@ -30,13 +32,13 @@ pub fn execute<'pc, 'vm, 'state, 'linkage>(
     gas_charger: &mut GasCharger,
     txn: ProgrammableTransaction,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
-) -> ResultWithTimings<(), ExecutionError> {
+) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
     use crate::static_programmable_transactions::env::Env;
 
     let mut env = Env::new(protocol_config, vm, state_view, linkage_view);
     let txn = loading::translate::transaction(&env, txn).map_err(|e| (e, vec![]))?;
-    let txn = typing::translate_and_verify(&env, txn).map_err(|e| (e, vec![]))?;
-    execution::interpreter::execute(
+    let txn = typing::translate_and_verify::<Mode>(&env, txn).map_err(|e| (e, vec![]))?;
+    execution::interpreter::execute::<Mode>(
         &mut env,
         metrics,
         tx_context,

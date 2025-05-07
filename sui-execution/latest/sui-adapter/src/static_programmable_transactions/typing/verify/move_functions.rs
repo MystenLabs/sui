@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::execution_mode::ExecutionMode;
 use crate::programmable_transactions::execution::check_private_generics;
 
 use crate::static_programmable_transactions::typing::ast::InputArg;
@@ -98,18 +99,20 @@ impl IsDirty {
 /// Checks the following
 /// - entry function taint rules
 /// - valid visibility for move function calls
+///   - Can be disabled under certain execution modes
 /// - private generics rules for move function calls
 /// - no references returned from move calls
-pub fn verify(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
+///    - Can be disabled under certain execution modes
+pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
     let T::Transaction { inputs, commands } = txn;
     let mut context = Context::new(inputs);
     for (c, result) in commands {
-        command(env, &mut context, c, result)?;
+        command::<Mode>(env, &mut context, c, result)?;
     }
     Ok(())
 }
 
-fn command(
+fn command<Mode: ExecutionMode>(
     env: &Env,
     context: &mut Context,
     command: &T::Command,
@@ -117,7 +120,7 @@ fn command(
 ) -> Result<(), ExecutionError> {
     match &command.value {
         T::Command_::MoveCall(call) => {
-            let result_dirties = move_call(env, context, call, result)?;
+            let result_dirties = move_call::<Mode>(env, context, call, result)?;
             debug_assert!(result_dirties.len() == result.len());
             context.results.push(result_dirties);
         }
@@ -172,7 +175,7 @@ fn argument(_env: &Env, context: &mut Context, arg: &T::Argument) -> bool {
     context.is_dirty(arg)
 }
 
-fn move_call(
+fn move_call<Mode: ExecutionMode>(
     env: &Env,
     context: &mut Context,
     call: &T::MoveCall,
@@ -182,9 +185,9 @@ fn move_call(
         function,
         arguments: args,
     } = call;
-    check_signature(function)?;
+    check_signature::<Mode>(function)?;
     check_private_generics(&function.runtime_id, function.name.as_ident_str())?;
-    let (_vis, is_entry) = check_visibility(env, function)?;
+    let (_vis, is_entry) = check_visibility::<Mode>(env, function)?;
     let arg_dirties = args
         .iter()
         .map(|arg| argument(env, context, arg))
@@ -207,28 +210,33 @@ fn move_call(
     Ok(vec![IsDirty::Fixed { is_dirty }; result.len()])
 }
 
-fn check_signature(function: &T::LoadedFunction) -> Result<(), ExecutionError> {
-    fn check_return_type(idx: usize, return_type: &T::Type) -> Result<(), ExecutionError> {
+fn check_signature<Mode: ExecutionMode>(
+    function: &T::LoadedFunction,
+) -> Result<(), ExecutionError> {
+    fn check_return_type<Mode: ExecutionMode>(
+        idx: usize,
+        return_type: &T::Type,
+    ) -> Result<(), ExecutionError> {
         match return_type {
-            // Type::Reference(_) | Type::MutableReference(inner)
-            //     if Mode::allow_arbitrary_values() => Ok(()),
             Type::Reference(_, _) => {
-                debug_assert!(false, "TODO implement mode for arbitrary values");
-                return Err(ExecutionError::from_kind(
-                    ExecutionErrorKind::InvalidPublicFunctionReturnType { idx: idx as u16 },
-                ));
+                if !Mode::allow_arbitrary_values() {
+                    return Err(ExecutionError::from_kind(
+                        ExecutionErrorKind::InvalidPublicFunctionReturnType { idx: idx as u16 },
+                    ));
+                }
+                todo!("RUNTIME"); // can we support this?
             }
             t => t,
         };
         Ok(())
     }
     for (idx, ty) in function.signature.return_.iter().enumerate() {
-        check_return_type(idx, ty)?;
+        check_return_type::<Mode>(idx, ty)?;
     }
     Ok(())
 }
 
-fn check_visibility(
+fn check_visibility<Mode: ExecutionMode>(
     env: &Env,
     function: &T::LoadedFunction,
 ) -> Result<(Visibility, /* is_entry */ bool), ExecutionError> {
@@ -251,15 +259,14 @@ fn check_visibility(
         (Visibility::Public, true) => (),
         // can call public
         (Visibility::Public, false) => (),
-        // (Visibility::Private | Visibility::Friend, false)
-        // if Mode::allow_arbitrary_function_calls() =>
-        // (),
         // cannot call private or friend if not entry
         (Visibility::Private | Visibility::Friend, false) => {
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::NonEntryFunctionInvoked,
-                "Can only call `entry` or `public` functions",
-            ));
+            if !Mode::allow_arbitrary_function_calls() {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::NonEntryFunctionInvoked,
+                    "Can only call `entry` or `public` functions",
+                ));
+            }
         }
     };
     Ok((visibility, is_entry))

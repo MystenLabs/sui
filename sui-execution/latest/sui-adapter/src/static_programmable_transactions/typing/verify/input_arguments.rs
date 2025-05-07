@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    execution_mode::ExecutionMode,
     programmable_transactions::execution::{PrimitiveArgumentLayout, bcs_argument_validate},
     sp,
     static_programmable_transactions::{
@@ -56,15 +57,16 @@ impl Context {
 /// Verifies two properties for input objects:
 /// 1. That the `Pure` inputs can be serialized to the type inferred and that the type is
 ///    permissible
+///    - Can be relaxed under certain execution modes
 /// 2. That any `Object` arguments are used validly. This means mutable references are taken only
 ///    on mutable objects. And that the gas coin is only taken by value in transfer objects
-pub fn verify(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
+pub fn verify<Mode: ExecutionMode>(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
     let T::Transaction { inputs, commands } = txn;
     for (arg, ty) in inputs {
         match ty {
             T::InputType::Bytes(constraints) => {
                 for (constraint, &(command_idx, arg_idx)) in constraints {
-                    check_constraint(arg_idx, arg, constraint)
+                    check_constraint::<Mode>(arg_idx, arg, constraint)
                         .map_err(|e| e.with_command_index(command_idx as usize))?;
                 }
             }
@@ -82,13 +84,13 @@ pub fn verify(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
 // Pure bytes
 //**************************************************************************************************
 
-fn check_constraint(
+fn check_constraint<Mode: ExecutionMode>(
     command_arg_idx: u16,
     arg: &InputArg,
     constraint: &Type,
 ) -> Result<(), ExecutionError> {
     match arg {
-        InputArg::Pure(bytes) => check_pure_bytes(command_arg_idx, bytes, constraint),
+        InputArg::Pure(bytes) => check_pure_bytes::<Mode>(command_arg_idx, bytes, constraint),
         InputArg::Receiving(_) => check_receiving(command_arg_idx, constraint),
         InputArg::Object(
             ObjectArg::ImmObject(_) | ObjectArg::OwnedObject(_) | ObjectArg::SharedObject { .. },
@@ -98,12 +100,18 @@ fn check_constraint(
     }
 }
 
-fn check_pure_bytes(
+fn check_pure_bytes<Mode: ExecutionMode>(
     command_arg_idx: u16,
     bytes: &[u8],
     constraint: &Type,
 ) -> Result<(), ExecutionError> {
-    debug_assert!(false, "TODO implement mode for arbitrary values");
+    if Mode::allow_arbitrary_values() {
+        assert_invariant!(
+            !matches!(constraint, Type::Reference(_, _)),
+            "references should not be added as a constraint"
+        );
+        return Ok(());
+    }
     let Some(layout) = primitive_serialization_layout(constraint)? else {
         let msg = format!(
             "Non-primitive argument at index {command_arg_idx}. If it is an object, it must be \
