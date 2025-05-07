@@ -124,7 +124,7 @@ fun test_convert_to_fungible_staked_sui_fail_too_early() {
 }
 
 #[test]
-#[expected_failure(abort_code = staking_pool::EPoolPreactive)]
+#[expected_failure(abort_code = staking_pool::EPoolPreactiveOrInactive)]
 fun test_convert_to_fungible_staked_sui_fail_too_early_preactive() {
     let mut scenario = test_scenario::begin(@0x0);
     let mut staking_pool = staking_pool::new(scenario.ctx());
@@ -138,6 +138,33 @@ fun test_convert_to_fungible_staked_sui_fail_too_early_preactive() {
     );
 
     scenario.skip_to_epoch(activation_epoch);
+    let fungible_staked_sui = staking_pool.convert_to_fungible_staked_sui(
+        staked_sui,
+        scenario.ctx(),
+    );
+
+    destroy(staking_pool);
+    destroy(fungible_staked_sui);
+
+    scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = staking_pool::EPoolPreactiveOrInactive)]
+fun test_convert_to_fungible_staked_sui_fail_too_early_inactive() {
+    let mut scenario = test_scenario::begin(@0x0);
+    let mut staking_pool = staking_pool::new(scenario.ctx());
+
+    let sui = balance::create_for_testing(1_000_000_000);
+    let activation_epoch = scenario.ctx().epoch() + 1;
+    let staked_sui = staking_pool.request_add_stake(
+        sui,
+        activation_epoch,
+        scenario.ctx(),
+    );
+
+    scenario.skip_to_epoch(activation_epoch);
+    staking_pool.deactivate_staking_pool(0);
     let fungible_staked_sui = staking_pool.convert_to_fungible_staked_sui(
         staked_sui,
         scenario.ctx(),
