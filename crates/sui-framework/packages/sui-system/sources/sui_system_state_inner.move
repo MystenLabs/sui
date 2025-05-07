@@ -1112,6 +1112,11 @@ public(package) fun validators(self: &SuiSystemStateInnerV2): &ValidatorSet {
 }
 
 #[test_only]
+public(package) fun validators_mut(self: &mut SuiSystemStateInnerV2): &mut ValidatorSet {
+    &mut self.validators
+}
+
+#[test_only]
 /// Return the currently active validator by address
 public(package) fun active_validator_by_address(
     self: &SuiSystemStateInnerV2,
