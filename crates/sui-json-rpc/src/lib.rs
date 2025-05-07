@@ -1,9 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::SocketAddr;
-use std::sync::Arc;
-
 use axum::body::Body;
 use axum::http;
 use hyper::Request;
@@ -11,6 +8,9 @@ use jsonrpsee::RpcModule;
 use metrics::Metrics;
 use metrics::MetricsLayer;
 use prometheus::Registry;
+use std::net::SocketAddr;
+use std::sync::Arc;
+use std::time::Duration;
 use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_core::traffic_controller::TrafficController;
 use sui_types::traffic_control::PolicyConfig;
@@ -164,6 +164,7 @@ impl JsonRpcServerBuilder {
         std::mem::forget(server_handle);
 
         let rpc_middleware = jsonrpsee::server::middleware::rpc::RpcServiceBuilder::new()
+            .layer_fn(move |s| TimeoutLayer::new(s, Duration::from_secs(60)))
             .layer_fn(move |s| MetricsLayer::new(s, metrics.clone()))
             .layer_fn(move |s| TrafficControllerService::new(s, traffic_controller.clone()));
         let service_builder = jsonrpsee::server::ServerBuilder::new()
@@ -284,6 +285,7 @@ where
     fn rpc_doc_module() -> Module;
 }
 
+use crate::metrics::TimeoutLayer;
 use jsonrpsee::core::BoxError;
 
 #[derive(Clone)]
