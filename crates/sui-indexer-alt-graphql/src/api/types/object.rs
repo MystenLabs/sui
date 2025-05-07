@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use async_graphql::{
-    connection::{Connection, Edge},
+    connection::{Connection, CursorType, Edge},
     dataloader::DataLoader,
     Context, InputObject, Interface, Object,
 };
@@ -76,7 +76,7 @@ use super::{
         arg(name = "last", ty = "Option<u64>"),
         arg(name = "before", ty = "Option<CVersion>"),
         arg(name = "filter", ty = "Option<VersionFilter>"),
-        ty = "Result<Option<Connection<CVersion, Object>>, RpcError<Error>>",
+        ty = "Result<Option<Connection<String, Object>>, RpcError<Error>>",
         desc = "Paginate all versions of this object after this one."
     ),
     field(
@@ -86,7 +86,7 @@ use super::{
         arg(name = "last", ty = "Option<u64>"),
         arg(name = "before", ty = "Option<CVersion>"),
         arg(name = "filter", ty = "Option<VersionFilter>"),
-        ty = "Result<Option<Connection<CVersion, Object>>, RpcError<Error>>",
+        ty = "Result<Option<Connection<String, Object>>, RpcError<Error>>",
         desc = "Paginate all versions of this object before this one."
     ),
     field(
@@ -211,7 +211,7 @@ impl Object {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Connection<CVersion, Object>, RpcError<Error>> {
+    ) -> Result<Connection<String, Object>, RpcError<Error>> {
         ObjectImpl::from(self)
             .object_versions_after(ctx, first, after, last, before, filter)
             .await
@@ -226,7 +226,7 @@ impl Object {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Connection<CVersion, Object>, RpcError<Error>> {
+    ) -> Result<Connection<String, Object>, RpcError<Error>> {
         ObjectImpl::from(self)
             .object_versions_before(ctx, first, after, last, before, filter)
             .await
@@ -413,7 +413,7 @@ impl Object {
         page: Page<CVersion>,
         address: NativeSuiAddress,
         filter: VersionFilter,
-    ) -> Result<Connection<CVersion, Object>, RpcError<Error>> {
+    ) -> Result<Connection<String, Object>, RpcError<Error>> {
         use obj_versions::dsl as v;
 
         let mut conn = Connection::new(false, false);
@@ -473,7 +473,7 @@ impl Object {
 
         for (cursor, stored) in results {
             if let Some(object) = Self::from_stored_version(scope.clone(), stored)? {
-                conn.edges.push(Edge::new(cursor, object));
+                conn.edges.push(Edge::new(cursor.encode_cursor(), object));
             }
         }
 
@@ -550,7 +550,7 @@ impl ObjectImpl<'_> {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Connection<CVersion, Object>, RpcError<Error>> {
+    ) -> Result<Connection<String, Object>, RpcError<Error>> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("IObject", "objectVersionsAfter");
         let page = Page::from_params(limits, first, after, last, before)?;
@@ -582,7 +582,7 @@ impl ObjectImpl<'_> {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Connection<CVersion, Object>, RpcError<Error>> {
+    ) -> Result<Connection<String, Object>, RpcError<Error>> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("IObject", "objectVersionsBefore");
         let page = Page::from_params(limits, first, after, last, before)?;

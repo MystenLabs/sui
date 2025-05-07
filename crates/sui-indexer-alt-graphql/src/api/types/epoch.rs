@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{dataloader::DataLoader, Context, Object};
+use async_graphql::{connection::Connection, dataloader::DataLoader, Context, Object};
 use sui_indexer_alt_reader::{
     epochs::{CheckpointBoundedEpochStartKey, EpochEndKey, EpochStartKey},
     pg_reader::PgReader,
@@ -15,10 +15,12 @@ use sui_types::SUI_DENY_LIST_OBJECT_ID;
 use crate::{
     api::scalars::{big_int::BigInt, date_time::DateTime, uint53::UInt53},
     error::RpcError,
+    pagination::{Page, PaginationConfig},
     scope::Scope,
 };
 
 use super::{
+    move_package::{self, CSysPackage, MovePackage},
     object::{self, Object},
     protocol_configs::ProtocolConfigs,
 };
@@ -116,6 +118,34 @@ impl EpochStart {
         };
 
         Ok(Some(DateTime::from_ms(contents.start_timestamp_ms)?))
+    }
+
+    /// The system packages used by all transactions in this epoch.
+    async fn system_packages(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CSysPackage>,
+        last: Option<u64>,
+        before: Option<CSysPackage>,
+    ) -> Result<Option<Connection<String, MovePackage>>, RpcError<move_package::Error>> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Epoch", "systemPackages");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let Some(contents) = &self.contents else {
+            return Ok(None);
+        };
+
+        Ok(Some(
+            MovePackage::paginate_system_packages(
+                ctx,
+                self.scope.clone(),
+                page,
+                contents.cp_lo as u64,
+            )
+            .await?,
+        ))
     }
 }
 
