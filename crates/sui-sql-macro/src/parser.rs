@@ -18,7 +18,7 @@ pub(crate) struct Parser<'l, 's> {
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Format<'s> {
     pub head: Cow<'s, str>,
-    pub tail: Vec<(syn::Type, Cow<'s, str>)>,
+    pub tail: Vec<(Option<syn::Type>, Cow<'s, str>)>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -42,7 +42,7 @@ pub(crate) enum Error {
 ///   format        ::= text? (bind text?)*
 ///   text          ::= part +
 ///   part          ::= lcurly_escape | rcurly_escape | TEXT
-///   bind          ::= '{' TEXT '}'
+///   bind          ::= '{' TEXT? '}'
 ///   lcurly_escape ::= '{' '{'
 ///   rcurly_escape ::= '}' '}'
 ///
@@ -128,36 +128,53 @@ impl<'l, 's> Parser<'l, 's> {
         Ok(Cow::Borrowed("}"))
     }
 
-    /// Parses a binding (a text token surrounded by curly braces).
-    fn bind(&mut self) -> Result<Option<syn::Type>, Error> {
+    /// Parses a binding (curly braces optionally containing a type).
+    ///
+    /// Returns `Ok(None)` if there are no tokens left, `Ok(Some(None))` for a binding with no
+    /// type, `Ok(Some(Some(type)))` for a binding with a type, or an error if the binding is
+    /// malformed.
+    fn bind(&mut self) -> Result<Option<Option<syn::Type>>, Error> {
         if self.lexemes.is_empty() {
             return Ok(None);
         }
 
         self.eat(Token::LCurl)?;
-        let Lexeme(_, offset, bind) = self.eat(Token::Text)?;
+        if self.peek(Token::RCurl).is_ok() {
+            self.eat(Token::RCurl)?;
+            return Ok(Some(None));
+        }
+
+        let Lexeme(_, offset, type_) = self.eat(Token::Text)?;
         self.eat(Token::RCurl)?;
 
-        let bind = syn::parse_str(bind).map_err(|source| Error::TypeParse { offset, source })?;
-        Ok(Some(bind))
+        let type_ = syn::parse_str(type_).map_err(|source| Error::TypeParse { offset, source })?;
+        Ok(Some(Some(type_)))
     }
 
     /// Consume the next token (returning it) as long as it matches `expect`.
     fn eat(&mut self, expect: Token) -> Result<Lexeme<'s>, Error> {
-        let &lexeme = self
-            .lexemes
-            .first()
-            .ok_or(Error::UnexpectedEos { expect })?;
-
-        if lexeme.0 == expect {
-            self.lexemes = &self.lexemes[1..];
-            Ok(lexeme)
-        } else {
-            Err(Error::Unexpected {
-                offset: lexeme.1,
-                actual: lexeme.0,
+        match self.peek(expect) {
+            Ok(l) => {
+                self.lexemes = &self.lexemes[1..];
+                Ok(l)
+            }
+            Err(Some(l)) => Err(Error::Unexpected {
+                offset: l.1,
+                actual: l.0,
                 expect,
-            })
+            }),
+            Err(None) => Err(Error::UnexpectedEos { expect }),
+        }
+    }
+
+    /// Look at the next token and check that it matches `expect` without consuming it. Returns
+    /// the Ok of the lexeme if its token matches, otherwise it returns an error that either
+    /// contains the lexeme that did not match or None if there are no tokens left.
+    fn peek(&self, expect: Token) -> Result<Lexeme<'s>, Option<Lexeme<'s>>> {
+        match self.lexemes.first() {
+            Some(l) if l.0 == expect => Ok(*l),
+            Some(l) => Err(Some(*l)),
+            None => Err(None),
         }
     }
 }
@@ -174,9 +191,9 @@ mod tests {
         Parser::new(&lexemes).format()
     }
 
-    /// Parse a Rust type from a string, to compare against in tests.
-    fn type_(s: &str) -> syn::Type {
-        syn::parse_str(s).unwrap()
+    /// Parse a Rust type from a string, to compare against binds in tests.
+    fn type_(s: &str) -> Option<syn::Type> {
+        Some(syn::parse_str(s).unwrap())
     }
 
     #[test]
@@ -275,6 +292,18 @@ mod tests {
 
     #[test]
     fn test_bind_no_type() {
+        // Empty binders are supported.
+        assert_eq!(
+            parse("foo = {}").unwrap(),
+            Format {
+                head: "foo = ".into(),
+                tail: vec![(None, "".into())],
+            }
+        );
+    }
+
+    #[test]
+    fn test_bind_unfinished() {
         // Error if the binder does not contain a type.
         assert!(matches!(
             parse("foo = {").unwrap_err(),
