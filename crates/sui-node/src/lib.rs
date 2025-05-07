@@ -1571,7 +1571,8 @@ impl SuiNode {
 
         for tx in epoch_store.get_all_pending_consensus_transactions() {
             match tx.kind {
-                // shared object txns will be re-executed by consensus replay
+                // Shared object txns cannot be re-executed at this point, because we must wait for
+                // consensus replay to assign shared object versions.
                 ConsensusTransactionKind::CertifiedTransaction(tx)
                     if !tx.contains_shared_object() =>
                 {
