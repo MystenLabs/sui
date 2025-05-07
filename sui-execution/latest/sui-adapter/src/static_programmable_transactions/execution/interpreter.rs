@@ -7,13 +7,12 @@ use crate::{
     sp,
     static_programmable_transactions::{
         env::Env,
-        execution::{context::Context, values},
+        execution::{context::Context, values::Value},
         typing::ast as T,
     },
 };
 use move_core_types::account_address::AccountAddress;
 use move_trace_format::format::MoveTraceBuilder;
-use move_vm_types::values::Value;
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Instant};
 use sui_types::{
     base_types::TxContext,
@@ -173,7 +172,7 @@ fn execute_command<Mode: ExecutionMode>(
                 };
                 total = new_total;
             }
-            let coin_value = values::coin_value(context.copy_value(&coin_ref)?)?;
+            let coin_value = context.copy_value(&coin_ref)?.coin_ref_value()?;
             fp_ensure!(
                 coin_value >= total,
                 ExecutionError::new_with_source(
@@ -181,7 +180,7 @@ fn execute_command<Mode: ExecutionMode>(
                     format!("balance: {coin_value} required: {total}")
                 )
             );
-            values::coin_subtract_balance(coin_ref, total)?;
+            coin_ref.coin_ref_subtract_balance(total)?;
             let coins = amount_values
                 .into_iter()
                 .map(|a| context.new_coin(a))
@@ -208,17 +207,17 @@ fn execute_command<Mode: ExecutionMode>(
                 };
                 additional = new_additional;
             }
-            let target_value = values::coin_value(context.copy_value(&target_ref)?)?;
+            let target_value = context.copy_value(&target_ref)?.coin_ref_value()?;
             fp_ensure!(
                 target_value.checked_add(additional).is_some(),
                 ExecutionError::from_kind(ExecutionErrorKind::CoinBalanceOverflow,)
             );
-            values::coin_add_balance(target_ref, additional)?;
+            target_ref.coin_ref_add_balance(additional)?;
             vec![]
         }
         T::Command_::MakeMoveVec(ty, items) => {
             let items: Vec<Value> = context.arguments(items)?;
-            vec![values::vec_pack(ty, items)?]
+            vec![Value::vec_pack(ty, items)?]
         }
         T::Command_::Publish(..) => todo!("RUNTIME"),
         T::Command_::Upgrade(..) => todo!("RUNTIME"),

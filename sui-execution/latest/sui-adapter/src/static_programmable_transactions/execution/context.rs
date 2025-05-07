@@ -16,7 +16,9 @@ use crate::{
     sp,
     static_programmable_transactions::{
         env::Env,
-        execution::values::{self, ByteValue, InputObjectMetadata, InputObjectValue, InputValue},
+        execution::values::{
+            self, ByteValue, InputObjectMetadata, InputObjectValue, InputValue, Value,
+        },
         typing::ast::{self as T, Type},
     },
 };
@@ -30,7 +32,7 @@ use move_trace_format::format::MoveTraceBuilder;
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 use move_vm_types::{
     gas::GasMeter,
-    values::{VMValueCast, Value},
+    values::{VMValueCast, Value as VMValue},
 };
 use sui_move_natives::object_runtime::{
     self, LoadedRuntimeObject, ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
@@ -151,7 +153,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 let gas_ref = values::borrow_value(gas_ref)?;
                 // We have already checked that the gas balance is enough to cover the gas budget
                 let max_gas_in_balance = gas_charger.gas_budget();
-                values::coin_subtract_balance(gas_ref, max_gas_in_balance)?;
+                gas_ref.coin_ref_subtract_balance(max_gas_in_balance)?;
                 Some(gas)
             }
             None => None,
@@ -487,23 +489,23 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             T::Argument__::Read(usage) => {
                 let reference = self.location_usage(usage, ty)?;
                 charge_gas!(self, charge_read_ref, &reference)?;
-                values::read_ref(reference)
+                reference.read_ref()
             }
         }
     }
 
     pub fn argument<V>(&mut self, arg: T::Argument) -> Result<V, ExecutionError>
     where
-        Value: VMValueCast<V>,
+        VMValue: VMValueCast<V>,
     {
         let value = self.argument_value(arg)?;
-        let value: V = values::cast(value)?;
+        let value: V = value.cast()?;
         Ok(value)
     }
 
     pub fn arguments<V>(&mut self, args: Vec<T::Argument>) -> Result<Vec<V>, ExecutionError>
     where
-        Value: VMValueCast<V>,
+        VMValue: VMValueCast<V>,
     {
         args.into_iter().map(|arg| self.argument(arg)).collect()
     }
@@ -522,7 +524,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         match function.tx_context {
             TxContextKind::None => (),
             TxContextKind::Mutable | TxContextKind::Immutable => {
-                args.push(values::tx_context(self.tx_context.borrow().digest())?)
+                args.push(Value::tx_context(self.tx_context.borrow().digest())?)
             }
         }
         let storage_id = &function.storage_id;
@@ -551,7 +553,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             todo!("LOADING")
         };
         object_runtime_mut!(self)?
-            .transfer(recipient, ty, object)
+            .transfer(recipient, ty, object.into())
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
     }
 
@@ -564,11 +566,11 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         object_runtime_mut!(self)?
             .new_id(id)
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
-        Ok(values::coin(id, amount))
+        Ok(Value::coin(id, amount))
     }
 
     pub fn destroy_coin(&mut self, coin: Value) -> Result<u64, ExecutionError> {
-        let (id, amount) = values::unpack_coin(coin)?;
+        let (id, amount) = coin.unpack_coin()?;
         object_runtime_mut!(self)?
             .delete_id(id)
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
@@ -641,7 +643,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let layout = todo!("LOADING");
         let (bytes, ty) = match ty {
             Type::Reference(_, inner) => {
-                let v = values::read_ref(values::copy_value(result)?)?;
+                let v = result.copy_value()?.read_ref()?;
                 let Some(bytes) = result.simple_serialize(&layout) else {
                     invariant_violation!("Failed to serialize Move value");
                 };
@@ -753,7 +755,7 @@ fn load_byte_value(
 ) -> Result<Value, ExecutionError> {
     let loaded = match value {
         ByteValue::Pure(bytes) => values::load_value(env, bytes, ty)?,
-        ByteValue::Receiving { id, version } => values::receiving(*id, *version),
+        ByteValue::Receiving { id, version } => Value::receiving(*id, *version),
     };
     charge_gas_!(meter, env, charge_copy_loc, &loaded)?;
     Ok(loaded)
@@ -761,30 +763,35 @@ fn load_byte_value(
 
 fn copy_value(meter: &mut GasCharger, env: &Env, value: &Value) -> Result<Value, ExecutionError> {
     charge_gas_!(meter, env, charge_copy_loc, value)?;
-    values::copy_value(value)
+    value.copy_value()
 }
 
 /// The max budget was deducted from the gas coin at the beginning of the transaction,
 /// now we return exactly that amount. Gas will be charged by the execution engine
 fn refund_max_gas_budget<OType>(
-    writes: &mut IndexMap<ObjectID, (Owner, OType, Value)>,
+    writes: &mut IndexMap<ObjectID, (Owner, OType, VMValue)>,
     gas_charger: &mut GasCharger,
     gas_id: ObjectID,
 ) -> Result<(), ExecutionError> {
-    let Some((_, _, value)) = writes.get_mut(&gas_id) else {
+    let Some((_, _, value_ref)) = writes.get_mut(&gas_id) else {
         invariant_violation!("Gas object cannot be wrapped or destroyed")
     };
+    // replace with dummy value
+    let value = std::mem::replace(value_ref, VMValue::u8(0));
+    let value: Value = value.into();
     // NOTE we probably won't be able to actually call values::borrow_value here and might need
     // to make a new "local" like we would for Result
-    let coin_value = values::coin_value(values::borrow_value(&value)?)?;
+    let coin_value = values::borrow_value(&value)?.coin_ref_value()?;
     let additional = gas_charger.gas_budget();
-    let Some(new_balance) = coin_value.checked_add(additional) else {
+    if coin_value.checked_add(additional).is_none() {
         return Err(ExecutionError::new_with_source(
             ExecutionErrorKind::CoinBalanceOverflow,
             "Gas coin too large after returning the max gas budget",
         ));
     };
-    values::coin_add_balance(values::borrow_value(value)?, additional)?;
+    values::borrow_value(&value)?.coin_ref_add_balance(additional)?;
+    // put the value back
+    *value_ref = value.into();
     Ok(())
 }
 
