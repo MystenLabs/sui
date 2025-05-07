@@ -506,11 +506,11 @@ StakedSui objects cannot be split to below this amount.
 
 
 
-<a name="sui_system_staking_pool_EPoolNotPreactive"></a>
+<a name="sui_system_staking_pool_EPoolPreactiveOrInactive"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_EPoolNotPreactive">EPoolNotPreactive</a>: u64 = 15;
+<pre><code><b>const</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_EPoolPreactiveOrInactive">EPoolPreactiveOrInactive</a>: u64 = 15;
 </code></pre>
 
 
@@ -678,8 +678,8 @@ A proportional amount of pool token withdraw is recorded and processed at epoch 
     pool.pending_total_sui_withdraw = pool.pending_total_sui_withdraw + total_sui_withdraw_amount;
     pool.pending_pool_token_withdraw =
         pool.pending_pool_token_withdraw + pool_token_withdraw_amount;
-    // If the pool is inactive, we immediately process the withdrawal.
-    <b>if</b> (pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_is_inactive">is_inactive</a>()) pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_process_pending_stake_withdraw">process_pending_stake_withdraw</a>();
+    // If the pool is inactive or preactive, we immediately process the withdrawal.
+    <b>if</b> (pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_is_inactive">is_inactive</a>() || pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_is_preactive">is_preactive</a>()) pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_process_pending_stake_withdraw">process_pending_stake_withdraw</a>();
     // TODO: implement withdraw bonding period here.
     principal_withdraw.join(rewards_withdraw);
     principal_withdraw
@@ -819,6 +819,7 @@ Convert the given staked SUI to an FungibleStakedSui object
     <b>let</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakedSui">StakedSui</a> { id, <a href="../sui_system/staking_pool.md#sui_system_staking_pool_pool_id">pool_id</a>, <a href="../sui_system/staking_pool.md#sui_system_staking_pool_stake_activation_epoch">stake_activation_epoch</a>, principal } = staked_sui;
     <b>assert</b>!(<a href="../sui_system/staking_pool.md#sui_system_staking_pool_pool_id">pool_id</a> == object::id(pool), <a href="../sui_system/staking_pool.md#sui_system_staking_pool_EWrongPool">EWrongPool</a>);
     <b>assert</b>!(ctx.epoch() &gt;= <a href="../sui_system/staking_pool.md#sui_system_staking_pool_stake_activation_epoch">stake_activation_epoch</a>, <a href="../sui_system/staking_pool.md#sui_system_staking_pool_ECannotMintFungibleStakedSuiYet">ECannotMintFungibleStakedSuiYet</a>);
+    <b>assert</b>!(!pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_is_preactive">is_preactive</a>() && !pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_is_inactive">is_inactive</a>(), <a href="../sui_system/staking_pool.md#sui_system_staking_pool_EPoolPreactiveOrInactive">EPoolPreactiveOrInactive</a>);
     id.delete();
     <b>let</b> exchange_rate_at_staking_epoch = pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_pool_token_exchange_rate_at_epoch">pool_token_exchange_rate_at_epoch</a>(
         <a href="../sui_system/staking_pool.md#sui_system_staking_pool_stake_activation_epoch">stake_activation_epoch</a>,

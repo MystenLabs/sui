@@ -27,7 +27,7 @@ const EDeactivationOfInactivePool: u64 = 11;
 const EIncompatibleStakedSui: u64 = 12;
 const EWithdrawalInSameEpoch: u64 = 13;
 const EPoolAlreadyActive: u64 = 14;
-const EPoolNotPreactive: u64 = 15;
+const EPoolPreactiveOrInactive: u64 = 15;
 const EActivationOfInactivePool: u64 = 16;
 const EDelegationOfZeroSui: u64 = 17;
 const EStakedSuiBelowThreshold: u64 = 18;
@@ -179,8 +179,8 @@ public(package) fun request_withdraw_stake(
     pool.pending_pool_token_withdraw =
         pool.pending_pool_token_withdraw + pool_token_withdraw_amount;
 
-    // If the pool is inactive, we immediately process the withdrawal.
-    if (pool.is_inactive()) pool.process_pending_stake_withdraw();
+    // If the pool is inactive or preactive, we immediately process the withdrawal.
+    if (pool.is_inactive() || pool.is_preactive()) pool.process_pending_stake_withdraw();
 
     // TODO: implement withdraw bonding period here.
     principal_withdraw.join(rewards_withdraw);
@@ -275,6 +275,7 @@ public(package) fun convert_to_fungible_staked_sui(
 
     assert!(pool_id == object::id(pool), EWrongPool);
     assert!(ctx.epoch() >= stake_activation_epoch, ECannotMintFungibleStakedSuiYet);
+    assert!(!pool.is_preactive() && !pool.is_inactive(), EPoolPreactiveOrInactive);
 
     id.delete();
 
