@@ -3213,12 +3213,16 @@ impl AuthorityState {
             // if we built the last checkpoint locally (as opposed to receiving it from a peer),
             // then all shared_version_assignments except the one for the ChangeEpoch transaction
             // should have been removed
-            let num_shared_version_assignments = cur_epoch_store.num_shared_version_assignments();
+            let shared_version_assignments = cur_epoch_store.inspect_shared_version_assignments();
             // Note that while 1 is the typical value, 0 is possible if the node restarts after
             // committing the last checkpoint but before reconfiguring.
-            if num_shared_version_assignments > 1 {
+            if shared_version_assignments.len() > 1 {
+                let keys = shared_version_assignments.keys().collect::<Vec<_>>();
                 // If this happens in prod, we have a memory leak, but not a correctness issue.
-                debug_fatal!("all shared_version_assignments should have been removed (num_shared_version_assignments: {num_shared_version_assignments})");
+                debug_fatal!(
+                    "all shared_version_assignments should have been removed: {:?}",
+                    keys
+                );
             }
         }
 

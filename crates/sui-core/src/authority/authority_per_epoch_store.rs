@@ -1276,7 +1276,9 @@ impl AuthorityPerEpochStore {
         let system_state = match system_state {
             SuiSystemState::V2(system_state) => system_state,
             SuiSystemState::V1(_) => {
-                error!("`PerObjectCongestionControlMode::ExecutionTimeEstimate` cannot load execution time observations to SuiSystemState because it has an old version. This should not happen outside tests.");
+                if committee.epoch() > 1 {
+                    error!("`PerObjectCongestionControlMode::ExecutionTimeEstimate` cannot load execution time observations to SuiSystemState because it has an old version. This should not happen outside tests.");
+                }
                 return itertools::Either::Left(std::iter::empty());
             }
             #[cfg(msim)]
@@ -1432,8 +1434,11 @@ impl AuthorityPerEpochStore {
             .remove_shared_object_assignments(keys);
     }
 
-    pub fn num_shared_version_assignments(&self) -> usize {
-        self.consensus_output_cache.num_shared_version_assignments()
+    pub fn inspect_shared_version_assignments(
+        &self,
+    ) -> HashMap<TransactionKey, Vec<(ConsensusObjectSequenceKey, SequenceNumber)>> {
+        self.consensus_output_cache
+            .inspect_shared_version_assignments(10)
     }
 
     pub fn revert_executed_transaction(&self, tx_digest: &TransactionDigest) -> SuiResult {

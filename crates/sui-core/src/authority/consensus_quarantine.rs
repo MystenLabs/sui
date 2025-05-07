@@ -414,8 +414,19 @@ impl ConsensusOutputCache {
         }
     }
 
-    pub fn num_shared_version_assignments(&self) -> usize {
-        self.shared_version_assignments.len()
+    // Used for debugging only.
+    pub fn inspect_shared_version_assignments(
+        &self,
+        n: usize,
+    ) -> HashMap<TransactionKey, Vec<(ConsensusObjectSequenceKey, SequenceNumber)>> {
+        self.shared_version_assignments
+            .iter()
+            .take(n)
+            .map(|e| {
+                let (key, locks) = (e.key(), e.value());
+                (*key, locks.clone())
+            })
+            .collect()
     }
 
     pub fn get_assigned_shared_object_versions(
