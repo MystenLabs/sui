@@ -5,9 +5,8 @@
 module sui_system::stake_tests;
 
 use sui::coin;
-use sui::address;
 use sui::table::Table;
-use sui::test_scenario::{Self, Scenario};
+use sui::test_scenario;
 use sui::test_utils::{Self, assert_eq};
 use sui_system::governance_test_utils::{
     add_validator,
