@@ -137,6 +137,14 @@ public macro fun try_as_u128($x: _): Option<u128> {
     if (x > 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF) option::none() else option::some(x as u128)
 }
 
+public macro fun num_mul_div<$T, $U>($a: $T, $b: $T, $c: $T): $T {
+    (($a as $U) * ($b as $U) / ($c as $U)) as $T
+}
+
+public macro fun num_mul_div_ceil<$T, $U>($a: $T, $b: $T, $c: $T): $T {
+    (($a as $U) * ($b as $U)).divide_and_round_up($c as $U) as $T
+}
+
 /// Creates a fixed-point value from a quotient specified by its numerator and denominator.
 /// `$T` is the underlying integer type for the fixed-point value, where `$T` has `$t_bits` bits.
 /// `$U` is the type used for intermediate calculations, where `$U` is the next larger integer type.

@@ -49,6 +49,11 @@ fun test_diff() {
 }
 
 #[test]
+fun test_mul_div() {
+    integer_tests::test_mul_div!(MAX, CASES);
+}
+
+#[test]
 fun test_divide_and_round_up() {
     integer_tests::test_divide_and_round_up!(MAX, CASES);
 }
