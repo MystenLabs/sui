@@ -4,7 +4,7 @@
 use crate::static_programmable_transactions::{env::Env, typing::ast::Type};
 use move_binary_format::errors::PartialVMError;
 use move_core_types::account_address::AccountAddress;
-use move_vm_types::values::{self, Struct, VMValueCast, Value};
+use move_vm_types::values::{self, Struct, VMValueCast, Value, VectorSpecialization};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     digests::TransactionDigest,
@@ -38,6 +38,12 @@ pub struct InputObjectValue {
     pub object_metadata: InputObjectMetadata,
     pub value: Option<Value>,
 }
+
+// pub struct Value(values::Value);
+
+// pub fn new_locals(values: Vec<Value>) -> Result<Locals, ExecutionError> {
+//     todo!()
+// }
 
 pub fn load_value(_env: &Env, _bytes: &[u8], _ty: Type) -> Result<Value, ExecutionError> {
     todo!("RUNTIME")
@@ -90,13 +96,11 @@ pub fn coin(id: ObjectID, amount: u64) -> Value {
 }
 
 pub fn vec_pack(ty: Type, values: Vec<Value>) -> Result<Value, ExecutionError> {
-    let ty = {
-        ty;
-        // ty to vm type
-        todo!("LOADING")
-    };
-    let vec = values::Vector::pack(&ty, values).map_err(iv("pack"))?;
-    Ok(Value::struct_(Struct::pack([vec])))
+    let specialization: VectorSpecialization = ty
+        .try_into()
+        .map_err(|e| make_invariant_violation!("Unable to specialize vector: {e}"))?;
+    let vec = values::Vector::pack(specialization, values).map_err(iv("pack"))?;
+    Ok(vec)
 }
 
 pub fn tx_context(digest: TransactionDigest) -> Result<Value, ExecutionError> {

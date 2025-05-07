@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::static_programmable_transactions::{loading::ast as L, spanned::Spanned};
+use move_vm_types::values::VectorSpecialization;
 use std::{cell::OnceCell, collections::BTreeMap, fmt};
 use sui_types::base_types::ObjectID;
 
@@ -127,6 +128,25 @@ impl Argument__ {
 //**************************************************************************************************
 // traits
 //**************************************************************************************************
+
+impl TryFrom<Type> for VectorSpecialization {
+    type Error = &'static str;
+
+    fn try_from(value: Type) -> Result<Self, Self::Error> {
+        Ok(match value {
+            Type::U8 => VectorSpecialization::U8,
+            Type::U16 => VectorSpecialization::U16,
+            Type::U32 => VectorSpecialization::U32,
+            Type::U64 => VectorSpecialization::U64,
+            Type::U128 => VectorSpecialization::U128,
+            Type::U256 => VectorSpecialization::U256,
+            Type::Address => VectorSpecialization::Address,
+            Type::Bool => VectorSpecialization::Bool,
+            Type::Signer | Type::Vector(_) | Type::Datatype(_) => VectorSpecialization::Container,
+            Type::Reference(_, _) => return Err("unexpected reference in vector specialization"),
+        })
+    }
+}
 
 impl fmt::Display for Location {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

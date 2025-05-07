@@ -27,7 +27,7 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     values::{
         self, IntegerValue, Locals, Reference, Struct, StructRef, VMValueCast, Value, Variant,
-        VariantRef, Vector, VectorRef,
+        VariantRef, Vector, VectorRef, VectorSpecialization,
     },
     views::TypeView,
 };
@@ -1271,7 +1271,8 @@ impl Frame {
                     interpreter.operand_stack.last_n(*num as usize)?,
                 )?;
                 let elements = interpreter.operand_stack.popn(*num as u16)?;
-                let value = Vector::pack(&ty, elements)?;
+                let specialization: VectorSpecialization = (&ty).try_into()?;
+                let value = Vector::pack(specialization, elements)?;
                 interpreter.operand_stack.push(value)?;
             }
             Bytecode::VecLen(si) => {

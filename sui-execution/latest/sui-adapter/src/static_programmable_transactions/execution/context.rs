@@ -228,17 +228,12 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             tx_context,
             gas_charger,
             new_packages,
-            results,
             user_events,
             ..
         } = self;
         let ref_context: &RefCell<TxContext> = &*tx_context;
         let tx_context: &TxContext = &ref_context.borrow();
         let tx_digest = ref_context.borrow().digest();
-
-        // check for unused values
-        // disable this check for dev inspect
-        assert!(false, "todo modes");
 
         let object_runtime: ObjectRuntime = native_extensions
             .remove()

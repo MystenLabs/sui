@@ -119,16 +119,15 @@ pub fn load_nitro_attestation_internal(
 
 // Build an Option<vector<u8>> value
 fn to_option_vector_u8(value: Option<Vec<u8>>) -> PartialVMResult<Value> {
-    let vector_u8_type = Type::Vector(Box::new(Type::U8));
     match value {
         // Some(<vector<u8>>) = { vector[ <vector<u8>> ] }
         Some(vec) => Ok(Value::struct_(Struct::pack(vec![Vector::pack(
-            &vector_u8_type,
+            move_vm_types::values::VectorSpecialization::U8,
             vec![Value::vector_u8(vec)],
         )?]))),
         // None = { vector[ ] }
         None => Ok(Value::struct_(Struct::pack(vec![Vector::empty(
-            &vector_u8_type,
+            move_vm_types::values::VectorSpecialization::U8,
         )?]))),
     }
 }
