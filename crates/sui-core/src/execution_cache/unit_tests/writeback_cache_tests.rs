@@ -154,10 +154,12 @@ impl Scenario {
         let events: TransactionEvents = Default::default();
 
         let effects = TestEffectsBuilder::new(tx.inner()).build();
+        let effects_digest = effects.digest();
 
         TransactionOutputs {
             transaction: Arc::new(tx),
             effects,
+            effects_digest,
             events,
             markers: Default::default(),
             wrapped: Default::default(),

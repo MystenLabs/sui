@@ -219,8 +219,6 @@ struct UncommittedData {
 
     transaction_effects: DashMap<TransactionEffectsDigest, TransactionEffects>,
 
-    executed_effects_digests: DashMap<TransactionDigest, TransactionEffectsDigest>,
-
     // Transaction outputs that have not yet been written to the DB. Items are removed from this
     // table as they are flushed to the db.
     pending_transaction_writes: DashMap<TransactionDigest, Arc<TransactionOutputs>>,
@@ -235,7 +233,6 @@ impl UncommittedData {
             objects: DashMap::with_shard_amount(2048),
             markers: DashMap::with_shard_amount(2048),
             transaction_effects: DashMap::with_shard_amount(2048),
-            executed_effects_digests: DashMap::with_shard_amount(2048),
             pending_transaction_writes: DashMap::with_shard_amount(2048),
             total_transaction_inserts: AtomicU64::new(0),
             total_transaction_commits: AtomicU64::new(0),
@@ -246,7 +243,6 @@ impl UncommittedData {
         self.objects.clear();
         self.markers.clear();
         self.transaction_effects.clear();
-        self.executed_effects_digests.clear();
         self.pending_transaction_writes.clear();
         self.total_transaction_inserts
             .store(0, std::sync::atomic::Ordering::Relaxed);
@@ -261,7 +257,6 @@ impl UncommittedData {
                 self.objects.is_empty()
                     && self.markers.is_empty()
                     && self.transaction_effects.is_empty()
-                    && self.executed_effects_digests.is_empty()
                     && self
                         .total_transaction_inserts
                         .load(std::sync::atomic::Ordering::Relaxed)
@@ -277,6 +272,15 @@ impl UncommittedData {
         self.pending_transaction_writes
             .get(tx_digest)
             .map(|outputs| outputs.events.clone())
+    }
+
+    fn get_effects_digest(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Option<TransactionEffectsDigest> {
+        self.pending_transaction_writes
+            .get(tx_digest)
+            .map(|outputs| outputs.effects_digest)
     }
 }
 
@@ -903,9 +907,6 @@ impl WritebackCache {
         self.metrics.record_cache_write("transaction_events");
 
         self.metrics.record_cache_write("executed_effects_digests");
-        self.dirty
-            .executed_effects_digests
-            .insert(tx_digest, effects_digest);
 
         self.executed_effects_digests_notify_read
             .notify(&tx_digest, &effects_digest);
@@ -1085,11 +1086,6 @@ impl WritebackCache {
             .transaction_effects
             .remove(&effects_digest)
             .expect("effects must exist");
-
-        self.dirty
-            .executed_effects_digests
-            .remove(&tx_digest)
-            .expect("executed effects must exist");
 
         // Move dirty markers to cache
         for (object_key, marker_value) in markers.iter() {
@@ -1841,10 +1837,10 @@ impl TransactionCacheRead for WritebackCache {
             |(digest, _)| {
                 self.metrics
                     .record_cache_request("executed_effects_digests", "uncommitted");
-                if let Some(digest) = self.dirty.executed_effects_digests.get(digest) {
+                if let Some(digest) = self.dirty.get_effects_digest(digest) {
                     self.metrics
                         .record_cache_hit("executed_effects_digests", "uncommitted");
-                    return CacheResult::Hit(Some(*digest));
+                    return CacheResult::Hit(Some(digest));
                 }
                 self.metrics
                     .record_cache_miss("executed_effects_digests", "uncommitted");

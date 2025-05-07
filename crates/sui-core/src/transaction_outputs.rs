@@ -3,9 +3,10 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use sui_types::base_types::{FullObjectID, ObjectRef};
+use sui_types::base_types::{FullObjectID, ObjectRef, TransactionEffectsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::inner_temporary_store::{InnerTemporaryStore, WrittenObjects};
+use sui_types::message_envelope::Message;
 use sui_types::storage::{FullObjectKey, MarkerValue, ObjectKey};
 use sui_types::transaction::{TransactionDataAPI, VerifiedTransaction};
 
@@ -13,6 +14,7 @@ use sui_types::transaction::{TransactionDataAPI, VerifiedTransaction};
 pub struct TransactionOutputs {
     pub transaction: Arc<VerifiedTransaction>,
     pub effects: TransactionEffects,
+    pub effects_digest: TransactionEffectsDigest,
     pub events: TransactionEvents,
 
     pub markers: Vec<(FullObjectKey, MarkerValue)>,
@@ -171,9 +173,12 @@ impl TransactionOutputs {
 
         let wrapped = effects.wrapped().into_iter().map(ObjectKey::from).collect();
 
+        let effects_digest = effects.digest();
+
         TransactionOutputs {
             transaction: Arc::new(transaction),
             effects,
+            effects_digest,
             events,
             markers,
             wrapped,
