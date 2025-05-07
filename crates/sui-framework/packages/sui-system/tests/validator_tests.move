@@ -13,7 +13,7 @@ use sui_system::test_runner;
 use sui_system::validator;
 use sui_system::validator_builder;
 
-const DEFAULT_STAKE: u64 = 10_000_000_000;
+const DEFAULT_STAKE: u64 = 10;
 
 #[test]
 // Scenario:
@@ -21,13 +21,13 @@ const DEFAULT_STAKE: u64 = 10_000_000_000;
 // 2. Check that the validator has the correct initial stake
 // 3. Destroy the validator
 fun test_validator_owner_flow() {
-    let initial_stake = DEFAULT_STAKE;
+    let initial_stake = DEFAULT_STAKE * 1_000_000_000;
     let mut runner = test_runner::new().build();
     runner.set_sender(@2);
 
     let validator = validator_builder::new()
         .sui_address(@2)
-        .initial_stake(initial_stake)
+        .initial_stake(DEFAULT_STAKE)
         .build(runner.ctx());
 
     let pool_id = validator.staking_pool_id();
@@ -54,14 +54,14 @@ fun test_validator_owner_flow() {
 // 4. Trigger state change and pending processing
 // 5. Check that pending values have been processed
 fun test_pending_validator_flow() {
-    let initial_stake = DEFAULT_STAKE;
+    let initial_stake = DEFAULT_STAKE * 1_000_000_000;
     let added_stake = 30_000_000_000;
     let mut runner = test_runner::new().build();
     runner.set_sender(@2);
 
     let mut validator = validator_builder::new()
         .sui_address(@2)
-        .initial_stake(initial_stake)
+        .initial_stake(DEFAULT_STAKE)
         .build(runner.ctx());
 
     // add extra stake, but don't send it to the inventory just yet

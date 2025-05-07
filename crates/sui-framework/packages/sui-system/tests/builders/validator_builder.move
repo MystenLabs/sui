@@ -114,9 +114,9 @@ public fun build(builder: ValidatorBuilder, ctx: &mut TxContext): Validator {
         p2p_address.destroy_or!(VALID_P2P_ADDR),
         primary_address.destroy_or!(VALID_CONSENSUS_ADDR),
         worker_address.destroy_or!(VALID_WORKER_ADDR),
-        initial_stake.map!(|amount| balance::create_for_testing<SUI>(amount)),
+        initial_stake.map!(|amount| balance::create_for_testing<SUI>(amount * 1_000_000_000)),
         gas_price.destroy_or!(1),
-        commission_rate.destroy_or!(1),
+        commission_rate.destroy_or!(0),
         is_active_at_genesis,
         ctx,
     )

@@ -5,7 +5,7 @@
 module sui_system::test_runner;
 
 use sui::balance::{Self, Balance};
-use sui::coin;
+use sui::coin::{Self, Coin};
 use sui::sui::SUI;
 use sui::test_scenario::{Self, Scenario};
 use sui_system::stake_subsidy;
@@ -51,9 +51,7 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
 
     let validators = validators.destroy_or!({
         vector::tabulate!(validators_count.destroy_or!(4), |_| {
-            validator_builder::new().initial_stake(
-                validators_initial_stake.destroy_or!(1_000_000) * MIST_PER_SUI,
-            )
+            validator_builder::new().initial_stake(validators_initial_stake.destroy_or!(1_000_000))
         })
     });
 
@@ -69,7 +67,7 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
     );
 
     let stake_subsidy = stake_subsidy::create(
-        balance::create_for_testing<SUI>(sui_supply_amount.destroy_or!(1000 * MIST_PER_SUI)), // sui_supply
+        balance::create_for_testing<SUI>(sui_supply_amount.destroy_or!(1000) * MIST_PER_SUI), // sui_supply
         0, // stake subsidy initial distribution amount
         10, // stake_subsidy_period_length
         0, // stake_subsidy_decrease_rate
@@ -79,7 +77,7 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
     sui_system::create(
         object::new(scenario.ctx()), // it doesn't matter what ID sui system state has in tests
         validators.map!(|v| v.build(scenario.ctx())),
-        balance::create_for_testing<SUI>(storage_fund_amount.destroy_or!(0)), // storage_fund
+        balance::create_for_testing<SUI>(storage_fund_amount.destroy_or!(0) * MIST_PER_SUI), // storage_fund
         1, // protocol version
         0, // chain_start_timestamp_ms
         system_parameters,
@@ -347,6 +345,28 @@ public fun unstake(runner: &mut TestRunner, staked_sui_idx: u64) {
 
     system_state.request_withdraw_stake(staked_sui, scenario.ctx());
     test_scenario::return_shared(system_state);
+}
+
+/// Remove a validator from the system state.
+public fun remove_validator(runner: &mut TestRunner, validator: address) {
+    let TestRunner { scenario, sender } = runner;
+    scenario.next_tx(validator);
+    let mut system_state = scenario.take_shared<SuiSystemState>();
+    system_state.request_remove_validator(scenario.ctx());
+    scenario.next_tx(*sender);
+    test_scenario::return_shared(system_state);
+}
+
+public fun sui_balance(runner: &mut TestRunner): u64 {
+    let sender = runner.sender;
+    let scenario = runner.scenario_mut();
+    scenario.next_tx(sender);
+    scenario.ids_for_sender<Coin<SUI>>().fold!(0, |mut sum, coin_id| {
+        let coin = scenario.take_from_sender_by_id<Coin<SUI>>(coin_id);
+        sum = sum + coin.value();
+        scenario.return_to_sender(coin);
+        sum
+    })
 }
 
 #[test]
