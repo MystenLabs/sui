@@ -516,6 +516,19 @@ public fun active_validator_addresses(wrapper: &mut SuiSystemState): vector<addr
     wrapper.load_system_state_mut().active_validator_addresses()
 }
 
+/// Calculate the rewards for a staking pool.
+public fun calculate_rewards(
+    wrapper: &mut SuiSystemState,
+    pool_id: ID,
+    staked_principal: u64,
+    activation_epoch: u64,
+    withdraw_epoch: u64,
+): u64 {
+    wrapper
+        .load_system_state()
+        .calculate_rewards(pool_id, staked_principal, activation_epoch, withdraw_epoch)
+}
+
 #[allow(unused_function)]
 /// This function should be called at the end of an epoch, and advances the system to the next epoch.
 /// It does the following things:

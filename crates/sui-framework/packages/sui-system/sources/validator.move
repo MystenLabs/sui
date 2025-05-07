@@ -24,49 +24,34 @@ public use fun sui_system::validator_wrapper::create_v1 as Validator.wrap_v1;
 
 /// Invalid proof_of_possession field in ValidatorMetadata
 const EInvalidProofOfPossession: u64 = 0;
-
 /// Invalid pubkey_bytes field in ValidatorMetadata
 const EMetadataInvalidPubkey: u64 = 1;
-
 /// Invalid network_pubkey_bytes field in ValidatorMetadata
 const EMetadataInvalidNetPubkey: u64 = 2;
-
 /// Invalid worker_pubkey_bytes field in ValidatorMetadata
 const EMetadataInvalidWorkerPubkey: u64 = 3;
-
 /// Invalid net_address field in ValidatorMetadata
 const EMetadataInvalidNetAddr: u64 = 4;
-
 /// Invalid p2p_address field in ValidatorMetadata
 const EMetadataInvalidP2pAddr: u64 = 5;
-
 /// Invalid primary_address field in ValidatorMetadata
 const EMetadataInvalidPrimaryAddr: u64 = 6;
-
 /// Invalid worker_address field in ValidatorMetadata
 const EMetadataInvalidWorkerAddr: u64 = 7;
-
 /// Commission rate set by the validator is higher than the threshold
 const ECommissionRateTooHigh: u64 = 8;
-
 /// Validator Metadata is too long
 const EValidatorMetadataExceedingLengthLimit: u64 = 9;
-
 /// Intended validator is not a candidate one.
 const ENotValidatorCandidate: u64 = 10;
-
 /// Stake amount is invalid or wrong.
 const EInvalidStakeAmount: u64 = 11;
-
 /// Function called during non-genesis times.
 const ECalledDuringNonGenesis: u64 = 12;
-
 /// New Capability is not created by the validator itself
 const ENewCapNotCreatedByValidatorItself: u64 = 100;
-
 /// Capability code is not valid
 const EInvalidCap: u64 = 101;
-
 /// Validator trying to set gas price higher than threshold.
 const EGasPriceHigherThanThreshold: u64 = 102;
 
@@ -450,6 +435,24 @@ public(package) fun process_pending_stakes_and_withdraws(self: &mut Validator, c
     self.staking_pool.process_pending_stakes_and_withdraws(ctx);
     // TODO: bring this assertion back when we are ready.
     // assert!(stake_amount(self) == self.next_epoch_stake, EInvalidStakeAmount);
+}
+
+/// Calculate the rewards for an amount with value `staked_principal`, staked in the validator's
+/// staking pool between `activation_epoch` and `withdraw_epoch`.
+public(package) fun calculate_rewards(
+    self: &Validator,
+    staked_principal: u64,
+    activation_epoch: u64,
+    withdraw_epoch: u64,
+): u64 {
+    let shares = self
+        .pool_token_exchange_rate_at_epoch(activation_epoch)
+        .get_token_amount(staked_principal);
+    let sui_amount = self.pool_token_exchange_rate_at_epoch(withdraw_epoch).get_sui_amount(shares);
+
+    if (sui_amount >= staked_principal) {
+        sui_amount - staked_principal
+    } else 0
 }
 
 /// Returns true if the validator is preactive.

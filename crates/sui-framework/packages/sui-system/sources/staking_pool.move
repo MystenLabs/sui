@@ -595,7 +595,7 @@ fun is_preactive_at_epoch(pool: &StakingPool, epoch: u64): bool {
     pool.is_preactive() || (*pool.activation_epoch.borrow() > epoch)
 }
 
-fun get_sui_amount(exchange_rate: &PoolTokenExchangeRate, token_amount: u64): u64 {
+public(package) fun get_sui_amount(exchange_rate: &PoolTokenExchangeRate, token_amount: u64): u64 {
     // When either amount is 0, that means we have no stakes with this pool.
     // The other amount might be non-zero when there's dust left in the pool.
     if (exchange_rate.sui_amount == 0 || exchange_rate.pool_token_amount == 0) {
@@ -605,7 +605,7 @@ fun get_sui_amount(exchange_rate: &PoolTokenExchangeRate, token_amount: u64): u6
     mul_div!(exchange_rate.sui_amount, token_amount, exchange_rate.pool_token_amount)
 }
 
-fun get_token_amount(exchange_rate: &PoolTokenExchangeRate, sui_amount: u64): u64 {
+public(package) fun get_token_amount(exchange_rate: &PoolTokenExchangeRate, sui_amount: u64): u64 {
     // When either amount is 0, that means we have no stakes with this pool.
     // The other amount might be non-zero when there's dust left in the pool.
     if (exchange_rate.sui_amount == 0 || exchange_rate.pool_token_amount == 0) {

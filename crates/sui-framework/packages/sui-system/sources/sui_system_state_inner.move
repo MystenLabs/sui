@@ -1064,6 +1064,16 @@ public(package) fun pool_exchange_rates(
     self.validators.pool_exchange_rates(pool_id)
 }
 
+public(package) fun calculate_rewards(
+    self: &SuiSystemStateInnerV2,
+    pool_id: ID,
+    staked_principal: u64,
+    activation_epoch: u64,
+    withdraw_epoch: u64,
+): u64 {
+    self.validators.calculate_rewards(pool_id, staked_principal, activation_epoch, withdraw_epoch)
+}
+
 public(package) fun active_validator_addresses(self: &SuiSystemStateInnerV2): vector<address> {
     self.validators.active_validator_addresses()
 }
