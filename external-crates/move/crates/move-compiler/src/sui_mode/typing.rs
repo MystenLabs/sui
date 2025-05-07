@@ -1013,7 +1013,14 @@ fn check_event_emit(context: &mut Context, loc: Loc, mcall: &ModuleCall) {
         debug_assert!(false, "ICE arity should have been expanded for errors");
         return;
     };
+
+    let module_info = context.info.module(current_module);
+    if module_info.attributes.is_spec_or_spec_only() {
+        return;
+    }
+
     let is_defined_in_current_module = matches!(first_ty.value.type_name(), Some(sp!(_, TypeName_::ModuleType(m, _))) if m == current_module);
+
     if !is_defined_in_current_module {
         let msg = format!(
             "Invalid event. The function '{}::{}' must be called with a type defined in the current module",
