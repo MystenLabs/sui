@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 83;
+const MAX_PROTOCOL_VERSION: u64 = 82;
 
 // Record history of protocol version allocations here:
 //
@@ -235,8 +235,7 @@ const MAX_PROTOCOL_VERSION: u64 = 83;
 // Version 81: Enable median based commit timestamp in consensus on mainnet.
 //             Enforce checkpoint timestamps are non-decreasing for testnet and mainnet.
 //             Increase threshold for bad nodes that won't be considered leaders in consensus in mainnet
-// Version 82:
-// Version 83: Disable fungible staking before pool activation.
+// Version 82: Disable fungible staking before pool activation.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3485,7 +3484,6 @@ impl ProtocolConfig {
                 82 => {
                     cfg.feature_flags.max_ptb_value_size_v2 = true;
                 }
-                83 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
