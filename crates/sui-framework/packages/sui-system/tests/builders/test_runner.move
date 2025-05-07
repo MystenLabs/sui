@@ -11,8 +11,7 @@ use sui_system::stake_subsidy;
 use sui_system::staking_pool::StakedSui;
 use sui_system::sui_system::{Self, SuiSystemState};
 use sui_system::sui_system_state_inner;
-use sui_system::validator::Validator;
-use sui_system::validator_builder;
+use sui_system::validator_builder::{Self, ValidatorBuilder};
 
 const MIST_PER_SUI: u64 = 1_000_000_000;
 
@@ -20,7 +19,7 @@ const MIST_PER_SUI: u64 = 1_000_000_000;
 
 public struct TestRunnerBuilder {
     /// Mutually exclusive with `validators_number`
-    validators: Option<vector<Validator>>,
+    validators: Option<vector<ValidatorBuilder>>,
     sui_supply_amount: Option<u64>,
     storage_fund_amount: Option<u64>,
     /// Mutually exclusive with `validators`
@@ -51,9 +50,9 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
 
     let validators = validators.destroy_or!({
         vector::tabulate!(validators_count.destroy_or!(4), |_| {
-            validator_builder::new()
-                .initial_stake(validators_initial_stake.destroy_or!(1_000_000) * MIST_PER_SUI)
-                .build(scenario.ctx())
+            validator_builder::new().initial_stake(
+                validators_initial_stake.destroy_or!(1_000_000) * MIST_PER_SUI,
+            )
         })
     });
 
@@ -78,7 +77,7 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
 
     sui_system::create(
         object::new(scenario.ctx()), // it doesn't matter what ID sui system state has in tests
-        validators,
+        validators.map!(|v| v.build(scenario.ctx())),
         balance::create_for_testing<SUI>(storage_fund_amount.destroy_or!(0)), // storage_fund
         1, // protocol version
         0, // chain_start_timestamp_ms
@@ -95,7 +94,7 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
 
 public fun validators(
     mut builder: TestRunnerBuilder,
-    validators: vector<Validator>,
+    validators: vector<ValidatorBuilder>,
 ): TestRunnerBuilder {
     builder.validators.fill(validators);
     builder
@@ -225,11 +224,32 @@ public struct TestRunner {
     sender: address,
 }
 
+/// Set the sender of the next transaction.
 public fun set_sender(runner: &mut TestRunner, sender: address) {
     runner.scenario.next_tx(sender);
     runner.sender = sender;
 }
 
+/// Get the current transaction context.
+public fun ctx(runner: &mut TestRunner): &mut TxContext { runner.scenario.ctx() }
+
+public fun scenario_mut(runner: &mut TestRunner): &mut Scenario { &mut runner.scenario }
+
+public fun keep<T: key + store>(runner: &TestRunner, object: T) {
+    transfer::public_transfer(object, runner.sender);
+}
+
+public fun sender(runner: &mut TestRunner): address { runner.sender }
+
+public fun mint(amount: u64): Balance<SUI> {
+    balance::create_for_testing(amount * MIST_PER_SUI)
+}
+
+public fun destroy<T>(v: T) {
+    sui::test_utils::destroy(v);
+}
+
+/// Finish the test runner.
 public fun finish(runner: TestRunner) {
     let TestRunner { scenario, .. } = runner;
     scenario.end();
@@ -237,10 +257,25 @@ public fun finish(runner: TestRunner) {
 
 // === Macros ===
 
+public macro fun scenario_fn($runner: &mut TestRunner, $f: |&mut Scenario|) {
+    let sender = sender($runner);
+    let scenario = scenario_mut($runner);
+    scenario.next_tx(sender);
+    $f(scenario);
+}
+
+public macro fun owned_tx<$Object>($runner: &mut TestRunner, $f: |$Object|) {
+    let sender = sender($runner);
+    let scenario = scenario_mut($runner);
+    scenario.next_tx(sender);
+    $f(scenario.take_from_sender<$Object>());
+}
+
 /// Run a transaction on the system state
 public macro fun system_tx($runner: &mut TestRunner, $f: |&mut SuiSystemState, &mut TxContext|) {
-    let TestRunner { scenario, sender } = $runner;
-    scenario.next_tx(*sender);
+    let sender = sender($runner);
+    let scenario = scenario_mut($runner);
+    scenario.next_tx(sender);
     let mut system_state = scenario.take_shared<SuiSystemState>();
     $f(&mut system_state, scenario.ctx());
     test_scenario::return_shared(system_state);
