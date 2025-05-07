@@ -16,10 +16,8 @@ use crate::{
     sp,
     static_programmable_transactions::{
         env::Env,
-        execution::values::{
-            self, ByteValue, InputObjectMetadata, InputObjectValue, InputValue, borrow_value,
-        },
-        typing::ast::{self as T, Argument, Type},
+        execution::values::{self, ByteValue, InputObjectMetadata, InputObjectValue, InputValue},
+        typing::ast::{self as T, Type},
     },
 };
 use indexmap::IndexMap;
@@ -27,17 +25,13 @@ use move_binary_format::{
     errors::Location,
     file_format::{CodeOffset, FunctionDefinitionIndex},
 };
-use move_core_types::{
-    account_address::AccountAddress,
-    language_storage::{ModuleId, StructTag},
-};
+use move_core_types::language_storage::{ModuleId, StructTag};
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 use move_vm_types::{
     gas::GasMeter,
     values::{VMValueCast, Value},
 };
-use mysten_common::debug_fatal;
 use sui_move_natives::object_runtime::{
     self, LoadedRuntimeObject, ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
 };
@@ -45,12 +39,10 @@ use sui_types::{
     TypeTag,
     base_types::{ObjectID, TxContext, TxContextKind},
     error::{ExecutionError, ExecutionErrorKind},
-    event::Event,
-    execution::{ExecutionResults, ExecutionResultsV2},
+    execution::ExecutionResults,
     metrics::LimitsMetrics,
     move_package::MovePackage,
-    object::{Authenticator, MoveObject, Object, Owner},
-    storage::DenyListResult,
+    object::{MoveObject, Object, Owner},
 };
 use tracing::instrument;
 
@@ -210,6 +202,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                     },
                 value,
             } = input;
+            // We are only interested in mutable inputs.
+            if !is_mutable_input {
+                continue;
+            }
             loaded_runtime_objects.insert(
                 id,
                 LoadedRuntimeObject {
