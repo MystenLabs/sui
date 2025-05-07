@@ -83,6 +83,10 @@ type Epoch {
 	"""
 	startTimestamp: DateTime
 	"""
+	The system packages used by all transactions in this epoch.
+	"""
+	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection
+	"""
 	The timestamp associated with the last checkpoint in the epoch (or `null` if the epoch has not finished yet).
 	"""
 	endTimestamp: DateTime
