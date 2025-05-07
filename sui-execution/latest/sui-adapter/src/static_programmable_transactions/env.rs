@@ -8,25 +8,26 @@ use crate::{
     static_programmable_transactions::loading::ast::{self as L, LoadedFunction, Type},
 };
 use move_binary_format::{
+    CompiledModule,
     errors::VMError,
     file_format::{AbilitySet, TypeParameterIndex},
-    CompiledModule,
 };
 use move_core_types::{
     annotated_value,
     language_storage::{ModuleId, StructTag},
+    runtime_value,
 };
 use move_vm_runtime::move_vm::MoveVM;
 use std::{cell::OnceCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
+    Identifier,
     base_types::ObjectID,
     error::{ExecutionError, ExecutionErrorKind},
     gas_coin::GasCoin,
     move_package::{UpgradeReceipt, UpgradeTicket},
     object::Object,
     type_input::TypeInput,
-    Identifier,
 };
 
 pub struct Env<'pc, 'vm, 'state, 'linkage> {
@@ -114,6 +115,13 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         &self,
         _ty: &Type,
     ) -> Result<annotated_value::MoveTypeLayout, ExecutionError> {
+        todo!("LOADING")
+    }
+
+    pub fn runtime_layout(
+        &self,
+        _ty: &Type,
+    ) -> Result<runtime_value::MoveTypeLayout, ExecutionError> {
         todo!("LOADING")
     }
 

@@ -268,13 +268,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         }
 
         for (id, (recipient, ty, value)) in writes {
-            let ty: Type = {
-                todo!("LOADING");
-                ty;
-            };
+            let ty: Type = todo!("OBJECT RUNTIME TYPETAG");
             let abilities = ty.abilities();
             let has_public_transfer = abilities.has_store();
-            let layout = { todo!("LOADING") };
+            let layout = env.runtime_layout(&ty)?;
             let Some(bytes) = value.simple_serialize(&layout) else {
                 invariant_violation!("Failed to deserialize already serialized Move value");
             };
@@ -550,7 +547,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let ty = {
             ty;
             // ty to vm type
-            todo!("LOADING")
+            todo!("OBJECT RUNTIME TYPETAG")
         };
         object_runtime_mut!(self)?
             .transfer(recipient, ty, object.into())
@@ -578,7 +575,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     }
 
     pub fn location_updates(
-        &self,
+        &mut self,
         args: Vec<(T::Location, Type)>,
     ) -> Result<Vec<(sui_types::transaction::Argument, Vec<u8>, TypeTag)>, ExecutionError> {
         args.into_iter()
@@ -587,7 +584,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     }
 
     fn location_update(
-        &self,
+        &mut self,
         location: T::Location,
         ty: Type,
     ) -> Result<Option<(sui_types::transaction::Argument, Vec<u8>, TypeTag)>, ExecutionError> {
@@ -596,10 +593,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             Type::Reference(_, inner) => (*inner).clone(),
             ty => ty,
         };
-        let Ok(tag): Result<TypeTag, _> = ty.try_into() else {
+        let Ok(tag): Result<TypeTag, _> = ty.clone().try_into() else {
             invariant_violation!("unable to generate type tag from type")
         };
-        let layout = { todo!("LOADING") };
+        let layout = self.env.runtime_layout(&ty)?;
         let (_, _, lv) = self.location_value(location, ty)?;
         let value = match lv {
             LocationValue::Loaded(v) => match v.as_ref() {
@@ -640,7 +637,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         result: &Value,
         ty: Type,
     ) -> Result<(Vec<u8>, TypeTag), ExecutionError> {
-        let layout = todo!("LOADING");
+        let layout = self.env.runtime_layout(&ty)?;
         let (bytes, ty) = match ty {
             Type::Reference(_, inner) => {
                 let v = result.copy_value()?.read_ref()?;
