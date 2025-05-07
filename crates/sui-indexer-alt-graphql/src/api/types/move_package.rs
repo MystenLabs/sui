@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use async_graphql::{
-    connection::{Connection, Edge},
+    connection::{Connection, CursorType, Edge},
     dataloader::DataLoader,
     Context, InputObject, Object,
 };
@@ -17,6 +17,7 @@ use sui_indexer_alt_reader::{
     pg_reader::PgReader,
 };
 use sui_indexer_alt_schema::{packages::StoredPackage, schema::kv_packages};
+use sui_sql_macro::query;
 use sui_types::{
     base_types::{ObjectID, SuiAddress as NativeSuiAddress},
     move_package::MovePackage as NativeMovePackage,
@@ -24,7 +25,12 @@ use sui_types::{
 };
 
 use crate::{
-    api::scalars::{base64::Base64, cursor::JsonCursor, sui_address::SuiAddress, uint53::UInt53},
+    api::scalars::{
+        base64::Base64,
+        cursor::{BcsCursor, JsonCursor},
+        sui_address::SuiAddress,
+        uint53::UInt53,
+    },
     error::{bad_user_input, RpcError},
     pagination::{Page, PaginationConfig},
     scope::Scope,
@@ -68,6 +74,9 @@ pub(crate) enum Error {
     )]
     OneBound,
 }
+
+/// Cursor for iterating over system packages. Points at a particular system package, by its ID.
+pub(crate) type CSysPackage = BcsCursor<Vec<u8>>;
 
 /// A MovePackage is a kind of Object that represents code that has been published on-chain. It exposes information about its modules, type definitions, functions, and dependencies.
 #[Object]
@@ -119,7 +128,7 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Connection<CVersion, Object>, RpcError<object::Error>> {
+    ) -> Result<Connection<String, Object>, RpcError<object::Error>> {
         ObjectImpl::from(&self.super_)
             .object_versions_after(ctx, first, after, last, before, filter)
             .await
@@ -134,7 +143,7 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Connection<CVersion, Object>, RpcError<object::Error>> {
+    ) -> Result<Connection<String, Object>, RpcError<object::Error>> {
         ObjectImpl::from(&self.super_)
             .object_versions_before(ctx, first, after, last, before, filter)
             .await
@@ -176,7 +185,7 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Connection<CVersion, MovePackage>, RpcError<Error>> {
+    ) -> Result<Connection<String, MovePackage>, RpcError<Error>> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("MovePackage", "packageVersionsAfter");
         let page = Page::from_params(limits, first, after, last, before)?;
@@ -209,7 +218,7 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Connection<CVersion, MovePackage>, RpcError<Error>> {
+    ) -> Result<Connection<String, MovePackage>, RpcError<Error>> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("MovePackage", "packageVersionsBefore");
         let page = Page::from_params(limits, first, after, last, before)?;
@@ -381,7 +390,7 @@ impl MovePackage {
         page: Page<CVersion>,
         address: NativeSuiAddress,
         filter: VersionFilter,
-    ) -> Result<Connection<CVersion, MovePackage>, RpcError<Error>> {
+    ) -> Result<Connection<String, MovePackage>, RpcError<Error>> {
         use kv_packages::dsl as p;
 
         let mut conn = Connection::new(false, false);
@@ -459,7 +468,99 @@ impl MovePackage {
 
         for (cursor, stored) in results {
             if let Some(object) = Self::from_stored(scope.clone(), stored)? {
-                conn.edges.push(Edge::new(cursor, object));
+                conn.edges.push(Edge::new(cursor.encode_cursor(), object));
+            }
+        }
+
+        Ok(conn)
+    }
+
+    /// Paginate through versions of a package, identified by its original ID. `address` points to
+    /// any package on-chain that has that original ID.
+    pub(crate) async fn paginate_system_packages(
+        ctx: &Context<'_>,
+        scope: Scope,
+        page: Page<CSysPackage>,
+        checkpoint: u64,
+    ) -> Result<Connection<String, MovePackage>, RpcError<Error>> {
+        let mut conn = Connection::new(false, false);
+
+        let pg_reader: &PgReader = ctx.data()?;
+
+        let mut pagination = query!("");
+        if let Some(after) = page.after() {
+            pagination += query!(" AND {Bytea} <= original_id", after.as_slice());
+        }
+
+        if let Some(before) = page.before() {
+            pagination += query!(" AND original_id <= {Bytea}", before.as_slice());
+        }
+
+        let query = query!(
+            r#"
+            SELECT
+                v.*
+            FROM (
+                SELECT DISTINCT
+                    original_id
+                FROM
+                    kv_packages
+                WHERE
+                    is_system_package
+                AND cp_sequence_number <= {BigInt}
+                {}
+                ORDER BY {}
+                LIMIT {BigInt}
+            ) k
+            CROSS JOIN LATERAL (
+                SELECT
+                    *
+                FROM
+                    kv_packages
+                WHERE
+                    original_id = k.original_id
+                AND cp_sequence_number <= {BigInt}
+                ORDER BY
+                    cp_sequence_number DESC,
+                    package_version DESC
+                LIMIT
+                    1
+            ) v
+            "#,
+            checkpoint as i64,
+            pagination,
+            if page.is_from_front() {
+                query!("original_id")
+            } else {
+                query!("original_id DESC")
+            },
+            page.limit() as i64 + 2,
+            checkpoint as i64,
+        );
+
+        let mut c = pg_reader
+            .connect()
+            .await
+            .context("Failed to connect to database")?;
+
+        let mut results: Vec<StoredPackage> = c
+            .results(query)
+            .await
+            .context("Failed to read from database")?;
+
+        if !page.is_from_front() {
+            results.reverse();
+        }
+
+        let (prev, next, results) =
+            page.paginate_results(results, |p| BcsCursor::new(p.original_id.clone()));
+
+        conn.has_previous_page = prev;
+        conn.has_next_page = next;
+
+        for (cursor, stored) in results {
+            if let Some(object) = Self::from_stored(scope.clone(), stored)? {
+                conn.edges.push(Edge::new(cursor.encode_cursor(), object));
             }
         }
 
