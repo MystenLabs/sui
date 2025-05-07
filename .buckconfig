@@ -1,0 +1,20 @@
+[repositories]
+root = .
+prelude = ./buck/prelude
+prelude-mysten = ./buck/prelude-mysten
+toolchains = ./buck/toolchains
+none = none
+
+[repository_aliases]
+config = prelude
+ovr_config = prelude
+fbcode = none
+fbsource = none
+fbcode_macros = none
+buck = none
+
+[parser]
+target_platform_detector_spec = target:root//...->prelude//platforms:default
+
+[project]
+ignore = .git

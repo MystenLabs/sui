@@ -1,0 +1,3 @@
+extra_srcs = ["src/**/*.pest", "src/**/*.rs"]
+cargo_env = true
+buildscript = []
