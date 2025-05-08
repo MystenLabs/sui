@@ -139,7 +139,7 @@ impl Value {
         let specialization: VectorSpecialization = ty
             .try_into()
             .map_err(|e| make_invariant_violation!("Unable to specialize vector: {e}"))?;
-        let vec = values::Vector::pack(specialization, values.into_iter().map(|v| v.0).collect())
+        let vec = values::Vector::pack(specialization, values.into_iter().map(|v| v.0))
             .map_err(iv("pack"))?;
         Ok(Self(vec))
     }
