@@ -17,8 +17,8 @@ gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 
 
 task 3, lines 25-29:
 //# programmable --inputs object(2,0) @0
-//> 0: sui::multiparty::single_owner(Input(1));
-//> sui::transfer::public_multiparty_transfer<ex::m::Priv>(Input(0), Result(0))
+//> 0: sui::party::single_owner(Input(1));
+//> sui::transfer::public_party_transfer<ex::m::Priv>(Input(0), Result(0))
 // Does not have store
 Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: CONSTRAINT_NOT_SATISFIED, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [] }), command: Some(1) } }
@@ -26,24 +26,24 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 4, lines 30-35:
 //# programmable --inputs @0
 //> 0: ex::m::priv();
-//> 1: sui::multiparty::single_owner(Input(0));
-//> sui::transfer::public_multiparty_transfer<ex::m::Priv>(Result(0), Result(1))
+//> 1: sui::party::single_owner(Input(0));
+//> sui::transfer::public_party_transfer<ex::m::Priv>(Result(0), Result(1))
 // Private transfer
 Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: CONSTRAINT_NOT_SATISFIED, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [] }), command: Some(2) } }
 
 task 5, lines 36-40:
 //# programmable --inputs object(2,0) @0
-//> 0: sui::multiparty::single_owner(Input(1));
-//> sui::transfer::multiparty_transfer<ex::m::Priv>(Input(0), Result(0))
+//> 0: sui::party::single_owner(Input(1));
+//> sui::transfer::party_transfer<ex::m::Priv>(Input(0), Result(0))
 // Private transfer
 Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call sui::transfer::multiparty_transfer. Use the public variant instead, sui::transfer::public_multiparty_transfer"), command: Some(1) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call sui::transfer::party_transfer. Use the public variant instead, sui::transfer::public_party_transfer"), command: Some(1) } }
 
 task 6, lines 41-44:
 //# programmable --inputs @0
 //> 0: ex::m::priv();
-//> 1: sui::multiparty::single_owner(Input(0));
-//> sui::transfer::multiparty_transfer<ex::m::Priv>(Result(0), Result(1))
+//> 1: sui::party::single_owner(Input(0));
+//> sui::transfer::party_transfer<ex::m::Priv>(Result(0), Result(1))
 Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call sui::transfer::multiparty_transfer. Use the public variant instead, sui::transfer::public_multiparty_transfer"), command: Some(2) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call sui::transfer::party_transfer. Use the public variant instead, sui::transfer::public_party_transfer"), command: Some(2) } }

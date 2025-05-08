@@ -52,10 +52,10 @@ error[Sui E02009]: invalid private transfer call
 error[Sui E02009]: invalid private transfer call
    ┌─ tests/sui_mode/private_generics/no_public_transfer_store.move:26:9
    │
-25 │     public fun t6(s: other::S, p: sui::multiparty::Multiparty) {
+25 │     public fun t6(s: other::S, p: sui::party::Party) {
    │                      -------- The type 'a::other::S' is not declared in the current module
-26 │         transfer::multiparty_transfer(s, p);
-   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::multiparty_transfer' is restricted to being called in the object's module, 'a::other'
+26 │         transfer::party_transfer(s, p);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::party_transfer' is restricted to being called in the object's module, 'a::other'
    ·
 31 │     struct S has key, store {
-   │                       ----- The object has 'store' so 'sui::transfer::public_multiparty_transfer' can be called instead
+   │                       ----- The object has 'store' so 'sui::transfer::public_party_transfer' can be called instead
