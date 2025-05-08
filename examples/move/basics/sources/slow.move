@@ -24,10 +24,5 @@ public fun slow(mut n: u64, size: u64) {
 
 /// bimodal alternates between slow and fast execution every 10 seconds
 public fun bimodal(clock: &clock::Clock) {
-    let t = clock.timestamp_ms();
-    if ((t / 10000) % 2 == 0) {
-        slow(100, 100);
-    } else {
-        slow(10, 10);
-    }
+    slow(100, 100);
 }

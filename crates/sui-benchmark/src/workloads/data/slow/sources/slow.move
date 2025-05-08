@@ -28,12 +28,7 @@ module slow::slow {
 
     /// bimodal alternates between slow and fast execution every 10 seconds
     public fun bimodal(clock: &clock::Clock) {
-        let t = clock.timestamp_ms();
-        if ((t / 10000) % 2 == 0) {
-            slow(100, 100);
-        } else {
-            slow(10, 10);
-        }
+        slow(100, 100);
     }
 
     /// Initialize object to be used as mutable shared input
