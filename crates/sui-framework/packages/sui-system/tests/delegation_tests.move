@@ -80,7 +80,7 @@ fun test_join_different_epochs() {
         part1.join(part2);
     });
 
-    abort // unreacheable
+    abort
 }
 
 #[test, expected_failure(abort_code = staking_pool::EStakedSuiBelowThreshold)]
@@ -99,7 +99,7 @@ fun test_split_below_threshold() {
         stake.split_to_sender(1 * MIST_PER_SUI + 1, runner.ctx());
     });
 
-    abort // unreacheable
+    abort
 }
 
 #[test, expected_failure(abort_code = staking_pool::EStakedSuiBelowThreshold)]
@@ -118,7 +118,7 @@ fun test_split_nonentry_below_threshold() {
         stake.split_to_sender(1 * MIST_PER_SUI + 1, runner.ctx());
     });
 
-    abort // unreacheable
+    abort
 }
 
 #[test]
@@ -162,6 +162,7 @@ fun test_add_remove_stake_flow() {
         });
     });
 
+    // Advance epoch. Stake is now removed from the validator.
     runner.advance_epoch(option::none()).destroy_for_testing();
     runner.system_tx!(|system, _| {
         assert_eq!(system.validator_stake_amount(VALIDATOR_ADDR_1), 100 * MIST_PER_SUI);
@@ -390,7 +391,7 @@ fun test_add_preactive_remove_pending_failure() {
     // No advance epoch has happened yet.
     runner.set_sender(STAKER_ADDR_1).stake_with(NEW_VALIDATOR_ADDR, 100);
 
-    runner.finish();
+    abort
 }
 
 #[test]
