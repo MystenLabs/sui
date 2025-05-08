@@ -14,6 +14,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::package::{EnvironmentName, PackageName};
 
+// TODO (potential refactor): using [Option] here and representing the default environment as
+// [None] has led to some confusion, it might be better to make a specific enumeration, so that
+// [DependencySet] becomes closer to a vanilla map. In fact, in the dependency graph we'll have
+// `Option<EnvironmentName>, PackageName` edges - this might be a good type to encapsulate; then
+// DependencySet just becomes a map from edges to T. A little curry can go a long way
+
 /// A set of default dependencies and dep replacements. Within each environment, package names are
 /// unique.
 ///
@@ -77,6 +83,7 @@ impl<T> DependencySet<T> {
 
     /// Convenience method to return either [default_deps] or [deps_for_env] depending on [env]; an
     /// [env] of [None] indicates a request for the default dependencies.
+    /// TODO rename to deps
     pub fn deps_for(&self, env: Option<&EnvironmentName>) -> BTreeMap<PackageName, &T> {
         match env {
             Some(env) => self.deps_for_env(env),
@@ -127,6 +134,7 @@ impl<T> DependencySet<T> {
 
     /// A copy of [self] expanded with an entry (package name, env, dep) for all
     /// packages in [self] and environments in [envs].
+    /// TODO: rename to expand or extend
     pub fn explode(&mut self, envs: impl IntoIterator<Item = EnvironmentName>)
     where
         T: Clone,
@@ -263,6 +271,7 @@ impl<T> FromIterator<(Option<EnvironmentName>, PackageName, T)> for DependencySe
     }
 }
 
+// TODO: maybe this can be derived with our fancy derive macros?
 // Note: can't be derived because that adds a spurious T: Default bound
 impl<T> Default for DependencySet<T> {
     /// The empty dependency set

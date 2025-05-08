@@ -22,6 +22,8 @@ use lockfile::{Lockfile, Publication};
 use manifest::Manifest;
 use tracing::debug;
 
+// TODO: we might want to use [move_core_types::Identifier] here, particularly for `PackageName`.
+// This will force us to maintain invariants.
 pub type EnvironmentName = String;
 pub type PackageName = String;
 

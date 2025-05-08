@@ -19,6 +19,7 @@ use crate::{
 
 use super::*;
 
+// TODO: add 2025 edition
 const ALLOWED_EDITIONS: &[&str] = &["2024", "2024.beta", "legacy"];
 
 // Note: [Manifest] objects are immutable and should not implement [serde::Serialize]; any tool
@@ -96,6 +97,8 @@ impl<F: MoveFlavor> Manifest<F> {
     }
 
     /// Validate the manifest contents, after deserialization.
+    ///
+    // TODO: add more validation
     pub fn validate_manifest(&self, handle: FileHandle) -> PackageResult<()> {
         // Validate package name
         if self.package.name.get_ref().is_empty() {
