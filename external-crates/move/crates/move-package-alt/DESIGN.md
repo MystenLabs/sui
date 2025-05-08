@@ -1,5 +1,4 @@
 # TODO: careful rollout plan - parallel with extisting system?
-# TODO:
 
 # Package Management Alt Design
 
@@ -122,10 +121,6 @@ mainnet.foo = {
 	published-at = "...",
 	use-environment = "mainnet_alpha" # override/specify the dep's environment
 }
-
-# TODO: we could add an [addresses] section but with much simpler semantics - addresses could be
-# local to the package and not inherited from dependencies. This might make backwards compatibility
-# easier. We would probably want to make them per-environment?
 ```
 
 Move.lock (contains `unpublished` and entries for environments defined in `Move.toml`):
@@ -134,79 +129,46 @@ Move.lock (contains `unpublished` and entries for environments defined in `Move.
 [move]
 version = 4
 
-# TODO: we could either serialize the resolution graph as one big graph containing edges with
-# network labels or as a separate graph for each environment. This example currently uses the
-# latter approach but I think I prefer the former, because it allows consolidating overrides with
-# defaults
-
-# TODO: unpublished should maybe just be "pinned" or something - it has a pretty different structure
-# from published
-
-[pinned.deps]
-# edges in the dependency graph are labeled by environment name (or default) and by (local)
-# dependency name. Source and target are node ids (in the unpublished.pinned section below)
-example.std = "MoveStdlib"
-example.sui = "Sui"
-example.foo = "foo"
-example.bar = "bar"
-
-Sui.std = "MoveStdlib"
-
-foo.std = "MoveStdlib"
-foo.sui = "Sui"
-foo.bar = "bar"
-
-bar.std = "MoveStdlib"
-bar.sui = "Sui"
-
-[pinned.
-
-[unpublished.default.pinned.MoveStdlib]
-# nodes in the dependency graph have an id (MoveStdlib), a pinned dependency in `source`, and a
-# digest of the dependency's Move.toml file
+# The `pinned` section contains the entire dependency graph across all environments. Each node in
+# the graph contains the pinned dependency location, a digest of the manifest of the dependency (to
+# detect local changes), and a set of outgoing edges. The edges are labeled by an environment name
+# (or "default") and the name of the dependency.
 #
-# The ids are take from the package's name (as defined in their `Move.toml` files), but with numbers
-# appended in case of conflicts (e.g. if two packages have `name = "foo"` they would be given ids
-# `foo_1` and `foo_2`
-source = { git = "sui.git", rev = "SHA for mainnet", path = ".../packages/move-stdlib" }
+# The identities of the nodes are arbitrary, but it seems nice to generate them from the package
+# names that dependencies declare for themselves.
+
+# There is also a node for the current package; the only thing that makes it special is that it has
+# the name of the current package as its identity (it will also always have `{local = "."}` as its
+# source)
+[pinned.example]
+source = { local = "." }
 manifest_digest = "..."
 
-[unpublished.default.pinned.Sui]
-source = { git = "sui.git", rev = "SHA for mainnet", path = ".../packages/sui" }
+# in this example, `std` and `sui` have non-default entries because they are system packages that
+# may be resolved differently for different environments; `foo` has an override in the manifest
+# file, and `bar` is externally resolved, and the external resolver may return different source for
+# different chain IDs:
+deps.std = { default: "MoveStdlib_0", mainnet = "MoveStdlib_1", testnet = "MoveStdlib_2" }
+deps.sui = { default: "Sui_0", mainnet = "Sui_1", testnet = "Sui_2" }
+deps.foo = { default: "foo_0", mainnet = "foo_1" }
+deps.bar = { default: "bar_0", testnet = "bar_2" }
+deps.baz = { default: "Baz_0" }
+
+[pinned.MoveStdlib_0]
+source = { git = "...", path = "...", rev = "1234" }
 manifest_digest = "..."
+deps = {}
 
-[unpublished.default.pinned.foo]
-source = { git = "sui.git", rev = "foo SHA" }
-manifest_digest = "..."
+[pinned.Sui_0]
+source = ...
+manifest_digest = ...
+deps.MoveStdlib = { default: "MoveStdlib_0" }
 
-[unpublished.default.pinned.bar]
-source = { git = "sui.git", rev = "bar SHA" }
-manifest_digest = "..."
+... additional sections for all the identities mentioned in the `deps` sections (e.g.
+`MoveStdlib_1`, `foo_0`, `Baz_0`, etc.
 
-[unpublished.mainnet.deps]
-example.std = "MoveStdlib"
-example.sui = "Sui"
-example.foo = "foo"
-example.bar = "bar"
-
-Sui.std = "MoveStdlib"
-
-foo.std = "MoveStdlib"
-foo.sui = "Sui"
-foo.bar = "bar"
-
-bar.std = "MoveStdlib"
-bar.sui = "Sui"
-
-[unpublished.mainnet.pinned.MoveStdlib]
-source = { git = "sui.git", rev = "SHA for mainnet", path = ".../packages/move-stdlib" }
-manifest_digest = "..."
-
-[unpublished.mainnet.pinned.Sui]
-source = { git = "sui.git", rev = "SHA for mainnet", path = ".../packages/sui" }
-manifest_digest = "..."
-
-
+# The `published` section contains a record for the current versions published on each declared
+# environment (if any).
 [published.mainnet] # metadata from most recent publish to mainnet
 chain-id = "35834a8a"
 published-at = "..."
@@ -215,6 +177,7 @@ upgrade-cap = "..."
 
 build-config = "..."
 toolchain-version = "..."
+version = "3"
 
 [published.testnet] # metadata from most recent publish to testnet
 chain-id = "4c78adac"
@@ -223,7 +186,7 @@ original-id = "..."
 upgrade-cap = "..."
 toolchain-version = "..."
 build-config = "..."
-
+version = "5"
 ```
 
 `.Move.<environment>.lock` (contains information for a chain not included in `Move.toml`, should be
@@ -236,6 +199,7 @@ original-id = "..."
 upgrade-cap = "..."
 toolchain-version = "..."
 build-config = "..."
+version = "0"
 ```
 
 # Schema for manifest and lock files
@@ -248,7 +212,7 @@ Move.toml
         version : Optional String
         license : Optional String
         authors : Optional Array of String
-        implicit_deps : Boolean (default true)
+        implicit_dependencies : Boolean (default true)
 
     environments : EnvironmentName → ChainID
 
@@ -258,13 +222,12 @@ Move.toml
 
 Move.lock
     move
-	    version : 4
+        version : 4
 
-    unpublished : (EnvironmentName | Default) →
-        deps : PackageID → PackageName → PackageID
-        pinned : PackageID →
-            source : PinnedDependencyLoc
-            manifest_digest : Digest
+    pinned : PackageID →
+        source : PinnedDependencyLoc
+        manifest_digest : Digest
+        deps : PackageName → EnvironmentName → PackageID
 
     published : EnvironmentName → PublishedMetadata
 
@@ -272,8 +235,8 @@ Move.<EnvironmentName>.lock
     PublishedMetadata
 
 DependencyLocation: # information used to locate a dependency
-		source: ResolverName
-		additional resolver-dependent fields
+    source: ResolverName
+    additional resolver-dependent fields
 
 PinnedDependencyLoc:
     DependencyLocation with additional constraints - see Pinning
@@ -288,13 +251,12 @@ AddressInfo:
     original-id  : ObjectID
 
 PublishedMetadata: # snapshot of an on-chain published version
-
     # Note: we will always output the optional fields, but we may not be able to
     # when migrating historical packages.
     chain-id : ChainID
     upgrade-cap : Optional ObjectID
     + AddressInfo
-    version : Int # used to detect dependency downgrading
+    version : String # used to report dependency changes during publication
 
     toolchain-version : Optional ToolchainVersion
     build-config : Optional OpaqueBuildConfig
@@ -302,54 +264,59 @@ PublishedMetadata: # snapshot of an on-chain published version
 
 # Internal Operations
 
-## Overview
+## Pinned dependencies
 
 The purpose of the lockfile is to give stability to developers by pinning consistent (transitive)
 dependency versions. These pinned versions are then used by other developers working on the same
-project, by CI, and so forth. Dependencies are always pinned as a group and are only repinned in two
-situations:
+project, by CI, by source verifiers, and so forth.
+
+A pinned dependency is one that guarantees that future lookups of the same dependency
+will yield the same source package. For example, a git dependency with a branch revision is not
+pinned, because the branch may be moved to a different commit, which might have different source
+code. To pin this kind of dependency, we must replace the branch name with a commit hash -
+downloading the same commit should always produce the same source code.
+
+Although we expect pinned dependencies to not change, there are a few situations where they could.
+One possiblity is local dependencies - if a single repository contains both a dependency and the
+depending project, we would want changes in the dependency to be reflected immediately in the
+depending project. Moreover, this doesn't cause inconsistencies in CI because presumably those
+changes would be committed together. Another example would be if a user wants to temporarily change
+a cached dependency during debugging to rerun a test or something. To handle these situations, we
+will store digests of all transitive dependency manifests and repin if any of them change.
+
+Dependencies are always pinned as a group and are only repinned in two situations:
 
 1. The user explicitly asks for it by running `sui move update-deps`. This command will repin all
    dependencies.
 
-2. The user adds or modifies a dependency in their `Move.toml` file. We detect this by comparing
-   `unpublished.dependencies.unpinned` in `Move.lock` with `dependencies` in `Move.toml`. If an
-   entry is different, that means the user has modified it, so we repin all dependencies.
-
-3. A local tranistive dependency has modified its manifest's dependencies
+2. The user modifies a `Move.toml` file in their dependency tree. We detect this by comparing
+   the `pinned.ID.manifest_digest` field of the lockfile of the project being built to the manifest
+   file of the corresponding dependency.
 
 Note: we had considered only repinning the dependencies that had changed and allowing the user to
-repin only specific deps, but this leads to a lot of confusing corner cases.
+repin only specific deps, but this leads to a lot of confusing corner cases. This is consistent with
+the philosophy is that pinning is a mechanism for reliable rebuilding and not for dependency version
+management - if a user cares about the exact version of a dependency then they can indicate that by
+referring to that version in their manifest.
+
+## Environment-Specific Dependency Replacements
 
 In addition to the main set of dependencies, the user can also override dependencies in specific
-environments using a `[dep-replacements]` section. These are treated identically, except that they
-are pinned in the `[unpublished.dep-replacements]` section instead of `[unpublished.dependencies]`
-(the differences are also relevant for publication).
+environments using a `[dep-replacements]` section. These have a slightly different set of
+information - for example they can include the on-chain addresses for packages (although this should
+only be used in the case of a legacy package whose address isn't recorded in its lockfile).
 
-When we do detect that dependencies needs to be updated, we perform the following steps:
-
- - **Resolve** and **Fetch** all dependencies (recursively)
- - **Pin** each dependency to a specific version
- - **Validate** the resulting dependency graph
-
-This process produces a graph where each vertex contains a path to the downloaded files and a pinned
-dependency, and each edge is labeled by the name that its source gives to its target. This graph is
-stored in the `unpublished.dependencies` section of the lock file.
-
-Note that if we did not repin, it is possible that not all packages have been downloaded (e.g. if we
-are rerunning in CI); in that case, we may need to fetch the dependency after loading the dependency
-graph.
+In the dependency graph, edges are annotated with an environment name (or "default") to handle
+dependency replacements (and also implicit and externally resolved dependencies; see below).
 
 ## From start to package graph
 
 0. validate manifest
     - parsing against schema
-    - note: allow environments that aren't listed - this will allow package system to support
-      special verifier or testing environments. Warn on unrecognized environments
-
-    - TODO: allow override dependencies that aren't specified in defaults?
-
-    - TODO: figure out how to merge test environment
+    - TODO: maybe allow environments that aren't listed - this will allow package system to support
+      special verifier or testing environments. Maybe warn on unrecognized environments. Similarly,
+      there may be test-related reasons to include a dependency in "dep-replacements" that wasn't
+      listed in "dependencies".
 
 1. check for repin
     - fetch all pinned dependencies
@@ -361,11 +328,12 @@ graph.
 
 2. recursively repin everything
     - explode the manifest dependencies so that there is a dep for every environment
-        - note that we will need to pay attention to `use-environment` here
+        - include implicit dependencies
     - resolve all direct external dependencies into internal dependencies
     - fetch all direct dependencies
         - note that the lockfiles of the dependencies are ignored
     - recursively repin dependencies
+        - note that we will need to pay attention to `use-environment` here
     - record FS path, pinned dep info, manifest digest
 
 3. check for conflicts
@@ -377,29 +345,26 @@ graph.
     - if two nodes have same original id and different published id for a given network, there is a
       conflict - warn
 
-4. rewrite the lock file
+4. rewrite the dependency graph to the lock file
     - (optional) collapse down overrides if they match the default environment
 
 ## Invariants
 
-To the best of our ability, we maintain the following invariants between `Move.toml` and `Move.lock`s:
+To the best of our ability, we establish the following invariants while constructing the package
+graph:
 
- - unpublished.dependencies.unpinned matches manifest.dependencies (likewise for dep-replacements).
-   If we discover a mismatch, we upgrade the mismatched dependency (as if the user ran `sui move
-   upgrade-deps`
+ - there is a node in the `pinned` section having an ID that matches the package name and a `source`
+   field containing exactly `{ local = "." }`; we call this the "root node"
 
- - `unpublished.dependencies.pinned` encodes a dag with a root node named the same as the package
-   name declared in `Move.toml`.
+ - the dependency graph in `pinned` is a DAG rooted at the root node.
 
- - For each dependency `d` in `unpublished.dependencies.pinned`, the keys in the manifest of `d` are
-   the same as those of the children of `d` in the `unpublished.dependencies.pinned`.
+ - every entry in `pinned` has a different `source`
 
- - keys of unpublished.dependencies.pinned are the transitive closure of the dependencies in
-   unpublished.dependencies.unpinned. This can change if a local dependency changes its transitive
-   dependencies. Therefore, we always perform these checks on local dependencies as well as the main
-   package
+ - For each node `p` in the `pinned` section of `Move.lock`:
+     - `p.manifest_digest` is the digest of `Move.toml`
+     - `p.deps` contains the same keys as the dependencies of `Move.toml`
+     - `p.source` has been cached locally
 
- - unpublished.dependencies.pinned are cached locally (transitively). If any are missing, we refetch
  - environments are in Move.lock if and only if they are in Move.toml; all other environments live
    in .Move.<env>.lock. If this is violated, we move the published metadata into or out of Move.lock
 
@@ -410,44 +375,32 @@ sync-lock` or something).
 ## Resolution
 
 We maintain the distinction between “internal” and “external” resolvers, but the job of an external
-resolver is much simpler - it is simply responsible for converting its own dependencies into
-internal dependencies (currently git, local, or on-chain).
+resolver is much simpler than the current design - it is simply responsible for converting its own
+dependencies into internal dependencies (currently git, local, or on-chain).
 
 External resolvers may want to return different information for each network (e.g if there are
-different versions published on mainnet or testnet). They may also want to batch their lookups.
-Therefore, the interface for an external resolver is that it receives a map from chain IDs to names
-to dependencies, and returns the same structure but with internal dependencies in the leaves.
+different versions published on mainnet or testnet). They may also want to batch their lookups. To
+support this and possible future extensions, we use JSON rpc (over stdio) for communication between
+the package management system and external resolver binaries.
 
-To be concrete, if there are any dependencies of the form `{r.<res> = ...}`, we will invoke the
-binary `<res>` from the path with the `--resolve-dependencies` command line argument, and pass the
-dependency-specific fields (i.e. not the override flags, addresses, etc) in a toml-formatted stream
-on standard in; we will then read a toml-formatted set of dependencies from standard out, then check
-that the output has the same structure as the input (same chain IDs and package names) and that the
-dependencies are internal.
+To be concrete, if there are any dependencies of the form `{r.<res> = <data>}` we will invoke the
+binary `<res>` from the path with the `--resolve-deps` command line argument. We will pass it a JSON
+RPC batch request on standard in and read a batch response from its standard out. The batch request
+will contain one call to the `resolve` method for each environment and for each dependency, passing
+the environment and the `<data>` as arguments. The method call responses will then be decoded as
+internal dependencies.
 
 Currently the only external resolver is mvr, and it will just look up the mvr name and convert it
 into a git dependency.
 
-Resolution is the phase where we handle implicit system dependencies - they are transformed to
-normal dependencies. They are treated as dep-replacements since they are environment specific.
+## Implicit dependencies
 
-## Pinning
+Unlike the current system, explicitly including an implicit dependency is an error; you disable
+implicit dependencies by adding `implicit_dependencies = false` to the `[package]` section of your
+manifest.
 
-Pinning is the process of taking a user-specified dependency and converting it to a stable pinned
-dependency. A pinned dependency is one that guarantees that future lookups of the same dependency
-will yield the same source package. For example, a git dependency with a branch revision is not
-pinned, because the branch may be moved to a different commit, which might have different source
-code. To pin this kind of dependency, we must replace the branch name with a commit hash -
-downloading the same commit should always produce the same source code.
-
-One exception to this rule is local dependencies. Local dependencies within the same repository
-should be pinned as local dependencies. That way, if a user has a repository containing both a
-package and its dependency and they modify the dependency, the changes are picked up right away.
-
-This exception means we should also process (transitive) local dependencies when we process the root
-package. For example, we should repin if we detect changes in their lock files.
-
-Pinned dependencies are stored in `Move.lock` in the `unpublished.dependencies.pinned` table.
+Like externally resolved dependencies, implicit dependencies will be pinned to different versions
+for each environment.
 
 ## Fetching
 
@@ -461,6 +414,10 @@ Since the cached files will never change, it is safe to use them across projects
 think we don’t need to have a copy of dependency sources within a project’s build artifacts.
 However, we may want to mark the files as read-only in this case, since the LSP may end up
 navigating to them during debugging and accidental changes could be bad.
+
+Of course, the users may choose to update the cache anyway (for example if they want to locally test
+a change). We should only allow building with a dirty cache if the user gives a special command-line
+argument.
 
 Note that since we always fetch after pinning, we never need to go to the network unless a
 dependency needs to be repinned (because the manifest changed or the user ran update-deps).
@@ -479,7 +436,11 @@ The only other place where bytecode deps are relevant is during testing - we nee
 we run the stored bytecode rather than the compiled stubs. However, it is probably best to always
 use the cached build artifacts when testing.
 
+TODO: what do we use as the "default" for on-chain deps?
+
 ## Validation
+
+TODO: this maybe needs to change
 
 Finally, we may want to do some validation and sanity checks after downloading. For example, `mvr`
 would check the `published-at` fields of the dependencies' lock files match the registered versions.
@@ -502,6 +463,7 @@ For example, we can perform the following checks:
     > here published-at should refer to the current version of the package and
     > original-id should refer to the first version of the package.
     >
+
  - are the chain IDs for the environments consistent?
 
     > Warning: your package depends on foo but foo’s devnet chain ID (defined in foo/Move.toml) is
@@ -518,17 +480,21 @@ the one in the package?
     > mainnet, but package foo is published at a different address according to its Move.lock file.
     > Consider removing the published-at field for foo from your Move.toml file
 
-- is the dependency graph valid?
+- If two dependencies in the graph have the same original ID but different published addresses, then
+  there is a conflict - they are referring to different versions of the same package.
 
     > Error: packages foo and bar depend on different versions of baz
     >
     >
-    > You must choose a specific version of `baz` by giving an override
-    > dependency:
+    > You must choose a specific version of `baz` by giving an override dependency:
     >
     > [dependencies]
     > baz = { <info for latest of the conflicting versions>, override = "true" }
     >
+
+- TODO: If two deps have the same published addresses, then we have two source packages claiming to match
+  the same on-chain package. This could happen if one is a bytecode dependency and the other is a
+  source dependency. We need to figure out how to disambiguate
 
 - Are there local dependencies that don’t share a repository with the current package? This is
   almost certainly a bug!
@@ -577,6 +543,8 @@ Care must be taken to use the correct environments if a package has a dependency
 `use-environment`
 
 ## Publish / Upgrade
+
+TODO: report on changed dependencies during upgrades
 
 During publication, we need to recheck that the dependencies are all published on the given network
 and that the relevant chain IDs are consistent.
