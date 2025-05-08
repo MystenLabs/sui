@@ -20,7 +20,7 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
     pop_arg,
-    values::{self, StructRef, Value},
+    values::{self, StructRef, Value, Vector, VectorSpecialization},
 };
 use smallvec::smallvec;
 use std::{
@@ -420,7 +420,7 @@ pub fn ids_for_address(
         .and_then(|inv| inv.get(&specified_ty))
         .map(|s| s.iter().map(|id| pack_id(*id)).collect::<Vec<Value>>())
         .unwrap_or_default();
-    let ids_vector = Value::vector_for_testing_only(ids);
+    let ids_vector = Vector::pack(VectorSpecialization::Container, ids).unwrap();
     Ok(NativeResult::ok(legacy_test_cost(), smallvec![ids_vector]))
 }
 
@@ -436,7 +436,7 @@ pub fn most_recent_id_for_address(
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
     let inventories = &mut object_runtime.test_inventories;
     let most_recent_id = match inventories.address_inventories.get(&account) {
-        None => pack_option(None),
+        None => pack_option(vector_specialization(&specified_ty), None),
         Some(inv) => most_recent_at_ty(&inventories.taken, inv, specified_ty),
     };
     Ok(NativeResult::ok(
@@ -770,12 +770,25 @@ fn take_from_inventory(
     Ok(obj.copy_value().unwrap())
 }
 
+fn vector_specialization(ty: &Type) -> VectorSpecialization {
+    match ty.try_into() {
+        Ok(s) => s,
+        Err(_) => {
+            debug_assert!(false, "Invalid vector specialization");
+            VectorSpecialization::Container
+        }
+    }
+}
+
 fn most_recent_at_ty(
     taken: &BTreeMap<ObjectID, Owner>,
     inv: &BTreeMap<Type, Set<ObjectID>>,
     ty: Type,
 ) -> Value {
-    pack_option(most_recent_at_ty_opt(taken, inv, ty))
+    pack_option(
+        vector_specialization(&ty),
+        most_recent_at_ty_opt(taken, inv, ty),
+    )
 }
 
 fn most_recent_at_ty_opt(
@@ -813,15 +826,21 @@ fn pack_id(a: impl Into<AccountAddress>) -> Value {
 }
 
 fn pack_ids(items: impl IntoIterator<Item = impl Into<AccountAddress>>) -> Value {
-    Value::vector_for_testing_only(items.into_iter().map(pack_id))
+    Vector::pack(
+        VectorSpecialization::Container,
+        items.into_iter().map(pack_id),
+    )
+    .unwrap()
 }
 
 fn pack_vec_map(items: impl IntoIterator<Item = (Value, Value)>) -> Value {
-    Value::struct_(values::Struct::pack(vec![Value::vector_for_testing_only(
+    Value::struct_(values::Struct::pack(vec![Vector::pack(
+        VectorSpecialization::Container,
         items
             .into_iter()
             .map(|(k, v)| Value::struct_(values::Struct::pack(vec![k, v]))),
-    )]))
+    )
+    .unwrap()]))
 }
 
 fn transaction_effects(
@@ -872,14 +891,16 @@ fn transaction_effects(
     ]))
 }
 
-fn pack_option(opt: Option<Value>) -> Value {
+fn pack_option(specialization: VectorSpecialization, opt: Option<Value>) -> Value {
     let item = match opt {
         Some(v) => vec![v],
         None => vec![],
     };
-    Value::struct_(values::Struct::pack(vec![Value::vector_for_testing_only(
+    Value::struct_(values::Struct::pack(vec![Vector::pack(
+        specialization,
         item,
-    )]))
+    )
+    .unwrap()]))
 }
 
 fn find_all_wrapped_objects<'a, 'i>(
