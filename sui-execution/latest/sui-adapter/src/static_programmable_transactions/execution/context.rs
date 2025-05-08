@@ -376,7 +376,16 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         }
         let new_events = events
             .into_iter()
-            .map(|(ty, tag, value)| {
+            .map(|(tag, value)| {
+                let ty = self
+                    .env
+                    .vm
+                    .get_runtime()
+                    .try_load_cached_type(&TypeTag::Struct(Box::new(tag.clone())))
+                    .map_err(|e| self.env.convert_vm_error(e))?
+                    .ok_or_else(|| {
+                        make_invariant_violation!("Failed to load type for event tag: {}", tag)
+                    })?;
                 let layout = self
                     .env
                     .vm

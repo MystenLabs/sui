@@ -15,7 +15,10 @@ mod checked {
         },
         gas_charger::GasCharger,
         gas_meter::SuiGasMeter,
-        programmable_transactions::{data_store::SuiDataStore, linkage_view::LinkageView},
+        programmable_transactions::{
+            data_store::{PackageStore, SuiDataStore},
+            linkage_view::LinkageView,
+        },
         type_resolver::TypeTagResolver,
     };
     use indexmap::IndexSet;
@@ -60,7 +63,7 @@ mod checked {
         metrics::LimitsMetrics,
         move_package::MovePackage,
         object::{Data, MoveObject, Object, ObjectInner, Owner},
-        storage::{BackingPackageStore, DenyListResult, PackageObject},
+        storage::DenyListResult,
         transaction::{Argument, CallArg, ObjectArg},
     };
     use tracing::instrument;
@@ -286,10 +289,10 @@ mod checked {
                     .unwrap_or(*package_id));
             }
 
-            let package = package_for_linkage(&self.linkage_view, package_id)
+            let move_package = get_package(&self.linkage_view, package_id)
                 .map_err(|e| self.convert_vm_error(e))?;
 
-            self.linkage_view.set_linkage(package.move_package())
+            self.linkage_view.set_linkage(&move_package)
         }
 
         /// Load a type using the context's current session.
@@ -332,7 +335,21 @@ mod checked {
             }
             let new_events = events
                 .into_iter()
-                .map(|(ty, tag, value)| {
+                .map(|(tag, value)| {
+                    let type_tag = TypeTag::Struct(Box::new(tag.clone()));
+                    let ty = unwrap_type_tag_load(
+                        self.protocol_config,
+                        self.vm
+                            .get_runtime()
+                            .try_load_cached_type(&type_tag)
+                            .map_err(|e| self.convert_vm_error(e))?
+                            .ok_or_else(|| {
+                                make_invariant_violation!(
+                                    "Failed to load type for event tag: {}",
+                                    tag
+                                )
+                            }),
+                    )?;
                     let layout = self
                         .vm
                         .get_runtime()
@@ -863,7 +880,23 @@ mod checked {
                 }
             }
 
-            for (id, (recipient, ty, value)) in writes {
+            for (id, (recipient, tag, value)) in writes {
+                let ty = unwrap_type_tag_load(
+                    protocol_config,
+                    vm.get_runtime()
+                        .try_load_cached_type(&TypeTag::from(tag.clone()))
+                        .map_err(|e| {
+                            convert_vm_error(
+                                e,
+                                vm,
+                                &linkage_view,
+                                protocol_config.resolve_abort_locations_to_package_id(),
+                            )
+                        })?
+                        .ok_or_else(|| {
+                            make_invariant_violation!("Failed to load type for event tag: {}", tag)
+                        }),
+                )?;
                 let abilities = vm.get_runtime().get_type_abilities(&ty).map_err(|e| {
                     convert_vm_error(
                         e,
@@ -928,7 +961,6 @@ mod checked {
 
         /// Special case errors for type arguments to Move functions
         pub fn convert_type_argument_error(&self, idx: usize, error: VMError) -> ExecutionError {
-            use move_core_types::vm_status::StatusCode;
             use sui_types::execution_status::TypeArgumentError;
             match error.major_status() {
                 StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH => {
@@ -1189,22 +1221,17 @@ mod checked {
 
     /// Fetch the package at `package_id` with a view to using it as a link context.  Produces an error
     /// if the object at that ID does not exist, or is not a package.
-    fn package_for_linkage(
-        linkage_view: &LinkageView,
+    fn get_package(
+        package_store: &dyn PackageStore,
         package_id: ObjectID,
-    ) -> VMResult<PackageObject> {
-        use move_binary_format::errors::PartialVMError;
-        use move_core_types::vm_status::StatusCode;
-
-        match linkage_view.get_package_object(&package_id) {
+    ) -> VMResult<Rc<MovePackage>> {
+        match package_store.get_package(&package_id) {
             Ok(Some(package)) => Ok(package),
             Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
                 .with_message(format!("Cannot find link context {package_id} in store"))
                 .finish(Location::Undefined)),
             Err(err) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
-                .with_message(format!(
-                    "Error loading link context {package_id} from store: {err}"
-                ))
+                .with_message(format!("Error loading {package_id} from store: {err}"))
                 .finish(Location::Undefined)),
         }
     }
@@ -1341,17 +1368,17 @@ mod checked {
 
         // Load the package that the struct is defined in, in storage
         let defining_id = ObjectID::from_address(*address);
-        let package = package_for_linkage(linkage_view, defining_id)?;
+
+        let data_store = SuiDataStore::new(linkage_view, new_packages);
+        let move_package = get_package(&data_store, defining_id)?;
 
         // Set the defining package as the link context while loading the
         // struct
-        let original_address = linkage_view
-            .set_linkage(package.move_package())
-            .map_err(|e| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(e.to_string())
-                    .finish(Location::Undefined)
-            })?;
+        let original_address = linkage_view.set_linkage(&move_package).map_err(|e| {
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message(e.to_string())
+                .finish(Location::Undefined)
+        })?;
 
         let runtime_id = ModuleId::new(original_address, module.clone());
         let data_store = SuiDataStore::new(linkage_view, new_packages);
@@ -1730,6 +1757,17 @@ mod checked {
                 protocol_config,
                 Mode::packages_are_predefined(),
             )
+        }
+    }
+
+    fn unwrap_type_tag_load(
+        protocol_config: &ProtocolConfig,
+        ty: Result<Type, ExecutionError>,
+    ) -> Result<Type, ExecutionError> {
+        if ty.is_err() && !protocol_config.type_tags_in_object_runtime() {
+            panic!("Failed to load a type tag from the object runtime -- this shouldn't happen")
+        } else {
+            ty
         }
     }
 
