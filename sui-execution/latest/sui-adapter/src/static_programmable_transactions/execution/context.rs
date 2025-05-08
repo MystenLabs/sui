@@ -17,7 +17,7 @@ use crate::{
     static_programmable_transactions::{
         env::Env,
         execution::values::{
-            self, ByteValue, InputObjectMetadata, InputObjectValue, InputValue, Value,
+            ByteValue, InitialInput, InputObjectMetadata, InputValue, Inputs, Local, Locals, Value,
         },
         typing::ast::{self as T, Type},
     },
@@ -85,8 +85,8 @@ macro_rules! charge_gas {
 pub struct CtxValue(Value);
 
 enum LocationValue<'a> {
-    Loaded(&'a mut Option<Value>),
-    Bytes(&'a mut InputValue, Type),
+    Loaded(Local<'a>),
+    InputBytes(&'a mut Inputs, u16, Type),
 }
 
 #[derive(Copy, Clone)]
@@ -113,13 +113,13 @@ pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
     user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
     // runtime data
     /// The runtime value for the Gas coin, None if no gas coin is provided
-    gas: Option<InputObjectValue>,
+    gas: Option<Inputs>,
     /// The runtime value for the inputs/call args
-    inputs: Vec<InputValue>,
+    inputs: Inputs,
     /// The results of a given command. For most commands, the inner vector will have length 1.
     /// It will only not be 1 for Move calls with multiple return values.
     /// Inner values are None if taken/moved by-value
-    results: Vec<Vec<Option<Value>>>,
+    results: Vec<Locals>,
 }
 
 impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
@@ -139,10 +139,11 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             .into_iter()
             .map(|(arg, ty)| load_input_arg(gas_charger, env, &mut input_object_map, arg, ty))
             .collect::<Result<Vec<_>, ExecutionError>>()?;
+        let inputs = Inputs::new(inputs)?;
         let gas = match gas_charger.gas_coin() {
             Some(gas_coin) => {
                 let ty = env.gas_coin_type()?;
-                let gas = load_object_arg_impl(
+                let (gas_metadata, gas_value) = load_object_arg_impl(
                     gas_charger,
                     env,
                     &mut input_object_map,
@@ -150,14 +151,15 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                     true,
                     ty,
                 )?;
-                let Some(gas_ref) = gas.value.as_ref() else {
-                    invariant_violation!("Gas object should be a populated coin")
+                let mut gas_locals = Inputs::new([InitialInput::Object(gas_metadata, gas_value)])?;
+                let InputValue::Loaded(gas_local) = gas_locals.get(0)? else {
+                    invariant_violation!("Gas coin should be loaded, not bytes");
                 };
-                let gas_ref = values::borrow_value(gas_ref)?;
+                let gas_ref = gas_local.borrow()?;
                 // We have already checked that the gas balance is enough to cover the gas budget
                 let max_gas_in_balance = gas_charger.gas_budget();
                 gas_ref.coin_ref_subtract_balance(max_gas_in_balance)?;
-                Some(gas)
+                Some(gas_locals)
             }
             None => None,
         };
@@ -186,27 +188,25 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
 
     pub fn finish(mut self) -> Result<ExecutionResults, ExecutionError> {
         let gas = std::mem::take(&mut self.gas);
-        let inputs = std::mem::take(&mut self.inputs);
-        let gas_id_opt = gas.as_ref().map(|v| v.object_metadata.id);
+        let inputs = std::mem::replace(&mut self.inputs, Inputs::new([])?);
         let mut loaded_runtime_objects = BTreeMap::new();
         let mut by_value_shared_objects = BTreeSet::new();
         let mut authenticator_objects = BTreeMap::new();
-        let input_objects = inputs.into_iter().filter_map(|v| match v {
-            InputValue::Bytes(_) | InputValue::Fixed(_) => None,
-            InputValue::Object(v) => Some(v),
-        });
-        for input in input_objects.chain(gas) {
-            let InputObjectValue {
-                object_metadata:
-                    InputObjectMetadata {
-                        id,
-                        is_mutable_input,
-                        owner,
-                        version,
-                        type_,
-                    },
-                value,
-            } = input;
+        let gas_object = gas
+            .map(|g| g.into_objects())
+            .transpose()?
+            .unwrap_or_default();
+        debug_assert!(gas_object.len() <= 1);
+        let gas_id_opt = gas_object.get(0).map(|(o, _)| o.id);
+        let input_objects = inputs.into_objects()?;
+        for (metadata, value) in input_objects.into_iter().chain(gas_object) {
+            let InputObjectMetadata {
+                id,
+                is_mutable_input,
+                owner,
+                version,
+                type_,
+            } = metadata;
             // We are only interested in mutable inputs.
             if !is_mutable_input {
                 continue;
@@ -405,20 +405,26 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let v = match location {
             T::Location::GasCoin => {
                 todo!("better error here? How do we handle if there is no gas coin?");
-                let gas = unwrap!(self.gas.as_mut(), "Gas coin not provided");
-                LocationValue::Loaded(&mut gas.value)
+                let gas_locals = unwrap!(self.gas.as_mut(), "Gas coin not provided");
+                let InputValue::Loaded(gas_local) = gas_locals.get(0)? else {
+                    invariant_violation!("Gas coin should be loaded, not bytes");
+                };
+                LocationValue::Loaded(gas_local)
             }
             T::Location::Result(i, j) => {
                 let result = unwrap!(self.results.get_mut(i as usize), "bounds already verified");
-                let v = unwrap!(result.get_mut(j as usize), "bounds already verified");
+                let v = result.local(j)?;
                 LocationValue::Loaded(v)
             }
             T::Location::Input(i) => {
-                let v = unwrap!(self.inputs.get_mut(i as usize), "bounds already verified");
-                match v {
-                    InputValue::Object(v) => LocationValue::Loaded(&mut v.value),
-                    InputValue::Fixed(v) => LocationValue::Loaded(v),
-                    InputValue::Bytes(_) => LocationValue::Bytes(v, ty),
+                let is_bytes = self.inputs.is_bytes(i);
+                if is_bytes {
+                    LocationValue::InputBytes(&mut self.inputs, i, ty)
+                } else {
+                    let InputValue::Loaded(v) = self.inputs.get(i)? else {
+                        invariant_violation!("Expected local");
+                    };
+                    LocationValue::Loaded(v)
                 }
             }
         };
@@ -432,40 +438,38 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         ty: Type,
     ) -> Result<Value, ExecutionError> {
         let (gas_charger, env, lv) = self.location_value(location, ty)?;
-        let value_opt = match lv {
+        let mut local = match lv {
             LocationValue::Loaded(v) => v,
-            LocationValue::Bytes(v, ty) => match usage {
+            LocationValue::InputBytes(inputs, i, ty) => match usage {
                 UsageKind::Move | UsageKind::Borrow(true) => {
-                    let bytes = match v {
-                        InputValue::Bytes(bytes) => bytes,
-                        _ => invariant_violation!("Expected bytes"),
+                    let bytes = match inputs.get(i)? {
+                        InputValue::Bytes(v) => v,
+                        InputValue::Loaded(_) => invariant_violation!("Expected bytes"),
                     };
                     let value = load_byte_value(gas_charger, env, bytes, ty)?;
-                    *v = InputValue::Fixed(Some(value));
-                    match v {
-                        InputValue::Fixed(v) => v,
-                        _ => invariant_violation!("Expected fixed value"),
+                    inputs.fix(i, value)?;
+                    match inputs.get(i)? {
+                        InputValue::Loaded(v) => v,
+                        InputValue::Bytes(_) => invariant_violation!("Expected fixed value"),
                     }
                 }
                 UsageKind::Copy | UsageKind::Borrow(false) => {
-                    let bytes = match v {
-                        InputValue::Bytes(bytes) => bytes,
-                        _ => invariant_violation!("Expected bytes"),
+                    let bytes = match inputs.get(i)? {
+                        InputValue::Bytes(v) => v,
+                        InputValue::Loaded(_) => invariant_violation!("Expected bytes"),
                     };
                     return load_byte_value(gas_charger, env, bytes, ty);
                 }
             },
         };
         Ok(match usage {
-            UsageKind::Move => unwrap!(value_opt.take(), "use after move"),
+            UsageKind::Move => local.move_()?,
             UsageKind::Copy => {
-                let value = unwrap!(value_opt.as_ref(), "use after move");
-                copy_value(gas_charger, env, value)?
+                let value = local.copy()?;
+                charge_gas_!(gas_charger, env, charge_copy_loc, &value)?;
+                value
             }
-            UsageKind::Borrow(_) => {
-                let value = unwrap!(value_opt.as_ref(), "use after move");
-                values::borrow_value(value)?
-            }
+            UsageKind::Borrow(_) => local.borrow()?,
         })
     }
 
@@ -512,7 +516,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
 
     pub fn result(&mut self, result: Vec<CtxValue>) -> Result<(), ExecutionError> {
         self.results
-            .push(result.into_iter().map(|v| Some(v.0)).collect());
+            .push(Locals::new(result.into_iter().map(|v| v.0))?);
         Ok(())
     }
 
@@ -602,14 +606,16 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         };
         let layout = self.env.runtime_layout(&ty)?;
         let (_, _, lv) = self.location_value(location, ty)?;
-        let value = match lv {
-            LocationValue::Loaded(v) => match v.as_ref() {
-                Some(v) => v,
-                None => return Ok(None),
-            },
-            LocationValue::Bytes(_, _) => return Ok(None),
+        let local = match lv {
+            LocationValue::Loaded(v) => {
+                if v.is_invalid()? {
+                    return Ok(None);
+                }
+                v
+            }
+            LocationValue::InputBytes(_, _, _) => return Ok(None),
         };
-        let Some(bytes) = value.simple_serialize(&layout) else {
+        let Some(bytes) = local.copy()?.serialize(&layout) else {
             invariant_violation!("Failed to serialize Move value");
         };
         let arg = match location {
@@ -642,20 +648,16 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         ty: Type,
     ) -> Result<(Vec<u8>, TypeTag), ExecutionError> {
         let layout = self.env.runtime_layout(&ty)?;
-        let (bytes, ty) = match ty {
+        let inner_value;
+        let (v, ty) = match ty {
             Type::Reference(_, inner) => {
-                let v = result.copy_value()?.read_ref()?;
-                let Some(bytes) = result.simple_serialize(&layout) else {
-                    invariant_violation!("Failed to serialize Move value");
-                };
-                (bytes, (*inner).clone())
+                inner_value = result.copy()?.read_ref()?;
+                (&inner_value, (*inner).clone())
             }
-            _ => {
-                let Some(bytes) = result.simple_serialize(&layout) else {
-                    invariant_violation!("Failed to serialize Move value");
-                };
-                (bytes, ty)
-            }
+            _ => (result, ty),
+        };
+        let Some(bytes) = v.serialize(&layout) else {
+            invariant_violation!("Failed to serialize Move value");
         };
         let Ok(tag): Result<TypeTag, _> = ty.try_into() else {
             invariant_violation!("unable to generate type tag from type")
@@ -697,17 +699,18 @@ fn load_input_arg(
     input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     arg: T::InputArg,
     ty: T::InputType,
-) -> Result<InputValue, ExecutionError> {
+) -> Result<InitialInput, ExecutionError> {
     Ok(match arg {
-        T::InputArg::Pure(bytes) => InputValue::Bytes(ByteValue::Pure(bytes)),
+        T::InputArg::Pure(bytes) => InitialInput::Bytes(ByteValue::Pure(bytes)),
         T::InputArg::Receiving((id, version, _)) => {
-            InputValue::Bytes(ByteValue::Receiving { id, version })
+            InitialInput::Bytes(ByteValue::Receiving { id, version })
         }
         T::InputArg::Object(arg) => {
             let T::InputType::Fixed(ty) = ty else {
                 invariant_violation!("Expected fixed type for object arg");
             };
-            InputValue::Object(load_object_arg(meter, env, input_object_map, arg, ty)?)
+            let (object_metadata, value) = load_object_arg(meter, env, input_object_map, arg, ty)?;
+            InitialInput::Object(object_metadata, value)
         }
     })
 }
@@ -718,7 +721,7 @@ fn load_object_arg(
     input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     arg: T::ObjectArg,
     ty: T::Type,
-) -> Result<InputObjectValue, ExecutionError> {
+) -> Result<(InputObjectMetadata, Value), ExecutionError> {
     let id = arg.id();
     let is_mutable_input = arg.is_mutable();
     load_object_arg_impl(meter, env, input_object_map, id, is_mutable_input, ty)
@@ -731,7 +734,7 @@ fn load_object_arg_impl(
     id: ObjectID,
     is_mutable_input: bool,
     ty: T::Type,
-) -> Result<InputObjectValue, ExecutionError> {
+) -> Result<(InputObjectMetadata, Value), ExecutionError> {
     let obj = env.read_object(&id)?;
     let owner = obj.owner.clone();
     let version = obj.version();
@@ -764,15 +767,9 @@ fn load_object_arg_impl(
         },
     );
 
-    todo!("should we charge gas here?");
-    let v = values::load_value(env, move_obj.contents(), ty)?;
+    let v = Value::deserialize(env, move_obj.contents(), ty)?;
     charge_gas_!(meter, env, charge_copy_loc, &v)?;
-    let input_object_value = InputObjectValue {
-        object_metadata,
-        value: Some(v),
-    };
-
-    Ok(input_object_value)
+    Ok((object_metadata, v))
 }
 
 fn load_byte_value(
@@ -782,7 +779,7 @@ fn load_byte_value(
     ty: Type,
 ) -> Result<Value, ExecutionError> {
     let loaded = match value {
-        ByteValue::Pure(bytes) => values::load_value(env, bytes, ty)?,
+        ByteValue::Pure(bytes) => Value::deserialize(env, bytes, ty)?,
         ByteValue::Receiving { id, version } => Value::receiving(*id, *version),
     };
     charge_gas_!(meter, env, charge_copy_loc, &loaded)?;
@@ -791,7 +788,7 @@ fn load_byte_value(
 
 fn copy_value(meter: &mut GasCharger, env: &Env, value: &Value) -> Result<Value, ExecutionError> {
     charge_gas_!(meter, env, charge_copy_loc, value)?;
-    value.copy_value()
+    value.copy()
 }
 
 /// The max budget was deducted from the gas coin at the beginning of the transaction,
@@ -806,10 +803,9 @@ fn refund_max_gas_budget<OType>(
     };
     // replace with dummy value
     let value = std::mem::replace(value_ref, VMValue::u8(0));
-    let value: Value = value.into();
-    // NOTE we probably won't be able to actually call values::borrow_value here and might need
-    // to make a new "local" like we would for Result
-    let coin_value = values::borrow_value(&value)?.coin_ref_value()?;
+    let mut locals = Locals::new([value.into()])?;
+    let mut local = locals.local(0)?;
+    let coin_value = local.borrow()?.coin_ref_value()?;
     let additional = gas_charger.gas_budget();
     if coin_value.checked_add(additional).is_none() {
         return Err(ExecutionError::new_with_source(
@@ -817,9 +813,9 @@ fn refund_max_gas_budget<OType>(
             "Gas coin too large after returning the max gas budget",
         ));
     };
-    values::borrow_value(&value)?.coin_ref_add_balance(additional)?;
+    local.borrow()?.coin_ref_add_balance(additional)?;
     // put the value back
-    *value_ref = value.into();
+    *value_ref = local.move_()?.into();
     Ok(())
 }
 

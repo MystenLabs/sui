@@ -1,11 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use crate::static_programmable_transactions::{env::Env, typing::ast::Type};
 use move_binary_format::errors::PartialVMError;
 use move_core_types::{account_address::AccountAddress, runtime_value};
 use move_vm_types::{
-    values::{self, Struct, VMValueCast, Value as VMValue, VectorSpecialization},
+    values::{
+        self, Locals as VMLocals, Struct, VMValueCast, Value as VMValue, VectorSpecialization,
+    },
     views::ValueView,
 };
 use sui_types::{
@@ -14,10 +18,14 @@ use sui_types::{
     error::ExecutionError,
     object::Owner,
 };
-pub enum InputValue {
+pub enum InputValue<'a> {
+    Bytes(&'a ByteValue),
+    Loaded(Local<'a>),
+}
+
+pub enum InitialInput {
     Bytes(ByteValue),
-    Fixed(Option<Value>),
-    Object(InputObjectValue),
+    Object(InputObjectMetadata, Value),
 }
 
 pub enum ByteValue {
@@ -42,32 +50,177 @@ pub struct InputObjectValue {
     pub value: Option<Value>,
 }
 
-pub struct Value(VMValue);
-
-// pub fn new_locals(values: Vec<Value>) -> Result<Locals, ExecutionError> {
-//     todo!()
-// }
-
-pub fn load_value(_env: &Env, _bytes: &[u8], _ty: Type) -> Result<Value, ExecutionError> {
-    todo!("RUNTIME")
+pub struct Inputs {
+    metadata: BTreeMap<u16, InputObjectMetadata>,
+    byte_values: BTreeMap<u16, ByteValue>,
+    locals: Locals,
 }
 
-pub fn borrow_value(_value: &Value) -> Result<Value, ExecutionError> {
-    todo!("RUNTIME")
+/// A memory location that can be borrowed or moved from
+pub struct Local<'a>(&'a mut Locals, u16);
+
+/// A set of memory locations that can be borrowed or moved from. Used for inputs and results
+pub struct Locals(VMLocals);
+
+pub struct Value(VMValue);
+
+impl Inputs {
+    pub fn new<Items>(values: Items) -> Result<Self, ExecutionError>
+    where
+        Items: IntoIterator<Item = InitialInput>,
+        Items::IntoIter: ExactSizeIterator,
+    {
+        let values = values.into_iter();
+        let n = values.len();
+        assert_invariant!(n <= u16::MAX as usize, "Locals size exceeds u16::MAX");
+        let mut locals = VMLocals::new(n);
+        let mut metadata = BTreeMap::new();
+        let mut byte_values = BTreeMap::new();
+        for (i, value) in values.enumerate() {
+            match value {
+                InitialInput::Bytes(byte_value) => {
+                    byte_values.insert(i as u16, byte_value);
+                }
+                InitialInput::Object(object_metadata, value) => {
+                    metadata.insert(i as u16, object_metadata);
+                    locals
+                        .store_loc(i, value.0, /* violation check */ true)
+                        .map_err(iv("store loc"))?;
+                }
+            }
+        }
+        Ok(Self {
+            metadata,
+            byte_values,
+            locals: Locals(locals),
+        })
+    }
+
+    /// Is the input a non-fixed byte value?
+    /// Once it is fixed, it will be a loaded value and this will return false
+    pub fn is_bytes(&self, index: u16) -> bool {
+        self.byte_values.contains_key(&index)
+    }
+
+    /// Retrieve an input, either a loaded value or a byte value
+    pub fn get(&mut self, index: u16) -> Result<InputValue, ExecutionError> {
+        Ok(match self.byte_values.get(&index) {
+            Some(byte_value) => InputValue::Bytes(byte_value),
+            None => InputValue::Loaded(self.locals.local(index)?),
+        })
+    }
+
+    /// Fix a byte value to a loaded value
+    pub fn fix(&mut self, index: u16, value: Value) -> Result<(), ExecutionError> {
+        let byte_value = self.byte_values.remove(&index);
+        assert_invariant!(
+            byte_value.is_some(),
+            "Cannot fix a value that is not a byte value"
+        );
+        self.locals
+            .0
+            .store_loc(index as usize, value.0, /* violation check */ true)
+            .map_err(iv("store loc"))?;
+        Ok(())
+    }
+
+    /// Collect object data and the value, if it was not moved
+    pub fn into_objects(self) -> Result<Vec<(InputObjectMetadata, Option<Value>)>, ExecutionError> {
+        let Self {
+            metadata,
+            byte_values: _,
+            mut locals,
+        } = self;
+
+        metadata
+            .into_iter()
+            .map(|(i, object_metadata)| {
+                let mut local = locals.local(i)?;
+                let value = if local.is_invalid()? {
+                    // Object was moved, nothing to take
+                    None
+                } else {
+                    // Object was not moved, take the value
+                    Some(local.move_()?)
+                };
+                Ok((object_metadata, value))
+            })
+            .collect()
+    }
+}
+
+impl Locals {
+    pub fn new<Items>(values: Items) -> Result<Self, ExecutionError>
+    where
+        Items: IntoIterator<Item = Value>,
+        Items::IntoIter: ExactSizeIterator,
+    {
+        let values = values.into_iter();
+        let n = values.len();
+        assert_invariant!(n <= u16::MAX as usize, "Locals size exceeds u16::MAX");
+        let mut locals = VMLocals::new(n);
+        for (i, value) in values.enumerate() {
+            locals
+                .store_loc(i, value.0, /* violation check */ true)
+                .map_err(iv("store loc"))?;
+        }
+        Ok(Self(locals))
+    }
+
+    pub fn local(&mut self, index: u16) -> Result<Local, ExecutionError> {
+        Ok(Local(self, index))
+    }
+}
+
+impl<'a> Local<'a> {
+    /// Does the local contain a value?
+    pub fn is_invalid(&self) -> Result<bool, ExecutionError> {
+        self.0
+            .0
+            .is_invalid(self.1 as usize)
+            .map_err(iv("out of bounds"))
+    }
+
+    /// Move the value out of the local
+    pub fn move_(&mut self) -> Result<Value, ExecutionError> {
+        assert_invariant!(!self.is_invalid()?, "cannot move invalid local");
+        Ok(Value(
+            self.0
+                .0
+                .move_loc(self.1 as usize, /* violation check */ true)
+                .map_err(iv("move loc"))?,
+        ))
+    }
+
+    /// Copy the value out in the local
+    pub fn copy(&self) -> Result<Value, ExecutionError> {
+        assert_invariant!(!self.is_invalid()?, "cannot copy invalid local");
+        Ok(Value(
+            self.0.0.copy_loc(self.1 as usize).map_err(iv("copy loc"))?,
+        ))
+    }
+
+    /// Borrow the local, creating a reference to the value
+    pub fn borrow(&self) -> Result<Value, ExecutionError> {
+        assert_invariant!(!self.is_invalid()?, "cannot borrow invalid local");
+        Ok(Value(
+            self.0
+                .0
+                .borrow_loc(self.1 as usize)
+                .map_err(iv("borrow loc"))?,
+        ))
+    }
 }
 
 impl Value {
-    pub fn copy_value(&self) -> Result<Self, ExecutionError> {
+    pub fn copy(&self) -> Result<Self, ExecutionError> {
         Ok(Value(self.0.copy_value().map_err(iv("copy"))?))
     }
 
+    /// Read the value, giving an invariant violation if the value is not a reference
     pub fn read_ref(self) -> Result<Self, ExecutionError> {
         let value: values::Reference = self.0.cast().map_err(iv("cast"))?;
         Ok(Self(value.read_ref().map_err(iv("read ref"))?))
-    }
-
-    pub fn simple_serialize(&self, layout: &runtime_value::MoveTypeLayout) -> Option<Vec<u8>> {
-        self.0.simple_serialize(layout)
     }
 
     /// This function will invariant violation on an invalid cast
@@ -76,6 +229,20 @@ impl Value {
         VMValue: VMValueCast<V>,
     {
         self.0.cast().map_err(iv("cast"))
+    }
+
+    pub fn deserialize(env: &Env, bytes: &[u8], ty: Type) -> Result<Value, ExecutionError> {
+        let layout = env.runtime_layout(&ty)?;
+        let Some(value) = VMValue::simple_deserialize(bytes, &layout) else {
+            // we already checked the layout of pure bytes during typing
+            // and objects should already be valid
+            invariant_violation!("unable to deserialize value to type {ty:?}")
+        };
+        Ok(Value(value))
+    }
+
+    pub fn serialize(&self, layout: &runtime_value::MoveTypeLayout) -> Option<Vec<u8>> {
+        self.0.simple_serialize(layout)
     }
 }
 
@@ -104,7 +271,7 @@ impl ValueView for Value {
 }
 
 //**************************************************************************************************
-// Construction
+// Value Construction
 //**************************************************************************************************
 
 impl Value {
