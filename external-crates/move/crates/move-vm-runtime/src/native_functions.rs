@@ -20,7 +20,8 @@ use move_core_types::{
 };
 use move_vm_config::runtime::VMRuntimeLimitsConfig;
 use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
+    data_store::DataStore, loaded_data::runtime_types::Type, natives::function::NativeResult,
+    values::Value,
 };
 use std::{
     cell::RefCell,
@@ -154,6 +155,46 @@ impl<'b> NativeContext<'_, 'b> {
         match self.resolver.type_to_fully_annotated_layout(ty) {
             Ok(ty_layout) => Ok(Some(ty_layout)),
             Err(e) if e.major_status().status_type() == StatusType::InvariantViolation => Err(e),
+            Err(_) => Ok(None),
+        }
+    }
+
+    // TODO: This is a bit hacky right now since we need to pass the store, however this is only
+    // used in test scenarios so we have some special knowledge that makes this work. In the new VM
+    // however this is _MUCH_ nicer as we don't need to pass the datastore as the VM's linkage
+    // tables must have the type present.
+    pub fn type_tag_to_fully_annotated_layout(
+        &self,
+        tag: &TypeTag,
+        store: &impl DataStore,
+    ) -> PartialVMResult<Option<A::MoveTypeLayout>> {
+        match self
+            .resolver
+            .loader()
+            .get_fully_annotated_type_layout(tag, store)
+        {
+            Ok(ty_layout) => Ok(Some(ty_layout)),
+            Err(e) if e.major_status().status_type() == StatusType::InvariantViolation => {
+                Err(e.to_partial())
+            }
+            Err(_) => Ok(None),
+        }
+    }
+
+    // TODO: This is a bit hacky right now since we need to pass the store, however this is only
+    // used in test scenarios so we have some special knowledge that makes this work. In the new VM
+    // however this is _MUCH_ nicer as we don't need to pass the datastore as the VM's linkage
+    // tables must have the type present.
+    pub fn type_tag_to_layout(
+        &self,
+        tag: &TypeTag,
+        store: &impl DataStore,
+    ) -> PartialVMResult<Option<R::MoveTypeLayout>> {
+        match self.resolver.loader().get_type_layout(tag, store) {
+            Ok(ty_layout) => Ok(Some(ty_layout)),
+            Err(e) if e.major_status().status_type() == StatusType::InvariantViolation => {
+                Err(e.to_partial())
+            }
             Err(_) => Ok(None),
         }
     }

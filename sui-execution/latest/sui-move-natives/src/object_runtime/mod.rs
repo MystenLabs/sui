@@ -22,10 +22,7 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_runtime::native_extensions::NativeExtensionMarker;
-use move_vm_types::{
-    loaded_data::runtime_types::Type,
-    values::{GlobalValue, Value},
-};
+use move_vm_types::values::{GlobalValue, Value};
 use object_store::{ActiveChildObject, ChildObjectStore};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -59,11 +56,11 @@ type Set<K> = IndexSet<K>;
 pub(crate) struct TestInventories {
     pub(crate) objects: BTreeMap<ObjectID, Value>,
     // address inventories. Most recent objects are at the back of the set
-    pub(crate) address_inventories: BTreeMap<SuiAddress, BTreeMap<Type, Set<ObjectID>>>,
+    pub(crate) address_inventories: BTreeMap<SuiAddress, BTreeMap<MoveObjectType, Set<ObjectID>>>,
     // global inventories.Most recent objects are at the back of the set
-    pub(crate) shared_inventory: BTreeMap<Type, Set<ObjectID>>,
-    pub(crate) immutable_inventory: BTreeMap<Type, Set<ObjectID>>,
-    pub(crate) taken_immutable_values: BTreeMap<Type, BTreeMap<ObjectID, Value>>,
+    pub(crate) shared_inventory: BTreeMap<MoveObjectType, Set<ObjectID>>,
+    pub(crate) immutable_inventory: BTreeMap<MoveObjectType, Set<ObjectID>>,
+    pub(crate) taken_immutable_values: BTreeMap<MoveObjectType, BTreeMap<ObjectID, Value>>,
     // object has been taken from the inventory
     pub(crate) taken: BTreeMap<ObjectID, Owner>,
     // allocated receiving tickets
@@ -76,8 +73,8 @@ pub struct LoadedRuntimeObject {
 }
 
 pub struct RuntimeResults {
-    pub writes: IndexMap<ObjectID, (Owner, Type, Value)>,
-    pub user_events: Vec<(Type, StructTag, Value)>,
+    pub writes: IndexMap<ObjectID, (Owner, MoveObjectType, Value)>,
+    pub user_events: Vec<(StructTag, Value)>,
     // Loaded child objects, their loaded version/digest and whether they were modified.
     pub loaded_child_objects: BTreeMap<ObjectID, LoadedRuntimeObject>,
     pub created_object_ids: Set<ObjectID>,
@@ -93,8 +90,8 @@ pub(crate) struct ObjectRuntimeState {
     deleted_ids: Set<ObjectID>,
     // transfers to a new owner (shared, immutable, object, or account address)
     // TODO these struct tags can be removed if type_to_type_tag was exposed in the session
-    transfers: IndexMap<ObjectID, (Owner, Type, Value)>,
-    events: Vec<(Type, StructTag, Value)>,
+    transfers: IndexMap<ObjectID, (Owner, MoveObjectType, Value)>,
+    events: Vec<(StructTag, Value)>,
     // total size of events emitted so far
     total_events_size: u64,
     received: IndexMap<ObjectID, DynamicallyLoadedObjectMetadata>,
@@ -246,7 +243,7 @@ impl<'a> ObjectRuntime<'a> {
     pub fn transfer(
         &mut self,
         owner: Owner,
-        ty: Type,
+        ty: MoveObjectType,
         obj: Value,
     ) -> PartialVMResult<TransferResult> {
         let id: ObjectID = get_object_id(obj.copy_value()?)?
@@ -316,15 +313,15 @@ impl<'a> ObjectRuntime<'a> {
         Ok(transfer_result)
     }
 
-    pub fn emit_event(&mut self, ty: Type, tag: StructTag, event: Value) -> PartialVMResult<()> {
+    pub fn emit_event(&mut self, tag: StructTag, event: Value) -> PartialVMResult<()> {
         if self.state.events.len() >= (self.protocol_config.max_num_event_emit() as usize) {
             return Err(max_event_error(self.protocol_config.max_num_event_emit()));
         }
-        self.state.events.push((ty, tag, event));
+        self.state.events.push((tag, event));
         Ok(())
     }
 
-    pub fn take_user_events(&mut self) -> Vec<(Type, StructTag, Value)> {
+    pub fn take_user_events(&mut self) -> Vec<(StructTag, Value)> {
         std::mem::take(&mut self.state.events)
     }
 
@@ -351,7 +348,6 @@ impl<'a> ObjectRuntime<'a> {
         parent: ObjectID,
         child: ObjectID,
         child_version: SequenceNumber,
-        child_ty: &Type,
         child_layout: &R::MoveTypeLayout,
         child_fully_annotated_layout: &MoveTypeLayout,
         child_move_type: MoveObjectType,
@@ -360,7 +356,6 @@ impl<'a> ObjectRuntime<'a> {
             parent,
             child,
             child_version,
-            child_ty,
             child_layout,
             child_fully_annotated_layout,
             child_move_type,
@@ -387,7 +382,6 @@ impl<'a> ObjectRuntime<'a> {
         &mut self,
         parent: ObjectID,
         child: ObjectID,
-        child_ty: &Type,
         child_layout: &R::MoveTypeLayout,
         child_fully_annotated_layout: &MoveTypeLayout,
         child_move_type: MoveObjectType,
@@ -395,7 +389,6 @@ impl<'a> ObjectRuntime<'a> {
         let res = self.child_object_store.get_or_fetch_object(
             parent,
             child,
-            child_ty,
             child_layout,
             child_fully_annotated_layout,
             child_move_type,
@@ -410,26 +403,23 @@ impl<'a> ObjectRuntime<'a> {
         &mut self,
         parent: ObjectID,
         child: ObjectID,
-        child_ty: &Type,
         child_move_type: MoveObjectType,
         child_value: Value,
     ) -> PartialVMResult<()> {
         self.child_object_store
-            .add_object(parent, child, child_ty, child_move_type, child_value)
+            .add_object(parent, child, child_move_type, child_value)
     }
 
     pub(crate) fn config_setting_unsequenced_read(
         &mut self,
         config_id: ObjectID,
         name_df_id: ObjectID,
-        field_setting_ty: &Type,
         field_setting_layout: &R::MoveTypeLayout,
         field_setting_object_type: &MoveObjectType,
     ) -> Option<Value> {
         match self.child_object_store.config_setting_unsequenced_read(
             config_id,
             name_df_id,
-            field_setting_ty,
             field_setting_layout,
             field_setting_object_type,
         ) {
@@ -620,7 +610,7 @@ impl ObjectRuntimeState {
         })
     }
 
-    pub fn events(&self) -> &[(Type, StructTag, Value)] {
+    pub fn events(&self) -> &[(StructTag, Value)] {
         &self.events
     }
 
