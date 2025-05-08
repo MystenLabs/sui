@@ -62,6 +62,7 @@ fun test_pending_validator_flow() {
     let mut validator = validator_builder::new()
         .sui_address(@2)
         .initial_stake(DEFAULT_STAKE)
+        .is_active_at_genesis(true)
         .build(runner.ctx());
 
     // add extra stake, but don't send it to the inventory just yet
@@ -98,7 +99,7 @@ fun test_pending_validator_flow() {
 #[test]
 fun test_metadata() {
     let ctx = &mut tx_context::dummy();
-    let metadata = validator_builder::new().build_metadata(ctx);
+    let metadata = validator_builder::preset().build_metadata(ctx);
     metadata.validate();
     test_utils::destroy(metadata);
 }
@@ -107,70 +108,76 @@ fun test_metadata() {
 #[expected_failure(abort_code = validator::EMetadataInvalidPubkey)]
 fun test_metadata_invalid_pubkey() {
     let ctx = &mut tx_context::dummy();
-    let metadata = validator_builder::new().protocol_pubkey_bytes(b"incorrect").build_metadata(ctx);
+    let metadata = validator_builder::preset()
+        .protocol_pubkey_bytes(b"incorrect")
+        .build_metadata(ctx);
 
     metadata.validate();
-    test_utils::destroy(metadata);
+    abort
 }
 
 #[test]
 #[expected_failure(abort_code = validator::EMetadataInvalidNetPubkey)]
 fun test_metadata_invalid_net_pubkey() {
     let ctx = &mut tx_context::dummy();
-    let metadata = validator_builder::new().network_pubkey_bytes(b"incorrect").build_metadata(ctx);
+    let metadata = validator_builder::preset()
+        .network_pubkey_bytes(b"incorrect")
+        .build_metadata(ctx);
 
     metadata.validate();
-    test_utils::destroy(metadata);
+    abort
 }
 
 #[test]
 #[expected_failure(abort_code = validator::EMetadataInvalidWorkerPubkey)]
 fun test_metadata_invalid_worker_pubkey() {
     let ctx = &mut tx_context::dummy();
-    let metadata = validator_builder::new().worker_pubkey_bytes(b"incorrect").build_metadata(ctx);
+    let metadata = validator_builder::preset()
+        .worker_pubkey_bytes(b"incorrect")
+        .build_metadata(ctx);
 
     metadata.validate();
-    test_utils::destroy(metadata);
+    abort
 }
 
 #[test]
 #[expected_failure(abort_code = validator::EMetadataInvalidNetAddr)]
 fun test_metadata_invalid_net_addr() {
     let ctx = &mut tx_context::dummy();
-    let metadata = validator_builder::new().net_address(b"incorrect").build_metadata(ctx);
+    let metadata = validator_builder::preset().net_address(b"incorrect").build_metadata(ctx);
 
     metadata.validate();
-    test_utils::destroy(metadata);
+    abort
 }
 
 #[test]
 #[expected_failure(abort_code = validator::EMetadataInvalidP2pAddr)]
 fun test_metadata_invalid_p2p_addr() {
     let ctx = &mut tx_context::dummy();
-    let metadata = validator_builder::new().p2p_address(b"incorrect").build_metadata(ctx);
+    let metadata = validator_builder::preset().p2p_address(b"incorrect").build_metadata(ctx);
 
     metadata.validate();
-    test_utils::destroy(metadata);
+    abort
 }
 
 #[test]
 #[expected_failure(abort_code = validator::EMetadataInvalidPrimaryAddr)]
 fun test_metadata_invalid_consensus_addr() {
     let ctx = &mut tx_context::dummy();
-    let metadata = validator_builder::new().primary_address(b"incorrect").build_metadata(ctx);
+    let metadata = validator_builder::preset().primary_address(b"incorrect").build_metadata(ctx);
 
     metadata.validate();
-    test_utils::destroy(metadata);
+    abort
 }
 
 #[test]
 #[expected_failure(abort_code = validator::EMetadataInvalidWorkerAddr)]
 fun test_metadata_invalid_worker_addr() {
     let ctx = &mut tx_context::dummy();
-    let metadata = validator_builder::new().worker_address(b"incorrect").build_metadata(ctx);
+    let metadata = validator_builder::preset().worker_address(b"incorrect").build_metadata(ctx);
 
     metadata.validate();
-    test_utils::destroy(metadata);
+    abort
 }
 
 #[test, allow(implicit_const_copy)]
@@ -186,7 +193,7 @@ fun test_validator_update_metadata_ok() {
     let new_network_pub_key = vector[149, 128, 161, 13, 11, 183, 96, 45, 89, 20, 188, 205, 26, 127, 147, 254, 184, 229, 184, 102, 64, 170, 104, 29, 191, 171, 91, 99, 58, 178, 41, 156];
 
     let ctx = &mut tx_context::dummy();
-    let mut validator = validator_builder::new().build(ctx);
+    let mut validator = validator_builder::preset().build(ctx);
 
     // perform updates
     validator.update_next_epoch_network_address(b"/ip4/192.168.1.1/tcp/80");
@@ -256,7 +263,7 @@ fun test_validator_update_metadata_ok() {
 #[test, expected_failure(abort_code = validator::EInvalidProofOfPossession)]
 fun test_validator_update_metadata_invalid_proof_of_possession() {
     let ctx = &mut tx_context::dummy();
-    let mut validator = validator_builder::new().build(ctx);
+    let mut validator = validator_builder::preset().build(ctx);
 
     validator.update_next_epoch_protocol_pubkey(
         x"96d19c53f1bee2158c3fcfb5bb2f06d3a8237667529d2d8f0fbb22fe5c3b3e64748420b4103674490476d98530d063271222d2a59b0f7932909cc455a30f00c69380e6885375e94243f7468e9563aad29330aca7ab431927540e9508888f0e1c",
@@ -269,7 +276,7 @@ fun test_validator_update_metadata_invalid_proof_of_possession() {
 #[test, expected_failure(abort_code = validator::EMetadataInvalidNetPubkey)]
 fun test_validator_update_metadata_invalid_network_key() {
     let ctx = &mut tx_context::dummy();
-    let mut validator = validator_builder::new().build(ctx);
+    let mut validator = validator_builder::preset().build(ctx);
 
     validator.update_next_epoch_network_pubkey(x"beef");
 
@@ -279,7 +286,7 @@ fun test_validator_update_metadata_invalid_network_key() {
 #[test, expected_failure(abort_code = validator::EMetadataInvalidWorkerPubkey)]
 fun test_validator_update_metadata_invalid_worker_key() {
     let ctx = &mut tx_context::dummy();
-    let mut validator = validator_builder::new().build(ctx);
+    let mut validator = validator_builder::preset().build(ctx);
 
     validator.update_next_epoch_worker_pubkey(x"beef");
 
@@ -289,7 +296,7 @@ fun test_validator_update_metadata_invalid_worker_key() {
 #[test, expected_failure(abort_code = validator::EMetadataInvalidNetAddr)]
 fun test_validator_update_metadata_invalid_network_addr() {
     let ctx = &mut tx_context::dummy();
-    let mut validator = validator_builder::new().build(ctx);
+    let mut validator = validator_builder::preset().build(ctx);
 
     validator.update_next_epoch_network_address(b"beef");
 
@@ -299,7 +306,7 @@ fun test_validator_update_metadata_invalid_network_addr() {
 #[test, expected_failure(abort_code = validator::EMetadataInvalidPrimaryAddr)]
 fun test_validator_update_metadata_invalid_primary_addr() {
     let ctx = &mut tx_context::dummy();
-    let mut validator = validator_builder::new().build(ctx);
+    let mut validator = validator_builder::preset().build(ctx);
 
     validator.update_next_epoch_primary_address(b"beef");
 
@@ -309,7 +316,7 @@ fun test_validator_update_metadata_invalid_primary_addr() {
 #[test, expected_failure(abort_code = validator::EMetadataInvalidWorkerAddr)]
 fun test_validator_update_metadata_invalid_worker_addr() {
     let ctx = &mut tx_context::dummy();
-    let mut validator = validator_builder::new().build(ctx);
+    let mut validator = validator_builder::preset().build(ctx);
 
     validator.update_next_epoch_worker_address(b"beef");
 
@@ -319,7 +326,7 @@ fun test_validator_update_metadata_invalid_worker_addr() {
 #[test, expected_failure(abort_code = validator::EMetadataInvalidP2pAddr)]
 fun test_validator_update_metadata_invalid_p2p_address() {
     let ctx = &mut tx_context::dummy();
-    let mut validator = validator_builder::new().build(ctx);
+    let mut validator = validator_builder::preset().build(ctx);
 
     validator.update_next_epoch_p2p_address(b"beef");
 
@@ -329,7 +336,7 @@ fun test_validator_update_metadata_invalid_p2p_address() {
 #[test, expected_failure(abort_code = validator::EValidatorMetadataExceedingLengthLimit)]
 fun test_validator_update_metadata_primary_address_too_long() {
     let ctx = &mut tx_context::dummy();
-    let mut validator = validator_builder::new().build(ctx);
+    let mut validator = validator_builder::preset().build(ctx);
 
     validator.update_next_epoch_primary_address(vector::tabulate!(257, |_| 0));
     abort
@@ -338,7 +345,7 @@ fun test_validator_update_metadata_primary_address_too_long() {
 #[test, expected_failure(abort_code = validator::EValidatorMetadataExceedingLengthLimit)]
 fun test_validator_update_metadata_net_address_too_long() {
     let ctx = &mut tx_context::dummy();
-    let mut validator = validator_builder::new().build(ctx);
+    let mut validator = validator_builder::preset().build(ctx);
 
     validator.update_next_epoch_network_address(vector::tabulate!(257, |_| 0));
 
@@ -348,7 +355,7 @@ fun test_validator_update_metadata_net_address_too_long() {
 #[test, expected_failure(abort_code = validator::EValidatorMetadataExceedingLengthLimit)]
 fun test_validator_update_metadata_worker_address_too_long() {
     let ctx = &mut tx_context::dummy();
-    let mut validator = validator_builder::new().build(ctx);
+    let mut validator = validator_builder::preset().build(ctx);
 
     validator.update_next_epoch_worker_address(vector::tabulate!(257, |_| 0));
 
@@ -358,7 +365,7 @@ fun test_validator_update_metadata_worker_address_too_long() {
 #[test, expected_failure(abort_code = validator::EValidatorMetadataExceedingLengthLimit)]
 fun test_validator_update_metadata_p2p_address_too_long() {
     let ctx = &mut tx_context::dummy();
-    let mut validator = validator_builder::new().build(ctx);
+    let mut validator = validator_builder::preset().build(ctx);
 
     validator.update_next_epoch_p2p_address(vector::tabulate!(257, |_| 0));
 
@@ -368,7 +375,7 @@ fun test_validator_update_metadata_p2p_address_too_long() {
 #[test, expected_failure(abort_code = validator::EValidatorMetadataExceedingLengthLimit)]
 fun test_validator_update_name_too_long() {
     let ctx = &mut tx_context::dummy();
-    let mut validator = validator_builder::new().build(ctx);
+    let mut validator = validator_builder::preset().build(ctx);
 
     validator.update_name(vector::tabulate!(257, |_| 0));
 
@@ -378,7 +385,7 @@ fun test_validator_update_name_too_long() {
 #[test, expected_failure(abort_code = validator::EValidatorMetadataExceedingLengthLimit)]
 fun test_validator_update_description_too_long() {
     let ctx = &mut tx_context::dummy();
-    let mut validator = validator_builder::new().build(ctx);
+    let mut validator = validator_builder::preset().build(ctx);
 
     validator.update_description(vector::tabulate!(257, |_| 0));
 
@@ -388,7 +395,7 @@ fun test_validator_update_description_too_long() {
 #[test, expected_failure(abort_code = validator::EValidatorMetadataExceedingLengthLimit)]
 fun test_validator_update_project_url_too_long() {
     let ctx = &mut tx_context::dummy();
-    let mut validator = validator_builder::new().build(ctx);
+    let mut validator = validator_builder::preset().build(ctx);
 
     validator.update_project_url(vector::tabulate!(257, |_| 0));
 
@@ -398,7 +405,7 @@ fun test_validator_update_project_url_too_long() {
 #[test, expected_failure(abort_code = validator::EValidatorMetadataExceedingLengthLimit)]
 fun test_validator_update_image_url_too_long() {
     let ctx = &mut tx_context::dummy();
-    let mut validator = validator_builder::new().build(ctx);
+    let mut validator = validator_builder::preset().build(ctx);
 
     validator.update_image_url(vector::tabulate!(257, |_| 0));
 
