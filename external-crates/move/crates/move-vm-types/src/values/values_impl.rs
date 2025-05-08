@@ -1372,7 +1372,6 @@ impl Value {
         ))))
     }
 
-    // TODO: consider whether we want to replace these with fn vector(v: Vec<Value>).
     pub fn vector_u8(it: impl IntoIterator<Item = u8>) -> Self {
         Self(ValueImpl::Container(Container::VecU8(Rc::new(
             RefCell::new(it.into_iter().collect()),
@@ -1420,13 +1419,6 @@ impl Value {
             RefCell::new(it.into_iter().collect()),
         ))))
     }
-
-    // REVIEW: This API can break
-    pub fn vector_for_testing_only(it: impl IntoIterator<Item = Value>) -> Self {
-        Self(ValueImpl::Container(Container::Vec(Rc::new(RefCell::new(
-            it.into_iter().map(|v| v.0).collect(),
-        )))))
-    }
 }
 
 /***************************************************************************************
@@ -1472,6 +1464,12 @@ macro_rules! impl_vm_value_cast_boxed {
             }
         }
     };
+}
+
+impl VMValueCast<Value> for Value {
+    fn cast(self) -> PartialVMResult<Value> {
+        Ok(self)
+    }
 }
 
 impl_vm_value_cast!(u8, U8);
@@ -2452,77 +2450,109 @@ impl VectorRef {
     }
 }
 
-impl Vector {
-    pub fn pack(type_param: &Type, elements: Vec<Value>) -> PartialVMResult<Value> {
-        let container = match type_param {
-            Type::U8 => Value::vector_u8(
-                elements
-                    .into_iter()
-                    .map(|v| v.value_as())
-                    .collect::<PartialVMResult<Vec<_>>>()?,
-            ),
-            Type::U16 => Value::vector_u16(
-                elements
-                    .into_iter()
-                    .map(|v| v.value_as())
-                    .collect::<PartialVMResult<Vec<_>>>()?,
-            ),
-            Type::U32 => Value::vector_u32(
-                elements
-                    .into_iter()
-                    .map(|v| v.value_as())
-                    .collect::<PartialVMResult<Vec<_>>>()?,
-            ),
-            Type::U64 => Value::vector_u64(
-                elements
-                    .into_iter()
-                    .map(|v| v.value_as())
-                    .collect::<PartialVMResult<Vec<_>>>()?,
-            ),
-            Type::U128 => Value::vector_u128(
-                elements
-                    .into_iter()
-                    .map(|v| v.value_as())
-                    .collect::<PartialVMResult<Vec<_>>>()?,
-            ),
-            Type::U256 => Value::vector_u256(
-                elements
-                    .into_iter()
-                    .map(|v| v.value_as())
-                    .collect::<PartialVMResult<Vec<_>>>()?,
-            ),
-            Type::Bool => Value::vector_bool(
-                elements
-                    .into_iter()
-                    .map(|v| v.value_as())
-                    .collect::<PartialVMResult<Vec<_>>>()?,
-            ),
-            Type::Address => Value::vector_address(
-                elements
-                    .into_iter()
-                    .map(|v| v.value_as())
-                    .collect::<PartialVMResult<Vec<_>>>()?,
-            ),
+pub enum VectorSpecialization {
+    U8,
+    U16,
+    U32,
+    U64,
+    U128,
+    U256,
+    Bool,
+    Address,
+    Container,
+}
 
-            Type::Signer | Type::Vector(_) | Type::Datatype(_) | Type::DatatypeInstantiation(_) => {
-                Value(ValueImpl::Container(Container::Vec(Rc::new(RefCell::new(
-                    elements.into_iter().map(|v| v.0).collect(),
-                )))))
+impl TryFrom<&Type> for VectorSpecialization {
+    type Error = PartialVMError;
+
+    fn try_from(ty: &Type) -> Result<Self, Self::Error> {
+        Ok(match ty {
+            Type::U8 => VectorSpecialization::U8,
+            Type::U16 => VectorSpecialization::U16,
+            Type::U32 => VectorSpecialization::U32,
+            Type::U64 => VectorSpecialization::U64,
+            Type::U128 => VectorSpecialization::U128,
+            Type::U256 => VectorSpecialization::U256,
+            Type::Bool => VectorSpecialization::Bool,
+            Type::Address => VectorSpecialization::Address,
+            Type::Vector(_) | Type::Signer | Type::Datatype(_) | Type::DatatypeInstantiation(_) => {
+                VectorSpecialization::Container
             }
-
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(format!("invalid type param for vector: {:?}", type_param)),
+                        .with_message(format!("invalid type param for vector: {:?}", ty)),
                 );
             }
+        })
+    }
+}
+
+impl Vector {
+    pub fn pack(
+        specialization: VectorSpecialization,
+        elements: impl IntoIterator<Item = Value>,
+    ) -> PartialVMResult<Value> {
+        let container = match specialization {
+            VectorSpecialization::U8 => Value::vector_u8(
+                elements
+                    .into_iter()
+                    .map(|v| v.value_as())
+                    .collect::<PartialVMResult<Vec<_>>>()?,
+            ),
+            VectorSpecialization::U16 => Value::vector_u16(
+                elements
+                    .into_iter()
+                    .map(|v| v.value_as())
+                    .collect::<PartialVMResult<Vec<_>>>()?,
+            ),
+            VectorSpecialization::U32 => Value::vector_u32(
+                elements
+                    .into_iter()
+                    .map(|v| v.value_as())
+                    .collect::<PartialVMResult<Vec<_>>>()?,
+            ),
+            VectorSpecialization::U64 => Value::vector_u64(
+                elements
+                    .into_iter()
+                    .map(|v| v.value_as())
+                    .collect::<PartialVMResult<Vec<_>>>()?,
+            ),
+            VectorSpecialization::U128 => Value::vector_u128(
+                elements
+                    .into_iter()
+                    .map(|v| v.value_as())
+                    .collect::<PartialVMResult<Vec<_>>>()?,
+            ),
+            VectorSpecialization::U256 => Value::vector_u256(
+                elements
+                    .into_iter()
+                    .map(|v| v.value_as())
+                    .collect::<PartialVMResult<Vec<_>>>()?,
+            ),
+            VectorSpecialization::Bool => Value::vector_bool(
+                elements
+                    .into_iter()
+                    .map(|v| v.value_as())
+                    .collect::<PartialVMResult<Vec<_>>>()?,
+            ),
+            VectorSpecialization::Address => Value::vector_address(
+                elements
+                    .into_iter()
+                    .map(|v| v.value_as())
+                    .collect::<PartialVMResult<Vec<_>>>()?,
+            ),
+
+            VectorSpecialization::Container => Value(ValueImpl::Container(Container::Vec(
+                Rc::new(RefCell::new(elements.into_iter().map(|v| v.0).collect())),
+            ))),
         };
 
         Ok(container)
     }
 
-    pub fn empty(type_param: &Type) -> PartialVMResult<Value> {
-        Self::pack(type_param, vec![])
+    pub fn empty(specialization: VectorSpecialization) -> PartialVMResult<Value> {
+        Self::pack(specialization, vec![])
     }
 
     pub fn unpack(self, type_param: &Type, expected_num: u64) -> PartialVMResult<Vec<Value>> {
