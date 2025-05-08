@@ -1,3 +1,6 @@
+# TODO: careful rollout plan - parallel with extisting system?
+# TODO:
+
 # Package Management Alt Design
 
 In this proposal, the `Move.lock` file contains all the information about the published versions of
@@ -14,24 +17,8 @@ stories][notion-userstories] for a walkthrough of usage scenarios.
 
 # Document status
 
- - 4/02/25 Removed `dev-dependencies` section from `Move.toml` schema. Added the
-   `flavor` section in backwards compatibility.
- - 3/21/25 Final draft circulated for comments (minor changes)
- - 3/13/25 (incomplete) Rewrote based on initial [design document][notion-overview] and discussion.
-     - Replaced local registry with Move.<environment>.lock
-     - Separated resolution into resolution and pinning
-     - Added verification step to pinning
-     - Added concrete schemata
-     - Removed comparisons with old system
-     - Added change detection for Move.toml
- - 4/3/25 Updates based on discussions
-     - added list of questions
-     - changed resolver-specific manifest entries to use same format as today
-     - added more detail to external resolver protocol
-     - specified checkouts are sparse and shallow
  - 4/25/25
      - TODO:
-         - [dep-overrides] is now [dep-replacements]
          - sui move build/test now use the default dependencies unless you ask otherwise
          - two packages share an identity if they have the same original-id in any environment
          - maybe need to do additional identity checks when running `--publish-unpublished-deps`
@@ -44,14 +31,6 @@ stories][notion-userstories] for a walkthrough of usage scenarios.
 
 (*) indicates @Michael George ‘s preference
 
- - In manifest: how to name the environment-specific dependency overrides?
-     - * opt 1: `[dep-replacements] mainnet.foo = {...}`
-         - Cons: `override` has a different meaning inside of a dependency
-     - opt 2: `[env.mainnet.dependencies] foo = {...}`
-         - Cons: makes it seem like this might be all the dependencies on
-           mainnet, rather than something that is merged into the default
-           dependencies
-     - **Resolution**: we’re using `[dep-replacements]`
  - For `move build` and `move test`: should we build/test for all environments or only for one?
      - * opt 1: Build/test for all environments by default
          - Con: efficiency, but compilation is fast
@@ -79,52 +58,36 @@ stories][notion-userstories] for a walkthrough of usage scenarios.
      - Resolution: read-write but require opt-in to build with dirty cache (with
        an `--allow-dirty-cache` opt-in)
  - For local deps that don’t share a parent git repository: error or warning?
-     - * opt 1: error
-         - Cons: maybe there’s someone who really knows what there doing and
-           just wants to publish the damn thing and doesn’t want anyone to ever
-           depend on them
-     - opt 2: warning
-         - Cons: nobody can reliably depend on you or perform source
-           verification. If you do screw this up, your dependents can’t easily
-           do anything about it
      - **Resolution:** loud, clear warning that explains why this is bad
  - Include the dependencies in the publication records in Move.lock?
-     - opt 1: include them
+     - **Resolution:** omit them.
+     - The requirement from the publisher for successful source verification is that you have a
+       single revision with the "correct" source and a lockfile containing the published address
+     - Note that "correct" means that the compiled bytecode is the same - there can still be
+       changes to macros, comments, etc! We might want to make this more secure in the future, e.g.
+       by including some kind of digest or publishing macros on-chain
 
-         ```toml
-         [published.mainnet.dependencies]
-         d1 = { git = "..." }
-         d2 = { ... }
-         ```
-
-         - Pro: Keeps a “historical record”
-         - Con: adds complexity to the lockfile; in particular there’s now two sets of env-specific
-           deps (unpublished and published)
-     - * opt 2: exclude them
-         - Pro: The only purpose for these is source verification; presumably if you are verifying
-           the source then you have the source, which includes the lockfile with its pinned deps.
-           However these entries can cause confusion since you now have two sets of env-specific
-           deps (the unpublished overrides section and the stamp for the most recent publication)
-     - opt 3: stamp the current repo instead
-
-         ```toml
-         [published.mainnet]
-         pinned-source: { git = "...", rev = "0xdeadbeef" }
-         ```
-
-         - Pro: gives a hook for a tool like mvr to derive the source versions from a single default version
-         - Con: the stamp doesn’t show up until the commit after the one that is published. I don’t think this actually matters, since these are “historical records” anyway.
-         - Con: not clear how to generate the pin (e.g. what if we want to make walrus the source of truth; if there are multiple remotes, how do we choose, etc)
  - Question: What should we name the new edition that contains these changes?
      - Move 2025!
- - Question: What does the `flavor` field currently do? How does it interact with `edition`? Do we need to support it?
+
+ - Question: What does the `flavor` field currently do? How does it interact with `edition`? Do we
+   need to support it?
  - Question: What is `--dependencies-are-root`? Do we still need it?
- - Question: Do we want a `build` section?
+ - Question: Do we want a `build` section in the manifest?
  - Question: `override = true` for transitive deps
      - If A depends on B and C, B depends on Dv1, C depends on Dv2, Dv1 depends on Ev1, and Dv2 depends on Ev2, does A need to specify an override for E?
      - If so, should we change this?
- - Worry: packages are now identified by published address instead of name. Published addresses are chain-specific, which is fine; we can detect errors separately on different chains. However, what about ephemeral networks and `--publish-unpublished-deps`? Is it ok that we just publish two different versions of a package and treat them as different packages (you would already have gotten a warning if they are published on one of the networks you care about).
- - Need to think more on: how do we help users who are publishing using mechanisms other than the CLI to keep their lock files up to date?
+ - Worry: packages are now identified by published address instead of name. Published addresses are
+   chain-specific, which is fine; we can detect errors separately on different chains. However, what
+   about ephemeral networks and `--publish-unpublished-deps`? Is it ok that we just publish two
+   different versions of a package and treat them as different packages (you would already have
+   gotten a warning if they are published on one of the networks you care about).
+
+ - Question: how do we help users who are publishing using mechanisms other than the
+   CLI to keep their lock files up to date?
+     - When we "publish" with --dump, we not only output the bytecode, but an additional file
+       containing the information needed to update the lockfile; we then have a separate command
+       that users can use to update the lock file after publishing
 
 # Example manifest and lock files
 
@@ -176,7 +139,10 @@ version = 4
 # latter approach but I think I prefer the former, because it allows consolidating overrides with
 # defaults
 
-[unpublished.default.deps]
+# TODO: unpublished should maybe just be "pinned" or something - it has a pretty different structure
+# from published
+
+[pinned.deps]
 # edges in the dependency graph are labeled by environment name (or default) and by (local)
 # dependency name. Source and target are node ids (in the unpublished.pinned section below)
 example.std = "MoveStdlib"
@@ -192,6 +158,8 @@ foo.bar = "bar"
 
 bar.std = "MoveStdlib"
 bar.sui = "Sui"
+
+[pinned.
 
 [unpublished.default.pinned.MoveStdlib]
 # nodes in the dependency graph have an id (MoveStdlib), a pinned dependency in `source`, and a
@@ -245,8 +213,8 @@ published-at = "..."
 original-id  = "..."
 upgrade-cap = "..."
 
-toolchain-version = "..."
 build-config = "..."
+toolchain-version = "..."
 
 [published.testnet] # metadata from most recent publish to testnet
 chain-id = "4c78adac"
