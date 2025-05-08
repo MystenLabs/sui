@@ -1,0 +1,38 @@
+---
+title: Soulbound NFT Example
+description: An example using Sui Move struct abilities and the Sui Framework's `transfer` module to make a NFT soulbound (non-transferable).
+keywords: [ERC-721, NFT, Soulbound]
+---
+
+A soulbound NFT is an NFT that is non-transferable. After an NFT is minted to a Sui account, the NFT is "bounded" to that account and cannot be transferred. This implementation leverages the custom logic of the Sui framework's transfer functions. The <a href="/references/framework/sui-framework/transfer" data-noBrokenLinkCheck='true'>`sui::transfer` module</a> contains two functions that transfers objects: <a href="/references/framework/sui-framework/transfer#function-transfer" data-noBrokenLinkCheck='true'>`transfer::transfer`</a> and <a href="/references/framework/sui-framework/transfer#function-public_transfer" data-noBrokenLinkCheck='true'>`transfer::public_transfer`</a>. 
+
+Typically, when defining new NFTs or object types on Sui, you don't need to create a transfer function because the Sui Framework offers `transfer::public_transfer` which anyone can use to transfer objects. However, `transfer::public_transfer` requires transferred objects have the `key` and `store` ability. Therefore, if you define a new NFT type that has the `key` ability, meaning it is a Sui object, but not the `store` ability, the holders won't be able to use `transfer::public_transfer`. This results in a soulbound NFT.
+
+It is also possible to create custom transfer logic for NFTs on Sui. The `transfer::transfer` function has custom rules performed by the Sui Move bytecode verifier that ensures that the transferred objects are defined in the module where transfer is invoked. While removing the `store` ability from a struct definition makes `transfer::public_transfer` unusable, `transfer::transfer` can still be used as long as it's used in the module that defined that object's type. This allows for the module owner to provide custom transfer logic for their soulbound NFTs. 
+
+## Example
+
+The following example creates a basic soulbound NFT on Sui. The `TestnetSoulboundNFT` struct defines the NFT with an `id`, `name`, `description`, and `url` fields. 
+
+{@inject: examples/move/nft-soulbound/sources/testnet_soulbound_nft.move#struct=TestnetSoulboundNFT noComments}
+
+This `TestnetSoulboundNFT` struct is defined with the `key` ability but without the `store` ability. This means you cannot transfer it with `transfer::public_transfer`. Instead, use `transfer::transfer` with custom transfer logic implemented in the same module. 
+
+This example also shows how to provide custom transfer logic using the `transfer::transfer` function. This is where you can add additional logic, such as resetting the NFT's stats or requiring a payment. Don't provide this functionality if the NFT is fully soulbound. 
+
+{@inject: examples/move/nft-soulbound/sources/testnet_soulbound_nft.move#fun=transfer}
+
+<details>
+<summary>
+`testnet_soulbound_nft.move` 
+</summary>
+
+{@inject: examples/move/nft-soulbound/sources/testnet_soulbound_nft.move}
+
+</details>
+
+## Related links
+
+- [Soulbound NFT example source code](https://github.com/MystenLabs/sui/tree/main/examples/move/nft-soulbound): The source code that this document references.
+- [NFT Rental](/guides/developer/nft/nft-rental.mdx): Example that rents NFTs using Kiosk Apps. 
+- [Asset Tokenization](/guides/developer/nft/asset-tokenization.mdx): Example that uses NFTs to tokenize real-world assets.

@@ -94,7 +94,7 @@ const guides = [
 					type: 'doc',
 					id: 'guides/developer/nft',
 				},
-				items: ['guides/developer/nft/nft-rental', 'guides/developer/nft/asset-tokenization'],
+				items: ['guides/developer/nft/nft-soulbound', 'guides/developer/nft/nft-rental', 'guides/developer/nft/asset-tokenization'],
 			},
 			{
 				type: 'category',
