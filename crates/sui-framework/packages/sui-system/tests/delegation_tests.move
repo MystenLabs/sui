@@ -92,8 +92,8 @@ fun test_split_below_threshold() {
         ])
         .build();
 
-    runner.set_sender(STAKER_ADDR_1);
-    runner.stake_with(VALIDATOR_ADDR_1, 2);
+    // Stake 2 SUI to the validator.
+    runner.set_sender(STAKER_ADDR_1).stake_with(VALIDATOR_ADDR_1, 2);
 
     runner.owned_tx!<StakedSui>(|mut stake| {
         stake.split_to_sender(1 * MIST_PER_SUI + 1, runner.ctx());
@@ -111,8 +111,8 @@ fun test_split_nonentry_below_threshold() {
         ])
         .build();
 
-    runner.set_sender(STAKER_ADDR_1);
-    runner.stake_with(VALIDATOR_ADDR_1, 2); // Stake 2 SUI
+    // Stake 2 SUI to the validator.
+    runner.set_sender(STAKER_ADDR_1).stake_with(VALIDATOR_ADDR_1, 2);
 
     runner.owned_tx!<StakedSui>(|mut stake| {
         stake.split_to_sender(1 * MIST_PER_SUI + 1, runner.ctx());
@@ -137,15 +137,19 @@ fun test_add_remove_stake_flow() {
         ])
         .build();
 
-    runner.set_sender(STAKER_ADDR_1);
+    // Stake 60 SUI to the validator.
+    runner.set_sender(STAKER_ADDR_1).stake_with(VALIDATOR_ADDR_1, 60);
 
-    runner.stake_with(VALIDATOR_ADDR_1, 60);
+    // Check that the stake is NOT yet added to the validator.
     runner.system_tx!(|system, _| {
         assert_eq!(system.validator_stake_amount(VALIDATOR_ADDR_1), 100 * MIST_PER_SUI);
         assert_eq!(system.validator_stake_amount(VALIDATOR_ADDR_2), 100 * MIST_PER_SUI);
     });
 
+    // Advance epoch. Stake is now added to the validator.
     runner.advance_epoch(option::none()).destroy_for_testing();
+
+    // Withdraw the stake.
     runner.set_sender(STAKER_ADDR_1);
     runner.owned_tx!<StakedSui>(|stake| {
         runner.system_tx!(|system, ctx| {
