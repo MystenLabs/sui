@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
+/// Test Runner is a context-specific wrapper around the `Scenario` struct, which
+/// provides a set of convenience methods for testing the Sui System.
 module sui_system::test_runner;
 
 use sui::balance::{Self, Balance};
@@ -12,6 +14,7 @@ use sui_system::stake_subsidy;
 use sui_system::staking_pool::StakedSui;
 use sui_system::sui_system::{Self, SuiSystemState};
 use sui_system::sui_system_state_inner;
+use sui_system::validator::Validator;
 use sui_system::validator_builder::{Self, ValidatorBuilder};
 
 const MIST_PER_SUI: u64 = 1_000_000_000;
@@ -76,7 +79,7 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
 
     sui_system::create(
         object::new(scenario.ctx()), // it doesn't matter what ID sui system state has in tests
-        validators.map!(|v| v.build(scenario.ctx())),
+        validators.map!(|v| v.is_active_at_genesis(true).build(scenario.ctx())),
         balance::create_for_testing<SUI>(storage_fund_amount.destroy_or!(0) * MIST_PER_SUI), // storage_fund
         1, // protocol version
         0, // chain_start_timestamp_ms
@@ -224,9 +227,10 @@ public struct TestRunner {
 }
 
 /// Set the sender of the next transaction.
-public fun set_sender(runner: &mut TestRunner, sender: address) {
+public fun set_sender(runner: &mut TestRunner, sender: address): &mut TestRunner {
     runner.scenario.next_tx(sender);
     runner.sender = sender;
+    runner
 }
 
 /// Get the current transaction context.
@@ -280,6 +284,22 @@ public macro fun system_tx($runner: &mut TestRunner, $f: |&mut SuiSystemState, &
     test_scenario::return_shared(system_state);
 }
 
+/// Advance the epoch of the system state. Takes an optional `AdvanceEpochOptions` struct
+/// to configure the epoch advance. Returns the storage rebate balance.
+///
+/// ```rust
+/// // default, no rewards
+/// runner.advance_epoch(option::none());
+///
+/// // custom options
+/// let opts = runner.advance_epoch_opts()
+///     .storage_charge(100)
+///     .computation_charge(200)
+///     .storage_rebate(10)
+///     .reward_slashing_rate(10);
+///
+/// runner.advance_epoch(option::some(opts));
+/// ```
 public fun advance_epoch(
     runner: &mut TestRunner,
     options: Option<AdvanceEpochOptions>,
@@ -326,37 +346,61 @@ public fun advance_epoch(
 public fun stake_with(runner: &mut TestRunner, validator: address, amount: u64) {
     let TestRunner { scenario, sender } = runner;
     scenario.next_tx(*sender);
-    let mut system_state = scenario.take_shared<SuiSystemState>();
-    system_state.request_add_stake(
-        coin::mint_for_testing(amount * MIST_PER_SUI, scenario.ctx()),
-        validator,
-        scenario.ctx(),
-    );
-    test_scenario::return_shared(system_state);
+    runner.system_tx!(|system, ctx| {
+        system.request_add_stake(
+            coin::mint_for_testing(amount * MIST_PER_SUI, ctx),
+            validator,
+            ctx,
+        );
+    });
 }
 
 /// Call the `request_withdraw_stake` function on the system state.
 public fun unstake(runner: &mut TestRunner, staked_sui_idx: u64) {
-    let TestRunner { scenario, sender } = runner;
-    scenario.next_tx(*sender);
-    let stake_sui_ids = scenario.ids_for_sender<StakedSui>();
-    let staked_sui = scenario.take_from_sender_by_id(stake_sui_ids[staked_sui_idx]);
-    let mut system_state = scenario.take_shared<SuiSystemState>();
+    let sender = runner.sender;
+    runner.set_sender(sender);
+    let stake_sui_ids = runner.scenario.ids_for_sender<StakedSui>();
+    let staked_sui = runner.scenario.take_from_sender_by_id(stake_sui_ids[staked_sui_idx]);
+    runner.system_tx!(|system, ctx| {
+        system.request_withdraw_stake(staked_sui, ctx);
+    });
+}
 
-    system_state.request_withdraw_stake(staked_sui, scenario.ctx());
-    test_scenario::return_shared(system_state);
+// === Validator Management ===
+
+/// Add a validator candidate to the system state.
+public fun add_validator_candidate(runner: &mut TestRunner, validator: Validator) {
+    let sender = runner.sender;
+    runner.scenario.next_tx(validator.sui_address());
+    runner.system_tx!(|system, ctx| {
+        system.validators_mut().request_add_validator_candidate(validator, ctx);
+    });
+    runner.scenario.next_tx(sender);
+}
+
+/// Remove a validator candidate from the system state.
+public fun remove_validator_candidate(runner: &mut TestRunner) {
+    runner.system_tx!(|system, ctx| {
+        system.validators_mut().request_remove_validator_candidate(ctx);
+    });
+}
+
+/// Requests the addition of a validator to the active validator set beginning next epoch.
+/// The sender of the transaction must match the validator's address.
+public fun add_validator(runner: &mut TestRunner) {
+    runner.system_tx!(|system, ctx| {
+        system.validators_mut().request_add_validator(ctx);
+    });
 }
 
 /// Remove a validator from the system state.
-public fun remove_validator(runner: &mut TestRunner, validator: address) {
-    let TestRunner { scenario, sender } = runner;
-    scenario.next_tx(validator);
-    let mut system_state = scenario.take_shared<SuiSystemState>();
-    system_state.request_remove_validator(scenario.ctx());
-    scenario.next_tx(*sender);
-    test_scenario::return_shared(system_state);
+public fun remove_validator(runner: &mut TestRunner) {
+    runner.system_tx!(|system, ctx| {
+        system.validators_mut().request_remove_validator(ctx);
+    });
 }
 
+/// Get the sum of the balances of all the SUI coins in the sender's account.
 public fun sui_balance(runner: &mut TestRunner): u64 {
     let sender = runner.sender;
     let scenario = runner.scenario_mut();

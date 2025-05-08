@@ -6,22 +6,7 @@ module sui_system::delegation_tests;
 
 use std::unit_test::assert_eq;
 use sui::table::Table;
-use sui::test_scenario;
-use sui_system::governance_test_utils::{
-    add_validator,
-    add_validator_candidate,
-    advance_epoch,
-    advance_epoch_with_reward_amounts,
-    create_validator_for_testing,
-    create_sui_system_state_for_testing,
-    stake_with,
-    remove_validator,
-    remove_validator_candidate,
-    total_sui_balance,
-    unstake
-};
 use sui_system::staking_pool::{Self, StakedSui, PoolTokenExchangeRate};
-use sui_system::sui_system::SuiSystemState;
 use sui_system::test_runner;
 use sui_system::validator_builder;
 use sui_system::validator_set;
@@ -35,12 +20,6 @@ const STAKER_ADDR_3: address = @44;
 
 const NEW_VALIDATOR_ADDR: address =
     @0x1a4623343cd42be47d67314fce0ad042f3c82685544bc91d8c11d24e74ba7357;
-// Generated with seed [0;32]
-const NEW_VALIDATOR_PUBKEY: vector<u8> =
-    x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
-// Generated using [fn test_proof_of_possession]
-const NEW_VALIDATOR_POP: vector<u8> =
-    x"8b93fc1b33379e2796d361c4056f0f04ad5aea7f4a8c02eaac57340ff09b6dc158eb1945eece103319167f420daf0cb3";
 
 const MIST_PER_SUI: u64 = 1_000_000_000;
 
@@ -214,23 +193,29 @@ fun test_remove_stake_post_active_flow(should_distribute_rewards: bool) {
         .storage_fund_amount(100)
         .build();
 
-    runner.set_sender(STAKER_ADDR_1);
-    runner.stake_with(VALIDATOR_ADDR_1, 100);
+    // Stake 100 SUI to the validator.
+    runner.set_sender(STAKER_ADDR_1).stake_with(VALIDATOR_ADDR_1, 100);
+
+    // Advance epoch.
     runner.advance_epoch(option::none()).destroy_for_testing();
 
+    // Check that the stake is added to the validator.
     runner.system_tx!(|system, _| {
         assert_eq!(system.validator_stake_amount(VALIDATOR_ADDR_1), 200 * MIST_PER_SUI);
         assert_eq!(system.validator_stake_amount(VALIDATOR_ADDR_2), 100 * MIST_PER_SUI);
     });
 
-    // depending on the flag we configure epoch advance options
+    // Depending on the flag we configure epoch advance options
     let options = if (should_distribute_rewards) {
-        option::some(runner.advance_epoch_opts().storage_charge(0).computation_charge(80))
+        option::some(runner.advance_epoch_opts().computation_charge(80))
     } else {
         option::none()
     };
 
-    runner.remove_validator(VALIDATOR_ADDR_1);
+    // Remove the validator and advance epoch.
+    runner.set_sender(VALIDATOR_ADDR_1).remove_validator();
+
+    // Advance epoch.
     runner.advance_epoch(options).destroy_for_testing();
 
     let reward_amt = if (should_distribute_rewards) 15 * MIST_PER_SUI else 0;
@@ -250,8 +235,8 @@ fun test_remove_stake_post_active_flow(should_distribute_rewards: bool) {
     assert_eq!(runner.sui_balance(), 100 * MIST_PER_SUI + reward_amt);
 
     // check that the validator unstakes and gets the rewards
-    runner.set_sender(VALIDATOR_ADDR_1);
-    runner.unstake(0);
+    runner.set_sender(VALIDATOR_ADDR_1).unstake(0);
+
     if (should_distribute_rewards) runner.unstake(0);
     assert_eq!(runner.sui_balance(), 100 * MIST_PER_SUI + reward_amt + validator_reward_amt);
 
@@ -269,16 +254,15 @@ fun test_earns_rewards_at_last_epoch() {
         .storage_fund_amount(100)
         .build();
 
-    runner.set_sender(STAKER_ADDR_1);
-    runner.stake_with(VALIDATOR_ADDR_1, 100);
+    // Stake 100 SUI to the validator.
+    runner.set_sender(STAKER_ADDR_1).stake_with(VALIDATOR_ADDR_1, 100);
 
     runner.advance_epoch(option::none()).destroy_for_testing();
-
-    runner.remove_validator(VALIDATOR_ADDR_1);
+    runner.set_sender(VALIDATOR_ADDR_1).remove_validator();
 
     // Add some rewards after the validator requests to leave. Since the validator is still active
     // this epoch, they should get the rewards from this epoch.
-    let options = runner.advance_epoch_opts().storage_charge(0).computation_charge(80);
+    let options = runner.advance_epoch_opts().computation_charge(80);
     runner.advance_epoch(option::some(options)).destroy_for_testing();
 
     // Each validator pool gets 30 MIST and validators shares the 20 MIST from the storage fund
@@ -286,6 +270,7 @@ fun test_earns_rewards_at_last_epoch() {
     let reward_amt = 15 * MIST_PER_SUI;
     let validator_reward_amt = 10 * MIST_PER_SUI;
 
+    runner.set_sender(STAKER_ADDR_1);
     runner.owned_tx!<StakedSui>(|stake| {
         assert_eq!(stake.amount(), 100 * MIST_PER_SUI);
         runner.system_tx!(|system, _| {
@@ -317,10 +302,16 @@ fun test_add_stake_post_active_flow() {
         ])
         .build();
 
-    runner.set_sender(STAKER_ADDR_1);
-    runner.stake_with(VALIDATOR_ADDR_1, 100);
+    // Stake 100 SUI to the validator.
+    runner.set_sender(STAKER_ADDR_1).stake_with(VALIDATOR_ADDR_1, 100);
+
+    // Advance epoch.
     runner.advance_epoch(option::none()).destroy_for_testing();
-    runner.remove_validator(VALIDATOR_ADDR_1);
+
+    // Remove the validator.
+    runner.set_sender(VALIDATOR_ADDR_1).remove_validator();
+
+    // Advance epoch again.
     runner.advance_epoch(option::none()).destroy_for_testing();
 
     // Make sure the validator is no longer active.
@@ -334,204 +325,280 @@ fun test_add_stake_post_active_flow() {
 }
 
 #[test]
+// Scenario:
+// 1. Add a validator candidate
+// 2. Stake 100 SUI to the validator candidate
+// 3. Advance epoch twice with some rewards
+// 4. Unstake from the preactive validator. There should be no rewards earned.
 fun test_add_preactive_remove_preactive() {
-    set_up_sui_system_state();
-    let mut scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
-    let scenario = &mut scenario_val;
+    let mut runner = test_runner::new()
+        .validators(vector[
+            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1),
+            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_2),
+        ])
+        .build();
 
-    add_validator_candidate(
-        NEW_VALIDATOR_ADDR,
-        b"name5",
-        b"/ip4/127.0.0.1/udp/85",
-        NEW_VALIDATOR_PUBKEY,
-        NEW_VALIDATOR_POP,
-        scenario,
-    );
+    let validator = validator_builder::preset().sui_address(NEW_VALIDATOR_ADDR).build(runner.ctx());
 
-    // Delegate 100 MIST to the preactive validator
-    stake_with(STAKER_ADDR_1, NEW_VALIDATOR_ADDR, 100, scenario);
+    runner.add_validator_candidate(validator);
+    runner.set_sender(STAKER_ADDR_1).stake_with(NEW_VALIDATOR_ADDR, 100);
 
-    // Advance epoch twice with some rewards
-    advance_epoch_with_reward_amounts(0, 400, scenario);
-    advance_epoch_with_reward_amounts(0, 900, scenario);
+    // Advance epoch with some rewards
+    let opts = runner.advance_epoch_opts().computation_charge(400);
+    runner.advance_epoch(option::some(opts)).destroy_for_testing();
+
+    // And again
+    let opts = runner.advance_epoch_opts().computation_charge(900);
+    runner.advance_epoch(option::some(opts)).destroy_for_testing();
 
     // Unstake from the preactive validator. There should be no rewards earned.
-    unstake(STAKER_ADDR_1, 0, scenario);
-    assert_eq!(total_sui_balance(STAKER_ADDR_1, scenario), 100 * MIST_PER_SUI);
+    runner.set_sender(STAKER_ADDR_1).unstake(0);
+    assert_eq!(runner.sui_balance(), 100 * MIST_PER_SUI);
 
-    scenario_val.end();
+    runner.finish();
 }
 
-#[test]
-#[expected_failure(abort_code = validator_set::ENotAValidator)]
+#[test, expected_failure(abort_code = validator_set::ENotAValidator)]
+// Scenario:
+// 1. Add a validator candidate
+// 2. Stake 100 SUI to the validator candidate
+// 3. Request to add the validator candidate to the active validator set.
+// 4. Try staking to the validator candidate. This should fail because the validator candidate is pending.
 fun test_add_preactive_remove_pending_failure() {
-    set_up_sui_system_state();
-    let mut scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
-    let scenario = &mut scenario_val;
+    let mut runner = test_runner::new()
+        .validators(vector[
+            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1),
+            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_2),
+        ])
+        .build();
 
-    add_validator_candidate(
-        NEW_VALIDATOR_ADDR,
-        b"name4",
-        b"/ip4/127.0.0.1/udp/84",
-        NEW_VALIDATOR_PUBKEY,
-        NEW_VALIDATOR_POP,
-        scenario,
-    );
-    stake_with(STAKER_ADDR_1, NEW_VALIDATOR_ADDR, 100, scenario);
-    add_validator(NEW_VALIDATOR_ADDR, scenario);
+    let validator = validator_builder::preset().sui_address(NEW_VALIDATOR_ADDR).build(runner.ctx());
 
-    // Delegate 100 SUI to the pending validator. This should fail because pending active validators don't accept
-    // new stakes or withdraws.
-    stake_with(STAKER_ADDR_1, NEW_VALIDATOR_ADDR, 100, scenario);
+    // Add the validator candidate.
+    runner.add_validator_candidate(validator);
 
-    scenario_val.end();
+    // Stake 100 SUI to the validator candidate.
+    runner.set_sender(STAKER_ADDR_1).stake_with(NEW_VALIDATOR_ADDR, 100);
+
+    // Try adding self to the active validator set.
+    runner.set_sender(NEW_VALIDATOR_ADDR).add_validator();
+
+    // No advance epoch has happened yet.
+    runner.set_sender(STAKER_ADDR_1).stake_with(NEW_VALIDATOR_ADDR, 100);
+
+    runner.finish();
 }
 
 #[test]
+// Scenario:
+// 1. Add a validator candidate
+// 2. Perform different stake and unstake transactions in different epochs
+// 3. Make sure that the rewards are distributed correctly and proportionally
 fun test_add_preactive_remove_active() {
-    set_up_sui_system_state_with_storage_fund();
-    let mut scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
-    let scenario = &mut scenario_val;
+    let mut runner = test_runner::new()
+        .validators(vector[
+            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1),
+            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_2),
+        ])
+        .sui_supply_amount(300)
+        .storage_fund_amount(100)
+        .build();
 
-    add_validator_candidate(
-        NEW_VALIDATOR_ADDR,
-        b"name3",
-        b"/ip4/127.0.0.1/udp/83",
-        NEW_VALIDATOR_PUBKEY,
-        NEW_VALIDATOR_POP,
-        scenario,
-    );
+    let validator = validator_builder::preset().sui_address(NEW_VALIDATOR_ADDR).build(runner.ctx());
 
-    // Delegate 100 SUI to the preactive validator
-    stake_with(STAKER_ADDR_1, NEW_VALIDATOR_ADDR, 100, scenario);
-    advance_epoch_with_reward_amounts(0, 300, scenario);
+    // Add the validator candidate.
+    runner.add_validator_candidate(validator);
+
+    // Stake 100 SUI to the validator candidate.
+    runner.set_sender(STAKER_ADDR_1).stake_with(NEW_VALIDATOR_ADDR, 100);
+
+    // Advance epoch twice with some rewards
+    let opts = runner.advance_epoch_opts().computation_charge(300);
+    runner.advance_epoch(option::some(opts)).destroy_for_testing();
+
     // At this point we got the following distribution of stake:
     // V1: 250, V2: 250, storage fund: 100
+    runner.system_tx!(|system, _| {
+        assert_eq!(system.validator_stake_amount(VALIDATOR_ADDR_1), 250 * MIST_PER_SUI);
+        assert_eq!(system.validator_stake_amount(VALIDATOR_ADDR_2), 250 * MIST_PER_SUI);
+        assert_eq!(
+            system.inner_mut_for_testing().get_storage_fund_total_balance(),
+            100 * MIST_PER_SUI,
+        );
+    });
 
-    stake_with(STAKER_ADDR_2, NEW_VALIDATOR_ADDR, 50, scenario);
-    stake_with(STAKER_ADDR_3, NEW_VALIDATOR_ADDR, 100, scenario);
+    // Stake 50 SUI to the validator candidate from staker 2.
+    runner.set_sender(STAKER_ADDR_2).stake_with(NEW_VALIDATOR_ADDR, 50);
 
-    // Now the preactive becomes active
-    add_validator(NEW_VALIDATOR_ADDR, scenario);
-    advance_epoch(scenario);
+    // Stake 100 SUI to the validator candidate from staker 3.
+    runner.set_sender(STAKER_ADDR_3).stake_with(NEW_VALIDATOR_ADDR, 100);
+
+    // Activate the validator candidate.
+    runner.set_sender(NEW_VALIDATOR_ADDR).add_validator();
+
+    // Advance epoch with no rewards.
+    runner.advance_epoch(option::none()).destroy_for_testing();
 
     // At this point we got the following distribution of stake:
     // V1: 250, V2: 250, V3: 250, storage fund: 100
+    runner.system_tx!(|system, _| {
+        assert_eq!(system.validator_stake_amount(VALIDATOR_ADDR_1), 250 * MIST_PER_SUI);
+        assert_eq!(system.validator_stake_amount(VALIDATOR_ADDR_2), 250 * MIST_PER_SUI);
+        assert_eq!(system.validator_stake_amount(NEW_VALIDATOR_ADDR), 250 * MIST_PER_SUI);
+        assert_eq!(
+            system.inner_mut_for_testing().get_storage_fund_total_balance(),
+            100 * MIST_PER_SUI,
+        );
+    });
 
-    advance_epoch_with_reward_amounts(0, 85, scenario);
+    // advance epoch with some rewards
+    let opts = runner.advance_epoch_opts().computation_charge(85);
+    runner.advance_epoch(option::some(opts)).destroy_for_testing();
 
     // staker 1 and 3 unstake from the validator and earns about 2/5 * (85 - 10) * 1/3 = 10 SUI each.
     // Although they stake in different epochs, they earn the same rewards as long as they unstake
     // in the same epoch because the validator was preactive when they staked.
     // So they will both get slightly more than 110 SUI in total balance.
-    unstake(STAKER_ADDR_1, 0, scenario);
-    assert_eq!(total_sui_balance(STAKER_ADDR_1, scenario), 110002000000);
-    unstake(STAKER_ADDR_3, 0, scenario);
-    assert_eq!(total_sui_balance(STAKER_ADDR_3, scenario), 110002000000);
+    runner.set_sender(STAKER_ADDR_1).unstake(0);
+    assert_eq!(runner.sui_balance(), 110002000000);
 
-    advance_epoch_with_reward_amounts(0, 85, scenario);
-    unstake(STAKER_ADDR_2, 0, scenario);
+    runner.set_sender(STAKER_ADDR_3).unstake(0);
+    assert_eq!(runner.sui_balance(), 110002000000);
+
+    // Advance epoch once more with some rewards
+    let opts = runner.advance_epoch_opts().computation_charge(85);
+    runner.advance_epoch(option::some(opts)).destroy_for_testing();
+
     // staker 2 earns about 5 SUI from the previous epoch and 24-ish from this one
     // so in total she has about 50 + 5 + 24 = 79 SUI.
-    assert_eq!(total_sui_balance(STAKER_ADDR_2, scenario), 78862939078);
+    runner.set_sender(STAKER_ADDR_2).unstake(0);
+    assert_eq!(runner.sui_balance(), 78862939078);
 
-    scenario_val.end();
+    runner.finish();
 }
 
 #[test]
 fun test_add_preactive_remove_post_active() {
-    set_up_sui_system_state();
-    let mut scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
-    let scenario = &mut scenario_val;
+    let mut runner = test_runner::new()
+        .validators(vector[
+            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1),
+            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_2),
+        ])
+        .build();
 
-    add_validator_candidate(
-        NEW_VALIDATOR_ADDR,
-        b"name1",
-        b"/ip4/127.0.0.1/udp/81",
-        NEW_VALIDATOR_PUBKEY,
-        NEW_VALIDATOR_POP,
-        scenario,
-    );
+    let validator = validator_builder::preset().sui_address(NEW_VALIDATOR_ADDR).build(runner.ctx());
 
-    // Delegate 100 SUI to the preactive validator
-    stake_with(STAKER_ADDR_1, NEW_VALIDATOR_ADDR, 100, scenario);
+    // Add the validator candidate.
+    runner.add_validator_candidate(validator);
+
+    // Stake 100 SUI to the validator candidate.
+    runner.set_sender(STAKER_ADDR_1).stake_with(NEW_VALIDATOR_ADDR, 100);
 
     // Now the preactive becomes active
-    add_validator(NEW_VALIDATOR_ADDR, scenario);
-    advance_epoch(scenario);
+    runner.set_sender(NEW_VALIDATOR_ADDR).add_validator();
+
+    // Advance epoch with no rewards.
+    runner.advance_epoch(option::none()).destroy_for_testing();
 
     // staker 1 earns a bit greater than 30 SUI here. A bit greater because the new validator's voting power
     // is slightly greater than 1/3 of the total voting power.
-    advance_epoch_with_reward_amounts(0, 90, scenario);
+    let opts = runner.advance_epoch_opts().computation_charge(90);
+    runner.advance_epoch(option::some(opts)).destroy_for_testing();
 
     // And now the validator leaves the validator set.
-    remove_validator(NEW_VALIDATOR_ADDR, scenario);
+    runner.set_sender(NEW_VALIDATOR_ADDR).remove_validator();
 
-    advance_epoch(scenario);
+    // Advance epoch with no rewards.
+    runner.advance_epoch(option::none()).destroy_for_testing();
 
-    unstake(STAKER_ADDR_1, 0, scenario);
-    assert_eq!(total_sui_balance(STAKER_ADDR_1, scenario), 130006000000);
+    // Unstake from the validator.
+    runner.set_sender(STAKER_ADDR_1).unstake(0);
+    assert_eq!(runner.sui_balance(), 130006000000);
 
-    scenario_val.end();
+    runner.finish();
 }
 
 #[test]
+// Scenario:
+// 1. Add a validator candidate
+// 2. Delegate 100 SUI to the validator candidate
+// 3. Advance epoch and give out some rewards. The candidate should get nothing.
+// 4. Remove the candidate
+// 5. Staker unstakes and gets no rewards.
 fun test_add_preactive_candidate_drop_out() {
-    set_up_sui_system_state();
-    let mut scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
-    let scenario = &mut scenario_val;
+    let mut runner = test_runner::new()
+        .validators(vector[
+            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1),
+            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_2),
+        ])
+        .build();
 
-    add_validator_candidate(
-        NEW_VALIDATOR_ADDR,
-        b"name2",
-        b"/ip4/127.0.0.1/udp/82",
-        NEW_VALIDATOR_PUBKEY,
-        NEW_VALIDATOR_POP,
-        scenario,
-    );
+    let validator = validator_builder::preset().sui_address(NEW_VALIDATOR_ADDR).build(runner.ctx());
+    runner.add_validator_candidate(validator);
 
     // Delegate 100 MIST to the preactive validator
-    stake_with(STAKER_ADDR_1, NEW_VALIDATOR_ADDR, 100, scenario);
+    runner.set_sender(STAKER_ADDR_1).stake_with(NEW_VALIDATOR_ADDR, 100);
 
     // Advance epoch and give out some rewards. The candidate should get nothing, of course.
-    advance_epoch_with_reward_amounts(0, 800, scenario);
+    let opts = runner.advance_epoch_opts().computation_charge(800);
+    runner.advance_epoch(option::some(opts)).destroy_for_testing();
 
     // Now the candidate leaves.
-    remove_validator_candidate(NEW_VALIDATOR_ADDR, scenario);
+    runner.set_sender(NEW_VALIDATOR_ADDR).remove_validator_candidate();
 
     // Advance epoch a few times.
-    advance_epoch(scenario);
-    advance_epoch(scenario);
-    advance_epoch(scenario);
+    runner.advance_epoch(option::none()).destroy_for_testing();
+    runner.advance_epoch(option::none()).destroy_for_testing();
+    runner.advance_epoch(option::none()).destroy_for_testing();
 
     // Unstake now and the staker should get no rewards.
-    unstake(STAKER_ADDR_1, 0, scenario);
-    assert_eq!(total_sui_balance(STAKER_ADDR_1, scenario), 100 * MIST_PER_SUI);
+    runner.set_sender(STAKER_ADDR_1).unstake(0);
+    assert_eq!(runner.sui_balance(), 100 * MIST_PER_SUI);
 
-    scenario_val.end();
+    runner.finish();
 }
 
 #[test]
+/// Scenario:
+/// 1. Stake 100 SUI to the validator.
+/// 2. Advance epoch.
+/// 3. Advance epoch with rewards.
+/// 4. Check the exchange rates in the system state.
 fun test_staking_pool_exchange_rate_getter() {
-    set_up_sui_system_state();
-    let mut scenario_val = test_scenario::begin(@0x0);
-    let scenario = &mut scenario_val;
-    stake_with(@0x42, @0x2, 100, scenario); // stakes 100 SUI with 0x2
-    scenario.next_tx(@0x42);
-    let staked_sui = scenario.take_from_address<StakedSui>(@0x42);
-    let pool_id = staked_sui.pool_id();
-    test_scenario::return_to_address(@0x42, staked_sui);
-    advance_epoch(scenario); // advances epoch to effectuate the stake
-    // Each staking pool gets 10 SUI of rewards.
-    advance_epoch_with_reward_amounts(0, 20, scenario);
-    let mut system_state = scenario.take_shared<SuiSystemState>();
-    let rates = system_state.pool_exchange_rates(&pool_id);
-    assert_eq!(rates.length(), 3);
-    assert_exchange_rate_eq(rates, 0, 0, 0); // no tokens at epoch 0
-    assert_exchange_rate_eq(rates, 1, 200, 200); // 200 SUI of self + delegate stake at epoch 1
-    assert_exchange_rate_eq(rates, 2, 210, 200); // 10 SUI of rewards at epoch 2
-    test_scenario::return_shared(system_state);
-    scenario_val.end();
+    let mut runner = test_runner::new()
+        .validators(vector[
+            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1),
+            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_2),
+        ])
+        .build();
+
+    runner.set_sender(STAKER_ADDR_1).stake_with(VALIDATOR_ADDR_1, 100);
+
+    let pool_id;
+
+    runner.owned_tx!<StakedSui>(|stake| {
+        pool_id = stake.pool_id();
+        runner.keep(stake);
+    });
+
+    // Advance epoch without rewards.
+    runner.advance_epoch(option::none()).destroy_for_testing();
+
+    // Advance epoch with rewards.
+    // Each staking pool (2 pools) gets 10 SUI of rewards.
+    let opts = runner.advance_epoch_opts().computation_charge(20);
+    runner.advance_epoch(option::some(opts)).destroy_for_testing();
+
+    // Check the exchange rates in the system state.
+    runner.system_tx!(|system, _| {
+        let rates = system.pool_exchange_rates(&pool_id);
+        assert_eq!(rates.length(), 3);
+        assert_exchange_rate_eq(rates, 0, 0, 0); // no tokens at epoch 0
+        assert_exchange_rate_eq(rates, 1, 200, 200); // 200 SUI of self + delegate stake at epoch 1
+        assert_exchange_rate_eq(rates, 2, 210, 200); // 10 SUI of rewards at epoch 2
+    });
+
+    runner.finish();
 }
 
 fun assert_exchange_rate_eq(
@@ -543,30 +610,4 @@ fun assert_exchange_rate_eq(
     let rate = &rates[epoch];
     assert_eq!(rate.sui_amount(), sui_amount * MIST_PER_SUI);
     assert_eq!(rate.pool_token_amount(), pool_token_amount * MIST_PER_SUI);
-}
-
-fun set_up_sui_system_state() {
-    let mut scenario_val = test_scenario::begin(@0x0);
-    let scenario = &mut scenario_val;
-    let ctx = scenario.ctx();
-
-    let validators = vector[
-        create_validator_for_testing(VALIDATOR_ADDR_1, 100, ctx),
-        create_validator_for_testing(VALIDATOR_ADDR_2, 100, ctx),
-    ];
-    create_sui_system_state_for_testing(validators, 0, 0, ctx);
-    scenario_val.end();
-}
-
-fun set_up_sui_system_state_with_storage_fund() {
-    let mut scenario_val = test_scenario::begin(@0x0);
-    let scenario = &mut scenario_val;
-    let ctx = scenario.ctx();
-
-    let validators = vector[
-        create_validator_for_testing(VALIDATOR_ADDR_1, 100, ctx),
-        create_validator_for_testing(VALIDATOR_ADDR_2, 100, ctx),
-    ];
-    create_sui_system_state_for_testing(validators, 300, 100, ctx);
-    scenario_val.end();
 }

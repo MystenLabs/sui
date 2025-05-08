@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
+/// Validator Builder is a helper module which implements a builder pattern for
+/// creating a `Validator` or `ValidatorMetadata` struct.
+///
+/// It can be used in the `TestRunner` module to set up validators in the system.
 module sui_system::validator_builder;
 
 use sui::bag;
@@ -57,6 +61,7 @@ public struct ValidatorBuilder has drop {
     initial_stake: Option<u64>,
 }
 
+/// Start the builder with empty values.
 public fun new(): ValidatorBuilder {
     ValidatorBuilder {
         sui_address: option::none(),
@@ -74,11 +79,35 @@ public fun new(): ValidatorBuilder {
         worker_address: option::none(),
         gas_price: option::none(),
         commission_rate: option::none(),
-        is_active_at_genesis: true,
+        is_active_at_genesis: false,
         initial_stake: option::none(),
     }
 }
 
+/// Start the builder with correct default values.
+public fun preset(): ValidatorBuilder {
+    ValidatorBuilder {
+        sui_address: option::some(VALID_ADDRESS),
+        protocol_pubkey_bytes: option::some(VALID_PUBKEY),
+        network_pubkey_bytes: option::some(VALID_NET_PUBKEY),
+        worker_pubkey_bytes: option::some(VALID_WORKER_PUBKEY),
+        proof_of_possession: option::some(PROOF_OF_POSSESSION),
+        name: option::some(b"name"),
+        description: option::some(b"description"),
+        image_url: option::some(b"image_url"),
+        project_url: option::some(b"project_url"),
+        net_address: option::some(VALID_NET_ADDR),
+        p2p_address: option::some(VALID_P2P_ADDR),
+        primary_address: option::some(VALID_CONSENSUS_ADDR),
+        worker_address: option::some(VALID_WORKER_ADDR),
+        gas_price: option::none(),
+        commission_rate: option::none(),
+        is_active_at_genesis: false,
+        initial_stake: option::none(),
+    }
+}
+
+/// Build a `Validator` struct using default unchecked values.
 public fun build(builder: ValidatorBuilder, ctx: &mut TxContext): Validator {
     let ValidatorBuilder {
         sui_address,
@@ -101,19 +130,19 @@ public fun build(builder: ValidatorBuilder, ctx: &mut TxContext): Validator {
     } = builder;
 
     validator::new_for_testing(
-        sui_address.destroy_or!(VALID_ADDRESS),
-        protocol_pubkey_bytes.destroy_or!(VALID_PUBKEY),
-        network_pubkey_bytes.destroy_or!(VALID_NET_PUBKEY),
-        worker_pubkey_bytes.destroy_or!(VALID_WORKER_PUBKEY),
-        proof_of_possession.destroy_or!(PROOF_OF_POSSESSION),
-        name.destroy_or!(b"name"),
-        description.destroy_or!(b"description"),
-        image_url.destroy_or!(b"image_url"),
-        project_url.destroy_or!(b"project_url"),
-        net_address.destroy_or!(VALID_NET_ADDR),
-        p2p_address.destroy_or!(VALID_P2P_ADDR),
-        primary_address.destroy_or!(VALID_CONSENSUS_ADDR),
-        worker_address.destroy_or!(VALID_WORKER_ADDR),
+        sui_address.destroy_or!(ctx.fresh_object_address()),
+        protocol_pubkey_bytes.destroy_or!(b"protocol_pubkey_bytes"),
+        network_pubkey_bytes.destroy_or!(b"network_pubkey_bytes"),
+        worker_pubkey_bytes.destroy_or!(b"worker_pubkey_bytes"),
+        proof_of_possession.destroy_or!(b"proof_of_possession"),
+        name.destroy_or!(b"default_name"),
+        description.destroy_or!(b"default_description"),
+        image_url.destroy_or!(b"default_image_url"),
+        project_url.destroy_or!(b"default_project_url"),
+        net_address.destroy_or!(b"default_net_address"),
+        p2p_address.destroy_or!(b"p2p_address"),
+        primary_address.destroy_or!(b"primary_address"),
+        worker_address.destroy_or!(b"worker_address"),
         initial_stake.map!(|amount| balance::create_for_testing<SUI>(amount * 1_000_000_000)),
         gas_price.destroy_or!(1),
         commission_rate.destroy_or!(0),
