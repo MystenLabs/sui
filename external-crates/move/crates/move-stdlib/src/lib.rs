@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_command_line_common::files::{extension_equals, find_filenames, MOVE_EXTENSION};
+use move_command_line_common::files::{MOVE_EXTENSION, extension_equals, find_filenames};
 use move_core_types::parsing::address::NumericalAddress;
 use move_docgen::DocgenOptions;
 use move_package::BuildConfig;
@@ -70,9 +70,11 @@ pub fn build_stdlib_doc(output_directory: String) -> anyhow::Result<()> {
     let options = DocgenOptions {
         output_directory,
         doc_path: vec![String::new()],
-        root_doc_templates: vec![path_in_crate(OVERVIEW_TEMPLATE)
-            .to_string_lossy()
-            .to_string()],
+        root_doc_templates: vec![
+            path_in_crate(OVERVIEW_TEMPLATE)
+                .to_string_lossy()
+                .to_string(),
+        ],
         references_file: Some(
             path_in_crate(REFERENCES_TEMPLATE)
                 .to_string_lossy()
@@ -81,7 +83,7 @@ pub fn build_stdlib_doc(output_directory: String) -> anyhow::Result<()> {
         ..DocgenOptions::default()
     };
     let docgen = move_docgen::Docgen::new(&model, &options);
-    for (file, content) in docgen.gen(&model)? {
+    for (file, content) in docgen.generate(&model)? {
         let path = PathBuf::from(&file);
         fs::create_dir_all(path.parent().unwrap())?;
         fs::write(path.as_path(), content)?;

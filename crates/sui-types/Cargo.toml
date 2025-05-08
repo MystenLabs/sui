@@ -80,6 +80,7 @@ p384.workspace = true
 rustls-pemfile.workspace = true
 
 [dev-dependencies]
+base64.workspace = true
 bincode.workspace = true
 criterion.workspace = true
 proptest.workspace = true

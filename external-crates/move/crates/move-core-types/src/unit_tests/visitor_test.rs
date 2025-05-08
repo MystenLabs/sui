@@ -4,6 +4,7 @@
 use std::{fmt::Write, str::FromStr};
 
 use crate::{
+    VARIANT_COUNT_MAX,
     account_address::AccountAddress,
     annotated_value::{
         MoveEnumLayout, MoveFieldLayout, MoveStruct, MoveStructLayout, MoveTypeLayout, MoveValue,
@@ -16,7 +17,6 @@ use crate::{
     identifier::Identifier,
     language_storage::StructTag,
     u256::U256,
-    VARIANT_COUNT_MAX,
 };
 
 #[derive(Default)]

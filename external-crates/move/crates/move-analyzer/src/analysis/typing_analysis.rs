@@ -4,8 +4,8 @@
 use crate::{
     compiler_info::CompilerInfo,
     symbols::{
-        add_member_use_def, expansion_mod_ident_to_map_key, find_datatype, type_def_loc, DefInfo,
-        DefMap, LocalDef, MemberDefInfo, ModuleDefs, References, UseDef, UseDefMap,
+        DefInfo, DefMap, LocalDef, MemberDefInfo, ModuleDefs, References, UseDef, UseDefMap,
+        add_member_use_def, expansion_mod_ident_to_map_key, find_datatype, type_def_loc,
     },
     utils::{ignored_function, loc_start_to_lsp_position_opt},
 };
@@ -15,13 +15,13 @@ use move_compiler::{
     expansion::ast::{self as E, ModuleIdent},
     naming::ast as N,
     parser::ast::{self as P, ConstantName},
-    shared::{files::MappedFiles, ide::MacroCallInfo, Identifier, Name},
+    shared::{Identifier, Name, files::MappedFiles, ide::MacroCallInfo},
     typing::{
         ast as T,
         visitor::{LValueKind, TypingVisitorContext},
     },
 };
-use move_ir_types::location::{sp, Loc};
+use move_ir_types::location::{Loc, sp};
 use move_symbol_pool::Symbol;
 
 use im::OrdMap;

@@ -12,9 +12,9 @@ use crate::ability_cache::AbilityCache;
 use abstract_state::{AbstractState, LocalState, RET_COST, STEP_BASE_COST};
 use move_abstract_interpreter::absint::{AbstractInterpreter, FunctionContext, TransferFunctions};
 use move_binary_format::{
+    CompiledModule,
     errors::{PartialVMError, PartialVMResult},
     file_format::{Bytecode, CodeOffset},
-    CompiledModule,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
@@ -41,21 +41,21 @@ fn execute_inner(
             LocalState::MaybeAvailable | LocalState::Available
                 if !state.local_abilities(*idx).has_drop() =>
             {
-                return Err(state.error(StatusCode::STLOC_UNSAFE_TO_DESTROY_ERROR, offset))
+                return Err(state.error(StatusCode::STLOC_UNSAFE_TO_DESTROY_ERROR, offset));
             }
             _ => state.set_available(*idx),
         },
 
         Bytecode::MoveLoc(idx) => match state.local_state(*idx) {
             LocalState::MaybeAvailable | LocalState::Unavailable => {
-                return Err(state.error(StatusCode::MOVELOC_UNAVAILABLE_ERROR, offset))
+                return Err(state.error(StatusCode::MOVELOC_UNAVAILABLE_ERROR, offset));
             }
             LocalState::Available => state.set_unavailable(*idx),
         },
 
         Bytecode::CopyLoc(idx) => match state.local_state(*idx) {
             LocalState::MaybeAvailable | LocalState::Unavailable => {
-                return Err(state.error(StatusCode::COPYLOC_UNAVAILABLE_ERROR, offset))
+                return Err(state.error(StatusCode::COPYLOC_UNAVAILABLE_ERROR, offset));
             }
             LocalState::Available => (),
         },
@@ -63,7 +63,7 @@ fn execute_inner(
         Bytecode::MutBorrowLoc(idx) | Bytecode::ImmBorrowLoc(idx) => {
             match state.local_state(*idx) {
                 LocalState::Unavailable | LocalState::MaybeAvailable => {
-                    return Err(state.error(StatusCode::BORROWLOC_UNAVAILABLE_ERROR, offset))
+                    return Err(state.error(StatusCode::BORROWLOC_UNAVAILABLE_ERROR, offset));
                 }
                 LocalState::Available => (),
             }
@@ -81,7 +81,7 @@ fn execute_inner(
                     {
                         return Err(
                             state.error(StatusCode::UNSAFE_RET_UNUSED_VALUES_WITHOUT_DROP, offset)
-                        )
+                        );
                     }
                     _ => (),
                 }

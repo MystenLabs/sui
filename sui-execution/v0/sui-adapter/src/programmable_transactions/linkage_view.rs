@@ -11,8 +11,8 @@ use crate::execution_value::SuiResolver;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
-    language_storage::{ModuleId, StructTag},
-    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
+    language_storage::ModuleId,
+    resolver::{LinkageResolver, ModuleResolver},
 };
 use sui_types::storage::{get_module, PackageObject};
 use sui_types::{
@@ -326,18 +326,6 @@ impl LinkageResolver for LinkageView<'_> {
 }
 
 // Remaining implementations delegated to state_view
-
-impl ResourceResolver for LinkageView<'_> {
-    type Error = SuiError;
-
-    fn get_resource(
-        &self,
-        address: &AccountAddress,
-        typ: &StructTag,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.resolver.get_resource(address, typ)
-    }
-}
 
 impl ModuleResolver for LinkageView<'_> {
     type Error = SuiError;

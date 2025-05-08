@@ -1,0 +1,14 @@
+# Broken external resolver returns correct output but exits with an error code
+
+[package]
+name = "example"
+edition = "2024.beta"
+license = "Apache-2.0"
+authors = ["Move Team"]
+
+[dependencies.mock.r.mock-resolver]
+exit_code = 1
+stdout = """\
+[ { "jsonrpc": "2.0", "id": 0, "result": { "local": "for_default" } } ]
+"""
+stderr = "stderr output"

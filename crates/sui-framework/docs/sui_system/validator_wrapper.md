@@ -106,7 +106,7 @@ title: Module `sui_system::validator_wrapper`
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_create_v1">create_v1</a>(<a href="../sui_system/validator.md#sui_system_validator">validator</a>: Validator, ctx: &<b>mut</b> TxContext): <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a> {
     <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a> {
-        inner: versioned::create(1, <a href="../sui_system/validator.md#sui_system_validator">validator</a>, ctx)
+        inner: versioned::create(1, <a href="../sui_system/validator.md#sui_system_validator">validator</a>, ctx),
     }
 }
 </code></pre>
@@ -133,8 +133,8 @@ If the inner version is old, we upgrade it lazily in-place.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_load_validator_maybe_upgrade">load_validator_maybe_upgrade</a>(self: &<b>mut</b> <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a>): &<b>mut</b> Validator {
-    <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_upgrade_to_latest">upgrade_to_latest</a>(self);
-    versioned::load_value_mut(&<b>mut</b> self.inner)
+    self.<a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_upgrade_to_latest">upgrade_to_latest</a>();
+    self.inner.load_value_mut()
 }
 </code></pre>
 
@@ -161,7 +161,7 @@ Destroy the wrapper and retrieve the inner validator object.
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_destroy">destroy</a>(self: <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a>): Validator {
     <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_upgrade_to_latest">upgrade_to_latest</a>(&self);
     <b>let</b> <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a> { inner } = self;
-    versioned::destroy(inner)
+    inner.<a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_destroy">destroy</a>()
 }
 </code></pre>
 
@@ -185,7 +185,7 @@ Destroy the wrapper and retrieve the inner validator object.
 
 
 <pre><code><b>fun</b> <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_upgrade_to_latest">upgrade_to_latest</a>(self: &<a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a>) {
-    <b>let</b> <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_version">version</a> = <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_version">version</a>(self);
+    <b>let</b> <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_version">version</a> = self.<a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_version">version</a>();
     // TODO: When new versions are added, we need to explicitly upgrade here.
     <b>assert</b>!(<a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_version">version</a> == 1, <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_EInvalidVersion">EInvalidVersion</a>);
 }
@@ -211,7 +211,7 @@ Destroy the wrapper and retrieve the inner validator object.
 
 
 <pre><code><b>fun</b> <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_version">version</a>(self: &<a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a>): u64 {
-    versioned::version(&self.inner)
+    self.inner.<a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_version">version</a>()
 }
 </code></pre>
 

@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 82;
+const MAX_PROTOCOL_VERSION: u64 = 83;
 
 // Record history of protocol version allocations here:
 //
@@ -675,6 +675,10 @@ struct FeatureFlags {
     // If true, enforces checkpoint timestamps are non-decreasing.
     #[serde(skip_serializing_if = "is_false")]
     enforce_checkpoint_timestamp_monotonicity: bool,
+
+    // If true, enables better errors and bounds for max ptb values
+    #[serde(skip_serializing_if = "is_false")]
+    max_ptb_value_size_v2: bool,
 
     // Enable native function for multiparty transfer
     #[serde(skip_serializing_if = "is_false")]
@@ -1946,6 +1950,10 @@ impl ProtocolConfig {
 
     pub fn enforce_checkpoint_timestamp_monotonicity(&self) -> bool {
         self.feature_flags.enforce_checkpoint_timestamp_monotonicity
+    }
+
+    pub fn max_ptb_value_size_v2(&self) -> bool {
+        self.feature_flags.max_ptb_value_size_v2
     }
 
     pub fn enable_multiparty_transfer(&self) -> bool {
@@ -3486,6 +3494,9 @@ impl ProtocolConfig {
                     cfg.consensus_bad_nodes_stake_threshold = Some(30)
                 }
                 82 => {
+                    cfg.feature_flags.max_ptb_value_size_v2 = true;
+                }
+                83 => {
                     cfg.transfer_multiparty_transfer_internal_cost_base = Some(52);
                 }
                 // Use this template when making changes:

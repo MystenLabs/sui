@@ -32,7 +32,7 @@ impl ArchivalCheckpointInfo {
         let archive_reader_config = ArchiveReaderConfig {
             remote_store_config: archive_store_config,
             download_concurrency: NonZeroUsize::new(1).unwrap(),
-            use_for_pruning_watermark: false,
+            ingestion_url: None,
         };
         let metrics = ArchiveReaderMetrics::new(&Registry::default());
         let archive_reader = ArchiveReader::new(archive_reader_config, &metrics)?;

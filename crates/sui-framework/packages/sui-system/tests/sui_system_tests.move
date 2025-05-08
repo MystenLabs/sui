@@ -8,18 +8,26 @@
 #[test_only]
 module sui_system::sui_system_tests;
 
-use sui::test_scenario::{Self, Scenario};
+use sui::balance;
+use sui::coin;
 use sui::sui::SUI;
-use sui::coin::Self;
-use sui_system::governance_test_utils::{add_validator_full_flow, advance_epoch, remove_validator, set_up_sui_system_state, create_sui_system_state_for_testing, stake_with, unstake};
+use sui::test_scenario::{Self, Scenario};
+use sui::test_utils::{assert_eq, destroy};
+use sui::url;
+use sui_system::governance_test_utils::{
+    add_validator_full_flow,
+    advance_epoch,
+    remove_validator,
+    set_up_sui_system_state,
+    create_sui_system_state_for_testing,
+    stake_with,
+    unstake
+};
 use sui_system::sui_system::SuiSystemState;
 use sui_system::sui_system_state_inner;
 use sui_system::validator::{Self, Validator};
-use sui_system::validator_set;
 use sui_system::validator_cap::UnverifiedValidatorOperationCap;
-use sui::balance;
-use sui::test_utils::{assert_eq, destroy};
-use sui::url;
+use sui_system::validator_set;
 
 #[test]
 fun test_report_validator() {
@@ -48,7 +56,6 @@ fun test_report_validator() {
 
     report_helper(@0x2, @0x1, false, scenario);
     assert!(get_reporters_of(@0x1, scenario) == vector[@0x2]);
-
 
     report_helper(@0x3, @0x2, false, scenario);
     assert!(get_reporters_of(@0x2, scenario) == vector[@0x1, @0x3]);
@@ -101,9 +108,19 @@ fun test_validator_ops_by_stakee_ok() {
     // Add a pending validator
     let new_validator_addr = @0x1a4623343cd42be47d67314fce0ad042f3c82685544bc91d8c11d24e74ba7357;
     scenario.next_tx(new_validator_addr);
-    let pubkey = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
-    let pop = x"8b93fc1b33379e2796d361c4056f0f04ad5aea7f4a8c02eaac57340ff09b6dc158eb1945eece103319167f420daf0cb3";
-    add_validator_full_flow(new_validator_addr, b"name1", b"/ip4/127.0.0.1/udp/81", 100, pubkey, pop, scenario);
+    let pubkey =
+        x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
+    let pop =
+        x"8b93fc1b33379e2796d361c4056f0f04ad5aea7f4a8c02eaac57340ff09b6dc158eb1945eece103319167f420daf0cb3";
+    add_validator_full_flow(
+        new_validator_addr,
+        b"name1",
+        b"/ip4/127.0.0.1/udp/81",
+        100,
+        pubkey,
+        pop,
+        scenario,
+    );
 
     scenario.next_tx(new_validator_addr);
     // Pending validator could set reference price as well
@@ -282,12 +299,22 @@ fun test_staking_pool_mappings() {
     let new_validator_addr = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
     scenario.next_tx(new_validator_addr);
     // Seed [0; 32]
-    let pubkey = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
+    let pubkey =
+        x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
     // Generated with [fn test_proof_of_possession]
-    let pop = x"b01cc86f421beca7ab4cfca87c0799c4d038c199dd399fbec1924d4d4367866dba9e84d514710b91feb65316e4ceef43";
+    let pop =
+        x"b01cc86f421beca7ab4cfca87c0799c4d038c199dd399fbec1924d4d4367866dba9e84d514710b91feb65316e4ceef43";
 
     // Add a validator
-    add_validator_full_flow(new_validator_addr, b"name2", b"/ip4/127.0.0.1/udp/82", 100, pubkey, pop, scenario);
+    add_validator_full_flow(
+        new_validator_addr,
+        b"name2",
+        b"/ip4/127.0.0.1/udp/82",
+        100,
+        pubkey,
+        pop,
+        scenario,
+    );
     advance_epoch(scenario);
 
     scenario.next_tx(@0x1);
@@ -336,11 +363,7 @@ fun report_helper(sender: address, reported: address, is_undo: bool, scenario: &
     test_scenario::return_shared(system_state);
 }
 
-fun set_gas_price_helper(
-    sender: address,
-    new_gas_price: u64,
-    scenario: &mut Scenario,
-) {
+fun set_gas_price_helper(sender: address, new_gas_price: u64, scenario: &mut Scenario) {
     scenario.next_tx(sender);
     let cap = scenario.take_from_sender<UnverifiedValidatorOperationCap>();
     let mut system_state = scenario.take_shared<SuiSystemState>();
@@ -348,7 +371,6 @@ fun set_gas_price_helper(
     scenario.return_to_sender(cap);
     test_scenario::return_shared(system_state);
 }
-
 
 fun rotate_operation_cap(sender: address, scenario: &mut Scenario) {
     scenario.next_tx(sender);
@@ -389,17 +411,25 @@ fun update_candidate(
     system_state.update_candidate_validator_protocol_pubkey(
         protocol_pub_key,
         pop,
-        ctx
+        ctx,
     );
-    system_state.update_candidate_validator_worker_pubkey(vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25], ctx);
-    system_state.update_candidate_validator_network_pubkey(vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62], ctx);
+
+    // prettier-ignore
+    system_state.update_candidate_validator_worker_pubkey(
+        vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
+        ctx,
+    );
+    // prettier-ignore
+    system_state.update_candidate_validator_network_pubkey(
+        vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
+        ctx,
+    );
 
     system_state.set_candidate_validator_commission_rate(commission_rate, ctx);
     let cap = scenario.take_from_sender<UnverifiedValidatorOperationCap>();
     system_state.set_candidate_validator_gas_price(&cap, gas_price);
     scenario.return_to_sender(cap);
 }
-
 
 fun verify_candidate(
     validator: &Validator,
@@ -410,8 +440,8 @@ fun verify_candidate(
     p2p_address: vector<u8>,
     commission_rate: u64,
     gas_price: u64,
-
 ) {
+    // prettier-ignore
     verify_current_epoch_metadata(
         validator,
         name,
@@ -426,7 +456,6 @@ fun verify_candidate(
     );
     assert!(validator.commission_rate() == commission_rate);
     assert!(validator.gas_price() == gas_price);
-
 }
 
 // Note: `pop` MUST be a valid signature using sui_address and protocol_pubkey_bytes.
@@ -454,7 +483,7 @@ fun update_metadata(
     system_state.update_validator_next_epoch_protocol_pubkey(
         protocol_pub_key,
         pop,
-        ctx
+        ctx,
     );
     system_state.update_validator_next_epoch_network_pubkey(network_pubkey, ctx);
     system_state.update_validator_next_epoch_worker_pubkey(worker_pubkey, ctx);
@@ -491,26 +520,20 @@ fun verify_metadata(
     );
 
     // Next epoch
-    assert!(validator.next_epoch_network_address() == &option::some(new_network_address.to_string()));
+    assert!(
+        validator.next_epoch_network_address() == &option::some(new_network_address.to_string()),
+    );
     assert!(validator.next_epoch_p2p_address() == &option::some(new_p2p_address.to_string()));
-    assert!(validator.next_epoch_primary_address() == &option::some(b"/ip4/168.168.168.168/udp/80".to_string()));
-    assert!(validator.next_epoch_worker_address() == &option::some(b"/ip4/168.168.168.168/udp/80".to_string()));
     assert!(
-        validator.next_epoch_protocol_pubkey_bytes() == &option::some(new_protocol_pub_key),
-        0
+        validator.next_epoch_primary_address() == &option::some(b"/ip4/168.168.168.168/udp/80".to_string()),
     );
     assert!(
-        validator.next_epoch_proof_of_possession() == &option::some(new_pop),
-        0
+        validator.next_epoch_worker_address() == &option::some(b"/ip4/168.168.168.168/udp/80".to_string()),
     );
-    assert!(
-        validator.next_epoch_worker_pubkey_bytes() == &option::some(new_worker_pubkey),
-        0
-    );
-    assert!(
-        validator.next_epoch_network_pubkey_bytes() == &option::some(new_network_pubkey),
-        0
-    );
+    assert!(validator.next_epoch_protocol_pubkey_bytes() == &option::some(new_protocol_pub_key), 0);
+    assert!(validator.next_epoch_proof_of_possession() == &option::some(new_pop), 0);
+    assert!(validator.next_epoch_worker_pubkey_bytes() == &option::some(new_worker_pubkey), 0);
+    assert!(validator.next_epoch_network_pubkey_bytes() == &option::some(new_network_pubkey), 0);
 }
 
 fun verify_current_epoch_metadata(
@@ -539,7 +562,6 @@ fun verify_current_epoch_metadata(
     assert!(validator.worker_pubkey_bytes() == &worker_pubkey_bytes);
     assert!(validator.network_pubkey_bytes() == &network_pubkey_bytes);
 }
-
 
 fun verify_metadata_after_advancing_epoch(
     validator: &Validator,
@@ -580,22 +602,30 @@ fun verify_metadata_after_advancing_epoch(
 fun test_active_validator_update_metadata() {
     let validator_addr = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
     // pubkey generated with protocol key on seed [0; 32]
-    let pubkey = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
+    let pubkey =
+        x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
     // pop generated using the protocol key and address with [fn test_proof_of_possession]
-    let pop = x"b01cc86f421beca7ab4cfca87c0799c4d038c199dd399fbec1924d4d4367866dba9e84d514710b91feb65316e4ceef43";
+    let pop =
+        x"b01cc86f421beca7ab4cfca87c0799c4d038c199dd399fbec1924d4d4367866dba9e84d514710b91feb65316e4ceef43";
 
     // pubkey generated with protocol key on seed [1; 32]
-    let pubkey1 = x"96d19c53f1bee2158c3fcfb5bb2f06d3a8237667529d2d8f0fbb22fe5c3b3e64748420b4103674490476d98530d063271222d2a59b0f7932909cc455a30f00c69380e6885375e94243f7468e9563aad29330aca7ab431927540e9508888f0e1c";
-    let pop1 = x"a8a0bcaf04e13565914eb22fa9f27a76f297db04446860ee2b923d10224cedb130b30783fb60b12556e7fc50e5b57a86";
+    let pubkey1 =
+        x"96d19c53f1bee2158c3fcfb5bb2f06d3a8237667529d2d8f0fbb22fe5c3b3e64748420b4103674490476d98530d063271222d2a59b0f7932909cc455a30f00c69380e6885375e94243f7468e9563aad29330aca7ab431927540e9508888f0e1c";
+    let pop1 =
+        x"a8a0bcaf04e13565914eb22fa9f27a76f297db04446860ee2b923d10224cedb130b30783fb60b12556e7fc50e5b57a86";
 
     let new_validator_addr = @0x8e3446145b0c7768839d71840df389ffa3b9742d0baaff326a3d453b595f87d7;
     // pubkey generated with protocol key on seed [2; 32]
-    let new_pubkey = x"adf2e2350fe9a58f3fa50777499f20331c4550ab70f6a4fb25a58c61b50b5366107b5c06332e71bb47aa99ce2d5c07fe0dab04b8af71589f0f292c50382eba6ad4c90acb010ab9db7412988b2aba1018aaf840b1390a8b2bee3fde35b4ab7fdf";
-    let new_pop = x"926fdb08b2b46d802e3642044f215dcb049e6c17a376a272ffd7dba32739bb995370966698ab235ee172fbd974985cfe";
+    let new_pubkey =
+        x"adf2e2350fe9a58f3fa50777499f20331c4550ab70f6a4fb25a58c61b50b5366107b5c06332e71bb47aa99ce2d5c07fe0dab04b8af71589f0f292c50382eba6ad4c90acb010ab9db7412988b2aba1018aaf840b1390a8b2bee3fde35b4ab7fdf";
+    let new_pop =
+        x"926fdb08b2b46d802e3642044f215dcb049e6c17a376a272ffd7dba32739bb995370966698ab235ee172fbd974985cfe";
 
     // pubkey generated with protocol key on seed [3; 32]
-    let new_pubkey1 = x"91b8de031e0b60861c655c8168596d98b065d57f26f287f8c810590b06a636eff13c4055983e95b2f60a4d6ba5484fa4176923d1f7807cc0b222ddf6179c1db099dba0433f098aae82542b3fd27b411d64a0a35aad01b2c07ac67f7d0a1d2c11";
-    let new_pop1 = x"b61913eb4dc7ea1d92f174e1a3c6cad3f49ae8de40b13b69046ce072d8d778bfe87e734349c7394fd1543fff0cb6e2d0";
+    let new_pubkey1 =
+        x"91b8de031e0b60861c655c8168596d98b065d57f26f287f8c810590b06a636eff13c4055983e95b2f60a4d6ba5484fa4176923d1f7807cc0b222ddf6179c1db099dba0433f098aae82542b3fd27b411d64a0a35aad01b2c07ac67f7d0a1d2c11";
+    let new_pop1 =
+        x"b61913eb4dc7ea1d92f174e1a3c6cad3f49ae8de40b13b69046ce072d8d778bfe87e734349c7394fd1543fff0cb6e2d0";
 
     let mut scenario_val = test_scenario::begin(validator_addr);
     let scenario = &mut scenario_val;
@@ -603,6 +633,7 @@ fun test_active_validator_update_metadata() {
     // Set up SuiSystemState with an active validator
     let mut validators = vector[];
     let ctx = scenario.ctx();
+    // prettier-ignore
     let validator = validator::new_for_testing(
         validator_addr,
         pubkey,
@@ -621,7 +652,7 @@ fun test_active_validator_update_metadata() {
         1,
         0,
         true,
-        ctx
+        ctx,
     );
     validators.push_back(validator);
     create_sui_system_state_for_testing(validators, 1000, 0, ctx);
@@ -633,6 +664,7 @@ fun test_active_validator_update_metadata() {
     // Test active validator metadata changes
     scenario.next_tx(validator_addr);
     {
+        // prettier-ignore
         update_metadata(
             scenario,
             &mut system_state,
@@ -648,6 +680,8 @@ fun test_active_validator_update_metadata() {
 
     scenario.next_tx(validator_addr);
     let validator = system_state.active_validator_by_address(validator_addr);
+
+    // prettier-ignore
     verify_metadata(
         validator,
         b"validator_new_name",
@@ -675,6 +709,7 @@ fun test_active_validator_update_metadata() {
     scenario.next_tx(new_validator_addr);
     {
         let ctx = scenario.ctx();
+        // prettier-ignore
         system_state.request_add_validator_candidate(
             new_pubkey,
             vector[33, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
@@ -693,7 +728,9 @@ fun test_active_validator_update_metadata() {
             ctx,
         );
         let staked_sui = system_state.request_add_stake_non_entry(
-            coin::mint_for_testing(100_000_000_000, ctx), new_validator_addr, ctx
+            coin::mint_for_testing(100_000_000_000, ctx),
+            new_validator_addr,
+            ctx,
         );
         transfer::public_transfer(staked_sui, @0x0);
         system_state.request_add_validator_for_testing(ctx);
@@ -701,6 +738,7 @@ fun test_active_validator_update_metadata() {
 
     scenario.next_tx(new_validator_addr);
     {
+        // prettier-ignore
         update_metadata(
             scenario,
             &mut system_state,
@@ -716,6 +754,7 @@ fun test_active_validator_update_metadata() {
 
     scenario.next_tx(new_validator_addr);
     let validator = system_state.pending_validator_by_address(new_validator_addr);
+    // prettier-ignore
     verify_metadata(
         validator,
         b"new_validator_new_name",
@@ -743,6 +782,7 @@ fun test_active_validator_update_metadata() {
     scenario.next_tx(new_validator_addr);
     let mut system_state = scenario.take_shared<SuiSystemState>();
     let validator = system_state.active_validator_by_address(validator_addr);
+    // prettier-ignore
     verify_metadata_after_advancing_epoch(
         validator,
         b"validator_new_name",
@@ -755,6 +795,7 @@ fun test_active_validator_update_metadata() {
     );
 
     let validator = system_state.active_validator_by_address(new_validator_addr);
+    // prettier-ignore
     verify_metadata_after_advancing_epoch(
         validator,
         b"new_validator_new_name",
@@ -770,18 +811,21 @@ fun test_active_validator_update_metadata() {
     scenario_val.end();
 }
 
-
 #[test]
 fun test_validator_candidate_update() {
     let validator_addr = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
     // pubkey generated with protocol key on seed [0; 32]
-    let pubkey = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
+    let pubkey =
+        x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
     // pop generated using the protocol key and address with [fn test_proof_of_possession]
-    let pop = x"b01cc86f421beca7ab4cfca87c0799c4d038c199dd399fbec1924d4d4367866dba9e84d514710b91feb65316e4ceef43";
+    let pop =
+        x"b01cc86f421beca7ab4cfca87c0799c4d038c199dd399fbec1924d4d4367866dba9e84d514710b91feb65316e4ceef43";
 
     // pubkey generated with protocol key on seed [1; 32]
-    let pubkey1 = x"96d19c53f1bee2158c3fcfb5bb2f06d3a8237667529d2d8f0fbb22fe5c3b3e64748420b4103674490476d98530d063271222d2a59b0f7932909cc455a30f00c69380e6885375e94243f7468e9563aad29330aca7ab431927540e9508888f0e1c";
-    let pop1 = x"a8a0bcaf04e13565914eb22fa9f27a76f297db04446860ee2b923d10224cedb130b30783fb60b12556e7fc50e5b57a86";
+    let pubkey1 =
+        x"96d19c53f1bee2158c3fcfb5bb2f06d3a8237667529d2d8f0fbb22fe5c3b3e64748420b4103674490476d98530d063271222d2a59b0f7932909cc455a30f00c69380e6885375e94243f7468e9563aad29330aca7ab431927540e9508888f0e1c";
+    let pop1 =
+        x"a8a0bcaf04e13565914eb22fa9f27a76f297db04446860ee2b923d10224cedb130b30783fb60b12556e7fc50e5b57a86";
 
     let mut scenario_val = test_scenario::begin(validator_addr);
     let scenario = &mut scenario_val;
@@ -791,6 +835,7 @@ fun test_validator_candidate_update() {
     let mut system_state = scenario.take_shared<SuiSystemState>();
     scenario.next_tx(validator_addr);
     {
+        // prettier-ignore
         system_state.request_add_validator_candidate_for_testing(
             pubkey,
             vector[215, 64, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
@@ -837,8 +882,6 @@ fun test_validator_candidate_update() {
         7,
     );
 
-
-
     test_scenario::return_shared(system_state);
     scenario_val.end();
 }
@@ -851,12 +894,15 @@ fun test_add_validator_candidate_failure_invalid_metadata() {
 
     // Generated using [fn test_proof_of_possession]
     let new_validator_addr = @0x8e3446145b0c7768839d71840df389ffa3b9742d0baaff326a3d453b595f87d7;
-    let pubkey = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
-    let pop = x"83809369ce6572be211512d85621a075ee6a8da57fbb2d867d05e6a395e71f10e4e957796944d68a051381eb91720fba";
+    let pubkey =
+        x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
+    let pop =
+        x"83809369ce6572be211512d85621a075ee6a8da57fbb2d867d05e6a395e71f10e4e957796944d68a051381eb91720fba";
 
     set_up_sui_system_state(vector[@0x1, @0x2, @0x3]);
     scenario.next_tx(new_validator_addr);
     let mut system_state = scenario.take_shared<SuiSystemState>();
+    // prettier-ignore
     system_state.request_add_validator_candidate(
         pubkey,
         vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
@@ -884,12 +930,15 @@ fun test_add_validator_candidate_failure_double_register() {
     let mut scenario_val = test_scenario::begin(@0x0);
     let scenario = &mut scenario_val;
     let new_validator_addr = @0x8e3446145b0c7768839d71840df389ffa3b9742d0baaff326a3d453b595f87d7;
-    let pubkey = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
-    let pop = x"83809369ce6572be211512d85621a075ee6a8da57fbb2d867d05e6a395e71f10e4e957796944d68a051381eb91720fba";
+    let pubkey =
+        x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
+    let pop =
+        x"83809369ce6572be211512d85621a075ee6a8da57fbb2d867d05e6a395e71f10e4e957796944d68a051381eb91720fba";
 
     set_up_sui_system_state(vector[@0x1, @0x2, @0x3]);
     scenario.next_tx(new_validator_addr);
     let mut system_state = scenario.take_shared<SuiSystemState>();
+    // prettier-ignore
     system_state.request_add_validator_candidate(
         pubkey,
         vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
@@ -908,6 +957,7 @@ fun test_add_validator_candidate_failure_double_register() {
         scenario.ctx(),
     );
 
+    // prettier-ignore
     // Add the same address as candidate again, should fail this time.
     system_state.request_add_validator_candidate(
         pubkey,
@@ -935,19 +985,24 @@ fun test_add_validator_candidate_failure_double_register() {
 fun test_add_validator_candidate_failure_duplicate_with_active() {
     let validator_addr = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
     // Seed [0; 32]
-    let pubkey = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
-    let pop = x"b01cc86f421beca7ab4cfca87c0799c4d038c199dd399fbec1924d4d4367866dba9e84d514710b91feb65316e4ceef43";
+    let pubkey =
+        x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
+    let pop =
+        x"b01cc86f421beca7ab4cfca87c0799c4d038c199dd399fbec1924d4d4367866dba9e84d514710b91feb65316e4ceef43";
 
     let new_addr = @0x1a4623343cd42be47d67314fce0ad042f3c82685544bc91d8c11d24e74ba7357;
     // Seed [1; 32]
-    let new_pubkey = x"96d19c53f1bee2158c3fcfb5bb2f06d3a8237667529d2d8f0fbb22fe5c3b3e64748420b4103674490476d98530d063271222d2a59b0f7932909cc455a30f00c69380e6885375e94243f7468e9563aad29330aca7ab431927540e9508888f0e1c";
-    let new_pop = x"932336c35a8c393019c63eb0f7d385dd4e0bd131f04b54cf45aa9544f14dca4dab53bd70ffcb8e0b34656e4388309720";
+    let new_pubkey =
+        x"96d19c53f1bee2158c3fcfb5bb2f06d3a8237667529d2d8f0fbb22fe5c3b3e64748420b4103674490476d98530d063271222d2a59b0f7932909cc455a30f00c69380e6885375e94243f7468e9563aad29330aca7ab431927540e9508888f0e1c";
+    let new_pop =
+        x"932336c35a8c393019c63eb0f7d385dd4e0bd131f04b54cf45aa9544f14dca4dab53bd70ffcb8e0b34656e4388309720";
 
     let mut scenario_val = test_scenario::begin(validator_addr);
     let scenario = &mut scenario_val;
 
     // Set up SuiSystemState with an active validator
     let ctx = scenario.ctx();
+    // prettier-ignore
     let validator = validator::new_for_testing(
         validator_addr,
         pubkey,
@@ -966,7 +1021,7 @@ fun test_add_validator_candidate_failure_duplicate_with_active() {
         1,
         0,
         true,
-        ctx
+        ctx,
     );
     create_sui_system_state_for_testing(vector[validator], 1000, 0, ctx);
 
@@ -974,6 +1029,7 @@ fun test_add_validator_candidate_failure_duplicate_with_active() {
 
     let mut system_state = scenario.take_shared<SuiSystemState>();
 
+    // prettier-ignore
     // Add a candidate with the same name. Fails due to duplicating with an already active validator.
     system_state.request_add_validator_candidate(
         new_pubkey,
@@ -1011,7 +1067,11 @@ fun test_skip_stake_subsidy() {
     scenario_val.end();
 }
 
-fun advance_epoch_and_check_distribution_counter(scenario: &mut Scenario, epoch_length: u64, should_increment_counter: bool) {
+fun advance_epoch_and_check_distribution_counter(
+    scenario: &mut Scenario,
+    epoch_length: u64,
+    should_increment_counter: bool,
+) {
     scenario.next_tx(@0x0);
     let new_epoch = scenario.ctx().epoch() + 1;
     let mut system_state = scenario.take_shared<SuiSystemState>();
@@ -1019,10 +1079,22 @@ fun advance_epoch_and_check_distribution_counter(scenario: &mut Scenario, epoch_
     let prev_counter = system_state.get_stake_subsidy_distribution_counter();
 
     let rebate = system_state.advance_epoch_for_testing(
-        new_epoch, 1, 0, 0, 0, 0, 0, 0, prev_epoch_time + epoch_length, scenario.ctx()
+        new_epoch,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        prev_epoch_time + epoch_length,
+        scenario.ctx(),
     );
     destroy(rebate);
-    assert_eq(system_state.get_stake_subsidy_distribution_counter(), prev_counter + (if (should_increment_counter) 1 else 0));
+    assert_eq(
+        system_state.get_stake_subsidy_distribution_counter(),
+        prev_counter + (if (should_increment_counter) 1 else 0),
+    );
     test_scenario::return_shared(system_state);
     scenario.next_epoch(@0x0);
 }
@@ -1102,7 +1174,7 @@ fun test_convert_to_fungible_staked_sui_and_redeem() {
     let staked_sui = system_state.request_add_stake_non_entry(
         coin::mint_for_testing(100_000_000_000, scenario.ctx()),
         @0x1,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     assert!(staked_sui.amount() == 100_000_000_000, 0);
@@ -1113,14 +1185,14 @@ fun test_convert_to_fungible_staked_sui_and_redeem() {
     let mut system_state = scenario.take_shared<SuiSystemState>();
     let fungible_staked_sui = system_state.convert_to_fungible_staked_sui(
         staked_sui,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     assert!(fungible_staked_sui.value() == 100_000_000_000, 0);
 
     let sui = system_state.redeem_fungible_staked_sui(
         fungible_staked_sui,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     assert!(sui.value() == 100_000_000_000, 0);

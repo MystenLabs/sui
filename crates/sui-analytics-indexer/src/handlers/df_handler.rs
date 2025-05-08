@@ -4,6 +4,7 @@
 use anyhow::Result;
 use fastcrypto::encoding::{Base64, Encoding};
 use std::collections::HashMap;
+use std::sync::Arc;
 use sui_data_ingestion_core::Worker;
 use sui_indexer::errors::IndexerError;
 use sui_types::object::bounded_visitor::BoundedVisitor;
@@ -14,7 +15,6 @@ use tracing::warn;
 
 use sui_indexer::types::owner_to_owner_info;
 use sui_json_rpc_types::SuiMoveValue;
-use sui_package_resolver::Resolver;
 use sui_types::base_types::ObjectID;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::dynamic_field::{DynamicFieldName, DynamicFieldType};
@@ -22,18 +22,17 @@ use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 use sui_types::object::Object;
 
 use crate::handlers::AnalyticsHandler;
-use crate::package_store::{LocalDBPackageStore, PackageCache};
+use crate::package_store::PackageCache;
 use crate::tables::DynamicFieldEntry;
 use crate::FileType;
 
 pub struct DynamicFieldHandler {
     state: Mutex<State>,
+    package_cache: Arc<PackageCache>,
 }
 
 struct State {
     dynamic_fields: Vec<DynamicFieldEntry>,
-    package_store: LocalDBPackageStore,
-    resolver: Resolver<PackageCache>,
 }
 
 #[async_trait::async_trait]
@@ -49,7 +48,7 @@ impl Worker for DynamicFieldHandler {
         let mut state = self.state.lock().await;
         for checkpoint_transaction in checkpoint_transactions {
             for object in checkpoint_transaction.output_objects.iter() {
-                state.package_store.update(object)?;
+                self.package_cache.update(object)?;
             }
             self.process_transaction(
                 checkpoint_summary.epoch,
@@ -60,7 +59,7 @@ impl Worker for DynamicFieldHandler {
             )
             .await?;
             if checkpoint_summary.end_of_epoch_data.is_some() {
-                state
+                self.package_cache
                     .resolver
                     .package_store()
                     .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
@@ -89,14 +88,13 @@ impl AnalyticsHandler<DynamicFieldEntry> for DynamicFieldHandler {
 }
 
 impl DynamicFieldHandler {
-    pub fn new(package_store: LocalDBPackageStore) -> Self {
+    pub fn new(package_cache: Arc<PackageCache>) -> Self {
         let state = State {
             dynamic_fields: vec![],
-            package_store: package_store.clone(),
-            resolver: Resolver::new(PackageCache::new(package_store)),
         };
         Self {
             state: Mutex::new(state),
+            package_cache,
         }
     }
     async fn process_dynamic_field(
@@ -117,7 +115,8 @@ impl DynamicFieldHandler {
             return Ok(());
         }
 
-        let layout = state
+        let layout = self
+            .package_cache
             .resolver
             .type_layout(move_object.type_().clone().into())
             .await?;

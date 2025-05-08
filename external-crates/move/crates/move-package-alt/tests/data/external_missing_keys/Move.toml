@@ -1,0 +1,17 @@
+# Broken external resolver is missing output
+
+[package]
+name = "example"
+edition = "2024.beta"
+license = "Apache-2.0"
+authors = ["Move Team"]
+
+[environments]
+mainnet = "35834a8a"
+
+[dependencies.missing_env.r.mock-resolver]
+# only one response for two queries
+stderr = "stderr output"
+stdout = """\
+[ { "jsonrpc": "2.0", "id": 1, "result": { "local": "for_mainnet" } } ]
+"""

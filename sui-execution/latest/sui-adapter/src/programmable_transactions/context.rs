@@ -13,7 +13,6 @@ mod checked {
         sync::Arc,
     };
 
-    use crate::adapter::new_native_extensions;
     use crate::error::convert_vm_error;
     use crate::execution_mode::ExecutionMode;
     use crate::execution_value::{CommandKind, ObjectContents, TryFromValue, Value};
@@ -25,10 +24,11 @@ mod checked {
     use crate::gas_meter::SuiGasMeter;
     use crate::programmable_transactions::linkage_view::LinkageView;
     use crate::type_resolver::TypeTagResolver;
+    use crate::{adapter::new_native_extensions, execution_value::SizeBound};
     use move_binary_format::{
-        errors::{Location, PartialVMError, PartialVMResult, VMError, VMResult},
-        file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
         CompiledModule,
+        errors::{Location, PartialVMError, PartialVMResult, VMError, VMResult},
+        file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
     };
     use move_core_types::resolver::ModuleResolver;
     use move_core_types::vm_status::StatusCode;
@@ -47,7 +47,7 @@ mod checked {
     use move_vm_types::loaded_data::runtime_types::Type;
     use mysten_common::debug_fatal;
     use sui_move_natives::object_runtime::{
-        self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
+        self, LoadedRuntimeObject, ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::storage::{DenyListResult, PackageObject};
@@ -313,6 +313,13 @@ mod checked {
                 &self.new_packages,
                 struct_tag,
             )
+        }
+
+        pub fn get_type_abilities(&self, t: &Type) -> Result<AbilitySet, ExecutionError> {
+            self.vm
+                .get_runtime()
+                .get_type_abilities(t)
+                .map_err(|e| self.convert_vm_error(e))
         }
 
         /// Takes the user events from the runtime and tags them with the Move module of the function
@@ -767,7 +774,7 @@ mod checked {
                                     result_idx: i as u16,
                                     secondary_idx: j as u16,
                                 }
-                                .into())
+                                .into());
                             }
                             Some(Value::Raw(RawValueType::Any, _)) => (),
                             Some(Value::Raw(RawValueType::Loaded { abilities, .. }, _)) => {
@@ -953,7 +960,9 @@ mod checked {
                         // Already verified in pre-execution checks that tx sender is the object owner.
                         // SingleOwner is allowed to do anything with the object.
                         if ref_context.borrow().sender() != *owner {
-                            debug_fatal!("transaction with a singly owned input object where the tx sender is not the owner should never be executed");
+                            debug_fatal!(
+                                "transaction with a singly owned input object where the tx sender is not the owner should never be executed"
+                            );
                             return Err(ExecutionError::new(
                                 ExecutionErrorKind::SharedObjectOperationNotAllowed,
                                 Some(
@@ -1227,6 +1236,22 @@ mod checked {
                 &mut SuiGasMeter(self.gas_charger.move_gas_status_mut()),
             )
         }
+
+        pub fn size_bound_raw(&self, bound: u64) -> SizeBound {
+            if self.protocol_config.max_ptb_value_size_v2() {
+                SizeBound::Raw(bound)
+            } else {
+                SizeBound::Object(bound)
+            }
+        }
+
+        pub fn size_bound_vector_elem(&self, bound: u64) -> SizeBound {
+            if self.protocol_config.max_ptb_value_size_v2() {
+                SizeBound::VectorElem(bound)
+            } else {
+                SizeBound::Object(bound)
+            }
+        }
     }
 
     impl Arg {
@@ -1372,7 +1397,7 @@ mod checked {
                 Type::Vector(Box::new(load_type(vm, linkage_view, new_packages, inner)?))
             }
             TypeTag::Struct(struct_tag) => {
-                return load_type_from_struct(vm, linkage_view, new_packages, struct_tag)
+                return load_type_from_struct(vm, linkage_view, new_packages, struct_tag);
             }
         })
     }
@@ -1675,13 +1700,15 @@ mod checked {
             TypeTag::Struct(inner) => *inner,
             _ => invariant_violation!("Non struct type for object"),
         };
-        MoveObject::new_from_execution(
-            struct_tag.into(),
-            has_public_transfer,
-            old_obj_ver.unwrap_or_default(),
-            contents,
-            protocol_config,
-        )
+        unsafe {
+            MoveObject::new_from_execution(
+                struct_tag.into(),
+                has_public_transfer,
+                old_obj_ver.unwrap_or_default(),
+                contents,
+                protocol_config,
+            )
+        }
     }
 
     // Implementation of the `DataStore` trait for the Move VM.

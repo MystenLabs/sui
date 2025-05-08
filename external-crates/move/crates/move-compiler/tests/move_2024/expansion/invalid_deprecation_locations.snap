@@ -5,13 +5,13 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02015]: invalid attribute
+error[E10004]: invalid usage of known attribute
   ┌─ tests/move_2024/expansion/invalid_deprecation_locations.move:5:7
   │
 5 │     #[deprecated]
   │       ^^^^^^^^^^
   │       │
-  │       Known attribute 'deprecated' is not expected with a friend
+  │       Attribute 'deprecated' is not expected with a friend
   │       Expected to be used with one of the following: module, constant, struct, enum, function
 
 error[E13002]: feature is deprecated in specified edition
@@ -20,13 +20,13 @@ error[E13002]: feature is deprecated in specified edition
 6 │     friend 0x42::k;
   │     ^^^^^^^^^^^^^^^ 'friend's are deprecated. Remove and replace 'public(friend)' with 'public(package)'
 
-error[E02015]: invalid attribute
+error[E10004]: invalid usage of known attribute
   ┌─ tests/move_2024/expansion/invalid_deprecation_locations.move:8:7
   │
 8 │     #[deprecated]
   │       ^^^^^^^^^^
   │       │
-  │       Known attribute 'deprecated' is not expected with a use
+  │       Attribute 'deprecated' is not expected with a use
   │       Expected to be used with one of the following: module, constant, struct, enum, function
 
 warning[W09001]: unused alias

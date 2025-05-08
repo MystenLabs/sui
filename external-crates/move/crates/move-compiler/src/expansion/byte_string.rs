@@ -65,13 +65,7 @@ fn decode_(context: &mut Context, buffer: &mut Vec<u8>, chars: Vec<char>) {
         }};
     }
     macro_rules! next_char_opt {
-        () => {{
-            if i < len {
-                Some(next_char!())
-            } else {
-                None
-            }
-        }};
+        () => {{ if i < len { Some(next_char!()) } else { None } }};
     }
     while i < len {
         let cur = i;

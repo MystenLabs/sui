@@ -13,7 +13,7 @@ verified_operation_cap_address
 new_unverified_validator_operation_cap_and_transfer
 	public(package) fun
 	0x3::validator_cap
-new_from_unverified
+into_verified
 	public(package) fun
 	0x3::validator_cap
 StakingPool

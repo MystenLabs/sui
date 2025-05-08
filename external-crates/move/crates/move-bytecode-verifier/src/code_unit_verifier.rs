@@ -11,11 +11,11 @@ use crate::{
 };
 use move_abstract_interpreter::{absint::FunctionContext, control_flow_graph::ControlFlowGraph};
 use move_binary_format::{
+    IndexKind,
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
         CompiledModule, FunctionDefinition, FunctionDefinitionIndex, IdentifierIndex, TableIndex,
     },
-    IndexKind,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
@@ -72,7 +72,7 @@ fn verify_module_impl<'env>(
     Ok(())
 }
 
-fn verify_function<'env>(
+pub fn verify_function<'env>(
     verifier_config: &VerifierConfig,
     index: FunctionDefinitionIndex,
     function_definition: &'env FunctionDefinition,

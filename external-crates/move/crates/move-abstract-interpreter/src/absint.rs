@@ -4,12 +4,12 @@
 
 use crate::control_flow_graph::{BlockId, ControlFlowGraph, VMControlFlowGraph};
 use move_binary_format::{
+    CompiledModule,
     errors::PartialVMResult,
     file_format::{
         AbilitySet, Bytecode, CodeOffset, CodeUnit, FunctionDefinitionIndex, FunctionHandle,
         Signature,
     },
-    CompiledModule,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use std::collections::BTreeMap;

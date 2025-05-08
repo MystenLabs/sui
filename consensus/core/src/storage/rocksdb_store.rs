@@ -15,7 +15,7 @@ use typed_store::{
 
 use super::{CommitInfo, Store, WriteBatch};
 use crate::{
-    block::{BlockAPI as _, BlockDigest, BlockRef, Round, SignedBlock, Slot, VerifiedBlock},
+    block::{BlockAPI as _, BlockDigest, BlockRef, Round, SignedBlock, VerifiedBlock},
     commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitRange, CommitRef, TrustedCommit},
     error::{ConsensusError, ConsensusResult},
 };
@@ -175,18 +175,6 @@ impl Store for RocksDBStore {
             .collect::<Vec<_>>();
         let exist = self.blocks.multi_contains_keys(refs)?;
         Ok(exist)
-    }
-
-    fn contains_block_at_slot(&self, slot: Slot) -> ConsensusResult<bool> {
-        let found = self
-            .digests_by_authorities
-            .safe_range_iter((
-                Included((slot.authority, slot.round, BlockDigest::MIN)),
-                Included((slot.authority, slot.round, BlockDigest::MAX)),
-            ))
-            .next()
-            .is_some();
-        Ok(found)
     }
 
     fn scan_blocks_by_author(

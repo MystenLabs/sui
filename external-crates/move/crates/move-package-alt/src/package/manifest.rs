@@ -4,6 +4,7 @@
 
 use std::{
     collections::BTreeMap,
+    fmt,
     fmt::{Debug, Display, Formatter},
 };
 
@@ -11,8 +12,8 @@ use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    dependency::ManifestDependencyInfo,
-    errors::{with_file, FileHandle, Located, ManifestError, ManifestErrorKind, PackageResult},
+    dependency::{DependencySet, ManifestDependencyInfo},
+    errors::{FileHandle, Located, ManifestError, ManifestErrorKind, PackageResult, with_file},
     flavor::{MoveFlavor, Vanilla},
 };
 
@@ -29,7 +30,10 @@ const ALLOWED_EDITIONS: &[&str] = &["2024", "2024.beta", "legacy"];
 #[serde(bound = "")]
 pub struct Manifest<F: MoveFlavor> {
     package: PackageMetadata<F>,
+
+    #[serde(default)]
     environments: BTreeMap<EnvironmentName, F::EnvironmentID>,
+
     #[serde(default)]
     dependencies: BTreeMap<PackageName, ManifestDependency<F>>,
     #[serde(default)]
@@ -49,7 +53,7 @@ struct PackageMetadata<F: MoveFlavor> {
 #[derive(Deserialize, Debug)]
 #[serde(bound = "")]
 #[serde(rename_all = "kebab-case")]
-struct ManifestDependency<F: MoveFlavor> {
+pub struct ManifestDependency<F: MoveFlavor> {
     #[serde(flatten)]
     dependency_info: ManifestDependencyInfo<F>,
 
@@ -63,7 +67,7 @@ struct ManifestDependency<F: MoveFlavor> {
 #[derive(Debug, Deserialize)]
 #[serde(bound = "")]
 #[serde(rename_all = "kebab-case")]
-struct ManifestDependencyOverride<F: MoveFlavor> {
+pub struct ManifestDependencyOverride<F: MoveFlavor> {
     #[serde(flatten, default)]
     dependency: Option<ManifestDependency<F>>,
 
@@ -119,7 +123,7 @@ impl<F: MoveFlavor> Manifest<F> {
         Ok(())
     }
 
-    fn write_template(path: impl AsRef<Path>, name: &PackageName) -> anyhow::Result<()> {
+    fn write_template(path: impl AsRef<Path>, name: &PackageName) -> PackageResult<()> {
         std::fs::write(
             path,
             r###"
@@ -127,5 +131,27 @@ impl<F: MoveFlavor> Manifest<F> {
         )?;
 
         Ok(())
+    }
+
+    /// Return the dependency set of this manifest, including overrides.
+    pub fn dependencies(&self) -> DependencySet<ManifestDependencyInfo<F>> {
+        let mut deps = DependencySet::new();
+
+        for (name, dep) in &self.dependencies {
+            deps.insert(None, name.clone(), dep.dependency_info.clone());
+        }
+
+        for (env, overrides) in &self.dep_overrides {
+            for (name, dep) in overrides {
+                if let Some(dep) = &dep.dependency {
+                    deps.insert(Some(env.clone()), name.clone(), dep.dependency_info.clone());
+                }
+            }
+        }
+        deps
+    }
+
+    pub fn environments(&self) -> &BTreeMap<EnvironmentName, F::EnvironmentID> {
+        &self.environments
     }
 }

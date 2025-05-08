@@ -2,8 +2,20 @@
 
 There are minimum staking requirements a validator must satisfy to become active and to stay in the active validator set.
 
-More precisely:
+#### Stake Requirements
 
-- A validator candidate must accrue at least 30M SUI of stake before they can request to join the validator set.
-- If an active validator’s stake falls below 20M SUI, they have seven epochs of grace period to gain back the stake before being removed from the validator set.
-- If an active validator’s stake falls below 15M SUI, they are removed from the validator set at the end of the current epoch boundary. Sui uses 24-hour epochs.
+The Sui network is rolling out [SIP-39](https://github.com/sui-foundation/sips/blob/main/sips/sip-39.md), which will significantly lower the barrier to entry for validators. Instead of requiring a minimum amount of SUI tokens, validators will need a minimum amount of *voting power*.
+
+When fully rolled out, SIP-39 will mean the following validator requirements:
+
+- A validator candidate must accrue at least 3 voting power before they can request to join the validator set.
+- If an active validator's stake falls below 2 voting power, they have seven epochs of grace period to gain back the stake before being removed from the validator set.
+- If an active validator's stake falls below 1 voting power, they are removed from the validator set at the end of the current epoch boundary. Sui uses 24-hour epochs.
+
+For more information on voting power, see [Understanding the voting power formula](/concepts/tokenomics.mdx#understanding-the-voting-power-formula).
+
+---
+
+> ### **Planning on becoming a Sui validator?**
+>
+> **If you have the required stake and plan to operate a validator on Sui, we welcome your participation and are committed to supporting your onboarding. Kindly complete [this form](https://docs.google.com/forms/d/e/1FAIpQLSf6ZngRJ6Q5RdEiBfnbpUq4Htj8ShL58I6JRkmRTwTVSzeNtQ/viewform) to be added to our Validator Discord and keep up with upcoming validator releases and technical support.**

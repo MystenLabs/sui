@@ -17,7 +17,7 @@ pub mod memstore;
 pub mod metrics;
 pub mod rocks;
 #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-mod tidehunter_util;
+pub mod tidehunter_util;
 mod util;
 pub use metrics::DBMetrics;
 pub use typed_store_error::TypedStoreError;

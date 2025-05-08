@@ -307,7 +307,6 @@ where
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
             leader_schedule.clone(),
         );
 

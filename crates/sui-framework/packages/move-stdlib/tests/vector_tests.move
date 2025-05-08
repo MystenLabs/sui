@@ -6,6 +6,8 @@
 #[test_only]
 module std::vector_tests;
 
+use std::unit_test::assert_eq;
+
 public struct R has store {}
 public struct Droppable has drop {}
 public struct NotDroppable {}
@@ -846,4 +848,159 @@ fun zip_map_ref_macro() {
     let v1 = vector[1u64, 2, 3];
     let v2 = vector[4u64, 5, 6];
     assert!(v2.zip_map_ref!(&v1, |a, b| *a + *b) == vector[5, 7, 9]);
+}
+
+// A helper struct for testing stability of sort macros
+public struct Indexed has copy, drop {
+    value: u64,
+    index: u64,
+}
+
+const UNSORTED_100: vector<u8> =
+    x"ed0c0f0ef96c4537d606ad4e1482e6369cf2db785363f16c2786bf866731cf072f030d29c5acac94e9aa10bd402fba01efa38d7c3f6399b3d8d8fc137bbcaa3e5b6db5b3dd163e041dea8c45dab677a9f49aa6ee25a55e52a5618aa0da08af2a4e8e7b1b";
+const UNSORTED_50: vector<u8> =
+    x"2f2420312a0f20050a19312028251731202b250c29301927040f06030220022d2314060c2a2e23021b11292a1d2e301a1c07";
+const UNSORTED_40: vector<u8> =
+    x"6deb6c0d0e1ca38d4a59ceb875dd36b857699bd34980ac6e79e7f7a8f999684b6ab929b070da47f7";
+const UNSORTED_30: vector<u8> = x"0220021409192d182808091c20170e0e121e04290521181428151b2f150f";
+
+#[test]
+fun insertion_sort_by_macro() {
+    let mut arr = UNSORTED_100;
+    arr.insertion_sort_by!(|a, b| *a <= *b);
+    assert!(arr.is_sorted_by!(|a, b| *a <= *b));
+
+    let mut arr = UNSORTED_50;
+    arr.insertion_sort_by!(|a, b| *a < *b);
+    assert!(arr.is_sorted_by!(|a, b| *a <= *b));
+
+    let mut arr = UNSORTED_40;
+    arr.insertion_sort_by!(|a, b| *a < *b);
+    assert!(arr.is_sorted_by!(|a, b| *a <= *b));
+
+    let mut arr = UNSORTED_30;
+    arr.insertion_sort_by!(|a, b| *a < *b);
+    assert!(arr.is_sorted_by!(|a, b| *a <= *b));
+}
+
+#[test]
+fun merge_sort_by_macro() {
+    let mut arr = UNSORTED_100;
+    arr.merge_sort_by!(|a, b| *a < *b);
+    assert!(arr.is_sorted_by!(|a, b| *a <= *b));
+
+    let mut arr = UNSORTED_50;
+    arr.merge_sort_by!(|a, b| *a < *b);
+    assert!(arr.is_sorted_by!(|a, b| *a <= *b));
+
+    let mut arr = UNSORTED_40;
+    arr.merge_sort_by!(|a, b| *a < *b);
+    assert!(arr.is_sorted_by!(|a, b| *a <= *b));
+
+    let mut arr = UNSORTED_30;
+    arr.merge_sort_by!(|a, b| *a < *b);
+    assert!(arr.is_sorted_by!(|a, b| *a <= *b));
+}
+
+#[random_test]
+// this test may time out if we take large vectors
+// so to optimize, we pop the vector to a smaller size
+fun sort_by_random_set(mut v: vector<u8>) {
+    let mut arr = vector::tabulate!(v.length().min(100), |_| v.pop_back());
+    arr.insertion_sort_by!(|a, b| *a <= *b);
+    assert!(arr.is_sorted_by!(|a, b| *a <= *b));
+}
+
+#[test]
+fun test_insertion_sort_is_stable_sort_by() {
+    let mut arr = vector[
+        Indexed { value: 1, index: 0 },
+        Indexed { value: 2, index: 1 },
+        Indexed { value: 3, index: 2 },
+        Indexed { value: 3, index: 3 },
+        Indexed { value: 1, index: 4 },
+        Indexed { value: 2, index: 5 },
+    ];
+
+    arr.insertion_sort_by!(|a, b| a.value <= b.value);
+    assert_eq!(
+        arr,
+        vector[
+            Indexed { value: 1, index: 0 },
+            Indexed { value: 1, index: 4 },
+            Indexed { value: 2, index: 1 },
+            Indexed { value: 2, index: 5 },
+            Indexed { value: 3, index: 2 },
+            Indexed { value: 3, index: 3 },
+        ],
+    );
+
+    // reverse the comparison function
+    arr.insertion_sort_by!(|a, b| b.value <= a.value);
+    assert_eq!(
+        arr,
+        vector[
+            Indexed { value: 3, index: 2 },
+            Indexed { value: 3, index: 3 },
+            Indexed { value: 2, index: 1 },
+            Indexed { value: 2, index: 5 },
+            Indexed { value: 1, index: 0 },
+            Indexed { value: 1, index: 4 },
+        ],
+    );
+}
+
+#[test]
+fun test_merge_sort_is_stable_sort_by() {
+    let mut arr = vector[
+        Indexed { value: 1, index: 0 },
+        Indexed { value: 2, index: 1 },
+        Indexed { value: 3, index: 2 },
+        Indexed { value: 3, index: 3 },
+        Indexed { value: 1, index: 4 },
+        Indexed { value: 2, index: 5 },
+    ];
+
+    arr.merge_sort_by!(|a, b| a.value <= b.value);
+    assert_eq!(
+        arr,
+        vector[
+            Indexed { value: 1, index: 0 },
+            Indexed { value: 1, index: 4 },
+            Indexed { value: 2, index: 1 },
+            Indexed { value: 2, index: 5 },
+            Indexed { value: 3, index: 2 },
+            Indexed { value: 3, index: 3 },
+        ],
+    );
+
+    arr.merge_sort_by!(|a, b| a.value >= b.value);
+    assert_eq!(
+        arr,
+        vector[
+            Indexed { value: 3, index: 2 },
+            Indexed { value: 3, index: 3 },
+            Indexed { value: 2, index: 1 },
+            Indexed { value: 2, index: 5 },
+            Indexed { value: 1, index: 0 },
+            Indexed { value: 1, index: 4 },
+        ],
+    );
+}
+
+#[test]
+#[allow(implicit_const_copy)]
+fun test_is_sorted_by() {
+    assert!(vector<u8>[].is_sorted_by!(|a, b| *a <= *b));
+    assert!(vector<u8>[].is_sorted_by!(|a, b| *a <= *b));
+    assert!(vector<u8>[].is_sorted_by!(|_, _| false));
+    assert!(vector[0].is_sorted_by!(|a, b| *a <= *b));
+    assert!(vector[0].is_sorted_by!(|a, b| *a <= *b));
+    assert!(vector[0].is_sorted_by!(|_, _| false));
+    assert!(!vector[1, 2, 4, 3].is_sorted_by!(|a, b| *a < *b));
+
+    assert!(!UNSORTED_30.is_sorted_by!(|a, b| *a <= *b));
+    assert!(!UNSORTED_40.is_sorted_by!(|a, b| *a <= *b));
+    assert!(!UNSORTED_50.is_sorted_by!(|a, b| *a <= *b));
+    assert!(!UNSORTED_100.is_sorted_by!(|a, b| *a <= *b));
 }

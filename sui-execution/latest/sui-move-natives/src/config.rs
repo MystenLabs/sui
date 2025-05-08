@@ -184,6 +184,6 @@ fn unpack_option(option: Value, type_param: &Type) -> PartialVMResult<Option<Val
 
 fn option_none(type_param: &Type) -> PartialVMResult<Value> {
     Ok(Value::struct_(Struct::pack(vec![Vector::empty(
-        type_param,
+        type_param.try_into()?,
     )?])))
 }

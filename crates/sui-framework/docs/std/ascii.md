@@ -195,8 +195,7 @@ characters. Otherwise returns <code>None</code>.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_try_string">try_string</a>(bytes: <a href="../std/vector.md#std_vector">vector</a>&lt;<a href="../std/u8.md#std_u8">u8</a>&gt;): Option&lt;<a href="../std/ascii.md#std_ascii_String">String</a>&gt; {
     <b>let</b> is_valid = bytes.all!(|<a href="../std/ascii.md#std_ascii_byte">byte</a>| <a href="../std/ascii.md#std_ascii_is_valid_char">is_valid_char</a>(*<a href="../std/ascii.md#std_ascii_byte">byte</a>));
-    <b>if</b> (is_valid) <a href="../std/option.md#std_option_some">option::some</a>(<a href="../std/ascii.md#std_ascii_String">String</a> { bytes })
-    <b>else</b> <a href="../std/option.md#std_option_none">option::none</a>()
+    <b>if</b> (is_valid) <a href="../std/option.md#std_option_some">option::some</a>(<a href="../std/ascii.md#std_ascii_String">String</a> { bytes }) <b>else</b> <a href="../std/option.md#std_option_none">option::none</a>()
 }
 </code></pre>
 
@@ -644,8 +643,7 @@ Convert a <code><a href="../std/ascii.md#std_ascii_char">char</a></code> to its 
 
 
 <pre><code><b>fun</b> <a href="../std/ascii.md#std_ascii_char_to_uppercase">char_to_uppercase</a>(<a href="../std/ascii.md#std_ascii_byte">byte</a>: <a href="../std/u8.md#std_u8">u8</a>): <a href="../std/u8.md#std_u8">u8</a> {
-    <b>if</b> (<a href="../std/ascii.md#std_ascii_byte">byte</a> &gt;= 0x61 && <a href="../std/ascii.md#std_ascii_byte">byte</a> &lt;= 0x7A) <a href="../std/ascii.md#std_ascii_byte">byte</a> - 0x20
-    <b>else</b> <a href="../std/ascii.md#std_ascii_byte">byte</a>
+    <b>if</b> (<a href="../std/ascii.md#std_ascii_byte">byte</a> &gt;= 0x61 && <a href="../std/ascii.md#std_ascii_byte">byte</a> &lt;= 0x7A) <a href="../std/ascii.md#std_ascii_byte">byte</a> - 0x20 <b>else</b> <a href="../std/ascii.md#std_ascii_byte">byte</a>
 }
 </code></pre>
 
@@ -670,8 +668,7 @@ Convert a <code><a href="../std/ascii.md#std_ascii_char">char</a></code> to its 
 
 
 <pre><code><b>fun</b> <a href="../std/ascii.md#std_ascii_char_to_lowercase">char_to_lowercase</a>(<a href="../std/ascii.md#std_ascii_byte">byte</a>: <a href="../std/u8.md#std_u8">u8</a>): <a href="../std/u8.md#std_u8">u8</a> {
-    <b>if</b> (<a href="../std/ascii.md#std_ascii_byte">byte</a> &gt;= 0x41 && <a href="../std/ascii.md#std_ascii_byte">byte</a> &lt;= 0x5A) <a href="../std/ascii.md#std_ascii_byte">byte</a> + 0x20
-    <b>else</b> <a href="../std/ascii.md#std_ascii_byte">byte</a>
+    <b>if</b> (<a href="../std/ascii.md#std_ascii_byte">byte</a> &gt;= 0x41 && <a href="../std/ascii.md#std_ascii_byte">byte</a> &lt;= 0x5A) <a href="../std/ascii.md#std_ascii_byte">byte</a> + 0x20 <b>else</b> <a href="../std/ascii.md#std_ascii_byte">byte</a>
 }
 </code></pre>
 

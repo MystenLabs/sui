@@ -10,6 +10,7 @@ use std::{cmp::max, num::NonZeroU64};
 use move_abstract_interpreter::{absint::FunctionContext, control_flow_graph::ControlFlowGraph};
 use move_abstract_stack::AbstractStack;
 use move_binary_format::{
+    CompiledModule,
     errors::{PartialVMError, PartialVMResult},
     file_format::{
         AbilitySet, Bytecode, CodeOffset, DatatypeHandleIndex, EnumDefinition, FieldHandleIndex,
@@ -17,7 +18,7 @@ use move_binary_format::{
         SignatureToken, SignatureToken as ST, StructDefinition, StructDefinitionIndex,
         StructFieldInformation, VariantDefinition, VariantJumpTable,
     },
-    safe_unwrap_err, CompiledModule,
+    safe_unwrap_err,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
@@ -797,7 +798,7 @@ fn verify_instr(
                 _ => {
                     return Err(
                         verifier.error(StatusCode::WRITEREF_NO_MUTABLE_REFERENCE_ERROR, offset)
-                    )
+                    );
                 }
             };
             if !verifier.abilities(meter, &ref_inner_signature)?.has_drop() {

@@ -9,14 +9,14 @@ use crate::{
     },
     command_line as cli,
     diagnostics::{
+        DiagnosticReporter, Diagnostics, DiagnosticsFormat,
         codes::{DiagnosticsID, Severity},
         warning_filters::{
-            FilterName, FilterPrefix, WarningFilter, WarningFiltersBuilder, WarningFiltersScope,
-            WarningFiltersTable, FILTER_ALL,
+            FILTER_ALL, FilterName, FilterPrefix, WarningFilter, WarningFiltersBuilder,
+            WarningFiltersScope, WarningFiltersTable,
         },
-        DiagnosticReporter, Diagnostics, DiagnosticsFormat,
     },
-    editions::{check_feature_or_error, feature_edition_error_msg, Edition, FeatureGate, Flavor},
+    editions::{Edition, FeatureGate, Flavor, check_feature_or_error, feature_edition_error_msg},
     expansion::ast as E,
     hlir::ast as H,
     naming::ast as N,
@@ -42,8 +42,8 @@ use std::{
     hash::Hash,
     path::PathBuf,
     sync::{
-        atomic::{AtomicUsize, Ordering as AtomicOrdering},
         Arc, Mutex, OnceLock, RwLock,
+        atomic::{AtomicUsize, Ordering as AtomicOrdering},
     },
 };
 use vfs::{VfsError, VfsPath};
@@ -66,8 +66,8 @@ pub use ast_debug::AstDebug;
 //**************************************************************************************************
 
 pub use move_core_types::parsing::parser::{
-    parse_address_number as parse_address, parse_u128, parse_u16, parse_u256, parse_u32, parse_u64,
-    parse_u8, NumberFormat,
+    NumberFormat, parse_address_number as parse_address, parse_u8, parse_u16, parse_u32, parse_u64,
+    parse_u128, parse_u256,
 };
 
 //**************************************************************************************************

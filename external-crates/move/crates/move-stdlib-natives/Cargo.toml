@@ -1,7 +1,7 @@
 [package]
 name = "move-stdlib-natives"
 version = "0.1.1"
-edition = "2021"
+edition = "2024"
 authors = ["Diem Association <opensource@diem.com>"]
 description = "Diem stdlib"
 repository = "https://github.com/diem/diem"

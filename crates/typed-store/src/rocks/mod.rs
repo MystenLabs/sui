@@ -14,7 +14,7 @@ pub use crate::rocks::options::{
 use crate::rocks::safe_iter::{SafeIter, SafeRevIter};
 #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
 use crate::tidehunter_util::{
-    apply_range_bounds, transform_th_iterator, typed_store_error_from_th_error,
+    apply_range_bounds, transform_th_iterator, transform_th_key, typed_store_error_from_th_error,
 };
 use crate::util::{be_fix_int_ser, iterator_bounds, iterator_bounds_with_range};
 use crate::{
@@ -23,6 +23,8 @@ use crate::{
 };
 use crate::{DbIterator, TypedStoreError};
 use backoff::backoff::Backoff;
+use fastcrypto::hash::{Digest, HashFunction};
+use mysten_common::debug_fatal;
 use prometheus::{Histogram, HistogramTimer};
 use rocksdb::properties::num_files_at_level;
 use rocksdb::{checkpoint::Checkpoint, DBPinnableSlice, LiveFile};
@@ -83,7 +85,7 @@ pub enum ColumnFamily {
     Rocks(String),
     InMemory(String),
     #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-    TideHunter(KeySpace),
+    TideHunter((KeySpace, Option<Vec<u8>>)),
 }
 
 impl std::fmt::Debug for ColumnFamily {
@@ -159,7 +161,7 @@ impl Deref for GetResult<'_> {
 }
 
 impl Database {
-    fn new(storage: Storage, metric_conf: MetricConf) -> Self {
+    pub fn new(storage: Storage, metric_conf: MetricConf) -> Self {
         DBMetrics::get().increment_num_active_dbs(&metric_conf.db_name);
         Self {
             storage,
@@ -183,8 +185,8 @@ impl Database {
                 Ok(db.get(cf_name, key).map(GetResult::InMemory))
             }
             #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-            (Storage::TideHunter(db), ColumnFamily::TideHunter(ks)) => Ok(db
-                .get(*ks, key.as_ref())
+            (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => Ok(db
+                .get(*ks, &transform_th_key(key.as_ref(), prefix))
                 .map_err(typed_store_error_from_th_error)?
                 .map(GetResult::TideHunter)),
 
@@ -206,9 +208,10 @@ impl Database {
     {
         match (&self.storage, cf) {
             (Storage::Rocks(db), ColumnFamily::Rocks(_)) => {
+                let keys_vec: Vec<K> = keys.into_iter().collect();
                 let res = db.underlying.batched_multi_get_cf_opt(
                     &cf.rocks_cf(db),
-                    keys,
+                    keys_vec.iter(),
                     /* sorted_input */ false,
                     readopts,
                 );
@@ -225,9 +228,9 @@ impl Database {
                 .map(|r| Ok(r.map(GetResult::InMemory)))
                 .collect(),
             #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-            (Storage::TideHunter(db), ColumnFamily::TideHunter(ks)) => {
+            (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => {
                 let res = keys.into_iter().map(|k| {
-                    db.get(*ks, k.as_ref())
+                    db.get(*ks, &transform_th_key(k.as_ref(), prefix))
                         .map_err(typed_store_error_from_th_error)
                 });
                 res.into_iter()
@@ -276,8 +279,8 @@ impl Database {
                 Ok(())
             }
             #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-            (Storage::TideHunter(db), ColumnFamily::TideHunter(ks)) => db
-                .remove(*ks, key.as_ref().to_vec())
+            (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => db
+                .remove(*ks, transform_th_key(key.as_ref(), prefix))
                 .map_err(typed_store_error_from_th_error),
             _ => Err(TypedStoreError::RocksDBError(
                 "typed store invariant violation".to_string(),
@@ -312,8 +315,8 @@ impl Database {
                 Ok(())
             }
             #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-            (Storage::TideHunter(db), ColumnFamily::TideHunter(ks)) => db
-                .insert(*ks, key, value)
+            (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => db
+                .insert(*ks, transform_th_key(&key, prefix), value)
                 .map_err(typed_store_error_from_th_error),
             _ => Err(TypedStoreError::RocksDBError(
                 "typed store invariant violation".to_string(),
@@ -569,6 +572,22 @@ impl<K, V> DBMap<K, V> {
             ColumnFamily::Rocks(cf_key.to_string()),
             is_deprecated,
         ))
+    }
+
+    #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+    pub fn reopen_th(
+        db: Arc<Database>,
+        cf_name: &str,
+        ks: KeySpace,
+        prefix: Option<Vec<u8>>,
+    ) -> Self {
+        DBMap::new(
+            db,
+            &ReadWriteOptions::default(),
+            cf_name,
+            ColumnFamily::TideHunter((ks, prefix.clone())),
+            false,
+        )
     }
 
     pub fn cf_name(&self) -> &str {
@@ -1016,11 +1035,11 @@ impl<K, V> DBMap<K, V> {
             }
             #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
             Storage::TideHunter(db) => match &self.column_family {
-                ColumnFamily::TideHunter(ks) => {
+                ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
                     apply_range_bounds(&mut iter, it_lower_bound, it_upper_bound);
                     iter.reverse();
-                    Ok(Box::new(transform_th_iterator(iter)))
+                    Ok(Box::new(transform_th_iterator(iter, prefix)))
                 }
                 _ => unreachable!("storage backend invariant violation"),
             },
@@ -1188,8 +1207,8 @@ impl DBBatch {
                         b.delete_cf(name, k_buf)
                     }
                     #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-                    (StorageWriteBatch::TideHunter(b), ColumnFamily::TideHunter(ks)) => {
-                        b.delete(*ks, k_buf)
+                    (StorageWriteBatch::TideHunter(b), ColumnFamily::TideHunter((ks, prefix))) => {
+                        b.delete(*ks, transform_th_key(&k_buf, prefix))
                     }
                     _ => Err(TypedStoreError::RocksDBError(
                         "typed store invariant violation".to_string(),
@@ -1208,7 +1227,7 @@ impl DBBatch {
     /// with ignore_range_deletions set to true, the old value are visible until
     /// compaction actually deletes them which will happen sometime after. By
     /// default ignore_range_deletions is set to true on a DBMap (unless it is
-    /// overriden in the config), so please use this function with caution
+    /// overridden in the config), so please use this function with caution
     pub fn schedule_delete_range<K: Serialize, V>(
         &mut self,
         db: &DBMap<K, V>,
@@ -1248,6 +1267,16 @@ impl DBBatch {
                 let k_buf = be_fix_int_ser(k.borrow());
                 let v_buf = bcs::to_bytes(v.borrow()).map_err(typed_store_err_from_bcs_err)?;
                 total += k_buf.len() + v_buf.len();
+                if db.opts.log_value_hash {
+                    let key_hash = default_hash(&k_buf);
+                    let value_hash = default_hash(&v_buf);
+                    debug!(
+                        "Insert to DB table: {:?}, key_hash: {:?}, value_hash: {:?}",
+                        db.cf_name(),
+                        key_hash,
+                        value_hash
+                    );
+                }
                 match (&mut self.batch, &db.column_family) {
                     (StorageWriteBatch::Rocks(b), ColumnFamily::Rocks(name)) => {
                         b.put_cf(&rocks_cf_from_db(&self.database, name)?, k_buf, v_buf)
@@ -1256,8 +1285,8 @@ impl DBBatch {
                         b.put_cf(name, k_buf, v_buf)
                     }
                     #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-                    (StorageWriteBatch::TideHunter(b), ColumnFamily::TideHunter(ks)) => {
-                        b.write(*ks, k_buf.to_vec(), v_buf.to_vec())
+                    (StorageWriteBatch::TideHunter(b), ColumnFamily::TideHunter((ks, prefix))) => {
+                        b.write(*ks, transform_th_key(&k_buf, prefix), v_buf.to_vec())
                     }
                     _ => Err(TypedStoreError::RocksDBError(
                         "typed store invariant violation".to_string(),
@@ -1355,9 +1384,21 @@ where
                 .report_metrics(&self.cf);
         }
         match res {
-            Some(data) => Ok(Some(
-                bcs::from_bytes(&data).map_err(typed_store_err_from_bcs_err)?,
-            )),
+            Some(data) => {
+                let value = bcs::from_bytes(&data).map_err(typed_store_err_from_bcs_err);
+                if value.is_err() {
+                    let key_hash = default_hash(&key_buf);
+                    let value_hash = default_hash(&data);
+                    debug_fatal!(
+                        "Failed to deserialize value from DB table {:?}, key_hash: {:?}, value_hash: {:?}, error: {:?}",
+                        self.cf_name(),
+                        key_hash,
+                        value_hash,
+                        value.as_ref().err().unwrap()
+                    );
+                }
+                Ok(Some(value?))
+            }
             None => Ok(None),
         }
     }
@@ -1442,7 +1483,7 @@ where
     /// with ignore_range_deletions set to true, the old value are visible until
     /// compaction actually deletes them which will happen sometime after. By
     /// default ignore_range_deletions is set to true on a DBMap (unless it is
-    /// overriden in the config), so please use this function with caution
+    /// overridden in the config), so please use this function with caution
     #[instrument(level = "trace", skip_all, err)]
     fn schedule_delete_all(&self) -> Result<(), TypedStoreError> {
         let first_key = self.safe_iter().next().transpose()?.map(|(k, _v)| k);
@@ -1483,7 +1524,9 @@ where
             Storage::InMemory(db) => db.iterator(&self.cf, None, None, false),
             #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
             Storage::TideHunter(db) => match &self.column_family {
-                ColumnFamily::TideHunter(ks) => Box::new(transform_th_iterator(db.iterator(*ks))),
+                ColumnFamily::TideHunter((ks, prefix)) => {
+                    Box::new(transform_th_iterator(db.iterator(*ks), prefix))
+                }
                 _ => unreachable!("storage backend invariant violation"),
             },
         }
@@ -1516,10 +1559,10 @@ where
             Storage::InMemory(db) => db.iterator(&self.cf, lower_bound, upper_bound, false),
             #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
             Storage::TideHunter(db) => match &self.column_family {
-                ColumnFamily::TideHunter(ks) => {
+                ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
                     apply_range_bounds(&mut iter, lower_bound, upper_bound);
-                    Box::new(transform_th_iterator(iter))
+                    Box::new(transform_th_iterator(iter, prefix))
                 }
                 _ => unreachable!("storage backend invariant violation"),
             },
@@ -1549,10 +1592,10 @@ where
             Storage::InMemory(db) => db.iterator(&self.cf, lower_bound, upper_bound, false),
             #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
             Storage::TideHunter(db) => match &self.column_family {
-                ColumnFamily::TideHunter(ks) => {
+                ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
                     apply_range_bounds(&mut iter, lower_bound, upper_bound);
-                    Box::new(transform_th_iterator(iter))
+                    Box::new(transform_th_iterator(iter, prefix))
                 }
                 _ => unreachable!("storage backend invariant violation"),
             },
@@ -1765,4 +1808,10 @@ fn populate_missing_cfs(
             .map(|(name, opts)| (name.to_string(), (*opts).clone())),
     );
     Ok(cfs)
+}
+
+fn default_hash(value: &[u8]) -> Digest<32> {
+    let mut hasher = fastcrypto::hash::Blake2b256::default();
+    hasher.update(value);
+    hasher.finalize()
 }

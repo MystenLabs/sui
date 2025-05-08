@@ -12,9 +12,10 @@
 /// ===========================================================================================
 #[allow(unused_const)]
 module vesting::cliff;
-use sui::coin::{Self, Coin};
-use sui::clock::Clock;
+
 use sui::balance::Balance;
+use sui::clock::Clock;
+use sui::coin::{Self, Coin};
 
 // === Errors ===
 #[error]
@@ -32,7 +33,6 @@ public struct Wallet<phantom T> has key, store {
     // Amount of coins that have been claimed
     claimed: u64,
 }
-
 
 // === Public Functions ===
 
@@ -52,35 +52,26 @@ public fun new_wallet<T>(
         id: object::new(ctx),
         balance: coins.into_balance(),
         cliff_time,
-        claimed: 0
+        claimed: 0,
     }
 }
 
 /// Claim the coins that are available for claiming at the current time.
-public fun claim<T>(
-    self: &mut Wallet<T>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): Coin<T> {
+public fun claim<T>(self: &mut Wallet<T>, clock: &Clock, ctx: &mut TxContext): Coin<T> {
     let claimable_amount = self.claimable(clock);
     self.claimed = self.claimed + claimable_amount;
     coin::from_balance(self.balance.split(claimable_amount), ctx)
 }
 
 /// Calculate the amount of coins that can be claimed at the current time.
-public fun claimable<T>(
-    self: &Wallet<T>,
-    clock: &Clock,
-): u64 {
+public fun claimable<T>(self: &Wallet<T>, clock: &Clock): u64 {
     let timestamp = clock.timestamp_ms();
     if (timestamp < self.cliff_time) return 0;
     self.balance.value()
 }
 
 /// Delete the wallet if it is empty.
-public fun delete_wallet<T>(
-    self: Wallet<T>,
-) {
+public fun delete_wallet<T>(self: Wallet<T>) {
     let Wallet { id, balance, cliff_time: _, claimed: _ } = self;
     id.delete();
     balance.destroy_zero();
@@ -89,13 +80,11 @@ public fun delete_wallet<T>(
 // === Accessors ===
 
 /// Get the balance of the wallet.
-public fun balance<T>(self: &Wallet<T>
-): u64 {
+public fun balance<T>(self: &Wallet<T>): u64 {
     self.balance.value()
 }
 
 /// Get the cliff time of the vesting schedule.
-public fun cliff_time<T>(self: &Wallet<T>
-): u64 {
+public fun cliff_time<T>(self: &Wallet<T>): u64 {
     self.cliff_time
 }

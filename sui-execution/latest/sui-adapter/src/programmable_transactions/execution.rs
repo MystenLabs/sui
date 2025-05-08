@@ -7,16 +7,18 @@ pub use checked::*;
 mod checked {
     use crate::execution_mode::ExecutionMode;
     use crate::execution_value::{
-        ensure_serialized_size, CommandKind, ExecutionState, ObjectContents, ObjectValue,
-        RawValueType, Value,
+        CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
+        ensure_serialized_size,
     };
     use crate::gas_charger::GasCharger;
+    use move_binary_format::file_format::AbilitySet;
     use move_binary_format::{
+        CompiledModule,
         compatibility::{Compatibility, InclusionCheck},
         errors::{Location, PartialVMResult, VMResult},
-        file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
+        file_format::{CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
         file_format_common::VERSION_6,
-        normalized, CompiledModule,
+        normalized,
     };
     use move_core_types::{
         account_address::AccountAddress,
@@ -30,7 +32,8 @@ mod checked {
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
     };
     use move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
-    use serde::{de::DeserializeSeed, Deserialize};
+    use serde::{Deserialize, de::DeserializeSeed};
+    use std::cell::OnceCell;
     use std::{
         cell::RefCell,
         collections::{BTreeMap, BTreeSet},
@@ -44,29 +47,29 @@ mod checked {
     use sui_types::execution::{ExecutionTiming, ResultWithTimings};
     use sui_types::execution_config_utils::to_binary_config;
     use sui_types::execution_status::{CommandArgumentError, PackageUpgradeError};
-    use sui_types::storage::{get_package_objects, PackageObject};
+    use sui_types::storage::{PackageObject, get_package_objects};
     use sui_types::type_input::TypeInput;
     use sui_types::{
+        SUI_FRAMEWORK_ADDRESS,
         base_types::{
-            MoveLegacyTxContext, MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind,
-            RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME,
-            TX_CONTEXT_STRUCT_NAME,
+            MoveLegacyTxContext, MoveObjectType, ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION,
+            RESOLVED_UTF8_STR, SuiAddress, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
+            TxContext, TxContextKind,
         },
         coin::Coin,
-        error::{command_argument_error, ExecutionError, ExecutionErrorKind},
+        error::{ExecutionError, ExecutionErrorKind, command_argument_error},
         id::RESOLVED_SUI_ID,
         metrics::LimitsMetrics,
         move_package::{
-            normalize_deserialized_modules, MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt,
-            UpgradeTicket,
+            MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt, UpgradeTicket,
+            normalize_deserialized_modules,
         },
         transaction::{Command, ProgrammableMoveCall, ProgrammableTransaction},
         transfer::RESOLVED_RECEIVING_STRUCT,
-        SUI_FRAMEWORK_ADDRESS,
     };
     use sui_verifier::{
-        private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
         INIT_FN_NAME,
+        private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
     };
     use tracing::instrument;
 
@@ -189,11 +192,7 @@ mod checked {
                 })?;
 
                 let ty = Type::Vector(Box::new(elem_ty));
-                let abilities = context
-                    .vm
-                    .get_runtime()
-                    .get_type_abilities(&ty)
-                    .map_err(|e| context.convert_vm_error(e))?;
+                let abilities = context.get_type_abilities(&ty)?;
                 // BCS layout for any empty vector should be the same
                 let bytes = bcs::to_bytes::<Vec<u8>>(&vec![]).unwrap();
                 vec![Value::Raw(
@@ -207,6 +206,7 @@ mod checked {
             }
             Command::MakeMoveVec(tag_opt, args) => {
                 let args = context.splat_args(0, args)?;
+                let elem_abilities = OnceCell::<AbilitySet>::new();
                 let mut res = vec![];
                 leb128::write::unsigned(&mut res, args.len() as u64).unwrap();
                 let mut arg_iter = args.into_iter().enumerate();
@@ -228,9 +228,11 @@ mod checked {
                         let (idx, arg) = arg_iter.next().unwrap();
                         let obj: ObjectValue =
                             context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
+                        let bound =
+                            amplification_bound::<Mode>(context, &obj.type_, &elem_abilities)?;
                         obj.write_bcs_bytes(
                             &mut res,
-                            amplification_bound::<Mode>(context, &obj.type_)?,
+                            bound.map(|b| context.size_bound_vector_elem(b)),
                         )?;
                         (obj.used_in_non_entry_move_call, obj.type_)
                     }
@@ -240,17 +242,14 @@ mod checked {
                     check_param_type::<Mode>(context, idx, &value, &elem_ty)?;
                     used_in_non_entry_move_call =
                         used_in_non_entry_move_call || value.was_used_in_non_entry_move_call();
+                    let bound = amplification_bound::<Mode>(context, &elem_ty, &elem_abilities)?;
                     value.write_bcs_bytes(
                         &mut res,
-                        amplification_bound::<Mode>(context, &elem_ty)?,
+                        bound.map(|b| context.size_bound_vector_elem(b)),
                     )?;
                 }
                 let ty = Type::Vector(Box::new(elem_ty));
-                let abilities = context
-                    .vm
-                    .get_runtime()
-                    .get_type_abilities(&ty)
-                    .map_err(|e| context.convert_vm_error(e))?;
+                let abilities = context.get_type_abilities(&ty)?;
                 vec![Value::Raw(
                     RawValueType::Loaded {
                         ty,
@@ -641,10 +640,10 @@ mod checked {
             let ticket_val: Value =
                 context.by_value_arg(CommandKind::Upgrade, 0, upgrade_ticket_arg)?;
             check_param_type::<Mode>(context, 0, &ticket_val, &upgrade_ticket_type)?;
-            ticket_val.write_bcs_bytes(
-                &mut ticket_bytes,
-                amplification_bound::<Mode>(context, &upgrade_ticket_type)?,
-            )?;
+            let bound =
+                amplification_bound::<Mode>(context, &upgrade_ticket_type, &OnceCell::new())?;
+            ticket_val
+                .write_bcs_bytes(&mut ticket_bytes, bound.map(|b| context.size_bound_raw(b)))?;
             bcs::from_bytes(&ticket_bytes).map_err(|_| {
                 ExecutionError::from_kind(ExecutionErrorKind::CommandArgumentError {
                     arg_idx: 0,
@@ -1200,15 +1199,11 @@ mod checked {
                     Type::Reference(_) | Type::MutableReference(_) => {
                         return Err(ExecutionError::from_kind(
                             ExecutionErrorKind::InvalidPublicFunctionReturnType { idx: idx as u16 },
-                        ))
+                        ));
                     }
                     t => t,
                 };
-                let abilities = context
-                    .vm
-                    .get_runtime()
-                    .get_type_abilities(return_type)
-                    .map_err(|e| context.convert_vm_error(e))?;
+                let abilities = context.get_type_abilities(return_type)?;
                 Ok(match return_type {
                     Type::MutableReference(_) | Type::Reference(_) => unreachable!(),
                     Type::TyParam(_) => {
@@ -1360,11 +1355,7 @@ mod checked {
                             has_public_transfer: *has_public_transfer,
                         }
                     } else {
-                        let abilities = context
-                            .vm
-                            .get_runtime()
-                            .get_type_abilities(inner)
-                            .map_err(|e| context.convert_vm_error(e))?;
+                        let abilities = context.get_type_abilities(inner)?;
                         ValueKind::Raw((**inner).clone(), abilities)
                     };
                     by_mut_ref.push((idx as LocalIndex, object_info));
@@ -1408,7 +1399,8 @@ mod checked {
             // For dev-spect, allow any BCS bytes. This does mean internal invariants for types can
             // be violated (like for string or Option)
             Value::Raw(RawValueType::Any, bytes) if Mode::allow_arbitrary_values() => {
-                if let Some(bound) = amplification_bound::<Mode>(context, param_ty)? {
+                if let Some(bound) = amplification_bound_::<Mode>(context, param_ty)? {
+                    let bound = context.size_bound_raw(bound);
                     return ensure_serialized_size(bytes.len() as u64, bound);
                 } else {
                     return Ok(());
@@ -1624,7 +1616,29 @@ mod checked {
         })
     }
 
+    // We use a `OnceCell` for two reasons. One to cache the ability set for the type so that it
+    // is not recomputed for each element of the vector. And two, to avoid computing the abilities
+    // in the case where `max_ptb_value_size_v2` is false--this removes any case of diverging
+    // based on the result of `get_type_abilities`.
     fn amplification_bound<Mode: ExecutionMode>(
+        context: &mut ExecutionContext<'_, '_, '_>,
+        param_ty: &Type,
+        abilities: &OnceCell<AbilitySet>,
+    ) -> Result<Option<u64>, ExecutionError> {
+        if context.protocol_config.max_ptb_value_size_v2() {
+            if abilities.get().is_none() {
+                abilities
+                    .set(context.get_type_abilities(param_ty)?)
+                    .unwrap();
+            }
+            if !abilities.get().unwrap().has_copy() {
+                return Ok(None);
+            }
+        }
+        amplification_bound_::<Mode>(context, param_ty)
+    }
+
+    fn amplification_bound_<Mode: ExecutionMode>(
         context: &mut ExecutionContext<'_, '_, '_>,
         param_ty: &Type,
     ) -> Result<Option<u64>, ExecutionError> {

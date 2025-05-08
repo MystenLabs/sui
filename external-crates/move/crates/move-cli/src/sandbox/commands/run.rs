@@ -3,21 +3,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    NativeFunctionRecord,
     sandbox::utils::{
         contains_module, explain_execution_error, get_gas_status, is_bytecode_file,
         on_disk_state_view::OnDiskStateView,
     },
-    NativeFunctionRecord,
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use move_binary_format::file_format::CompiledModule;
 use move_command_line_common::files::try_exists;
 use move_core_types::{
-    account_address::AccountAddress,
-    identifier::IdentStr,
-    language_storage::TypeTag,
+    account_address::AccountAddress, identifier::IdentStr, language_storage::TypeTag,
     runtime_value::MoveValue,
-    transaction_argument::{convert_txn_args, TransactionArgument},
 };
 use move_package::compilation::compiled_package::CompiledPackage;
 use move_vm_runtime::move_vm::MoveVM;
@@ -32,7 +29,7 @@ pub fn run(
     module_file: &Path,
     function_name: &str,
     signers: &[String],
-    txn_args: &[TransactionArgument],
+    txn_args: &[MoveValue],
     vm_type_tags: Vec<TypeTag>,
     gas_budget: Option<u64>,
     _dry_run: bool,
@@ -54,8 +51,13 @@ pub fn run(
         .iter()
         .map(|s| AccountAddress::from_hex_literal(s))
         .collect::<Result<Vec<AccountAddress>, _>>()?;
-    // TODO: parse Value's directly instead of going through the indirection of TransactionArgument?
-    let vm_args: Vec<Vec<u8>> = convert_txn_args(txn_args);
+    let vm_args: Vec<Vec<u8>> = txn_args
+        .iter()
+        .map(|arg| {
+            arg.simple_serialize()
+                .expect("Transaction arguments must serialize")
+        })
+        .collect();
 
     let vm = MoveVM::new(natives).unwrap();
     let mut gas_status = get_gas_status(cost_table, gas_budget)?;

@@ -8,8 +8,8 @@ use anyhow::{bail, Context, Result};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::{Connection, Db},
     pipeline::{concurrent::Handler, Processor},
+    postgres::{Connection, Db},
     types::{
         full_checkpoint_content::CheckpointData,
         sui_system_state::{get_sui_system_state, SuiSystemStateTrait},

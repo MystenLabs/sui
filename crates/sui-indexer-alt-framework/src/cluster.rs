@@ -15,8 +15,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 use url::Url;
 
+use crate::postgres::{Db, DbArgs};
 use crate::{
-    db::DbArgs,
     ingestion::{ClientArgs, IngestionConfig},
     Indexer, IndexerArgs, IndexerMetrics, Result,
 };
@@ -39,11 +39,11 @@ pub struct Args {
     metrics_args: MetricsArgs,
 }
 
-/// An [IndexerCluster] combines an [Indexer] with a [MetricsService] and a tracing subscriber
-/// (outputting to stderr) to provide observability. It is a useful starting point for an indexer
-/// binary.
+/// An opinionated [IndexerCluster] that spins up an [Indexer] implementation using Postgres as its
+/// store, along with a [MetricsService] and a tracing subscriber (outputting to stderr) to provide
+/// observability. It is a useful starting point for an indexer binary.
 pub struct IndexerCluster {
-    indexer: Indexer,
+    indexer: Indexer<Db>,
     metrics: MetricsService,
 
     /// Cancelling this token signals cancellation to both the indexer and metrics service.
@@ -95,7 +95,7 @@ impl IndexerCluster {
 
         let metrics = MetricsService::new(args.metrics_args, registry, cancel.child_token());
 
-        let indexer = Indexer::new(
+        let indexer = Indexer::new_from_pg(
             database_url,
             db_args,
             args.indexer_args,
@@ -156,7 +156,7 @@ impl IndexerCluster {
 }
 
 impl Deref for IndexerCluster {
-    type Target = Indexer;
+    type Target = Indexer<Db>;
 
     fn deref(&self) -> &Self::Target {
         &self.indexer
@@ -178,12 +178,12 @@ mod tests {
     use sui_synthetic_ingestion::synthetic_ingestion;
     use tempfile::tempdir;
 
-    use crate::db::{
-        temp::{get_available_port, TempDb},
-        Connection, Db,
-    };
     use crate::pipeline::concurrent::{self, ConcurrentConfig};
     use crate::pipeline::Processor;
+    use crate::postgres::{
+        temp::{get_available_port, TempDb},
+        Connection, Db, DbArgs,
+    };
     use crate::types::full_checkpoint_content::CheckpointData;
     use crate::FieldCount;
 

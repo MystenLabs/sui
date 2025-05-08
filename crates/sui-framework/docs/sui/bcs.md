@@ -828,8 +828,7 @@ functionality of peeling the inner value.
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_option">peel_option</a>&lt;$T&gt;($<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>, $peel: |&<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>| -&gt; $T): Option&lt;$T&gt; {
     <b>let</b> <a href="../sui/bcs.md#sui_bcs">bcs</a> = $<a href="../sui/bcs.md#sui_bcs">bcs</a>;
-    <b>if</b> (<a href="../sui/bcs.md#sui_bcs">bcs</a>.<a href="../sui/bcs.md#sui_bcs_peel_bool">peel_bool</a>()) option::some($peel(<a href="../sui/bcs.md#sui_bcs">bcs</a>))
-    <b>else</b> option::none()
+    <b>if</b> (<a href="../sui/bcs.md#sui_bcs">bcs</a>.<a href="../sui/bcs.md#sui_bcs_peel_bool">peel_bool</a>()) option::some($peel(<a href="../sui/bcs.md#sui_bcs">bcs</a>)) <b>else</b> option::none()
 }
 </code></pre>
 

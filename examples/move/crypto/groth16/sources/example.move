@@ -5,7 +5,8 @@
 /// See https://eprint.iacr.org/2016/260.pdf for details.
 module groth16::example;
 
-use sui::{bls12381, group_ops::Element};
+use sui::bls12381;
+use sui::group_ops::Element;
 
 // === Types ===
 
@@ -17,7 +18,7 @@ public struct Proof has drop {
 }
 
 /// A Groth16 verifying key used to verify a zero-knowledge proof.
-public struct VerifyingKey has store, drop {
+public struct VerifyingKey has drop, store {
     alpha: Element<bls12381::G1>,
     beta: Element<bls12381::G2>,
     gamma: Element<bls12381::G2>,
@@ -26,7 +27,7 @@ public struct VerifyingKey has store, drop {
 }
 
 /// A prepared verifying key. This makes verification faster than using the verifying key directly.
-public struct PreparedVerifyingKey has store, drop {
+public struct PreparedVerifyingKey has drop, store {
     alpha_beta: Element<bls12381::GT>,
     gamma_neg: Element<bls12381::G2>,
     gamma_abc: vector<Element<bls12381::G1>>,

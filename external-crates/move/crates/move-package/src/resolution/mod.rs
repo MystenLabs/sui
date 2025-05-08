@@ -10,8 +10,8 @@ use std::{
 };
 
 use crate::{
-    source_package::parsed_manifest::{DependencyKind, GitInfo, OnChainInfo},
     BuildConfig,
+    source_package::parsed_manifest::{DependencyKind, GitInfo, OnChainInfo},
 };
 
 use self::dependency_graph::DependencyGraphBuilder;

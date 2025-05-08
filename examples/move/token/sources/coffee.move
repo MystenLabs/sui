@@ -5,13 +5,11 @@
 /// only rely on `TreasuryCap` for minting and burning tokens.
 module examples::coffee;
 
-use sui::{
-    balance::{Self, Balance},
-    coin::{Self, TreasuryCap, Coin},
-    sui::SUI,
-    token::{Self, Token},
-    tx_context::sender
-};
+use sui::balance::{Self, Balance};
+use sui::coin::{Self, TreasuryCap, Coin};
+use sui::sui::SUI;
+use sui::token::{Self, Token};
+use sui::tx_context::sender;
 
 /// Error code for incorrect amount.
 const EIncorrectAmount: u64 = 0;
@@ -37,7 +35,7 @@ public struct CoffeeShop has key {
 
 /// Event marking that a Coffee was purchased; transaction sender serves as
 /// the customer ID.
-public struct CoffeePurchased has copy, store, drop {}
+public struct CoffeePurchased has copy, drop, store {}
 
 // Create and share the `CoffeeShop` object.
 fun init(otw: COFFEE, ctx: &mut TxContext) {

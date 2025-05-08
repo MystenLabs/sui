@@ -20,7 +20,7 @@ pub use progress_store::{
 };
 pub use reader::ReaderOptions;
 use sui_types::full_checkpoint_content::CheckpointData;
-pub use util::create_remote_store_client;
+pub use util::{create_remote_store_client, end_of_epoch_data};
 pub use worker_pool::WorkerPool;
 
 #[async_trait]

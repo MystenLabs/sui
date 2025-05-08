@@ -132,7 +132,9 @@ pub fn init_completion(
             // the init function has a struct thats an one-time-witness candidate struct
             let otw_candidate = Symbol::from(mod_ident.module.value().to_uppercase());
             let init_snippet = if mdef.structs().contains_key(&otw_candidate) {
-                format!("{INIT_FN_NAME}(${{1:witness}}: {otw_candidate}, {sui_ctx_arg}) {{\n\t${{2:}}\n}}\n")
+                format!(
+                    "{INIT_FN_NAME}(${{1:witness}}: {otw_candidate}, {sui_ctx_arg}) {{\n\t${{2:}}\n}}\n"
+                )
             } else {
                 format!("{INIT_FN_NAME}({sui_ctx_arg}) {{\n\t${{1:}}\n}}\n")
             };

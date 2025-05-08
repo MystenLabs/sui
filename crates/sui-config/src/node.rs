@@ -145,9 +145,6 @@ pub struct NodeConfig {
     pub state_debug_dump_config: StateDebugDumpConfig,
 
     #[serde(default)]
-    pub state_archive_write_config: StateArchiveConfig,
-
-    #[serde(default)]
     pub state_archive_read_config: Vec<StateArchiveConfig>,
 
     #[serde(default)]
@@ -728,21 +725,15 @@ impl NodeConfig {
         (&self.account_key_pair.keypair().public()).into()
     }
 
-    pub fn archive_reader_config(&self) -> Vec<ArchiveReaderConfig> {
+    pub fn archive_reader_config(&self) -> Option<ArchiveReaderConfig> {
         self.state_archive_read_config
-            .iter()
-            .flat_map(|config| {
-                config
-                    .object_store_config
-                    .as_ref()
-                    .map(|remote_store_config| ArchiveReaderConfig {
-                        remote_store_config: remote_store_config.clone(),
-                        download_concurrency: NonZeroUsize::new(config.concurrency)
-                            .unwrap_or(NonZeroUsize::new(5).unwrap()),
-                        use_for_pruning_watermark: config.use_for_pruning_watermark,
-                    })
+            .first()
+            .map(|config| ArchiveReaderConfig {
+                ingestion_url: config.ingestion_url.clone(),
+                download_concurrency: NonZeroUsize::new(config.concurrency)
+                    .unwrap_or(NonZeroUsize::new(5).unwrap()),
+                remote_store_config: ObjectStoreConfig::default(),
             })
-            .collect()
     }
 
     pub fn jsonrpc_server_type(&self) -> ServerType {
@@ -1093,7 +1084,7 @@ pub struct DBCheckpointConfig {
 pub struct ArchiveReaderConfig {
     pub remote_store_config: ObjectStoreConfig,
     pub download_concurrency: NonZeroUsize,
-    pub use_for_pruning_watermark: bool,
+    pub ingestion_url: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
@@ -1102,7 +1093,8 @@ pub struct StateArchiveConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub object_store_config: Option<ObjectStoreConfig>,
     pub concurrency: usize,
-    pub use_for_pruning_watermark: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ingestion_url: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]

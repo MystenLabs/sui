@@ -6,7 +6,6 @@
 
 use std::fmt;
 
-pub mod abi;
 pub mod account_address;
 pub mod annotated_extractor;
 pub mod annotated_value;
@@ -16,14 +15,11 @@ pub mod gas_algebra;
 pub mod identifier;
 pub mod language_storage;
 pub mod metadata;
-pub mod move_resource;
 pub mod parsing;
 #[cfg(any(test, feature = "fuzzing"))]
 pub mod proptest_types;
 pub mod resolver;
 pub mod runtime_value;
-pub mod state;
-pub mod transaction_argument;
 pub mod u256;
 #[cfg(test)]
 mod unit_tests;

@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod response_ext;
+use std::time::Duration;
+
 pub use response_ext::ResponseExt;
 
 use tap::Pipe;
@@ -51,7 +53,10 @@ impl Client {
                 .map_err(Into::into)
                 .map_err(Status::from_error)?;
         }
-        let channel = endpoint.connect_lazy();
+        let channel = endpoint
+            .connect_timeout(Duration::from_secs(5))
+            .http2_keep_alive_interval(Duration::from_secs(5))
+            .connect_lazy();
 
         Ok(Self {
             uri,

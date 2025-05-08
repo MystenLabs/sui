@@ -59,14 +59,14 @@ use crate::{
     utils::{loc_start_to_lsp_position_opt, lsp_position_to_loc},
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use crossbeam::channel::Sender;
 use im::ordmap::OrdMap;
 use lsp_server::{Message, Request, RequestId, Response};
 use lsp_types::{
-    request::GotoTypeDefinitionParams, Diagnostic, DocumentSymbol, DocumentSymbolParams,
-    GotoDefinitionParams, Hover, HoverContents, HoverParams, Location, MarkupContent, MarkupKind,
-    Position, Range, ReferenceParams, SymbolKind,
+    Diagnostic, DocumentSymbol, DocumentSymbolParams, GotoDefinitionParams, Hover, HoverContents,
+    HoverParams, Location, MarkupContent, MarkupKind, Position, Range, ReferenceParams, SymbolKind,
+    request::GotoTypeDefinitionParams,
 };
 use sha2::{Digest, Sha256};
 use std::{
@@ -82,36 +82,36 @@ use std::{
 use tempfile::tempdir;
 use url::Url;
 use vfs::{
-    impls::{memory::MemoryFS, overlay::OverlayFS, physical::PhysicalFS},
     VfsPath,
+    impls::{memory::MemoryFS, overlay::OverlayFS, physical::PhysicalFS},
 };
 
 use move_command_line_common::files::FileHash;
 use move_compiler::{
-    command_line::compiler::{construct_pre_compiled_lib, FullyCompiledProgram},
+    PASS_CFGIR, PASS_PARSER, PASS_TYPING,
+    command_line::compiler::{FullyCompiledProgram, construct_pre_compiled_lib},
     editions::{Edition, FeatureGate, Flavor},
     expansion::{
         ast::{self as E, AbilitySet, ModuleIdent, ModuleIdent_, Value, Value_, Visibility},
         name_validation::{
-            ModuleMemberKind, IMPLICIT_STD_MEMBERS, IMPLICIT_STD_MODULES, IMPLICIT_SUI_MEMBERS,
-            IMPLICIT_SUI_MODULES,
+            IMPLICIT_STD_MEMBERS, IMPLICIT_STD_MODULES, IMPLICIT_SUI_MEMBERS, IMPLICIT_SUI_MODULES,
+            ModuleMemberKind,
         },
     },
     linters::LintLevel,
     naming::ast::{
-        DatatypeTypeParameter, Neighbor, StructFields, Type, TypeName_, Type_, VariantFields,
+        DatatypeTypeParameter, Neighbor, StructFields, Type, Type_, TypeName_, VariantFields,
     },
     parser::ast::{self as P, DocComment},
     shared::{
-        files::MappedFiles, unique_map::UniqueMap, Identifier, Name, NamedAddressMap,
-        NamedAddressMaps,
+        Identifier, Name, NamedAddressMap, NamedAddressMaps, files::MappedFiles,
+        unique_map::UniqueMap,
     },
     typing::{
         ast::{Exp, ExpListItem, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_},
         visitor::TypingVisitorContext,
     },
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
-    PASS_CFGIR, PASS_PARSER, PASS_TYPING,
 };
 use move_core_types::{account_address::AccountAddress, parsing::address::NumericalAddress};
 use move_ir_types::location::*;
@@ -607,31 +607,31 @@ impl CursorContext {
         match &self.position {
             CP::Exp(sp!(_, exp)) => match exp {
                 P::Exp_::Name(chain) if chain.loc.contains(&self.loc) => {
-                    return Some(ChainInfo::new(chain.clone(), CT::All, false))
+                    return Some(ChainInfo::new(chain.clone(), CT::All, false));
                 }
                 P::Exp_::Call(chain, _) if chain.loc.contains(&self.loc) => {
-                    return Some(ChainInfo::new(chain.clone(), CT::Function, false))
+                    return Some(ChainInfo::new(chain.clone(), CT::Function, false));
                 }
                 P::Exp_::Pack(chain, _) if chain.loc.contains(&self.loc) => {
-                    return Some(ChainInfo::new(chain.clone(), CT::Type, false))
+                    return Some(ChainInfo::new(chain.clone(), CT::Type, false));
                 }
                 _ => (),
             },
             CP::Binding(sp!(_, bind)) => match bind {
                 P::Bind_::Unpack(chain, _) if chain.loc.contains(&self.loc) => {
-                    return Some(ChainInfo::new(*(chain.clone()), CT::Type, false))
+                    return Some(ChainInfo::new(*(chain.clone()), CT::Type, false));
                 }
                 _ => (),
             },
             CP::Type(sp!(_, ty)) => match ty {
                 P::Type_::Apply(chain) if chain.loc.contains(&self.loc) => {
-                    return Some(ChainInfo::new(*(chain.clone()), CT::Type, false))
+                    return Some(ChainInfo::new(*(chain.clone()), CT::Type, false));
                 }
                 _ => (),
             },
             CP::Attribute(attr_val) => match &attr_val.value {
                 P::AttributeValue_::ModuleAccess(chain) if chain.loc.contains(&self.loc) => {
-                    return Some(ChainInfo::new(chain.clone(), CT::All, false))
+                    return Some(ChainInfo::new(chain.clone(), CT::All, false));
                 }
                 _ => (),
             },

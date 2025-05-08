@@ -36,11 +36,12 @@ struct FaucetResponse {
     error: Option<String>,
 }
 
-// const SUI_FAUCET: &str = "https://faucet.devnet.sui.io/gas"; // devnet faucet
+// const SUI_FAUCET: &str = "https://faucet.devnet.sui.io/v2/gas"; // devnet faucet
 
-pub const SUI_FAUCET: &str = "https://faucet.testnet.sui.io/v1/gas"; // testnet faucet
+// Testnet faucet is under heavy rate limit, we recommend using devnet for these examples
+pub const SUI_FAUCET: &str = "https://faucet.testnet.sui.io/v2/gas"; // testnet faucet
 
-// const SUI_FAUCET: &str = "http://127.0.0.1:9123/gas";
+// const SUI_FAUCET: &str = "http://127.0.0.1:9123/v2/gas";
 
 /// Return a sui client to interact with the APIs,
 /// the active address of the local wallet, and another address that can be used as a recipient.
@@ -310,7 +311,8 @@ pub fn retrieve_wallet() -> Result<WalletContext, anyhow::Error> {
     client_config.active_address = Some(default_active_address);
     client_config.save(&wallet_conf)?;
 
-    let wallet = WalletContext::new(&wallet_conf, Some(std::time::Duration::from_secs(60)), None)?;
+    let wallet =
+        WalletContext::new(&wallet_conf)?.with_request_timeout(std::time::Duration::from_secs(60));
 
     Ok(wallet)
 }

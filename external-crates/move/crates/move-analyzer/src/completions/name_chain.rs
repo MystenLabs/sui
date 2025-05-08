@@ -14,13 +14,12 @@
 
 use crate::{
     completions::utils::{
-        addr_to_ide_string, call_completion_item, completion_item, import_insertion_info, mod_defs,
-        PRIMITIVE_TYPE_COMPLETIONS,
+        PRIMITIVE_TYPE_COMPLETIONS, addr_to_ide_string, call_completion_item, completion_item,
+        import_insertion_info, mod_defs,
     },
     symbols::{
-        expansion_mod_ident_to_map_key, AutoImportInsertionInfo, ChainCompletionKind, ChainInfo,
-        CursorContext, DefInfo, FunType, MemberDef, MemberDefInfo, ModuleDefs, Symbols,
-        VariantInfo,
+        AutoImportInsertionInfo, ChainCompletionKind, ChainInfo, CursorContext, DefInfo, FunType,
+        MemberDef, MemberDefInfo, ModuleDefs, Symbols, VariantInfo, expansion_mod_ident_to_map_key,
     },
 };
 use itertools::Itertools;
@@ -28,9 +27,9 @@ use lsp_types::{CompletionItem, CompletionItemKind, CompletionItemLabelDetails, 
 use move_compiler::{
     expansion::ast::{Address, ModuleIdent, ModuleIdent_, Visibility},
     parser::ast as P,
-    shared::{ide::AliasAutocompleteInfo, Identifier, Name, NumericalAddress},
+    shared::{Identifier, Name, NumericalAddress, ide::AliasAutocompleteInfo},
 };
-use move_ir_types::location::{sp, Loc};
+use move_ir_types::location::{Loc, sp};
 use move_symbol_pool::Symbol;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -102,8 +101,13 @@ pub fn name_chain_completions(
         .cloned()
         .unwrap_or_else(AliasAutocompleteInfo::new);
 
-    eprintln!("found access chain for auto-completion (adddreses: {}, modules: {}, members: {}, tparams: {}",
-              info.addresses.len(), info.modules.len(), info.members.len(), info.type_params.len());
+    eprintln!(
+        "found access chain for auto-completion (adddreses: {}, modules: {}, members: {}, tparams: {}",
+        info.addresses.len(),
+        info.modules.len(),
+        info.members.len(),
+        info.type_params.len()
+    );
 
     // if we are auto-completing for an access chain, there is no need to include default completions
     completion_finalized = true;

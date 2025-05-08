@@ -6,7 +6,7 @@ mod state;
 
 use super::{
     absint::*,
-    cfg::{MutForwardCFG, MutReverseCFG, ReverseCFG, CFG},
+    cfg::{CFG, MutForwardCFG, MutReverseCFG, ReverseCFG},
     locals,
 };
 use crate::{
@@ -186,11 +186,11 @@ mod last_usage {
     use move_proc_macros::growing_stack;
 
     use crate::{
-        cfgir::{liveness::state::LivenessState, CFGContext},
+        cfgir::{CFGContext, liveness::state::LivenessState},
         diag,
         hlir::{
             ast::*,
-            translate::{display_var, DisplayVar},
+            translate::{DisplayVar, display_var},
         },
     };
     use std::collections::{BTreeSet, VecDeque};

@@ -31,8 +31,9 @@ use crate::multisig::MultiSigPublicKey;
 use crate::object::{Object, Owner};
 use crate::parse_sui_struct_tag;
 use crate::signature::GenericSignature;
+use crate::sui_serde::to_custom_deser_error;
+use crate::sui_serde::to_sui_struct_tag_string;
 use crate::sui_serde::Readable;
-use crate::sui_serde::{to_sui_struct_tag_string, HexAccountAddress};
 use crate::transaction::Transaction;
 use crate::transaction::VerifiedTransaction;
 use crate::zk_login_authenticator::ZkLoginAuthenticator;
@@ -60,9 +61,12 @@ use rand::Rng;
 use schemars::JsonSchema;
 use serde::ser::Error;
 use serde::ser::SerializeSeq;
+use serde::Deserializer;
 use serde::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use serde_with::DeserializeAs;
+use serde_with::SerializeAs;
 use shared_crypto::intent::HashingIntentScope;
 use std::cmp::max;
 use std::convert::{TryFrom, TryInto};
@@ -1570,6 +1574,33 @@ impl From<ObjectID> for AccountAddress {
 impl From<SuiAddress> for AccountAddress {
     fn from(address: SuiAddress) -> Self {
         Self::new(address.0)
+    }
+}
+
+/// Hex serde for AccountAddress
+struct HexAccountAddress;
+
+impl SerializeAs<AccountAddress> for HexAccountAddress {
+    fn serialize_as<S>(value: &AccountAddress, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        Hex::serialize_as(value, serializer)
+    }
+}
+
+impl<'de> DeserializeAs<'de, AccountAddress> for HexAccountAddress {
+    fn deserialize_as<D>(deserializer: D) -> Result<AccountAddress, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        if s.starts_with("0x") {
+            AccountAddress::from_hex_literal(&s)
+        } else {
+            AccountAddress::from_hex(&s)
+        }
+        .map_err(to_custom_deser_error::<'de, D, _>)
     }
 }
 

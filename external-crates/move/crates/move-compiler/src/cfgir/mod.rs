@@ -18,7 +18,7 @@ use crate::{
     diagnostics::DiagnosticReporter,
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{FunctionSignature, Label, SingleType, Var, Visibility},
-    shared::{program_info::TypingProgramInfo, unique_map::UniqueMap, CompilationEnv, Name},
+    shared::{CompilationEnv, Name, program_info::TypingProgramInfo, unique_map::UniqueMap},
 };
 use cfg::*;
 use move_ir_types::location::Loc;

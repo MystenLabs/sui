@@ -5,7 +5,7 @@
 
 use crate::{
     completions::utils::{call_completion_item, mod_defs},
-    symbols::{type_to_ide_string, DefInfo, FunType, Symbols},
+    symbols::{DefInfo, FunType, Symbols, type_to_ide_string},
     utils::lsp_position_to_loc,
 };
 use lsp_types::{
@@ -13,7 +13,7 @@ use lsp_types::{
 };
 use move_compiler::{
     expansion::ast::ModuleIdent_,
-    shared::{ide::AutocompleteMethod, Identifier},
+    shared::{Identifier, ide::AutocompleteMethod},
 };
 use move_symbol_pool::Symbol;
 

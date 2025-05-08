@@ -6,9 +6,9 @@ use crate::{
     account_address::AccountAddress,
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
-    transaction_argument::TransactionArgument,
 };
 use proptest::{collection::vec, prelude::*};
+
 impl Arbitrary for TypeTag {
     type Parameters = ();
     type Strategy = BoxedStrategy<Self>;
@@ -49,19 +49,4 @@ impl Arbitrary for TypeTag {
         )
         .boxed()
     }
-}
-
-impl Arbitrary for TransactionArgument {
-    type Parameters = ();
-    fn arbitrary_with(_args: ()) -> Self::Strategy {
-        prop_oneof![
-            any::<bool>().prop_map(TransactionArgument::Bool),
-            any::<u64>().prop_map(TransactionArgument::U64),
-            any::<AccountAddress>().prop_map(TransactionArgument::Address),
-            vec(any::<u8>(), 0..10).prop_map(TransactionArgument::U8Vector),
-        ]
-        .boxed()
-    }
-
-    type Strategy = BoxedStrategy<Self>;
 }
