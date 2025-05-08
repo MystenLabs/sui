@@ -1295,6 +1295,7 @@ impl AuthorityState {
 
         epoch_store.record_local_execution_time(
             certificate.data().transaction_data(),
+            &effects,
             timings,
             execution_start_time.elapsed(),
         );

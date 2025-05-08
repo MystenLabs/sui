@@ -49,7 +49,7 @@ use sui_types::crypto::{
 };
 use sui_types::digests::{ChainIdentifier, TransactionEffectsDigest};
 use sui_types::dynamic_field::get_dynamic_field_from_store;
-use sui_types::effects::TransactionEffects;
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::executable_transaction::{
     TrustedExecutableTransaction, VerifiedExecutableTransaction,
@@ -1230,6 +1230,7 @@ impl AuthorityPerEpochStore {
     pub fn record_local_execution_time(
         &self,
         tx: &TransactionData,
+        effects: &TransactionEffects,
         timings: Vec<ExecutionTiming>,
         total_duration: Duration,
     ) {
@@ -1237,6 +1238,10 @@ impl AuthorityPerEpochStore {
             // Drop observations if no ExecutionTimeObserver has been configured.
             return;
         };
+
+        if effects.status().is_cancelled() {
+            return;
+        }
 
         // Only record timings for PTBs with shared inputs.
         let TransactionKind::ProgrammableTransaction(ptb) = tx.kind() else {
