@@ -1,18 +1,33 @@
 module sui::coin_metadata_registry;
 
 use std::string::String;
+use sui::address;
 use sui::balance::Supply;
+use sui::bcs::to_bytes;
 use sui::dynamic_object_field;
-use sui::package::Publisher;
+use sui::table::{Self, Table};
 use sui::transfer::Receiving;
 use sui::vec_map::{Self, VecMap};
+use sui::vec_set::VecSet;
 
 const EMetadataNotFound: u64 = 0;
 const EAlreadyClaimed: u64 = 1;
 const ENotSystemAddress: u64 = 2;
 
+public struct RegistryOverrides has store {
+    regulated_hashes: VecSet<address>,
+    fixed_supply_hashes: VecSet<address>,
+    regulated_coins: Table<address, bool>,
+    fixed_supply_coins: Table<address, bool>,
+    // controversial but useful for scenario where coin no longer has TCap but wants to update metadata
+    legacy_metadata_cap_owners: Table<address, bool>,
+}
+
 /// @0x10.
-public struct CoinMetadataRegistry has key { id: UID }
+public struct CoinMetadataRegistry has key {
+    id: UID,
+    overrides: RegistryOverrides,
+}
 
 public fun coin_metadata_registry_id(): ID {
     @0x10.to_id()
@@ -23,7 +38,6 @@ public struct CoinMetadataKey<phantom T>() has copy, drop, store;
 
 public struct MetadataCap<phantom T> has key, store { id: UID }
 
-// enum for extensibility?
 public struct Metadata<phantom T> has key, store {
     id: UID,
     decimals: u8,
@@ -45,8 +59,48 @@ public struct InitMetadata<phantom T> {
     metadata: Metadata<T>,
 }
 
-// call this after create_currency_v2 to register the metadata
-public fun transfer_inner<T>(init: InitMetadata<T>) {
+// "unwrap" regulated hashes into the overrides table
+entry fun populate_regulated_overrides(
+    registry: &mut CoinMetadataRegistry,
+    coins: &mut vector<address>,
+) {
+    // we generate the `hash` of the addresses and amounts supplied.
+    let mut hash_vec = vector::empty<u8>();
+    let bytes = to_bytes(coins);
+
+    hash_vec.append(bytes);
+
+    let hash = sui::address::from_bytes(sui::hash::blake2b256(&hash_vec));
+    assert!(registry.overrides.regulated_hashes.contains(&hash));
+
+    coins.length().do!(|_| {
+        let coin = coins.pop_back();
+        registry.overrides.regulated_coins.add(coin, true);
+    });
+}
+
+// "unwrap" fixed supply hashes into the overrides table
+entry fun populate_fixed_supply_overrides(
+    registry: &mut CoinMetadataRegistry,
+    coins: &mut vector<address>,
+) {
+    // we generate the `hash` of the addresses and amounts supplied.
+    let mut hash_vec = vector::empty<u8>();
+    let bytes = to_bytes(coins);
+
+    hash_vec.append(bytes);
+
+    let hash = sui::address::from_bytes(sui::hash::blake2b256(&hash_vec));
+    assert!(registry.overrides.fixed_supply_hashes.contains(&hash));
+
+    coins.length().do!(|_| {
+        let coin = coins.pop_back();
+        registry.overrides.fixed_supply_coins.add(coin, true);
+    });
+}
+
+// called after create_currency_v2 to register the metadata
+public fun transfer_to_registry<T>(init: InitMetadata<T>) {
     let InitMetadata { metadata } = init;
 
     transfer::transfer(
@@ -55,7 +109,7 @@ public fun transfer_inner<T>(init: InitMetadata<T>) {
     );
 }
 
-/// For TTO registration flow.
+/// TTO registration
 public fun migrate_receiving<T>(
     registry: &mut CoinMetadataRegistry,
     metadata: Receiving<Metadata<T>>,
@@ -64,17 +118,18 @@ public fun migrate_receiving<T>(
     registry.register_metadata(received_metadata);
 }
 
-public fun create_cap_for_supply<T>(
-    registry: &CoinMetadataRegistry,
-    _supply: &mut Supply<T>,
-    publisher: &Publisher,
+/// enables coin metadata to be claimed by owners declared in the override table
+public fun claim_metadata_cap_override<T>(
+    registry: &mut CoinMetadataRegistry,
     ctx: &mut TxContext,
 ): MetadataCap<T> {
-    // only coin metadata objects can be registered
-    assert!(publisher.from_package<T>(), ENotSystemAddress);
-    let metadata = registry.metadata<T>();
-    assert!(!metadata.cap_claimed(), EAlreadyClaimed);
-    MetadataCap { id: object::new(ctx) }
+    assert!(registry.exists<T>(), EMetadataNotFound);
+
+    assert!(registry.overrides.legacy_metadata_cap_owners.contains(ctx.sender()));
+
+    let metadata = registry.metadata_mut<T>();
+
+    create_cap(metadata, ctx)
 }
 
 /// === Entry Setters ===
@@ -181,24 +236,19 @@ public(package) fun metadata_mut<T>(registry: &mut CoinMetadataRegistry): &mut M
 
 public(package) fun register_metadata<T>(
     registry: &mut CoinMetadataRegistry,
-    metadata: Metadata<T>,
+    mut metadata: Metadata<T>,
 ) {
-    // if registry already exists but the supplied metadata has a supply, extract and register supply
-    if (registry.exists<T>() && metadata.supply.is_some()) {
-        let Metadata {
-            id,
-            mut supply,
-            ..,
-        } = metadata;
-        registry.register_supply(supply.extract());
-        supply.destroy_none();
-        id.delete();
-    } else if (registry.exists<T>()) {
-        let Metadata {
-            id,
-            supply,
-            ..,
-        } = metadata;
+    registry.apply_overrides(&mut metadata);
+
+    // if the metadata already exists, delete and skip registration
+    if (registry.exists<T>()) {
+        let Metadata { id, mut supply, .. } = metadata;
+
+        // if newly supplied metadata has a supply, extract and register it
+        if (supply.is_some()) {
+            registry.register_supply(supply.extract());
+        };
+
         supply.destroy_none();
         id.delete();
     } else {
@@ -292,12 +342,56 @@ public(package) fun create_cap<T>(metadata: &mut Metadata<T>, ctx: &mut TxContex
     }
 }
 
+fun apply_overrides<T>(registry: &CoinMetadataRegistry, metadata: &mut Metadata<T>) {
+    let coin_address = address::from_bytes(std::type_name::get<T>().get_address().into_bytes());
+    metadata.is_fixed_supply = registry.overrides.fixed_supply_coins.contains(coin_address);
+    metadata.is_regulated = registry.overrides.regulated_coins.contains(coin_address);
+}
+
 // #[allow(unused_function)]
 // /// Create and share the singleton CoinMetadataRegistry
-// fun create(ctx: &TxContext) {
+// fun create(
+//     regulated_hashes: VecSet<address>,
+//     fixed_supply_hashes: VecSet<address>,
+//     ctx: &mut TxContext,
+// ) {
 //     assert!(ctx.sender() == @0x0, ENotSystemAddress);
 
-//     transfer::share_object(CoinMetadataRegistry {
+//     let overrides = RegistryOverrides {
+//         regulated_hashes: regulated_hashes,
+//         fixed_supply_hashes: fixed_supply_hashes,
+//         regulated_coins: table::new(ctx),
+//         fixed_supply_coins: table::new(ctx),
+//         legacy_metadata_cap_owners: table::new(ctx),
+//     };
+
+//     let registry = CoinMetadataRegistry {
 //         id: object::sui_coin_metadata_registry_object_id(),
-//     });
+//         overrides: overrides,
+//     };
+
+//     transfer::share_object(registry);
 // }
+
+public fun create_metadata_registry_for_testing(
+    regulated_hashes: VecSet<address>,
+    fixed_supply_hashes: VecSet<address>,
+    ctx: &mut TxContext,
+) {
+    assert!(ctx.sender() == @0x0, ENotSystemAddress);
+
+    let overrides = RegistryOverrides {
+        regulated_hashes: regulated_hashes,
+        fixed_supply_hashes: fixed_supply_hashes,
+        regulated_coins: table::new(ctx),
+        fixed_supply_coins: table::new(ctx),
+        legacy_metadata_cap_owners: table::new(ctx),
+    };
+
+    let registry = CoinMetadataRegistry {
+        id: object::new(ctx),
+        overrides: overrides,
+    };
+
+    transfer::share_object(registry);
+}

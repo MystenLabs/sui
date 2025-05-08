@@ -235,7 +235,7 @@ public fun migrate_metadata_to_registry<T>(
 }
 
 /// migration for frozen/shared metadata to the metadata registry
-public fun migrate_frozen_metadata_to_registry<T>(
+public fun migrate_immutable_metadata_to_registry<T>(
     registry: &mut CoinMetadataRegistry,
     metadata_v1: &CoinMetadata<T>,
     ctx: &mut TxContext,
@@ -251,7 +251,7 @@ public fun migrate_regulated_metadata_to_registry<T>(
     registry.register_deny_cap<T>(regulated_metadata_v1.deny_cap_object);
 }
 
-public fun migrate_supply_to_metadata_registry<T>(
+public fun migrate_supply_to_registry<T>(
     registry: &mut CoinMetadataRegistry,
     _: &mut Supply<T>,
     decimals: u8,
@@ -259,6 +259,31 @@ public fun migrate_supply_to_metadata_registry<T>(
 ) {
     let mut metadata = coin_metadata_registry::empty<T>(ctx);
     metadata.set_decimals<T>(decimals);
+    registry.register_metadata(metadata);
+}
+
+public fun create_registry_metadata<T>(
+    registry: &mut CoinMetadataRegistry,
+    decimals: u8,
+    symbol: String,
+    name: String,
+    description: String,
+    icon_url: String,
+    cap: &TreasuryCap<T>,
+    ctx: &mut TxContext,
+) {
+    let metadata: Metadata<T> = coin_metadata_registry::create_metadata(
+        decimals,
+        name,
+        symbol,
+        description,
+        icon_url,
+        option::none(),
+        option::some(cap.id.to_inner()),
+        option::none(),
+        option::none(),
+        ctx,
+    );
     registry.register_metadata(metadata);
 }
 
@@ -342,12 +367,6 @@ public fun create_regulated_currency_v3<T: drop>(
 
 // === CoinMetadataRegistry Entry Functions  ===
 
-/// Allows the caller to freeze supply on module init
-public fun init_freeze_supply<T>(init_metadata: &mut InitMetadata<T>, cap: TreasuryCap<T>) {
-    assert!(init_metadata.to_inner().cap_claimed(), EMetadataCapNotClaimed);
-    init_metadata.to_inner_mut().set_supply(cap.treasury_into_supply());
-}
-
 /// Allows the owner to freeze the currency by destroying the treasury cap.
 public fun freeze_supply<T>(registry: &mut CoinMetadataRegistry, cap: TreasuryCap<T>) {
     assert!(registry.exists<T>(), EMetadataNotFound);
@@ -356,6 +375,12 @@ public fun freeze_supply<T>(registry: &mut CoinMetadataRegistry, cap: TreasuryCa
 
     assert!(metadata.cap_claimed(), EMetadataCapNotClaimed);
     registry.register_supply(cap.treasury_into_supply());
+}
+
+/// Allows the caller to freeze supply on module init
+public fun init_freeze_supply<T>(init_metadata: &mut InitMetadata<T>, cap: TreasuryCap<T>) {
+    assert!(init_metadata.to_inner().cap_claimed(), EMetadataCapNotClaimed);
+    init_metadata.to_inner_mut().set_supply(cap.treasury_into_supply());
 }
 
 /// Claim the metadata cap for the given `TreasuryCap`
@@ -367,7 +392,7 @@ public fun claim_metadata_cap<T>(
     coin_metadata_registry::create_cap(metadata, ctx)
 }
 
-public fun claim_metadata_cap_for_supply<T>(
+public fun claim_metadata_cap_with_publisher<T>(
     registry: &mut CoinMetadataRegistry,
     _supply: &mut Supply<T>,
     publisher: &Publisher,
@@ -668,7 +693,7 @@ public entry fun update_icon_url<T>(
     metadata.icon_url = option::some(url::new_unsafe(url));
 }
 
-/// Destroy the metadata for a coin type, only callable by the registry.
+/// Destroy the metadata for a coin type, only called by the registry.
 public(package) fun destroy_metadata<T>(metadata: CoinMetadata<T>) {
     let CoinMetadata { id, .. } = metadata;
     id.delete()
