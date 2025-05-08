@@ -7,7 +7,7 @@ use crate::{
     sp,
     static_programmable_transactions::{
         env::Env,
-        execution::{context::Context, values::Value},
+        execution::context::{Context, CtxValue},
         typing::ast as T,
     },
 };
@@ -143,7 +143,7 @@ fn execute_command<Mode: ExecutionMode>(
                 .iter()
                 .map(|sp!(_, (_, ty))| ty.clone())
                 .collect::<Vec<_>>();
-            let object_values: Vec<Value> = context.arguments(objects)?;
+            let object_values: Vec<CtxValue> = context.arguments(objects)?;
             let recipient: AccountAddress = context.argument(recipient)?;
             assert_invariant!(
                 object_values.len() == object_tys.len(),
@@ -161,7 +161,7 @@ fn execute_command<Mode: ExecutionMode>(
             if Mode::TRACK_EXECUTION {
                 args_to_update.push((coin.value.0.location(), coin.value.1.clone()));
             }
-            let coin_ref: Value = context.argument(coin)?;
+            let coin_ref: CtxValue = context.argument(coin)?;
             let amount_values: Vec<u64> = context.arguments(amounts)?;
             let mut total: u64 = 0;
             for amount in &amount_values {
@@ -192,7 +192,7 @@ fn execute_command<Mode: ExecutionMode>(
             if Mode::TRACK_EXECUTION {
                 args_to_update.push((target.value.0.location(), target.value.1.clone()));
             }
-            let target_ref: Value = context.argument(target)?;
+            let target_ref: CtxValue = context.argument(target)?;
             let coins = context.arguments(coins)?;
             let amounts = coins
                 .into_iter()
@@ -216,8 +216,8 @@ fn execute_command<Mode: ExecutionMode>(
             vec![]
         }
         T::Command_::MakeMoveVec(ty, items) => {
-            let items: Vec<Value> = context.arguments(items)?;
-            vec![Value::vec_pack(ty, items)?]
+            let items: Vec<CtxValue> = context.arguments(items)?;
+            vec![CtxValue::vec_pack(ty, items)?]
         }
         T::Command_::Publish(..) => todo!("RUNTIME"),
         T::Command_::Upgrade(..) => todo!("RUNTIME"),

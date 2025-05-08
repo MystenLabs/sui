@@ -24,7 +24,7 @@ use crate::{
 };
 use indexmap::IndexMap;
 use move_binary_format::{
-    errors::Location,
+    errors::{Location, PartialVMError},
     file_format::{CodeOffset, FunctionDefinitionIndex},
 };
 use move_core_types::language_storage::{ModuleId, StructTag};
@@ -80,6 +80,9 @@ macro_rules! charge_gas_ {
 macro_rules! charge_gas {
     ($context:ident, $case:ident, $value_view:expr) => {{ charge_gas_!($context.gas_charger, $context.env, $case, $value_view) }};
 }
+
+/// Type wrapper around Value to ensure safe usage
+pub struct CtxValue(Value);
 
 enum LocationValue<'a> {
     Loaded(&'a mut Option<Value>),
@@ -216,7 +219,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 },
             );
             if let Some(object) = value {
-                self.transfer_object(owner, type_, object)?;
+                self.transfer_object(owner, type_, CtxValue(object))?;
             } else if owner.is_shared() {
                 by_value_shared_objects.insert(id);
             } else if owner.authenticator().is_some() {
@@ -507,22 +510,23 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         args.into_iter().map(|arg| self.argument(arg)).collect()
     }
 
-    pub fn result(&mut self, result: Vec<Value>) -> Result<(), ExecutionError> {
-        self.results.push(result.into_iter().map(Some).collect());
+    pub fn result(&mut self, result: Vec<CtxValue>) -> Result<(), ExecutionError> {
+        self.results
+            .push(result.into_iter().map(|v| Some(v.0)).collect());
         Ok(())
     }
 
     pub fn vm_move_call(
         &mut self,
         function: T::LoadedFunction,
-        mut args: Vec<Value>,
+        mut args: Vec<CtxValue>,
         trace_builder_opt: Option<&mut MoveTraceBuilder>,
-    ) -> Result<Vec<Value>, ExecutionError> {
+    ) -> Result<Vec<CtxValue>, ExecutionError> {
         match function.tx_context {
             TxContextKind::None => (),
-            TxContextKind::Mutable | TxContextKind::Immutable => {
-                args.push(Value::tx_context(self.tx_context.borrow().digest())?)
-            }
+            TxContextKind::Mutable | TxContextKind::Immutable => args.push(CtxValue(
+                Value::tx_context(self.tx_context.borrow().digest())?,
+            )),
         }
         let storage_id = &function.storage_id;
         let (index, last_instr) = {
@@ -542,7 +546,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         &mut self,
         recipient: Owner,
         ty: Type,
-        object: Value,
+        object: CtxValue,
     ) -> Result<(), ExecutionError> {
         let ty = {
             ty;
@@ -550,24 +554,24 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             todo!("OBJECT RUNTIME TYPETAG")
         };
         object_runtime_mut!(self)?
-            .transfer(recipient, ty, object.into())
+            .transfer(recipient, ty, object.0.into())
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
     }
 
-    pub fn copy_value(&mut self, value: &Value) -> Result<Value, ExecutionError> {
-        copy_value(self.gas_charger, self.env, value)
+    pub fn copy_value(&mut self, value: &CtxValue) -> Result<CtxValue, ExecutionError> {
+        Ok(CtxValue(copy_value(self.gas_charger, self.env, &value.0)?))
     }
 
-    pub fn new_coin(&mut self, amount: u64) -> Result<Value, ExecutionError> {
+    pub fn new_coin(&mut self, amount: u64) -> Result<CtxValue, ExecutionError> {
         let id = self.tx_context.borrow_mut().fresh_id();
         object_runtime_mut!(self)?
             .new_id(id)
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
-        Ok(Value::coin(id, amount))
+        Ok(CtxValue(Value::coin(id, amount)))
     }
 
-    pub fn destroy_coin(&mut self, coin: Value) -> Result<u64, ExecutionError> {
-        let (id, amount) = coin.unpack_coin()?;
+    pub fn destroy_coin(&mut self, coin: CtxValue) -> Result<u64, ExecutionError> {
+        let (id, amount) = coin.0.unpack_coin()?;
         object_runtime_mut!(self)?
             .delete_id(id)
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
@@ -618,7 +622,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
 
     pub fn tracked_results(
         &self,
-        results: &[Value],
+        results: &[CtxValue],
         result_tys: &T::ResultType,
     ) -> Result<Vec<(Vec<u8>, TypeTag)>, ExecutionError> {
         assert_invariant!(
@@ -628,7 +632,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         results
             .iter()
             .zip(result_tys)
-            .map(|(v, ty)| self.tracked_result(v, ty.clone()))
+            .map(|(v, ty)| self.tracked_result(&v.0, ty.clone()))
             .collect()
     }
 
@@ -657,6 +661,33 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             invariant_violation!("unable to generate type tag from type")
         };
         Ok((bytes, tag))
+    }
+}
+
+impl VMValueCast<CtxValue> for VMValue {
+    fn cast(self) -> Result<CtxValue, PartialVMError> {
+        Ok(CtxValue(self.into()))
+    }
+}
+
+impl CtxValue {
+    pub fn vec_pack(ty: Type, values: Vec<CtxValue>) -> Result<CtxValue, ExecutionError> {
+        Ok(CtxValue(Value::vec_pack(
+            ty,
+            values.into_iter().map(|v| v.0).collect(),
+        )?))
+    }
+
+    pub fn coin_ref_value(self) -> Result<u64, ExecutionError> {
+        self.0.coin_ref_value()
+    }
+
+    pub fn coin_ref_subtract_balance(self, amount: u64) -> Result<(), ExecutionError> {
+        self.0.coin_ref_subtract_balance(amount)
+    }
+
+    pub fn coin_ref_add_balance(self, amount: u64) -> Result<(), ExecutionError> {
+        self.0.coin_ref_add_balance(amount)
     }
 }
 

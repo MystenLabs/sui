@@ -91,12 +91,6 @@ impl From<Value> for VMValue {
     }
 }
 
-impl VMValueCast<Value> for Value {
-    fn cast(self) -> Result<Value, PartialVMError> {
-        Ok(self)
-    }
-}
-
 impl VMValueCast<Value> for VMValue {
     fn cast(self) -> Result<Value, PartialVMError> {
         Ok(self.into())
