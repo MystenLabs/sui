@@ -156,7 +156,7 @@ public(package) fun request_withdraw_stake(
     ctx: &TxContext,
 ): Balance<SUI> {
     // stake is inactive
-    if (staked_sui.stake_activation_epoch > ctx.epoch()) {
+    if (staked_sui.stake_activation_epoch > ctx.epoch() && !pool.is_preactive()) {
         let principal = staked_sui.into_balance();
         pool.pending_stake = pool.pending_stake - principal.value();
 
