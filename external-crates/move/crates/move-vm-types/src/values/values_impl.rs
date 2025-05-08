@@ -1372,7 +1372,6 @@ impl Value {
         ))))
     }
 
-    // TODO: consider whether we want to replace these with fn vector(v: Vec<Value>).
     pub fn vector_u8(it: impl IntoIterator<Item = u8>) -> Self {
         Self(ValueImpl::Container(Container::VecU8(Rc::new(
             RefCell::new(it.into_iter().collect()),
@@ -1419,13 +1418,6 @@ impl Value {
         Self(ValueImpl::Container(Container::VecAddress(Rc::new(
             RefCell::new(it.into_iter().collect()),
         ))))
-    }
-
-    // REVIEW: This API can break
-    pub fn vector_for_testing_only(it: impl IntoIterator<Item = Value>) -> Self {
-        Self(ValueImpl::Container(Container::Vec(Rc::new(RefCell::new(
-            it.into_iter().map(|v| v.0).collect(),
-        )))))
     }
 }
 
@@ -2486,7 +2478,7 @@ impl TryFrom<&Type> for VectorSpecialization {
             Type::Vector(_) | Type::Signer | Type::Datatype(_) | Type::DatatypeInstantiation(_) => {
                 VectorSpecialization::Container
             }
-            _ => {
+            Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message(format!("invalid type param for vector: {:?}", ty)),
@@ -2499,7 +2491,7 @@ impl TryFrom<&Type> for VectorSpecialization {
 impl Vector {
     pub fn pack(
         specialization: VectorSpecialization,
-        elements: Vec<Value>,
+        elements: impl IntoIterator<Item = Value>,
     ) -> PartialVMResult<Value> {
         let container = match specialization {
             VectorSpecialization::U8 => Value::vector_u8(

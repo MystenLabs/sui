@@ -45,7 +45,7 @@ pub fn native_empty(
 
     NativeResult::map_partial_vm_result_one(
         context.gas_used(),
-        (&ty_args[0]).try_into().and_then(|s| Vector::empty(s)),
+        (&ty_args[0]).try_into().and_then(Vector::empty),
     )
 }
 
