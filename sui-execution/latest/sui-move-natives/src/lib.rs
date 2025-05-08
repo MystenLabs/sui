@@ -44,7 +44,7 @@ use crate::crypto::group_ops::GroupOpsCostParams;
 use crate::crypto::poseidon::PoseidonBN254CostParams;
 use crate::crypto::zklogin;
 use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostParams};
-use crate::{crypto::group_ops, transfer::MultipartyTransferInternalCostParams};
+use crate::{crypto::group_ops, transfer::PartyTransferInternalCostParams};
 use better_any::{Tid, TidAble};
 use crypto::nitro_attestation::{self, NitroAttestationCostParams};
 use crypto::vdf::{self, VDFCostParams};
@@ -119,7 +119,7 @@ pub struct NativesCostTable {
 
     // Transfer
     pub transfer_transfer_internal_cost_params: TransferInternalCostParams,
-    pub transfer_multiparty_transfer_internal_cost_params: MultipartyTransferInternalCostParams,
+    pub transfer_party_transfer_internal_cost_params: PartyTransferInternalCostParams,
     pub transfer_freeze_object_cost_params: TransferFreezeObjectCostParams,
     pub transfer_share_object_cost_params: TransferShareObjectCostParams,
 
@@ -351,12 +351,11 @@ impl NativesCostTable {
                     .transfer_transfer_internal_cost_base()
                     .into(),
             },
-            transfer_multiparty_transfer_internal_cost_params:
-                MultipartyTransferInternalCostParams {
-                    transfer_multiparty_transfer_internal_cost_base: protocol_config
-                        .transfer_multiparty_transfer_internal_cost_base_as_option()
-                        .map(Into::into),
-                },
+            transfer_party_transfer_internal_cost_params: PartyTransferInternalCostParams {
+                transfer_party_transfer_internal_cost_base: protocol_config
+                    .transfer_party_transfer_internal_cost_base_as_option()
+                    .map(Into::into),
+            },
             transfer_freeze_object_cost_params: TransferFreezeObjectCostParams {
                 transfer_freeze_object_cost_base: protocol_config
                     .transfer_freeze_object_cost_base()
@@ -1104,8 +1103,8 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
         ),
         (
             "transfer",
-            "multiparty_transfer_impl",
-            make_native!(transfer::multiparty_transfer_internal),
+            "party_transfer_impl",
+            make_native!(transfer::party_transfer_internal),
         ),
         (
             "transfer",

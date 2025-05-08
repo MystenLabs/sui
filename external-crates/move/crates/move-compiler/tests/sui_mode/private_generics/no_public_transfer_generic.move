@@ -22,8 +22,8 @@ module a::m {
         transfer::receive(p, s)
     }
 
-    public fun t5<T: key>(s: T, p: sui::multiparty::Multiparty) {
-        transfer::multiparty_transfer(s, p);
+    public fun t5<T: key>(s: T, p: sui::party::Party) {
+        transfer::party_transfer(s, p);
     }
 }
 
@@ -46,11 +46,11 @@ module sui::transfer {
         abort 0
     }
 
-    public fun multiparty_transfer<T: key>(_: T, _: sui::multiparty::Multiparty) {
+    public fun party_transfer<T: key>(_: T, _: sui::party::Party) {
         abort 0
     }
 
-    public fun public_multiparty_transfer<T: key + store>(_: T, _: sui::multiparty::Multiparty) {
+    public fun public_party_transfer<T: key + store>(_: T, _: sui::party::Party) {
         abort 0
     }
 
@@ -79,6 +79,6 @@ module sui::transfer {
     }
 }
 
-module sui::multiparty {
-    struct Multiparty has copy, drop {}
+module sui::party {
+    struct Party has copy, drop {}
 }

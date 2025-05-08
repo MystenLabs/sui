@@ -145,8 +145,8 @@ pub fn transfer_internal(
 }
 
 #[derive(Clone, Debug)]
-pub struct MultipartyTransferInternalCostParams {
-    pub transfer_multiparty_transfer_internal_cost_base: Option<InternalGas>,
+pub struct PartyTransferInternalCostParams {
+    pub transfer_party_transfer_internal_cost_base: Option<InternalGas>,
 }
 
 macro_rules! native_charge_gas_early_exit_option {
@@ -157,7 +157,7 @@ macro_rules! native_charge_gas_early_exit_option {
             $native_context,
             $cost.ok_or_else(|| {
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Gas cost for multiparty is missing".to_string())
+                    .with_message("Gas cost for party is missing".to_string())
             })?
         );
     }};
@@ -165,10 +165,10 @@ macro_rules! native_charge_gas_early_exit_option {
 /***************************************************************************************************
 * native fun multi_partytransfer_impl
 * Implementation of the Move native function
-*   `multiparty_transfer_impl<T: key>(obj: T, recipient: address)`
-*   gas cost: transfer_multiparty_transfer_internal_cost_base                  |  covers various fixed costs in the oper
+*   `party_transfer_impl<T: key>(obj: T, recipient: address)`
+*   gas cost: transfer_party_transfer_internal_cost_base                  |  covers various fixed costs in the oper
 **************************************************************************************************/
-pub fn multiparty_transfer_internal(
+pub fn party_transfer_internal(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
@@ -187,22 +187,21 @@ pub fn multiparty_transfer_internal(
         .extensions()
         .get::<ObjectRuntime>()?
         .protocol_config
-        .enable_multiparty_transfer();
+        .enable_party_transfer();
     if !is_supported {
         let cost = context.gas_used();
         return Ok(NativeResult::err(cost, E_NOT_SUPPORTED));
     }
 
-    let transfer_multiparty_transfer_internal_cost_params = context
+    let transfer_party_transfer_internal_cost_params = context
         .extensions_mut()
         .get::<NativesCostTable>()?
-        .transfer_multiparty_transfer_internal_cost_params
+        .transfer_party_transfer_internal_cost_params
         .clone();
 
     native_charge_gas_early_exit_option!(
         context,
-        transfer_multiparty_transfer_internal_cost_params
-            .transfer_multiparty_transfer_internal_cost_base
+        transfer_party_transfer_internal_cost_params.transfer_party_transfer_internal_cost_base
     );
 
     let ty = ty_args.pop().unwrap();
@@ -212,21 +211,20 @@ pub fn multiparty_transfer_internal(
     let Ok([permissions]): Result<[u64; 1], _> = permissions.try_into() else {
         return Err(
             PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message("Multiparty transfer only supports one party member".to_string()),
+                .with_message("Party transfer only supports one party member".to_string()),
         );
     };
     if permissions != ALL || default_permissions != NONE {
         return Err(
             PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                "Multiparty transfer only supports one party member with all permissions"
-                    .to_string(),
+                "Party transfer only supports one party member with all permissions".to_string(),
             ),
         );
     }
     let Ok([address]): Result<[AccountAddress; 1], _> = addresses.try_into() else {
         return Err(
             PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message("Multiparty transfer only supports one party member".to_string()),
+                .with_message("Party transfer only supports one party member".to_string()),
         );
     };
     let obj = args.pop_back().unwrap();

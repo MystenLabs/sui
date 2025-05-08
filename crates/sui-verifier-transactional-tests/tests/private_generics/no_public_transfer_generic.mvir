@@ -54,11 +54,11 @@ module 0x0.m {
 //# publish
 module 0x0.m {
     import 0x2.transfer;
-    import 0x2.multiparty;
+    import 0x2.party;
 
-    t<T: key>(s: T, p: multiparty.Multiparty) {
+    t<T: key>(s: T, p: party.Party) {
         label l0:
-        transfer.multiparty_transfer<T>(move(s), move(p));
+        transfer.party_transfer<T>(move(s), move(p));
         return;
     }
 }

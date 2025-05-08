@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::multiparty;
+module sui::party;
 
 use sui::vec_map::{Self, VecMap};
 
@@ -33,14 +33,14 @@ const LEGACY_SHARED: u64 = (READ | WRITE | DELETE) as u64;
 const ALL_PERMISSIONS: u64 = (READ | WRITE | DELETE | TRANSFER) as u64;
 
 
-/// The permissions that apply to a multiparty object. If the transaction sender has an entry in
+/// The permissions that apply to a party object. If the transaction sender has an entry in
 /// the `parties` map, the permissions in that entry apply. Otherwise, the `default` permissions
 /// are used.
 /// If the party has the `READ` permission, the object can be taken as an immutable input.
 /// If the party has the `WRITE`, `DELETE`, or `TRANSFER` permissions, the object can be taken as
 /// a mutable input. Additional restrictions pertaining to each permission are checked at the end
 /// of transaction execution.
-public struct Multiparty has copy, drop {
+public struct Party has copy, drop {
     /// The permissions that apply if no specific permissions are set in the `parties` map.
     default: Permissions,
     /// The permissions per transaction sender.
@@ -51,64 +51,64 @@ public struct Multiparty has copy, drop {
 /// `DELETE`, and `TRANSFER` constants.
 public struct Permissions(u64) has copy, drop;
 
-/// Creates a `Multiparty` value with a single "owner" that has all permissions. No other party
+/// Creates a `Party` value with a single "owner" that has all permissions. No other party
 /// has any permissions. And there are no default permissions.
-public fun single_owner(owner: address): Multiparty {
+public fun single_owner(owner: address): Party {
     let mut mp = empty();
     mp.set_permissions(owner, Permissions(ALL_PERMISSIONS));
     mp
 }
 
-/// Creates a `Multiparty` value with permissions matching shared objects as defined by
+/// Creates a `Party` value with permissions matching shared objects as defined by
 /// `sui::transfer::share_object`. NOTE: This does not currently support upgrading non-shared
 /// objects (i.e. objects must be created in the same transaction).
-public fun legacy_shared(): Multiparty {
+public fun legacy_shared(): Party {
     let mut mp = empty();
     mp.default = Permissions(LEGACY_SHARED);
     mp
 }
 
-/// A helper `macro` that calls `sui::transfer::multiparty_transfer`.
-public macro fun transfer<$T: key>($self: Multiparty, $obj: $T) {
+/// A helper `macro` that calls `sui::transfer::party_transfer`.
+public macro fun transfer<$T: key>($self: Party, $obj: $T) {
     let mp = $self;
-    sui::transfer::multiparty_transfer($obj, mp)
+    sui::transfer::party_transfer($obj, mp)
 }
 
-/// A helper `macro` that calls `sui::transfer::public_multiparty_transfer`.
-public macro fun public_transfer<$T: key + store>($self: Multiparty, $obj: $T) {
+/// A helper `macro` that calls `sui::transfer::public_party_transfer`.
+public macro fun public_transfer<$T: key + store>($self: Party, $obj: $T) {
     let mp = $self;
-    sui::transfer::public_multiparty_transfer($obj, mp)
+    sui::transfer::public_party_transfer($obj, mp)
 }
 
-/* public */ fun empty(): Multiparty {
-    Multiparty {
+/* public */ fun empty(): Party {
+    Party {
         default: Permissions(NO_PERMISSIONS),
         parties: vec_map::empty(),
     }
 }
 
-/* public */ fun set_permissions(m: &mut Multiparty, address: address, permissions: Permissions) {
+/* public */ fun set_permissions(m: &mut Party, address: address, permissions: Permissions) {
     if (m.parties.contains(&address)) {
         m.parties.remove(&address);
     };
     m.parties.insert(address, permissions);
 }
 
-public(package) fun is_single_owner(m: &Multiparty): bool {
+public(package) fun is_single_owner(m: &Party): bool {
     m.default.0 == NO_PERMISSIONS &&
     m.parties.size() == 1 &&
     { let (_, p) = m.parties.get_entry_by_idx(0); p.0 == ALL_PERMISSIONS }
 }
 
-public(package) fun is_legacy_shared(m: &Multiparty): bool {
+public(package) fun is_legacy_shared(m: &Party): bool {
     m.default.0 == LEGACY_SHARED &&
     m.parties.size() == 0
 }
 
 public(package) fun into_native(
-    m: Multiparty,
+    m: Party,
 ): (u64, vector<address>, vector<u64>) {
-    let Multiparty { default, parties } = m;
+    let Party { default, parties } = m;
     let (addresses, permissions) = parties.into_keys_values();
     let permissions = permissions.map!(|Permissions(p)| p);
     (default.0, addresses, permissions)

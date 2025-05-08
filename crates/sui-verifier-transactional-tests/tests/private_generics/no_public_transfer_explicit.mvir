@@ -92,11 +92,11 @@ module 0x0.u {
 module 0x0.u {
     import test.m;
     import 0x2.transfer;
-    import 0x2.multiparty;
+    import 0x2.party;
 
-    f(x: m.KeyStruct, p: multiparty.Multiparty) {
+    f(x: m.KeyStruct, p: party.Party) {
         label l0:
-        transfer.multiparty_transfer<m.KeyStruct>(move(x), move(p));
+        transfer.party_transfer<m.KeyStruct>(move(x), move(p));
         return;
     }
 }
@@ -157,11 +157,11 @@ module 0x0.u {
 module 0x0.u {
     import test.m;
     import 0x2.transfer;
-    import 0x2.multiparty;
+    import 0x2.party;
 
-    f(x: m.KeyStoreStruct, p: multiparty.Multiparty) {
+    f(x: m.KeyStoreStruct, p: party.Party) {
         label l0:
-        transfer.multiparty_transfer<m.KeyStoreStruct>(move(x), move(p));
+        transfer.party_transfer<m.KeyStoreStruct>(move(x), move(p));
         return;
     }
 }
@@ -222,11 +222,11 @@ module 0x0.u {
 module 0x0.u {
     import test.m;
     import 0x2.transfer;
-    import 0x2.multiparty;
+    import 0x2.party;
 
-    f(x: m.StoreEnum, p: multiparty.Multiparty) {
+    f(x: m.StoreEnum, p: party.Party) {
         label l0:
-        transfer.multiparty_transfer<m.StoreEnum>(move(x), move(p));
+        transfer.party_transfer<m.StoreEnum>(move(x), move(p));
         return;
     }
 }

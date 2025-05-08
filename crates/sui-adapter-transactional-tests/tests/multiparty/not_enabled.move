@@ -21,36 +21,36 @@ public fun mint(ctx: &mut TxContext) {
     transfer::transfer(q, ctx.sender());
 }
 
-public fun create_multiparty(ctx: &mut TxContext) {
+public fun create_party(ctx: &mut TxContext) {
     let p = Pub { id: object::new(ctx) };
-    transfer::public_multiparty_transfer(p, sui::multiparty::single_owner(@0))
+    transfer::public_party_transfer(p, sui::party::single_owner(@0))
 }
 
-public fun pub_multiparty(obj: Pub, p: sui::multiparty::Multiparty) {
-    transfer::public_multiparty_transfer(obj, p)
+public fun pub_party(obj: Pub, p: sui::party::Party) {
+    transfer::public_party_transfer(obj, p)
 }
 
-public fun priv_multiparty(obj: Priv, p: sui::multiparty::Multiparty) {
-    transfer::multiparty_transfer(obj, p)
+public fun priv_party(obj: Priv, p: sui::party::Party) {
+    transfer::party_transfer(obj, p)
 }
 
 //# run ex::m::mint
 
-// Aborts since multiparty transfer is not enabled
-//# run ex::m::create_multiparty
+// Aborts since party transfer is not enabled
+//# run ex::m::create_party
 
-// Aborts since multiparty transfer is not enabled
+// Aborts since party transfer is not enabled
 //# programmable --inputs object(2,0) @0
-//> 0: sui::multiparty::single_owner(Input(1));
-//> ex::m::priv_multiparty(Input(0), Result(0))
+//> 0: sui::party::single_owner(Input(1));
+//> ex::m::priv_party(Input(0), Result(0))
 
 
-// Aborts since multiparty transfer is not enabled
+// Aborts since party transfer is not enabled
 //# programmable --inputs object(2,1) @0
-//> 0: sui::multiparty::single_owner(Input(1));
-//> ex::m::pub_multiparty(Input(0), Result(0))
+//> 0: sui::party::single_owner(Input(1));
+//> ex::m::pub_party(Input(0), Result(0))
 
-// Aborts since multiparty transfer is not enabled
+// Aborts since party transfer is not enabled
 //# programmable --inputs object(2,1) @0
-//> 0: sui::multiparty::single_owner(Input(1));
-//> sui::transfer::public_multiparty_transfer<ex::m::Pub>(Input(0), Result(0))
+//> 0: sui::party::single_owner(Input(1));
+//> sui::transfer::public_party_transfer<ex::m::Pub>(Input(0), Result(0))

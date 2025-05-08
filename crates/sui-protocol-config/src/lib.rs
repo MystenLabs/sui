@@ -680,9 +680,9 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     max_ptb_value_size_v2: bool,
 
-    // Enable native function for multiparty transfer
+    // Enable native function for party transfer
     #[serde(skip_serializing_if = "is_false")]
-    enable_multiparty_transfer: bool,
+    enable_party_transfer: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1154,8 +1154,8 @@ pub struct ProtocolConfig {
     // Transfer
     // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
     transfer_transfer_internal_cost_base: Option<u64>,
-    // Cost params for the Move native function `multiparty_transfer_impl<T: key>(obj: T, party_members: vector<address>)`
-    transfer_multiparty_transfer_internal_cost_base: Option<u64>,
+    // Cost params for the Move native function `party_transfer_impl<T: key>(obj: T, party_members: vector<address>)`
+    transfer_party_transfer_internal_cost_base: Option<u64>,
     // Cost params for the Move native function `freeze_object<T: key>(obj: T)`
     transfer_freeze_object_cost_base: Option<u64>,
     // Cost params for the Move native function `share_object<T: key>(obj: T)`
@@ -1956,8 +1956,8 @@ impl ProtocolConfig {
         self.feature_flags.max_ptb_value_size_v2
     }
 
-    pub fn enable_multiparty_transfer(&self) -> bool {
-        self.feature_flags.enable_multiparty_transfer
+    pub fn enable_party_transfer(&self) -> bool {
+        self.feature_flags.enable_party_transfer
     }
 }
 
@@ -2243,8 +2243,8 @@ impl ProtocolConfig {
             // `transfer` module
             // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
             transfer_transfer_internal_cost_base: Some(52),
-            // Cost params for the Move native function `multiparty_transfer_impl<T: key>(obj: T, party_members: vector<address>)`
-            transfer_multiparty_transfer_internal_cost_base: None,
+            // Cost params for the Move native function `party_transfer_impl<T: key>(obj: T, party_members: vector<address>)`
+            transfer_party_transfer_internal_cost_base: None,
             // Cost params for the Move native function `freeze_object<T: key>(obj: T)`
             transfer_freeze_object_cost_base: Some(52),
             // Cost params for the Move native function `share_object<T: key>(obj: T)`
@@ -3497,7 +3497,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.max_ptb_value_size_v2 = true;
                 }
                 83 => {
-                    cfg.transfer_multiparty_transfer_internal_cost_base = Some(52);
+                    cfg.transfer_party_transfer_internal_cost_base = Some(52);
                 }
                 // Use this template when making changes:
                 //

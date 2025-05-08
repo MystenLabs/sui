@@ -29,29 +29,29 @@ public fun create_pub(ctx: &mut TxContext): Pub {
     Pub { id: object::new(ctx) }
 }
 
-public fun priv_multiparty(obj: Priv, p: sui::multiparty::Multiparty) {
-    transfer::multiparty_transfer(obj, p)
+public fun priv_party(obj: Priv, p: sui::party::Party) {
+    transfer::party_transfer(obj, p)
 }
 
 //# run ex::m::mint
 
 // Aborts since legacy_shared  does not yet support "upgrades"
 //# programmable --inputs object(2,0)
-//> 0: sui::multiparty::legacy_shared();
-//> ex::m::priv_multiparty(Input(0), Result(0))
+//> 0: sui::party::legacy_shared();
+//> ex::m::priv_party(Input(0), Result(0))
 
 // Aborts since legacy_shared  does not yet support "upgrades"
 //# programmable --inputs object(2,1)
-//> 0: sui::multiparty::legacy_shared();
-//> sui::transfer::public_multiparty_transfer<ex::m::Pub>(Input(0), Result(0))
+//> 0: sui::party::legacy_shared();
+//> sui::transfer::public_party_transfer<ex::m::Pub>(Input(0), Result(0))
 
 // creates shared objects
 //# programmable
-//> 0: sui::multiparty::legacy_shared();
+//> 0: sui::party::legacy_shared();
 //> 1: ex::m::create_priv();
-//> 2: ex::m::priv_multiparty(Result(1), Result(0));
+//> 2: ex::m::priv_party(Result(1), Result(0));
 //> 3: ex::m::create_pub();
-//> sui::transfer::public_multiparty_transfer<ex::m::Pub>(Result(3), Result(0))
+//> sui::transfer::public_party_transfer<ex::m::Pub>(Result(3), Result(0))
 
 //# view-object 5,0
 

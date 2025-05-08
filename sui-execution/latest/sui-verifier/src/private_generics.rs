@@ -25,14 +25,14 @@ pub const PUBLIC_TRANSFER_FUNCTIONS: &[&IdentStr] = &[
     ident_str!("public_share_object"),
     ident_str!("public_receive"),
     ident_str!("receiving_object_id"),
-    ident_str!("public_multiparty_transfer"),
+    ident_str!("public_party_transfer"),
 ];
 pub const PRIVATE_TRANSFER_FUNCTIONS: &[&IdentStr] = &[
     ident_str!("transfer"),
     ident_str!("freeze_object"),
     ident_str!("share_object"),
     ident_str!("receive"),
-    ident_str!("multiparty_transfer"),
+    ident_str!("party_transfer"),
 ];
 
 /// All transfer functions (the functions in `sui::transfer`) are "private" in that they are
