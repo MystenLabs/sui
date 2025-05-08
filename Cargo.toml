@@ -38,6 +38,7 @@ exclude = [
   "external-crates/move/crates/move-ir-to-bytecode-syntax",
   "external-crates/move/crates/move-ir-types",
   "external-crates/move/crates/move-model",
+  "external-crates/move/crates/move-model-2",
   "external-crates/move/crates/move-package",
   "external-crates/move/crates/move-package-alt",
   "external-crates/move/crates/move-proc-macros",
