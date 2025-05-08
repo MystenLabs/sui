@@ -18,7 +18,7 @@ The following example creates a basic soulbound NFT on Sui. The `TestnetSoulboun
 
 This `TestnetSoulboundNFT` struct is defined with the `key` ability but without the `store` ability meaning it cannot be transferred with `transfer::public_transfer` and can only be transferred with `transfer::transfer`, which requires custom transfer logic to be implemented in the same module. 
 
-This example also includes an example of how to provide custom transfer logic using the `transfer::transfer` function. This is where you can add additional logic such as reset the NFT's stats, or requiring a payment. Don't provide this functionality if the NFT is fully soulbound. 
+This example also shows how to provide custom transfer logic using the `transfer::transfer` function. This is where you can add additional logic, such as resetting the NFT's stats or requiring a payment. Don't provide this functionality if the NFT is fully soulbound. 
 
 {@inject: examples/move/nft-soulbound/sources/testnet_soulbound_nft.move#fun=transfer}
 
