@@ -1034,18 +1034,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "external-resolver"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "serde",
- "thiserror",
- "tokio",
- "toml",
- "tracing",
-]
-
-[[package]]
 name = "fail"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2468,15 +2456,19 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "append-only-vec",
+ "clap 4.5.28",
  "codespan-reporting",
  "datatest-stable",
  "derive-where",
- "external-resolver",
  "futures",
  "insta",
+ "itertools 0.10.5",
  "move-command-line-common",
+ "regex",
  "serde",
+ "serde_json",
  "serde_spanned",
+ "tempfile",
  "thiserror",
  "tokio",
  "toml",

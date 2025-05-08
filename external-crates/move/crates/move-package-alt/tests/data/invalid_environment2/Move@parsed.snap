@@ -1,0 +1,8 @@
+---
+source: crates/move-package-alt/tests/test_runner.rs
+---
+error: TOML parse error at line 8, column 1
+  |
+8 | ~124512 = "35834a8a"
+  | ^
+invalid key

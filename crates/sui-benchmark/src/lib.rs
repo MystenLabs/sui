@@ -24,7 +24,6 @@ use sui_json_rpc_types::{
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
 use sui_types::gas::GasCostSummary;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::EffectsFinalityInfo;
@@ -44,6 +43,10 @@ use sui_types::{base_types::SequenceNumber, gas_coin::GasCoin};
 use sui_types::{
     base_types::{AuthorityName, SuiAddress},
     sui_system_state::SuiSystemStateTrait,
+};
+use sui_types::{
+    effects::{TransactionEffectsAPI, TransactionEvents},
+    execution_status::ExecutionFailureStatus,
 };
 use tokio::time::sleep;
 use tracing::{info, warn};
@@ -148,6 +151,28 @@ impl ExecutionEffects {
             }
             ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
                 sui_tx_effects.status().is_ok()
+            }
+        }
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
+                match effects.data().status() {
+                    sui_types::execution_status::ExecutionStatus::Success => false,
+                    sui_types::execution_status::ExecutionStatus::Failure {
+                        error:
+                            ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion {
+                                ..
+                            },
+                        ..
+                    } => true,
+                    _ => false,
+                }
+            }
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
+                let status = format!("{}", sui_tx_effects.status());
+                status.contains("ExecutionCancelledDueToSharedObjectCongestion")
             }
         }
     }

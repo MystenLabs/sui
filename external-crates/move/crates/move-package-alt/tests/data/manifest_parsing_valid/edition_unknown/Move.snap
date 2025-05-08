@@ -1,8 +1,0 @@
----
-source: crates/move-package-alt/tests/parsing_tests.rs
----
-error: unsupported edition 'foobar', expected one of '2024, 2024.beta, legacy'
-  ┌─ tests/data/manifest_parsing_valid/edition_unknown/Move.toml:3:11
-  │
-3 │ edition = "foobar"
-  │           ^^^^^^^^

@@ -1276,7 +1276,9 @@ impl AuthorityPerEpochStore {
         let system_state = match system_state {
             SuiSystemState::V2(system_state) => system_state,
             SuiSystemState::V1(_) => {
-                error!("`PerObjectCongestionControlMode::ExecutionTimeEstimate` cannot load execution time observations to SuiSystemState because it has an old version. This should not happen outside tests.");
+                if committee.epoch() > 1 {
+                    error!("`PerObjectCongestionControlMode::ExecutionTimeEstimate` cannot load execution time observations to SuiSystemState because it has an old version. This should not happen outside tests.");
+                }
                 return itertools::Either::Left(std::iter::empty());
             }
             #[cfg(msim)]

@@ -9,36 +9,36 @@ edition = "2024"
 [dependencies]
 anyhow.workspace = true
 append-only-vec.workspace = true
+clap.workspace = true
 codespan-reporting.workspace = true
 derive-where.workspace = true
+move-command-line-common.workspace = true
+itertools.workspace = true
 serde.workspace = true
 serde_spanned.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 toml_edit.workspace = true
 toml.workspace = true
-external-resolver.workspace = true
 futures.workspace = true
+regex.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
-move-command-line-common.workspace = true
 datatest-stable.workspace = true
 insta.workspace = true
+tempfile.workspace = true
 
 [[bin]]
 name = "mock-resolver"
-path = "src/mock-resolver.rs"
+path = "src/mocks/mock-resolver.rs"
 
 [[bin]]
 name = "mock-resolver-2"
-path = "src/mock-resolver-2.rs"
+path = "src/mocks/mock-resolver-2.rs"
 
 [[test]]
-name = "parsing_tests"
-harness = false
-
-[[test]]
-name = "pinning_tests"
+name = "test_runner"
 harness = false

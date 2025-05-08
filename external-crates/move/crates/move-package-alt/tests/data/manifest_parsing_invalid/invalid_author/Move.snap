@@ -1,4 +1,0 @@
----
-source: crates/move-package-alt/tests/parsing_tests.rs
----
-Manifest { package: PackageMetadata { name: Located { file: "tests/data/manifest_parsing_invalid/invalid_author/Move.toml", value: Spanned { span: 17..23, value: "name" } }, edition: Located { file: "tests/data/manifest_parsing_invalid/invalid_author/Move.toml", value: Spanned { span: 34..45, value: "2024.beta" } }, metadata: () }, environments: {"mainnet": "35834a8a"}, dependencies: {}, dep_overrides: {} }

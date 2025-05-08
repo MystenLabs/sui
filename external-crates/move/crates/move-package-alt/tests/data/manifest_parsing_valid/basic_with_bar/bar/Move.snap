@@ -1,4 +1,0 @@
----
-source: crates/move-package-alt/tests/parsing_tests.rs
----
-Manifest { package: PackageMetadata { name: Located { file: "tests/data/manifest_parsing_valid/basic_with_bar/bar/Move.toml", value: Spanned { span: 17..22, value: "bar" } }, edition: Located { file: "tests/data/manifest_parsing_valid/basic_with_bar/bar/Move.toml", value: Spanned { span: 33..44, value: "2024.beta" } }, metadata: () }, environments: {"mainnet": "35834a8a"}, dependencies: {"Sui": ManifestDependency { dependency_info: Local(LocalDependency { local: "../../../../../../../../../crates/sui-framework/packages/sui-framework" }), is_override: false, rename_from: None }}, dep_overrides: {} }
