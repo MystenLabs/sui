@@ -8,8 +8,8 @@ title: Module `sui::transfer`
 -  [Constants](#@Constants_0)
 -  [Function `transfer`](#sui_transfer_transfer)
 -  [Function `public_transfer`](#sui_transfer_public_transfer)
--  [Function `multiparty_transfer`](#sui_transfer_multiparty_transfer)
--  [Function `public_multiparty_transfer`](#sui_transfer_public_multiparty_transfer)
+-  [Function `party_transfer`](#sui_transfer_party_transfer)
+-  [Function `public_party_transfer`](#sui_transfer_public_party_transfer)
 -  [Function `freeze_object`](#sui_transfer_freeze_object)
 -  [Function `public_freeze_object`](#sui_transfer_public_freeze_object)
 -  [Function `share_object`](#sui_transfer_share_object)
@@ -19,7 +19,7 @@ title: Module `sui::transfer`
 -  [Function `receiving_object_id`](#sui_transfer_receiving_object_id)
 -  [Function `freeze_object_impl`](#sui_transfer_freeze_object_impl)
 -  [Function `share_object_impl`](#sui_transfer_share_object_impl)
--  [Function `multiparty_transfer_impl`](#sui_transfer_multiparty_transfer_impl)
+-  [Function `party_transfer_impl`](#sui_transfer_party_transfer_impl)
 -  [Function `transfer_impl`](#sui_transfer_transfer_impl)
 -  [Function `receive_impl`](#sui_transfer_receive_impl)
 
@@ -31,8 +31,8 @@ title: Module `sui::transfer`
 <b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
-<b>use</b> <a href="../sui/multiparty.md#sui_multiparty">sui::multiparty</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
+<b>use</b> <a href="../sui/multiparty.md#sui_party">sui::party</a>;
 <b>use</b> <a href="../sui/tx_context.md#sui_tx_context">sui::tx_context</a>;
 <b>use</b> <a href="../sui/vec_map.md#sui_vec_map">sui::vec_map</a>;
 </code></pre>
@@ -144,12 +144,12 @@ Operation is not yet supported by the network. The functionality might still be 
 
 
 
-<a name="sui_transfer_EInvalidMultipartyPermissions"></a>
+<a name="sui_transfer_EInvalidPartyPermissions"></a>
 
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/transfer.md#sui_transfer_EInvalidMultipartyPermissions">EInvalidMultipartyPermissions</a>: vector&lt;u8&gt; = b"Multiparty <a href="../sui/transfer.md#sui_transfer">transfer</a> is currently limited to one party.";
+<b>const</b> <a href="../sui/transfer.md#sui_transfer_EInvalidPartyPermissions">EInvalidPartyPermissions</a>: vector&lt;u8&gt; = b"Party <a href="../sui/transfer.md#sui_transfer">transfer</a> is currently limited to one <a href="../sui/multiparty.md#sui_party">party</a>.";
 </code></pre>
 
 
@@ -214,25 +214,25 @@ The object must have <code>store</code> to be transferred outside of its module.
 
 </details>
 
-<a name="sui_transfer_multiparty_transfer"></a>
+<a name="sui_transfer_party_transfer"></a>
 
-## Function `multiparty_transfer`
+## Function `party_transfer`
 
 NOT YET SUPPORTED. The function will abort with <code><a href="../sui/transfer.md#sui_transfer_ENotSupported">ENotSupported</a></code> if used on a network,
-e.g. mainnet, where multiparty objects other than <code>legacy_shared</code> are not yet supported.
-Transfer ownership of <code>obj</code> to the <code><a href="../sui/multiparty.md#sui_multiparty">multiparty</a></code>. This transfer behaves similar to both
+e.g. mainnet, where party objects other than <code>legacy_shared</code> are not yet supported.
+Transfer ownership of <code>obj</code> to the <code><a href="../sui/multiparty.md#sui_party">party</a></code>. This transfer behaves similar to both
 <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> and <code><a href="../sui/transfer.md#sui_transfer_share_object">share_object</a></code>. It is similar to <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> in that the object be authenticated
-only by the recipient(s), in this case the <code><a href="../sui/multiparty.md#sui_multiparty">multiparty</a></code>. This means that only the members
+only by the recipient(s), in this case the <code><a href="../sui/multiparty.md#sui_party">party</a></code>. This means that only the members
 can use the object as an input to a transaction. It is similar to <code><a href="../sui/transfer.md#sui_transfer_share_object">share_object</a></code> two ways. One
 in that the object can potentially be used by anyone, as defined by the <code>default</code> permissions of
-the <code>Multiparty</code> value. The other in that the object must be used in consensus and cannot be
+the <code>Party</code> value. The other in that the object must be used in consensus and cannot be
 used in the fast path.
 This function has custom rules performed by the Sui Move bytecode verifier that ensures that <code>T</code>
-is an object defined in the module where <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> is invoked. Use <code><a href="../sui/transfer.md#sui_transfer_public_multiparty_transfer">public_multiparty_transfer</a></code>
+is an object defined in the module where <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> is invoked. Use <code><a href="../sui/transfer.md#sui_transfer_public_party_transfer">public_party_transfer</a></code>
 to transfer an object with <code>store</code> outside of its module.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer_multiparty_transfer">multiparty_transfer</a>&lt;T: key&gt;(obj: T, <a href="../sui/multiparty.md#sui_multiparty">multiparty</a>: <a href="../sui/multiparty.md#sui_multiparty_Multiparty">sui::multiparty::Multiparty</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer_party_transfer">party_transfer</a>&lt;T: key&gt;(obj: T, <a href="../sui/multiparty.md#sui_party">party</a>: <a href="../sui/multiparty.md#sui_party_Party">sui::party::Party</a>)
 </code></pre>
 
 
@@ -241,13 +241,13 @@ to transfer an object with <code>store</code> outside of its module.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer_multiparty_transfer">multiparty_transfer</a>&lt;T: key&gt;(obj: T, <a href="../sui/multiparty.md#sui_multiparty">multiparty</a>: <a href="../sui/multiparty.md#sui_multiparty_Multiparty">sui::multiparty::Multiparty</a>) {
-    <b>if</b> (<a href="../sui/multiparty.md#sui_multiparty">multiparty</a>.is_legacy_shared()) {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer_party_transfer">party_transfer</a>&lt;T: key&gt;(obj: T, <a href="../sui/multiparty.md#sui_party">party</a>: <a href="../sui/multiparty.md#sui_party_Party">sui::party::Party</a>) {
+    <b>if</b> (<a href="../sui/multiparty.md#sui_party">party</a>.is_legacy_shared()) {
         <a href="../sui/transfer.md#sui_transfer_share_object_impl">share_object_impl</a>(obj)
     } <b>else</b> {
-        <b>assert</b>!(<a href="../sui/multiparty.md#sui_multiparty">multiparty</a>.is_single_owner(), <a href="../sui/transfer.md#sui_transfer_EInvalidMultipartyPermissions">EInvalidMultipartyPermissions</a>);
-        <b>let</b> (default, addresses, permissions) = <a href="../sui/multiparty.md#sui_multiparty">multiparty</a>.into_native();
-        <a href="../sui/transfer.md#sui_transfer_multiparty_transfer_impl">multiparty_transfer_impl</a>(obj, default, addresses, permissions)
+        <b>assert</b>!(<a href="../sui/multiparty.md#sui_party">party</a>.is_single_owner(), <a href="../sui/transfer.md#sui_transfer_EInvalidPartyPermissions">EInvalidPartyPermissions</a>);
+        <b>let</b> (default, addresses, permissions) = <a href="../sui/multiparty.md#sui_party">party</a>.into_native();
+        <a href="../sui/transfer.md#sui_transfer_party_transfer_impl">party_transfer_impl</a>(obj, default, addresses, permissions)
     }
 }
 </code></pre>
@@ -256,23 +256,23 @@ to transfer an object with <code>store</code> outside of its module.
 
 </details>
 
-<a name="sui_transfer_public_multiparty_transfer"></a>
+<a name="sui_transfer_public_party_transfer"></a>
 
-## Function `public_multiparty_transfer`
+## Function `public_party_transfer`
 
 NOT YET SUPPORTED. The function will abort with <code><a href="../sui/transfer.md#sui_transfer_ENotSupported">ENotSupported</a></code> if used on a network,
-e.g. mainnet, where multiparty objects other than <code>legacy_shared</code> are not yet supported.
-Transfer ownership of <code>obj</code> to the <code><a href="../sui/multiparty.md#sui_multiparty">multiparty</a></code>. This transfer behaves similar to both
+e.g. mainnet, where party objects other than <code>legacy_shared</code> are not yet supported.
+Transfer ownership of <code>obj</code> to the <code><a href="../sui/multiparty.md#sui_party">party</a></code>. This transfer behaves similar to both
 <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> and <code><a href="../sui/transfer.md#sui_transfer_share_object">share_object</a></code>. It is similar to <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> in that the object be authenticated
-only by the recipient(s), in this case the <code><a href="../sui/multiparty.md#sui_multiparty">multiparty</a></code>. This means that only the members
+only by the recipient(s), in this case the <code><a href="../sui/multiparty.md#sui_party">party</a></code>. This means that only the members
 can use the object as an input to a transaction. It is similar to <code><a href="../sui/transfer.md#sui_transfer_share_object">share_object</a></code> two ways. One
 in that the object can potentially be used by anyone, as defined by the <code>default</code> permissions of
-the <code>Multiparty</code> value. The other in that the object must be used in consensus and cannot be
+the <code>Party</code> value. The other in that the object must be used in consensus and cannot be
 used in the fast path.
 The object must have <code>store</code> to be transferred outside of its module.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer_public_multiparty_transfer">public_multiparty_transfer</a>&lt;T: key, store&gt;(obj: T, <a href="../sui/multiparty.md#sui_multiparty">multiparty</a>: <a href="../sui/multiparty.md#sui_multiparty_Multiparty">sui::multiparty::Multiparty</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer_public_party_transfer">public_party_transfer</a>&lt;T: key, store&gt;(obj: T, <a href="../sui/multiparty.md#sui_party">party</a>: <a href="../sui/multiparty.md#sui_party_Party">sui::party::Party</a>)
 </code></pre>
 
 
@@ -281,16 +281,16 @@ The object must have <code>store</code> to be transferred outside of its module.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer_public_multiparty_transfer">public_multiparty_transfer</a>&lt;T: key + store&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer_public_party_transfer">public_party_transfer</a>&lt;T: key + store&gt;(
     obj: T,
-    <a href="../sui/multiparty.md#sui_multiparty">multiparty</a>: <a href="../sui/multiparty.md#sui_multiparty_Multiparty">sui::multiparty::Multiparty</a>,
+    <a href="../sui/multiparty.md#sui_party">party</a>: <a href="../sui/multiparty.md#sui_party_Party">sui::party::Party</a>,
 ) {
-    <b>if</b> (<a href="../sui/multiparty.md#sui_multiparty">multiparty</a>.is_legacy_shared()) {
+    <b>if</b> (<a href="../sui/multiparty.md#sui_party">party</a>.is_legacy_shared()) {
         <a href="../sui/transfer.md#sui_transfer_share_object_impl">share_object_impl</a>(obj)
     } <b>else</b> {
-        <b>assert</b>!(<a href="../sui/multiparty.md#sui_multiparty">multiparty</a>.is_single_owner(), <a href="../sui/transfer.md#sui_transfer_EInvalidMultipartyPermissions">EInvalidMultipartyPermissions</a>);
-        <b>let</b> (default, addresses, permissions) = <a href="../sui/multiparty.md#sui_multiparty">multiparty</a>.into_native();
-        <a href="../sui/transfer.md#sui_transfer_multiparty_transfer_impl">multiparty_transfer_impl</a>(obj, default, addresses, permissions)
+        <b>assert</b>!(<a href="../sui/multiparty.md#sui_party">party</a>.is_single_owner(), <a href="../sui/transfer.md#sui_transfer_EInvalidPartyPermissions">EInvalidPartyPermissions</a>);
+        <b>let</b> (default, addresses, permissions) = <a href="../sui/multiparty.md#sui_party">party</a>.into_native();
+        <a href="../sui/transfer.md#sui_transfer_party_transfer_impl">party_transfer_impl</a>(obj, default, addresses, permissions)
     }
 }
 </code></pre>
@@ -544,13 +544,13 @@ Return the object ID that the given <code><a href="../sui/transfer.md#sui_transf
 
 </details>
 
-<a name="sui_transfer_multiparty_transfer_impl"></a>
+<a name="sui_transfer_party_transfer_impl"></a>
 
-## Function `multiparty_transfer_impl`
+## Function `party_transfer_impl`
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/transfer.md#sui_transfer_multiparty_transfer_impl">multiparty_transfer_impl</a>&lt;T: key&gt;(obj: T, default_permissions: u64, addresses: vector&lt;<b>address</b>&gt;, permissions: vector&lt;u64&gt;)
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/transfer.md#sui_transfer_party_transfer_impl">party_transfer_impl</a>&lt;T: key&gt;(obj: T, default_permissions: u64, addresses: vector&lt;<b>address</b>&gt;, permissions: vector&lt;u64&gt;)
 </code></pre>
 
 
@@ -559,7 +559,7 @@ Return the object ID that the given <code><a href="../sui/transfer.md#sui_transf
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer_multiparty_transfer_impl">multiparty_transfer_impl</a>&lt;T: key&gt;(
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer_party_transfer_impl">party_transfer_impl</a>&lt;T: key&gt;(
     obj: T,
     default_permissions: u64,
     addresses: vector&lt;<b>address</b>&gt;,
