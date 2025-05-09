@@ -5,13 +5,14 @@ use std::path::PathBuf;
 
 use crate::symbols::{
     compute_symbols_parsed_program, compute_symbols_pre_process,
+    cursor::CursorContext,
     ide_strings::{
         mod_ident_to_ide_string, ret_type_to_ide_str, type_args_to_ide_string,
         type_list_to_ide_string,
     },
     types::{
-        AutoImportInsertionInfo, AutoImportInsertionKind, CompiledPkgInfo, CursorContext, DefInfo,
-        ModuleDefs, Symbols, SymbolsComputationData,
+        AutoImportInsertionInfo, AutoImportInsertionKind, CompiledPkgInfo, DefInfo, ModuleDefs,
+        Symbols, SymbolsComputationData,
     },
 };
 use lsp_types::{

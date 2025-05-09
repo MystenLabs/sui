@@ -3,11 +3,13 @@
 
 use crate::{
     symbols::{
-        add_member_use_def, ignored_function, parsed_address,
-        parsing_leading_and_mod_names_to_map_key, parsing_mod_def_to_map_key,
+        add_member_use_def,
+        cursor::{CursorContext, CursorDefinition, CursorPosition},
+        ignored_function, parsed_address, parsing_leading_and_mod_names_to_map_key,
+        parsing_mod_def_to_map_key,
         types::{
-            AutoImportInsertionInfo, AutoImportInsertionKind, CallInfo, CursorContext,
-            CursorDefinition, CursorPosition, DefMap, ModuleDefs, References, UseDef, UseDefMap,
+            AutoImportInsertionInfo, AutoImportInsertionKind, CallInfo, DefMap, ModuleDefs,
+            References, UseDef, UseDefMap,
         },
     },
     utils::{loc_end_to_lsp_position_opt, loc_start_to_lsp_position_opt},

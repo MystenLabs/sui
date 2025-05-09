@@ -57,11 +57,12 @@ use crate::{
     context::Context,
     diagnostics::{lsp_diagnostics, lsp_empty_diagnostics},
     symbols::{
+        cursor::CursorContext,
         ide_strings::{const_val_to_ide_string, mod_ident_to_ide_string},
         runner::SymbolicatorRunner,
         types::{
-            AnalyzedPkgInfo, CompiledPkgInfo, CompiledProgram, CursorContext, DefInfo, DefMap,
-            FieldDef, FieldOrderInfo, FileModules, FileUseDefs, FunType, MemberDef, MemberDefInfo,
+            AnalyzedPkgInfo, CompiledPkgInfo, CompiledProgram, DefInfo, DefMap, FieldDef,
+            FieldOrderInfo, FileModules, FileUseDefs, FunType, MemberDef, MemberDefInfo,
             ModuleDefs, PrecomputedPkgInfo, References, Symbols, SymbolsComputationData, UseDef,
             UseDefMap, VariantInfo,
         },
@@ -115,6 +116,7 @@ use move_package::{
 };
 use move_symbol_pool::Symbol;
 
+pub mod cursor;
 pub mod ide_strings;
 pub mod runner;
 pub mod types;

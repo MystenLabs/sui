@@ -6,7 +6,10 @@
 
 use crate::{
     completions::utils::mod_defs,
-    symbols::types::{CursorContext, CursorDefinition, DefInfo, Symbols},
+    symbols::{
+        cursor::{CursorContext, CursorDefinition},
+        types::{DefInfo, Symbols},
+    },
 };
 use lsp_types::{CompletionItem, CompletionItemKind, Documentation, InsertTextFormat, Position};
 use move_command_line_common::files::FileHash;
