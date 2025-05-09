@@ -499,14 +499,14 @@ fun withdraw_inactive_stake(stake: u16) {
     runner.finish();
 }
 
-#[test]
-fun convert_to_fungible_staked_sui_and_redeem_2() {
-    let mut runner = test_runner::new()
-        .validators(vector[
-            validator_builder::new().sui_address(@1).initial_stake(100),
-            validator_builder::new().sui_address(@2).initial_stake(100),
-        ])
-        .build();
+#[random_test]
+// Stake random amount of SUI and check that the pending stake amount is correct.
+// Convert to fungible staked SUI and redeem it.
+// Check that the stake amount is correct.
+fun convert_to_fungible_staked_sui_and_redeem(stake: u16) {
+    let stake_amount = stake as u64;
+    let validator = validator_builder::new().sui_address(@1).initial_stake(100);
+    let mut runner = test_runner::new().validators(vector[validator]).build();
 
     // Check initial stake values.
     runner.system_tx!(|system, _| {
@@ -516,9 +516,9 @@ fun convert_to_fungible_staked_sui_and_redeem_2() {
         assert_eq!(pool.sui_balance(), 100 * MIST_PER_SUI);
     });
 
-    let staked_sui = runner.set_sender(@5).stake_with_and_take(@1, 100);
+    let staked_sui = runner.set_sender(@5).stake_with_and_take(@1, stake_amount);
 
-    assert_eq!(staked_sui.amount(), 100 * MIST_PER_SUI);
+    assert_eq!(staked_sui.amount(), stake_amount * MIST_PER_SUI);
 
     // Stake is now active. Check that the stake amount is correct.
     runner.advance_epoch(option::none()).destroy_for_testing();
@@ -526,7 +526,7 @@ fun convert_to_fungible_staked_sui_and_redeem_2() {
         let pool = system.active_validator_by_address(@1).get_staking_pool_ref();
         assert_eq!(pool.pending_stake_amount(), 0);
         assert_eq!(pool.pending_stake_withdraw_amount(), 0);
-        assert_eq!(pool.sui_balance(), 200 * MIST_PER_SUI);
+        assert_eq!(pool.sui_balance(), (100 + stake_amount) * MIST_PER_SUI);
     });
 
     // Convert to fungible staked SUI.
@@ -535,14 +535,14 @@ fun convert_to_fungible_staked_sui_and_redeem_2() {
         fungible_staked_sui = system.convert_to_fungible_staked_sui(staked_sui, runner.ctx());
     });
 
-    assert_eq!(fungible_staked_sui.value(), 100 * MIST_PER_SUI);
+    assert_eq!(fungible_staked_sui.value(), stake_amount * MIST_PER_SUI);
 
     let sui;
     runner.system_tx!(|system, _| {
         sui = system.redeem_fungible_staked_sui(fungible_staked_sui, runner.ctx());
     });
 
-    assert_eq!(sui.destroy_for_testing(), 100 * MIST_PER_SUI);
+    assert_eq!(sui.destroy_for_testing(), stake_amount * MIST_PER_SUI);
 
     runner.advance_epoch(option::none()).destroy_for_testing();
     runner.system_tx!(|system, _| {
