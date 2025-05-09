@@ -210,17 +210,18 @@ fn get_packages(txn_data: &TransactionData) -> Result<BTreeSet<ObjectID>, Replay
                 Command::MoveCall(move_call) => {
                     packages.insert(move_call.package);
                     for type_input in move_call.type_arguments.iter() {
-                        let typ = type_input.into_type_tag().map_err(|err| {
-                            ReplayError::GenericError {
-                                err: format!("{:?}", err),
-                            }
-                        })?;
+                        let typ =
+                            type_input
+                                .to_type_tag()
+                                .map_err(|err| ReplayError::GenericError {
+                                    err: format!("{:?}", err),
+                                })?;
                         packages_from_type_tag(&typ, &mut packages);
                     }
                 }
                 Command::MakeMoveVec(type_input, _) => {
                     if let Some(t) = type_input {
-                        let typ = t.into_type_tag().map_err(|err| ReplayError::GenericError {
+                        let typ = t.to_type_tag().map_err(|err| ReplayError::GenericError {
                             err: format!("{:?}", err),
                         })?;
                         packages_from_type_tag(&typ, &mut packages);

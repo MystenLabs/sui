@@ -151,7 +151,7 @@ impl TypeInput {
     /// Conversion to a `TypeTag`, which can fail if this value includes invalid identifiers.
     /// NB: This function should _not_ be used in the adapter or on the "write" side of transaction
     /// processing.
-    pub fn into_type_tag(&self) -> Result<TypeTag> {
+    pub fn to_type_tag(&self) -> Result<TypeTag> {
         use TypeInput as I;
         use TypeTag as T;
         Ok(match self {
@@ -164,7 +164,7 @@ impl TypeInput {
             I::U256 => T::U256,
             I::Address => T::Address,
             I::Signer => T::Signer,
-            I::Vector(t) => T::Vector(Box::new(t.into_type_tag()?)),
+            I::Vector(t) => T::Vector(Box::new(t.to_type_tag()?)),
             I::Struct(s) => {
                 let StructInput {
                     address,
@@ -174,7 +174,7 @@ impl TypeInput {
                 } = s.as_ref();
                 let type_params = type_params
                     .iter()
-                    .map(|t| t.into_type_tag())
+                    .map(|t| t.to_type_tag())
                     .collect::<Result<_>>()?;
                 T::Struct(Box::new(StructTag {
                     address: *address,
