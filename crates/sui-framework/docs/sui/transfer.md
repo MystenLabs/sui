@@ -277,10 +277,7 @@ The object must have <code>store</code> to be transferred outside of its module.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer_public_party_transfer">public_party_transfer</a>&lt;T: key + store&gt;(
-    obj: T,
-    <a href="../sui/party.md#sui_party">party</a>: <a href="../sui/party.md#sui_party_Party">sui::party::Party</a>,
-) {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer_public_party_transfer">public_party_transfer</a>&lt;T: key + store&gt;(obj: T, <a href="../sui/party.md#sui_party">party</a>: <a href="../sui/party.md#sui_party_Party">sui::party::Party</a>) {
     <b>assert</b>!(<a href="../sui/party.md#sui_party">party</a>.is_single_owner(), <a href="../sui/transfer.md#sui_transfer_EInvalidPartyPermissions">EInvalidPartyPermissions</a>);
     <b>let</b> (default, addresses, permissions) = <a href="../sui/party.md#sui_party">party</a>.into_native();
     <a href="../sui/transfer.md#sui_transfer_party_transfer_impl">party_transfer_impl</a>(obj, default, addresses, permissions)

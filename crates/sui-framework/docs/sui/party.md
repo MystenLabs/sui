@@ -335,9 +335,7 @@ p.members.insert(<b>address</b>, permissions);
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/party.md#sui_party_into_native">into_native</a>(
-    p: <a href="../sui/party.md#sui_party_Party">Party</a>,
-): (u64, vector&lt;<b>address</b>&gt;, vector&lt;u64&gt;) {
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/party.md#sui_party_into_native">into_native</a>(p: <a href="../sui/party.md#sui_party_Party">Party</a>): (u64, vector&lt;<b>address</b>&gt;, vector&lt;u64&gt;) {
     <b>let</b> <a href="../sui/party.md#sui_party_Party">Party</a> { default, members } = p;
     <b>let</b> (addresses, permissions) = members.into_keys_values();
     <b>let</b> permissions = permissions.map!(|<a href="../sui/party.md#sui_party_Permissions">Permissions</a>(x)| x);

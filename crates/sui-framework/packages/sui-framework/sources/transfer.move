@@ -42,8 +42,7 @@ const ESharedObjectOperationNotSupported: u64 = 4;
 const ENotSupported: u64 = 5;
 
 #[error]
-const EInvalidPartyPermissions: vector<u8> =
-    b"Party transfer is currently limited to one party.";
+const EInvalidPartyPermissions: vector<u8> = b"Party transfer is currently limited to one party.";
 
 /// Transfer ownership of `obj` to `recipient`. `obj` must have the `key` attribute,
 /// which (in turn) ensures that `obj` has a globally unique ID. Note that if the recipient
@@ -93,10 +92,7 @@ public fun party_transfer<T: key>(obj: T, party: sui::party::Party) {
 /// the `Party` value. The other in that the object must be used in consensus and cannot be
 /// used in the fast path.
 /// The object must have `store` to be transferred outside of its module.
-public fun public_party_transfer<T: key + store>(
-    obj: T,
-    party: sui::party::Party,
-) {
+public fun public_party_transfer<T: key + store>(obj: T, party: sui::party::Party) {
     assert!(party.is_single_owner(), EInvalidPartyPermissions);
     let (default, addresses, permissions) = party.into_native();
     party_transfer_impl(obj, default, addresses, permissions)

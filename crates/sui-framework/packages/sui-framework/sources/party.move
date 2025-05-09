@@ -27,7 +27,6 @@ const NO_PERMISSIONS: u64 = 0;
 /// All permissions.
 const ALL_PERMISSIONS: u64 = (READ | WRITE | DELETE | TRANSFER) as u64;
 
-
 /// The permissions that apply to a party object. If the transaction sender has an entry in
 /// the `members` map, the permissions in that entry apply. Otherwise, the `default` permissions
 /// are used.
@@ -86,9 +85,7 @@ public(package) fun is_single_owner(p: &Party): bool {
     { let (_, m) = p.members.get_entry_by_idx(0); m.0 == ALL_PERMISSIONS }
 }
 
-public(package) fun into_native(
-    p: Party,
-): (u64, vector<address>, vector<u64>) {
+public(package) fun into_native(p: Party): (u64, vector<address>, vector<u64>) {
     let Party { default, members } = p;
     let (addresses, permissions) = members.into_keys_values();
     let permissions = permissions.map!(|Permissions(x)| x);
