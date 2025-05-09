@@ -18,6 +18,8 @@ use crate::{
     scope::Scope,
 };
 
+use super::epoch::Epoch;
+
 pub(crate) struct Checkpoint {
     pub(crate) sequence_number: u64,
     pub(crate) scope: Scope,
@@ -57,6 +59,12 @@ impl Checkpoint {
 
 #[Object]
 impl CheckpointContents {
+    /// The epoch that this checkpoint is part of.
+    async fn epoch(&self) -> Option<Epoch> {
+        let (summary, _, _) = self.contents.as_ref()?;
+        Some(Epoch::with_id(self.scope.clone(), summary.epoch))
+    }
+
     /// The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
     async fn timestamp(&self) -> Result<Option<DateTime>, RpcError> {
         let Some((summary, _, _)) = &self.contents else {

@@ -10,6 +10,11 @@ String containing Base64-encoded binary data.
 """
 scalar Base64
 
+"""
+String representation of an arbitrary width, possibly signed integer
+"""
+scalar BigInt
+
 
 """
 Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
@@ -24,6 +29,10 @@ type Checkpoint {
 	"""
 	query: Query
 	"""
+	The epoch that this checkpoint is part of.
+	"""
+	epoch: Epoch
+	"""
 	The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
 	"""
 	timestamp: DateTime
@@ -33,6 +42,37 @@ type Checkpoint {
 ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ. Note that the milliseconds part is optional, and it may be omitted if its value is 0.
 """
 scalar DateTime
+
+"""
+Activity on Sui is partitioned in time, into epochs.
+
+Epoch changes are opportunities for the network to reconfigure itself (perform protocol or system package upgrades, or change the committee) and distribute staking rewards. The network aims to keep epochs roughly the same duration as each other.
+
+During a particular epoch the following data is fixed:
+
+- protocol version,
+- reference gas price,
+- system package versions,
+- validators in the committee.
+"""
+type Epoch {
+	"""
+	The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change.
+	"""
+	epochId: UInt53!
+	"""
+	The minimum gas price that a quorum of validators are guaranteed to sign a transaction for in this epoch.
+	"""
+	referenceGasPrice: BigInt
+	"""
+	The timestamp associated with the first checkpoint in the epoch.
+	"""
+	startTimestamp: DateTime
+	"""
+	The timestamp associated with the last checkpoint in the epoch (or `null` if the epoch has not finished yet).
+	"""
+	endTimestamp: DateTime
+}
 
 
 """
@@ -270,11 +310,23 @@ type Query {
 	"""
 	checkpoint(sequenceNumber: UInt53): Checkpoint
 	"""
+	Fetch an epoch by its ID.
+	
+	Returns `null` if the epoch does not exist yet, or was pruned.
+	"""
+	epoch(epochId: UInt53!): Epoch
+	"""
 	Fetch checkpoints by their sequence numbers.
 	
 	Returns a list of checkpoints that is guaranteed to be the same length as `keys`. If a checkpoint in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the checkpoint does not exist yet, or because it was pruned.
 	"""
 	multiGetCheckpoints(keys: [UInt53!]!): [Checkpoint]!
+	"""
+	Fetch epochs by their IDs.
+	
+	Returns a list of epochs that is guaranteed to be the same length as `keys`. If an epoch in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the epoch does not exist yet, or because it was pruned.
+	"""
+	multiGetEpochs(keys: [UInt53!]!): [Epoch]!
 	"""
 	Fetch objects by their keys.
 	

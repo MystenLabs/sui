@@ -3,6 +3,7 @@
 
 pub(crate) mod addressable;
 pub(crate) mod checkpoint;
+pub(crate) mod epoch;
 pub(crate) mod move_package;
 pub(crate) mod object;
 pub(crate) mod object_change;

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub(crate) mod base64;
+pub(crate) mod big_int;
 pub(crate) mod cursor;
 pub(crate) mod date_time;
 pub(crate) mod digest;
