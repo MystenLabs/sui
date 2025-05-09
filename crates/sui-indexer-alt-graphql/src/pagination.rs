@@ -26,8 +26,8 @@ pub(crate) struct PaginationConfig {
 
 /// The configuration for a single paginated field.
 pub(crate) struct PageLimits {
-    pub default: u32,
-    pub max: u32,
+    pub(crate) default: u32,
+    pub(crate) max: u32,
 }
 
 #[derive(Debug, Eq, PartialEq)]

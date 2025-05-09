@@ -29,8 +29,8 @@ use super::{
 
 #[derive(Clone)]
 pub(crate) struct TransactionEffects {
-    pub digest: TransactionDigest,
-    pub contents: EffectsContents,
+    pub(crate) digest: TransactionDigest,
+    pub(crate) contents: EffectsContents,
 }
 
 #[derive(Clone)]
