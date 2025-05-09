@@ -1,6 +1,9 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+//! This module contains the implementation of functions supporting conversion of various
+//! constructs to their IDE-friendly string representations.
+
 use crate::symbols::types::{FunType, VariantInfo};
 use move_compiler::{
     expansion::{

@@ -1,6 +1,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+//! This module contains the implementation of the symbolication runner, which is responsible
+//! for coordinating the symbolication process between different threads
+//! in the analyzer.
+
 use crate::symbols::{
     MANIFEST_FILE_NAME, get_symbols,
     types::{PrecomputedPkgInfo, Symbols},
