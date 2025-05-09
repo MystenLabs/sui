@@ -702,6 +702,9 @@ pub enum SuiError {
 
     #[error("Nitro attestation verify failed: {0}")]
     NitroAttestationFailedToVerify(String),
+
+    #[error("Invalid admin request: {0}")]
+    InvalidAdminRequest(String),
 }
 
 #[repr(u64)]
