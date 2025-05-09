@@ -30,15 +30,15 @@ title: Module `sui::party`
 ## Struct `Party`
 
 The permissions that apply to a party object. If the transaction sender has an entry in
-the <code>parties</code> map, the permissions in that entry apply. Otherwise, the <code>default</code> permissions
+the <code>members</code> map, the permissions in that entry apply. Otherwise, the <code>default</code> permissions
 are used.
-If the party has the <code><a href="../sui/multiparty.md#sui_party_READ">READ</a></code> permission, the object can be taken as an immutable input.
-If the party has the <code><a href="../sui/multiparty.md#sui_party_WRITE">WRITE</a></code>, <code><a href="../sui/multiparty.md#sui_party_DELETE">DELETE</a></code>, or <code><a href="../sui/multiparty.md#sui_party_TRANSFER">TRANSFER</a></code> permissions, the object can be taken as
+If the party has the <code><a href="../sui/party.md#sui_party_READ">READ</a></code> permission, the object can be taken as an immutable input.
+If the party has the <code><a href="../sui/party.md#sui_party_WRITE">WRITE</a></code>, <code><a href="../sui/party.md#sui_party_DELETE">DELETE</a></code>, or <code><a href="../sui/party.md#sui_party_TRANSFER">TRANSFER</a></code> permissions, the object can be taken as
 a mutable input. Additional restrictions pertaining to each permission are checked at the end
 of transaction execution.
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="../sui/multiparty.md#sui_party_Party">Party</a> <b>has</b> <b>copy</b>, drop
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/party.md#sui_party_Party">Party</a> <b>has</b> <b>copy</b>, drop
 </code></pre>
 
 
@@ -49,13 +49,13 @@ of transaction execution.
 
 <dl>
 <dt>
-<code>default: <a href="../sui/multiparty.md#sui_party_Permissions">sui::party::Permissions</a></code>
+<code>default: <a href="../sui/party.md#sui_party_Permissions">sui::party::Permissions</a></code>
 </dt>
 <dd>
- The permissions that apply if no specific permissions are set in the <code>parties</code> map.
+ The permissions that apply if no specific permissions are set in the <code>members</code> map.
 </dd>
 <dt>
-<code>parties: <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<b>address</b>, <a href="../sui/multiparty.md#sui_party_Permissions">sui::party::Permissions</a>&gt;</code>
+<code>members: <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<b>address</b>, <a href="../sui/party.md#sui_party_Permissions">sui::party::Permissions</a>&gt;</code>
 </dt>
 <dd>
  The permissions per transaction sender.
@@ -69,11 +69,11 @@ of transaction execution.
 
 ## Struct `Permissions`
 
-The permissions that a party has. The permissions are a bitset of the <code><a href="../sui/multiparty.md#sui_party_READ">READ</a></code>, <code><a href="../sui/multiparty.md#sui_party_WRITE">WRITE</a></code>,
-<code><a href="../sui/multiparty.md#sui_party_DELETE">DELETE</a></code>, and <code><a href="../sui/multiparty.md#sui_party_TRANSFER">TRANSFER</a></code> constants.
+The permissions that a party has. The permissions are a bitset of the <code><a href="../sui/party.md#sui_party_READ">READ</a></code>, <code><a href="../sui/party.md#sui_party_WRITE">WRITE</a></code>,
+<code><a href="../sui/party.md#sui_party_DELETE">DELETE</a></code>, and <code><a href="../sui/party.md#sui_party_TRANSFER">TRANSFER</a></code> constants.
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="../sui/multiparty.md#sui_party_Permissions">Permissions</a> <b>has</b> <b>copy</b>, drop
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/party.md#sui_party_Permissions">Permissions</a> <b>has</b> <b>copy</b>, drop
 </code></pre>
 
 
@@ -104,7 +104,7 @@ A party can read the object, taking it as an immutable argument. This restrictio
 when sending the transaction.
 
 
-<pre><code><b>const</b> <a href="../sui/multiparty.md#sui_party_READ">READ</a>: u8 = 1;
+<pre><code><b>const</b> <a href="../sui/party.md#sui_party_READ">READ</a>: u8 = 1;
 </code></pre>
 
 
@@ -115,7 +115,7 @@ The party can mutate the object, but not change its owner or delete it. This is 
 end end of transaction execution.
 
 
-<pre><code><b>const</b> <a href="../sui/multiparty.md#sui_party_WRITE">WRITE</a>: u8 = 2;
+<pre><code><b>const</b> <a href="../sui/party.md#sui_party_WRITE">WRITE</a>: u8 = 2;
 </code></pre>
 
 
@@ -126,7 +126,7 @@ The party can delete the object, but not otherwise modify it. This is checked at
 transaction execution.
 
 
-<pre><code><b>const</b> <a href="../sui/multiparty.md#sui_party_DELETE">DELETE</a>: u8 = 4;
+<pre><code><b>const</b> <a href="../sui/party.md#sui_party_DELETE">DELETE</a>: u8 = 4;
 </code></pre>
 
 
@@ -137,7 +137,7 @@ The party can change the owner of the object, but not otherwise modify it. This 
 the end of transaction execution.
 
 
-<pre><code><b>const</b> <a href="../sui/multiparty.md#sui_party_TRANSFER">TRANSFER</a>: u8 = 8;
+<pre><code><b>const</b> <a href="../sui/party.md#sui_party_TRANSFER">TRANSFER</a>: u8 = 8;
 </code></pre>
 
 
@@ -147,7 +147,7 @@ the end of transaction execution.
 No permissions.
 
 
-<pre><code><b>const</b> <a href="../sui/multiparty.md#sui_party_NO_PERMISSIONS">NO_PERMISSIONS</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui/party.md#sui_party_NO_PERMISSIONS">NO_PERMISSIONS</a>: u64 = 0;
 </code></pre>
 
 
@@ -159,7 +159,7 @@ However, unlike shared objects, it will be possible to "upgrade" a normal object
 legacy shared object--although this upgrade feature is not yet implemented.
 
 
-<pre><code><b>const</b> <a href="../sui/multiparty.md#sui_party_LEGACY_SHARED">LEGACY_SHARED</a>: u64 = 7;
+<pre><code><b>const</b> <a href="../sui/party.md#sui_party_LEGACY_SHARED">LEGACY_SHARED</a>: u64 = 7;
 </code></pre>
 
 
@@ -169,7 +169,7 @@ legacy shared object--although this upgrade feature is not yet implemented.
 All permissions.
 
 
-<pre><code><b>const</b> <a href="../sui/multiparty.md#sui_party_ALL_PERMISSIONS">ALL_PERMISSIONS</a>: u64 = 15;
+<pre><code><b>const</b> <a href="../sui/party.md#sui_party_ALL_PERMISSIONS">ALL_PERMISSIONS</a>: u64 = 15;
 </code></pre>
 
 
@@ -178,11 +178,11 @@ All permissions.
 
 ## Function `single_owner`
 
-Creates a <code><a href="../sui/multiparty.md#sui_party_Party">Party</a></code> value with a single "owner" that has all permissions. No other party
+Creates a <code><a href="../sui/party.md#sui_party_Party">Party</a></code> value with a single "owner" that has all permissions. No other party
 has any permissions. And there are no default permissions.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/multiparty.md#sui_party_single_owner">single_owner</a>(owner: <b>address</b>): <a href="../sui/multiparty.md#sui_party_Party">sui::party::Party</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/party.md#sui_party_single_owner">single_owner</a>(owner: <b>address</b>): <a href="../sui/party.md#sui_party_Party">sui::party::Party</a>
 </code></pre>
 
 
@@ -191,9 +191,9 @@ has any permissions. And there are no default permissions.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/multiparty.md#sui_party_single_owner">single_owner</a>(owner: <b>address</b>): <a href="../sui/multiparty.md#sui_party_Party">Party</a> {
-    <b>let</b> <b>mut</b> mp = <a href="../sui/multiparty.md#sui_party_empty">empty</a>();
-    mp.<a href="../sui/multiparty.md#sui_party_set_permissions">set_permissions</a>(owner, <a href="../sui/multiparty.md#sui_party_Permissions">Permissions</a>(<a href="../sui/multiparty.md#sui_party_ALL_PERMISSIONS">ALL_PERMISSIONS</a>));
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/party.md#sui_party_single_owner">single_owner</a>(owner: <b>address</b>): <a href="../sui/party.md#sui_party_Party">Party</a> {
+    <b>let</b> <b>mut</b> mp = <a href="../sui/party.md#sui_party_empty">empty</a>();
+    mp.<a href="../sui/party.md#sui_party_set_permissions">set_permissions</a>(owner, <a href="../sui/party.md#sui_party_Permissions">Permissions</a>(<a href="../sui/party.md#sui_party_ALL_PERMISSIONS">ALL_PERMISSIONS</a>));
     mp
 }
 </code></pre>
@@ -206,12 +206,12 @@ has any permissions. And there are no default permissions.
 
 ## Function `legacy_shared`
 
-Creates a <code><a href="../sui/multiparty.md#sui_party_Party">Party</a></code> value with permissions matching shared objects as defined by
+Creates a <code><a href="../sui/party.md#sui_party_Party">Party</a></code> value with permissions matching shared objects as defined by
 <code><a href="../sui/transfer.md#sui_transfer_share_object">sui::transfer::share_object</a></code>. NOTE: This does not currently support upgrading non-shared
 objects (i.e. objects must be created in the same transaction).
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/multiparty.md#sui_party_legacy_shared">legacy_shared</a>(): <a href="../sui/multiparty.md#sui_party_Party">sui::party::Party</a>
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/party.md#sui_party_legacy_shared">legacy_shared</a>(): <a href="../sui/party.md#sui_party_Party">sui::party::Party</a>
 </code></pre>
 
 
@@ -220,9 +220,9 @@ objects (i.e. objects must be created in the same transaction).
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/multiparty.md#sui_party_legacy_shared">legacy_shared</a>(): <a href="../sui/multiparty.md#sui_party_Party">Party</a> {
-    <b>let</b> <b>mut</b> mp = <a href="../sui/multiparty.md#sui_party_empty">empty</a>();
-    mp.default = <a href="../sui/multiparty.md#sui_party_Permissions">Permissions</a>(<a href="../sui/multiparty.md#sui_party_LEGACY_SHARED">LEGACY_SHARED</a>);
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/party.md#sui_party_legacy_shared">legacy_shared</a>(): <a href="../sui/party.md#sui_party_Party">Party</a> {
+    <b>let</b> <b>mut</b> mp = <a href="../sui/party.md#sui_party_empty">empty</a>();
+    mp.default = <a href="../sui/party.md#sui_party_Permissions">Permissions</a>(<a href="../sui/party.md#sui_party_LEGACY_SHARED">LEGACY_SHARED</a>);
     mp
 }
 </code></pre>
@@ -238,7 +238,7 @@ objects (i.e. objects must be created in the same transaction).
 A helper <code><b>macro</b></code> that calls <code><a href="../sui/transfer.md#sui_transfer_party_transfer">sui::transfer::party_transfer</a></code>.
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer">transfer</a>&lt;$T: key&gt;($self: <a href="../sui/multiparty.md#sui_party_Party">sui::party::Party</a>, $obj: $T)
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer">transfer</a>&lt;$T: key&gt;($self: <a href="../sui/party.md#sui_party_Party">sui::party::Party</a>, $obj: $T)
 </code></pre>
 
 
@@ -247,7 +247,7 @@ A helper <code><b>macro</b></code> that calls <code><a href="../sui/transfer.md#
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer">transfer</a>&lt;$T: key&gt;($self: <a href="../sui/multiparty.md#sui_party_Party">Party</a>, $obj: $T) {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer">transfer</a>&lt;$T: key&gt;($self: <a href="../sui/party.md#sui_party_Party">Party</a>, $obj: $T) {
     <b>let</b> mp = $self;
     <a href="../sui/transfer.md#sui_transfer_party_transfer">sui::transfer::party_transfer</a>($obj, mp)
 }
@@ -264,7 +264,7 @@ A helper <code><b>macro</b></code> that calls <code><a href="../sui/transfer.md#
 A helper <code><b>macro</b></code> that calls <code><a href="../sui/transfer.md#sui_transfer_public_party_transfer">sui::transfer::public_party_transfer</a></code>.
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/multiparty.md#sui_party_public_transfer">public_transfer</a>&lt;$T: key, store&gt;($self: <a href="../sui/multiparty.md#sui_party_Party">sui::party::Party</a>, $obj: $T)
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/party.md#sui_party_public_transfer">public_transfer</a>&lt;$T: key, store&gt;($self: <a href="../sui/party.md#sui_party_Party">sui::party::Party</a>, $obj: $T)
 </code></pre>
 
 
@@ -273,7 +273,7 @@ A helper <code><b>macro</b></code> that calls <code><a href="../sui/transfer.md#
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/multiparty.md#sui_party_public_transfer">public_transfer</a>&lt;$T: key + store&gt;($self: <a href="../sui/multiparty.md#sui_party_Party">Party</a>, $obj: $T) {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/party.md#sui_party_public_transfer">public_transfer</a>&lt;$T: key + store&gt;($self: <a href="../sui/party.md#sui_party_Party">Party</a>, $obj: $T) {
     <b>let</b> mp = $self;
     <a href="../sui/transfer.md#sui_transfer_public_party_transfer">sui::transfer::public_party_transfer</a>($obj, mp)
 }
@@ -289,7 +289,7 @@ A helper <code><b>macro</b></code> that calls <code><a href="../sui/transfer.md#
 
 
 
-<pre><code><b>fun</b> <a href="../sui/multiparty.md#sui_party_empty">empty</a>(): <a href="../sui/multiparty.md#sui_party_Party">sui::party::Party</a>
+<pre><code><b>fun</b> <a href="../sui/party.md#sui_party_empty">empty</a>(): <a href="../sui/party.md#sui_party_Party">sui::party::Party</a>
 </code></pre>
 
 
@@ -298,10 +298,10 @@ A helper <code><b>macro</b></code> that calls <code><a href="../sui/transfer.md#
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui/multiparty.md#sui_party_empty">empty</a>(): <a href="../sui/multiparty.md#sui_party_Party">Party</a> {
-<a href="../sui/multiparty.md#sui_party_Party">Party</a> {
-default: <a href="../sui/multiparty.md#sui_party_Permissions">Permissions</a>(<a href="../sui/multiparty.md#sui_party_NO_PERMISSIONS">NO_PERMISSIONS</a>),
-parties: <a href="../sui/vec_map.md#sui_vec_map_empty">vec_map::empty</a>(),
+<pre><code><b>fun</b> <a href="../sui/party.md#sui_party_empty">empty</a>(): <a href="../sui/party.md#sui_party_Party">Party</a> {
+<a href="../sui/party.md#sui_party_Party">Party</a> {
+default: <a href="../sui/party.md#sui_party_Permissions">Permissions</a>(<a href="../sui/party.md#sui_party_NO_PERMISSIONS">NO_PERMISSIONS</a>),
+members: <a href="../sui/vec_map.md#sui_vec_map_empty">vec_map::empty</a>(),
 }
 }
 </code></pre>
@@ -316,7 +316,7 @@ parties: <a href="../sui/vec_map.md#sui_vec_map_empty">vec_map::empty</a>(),
 
 
 
-<pre><code><b>fun</b> <a href="../sui/multiparty.md#sui_party_set_permissions">set_permissions</a>(m: &<b>mut</b> <a href="../sui/multiparty.md#sui_party_Party">sui::party::Party</a>, <b>address</b>: <b>address</b>, permissions: <a href="../sui/multiparty.md#sui_party_Permissions">sui::party::Permissions</a>)
+<pre><code><b>fun</b> <a href="../sui/party.md#sui_party_set_permissions">set_permissions</a>(m: &<b>mut</b> <a href="../sui/party.md#sui_party_Party">sui::party::Party</a>, <b>address</b>: <b>address</b>, permissions: <a href="../sui/party.md#sui_party_Permissions">sui::party::Permissions</a>)
 </code></pre>
 
 
@@ -325,11 +325,11 @@ parties: <a href="../sui/vec_map.md#sui_vec_map_empty">vec_map::empty</a>(),
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui/multiparty.md#sui_party_set_permissions">set_permissions</a>(m: &<b>mut</b> <a href="../sui/multiparty.md#sui_party_Party">Party</a>, <b>address</b>: <b>address</b>, permissions: <a href="../sui/multiparty.md#sui_party_Permissions">Permissions</a>) {
-<b>if</b> (m.parties.contains(&<b>address</b>)) {
-m.parties.remove(&<b>address</b>);
+<pre><code><b>fun</b> <a href="../sui/party.md#sui_party_set_permissions">set_permissions</a>(m: &<b>mut</b> <a href="../sui/party.md#sui_party_Party">Party</a>, <b>address</b>: <b>address</b>, permissions: <a href="../sui/party.md#sui_party_Permissions">Permissions</a>) {
+<b>if</b> (m.members.contains(&<b>address</b>)) {
+m.members.remove(&<b>address</b>);
 };
-m.parties.insert(<b>address</b>, permissions);
+m.members.insert(<b>address</b>, permissions);
 }
 </code></pre>
 
@@ -343,7 +343,7 @@ m.parties.insert(<b>address</b>, permissions);
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/multiparty.md#sui_party_is_single_owner">is_single_owner</a>(m: &<a href="../sui/multiparty.md#sui_party_Party">sui::party::Party</a>): bool
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/party.md#sui_party_is_single_owner">is_single_owner</a>(m: &<a href="../sui/party.md#sui_party_Party">sui::party::Party</a>): bool
 </code></pre>
 
 
@@ -352,10 +352,10 @@ m.parties.insert(<b>address</b>, permissions);
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/multiparty.md#sui_party_is_single_owner">is_single_owner</a>(m: &<a href="../sui/multiparty.md#sui_party_Party">Party</a>): bool {
-    m.default.0 == <a href="../sui/multiparty.md#sui_party_NO_PERMISSIONS">NO_PERMISSIONS</a> &&
-    m.parties.size() == 1 &&
-    { <b>let</b> (_, p) = m.parties.get_entry_by_idx(0); p.0 == <a href="../sui/multiparty.md#sui_party_ALL_PERMISSIONS">ALL_PERMISSIONS</a> }
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/party.md#sui_party_is_single_owner">is_single_owner</a>(m: &<a href="../sui/party.md#sui_party_Party">Party</a>): bool {
+    m.default.0 == <a href="../sui/party.md#sui_party_NO_PERMISSIONS">NO_PERMISSIONS</a> &&
+    m.members.size() == 1 &&
+    { <b>let</b> (_, p) = m.members.get_entry_by_idx(0); p.0 == <a href="../sui/party.md#sui_party_ALL_PERMISSIONS">ALL_PERMISSIONS</a> }
 }
 </code></pre>
 
@@ -369,7 +369,7 @@ m.parties.insert(<b>address</b>, permissions);
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/multiparty.md#sui_party_is_legacy_shared">is_legacy_shared</a>(m: &<a href="../sui/multiparty.md#sui_party_Party">sui::party::Party</a>): bool
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/party.md#sui_party_is_legacy_shared">is_legacy_shared</a>(m: &<a href="../sui/party.md#sui_party_Party">sui::party::Party</a>): bool
 </code></pre>
 
 
@@ -378,9 +378,9 @@ m.parties.insert(<b>address</b>, permissions);
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/multiparty.md#sui_party_is_legacy_shared">is_legacy_shared</a>(m: &<a href="../sui/multiparty.md#sui_party_Party">Party</a>): bool {
-    m.default.0 == <a href="../sui/multiparty.md#sui_party_LEGACY_SHARED">LEGACY_SHARED</a> &&
-    m.parties.size() == 0
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/party.md#sui_party_is_legacy_shared">is_legacy_shared</a>(m: &<a href="../sui/party.md#sui_party_Party">Party</a>): bool {
+    m.default.0 == <a href="../sui/party.md#sui_party_LEGACY_SHARED">LEGACY_SHARED</a> &&
+    m.members.size() == 0
 }
 </code></pre>
 
@@ -394,7 +394,7 @@ m.parties.insert(<b>address</b>, permissions);
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/multiparty.md#sui_party_into_native">into_native</a>(m: <a href="../sui/multiparty.md#sui_party_Party">sui::party::Party</a>): (u64, vector&lt;<b>address</b>&gt;, vector&lt;u64&gt;)
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/party.md#sui_party_into_native">into_native</a>(m: <a href="../sui/party.md#sui_party_Party">sui::party::Party</a>): (u64, vector&lt;<b>address</b>&gt;, vector&lt;u64&gt;)
 </code></pre>
 
 
@@ -403,12 +403,12 @@ m.parties.insert(<b>address</b>, permissions);
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/multiparty.md#sui_party_into_native">into_native</a>(
-    m: <a href="../sui/multiparty.md#sui_party_Party">Party</a>,
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/party.md#sui_party_into_native">into_native</a>(
+    m: <a href="../sui/party.md#sui_party_Party">Party</a>,
 ): (u64, vector&lt;<b>address</b>&gt;, vector&lt;u64&gt;) {
-    <b>let</b> <a href="../sui/multiparty.md#sui_party_Party">Party</a> { default, parties } = m;
-    <b>let</b> (addresses, permissions) = parties.into_keys_values();
-    <b>let</b> permissions = permissions.map!(|<a href="../sui/multiparty.md#sui_party_Permissions">Permissions</a>(p)| p);
+    <b>let</b> <a href="../sui/party.md#sui_party_Party">Party</a> { default, members } = m;
+    <b>let</b> (addresses, permissions) = members.into_keys_values();
+    <b>let</b> permissions = permissions.map!(|<a href="../sui/party.md#sui_party_Permissions">Permissions</a>(p)| p);
     (default.0, addresses, permissions)
 }
 </code></pre>

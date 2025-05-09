@@ -34,17 +34,17 @@ const ALL_PERMISSIONS: u64 = (READ | WRITE | DELETE | TRANSFER) as u64;
 
 
 /// The permissions that apply to a party object. If the transaction sender has an entry in
-/// the `parties` map, the permissions in that entry apply. Otherwise, the `default` permissions
+/// the `members` map, the permissions in that entry apply. Otherwise, the `default` permissions
 /// are used.
 /// If the party has the `READ` permission, the object can be taken as an immutable input.
 /// If the party has the `WRITE`, `DELETE`, or `TRANSFER` permissions, the object can be taken as
 /// a mutable input. Additional restrictions pertaining to each permission are checked at the end
 /// of transaction execution.
 public struct Party has copy, drop {
-    /// The permissions that apply if no specific permissions are set in the `parties` map.
+    /// The permissions that apply if no specific permissions are set in the `members` map.
     default: Permissions,
     /// The permissions per transaction sender.
-    parties: VecMap<address, Permissions>,
+    members: VecMap<address, Permissions>,
 }
 
 /// The permissions that a party has. The permissions are a bitset of the `READ`, `WRITE`,
@@ -83,33 +83,33 @@ public macro fun public_transfer<$T: key + store>($self: Party, $obj: $T) {
 /* public */ fun empty(): Party {
     Party {
         default: Permissions(NO_PERMISSIONS),
-        parties: vec_map::empty(),
+        members: vec_map::empty(),
     }
 }
 
 /* public */ fun set_permissions(m: &mut Party, address: address, permissions: Permissions) {
-    if (m.parties.contains(&address)) {
-        m.parties.remove(&address);
+    if (m.members.contains(&address)) {
+        m.members.remove(&address);
     };
-    m.parties.insert(address, permissions);
+    m.members.insert(address, permissions);
 }
 
 public(package) fun is_single_owner(m: &Party): bool {
     m.default.0 == NO_PERMISSIONS &&
-    m.parties.size() == 1 &&
-    { let (_, p) = m.parties.get_entry_by_idx(0); p.0 == ALL_PERMISSIONS }
+    m.members.size() == 1 &&
+    { let (_, p) = m.members.get_entry_by_idx(0); p.0 == ALL_PERMISSIONS }
 }
 
 public(package) fun is_legacy_shared(m: &Party): bool {
     m.default.0 == LEGACY_SHARED &&
-    m.parties.size() == 0
+    m.members.size() == 0
 }
 
 public(package) fun into_native(
     m: Party,
 ): (u64, vector<address>, vector<u64>) {
-    let Party { default, parties } = m;
-    let (addresses, permissions) = parties.into_keys_values();
+    let Party { default, members } = m;
+    let (addresses, permissions) = members.into_keys_values();
     let permissions = permissions.map!(|Permissions(p)| p);
     (default.0, addresses, permissions)
 }

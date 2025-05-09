@@ -32,7 +32,7 @@ title: Module `sui::transfer`
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
-<b>use</b> <a href="../sui/multiparty.md#sui_party">sui::party</a>;
+<b>use</b> <a href="../sui/party.md#sui_party">sui::party</a>;
 <b>use</b> <a href="../sui/tx_context.md#sui_tx_context">sui::tx_context</a>;
 <b>use</b> <a href="../sui/vec_map.md#sui_vec_map">sui::vec_map</a>;
 </code></pre>
@@ -149,7 +149,7 @@ Operation is not yet supported by the network. The functionality might still be 
 
 
 <pre><code>#[error]
-<b>const</b> <a href="../sui/transfer.md#sui_transfer_EInvalidPartyPermissions">EInvalidPartyPermissions</a>: vector&lt;u8&gt; = b"Party <a href="../sui/transfer.md#sui_transfer">transfer</a> is currently limited to one <a href="../sui/multiparty.md#sui_party">party</a>.";
+<b>const</b> <a href="../sui/transfer.md#sui_transfer_EInvalidPartyPermissions">EInvalidPartyPermissions</a>: vector&lt;u8&gt; = b"Party <a href="../sui/transfer.md#sui_transfer">transfer</a> is currently limited to one <a href="../sui/party.md#sui_party">party</a>.";
 </code></pre>
 
 
@@ -220,9 +220,9 @@ The object must have <code>store</code> to be transferred outside of its module.
 
 NOT YET SUPPORTED. The function will abort with <code><a href="../sui/transfer.md#sui_transfer_ENotSupported">ENotSupported</a></code> if used on a network,
 e.g. mainnet, where party objects other than <code>legacy_shared</code> are not yet supported.
-Transfer ownership of <code>obj</code> to the <code><a href="../sui/multiparty.md#sui_party">party</a></code>. This transfer behaves similar to both
+Transfer ownership of <code>obj</code> to the <code><a href="../sui/party.md#sui_party">party</a></code>. This transfer behaves similar to both
 <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> and <code><a href="../sui/transfer.md#sui_transfer_share_object">share_object</a></code>. It is similar to <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> in that the object be authenticated
-only by the recipient(s), in this case the <code><a href="../sui/multiparty.md#sui_party">party</a></code>. This means that only the members
+only by the recipient(s), in this case the <code><a href="../sui/party.md#sui_party">party</a></code>. This means that only the members
 can use the object as an input to a transaction. It is similar to <code><a href="../sui/transfer.md#sui_transfer_share_object">share_object</a></code> two ways. One
 in that the object can potentially be used by anyone, as defined by the <code>default</code> permissions of
 the <code>Party</code> value. The other in that the object must be used in consensus and cannot be
@@ -232,7 +232,7 @@ is an object defined in the module where <code><a href="../sui/transfer.md#sui_t
 to transfer an object with <code>store</code> outside of its module.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer_party_transfer">party_transfer</a>&lt;T: key&gt;(obj: T, <a href="../sui/multiparty.md#sui_party">party</a>: <a href="../sui/multiparty.md#sui_party_Party">sui::party::Party</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer_party_transfer">party_transfer</a>&lt;T: key&gt;(obj: T, <a href="../sui/party.md#sui_party">party</a>: <a href="../sui/party.md#sui_party_Party">sui::party::Party</a>)
 </code></pre>
 
 
@@ -241,12 +241,12 @@ to transfer an object with <code>store</code> outside of its module.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer_party_transfer">party_transfer</a>&lt;T: key&gt;(obj: T, <a href="../sui/multiparty.md#sui_party">party</a>: <a href="../sui/multiparty.md#sui_party_Party">sui::party::Party</a>) {
-    <b>if</b> (<a href="../sui/multiparty.md#sui_party">party</a>.is_legacy_shared()) {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer_party_transfer">party_transfer</a>&lt;T: key&gt;(obj: T, <a href="../sui/party.md#sui_party">party</a>: <a href="../sui/party.md#sui_party_Party">sui::party::Party</a>) {
+    <b>if</b> (<a href="../sui/party.md#sui_party">party</a>.is_legacy_shared()) {
         <a href="../sui/transfer.md#sui_transfer_share_object_impl">share_object_impl</a>(obj)
     } <b>else</b> {
-        <b>assert</b>!(<a href="../sui/multiparty.md#sui_party">party</a>.is_single_owner(), <a href="../sui/transfer.md#sui_transfer_EInvalidPartyPermissions">EInvalidPartyPermissions</a>);
-        <b>let</b> (default, addresses, permissions) = <a href="../sui/multiparty.md#sui_party">party</a>.into_native();
+        <b>assert</b>!(<a href="../sui/party.md#sui_party">party</a>.is_single_owner(), <a href="../sui/transfer.md#sui_transfer_EInvalidPartyPermissions">EInvalidPartyPermissions</a>);
+        <b>let</b> (default, addresses, permissions) = <a href="../sui/party.md#sui_party">party</a>.into_native();
         <a href="../sui/transfer.md#sui_transfer_party_transfer_impl">party_transfer_impl</a>(obj, default, addresses, permissions)
     }
 }
@@ -262,9 +262,9 @@ to transfer an object with <code>store</code> outside of its module.
 
 NOT YET SUPPORTED. The function will abort with <code><a href="../sui/transfer.md#sui_transfer_ENotSupported">ENotSupported</a></code> if used on a network,
 e.g. mainnet, where party objects other than <code>legacy_shared</code> are not yet supported.
-Transfer ownership of <code>obj</code> to the <code><a href="../sui/multiparty.md#sui_party">party</a></code>. This transfer behaves similar to both
+Transfer ownership of <code>obj</code> to the <code><a href="../sui/party.md#sui_party">party</a></code>. This transfer behaves similar to both
 <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> and <code><a href="../sui/transfer.md#sui_transfer_share_object">share_object</a></code>. It is similar to <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> in that the object be authenticated
-only by the recipient(s), in this case the <code><a href="../sui/multiparty.md#sui_party">party</a></code>. This means that only the members
+only by the recipient(s), in this case the <code><a href="../sui/party.md#sui_party">party</a></code>. This means that only the members
 can use the object as an input to a transaction. It is similar to <code><a href="../sui/transfer.md#sui_transfer_share_object">share_object</a></code> two ways. One
 in that the object can potentially be used by anyone, as defined by the <code>default</code> permissions of
 the <code>Party</code> value. The other in that the object must be used in consensus and cannot be
@@ -272,7 +272,7 @@ used in the fast path.
 The object must have <code>store</code> to be transferred outside of its module.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer_public_party_transfer">public_party_transfer</a>&lt;T: key, store&gt;(obj: T, <a href="../sui/multiparty.md#sui_party">party</a>: <a href="../sui/multiparty.md#sui_party_Party">sui::party::Party</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer_public_party_transfer">public_party_transfer</a>&lt;T: key, store&gt;(obj: T, <a href="../sui/party.md#sui_party">party</a>: <a href="../sui/party.md#sui_party_Party">sui::party::Party</a>)
 </code></pre>
 
 
@@ -283,13 +283,13 @@ The object must have <code>store</code> to be transferred outside of its module.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer_public_party_transfer">public_party_transfer</a>&lt;T: key + store&gt;(
     obj: T,
-    <a href="../sui/multiparty.md#sui_party">party</a>: <a href="../sui/multiparty.md#sui_party_Party">sui::party::Party</a>,
+    <a href="../sui/party.md#sui_party">party</a>: <a href="../sui/party.md#sui_party_Party">sui::party::Party</a>,
 ) {
-    <b>if</b> (<a href="../sui/multiparty.md#sui_party">party</a>.is_legacy_shared()) {
+    <b>if</b> (<a href="../sui/party.md#sui_party">party</a>.is_legacy_shared()) {
         <a href="../sui/transfer.md#sui_transfer_share_object_impl">share_object_impl</a>(obj)
     } <b>else</b> {
-        <b>assert</b>!(<a href="../sui/multiparty.md#sui_party">party</a>.is_single_owner(), <a href="../sui/transfer.md#sui_transfer_EInvalidPartyPermissions">EInvalidPartyPermissions</a>);
-        <b>let</b> (default, addresses, permissions) = <a href="../sui/multiparty.md#sui_party">party</a>.into_native();
+        <b>assert</b>!(<a href="../sui/party.md#sui_party">party</a>.is_single_owner(), <a href="../sui/transfer.md#sui_transfer_EInvalidPartyPermissions">EInvalidPartyPermissions</a>);
+        <b>let</b> (default, addresses, permissions) = <a href="../sui/party.md#sui_party">party</a>.into_native();
         <a href="../sui/transfer.md#sui_transfer_party_transfer_impl">party_transfer_impl</a>(obj, default, addresses, permissions)
     }
 }
