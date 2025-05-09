@@ -325,6 +325,7 @@ impl JsonRpcMetrics {
 }
 
 pub fn read_size_from_env(var_name: &str) -> Option<usize> {
+    // just test
     std::env::var(var_name)
         .ok()?
         .parse::<usize>()
