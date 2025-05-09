@@ -232,22 +232,27 @@ fn test_move_type_serde() {
                 },
             ],
         ),
-    ]
-    .into_iter()
-    .map(|(name, type_)| {
-        (
-            name.to_string(),
-            type_
-                .into_iter()
-                .enumerate()
-                .map(|(i, t)| SM::SuiMoveNormalizedField {
-                    name: format!("field{}", i),
-                    type_: t,
-                })
-                .collect(),
-        )
-    })
-    .collect();
+    ];
+    let variant_declaration_order = variants
+        .iter()
+        .map(|(name, _)| name.to_string())
+        .collect::<Vec<_>>();
+    let variants = variants
+        .into_iter()
+        .map(|(name, type_)| {
+            (
+                name.to_string(),
+                type_
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, t)| SM::SuiMoveNormalizedField {
+                        name: format!("field{}", i),
+                        type_: t,
+                    })
+                    .collect(),
+            )
+        })
+        .collect();
 
     let e = SM::SuiMoveNormalizedEnum {
         abilities: SM::SuiMoveAbilitySet {
@@ -255,6 +260,7 @@ fn test_move_type_serde() {
         },
         type_parameters: vec![],
         variants,
+        variant_declaration_order: Some(variant_declaration_order),
     };
 
     acc.push(serde_json::to_string(&e).unwrap());
