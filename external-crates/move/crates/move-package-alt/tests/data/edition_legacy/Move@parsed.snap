@@ -23,5 +23,5 @@ Manifest {
         "mainnet": "35834a8a",
     },
     dependencies: {},
-    dep_overrides: {},
+    dep_replacements: {},
 }

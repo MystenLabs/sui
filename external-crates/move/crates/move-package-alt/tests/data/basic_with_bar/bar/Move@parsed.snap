@@ -33,5 +33,5 @@ Manifest {
             rename_from: None,
         },
     },
-    dep_overrides: {},
+    dep_replacements: {},
 }
