@@ -6,10 +6,10 @@
 use crate::{
     context::Context,
     symbols::{
+        Symbols,
         def_info::DefInfo,
         mod_defs::{MemberDef, MemberDefInfo, ModuleDefs},
         runner::SymbolicatorRunner,
-        types::Symbols,
         use_def::UseDef,
     },
     utils::lsp_position_to_loc,

@@ -52,7 +52,7 @@
 #![allow(clippy::non_canonical_partial_ord_impl)]
 
 use crate::{
-    analysis::{run_parsing_analysis, run_typing_analysis},
+    analysis::{DefMap, run_parsing_analysis, run_typing_analysis},
     compiler_info::CompilerInfo,
     symbols::{
         compilation::{
@@ -63,7 +63,6 @@ use crate::{
         def_info::{DefInfo, FunType, VariantInfo},
         ide_strings::{const_val_to_ide_string, mod_ident_to_ide_string},
         mod_defs::{FieldDef, MemberDef, MemberDefInfo, ModuleDefs},
-        types::{DefMap, FieldOrderInfo, FileModules, FileUseDefs, Symbols},
         use_def::{References, UseDef, UseDefMap},
     },
     utils::{expansion_mod_ident_to_map_key, loc_start_to_lsp_position_opt, lsp_position_to_loc},
@@ -107,35 +106,42 @@ pub mod runner;
 pub mod types;
 pub mod use_def;
 
-impl Symbols {
-    pub fn line_uses(&self, use_fpath: &Path, use_line: u32) -> BTreeSet<UseDef> {
-        let Some(file_symbols) = self.file_use_defs.get(use_fpath) else {
-            return BTreeSet::new();
-        };
-        file_symbols.get(use_line).unwrap_or_else(BTreeSet::new)
-    }
-
-    pub fn def_info(&self, def_loc: &Loc) -> Option<&DefInfo> {
-        self.def_info.get(def_loc)
-    }
-
-    pub fn mod_defs(&self, fhash: &FileHash, mod_ident: ModuleIdent_) -> Option<&ModuleDefs> {
-        let Some(fpath) = self.files.file_name_mapping().get(fhash) else {
-            return None;
-        };
-        let Some(mod_defs) = self.file_mods.get(fpath) else {
-            return None;
-        };
-        mod_defs.iter().find(|d| d.ident == mod_ident)
-    }
-
-    pub fn file_hash(&self, path: &Path) -> Option<FileHash> {
-        let Some(mod_defs) = self.file_mods.get(path) else {
-            return None;
-        };
-        Some(mod_defs.first().unwrap().fhash)
-    }
+/// Result of the symbolication process
+#[derive(Debug, Clone)]
+pub struct Symbols {
+    /// A map from def locations to all the references (uses)
+    pub references: References,
+    /// A mapping from uses to definitions in a file
+    pub file_use_defs: FileUseDefs,
+    /// A mapping from filePath to ModuleDefs
+    pub file_mods: FileModules,
+    /// Mapped file information for translating locations into positions
+    pub files: MappedFiles,
+    /// Additional information about definitions
+    pub def_info: DefMap,
+    /// IDE Annotation Information from the Compiler
+    pub compiler_info: CompilerInfo,
+    /// Cursor information gathered up during analysis
+    pub cursor_context: Option<CursorContext>,
 }
+
+/// Information about field order in structs and enums needed for auto-completion
+/// to be consistent with field order in the source code
+#[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
+struct FieldOrderInfo {
+    pub structs: BTreeMap<String, StructFieldOrderInfo>,
+    pub variants: BTreeMap<String, VariantFieldOrderInfo>,
+}
+
+/// Map from struct name to field order information
+pub type StructFieldOrderInfo = BTreeMap<Symbol, BTreeMap<Symbol, usize>>;
+
+/// Map from enum name to variant name to field order information
+pub type VariantFieldOrderInfo = BTreeMap<Symbol, BTreeMap<Symbol, BTreeMap<Symbol, usize>>>;
+
+type FileUseDefs = BTreeMap<PathBuf, UseDefMap>;
+
+pub type FileModules = BTreeMap<PathBuf, BTreeSet<ModuleDefs>>;
 
 /// Preprocess parsed and typed programs prior to actual symbols computation.
 pub fn compute_symbols_pre_process(
@@ -1005,4 +1011,53 @@ pub fn find_datatype(mod_defs: &ModuleDefs, datatype_name: &Symbol) -> Option<Lo
         },
         |struct_def| Some(struct_def.name_loc),
     )
+}
+
+//**************************************************************************************************
+// Impls
+//**************************************************************************************************
+
+impl Symbols {
+    pub fn line_uses(&self, use_fpath: &Path, use_line: u32) -> BTreeSet<UseDef> {
+        let Some(file_symbols) = self.file_use_defs.get(use_fpath) else {
+            return BTreeSet::new();
+        };
+        file_symbols.get(use_line).unwrap_or_else(BTreeSet::new)
+    }
+
+    pub fn def_info(&self, def_loc: &Loc) -> Option<&DefInfo> {
+        self.def_info.get(def_loc)
+    }
+
+    pub fn mod_defs(&self, fhash: &FileHash, mod_ident: ModuleIdent_) -> Option<&ModuleDefs> {
+        let Some(fpath) = self.files.file_name_mapping().get(fhash) else {
+            return None;
+        };
+        let Some(mod_defs) = self.file_mods.get(fpath) else {
+            return None;
+        };
+        mod_defs.iter().find(|d| d.ident == mod_ident)
+    }
+
+    pub fn file_hash(&self, path: &Path) -> Option<FileHash> {
+        let Some(mod_defs) = self.file_mods.get(path) else {
+            return None;
+        };
+        Some(mod_defs.first().unwrap().fhash)
+    }
+}
+
+impl Default for FieldOrderInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl FieldOrderInfo {
+    pub fn new() -> Self {
+        Self {
+            structs: BTreeMap::new(),
+            variants: BTreeMap::new(),
+        }
+    }
 }

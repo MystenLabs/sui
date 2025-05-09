@@ -6,6 +6,7 @@ use crate::{
     symbols::{
         compilation::{CompiledPkgInfo, SymbolsComputationData},
         cursor::CursorContext,
+        def_info::DefInfo,
         use_def::UseDefMap,
     },
     utils::expansion_mod_ident_to_map_key,
@@ -21,9 +22,12 @@ use move_compiler::{
     shared::{NamedAddressMap, files::MappedFiles, unique_map::UniqueMap},
     typing::{ast::ModuleDefinition, visitor::TypingVisitorContext},
 };
+use move_ir_types::location::Loc;
 
 pub mod parsing_analysis;
 pub mod typing_analysis;
+
+pub type DefMap = BTreeMap<Loc, DefInfo>;
 
 /// Run parsing analysis for either main program or dependencies
 pub fn run_parsing_analysis(

@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 
 use crate::symbols::{
+    Symbols,
     compilation::{CompiledPkgInfo, SymbolsComputationData},
     compute_symbols_parsed_program, compute_symbols_pre_process,
     cursor::CursorContext,
@@ -13,7 +14,6 @@ use crate::symbols::{
         type_list_to_ide_string,
     },
     mod_defs::{AutoImportInsertionInfo, AutoImportInsertionKind, ModuleDefs},
-    types::Symbols,
 };
 use lsp_types::{
     CompletionItem, CompletionItemKind, CompletionItemLabelDetails, InsertTextFormat, Position,

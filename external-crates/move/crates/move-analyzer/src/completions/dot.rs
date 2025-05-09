@@ -6,9 +6,9 @@
 use crate::{
     completions::utils::{call_completion_item, mod_defs},
     symbols::{
+        Symbols,
         def_info::{DefInfo, FunType},
         ide_strings::type_to_ide_string,
-        types::Symbols,
     },
     utils::lsp_position_to_loc,
 };

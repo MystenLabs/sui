@@ -18,10 +18,10 @@ use crate::{
         import_insertion_info, mod_defs,
     },
     symbols::{
+        Symbols,
         cursor::{ChainCompletionKind, ChainInfo, CursorContext},
         def_info::{DefInfo, FunType, VariantInfo},
         mod_defs::{AutoImportInsertionInfo, MemberDef, MemberDefInfo, ModuleDefs},
-        types::Symbols,
     },
     utils::expansion_mod_ident_to_map_key,
 };
