@@ -41,7 +41,7 @@ pub(crate) struct CommitObserver {
     leader_schedule: Arc<LeaderSchedule>,
     /// Component to deterministically collect subdags for committed leaders.
     commit_interpreter: Linearizer,
-    /// An unbounded channel to send commits to commit handler.
+    /// Handle to an unbounded channel to send output commits.
     commit_finalizer_handle: CommitFinalizerHandle,
 }
 
@@ -75,7 +75,7 @@ impl CommitObserver {
 
     pub(crate) fn handle_commit(
         &mut self,
-        committed_leaders: Vec<(VerifiedBlock, bool)>,
+        committed_leaders: Vec<VerifiedBlock>,
     ) -> ConsensusResult<Vec<CommittedSubDag>> {
         let _s = self
             .context
@@ -85,10 +85,7 @@ impl CommitObserver {
             .with_label_values(&["CommitObserver::handle_commit"])
             .start_timer();
 
-        let (leader_blocks, direct_commits): (Vec<VerifiedBlock>, Vec<bool>) =
-            committed_leaders.into_iter().unzip();
-
-        let mut committed_sub_dags = self.commit_interpreter.handle_commit(leader_blocks);
+        let mut committed_sub_dags = self.commit_interpreter.handle_commit(committed_leaders);
         self.report_metrics(&committed_sub_dags);
 
         // Send scores as part of the first sub dag, if the leader schedule has been updated.
@@ -105,7 +102,7 @@ impl CommitObserver {
             committed_sub_dags[0].reputation_scores_desc = reputation_scores_desc;
         }
 
-        for (commit, direct) in committed_sub_dags.iter().zip(direct_commits) {
+        for commit in committed_sub_dags.iter() {
             tracing::debug!(
                 "Sending commit {} leader {} to execution.",
                 commit.commit_ref,
@@ -113,8 +110,7 @@ impl CommitObserver {
             );
             tracing::trace!("Committed subdag: {:#?}", commit);
             // Failures in sender.send() are assumed to be permanent
-            self.commit_finalizer_handle
-                .send((commit.clone(), direct))?;
+            self.commit_finalizer_handle.send(commit.clone())?;
         }
 
         self.dag_state
@@ -174,8 +170,9 @@ impl CommitObserver {
             info!("Sending commit {} during recovery", commit.index());
             let committed_sub_dag =
                 load_committed_subdag_from_store(self.store.as_ref(), commit, reputation_scores);
+            // Assume indirect commit during recovery to be safe.
             self.commit_finalizer_handle
-                .send((committed_sub_dag, false))
+                .send(committed_sub_dag)
                 .unwrap();
 
             last_sent_commit_index += 1;
@@ -303,19 +300,13 @@ mod tests {
             .collect::<Vec<_>>();
 
         // Commit first 5 leaders.
-        let mut commits = observer
-            .handle_commit(leaders[0..5].iter().map(|b| (b.clone(), true)).collect())
-            .unwrap();
+        let mut commits = observer.handle_commit(leaders[0..5].to_vec()).unwrap();
 
         // Trigger a leader schedule update.
         leader_schedule.update_leader_schedule_v2(&dag_state);
 
         // Commit the next 5 leaders.
-        commits.extend(
-            observer
-                .handle_commit(leaders[5..].iter().map(|b| (b.clone(), true)).collect())
-                .unwrap(),
-        );
+        commits.extend(observer.handle_commit(leaders[5..].to_vec()).unwrap());
 
         // Check commits are returned by CommitObserver::handle_commit is accurate
         let mut expected_stored_refs: Vec<BlockRef> = vec![];
@@ -458,13 +449,7 @@ mod tests {
         // consumer of the consensus output channel.
         let expected_last_processed_index: usize = 2;
         let mut commits = observer
-            .handle_commit(
-                leaders
-                    .iter()
-                    .take(expected_last_processed_index)
-                    .map(|b| (b.clone(), true))
-                    .collect::<Vec<_>>(),
-            )
+            .handle_commit(leaders[..expected_last_processed_index].to_vec())
             .unwrap();
 
         // Check commits sent over consensus output channel is accurate
@@ -494,13 +479,7 @@ mod tests {
         // the consumer side where the commits were not persisted.
         commits.append(
             &mut observer
-                .handle_commit(
-                    leaders
-                        .iter()
-                        .skip(expected_last_processed_index)
-                        .map(|b| (b.clone(), true))
-                        .collect::<Vec<_>>(),
-                )
+                .handle_commit(leaders[expected_last_processed_index..].to_vec())
                 .unwrap(),
         );
 
@@ -606,9 +585,7 @@ mod tests {
         // Commit all of the leaders and "receive" the subdags as the consumer of
         // the consensus output channel.
         let expected_last_processed_index: usize = 10;
-        let commits = observer
-            .handle_commit(leaders.iter().map(|b| (b.clone(), true)).collect())
-            .unwrap();
+        let commits = observer.handle_commit(leaders.clone()).unwrap();
 
         // Check commits sent over consensus output channel is accurate
         let mut processed_subdag_index = 0;

@@ -511,7 +511,11 @@ impl Display for LeaderStatus {
 /// Decision of each leader slot.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum DecidedLeader {
+    /// The committed leader block and whether it is a direct commit.
+    /// It is incorrect to trigger the direct commit optimization when the commit is not.
+    /// So when it is unknown if the commit is direct, the boolean flag should be false.
     Commit(VerifiedBlock, bool),
+    /// The skipped leader slot where no block is committed.
     Skip(Slot),
 }
 
@@ -525,9 +529,9 @@ impl DecidedLeader {
     }
 
     // Converts to committed block if the decision is to commit. Returns None otherwise.
-    pub(crate) fn into_committed_block(self) -> Option<(VerifiedBlock, bool)> {
+    pub(crate) fn into_committed_block(self) -> Option<VerifiedBlock> {
         match self {
-            Self::Commit(block, direct) => Some((block, direct)),
+            Self::Commit(block, _direct) => Some(block),
             Self::Skip(_) => None,
         }
     }
