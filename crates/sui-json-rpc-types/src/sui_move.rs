@@ -265,15 +265,13 @@ impl<S: Hash + Eq + ToString> From<&NormalizedEnum<S>> for SuiMoveNormalizedEnum
             .iter()
             .map(|(name, _)| name.clone())
             .collect::<Vec<String>>();
-        let variants = variants
-            .into_iter()
-            .map(|(name, fields)| (name, fields))
-            .collect();
+        let variants = variants.into_iter().collect();
         Self {
             abilities: value.abilities.into(),
             type_parameters: value
                 .type_parameters
-                .into_iter()
+                .iter()
+                .copied()
                 .map(SuiMoveStructTypeParameter::from)
                 .collect::<Vec<SuiMoveStructTypeParameter>>(),
             variants,

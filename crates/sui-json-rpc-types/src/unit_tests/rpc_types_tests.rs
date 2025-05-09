@@ -238,21 +238,21 @@ fn test_move_type_serde() {
         .map(|(name, _)| name.to_string())
         .collect::<Vec<_>>();
     let variants = variants
-    .into_iter()
-    .map(|(name, type_)| {
-        (
-            name.to_string(),
-            type_
-                .into_iter()
-                .enumerate()
-                .map(|(i, t)| SM::SuiMoveNormalizedField {
-                    name: format!("field{}", i),
-                    type_: t,
-                })
-                .collect(),
-        )
-    })
-    .collect();
+        .into_iter()
+        .map(|(name, type_)| {
+            (
+                name.to_string(),
+                type_
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, t)| SM::SuiMoveNormalizedField {
+                        name: format!("field{}", i),
+                        type_: t,
+                    })
+                    .collect(),
+            )
+        })
+        .collect();
 
     let e = SM::SuiMoveNormalizedEnum {
         abilities: SM::SuiMoveAbilitySet {
