@@ -12,6 +12,7 @@ use serde::{de::DeserializeOwned, Serialize};
 /// Cursor that hides its value by encoding it as JSON and then Base64.
 ///
 /// In the GraphQL schema this will show up as a `String`.
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub(crate) struct JsonCursor<C>(C);
 
 #[derive(thiserror::Error, Debug)]

@@ -21,7 +21,9 @@ pub struct StoredObject {
     pub serialized_object: Option<Vec<u8>>,
 }
 
-#[derive(Insertable, Selectable, Debug, Clone, PartialEq, Eq, FieldCount, QueryableByName)]
+#[derive(
+    Insertable, Selectable, Debug, Clone, PartialEq, Eq, FieldCount, Queryable, QueryableByName,
+)]
 #[diesel(table_name = obj_versions, primary_key(object_id, object_version))]
 pub struct StoredObjVersion {
     pub object_id: Vec<u8>,

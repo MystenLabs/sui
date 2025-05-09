@@ -56,6 +56,7 @@ pub mod config;
 mod error;
 mod extensions;
 mod health;
+mod intersect;
 mod metrics;
 mod middleware;
 mod pagination;
