@@ -97,7 +97,7 @@ passkey-client.workspace = true
 passkey-authenticator.workspace = true
 
 [[bench]]
-name = "accumulator_bench"
+name = "object_state_hash_bench"
 harness = false
 
 [[bench]]

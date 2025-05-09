@@ -29,13 +29,13 @@ use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::checkpoints::CheckpointStore;
 use sui_core::epoch::committee_store::CommitteeStore;
-use sui_core::state_accumulator::WrappedObject;
+use sui_core::object_state_hasher::WrappedObject;
 use sui_protocol_config::Chain;
 use sui_storage::object_store::util::path_to_filesystem;
 use sui_storage::{compute_sha3_checksum, FileCompression, SHA3_BYTES};
-use sui_types::accumulator::Accumulator;
 use sui_types::base_types::ObjectID;
 use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
+use sui_types::object_state_hash::ObjectStateHash;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::sui_system_state::SuiSystemStateTrait;
@@ -227,7 +227,7 @@ pub fn create_file_metadata(
 
 pub async fn setup_db_state(
     epoch: u64,
-    accumulator: Accumulator,
+    accumulator: ObjectStateHash,
     perpetual_db: Arc<AuthorityPerpetualTables>,
     checkpoint_store: Arc<CheckpointStore>,
     committee_store: Arc<CommitteeStore>,
@@ -291,7 +291,7 @@ pub async fn accumulate_live_object_iter(
     iter: Box<dyn Iterator<Item = LiveObject> + '_>,
     m: MultiProgress,
     num_live_objects: u64,
-) -> Accumulator {
+) -> ObjectStateHash {
     // Monitor progress of live object accumulation
     let accum_progress_bar = m.add(ProgressBar::new(num_live_objects).with_style(
         ProgressStyle::with_template("[{elapsed_precise}] {wide_bar} {pos}/{len} ({msg})").unwrap(),
@@ -321,7 +321,7 @@ pub async fn accumulate_live_object_iter(
     });
 
     // Accumulate live objects
-    let mut acc = Accumulator::default();
+    let mut acc = ObjectStateHash::default();
     for live_object in iter {
         match live_object {
             LiveObject::Normal(object) => {

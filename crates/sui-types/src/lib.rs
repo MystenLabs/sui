@@ -26,7 +26,6 @@ use crate::{base_types::RESOLVED_STD_OPTION, id::RESOLVED_SUI_ID};
 #[macro_use]
 pub mod error;
 
-pub mod accumulator;
 pub mod authenticator_state;
 pub mod balance;
 pub mod balance_change;
@@ -71,6 +70,7 @@ pub mod multisig;
 pub mod multisig_legacy;
 pub mod nitro_attestation;
 pub mod object;
+pub mod object_state_hash;
 pub mod passkey_authenticator;
 pub mod programmable_transaction_builder;
 pub mod quorum_driver_types;

@@ -18,25 +18,25 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use fastcrypto::hash::MultisetHash;
-use sui_types::accumulator::Accumulator;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::SuiResult;
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, ECMHLiveObjectSetDigest};
+use sui_types::object_state_hash::ObjectStateHash;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_tables::LiveObject;
 
-pub struct StateAccumulatorMetrics {
+pub struct ObjectStateHashMetrics {
     inconsistent_state: IntGauge,
 }
 
-impl StateAccumulatorMetrics {
+impl ObjectStateHashMetrics {
     pub fn new(registry: &Registry) -> Arc<Self> {
         let this = Self {
             inconsistent_state: register_int_gauge_with_registry!(
-                "accumulator_inconsistent_state",
-                "1 if accumulated live object set differs from StateAccumulator root state hash for the previous epoch",
+                "object_state_hasher_inconsistent_state",
+                "1 if accumulated live object set differs from ObjectStateHasher root state hash for the previous epoch",
                 registry
             )
             .unwrap(),
@@ -45,12 +45,12 @@ impl StateAccumulatorMetrics {
     }
 }
 
-pub struct StateAccumulator {
-    store: Arc<dyn AccumulatorStore>,
-    metrics: Arc<StateAccumulatorMetrics>,
+pub struct ObjectStateHasher {
+    store: Arc<dyn ObjectStateHashStore>,
+    metrics: Arc<ObjectStateHashMetrics>,
 }
 
-pub trait AccumulatorStore: ObjectStore + Send + Sync {
+pub trait ObjectStateHashStore: ObjectStore + Send + Sync {
     /// This function is only called in older protocol versions, and should no longer be used.
     /// It creates an explicit dependency to tombstones which is not desired.
     fn get_object_ref_prior_to_key_deprecated(
@@ -59,20 +59,20 @@ pub trait AccumulatorStore: ObjectStore + Send + Sync {
         version: VersionNumber,
     ) -> SuiResult<Option<ObjectRef>>;
 
-    fn get_root_state_accumulator_for_epoch(
+    fn get_root_state_hash_for_epoch(
         &self,
         epoch: EpochId,
-    ) -> SuiResult<Option<(CheckpointSequenceNumber, Accumulator)>>;
+    ) -> SuiResult<Option<(CheckpointSequenceNumber, ObjectStateHash)>>;
 
-    fn get_root_state_accumulator_for_highest_epoch(
+    fn get_root_state_hash_for_highest_epoch(
         &self,
-    ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, Accumulator))>>;
+    ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, ObjectStateHash))>>;
 
-    fn insert_state_accumulator_for_epoch(
+    fn insert_state_hash_for_epoch(
         &self,
         epoch: EpochId,
         checkpoint_seq_num: &CheckpointSequenceNumber,
-        acc: &Accumulator,
+        acc: &ObjectStateHash,
     ) -> SuiResult;
 
     fn iter_live_object_set(
@@ -88,7 +88,7 @@ pub trait AccumulatorStore: ObjectStore + Send + Sync {
     }
 }
 
-impl AccumulatorStore for InMemoryStorage {
+impl ObjectStateHashStore for InMemoryStorage {
     fn get_object_ref_prior_to_key_deprecated(
         &self,
         _object_id: &ObjectID,
@@ -97,24 +97,24 @@ impl AccumulatorStore for InMemoryStorage {
         unreachable!("get_object_ref_prior_to_key is only called by accumulate_effects_v1, while InMemoryStorage is used by testing and genesis only, which always uses latest protocol ")
     }
 
-    fn get_root_state_accumulator_for_epoch(
+    fn get_root_state_hash_for_epoch(
         &self,
         _epoch: EpochId,
-    ) -> SuiResult<Option<(CheckpointSequenceNumber, Accumulator)>> {
+    ) -> SuiResult<Option<(CheckpointSequenceNumber, ObjectStateHash)>> {
         unreachable!("not used for testing")
     }
 
-    fn get_root_state_accumulator_for_highest_epoch(
+    fn get_root_state_hash_for_highest_epoch(
         &self,
-    ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, Accumulator))>> {
+    ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, ObjectStateHash))>> {
         unreachable!("not used for testing")
     }
 
-    fn insert_state_accumulator_for_epoch(
+    fn insert_state_hash_for_epoch(
         &self,
         _epoch: EpochId,
         _checkpoint_seq_num: &CheckpointSequenceNumber,
-        _acc: &Accumulator,
+        _acc: &ObjectStateHash,
     ) -> SuiResult {
         unreachable!("not used for testing")
     }
@@ -151,10 +151,10 @@ pub fn accumulate_effects<T, S>(
     store: S,
     effects: &[TransactionEffects],
     protocol_config: &ProtocolConfig,
-) -> Accumulator
+) -> ObjectStateHash
 where
     S: std::ops::Deref<Target = T>,
-    T: AccumulatorStore + ?Sized,
+    T: ObjectStateHashStore + ?Sized,
 {
     if protocol_config.enable_effects_v2() {
         accumulate_effects_v3(effects)
@@ -169,12 +169,12 @@ fn accumulate_effects_v1<T, S>(
     store: S,
     effects: &[TransactionEffects],
     protocol_config: &ProtocolConfig,
-) -> Accumulator
+) -> ObjectStateHash
 where
     S: std::ops::Deref<Target = T>,
-    T: AccumulatorStore + ?Sized,
+    T: ObjectStateHashStore + ?Sized,
 {
-    let mut acc = Accumulator::default();
+    let mut acc = ObjectStateHash::default();
 
     // process insertions to the set
     acc.insert_all(
@@ -228,9 +228,9 @@ where
         .map(|(digest, ids)| (*digest, HashSet::from_iter(ids.iter().cloned())))
         .collect();
 
-    // Collect keys from modified_at_versions to remove from the accumulator.
+    // Collect keys from modified_at_versions to remove from the hasher.
     // Filter all unwrapped objects (from unwrapped or unwrapped_then_deleted effects)
-    // as these were inserted into the accumulator as a WrappedObject. Will handle these
+    // as these were inserted into the hasher as a WrappedObject. Will handle these
     // separately.
     let modified_at_version_keys: Vec<ObjectKey> = effects
         .iter()
@@ -298,12 +298,12 @@ where
     acc
 }
 
-fn accumulate_effects_v2<T, S>(store: S, effects: &[TransactionEffects]) -> Accumulator
+fn accumulate_effects_v2<T, S>(store: S, effects: &[TransactionEffects]) -> ObjectStateHash
 where
     S: std::ops::Deref<Target = T>,
-    T: AccumulatorStore + ?Sized,
+    T: ObjectStateHashStore + ?Sized,
 {
-    let mut acc = Accumulator::default();
+    let mut acc = ObjectStateHash::default();
 
     // process insertions to the set
     acc.insert_all(
@@ -317,7 +317,7 @@ where
             .collect::<Vec<ObjectDigest>>(),
     );
 
-    // Collect keys from modified_at_versions to remove from the accumulator.
+    // Collect keys from modified_at_versions to remove from the hasher.
     let modified_at_version_keys: Vec<_> = effects
         .iter()
         .flat_map(|fx| {
@@ -342,8 +342,8 @@ where
     acc
 }
 
-fn accumulate_effects_v3(effects: &[TransactionEffects]) -> Accumulator {
-    let mut acc = Accumulator::default();
+fn accumulate_effects_v3(effects: &[TransactionEffects]) -> ObjectStateHash {
+    let mut acc = ObjectStateHash::default();
 
     // process insertions to the set
     acc.insert_all(
@@ -372,16 +372,16 @@ fn accumulate_effects_v3(effects: &[TransactionEffects]) -> Accumulator {
     acc
 }
 
-impl StateAccumulator {
-    pub fn new(store: Arc<dyn AccumulatorStore>, metrics: Arc<StateAccumulatorMetrics>) -> Self {
+impl ObjectStateHasher {
+    pub fn new(store: Arc<dyn ObjectStateHashStore>, metrics: Arc<ObjectStateHashMetrics>) -> Self {
         Self { store, metrics }
     }
 
-    pub fn new_for_tests(store: Arc<dyn AccumulatorStore>) -> Self {
-        Self::new(store, StateAccumulatorMetrics::new(&Registry::new()))
+    pub fn new_for_tests(store: Arc<dyn ObjectStateHashStore>) -> Self {
+        Self::new(store, ObjectStateHashMetrics::new(&Registry::new()))
     }
 
-    pub fn metrics(&self) -> Arc<StateAccumulatorMetrics> {
+    pub fn metrics(&self) -> Arc<ObjectStateHashMetrics> {
         self.metrics.clone()
     }
 
@@ -391,13 +391,13 @@ impl StateAccumulator {
             .set(is_inconsistent_state as i64);
     }
 
-    /// Accumulates the effects of a single checkpoint and persists the accumulator.
+    /// Accumulates the effects of a single checkpoint and persists the hasher.
     pub fn accumulate_checkpoint(
         &self,
         effects: &[TransactionEffects],
         checkpoint_seq_num: CheckpointSequenceNumber,
         epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiResult<Accumulator> {
+    ) -> SuiResult<ObjectStateHash> {
         let _scope = monitored_scope("AccumulateCheckpoint");
         if let Some(acc) = epoch_store.get_state_hash_for_checkpoint(&checkpoint_seq_num)? {
             return Ok(acc);
@@ -418,7 +418,7 @@ impl StateAccumulator {
     pub fn accumulate_cached_live_object_set_for_testing(
         &self,
         include_wrapped_tombstone: bool,
-    ) -> Accumulator {
+    ) -> ObjectStateHash {
         Self::accumulate_live_object_set_impl(
             self.store
                 .iter_cached_live_object_set_for_testing(include_wrapped_tombstone),
@@ -426,21 +426,21 @@ impl StateAccumulator {
     }
 
     /// Returns the result of accumulating the live object set, without side effects
-    pub fn accumulate_live_object_set(&self, include_wrapped_tombstone: bool) -> Accumulator {
+    pub fn accumulate_live_object_set(&self, include_wrapped_tombstone: bool) -> ObjectStateHash {
         Self::accumulate_live_object_set_impl(
             self.store.iter_live_object_set(include_wrapped_tombstone),
         )
     }
 
-    fn accumulate_live_object_set_impl(iter: impl Iterator<Item = LiveObject>) -> Accumulator {
-        let mut acc = Accumulator::default();
+    fn accumulate_live_object_set_impl(iter: impl Iterator<Item = LiveObject>) -> ObjectStateHash {
+        let mut acc = ObjectStateHash::default();
         iter.for_each(|live_object| {
             Self::accumulate_live_object(&mut acc, &live_object);
         });
         acc
     }
 
-    pub fn accumulate_live_object(acc: &mut Accumulator, live_object: &LiveObject) {
+    pub fn accumulate_live_object(acc: &mut ObjectStateHash, live_object: &LiveObject) {
         match live_object {
             LiveObject::Normal(object) => {
                 acc.insert(object.compute_object_reference().2);
@@ -484,7 +484,7 @@ impl StateAccumulator {
         // there is nothing to wait for.
         if self
             .store
-            .get_root_state_accumulator_for_highest_epoch()?
+            .get_root_state_hash_for_highest_epoch()?
             .map(|(_, (last_checkpoint_prev_epoch, _))| last_checkpoint_prev_epoch)
             == Some(checkpoint_seq_num - 1)
         {
@@ -504,13 +504,13 @@ impl StateAccumulator {
         &self,
         epoch_store: &AuthorityPerEpochStore,
         checkpoint_seq_num: CheckpointSequenceNumber,
-    ) -> SuiResult<Accumulator> {
+    ) -> SuiResult<ObjectStateHash> {
         if checkpoint_seq_num == 0 {
-            return Ok(Accumulator::default());
+            return Ok(ObjectStateHash::default());
         }
 
         if let Some((prev_epoch, (last_checkpoint_prev_epoch, prev_acc))) =
-            self.store.get_root_state_accumulator_for_highest_epoch()?
+            self.store.get_root_state_hash_for_highest_epoch()?
         {
             assert_eq!(prev_epoch + 1, epoch_store.epoch());
             if last_checkpoint_prev_epoch == checkpoint_seq_num - 1 {
@@ -519,10 +519,10 @@ impl StateAccumulator {
         }
 
         let Some(prior_running_root) =
-            epoch_store.get_running_root_accumulator(checkpoint_seq_num - 1)?
+            epoch_store.get_running_root_state_hash(checkpoint_seq_num - 1)?
         else {
             fatal!(
-                "Running root accumulator must exist for checkpoint {}",
+                "Running root state hasher must exist for checkpoint {}",
                 checkpoint_seq_num - 1
             );
         };
@@ -536,7 +536,7 @@ impl StateAccumulator {
         &self,
         epoch_store: &AuthorityPerEpochStore,
         checkpoint_seq_num: CheckpointSequenceNumber,
-        checkpoint_acc: Option<Accumulator>,
+        checkpoint_acc: Option<ObjectStateHash>,
     ) -> SuiResult {
         let _scope = monitored_scope("AccumulateRunningRoot");
         tracing::info!(
@@ -546,7 +546,7 @@ impl StateAccumulator {
 
         // Idempotency.
         if epoch_store
-            .get_running_root_accumulator(checkpoint_seq_num)?
+            .get_running_root_state_hash(checkpoint_seq_num)?
             .is_some()
         {
             debug!(
@@ -566,7 +566,7 @@ impl StateAccumulator {
                 .expect("Expected checkpoint accumulator to exist")
         });
         running_root.union(&checkpoint_acc);
-        epoch_store.insert_running_root_accumulator(&checkpoint_seq_num, &running_root)?;
+        epoch_store.insert_running_root_state_hash(&checkpoint_seq_num, &running_root)?;
         debug!(
             "Accumulated checkpoint {} to running root accumulator",
             checkpoint_seq_num,
@@ -578,13 +578,13 @@ impl StateAccumulator {
         &self,
         epoch_store: Arc<AuthorityPerEpochStore>,
         last_checkpoint_of_epoch: CheckpointSequenceNumber,
-    ) -> SuiResult<Accumulator> {
+    ) -> SuiResult<ObjectStateHash> {
         let _scope = monitored_scope("AccumulateEpochV2");
         let running_root = epoch_store
-            .get_running_root_accumulator(last_checkpoint_of_epoch)?
+            .get_running_root_state_hash(last_checkpoint_of_epoch)?
             .expect("Expected running root accumulator to exist up to last checkpoint of epoch");
 
-        self.store.insert_state_accumulator_for_epoch(
+        self.store.insert_state_hash_for_epoch(
             epoch_store.epoch(),
             &last_checkpoint_of_epoch,
             &running_root,
@@ -601,7 +601,7 @@ impl StateAccumulator {
         &self,
         effects: &[TransactionEffects],
         protocol_config: &ProtocolConfig,
-    ) -> Accumulator {
+    ) -> ObjectStateHash {
         accumulate_effects(&*self.store, effects, protocol_config)
     }
 }

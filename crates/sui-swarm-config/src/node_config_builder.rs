@@ -45,7 +45,7 @@ pub struct ValidatorConfigBuilder {
     firewall_config: Option<RemoteFirewallConfig>,
     max_submit_position: Option<usize>,
     submit_delay_step_override_millis: Option<u64>,
-    state_accumulator_v2: bool,
+    object_state_hash_v2: bool,
     execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
     chain_override: Option<Chain>,
 }
@@ -53,7 +53,7 @@ pub struct ValidatorConfigBuilder {
 impl ValidatorConfigBuilder {
     pub fn new() -> Self {
         Self {
-            state_accumulator_v2: true,
+            object_state_hash_v2: true,
             ..Default::default()
         }
     }
@@ -127,8 +127,8 @@ impl ValidatorConfigBuilder {
         self
     }
 
-    pub fn with_state_accumulator_v2_enabled(mut self, enabled: bool) -> Self {
-        self.state_accumulator_v2 = enabled;
+    pub fn with_object_state_hash_v2_enabled(mut self, enabled: bool) -> Self {
+        self.object_state_hash_v2 = enabled;
         self
     }
 
@@ -246,7 +246,7 @@ impl ValidatorConfigBuilder {
             jsonrpc_server_type: None,
             policy_config: self.policy_config,
             firewall_config: self.firewall_config,
-            state_accumulator_v2: self.state_accumulator_v2,
+            state_accumulator_v2: self.object_state_hash_v2,
             enable_soft_bundle: true,
             enable_validator_tx_finalizer: true,
             verifier_signing_config: VerifierSigningConfig::default(),

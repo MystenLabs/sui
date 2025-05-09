@@ -29,11 +29,11 @@ use sui_types::transaction::{TransactionDataAPI, TransactionKind};
 
 use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
 use sui_macros::fail_point;
-use sui_types::accumulator::Accumulator;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::message_envelope::Message;
+use sui_types::object_state_hash::ObjectStateHash;
 use sui_types::{
     base_types::{TransactionDigest, TransactionEffectsDigest},
     messages_checkpoint::VerifiedCheckpoint,
@@ -45,7 +45,7 @@ use tracing::{debug, info, instrument, warn};
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::backpressure::BackpressureManager;
 use crate::authority::AuthorityState;
-use crate::state_accumulator::StateAccumulator;
+use crate::object_state_hasher::ObjectStateHasher;
 use crate::transaction_manager::TransactionManager;
 use crate::{
     checkpoints::CheckpointStore,
@@ -84,7 +84,7 @@ pub(crate) struct CheckpointTransactionData {
 pub(crate) struct CheckpointExecutionState {
     pub data: CheckpointExecutionData,
 
-    accumulator: Option<Accumulator>,
+    state_hasher: Option<ObjectStateHash>,
     full_data: Option<CheckpointData>,
 }
 
@@ -92,15 +92,18 @@ impl CheckpointExecutionState {
     pub fn new(data: CheckpointExecutionData) -> Self {
         Self {
             data,
-            accumulator: None,
+            state_hasher: None,
             full_data: None,
         }
     }
 
-    pub fn new_with_accumulator(data: CheckpointExecutionData, accumulator: Accumulator) -> Self {
+    pub fn new_with_object_state_hasher(
+        data: CheckpointExecutionData,
+        hasher: ObjectStateHash,
+    ) -> Self {
         Self {
             data,
-            accumulator: Some(accumulator),
+            state_hasher: Some(hasher),
             full_data: None,
         }
     }
@@ -121,7 +124,7 @@ pub struct CheckpointExecutor {
     object_cache_reader: Arc<dyn ObjectCacheRead>,
     transaction_cache_reader: Arc<dyn TransactionCacheRead>,
     tx_manager: Arc<TransactionManager>,
-    accumulator: Arc<StateAccumulator>,
+    object_state_hasher: Arc<ObjectStateHasher>,
     backpressure_manager: Arc<BackpressureManager>,
     config: CheckpointExecutorConfig,
     metrics: Arc<CheckpointExecutorMetrics>,
@@ -134,7 +137,7 @@ impl CheckpointExecutor {
         epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint_store: Arc<CheckpointStore>,
         state: Arc<AuthorityState>,
-        accumulator: Arc<StateAccumulator>,
+        object_state_hasher: Arc<ObjectStateHasher>,
         backpressure_manager: Arc<BackpressureManager>,
         config: CheckpointExecutorConfig,
         metrics: Arc<CheckpointExecutorMetrics>,
@@ -147,7 +150,7 @@ impl CheckpointExecutor {
             object_cache_reader: state.get_object_cache_reader().clone(),
             transaction_cache_reader: state.get_transaction_cache_reader().clone(),
             tx_manager: state.transaction_manager().clone(),
-            accumulator,
+            object_state_hasher,
             backpressure_manager,
             config,
             metrics,
@@ -160,13 +163,13 @@ impl CheckpointExecutor {
         epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint_store: Arc<CheckpointStore>,
         state: Arc<AuthorityState>,
-        accumulator: Arc<StateAccumulator>,
+        state_hasher: Arc<ObjectStateHasher>,
     ) -> Self {
         Self::new(
             epoch_store,
             checkpoint_store,
             state,
-            accumulator,
+            state_hasher,
             BackpressureManager::new_for_tests(),
             Default::default(),
             CheckpointExecutorMetrics::new_for_tests(),
@@ -392,8 +395,8 @@ impl CheckpointExecutor {
 
         finish_stage!(pipeline_handle, UpdateRpcIndex);
 
-        self.accumulator
-            .accumulate_running_root(&self.epoch_store, seq, ckpt_state.accumulator)
+        self.object_state_hasher
+            .accumulate_running_root(&self.epoch_store, seq, ckpt_state.state_hasher)
             .expect("Failed to accumulate running root");
 
         if is_final_checkpoint {
@@ -401,7 +404,7 @@ impl CheckpointExecutor {
                 .insert_epoch_last_checkpoint(self.epoch_store.epoch(), &ckpt_state.data.checkpoint)
                 .expect("Failed to insert epoch last checkpoint");
 
-            self.accumulator
+            self.object_state_hasher
                 .accumulate_epoch(self.epoch_store.clone(), seq)
                 .expect("Accumulating epoch cannot fail");
 
@@ -458,11 +461,11 @@ impl CheckpointExecutor {
         );
 
         // Checkpoint builder triggers accumulation of the checkpoint, so this is guaranteed to finish.
-        let accumulator = {
+        let state_hasher = {
             let _metrics_scope =
-                mysten_metrics::monitored_scope("CheckpointExecutor::notify_read_accumulator");
+                mysten_metrics::monitored_scope("CheckpointExecutor::notify_read_state_hasher");
             self.epoch_store
-                .notify_read_checkpoint_state_accumulator(&[sequence_number])
+                .notify_read_checkpoint_state_hasher(&[sequence_number])
                 .await
                 .unwrap()
                 .pop()
@@ -490,14 +493,14 @@ impl CheckpointExecutor {
 
         pipeline_handle.skip_to(PipelineStage::BuildDbBatch).await;
 
-        CheckpointExecutionState::new_with_accumulator(
+        CheckpointExecutionState::new_with_object_state_hasher(
             CheckpointExecutionData {
                 checkpoint,
                 checkpoint_contents,
                 tx_digests,
                 fx_digests,
             },
-            accumulator,
+            state_hasher,
         )
     }
 
@@ -545,11 +548,11 @@ impl CheckpointExecutor {
 
         self.insert_finalized_transactions(&ckpt_state.data.tx_digests, sequence_number);
 
-        // The early versions of the accumulator (prior to effectsv2) rely on db
+        // The early versions of the hasher (prior to effectsv2) rely on db
         // state, so we must wait until all transactions have been executed
         // before accumulating the checkpoint.
-        ckpt_state.accumulator = Some(
-            self.accumulator
+        ckpt_state.state_hasher = Some(
+            self.object_state_hasher
                 .accumulate_checkpoint(&tx_data.effects, sequence_number, &self.epoch_store)
                 .expect("epoch cannot have ended"),
         );

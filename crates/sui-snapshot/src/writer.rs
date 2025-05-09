@@ -24,14 +24,14 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_core::authority::authority_store_tables::{AuthorityPerpetualTables, LiveObject};
-use sui_core::state_accumulator::StateAccumulator;
+use sui_core::object_state_hasher::ObjectStateHasher;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_storage::blob::{Blob, BlobEncoding, BLOB_ENCODING_BYTES};
 use sui_storage::object_store::util::{copy_file, delete_recursively, path_to_filesystem};
-use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::digests::ChainIdentifier;
 use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
+use sui_types::object_state_hash::ObjectStateHash;
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use tokio::sync::mpsc;
@@ -379,9 +379,9 @@ impl StateSnapshotWriterV1 {
         let mut object_writers: HashMap<u32, LiveObjectSetWriterV1> = HashMap::new();
         let local_staging_dir_path =
             path_to_filesystem(self.local_staging_dir.clone(), &self.epoch_dir(epoch))?;
-        let mut acc = Accumulator::default();
+        let mut acc = ObjectStateHash::default();
         for object in perpetual_db.iter_live_object_set(include_wrapped_tombstone) {
-            StateAccumulator::accumulate_live_object(&mut acc, &object);
+            ObjectStateHasher::accumulate_live_object(&mut acc, &object);
             let bucket_num = bucket_func(&object);
             if let Vacant(entry) = object_writers.entry(bucket_num) {
                 entry.insert(LiveObjectSetWriterV1::new(
