@@ -59,10 +59,10 @@ use crate::{
         cursor::CursorContext,
         def_info::{DefInfo, FunType, VariantInfo},
         ide_strings::{const_val_to_ide_string, mod_ident_to_ide_string},
+        mod_defs::{FieldDef, MemberDef, MemberDefInfo, ModuleDefs},
         types::{
-            CompiledPkgInfo, CompiledProgram, DefMap, FieldDef, FieldOrderInfo, FileModules,
-            FileUseDefs, MemberDef, MemberDefInfo, ModuleDefs, PrecomputedPkgInfo, Symbols,
-            SymbolsComputationData,
+            CompiledPkgInfo, CompiledProgram, DefMap, FieldOrderInfo, FileModules, FileUseDefs,
+            PrecomputedPkgInfo, Symbols, SymbolsComputationData,
         },
         use_def::{References, UseDef, UseDefMap},
     },
@@ -101,6 +101,7 @@ pub mod compilation;
 pub mod cursor;
 pub mod def_info;
 pub mod ide_strings;
+pub mod mod_defs;
 pub mod requests;
 pub mod runner;
 pub mod types;

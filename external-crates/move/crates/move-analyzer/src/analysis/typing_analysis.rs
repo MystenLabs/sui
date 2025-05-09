@@ -6,8 +6,10 @@ use crate::{
     symbols::{
         add_member_use_def,
         def_info::DefInfo,
-        find_datatype, type_def_loc,
-        types::{DefMap, LocalDef, MemberDefInfo, ModuleDefs},
+        find_datatype,
+        mod_defs::{MemberDefInfo, ModuleDefs},
+        type_def_loc,
+        types::{DefMap, LocalDef},
         use_def::{References, UseDef, UseDefMap},
     },
     utils::{expansion_mod_ident_to_map_key, ignored_function, loc_start_to_lsp_position_opt},

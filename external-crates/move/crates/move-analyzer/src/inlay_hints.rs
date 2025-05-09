@@ -4,11 +4,8 @@
 use crate::{
     context::Context,
     symbols::{
-        def_info::DefInfo,
-        ide_strings::type_to_ide_string,
-        requests::on_hover_markup,
-        runner::SymbolicatorRunner,
-        types::{ModuleDefs, Symbols},
+        def_info::DefInfo, ide_strings::type_to_ide_string, mod_defs::ModuleDefs,
+        requests::on_hover_markup, runner::SymbolicatorRunner, types::Symbols,
     },
 };
 use lsp_server::{Message, Request, Response};

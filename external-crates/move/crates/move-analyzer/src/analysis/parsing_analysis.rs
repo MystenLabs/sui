@@ -5,9 +5,10 @@ use crate::{
     symbols::{
         add_member_use_def,
         cursor::{CursorContext, CursorDefinition, CursorPosition},
-        ignored_function, parsed_address, parsing_leading_and_mod_names_to_map_key,
-        parsing_mod_def_to_map_key,
-        types::{AutoImportInsertionInfo, AutoImportInsertionKind, CallInfo, DefMap, ModuleDefs},
+        ignored_function,
+        mod_defs::{AutoImportInsertionInfo, AutoImportInsertionKind, CallInfo, ModuleDefs},
+        parsed_address, parsing_leading_and_mod_names_to_map_key, parsing_mod_def_to_map_key,
+        types::DefMap,
         use_def::{References, UseDef, UseDefMap},
     },
     utils::{loc_end_to_lsp_position_opt, loc_start_to_lsp_position_opt},

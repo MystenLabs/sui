@@ -11,10 +11,8 @@ use crate::symbols::{
         mod_ident_to_ide_string, ret_type_to_ide_str, type_args_to_ide_string,
         type_list_to_ide_string,
     },
-    types::{
-        AutoImportInsertionInfo, AutoImportInsertionKind, CompiledPkgInfo, ModuleDefs, Symbols,
-        SymbolsComputationData,
-    },
+    mod_defs::{AutoImportInsertionInfo, AutoImportInsertionKind, ModuleDefs},
+    types::{CompiledPkgInfo, Symbols, SymbolsComputationData},
 };
 use lsp_types::{
     CompletionItem, CompletionItemKind, CompletionItemLabelDetails, InsertTextFormat, Position,

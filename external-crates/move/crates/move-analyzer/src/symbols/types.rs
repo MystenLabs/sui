@@ -6,6 +6,7 @@ use crate::{
     symbols::{
         cursor::CursorContext,
         def_info::DefInfo,
+        mod_defs::ModuleDefs,
         use_def::{References, UseDefMap, UseLoc},
     },
 };
@@ -23,8 +24,8 @@ use move_command_line_common::files::FileHash;
 use move_compiler::{
     command_line::compiler::FullyCompiledProgram,
     editions::Edition,
-    expansion::ast::{ModuleIdent, ModuleIdent_},
-    naming::ast::{Neighbor, Type},
+    expansion::ast::ModuleIdent,
+    naming::ast::Type,
     parser::ast as P,
     shared::{files::MappedFiles, unique_map::UniqueMap},
     typing::ast::ModuleDefinition,
@@ -132,35 +133,6 @@ pub struct PrecomputedPkgInfo {
     pub compiler_info: Option<CompilerInfo>,
 }
 
-/// Definition of a struct field
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct FieldDef {
-    pub name: Symbol,
-    pub loc: Loc,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum MemberDefInfo {
-    Struct {
-        field_defs: Vec<FieldDef>,
-        positional: bool,
-    },
-    Enum {
-        variants_info: BTreeMap<Symbol, (Loc, Vec<FieldDef>, /* positional */ bool)>,
-    },
-    Fun {
-        attrs: Vec<String>,
-    },
-    Const,
-}
-
-/// Definition of a module member
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct MemberDef {
-    pub name_loc: Loc,
-    pub info: MemberDefInfo,
-}
-
 /// Definition of a local (or parameter)
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct LocalDef {
@@ -178,28 +150,6 @@ impl PartialOrd for LocalDef {
 impl Ord for LocalDef {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         self.def_loc.cmp(&other.def_loc)
-    }
-}
-
-/// Information about call sites relevant to the IDE
-#[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
-pub struct CallInfo {
-    /// Is it a dot call?
-    pub dot_call: bool,
-    /// Locations of arguments
-    pub arg_locs: Vec<Loc>,
-    /// Definition of function being called (as an Option as its computed after
-    /// this struct is created)
-    pub def_loc: Option<Loc>,
-}
-
-impl CallInfo {
-    pub fn new(dot_call: bool, args: &[P::Exp]) -> Self {
-        Self {
-            dot_call,
-            arg_locs: args.iter().map(|e| e.loc).collect(),
-            def_loc: None,
-        }
     }
 }
 
@@ -231,58 +181,6 @@ impl FieldOrderInfo {
     }
 }
 
-/// Module-level definitions and other module-related info
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
-pub enum AutoImportInsertionKind {
-    AfterLastImport,
-    BeforeFirstMember, // when no imports exist
-}
-
-/// Information needed for auto-import insertion. We do our best
-/// to make the insertion fit with what's already in the source file.
-/// In particular, if uses are already preasent, we insert the new import
-/// in the following line keeping the tabulation of the previous import.
-/// If no imports are present, we insert the new import before the first
-/// module member (or before its doc comment if it exists), pushing
-/// this member down but keeping its original tabulation.
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
-pub struct AutoImportInsertionInfo {
-    // Kind of auto-import insertion
-    pub kind: AutoImportInsertionKind,
-    // Position in file where insertion should start
-    pub pos: Position,
-    // Tabulation in number of spaces
-    pub tabulation: usize,
-}
-
-/// Module-level definitions and other module-related info
-#[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
-pub struct ModuleDefs {
-    /// File where this module is located
-    pub fhash: FileHash,
-    /// Location where this module is located
-    pub name_loc: Loc,
-    /// Module name
-    pub ident: ModuleIdent_,
-    /// Struct definitions
-    pub structs: BTreeMap<Symbol, MemberDef>,
-    /// Enum definitions
-    pub enums: BTreeMap<Symbol, MemberDef>,
-    /// Const definitions
-    pub constants: BTreeMap<Symbol, MemberDef>,
-    /// Function definitions
-    pub functions: BTreeMap<Symbol, MemberDef>,
-    /// Definitions where the type is not explicitly specified
-    /// and should be inserted as an inlay hint
-    pub untyped_defs: BTreeSet<Loc>,
-    /// Information about calls in this module
-    pub call_infos: BTreeMap<Loc, CallInfo>,
-    /// Position where auto-imports should be inserted
-    pub import_insert_info: Option<AutoImportInsertionInfo>,
-    /// Dependencies summary
-    pub neighbors: UniqueMap<ModuleIdent, Neighbor>,
-}
-
 pub type DefMap = BTreeMap<Loc, DefInfo>;
 pub type FileUseDefs = BTreeMap<PathBuf, UseDefMap>;
 pub type FileModules = BTreeMap<PathBuf, BTreeSet<ModuleDefs>>;
@@ -304,26 +202,4 @@ pub struct Symbols {
     pub compiler_info: CompilerInfo,
     /// Cursor information gathered up during analysis
     pub cursor_context: Option<CursorContext>,
-}
-
-impl ModuleDefs {
-    pub fn functions(&self) -> &BTreeMap<Symbol, MemberDef> {
-        &self.functions
-    }
-
-    pub fn structs(&self) -> &BTreeMap<Symbol, MemberDef> {
-        &self.structs
-    }
-
-    pub fn fhash(&self) -> FileHash {
-        self.fhash
-    }
-
-    pub fn untyped_defs(&self) -> &BTreeSet<Loc> {
-        &self.untyped_defs
-    }
-
-    pub fn ident(&self) -> &ModuleIdent_ {
-        &self.ident
-    }
 }
