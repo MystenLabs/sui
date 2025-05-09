@@ -165,10 +165,7 @@ public fun validators_initial_stake(
     builder
 }
 
-public fun start_epoch(
-    mut builder: TestRunnerBuilder,
-    start_epoch: u64,
-): TestRunnerBuilder {
+public fun start_epoch(mut builder: TestRunnerBuilder, start_epoch: u64): TestRunnerBuilder {
     builder.start_epoch = option::some(start_epoch);
     builder
 }
@@ -459,8 +456,28 @@ public fun remove_validator(runner: &mut TestRunner) {
 /// Report another validator as malicious.
 public fun report_validator(runner: &mut TestRunner, validator: address) {
     runner.owned_tx!(|cap| {
-        runner.system_tx!(|system, _ctx| {
+        runner.system_tx!(|system, _| {
             system.report_validator(&cap, validator);
+        });
+        runner.keep(cap);
+    });
+}
+
+/// Undo report a validator.
+public fun undo_report_validator(runner: &mut TestRunner, validator: address) {
+    runner.owned_tx!(|cap| {
+        runner.system_tx!(|system, _| {
+            system.undo_report_validator(&cap, validator);
+        });
+        runner.keep(cap);
+    });
+}
+
+/// Set the reference gas price for the next epoch.
+public fun set_gas_price(runner: &mut TestRunner, gas_price: u64) {
+    runner.owned_tx!(|cap| {
+        runner.system_tx!(|system, _| {
+            system.request_set_gas_price(&cap, gas_price);
         });
         runner.keep(cap);
     });

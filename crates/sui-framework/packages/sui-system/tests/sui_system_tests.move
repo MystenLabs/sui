@@ -8,11 +8,12 @@
 #[test_only]
 module sui_system::sui_system_tests;
 
+use std::unit_test::assert_eq;
 use sui::balance;
 use sui::coin;
 use sui::sui::SUI;
 use sui::test_scenario::{Self, Scenario};
-use sui::test_utils::{assert_eq, destroy};
+use sui::test_utils::destroy;
 use sui::url;
 use sui_system::governance_test_utils::{
     add_validator_full_flow,
@@ -25,259 +26,319 @@ use sui_system::governance_test_utils::{
 };
 use sui_system::sui_system::SuiSystemState;
 use sui_system::sui_system_state_inner;
+use sui_system::test_runner;
 use sui_system::validator::{Self, Validator};
+use sui_system::validator_builder;
 use sui_system::validator_cap::UnverifiedValidatorOperationCap;
 use sui_system::validator_set;
 
 #[test]
-fun test_report_validator() {
-    let mut scenario_val = test_scenario::begin(@0x0);
-    let scenario = &mut scenario_val;
+// Scenario: perform a series of report and undo report operations on a validator.
+// Guarantees that:
+// - report records are persisted across epochs.
+// - report records are removed when a validator is removed.
+// - report records are removed when a validator leaves.
+// - duplicate report operations are ignored.
+fun report_validator() {
+    let mut runner = test_runner::new()
+        .validators(vector[
+            validator_builder::new().sui_address(@1).initial_stake(100),
+            validator_builder::new().sui_address(@2).initial_stake(100),
+            validator_builder::new().sui_address(@3).initial_stake(100),
+        ])
+        .build();
 
-    set_up_sui_system_state(vector[@0x1, @0x2, @0x3]);
+    // Validator 1 reports validator 2
+    runner.set_sender(@1).report_validator(@2);
+    runner.system_tx!(|system, _| {
+        assert_eq!(system.get_reporters_of(@2).into_keys(), vector[@1])
+    });
 
-    report_helper(@0x1, @0x2, false, scenario);
-    assert!(get_reporters_of(@0x2, scenario) == vector[@0x1]);
-    report_helper(@0x3, @0x2, false, scenario);
-    assert!(get_reporters_of(@0x2, scenario) == vector[@0x1, @0x3]);
+    // Validator 3 reports validator 2
+    runner.set_sender(@3).report_validator(@2);
+    runner.system_tx!(|system, _| {
+        assert_eq!(system.get_reporters_of(@2).into_keys(), vector[@1, @3])
+    });
 
     // Report again and result should stay the same.
-    report_helper(@0x1, @0x2, false, scenario);
-    assert!(get_reporters_of(@0x2, scenario) == vector[@0x1, @0x3]);
+    runner.set_sender(@1).report_validator(@2);
+    runner.system_tx!(|system, _| {
+        assert_eq!(system.get_reporters_of(@2).into_keys(), vector[@1, @3])
+    });
 
-    // Undo the report.
-    report_helper(@0x3, @0x2, true, scenario);
-    assert!(get_reporters_of(@0x2, scenario) == vector[@0x1]);
+    // Undo the report from Validator 3.
+    runner.set_sender(@3).undo_report_validator(@2);
+    runner.system_tx!(|system, _| {
+        assert_eq!(system.get_reporters_of(@2).into_keys(), vector[@1])
+    });
 
-    advance_epoch(scenario);
+    runner.advance_epoch(option::none()).destroy_for_testing();
 
     // After an epoch ends, report records are still present.
-    assert!(get_reporters_of(@0x2, scenario) == vector[@0x1]);
+    runner.system_tx!(|system, _| {
+        assert_eq!(system.get_reporters_of(@2).into_keys(), vector[@1])
+    });
 
-    report_helper(@0x2, @0x1, false, scenario);
-    assert!(get_reporters_of(@0x1, scenario) == vector[@0x2]);
+    // Validator 2 reports validator 1.
+    runner.set_sender(@2).report_validator(@1);
+    runner.system_tx!(|system, _| {
+        assert_eq!(system.get_reporters_of(@1).into_keys(), vector[@2])
+    });
 
-    report_helper(@0x3, @0x2, false, scenario);
-    assert!(get_reporters_of(@0x2, scenario) == vector[@0x1, @0x3]);
+    // Validator 3 reports validator 2 again.
+    runner.set_sender(@3).report_validator(@2);
+    runner.system_tx!(|system, _| {
+        assert_eq!(system.get_reporters_of(@2).into_keys(), vector[@1, @3])
+    });
 
-    // After 0x3 leaves, its reports are gone
-    remove_validator(@0x3, scenario);
-    advance_epoch(scenario);
-    assert!(get_reporters_of(@0x2, scenario) == vector[@0x1]);
+    // After Validator 3 leaves, its reports are gone.
+    runner.set_sender(@3).remove_validator();
+    runner.advance_epoch(option::none()).destroy_for_testing();
+    runner.system_tx!(|system, _| {
+        assert_eq!(system.get_reporters_of(@2).into_keys(), vector[@1])
+    });
 
-    // After 0x1 leaves, both its reports and the reports on its name are gone
-    remove_validator(@0x1, scenario);
-    advance_epoch(scenario);
-    assert!(get_reporters_of(@0x1, scenario).is_empty());
-    assert!(get_reporters_of(@0x2, scenario).is_empty());
-    scenario_val.end();
+    // Validator 1 leaves.
+    runner.set_sender(@1).remove_validator();
+    runner.advance_epoch(option::none()).destroy_for_testing();
+    runner.system_tx!(|system, _| {
+        assert!(system.get_reporters_of(@1).is_empty());
+        assert!(system.get_reporters_of(@2).is_empty());
+    });
+
+    runner.finish();
 }
 
 #[test]
-fun test_validator_ops_by_stakee_ok() {
-    let mut scenario_val = test_scenario::begin(@0x0);
-    let scenario = &mut scenario_val;
-    set_up_sui_system_state(vector[@0x1, @0x2]);
+// Scenario: transfer the validator cap object to different addresses and check
+//   that everything works as expected.
+//
+// TODO: discovered that pending validator does not set the gas price for the
+//   first active epoch, but for an epoch after that. Confirm, that this is the
+//   expected behavior.
+fun report_validator_by_stakee_ok() {
+    let mut runner = test_runner::new()
+        .validators(vector[
+            validator_builder::new().sui_address(@1).initial_stake(100),
+            validator_builder::new().sui_address(@2).initial_stake(100),
+        ])
+        .build();
+
+    let stakee = @0xbeef;
 
     // @0x1 transfers the cap object to stakee.
-    let stakee_address = @0xbeef;
-    scenario.next_tx(@0x1);
-    let cap = scenario.take_from_sender<UnverifiedValidatorOperationCap>();
-    transfer::public_transfer(cap, stakee_address);
+    runner.set_sender(@1).owned_tx!<UnverifiedValidatorOperationCap>(|cap| {
+        transfer::public_transfer(cap, stakee);
+    });
 
     // With the cap object in hand, stakee could report validators on behalf of @0x1.
-    report_helper(stakee_address, @0x2, false, scenario);
-    assert!(get_reporters_of(@0x2, scenario) == vector[@0x1]);
+    runner.set_sender(stakee).report_validator(@2);
+    runner.system_tx!(|system, _| {
+        assert_eq!(system.get_reporters_of(@2).into_keys(), vector[@1]);
+    });
 
     // stakee could also undo report.
-    report_helper(stakee_address, @0x2, true, scenario);
-    assert!(get_reporters_of(@0x2, scenario).is_empty());
+    runner.set_sender(stakee).undo_report_validator(@2);
+    runner.system_tx!(|system, _| {
+        assert!(system.get_reporters_of(@2).is_empty());
+    });
 
-    scenario.next_tx(stakee_address);
-    let cap = scenario.take_from_sender<UnverifiedValidatorOperationCap>();
-    let new_stakee_address = @0xcafe;
-    transfer::public_transfer(cap, new_stakee_address);
+    let new_stakee = @0xcafe;
 
-    // New stakee could report validators on behalf of @0x1.
-    report_helper(new_stakee_address, @0x2, false, scenario);
-    assert!(get_reporters_of(@0x2, scenario) == vector[@0x1]);
+    // transfer the cap object from `stakee` to `new_stakee`.
+    runner.set_sender(stakee).owned_tx!<UnverifiedValidatorOperationCap>(|cap| {
+        transfer::public_transfer(cap, new_stakee);
+    });
 
-    // New stakee could also set reference gas price on behalf of @0x1.
-    set_gas_price_helper(new_stakee_address, 666, scenario);
+    // `new_stakee` could report validators on behalf of @0x1.
+    runner.set_sender(new_stakee).report_validator(@2);
+    runner.system_tx!(|system, _| {
+        assert_eq!(system.get_reporters_of(@2).into_keys(), vector[@1]);
+    });
 
-    // Add a pending validator
-    let new_validator_addr = @0x1a4623343cd42be47d67314fce0ad042f3c82685544bc91d8c11d24e74ba7357;
-    scenario.next_tx(new_validator_addr);
-    let pubkey =
-        x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
-    let pop =
-        x"8b93fc1b33379e2796d361c4056f0f04ad5aea7f4a8c02eaac57340ff09b6dc158eb1945eece103319167f420daf0cb3";
-    add_validator_full_flow(
-        new_validator_addr,
-        b"name1",
-        b"/ip4/127.0.0.1/udp/81",
-        100,
-        pubkey,
-        pop,
-        scenario,
-    );
+    // `new_stakee` could also set reference gas price on behalf of @0x1.
+    runner.set_sender(new_stakee).set_gas_price(666);
 
-    scenario.next_tx(new_validator_addr);
+    // Add a new pending validator
+    runner.set_sender(@0);
+    let validator = validator_builder::preset().initial_stake(100).build(runner.ctx());
+    let new_validator = validator.sui_address();
+    runner.add_validator_candidate(validator);
+    runner.set_sender(new_validator).add_validator();
+
     // Pending validator could set reference price as well
-    set_gas_price_helper(new_validator_addr, 777, scenario);
+    runner.set_sender(new_validator).set_gas_price(777);
 
-    scenario.next_tx(new_stakee_address);
-    let mut system_state = scenario.take_shared<SuiSystemState>();
-    let validator = system_state.active_validator_by_address(@0x1);
-    assert!(validator.next_epoch_gas_price() == 666);
-    let pending_validator = system_state.pending_validator_by_address(new_validator_addr);
-    assert!(pending_validator.next_epoch_gas_price() == 777);
-    test_scenario::return_shared(system_state);
+    // Check that the next epoch gas price is set correctly
+    runner.system_tx!(|system, _| {
+        assert_eq!(system.active_validator_by_address(@1).next_epoch_gas_price(), 666);
+        assert_eq!(system.pending_validator_by_address(new_validator).next_epoch_gas_price(), 777);
+    });
 
-    scenario_val.end();
+    runner.advance_epoch(option::none()).destroy_for_testing();
+
+    // Check that the next epoch gas price is set correctly
+    runner.system_tx!(|system, _| {
+        assert_eq!(system.active_validator_by_address(@1).gas_price(), 666);
+        assert_eq!(system.active_validator_by_address(new_validator).gas_price(), 1);
+    });
+
+    runner.advance_epoch(option::none()).destroy_for_testing();
+
+    // Pending validator's gas price is only accounted in the next epoch after it becoming active.
+    runner.system_tx!(|system, _| {
+        assert_eq!(system.active_validator_by_address(new_validator).gas_price(), 777);
+    });
+
+    runner.finish();
 }
 
-#[test]
-#[expected_failure(abort_code = ::sui_system::validator_set::EInvalidCap)]
-fun test_report_validator_by_stakee_revoked() {
-    let mut scenario_val = test_scenario::begin(@0x0);
-    let scenario = &mut scenario_val;
-    set_up_sui_system_state(vector[@0x1, @0x2]);
+#[test, expected_failure(abort_code = ::sui_system::validator_set::EInvalidCap)]
+fun report_validator_by_stakee_revoked() {
+    let mut runner = test_runner::new()
+        .validators(vector[
+            validator_builder::new().sui_address(@1).initial_stake(100),
+            validator_builder::new().sui_address(@2).initial_stake(100),
+        ])
+        .build();
 
     // @0x1 transfers the cap object to stakee.
-    let stakee_address = @0xbeef;
-    scenario.next_tx(@0x1);
-    let cap = scenario.take_from_sender<UnverifiedValidatorOperationCap>();
-    transfer::public_transfer(cap, stakee_address);
+    let stakee = @0xbeef;
+    runner.set_sender(@1).owned_tx!<UnverifiedValidatorOperationCap>(|cap| {
+        transfer::public_transfer(cap, stakee);
+    });
 
-    report_helper(stakee_address, @0x2, false, scenario);
-    assert!(get_reporters_of(@0x2, scenario) == vector[@0x1]);
+    // Confirm the stakee has permission to report validators.
+    runner.set_sender(stakee).report_validator(@2);
 
-    // @0x1 revokes stakee's permission by creating a new
-    // operation cap object.
-    rotate_operation_cap(@0x1, scenario);
+    // Validator 1 revokes stakee's permission by creating a new cap object.
+    runner.set_sender(@1).system_tx!(|system, ctx| {
+        system.rotate_operation_cap(ctx);
+    });
 
-    // stakee no longer has permission to report validators, here it aborts.
-    report_helper(stakee_address, @0x2, true, scenario);
+    // Stakee no longer has permission to report validators, here it aborts.
+    runner.set_sender(stakee).undo_report_validator(@2);
 
-    scenario_val.end();
+    abort
 }
 
-#[test]
-#[expected_failure(abort_code = ::sui_system::validator_set::EInvalidCap)]
-fun test_set_reference_gas_price_by_stakee_revoked() {
-    let mut scenario_val = test_scenario::begin(@0x0);
-    let scenario = &mut scenario_val;
-    set_up_sui_system_state(vector[@0x1, @0x2]);
+#[test, expected_failure(abort_code = ::sui_system::validator_set::EInvalidCap)]
+fun set_reference_gas_price_by_stakee_revoked() {
+    let mut runner = test_runner::new()
+        .validators(vector[
+            validator_builder::new().sui_address(@1).initial_stake(100),
+            validator_builder::new().sui_address(@2).initial_stake(100),
+        ])
+        .build();
 
     // @0x1 transfers the cap object to stakee.
-    let stakee_address = @0xbeef;
-    scenario.next_tx(@0x1);
-    let cap = scenario.take_from_sender<UnverifiedValidatorOperationCap>();
-    transfer::public_transfer(cap, stakee_address);
+    let stakee = @0xbeef;
+    runner.set_sender(@1).owned_tx!<UnverifiedValidatorOperationCap>(|cap| {
+        transfer::public_transfer(cap, stakee);
+    });
 
-    // With the cap object in hand, stakee could report validators on behalf of @0x1.
-    set_gas_price_helper(stakee_address, 888, scenario);
+    // Confirm the stakee has permission to report validators.
+    runner.set_sender(stakee).report_validator(@2);
 
-    scenario.next_tx(stakee_address);
-    let mut system_state = scenario.take_shared<SuiSystemState>();
-    let validator = system_state.active_validator_by_address(@0x1);
-    assert!(validator.next_epoch_gas_price() == 888);
-    test_scenario::return_shared(system_state);
+    // Validator 1 revokes stakee's permission by creating a new cap object.
+    runner.set_sender(@1).system_tx!(|system, ctx| {
+        system.rotate_operation_cap(ctx);
+    });
 
-    // @0x1 revokes stakee's permssion by creating a new
-    // operation cap object.
-    rotate_operation_cap(@0x1, scenario);
+    // Stakee no longer has permission to set gas price, here it aborts.
+    runner.set_sender(stakee).set_gas_price(888);
 
-    // stakee no longer has permission to report validators, here it aborts.
-    set_gas_price_helper(stakee_address, 888, scenario);
-
-    scenario_val.end();
+    abort
 }
 
-#[test]
-#[expected_failure(abort_code = validator::EGasPriceHigherThanThreshold)]
-fun test_set_gas_price_failure() {
-    let mut scenario_val = test_scenario::begin(@0x0);
-    let scenario = &mut scenario_val;
-    set_up_sui_system_state(vector[@0x1, @0x2]);
+#[test, expected_failure(abort_code = validator::EGasPriceHigherThanThreshold)]
+fun set_gas_price_failure() {
+    let validator = validator_builder::new().sui_address(@1).initial_stake(100);
+    let mut runner = test_runner::new().validators(vector[validator]).build();
 
     // Fails here since the gas price is too high.
-    set_gas_price_helper(@0x1, 100_001, scenario);
+    runner.set_sender(@1).set_gas_price(100_001);
 
-    scenario_val.end();
+    abort
+}
+
+#[test, expected_failure(abort_code = validator::ECommissionRateTooHigh)]
+fun set_commission_rate_failure() {
+    let validator = validator_builder::new().sui_address(@1).initial_stake(100);
+    let mut runner = test_runner::new().validators(vector[validator]).build();
+
+    // Fails here since the gas price is too high.
+    runner.set_sender(@1).system_tx!(|system, ctx| {
+        system.request_set_commission_rate(2001, ctx);
+    });
+
+    abort
+}
+
+#[test, expected_failure(abort_code = sui_system_state_inner::ENotValidator)]
+fun report_non_validator_failure() {
+    let validator = validator_builder::new().sui_address(@1).initial_stake(100);
+    let mut runner = test_runner::new().validators(vector[validator]).build();
+
+    // Report a non-validator.
+    runner.set_sender(@1).report_validator(@42);
+
+    abort
+}
+
+#[test, expected_failure(abort_code = sui_system_state_inner::EReportRecordNotFound)]
+// TODO: the error expected here is not correct. Maybe we could improve this.
+fun undo_report_non_validator_failure() {
+    let validator = validator_builder::new().sui_address(@1).initial_stake(100);
+    let mut runner = test_runner::new().validators(vector[validator]).build();
+
+    // Undo a report on a non-validator.
+    runner.set_sender(@1).undo_report_validator(@42);
+
+    abort
+}
+
+#[test, expected_failure(abort_code = sui_system_state_inner::ECannotReportOneself)]
+fun report_self_failure() {
+    let validator = validator_builder::new().sui_address(@1).initial_stake(100);
+    let mut runner = test_runner::new().validators(vector[validator]).build();
+
+    // Report oneself.
+    runner.set_sender(@1).report_validator(@1);
+
+    abort
+}
+
+#[test, expected_failure(abort_code = sui_system_state_inner::EReportRecordNotFound)]
+fun undo_report_failure() {
+    let mut runner = test_runner::new()
+        .validators(vector[
+            validator_builder::new().sui_address(@1).initial_stake(100),
+            validator_builder::new().sui_address(@2).initial_stake(100),
+        ])
+        .build();
+
+    // Undo a report that doesn't exist.
+    runner.set_sender(@1).undo_report_validator(@2);
+
+    abort
 }
 
 #[test]
-#[expected_failure(abort_code = validator::ECommissionRateTooHigh)]
-fun test_set_commission_rate_failure() {
-    let mut scenario_val = test_scenario::begin(@0x0);
-    let scenario = &mut scenario_val;
-    set_up_sui_system_state(vector[@0x1, @0x2]);
+fun validator_address_by_pool_id() {
+    let validator = validator_builder::new().sui_address(@1).initial_stake(100);
+    let mut runner = test_runner::new().validators(vector[validator]).build();
 
-    scenario.next_tx(@0x2);
-    let mut system_state = scenario.take_shared<SuiSystemState>();
+    runner.system_tx!(|system, _| {
+        let pool_id = system.validator_staking_pool_id(@1);
+        assert_eq!(system.validator_address_by_pool_id(&pool_id), @1);
+    });
 
-    // Fails here since the commission rate is too high.
-    system_state.request_set_commission_rate(2001, scenario.ctx());
-    test_scenario::return_shared(system_state);
-
-    scenario_val.end();
+    runner.finish();
 }
 
 #[test]
-#[expected_failure(abort_code = sui_system_state_inner::ENotValidator)]
-fun test_report_non_validator_failure() {
-    let mut scenario_val = test_scenario::begin(@0x0);
-    let scenario = &mut scenario_val;
-
-    set_up_sui_system_state(vector[@0x1, @0x2, @0x3]);
-    report_helper(@0x1, @0x42, false, scenario);
-    scenario_val.end();
-}
-
-#[test]
-#[expected_failure(abort_code = sui_system_state_inner::ECannotReportOneself)]
-fun test_report_self_failure() {
-    let mut scenario_val = test_scenario::begin(@0x0);
-    let scenario = &mut scenario_val;
-
-    set_up_sui_system_state(vector[@0x1, @0x2, @0x3]);
-    report_helper(@0x1, @0x1, false, scenario);
-    scenario_val.end();
-}
-
-#[test]
-#[expected_failure(abort_code = sui_system_state_inner::EReportRecordNotFound)]
-fun test_undo_report_failure() {
-    let mut scenario_val = test_scenario::begin(@0x0);
-    let scenario = &mut scenario_val;
-
-    set_up_sui_system_state(vector[@0x1, @0x2, @0x3]);
-    report_helper(@0x2, @0x1, true, scenario);
-    scenario_val.end();
-}
-
-#[test]
-fun test_validator_address_by_pool_id() {
-    let mut scenario_val = test_scenario::begin(@0x0);
-    let scenario = &mut scenario_val;
-
-    set_up_sui_system_state(vector[@0x1, @0x2, @0x3, @0x4]);
-    scenario.next_tx(@0x1);
-
-    let mut system_state = scenario.take_shared<SuiSystemState>();
-    let pool_id_1 = system_state.validator_staking_pool_id(@0x1);
-    let validator_address = system_state.validator_address_by_pool_id(&pool_id_1);
-
-    assert_eq(validator_address, @0x1);
-    test_scenario::return_shared(system_state);
-
-    scenario_val.end();
-}
-
-#[test]
-fun test_staking_pool_mappings() {
+fun staking_pool_mappings() {
     let mut scenario_val = test_scenario::begin(@0x0);
     let scenario = &mut scenario_val;
 
@@ -289,11 +350,11 @@ fun test_staking_pool_mappings() {
     let pool_id_3 = system_state.validator_staking_pool_id(@0x3);
     let pool_id_4 = system_state.validator_staking_pool_id(@0x4);
     let mut pool_mappings = system_state.validator_staking_pool_mappings();
-    assert_eq(pool_mappings.length(), 4);
-    assert_eq(pool_mappings[pool_id_1], @0x1);
-    assert_eq(pool_mappings[pool_id_2], @0x2);
-    assert_eq(pool_mappings[pool_id_3], @0x3);
-    assert_eq(pool_mappings[pool_id_4], @0x4);
+    assert_eq!(pool_mappings.length(), 4);
+    assert_eq!(pool_mappings[pool_id_1], @0x1);
+    assert_eq!(pool_mappings[pool_id_2], @0x2);
+    assert_eq!(pool_mappings[pool_id_3], @0x3);
+    assert_eq!(pool_mappings[pool_id_4], @0x4);
     test_scenario::return_shared(system_state);
 
     let new_validator_addr = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
@@ -322,12 +383,12 @@ fun test_staking_pool_mappings() {
     let pool_id_5 = system_state.validator_staking_pool_id(new_validator_addr);
     pool_mappings = system_state.validator_staking_pool_mappings();
     // Check that the previous mappings didn't change as well.
-    assert_eq(pool_mappings.length(), 5);
-    assert_eq(pool_mappings[pool_id_1], @0x1);
-    assert_eq(pool_mappings[pool_id_2], @0x2);
-    assert_eq(pool_mappings[pool_id_3], @0x3);
-    assert_eq(pool_mappings[pool_id_4], @0x4);
-    assert_eq(pool_mappings[pool_id_5], new_validator_addr);
+    assert_eq!(pool_mappings.length(), 5);
+    assert_eq!(pool_mappings[pool_id_1], @0x1);
+    assert_eq!(pool_mappings[pool_id_2], @0x2);
+    assert_eq!(pool_mappings[pool_id_3], @0x3);
+    assert_eq!(pool_mappings[pool_id_4], @0x4);
+    assert_eq!(pool_mappings[pool_id_5], new_validator_addr);
     test_scenario::return_shared(system_state);
 
     // Remove one of the original validators.
@@ -338,54 +399,15 @@ fun test_staking_pool_mappings() {
     let mut system_state = scenario.take_shared<SuiSystemState>();
     pool_mappings = system_state.validator_staking_pool_mappings();
     // Check that the previous mappings didn't change as well.
-    assert_eq(pool_mappings.length(), 4);
-    assert_eq(pool_mappings.contains(pool_id_1), false);
-    assert_eq(pool_mappings[pool_id_2], @0x2);
-    assert_eq(pool_mappings[pool_id_3], @0x3);
-    assert_eq(pool_mappings[pool_id_4], @0x4);
-    assert_eq(pool_mappings[pool_id_5], new_validator_addr);
+    assert_eq!(pool_mappings.length(), 4);
+    assert_eq!(pool_mappings.contains(pool_id_1), false);
+    assert_eq!(pool_mappings[pool_id_2], @0x2);
+    assert_eq!(pool_mappings[pool_id_3], @0x3);
+    assert_eq!(pool_mappings[pool_id_4], @0x4);
+    assert_eq!(pool_mappings[pool_id_5], new_validator_addr);
     test_scenario::return_shared(system_state);
 
     scenario_val.end();
-}
-
-fun report_helper(sender: address, reported: address, is_undo: bool, scenario: &mut Scenario) {
-    scenario.next_tx(sender);
-
-    let mut system_state = scenario.take_shared<SuiSystemState>();
-    let cap = scenario.take_from_sender<UnverifiedValidatorOperationCap>();
-    if (is_undo) {
-        system_state.undo_report_validator(&cap, reported);
-    } else {
-        system_state.report_validator(&cap, reported);
-    };
-    scenario.return_to_sender(cap);
-    test_scenario::return_shared(system_state);
-}
-
-fun set_gas_price_helper(sender: address, new_gas_price: u64, scenario: &mut Scenario) {
-    scenario.next_tx(sender);
-    let cap = scenario.take_from_sender<UnverifiedValidatorOperationCap>();
-    let mut system_state = scenario.take_shared<SuiSystemState>();
-    system_state.request_set_gas_price(&cap, new_gas_price);
-    scenario.return_to_sender(cap);
-    test_scenario::return_shared(system_state);
-}
-
-fun rotate_operation_cap(sender: address, scenario: &mut Scenario) {
-    scenario.next_tx(sender);
-    let mut system_state = scenario.take_shared<SuiSystemState>();
-    let ctx = scenario.ctx();
-    system_state.rotate_operation_cap(ctx);
-    test_scenario::return_shared(system_state);
-}
-
-fun get_reporters_of(addr: address, scenario: &mut Scenario): vector<address> {
-    scenario.next_tx(addr);
-    let mut system_state = scenario.take_shared<SuiSystemState>();
-    let res = system_state.get_reporters_of(addr).into_keys();
-    test_scenario::return_shared(system_state);
-    res
 }
 
 fun update_candidate(
@@ -599,7 +621,7 @@ fun verify_metadata_after_advancing_epoch(
 }
 
 #[test]
-fun test_active_validator_update_metadata() {
+fun active_validator_update_metadata() {
     let validator_addr = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
     // pubkey generated with protocol key on seed [0; 32]
     let pubkey =
@@ -812,7 +834,7 @@ fun test_active_validator_update_metadata() {
 }
 
 #[test]
-fun test_validator_candidate_update() {
+fun validator_candidate_update() {
     let validator_addr = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
     // pubkey generated with protocol key on seed [0; 32]
     let pubkey =
@@ -886,9 +908,8 @@ fun test_validator_candidate_update() {
     scenario_val.end();
 }
 
-#[test]
-#[expected_failure(abort_code = validator::EMetadataInvalidWorkerPubkey)]
-fun test_add_validator_candidate_failure_invalid_metadata() {
+#[test, expected_failure(abort_code = validator::EMetadataInvalidWorkerPubkey)]
+fun add_validator_candidate_failure_invalid_metadata() {
     let mut scenario_val = test_scenario::begin(@0x0);
     let scenario = &mut scenario_val;
 
@@ -924,9 +945,8 @@ fun test_add_validator_candidate_failure_invalid_metadata() {
     scenario_val.end();
 }
 
-#[test]
-#[expected_failure(abort_code = validator_set::EAlreadyValidatorCandidate)]
-fun test_add_validator_candidate_failure_double_register() {
+#[test, expected_failure(abort_code = validator_set::EAlreadyValidatorCandidate)]
+fun add_validator_candidate_failure_double_register() {
     let mut scenario_val = test_scenario::begin(@0x0);
     let scenario = &mut scenario_val;
     let new_validator_addr = @0x8e3446145b0c7768839d71840df389ffa3b9742d0baaff326a3d453b595f87d7;
@@ -980,9 +1000,8 @@ fun test_add_validator_candidate_failure_double_register() {
     scenario_val.end();
 }
 
-#[test]
-#[expected_failure(abort_code = validator_set::EDuplicateValidator)]
-fun test_add_validator_candidate_failure_duplicate_with_active() {
+#[test, expected_failure(abort_code = validator_set::EDuplicateValidator)]
+fun add_validator_candidate_failure_duplicate_with_active() {
     let validator_addr = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
     // Seed [0; 32]
     let pubkey =
@@ -1054,7 +1073,7 @@ fun test_add_validator_candidate_failure_duplicate_with_active() {
 }
 
 #[test]
-fun test_skip_stake_subsidy() {
+fun skip_stake_subsidy() {
     let mut scenario_val = test_scenario::begin(@0x0);
     let scenario = &mut scenario_val;
     // Epoch duration is set to be 42 here.
@@ -1091,7 +1110,7 @@ fun advance_epoch_and_check_distribution_counter(
         scenario.ctx(),
     );
     destroy(rebate);
-    assert_eq(
+    assert_eq!(
         system_state.get_stake_subsidy_distribution_counter(),
         prev_counter + (if (should_increment_counter) 1 else 0),
     );
@@ -1100,7 +1119,7 @@ fun advance_epoch_and_check_distribution_counter(
 }
 
 #[test]
-fun test_withdraw_inactive_stake() {
+fun withdraw_inactive_stake() {
     let mut scenario_val = test_scenario::begin(@0x0);
     let scenario = &mut scenario_val;
     // Epoch duration is set to be 42 here.
@@ -1150,7 +1169,7 @@ fun test_withdraw_inactive_stake() {
 }
 
 #[test]
-fun test_convert_to_fungible_staked_sui_and_redeem() {
+fun convert_to_fungible_staked_sui_and_redeem() {
     let mut scenario_val = test_scenario::begin(@0x0);
     let scenario = &mut scenario_val;
     // Epoch duration is set to be 42 here.
