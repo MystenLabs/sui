@@ -52,10 +52,14 @@ impl Query {
         Ok(Checkpoint::with_sequence_number(scope, sequence_number))
     }
 
-    /// Fetch an epoch by its ID.
+    /// Fetch an epoch by its ID, or fetch the latest epoch if no ID is provided.
     ///
     /// Returns `null` if the epoch does not exist yet, or was pruned.
-    async fn epoch(&self, ctx: &Context<'_>, epoch_id: UInt53) -> Result<Option<Epoch>, RpcError> {
+    async fn epoch(
+        &self,
+        ctx: &Context<'_>,
+        epoch_id: Option<UInt53>,
+    ) -> Result<Option<Epoch>, RpcError> {
         let scope = self.scope(ctx)?;
         Epoch::fetch(ctx, scope, epoch_id).await
     }
@@ -86,7 +90,7 @@ impl Query {
         let scope = self.scope(ctx)?;
         let epochs = keys
             .into_iter()
-            .map(|k| Epoch::fetch(ctx, scope.clone(), k));
+            .map(|k| Epoch::fetch(ctx, scope.clone(), Some(k)));
 
         try_join_all(epochs).await
     }
@@ -223,9 +227,18 @@ impl Query {
         .await
     }
 
-    /// Fetch the protocol config by protocol version.
-    async fn protocol_configs(&self, version: UInt53) -> Option<ProtocolConfigs> {
-        Some(ProtocolConfigs::with_protocol_version(version.into()))
+    /// Fetch the protocol config by protocol version, or the latest protocol config used on chain if no version is provided.
+    async fn protocol_configs(
+        &self,
+        ctx: &Context<'_>,
+        version: Option<UInt53>,
+    ) -> Result<Option<ProtocolConfigs>, RpcError> {
+        if let Some(version) = version {
+            Ok(Some(ProtocolConfigs::with_protocol_version(version.into())))
+        } else {
+            let scope = self.scope(ctx)?;
+            ProtocolConfigs::latest(ctx, &scope).await
+        }
     }
 
     /// Configuration for this RPC service.

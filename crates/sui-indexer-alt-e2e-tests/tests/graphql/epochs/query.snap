@@ -18,10 +18,16 @@ task 5, line 14:
 //# advance-epoch
 Epoch advanced: 2
 
-task 6, lines 16-31:
+task 6, lines 16-33:
 //# run-graphql
 Response: {
   "data": {
+    "latest": {
+      "epochId": 2,
+      "referenceGasPrice": "1000",
+      "startTimestamp": "1970-01-01T00:00:00.444Z",
+      "endTimestamp": null
+    },
     "e0": {
       "epochId": 0,
       "referenceGasPrice": "1000",
@@ -44,18 +50,31 @@ Response: {
   }
 }
 
-task 7, lines 33-46:
+task 7, lines 35-53:
 //# run-graphql
 Response: {
   "data": {
     "checkpoint": {
       "query": {
-        "epoch": {
+        "latest": {
           "epochId": 1,
           "referenceGasPrice": "1000",
           "startTimestamp": "1970-01-01T00:00:00.123Z",
           "endTimestamp": null
-        }
+        },
+        "e0": {
+          "epochId": 0,
+          "referenceGasPrice": "1000",
+          "startTimestamp": "1970-01-01T00:00:00Z",
+          "endTimestamp": "1970-01-01T00:00:00.123Z"
+        },
+        "e1": {
+          "epochId": 1,
+          "referenceGasPrice": "1000",
+          "startTimestamp": "1970-01-01T00:00:00.123Z",
+          "endTimestamp": null
+        },
+        "e2": null
       }
     }
   }

@@ -1,18 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::Context as _;
-use async_graphql::{Context, Object, SimpleObject};
+use async_graphql::{dataloader::DataLoader, Context, Object, SimpleObject};
 use diesel::{ExpressionMethods, QueryDsl as _};
-use sui_indexer_alt_reader::pg_reader::PgReader;
+use sui_indexer_alt_reader::{epochs::CheckpointBoundedEpochStartKey, pg_reader::PgReader};
 use sui_indexer_alt_schema::{
     epochs::{StoredFeatureFlag, StoredProtocolConfig},
     schema::{kv_feature_flags, kv_protocol_configs},
 };
 
-use crate::{api::scalars::uint53::UInt53, error::RpcError};
+use crate::{api::scalars::uint53::UInt53, error::RpcError, scope::Scope};
 
 pub(crate) struct ProtocolConfigs {
     protocol_version: u64,
@@ -108,6 +108,24 @@ impl ProtocolConfigs {
     /// Construct a protocol config object that is represented by just its identifier (its protocol version).
     pub(crate) fn with_protocol_version(protocol_version: u64) -> Self {
         Self { protocol_version }
+    }
+
+    /// Fetch the protocol config for the latest epoch in scope.
+    pub(crate) async fn latest(ctx: &Context<'_>, scope: &Scope) -> Result<Option<Self>, RpcError> {
+        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+
+        let cp = scope.checkpoint_viewed_at();
+        let Some(stored) = pg_loader
+            .load_one(CheckpointBoundedEpochStartKey(cp))
+            .await
+            .context("Failed to fetch latest epoch")?
+        else {
+            return Ok(None);
+        };
+
+        Ok(Some(Self {
+            protocol_version: stored.protocol_version as u64,
+        }))
     }
 }
 
