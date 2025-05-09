@@ -1566,6 +1566,26 @@ impl VMValueCast<Vec<u8>> for Value {
     }
 }
 
+impl VMValueCast<Vec<u16>> for Value {
+    fn cast(self) -> PartialVMResult<Vec<u16>> {
+        match self.0 {
+            ValueImpl::Container(Container::VecU16(r)) => take_unique_ownership(r),
+            v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                .with_message(format!("cannot cast {:?} to vector<u16>", v,))),
+        }
+    }
+}
+
+impl VMValueCast<Vec<u32>> for Value {
+    fn cast(self) -> PartialVMResult<Vec<u32>> {
+        match self.0 {
+            ValueImpl::Container(Container::VecU32(r)) => take_unique_ownership(r),
+            v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                .with_message(format!("cannot cast {:?} to vector<u32>", v,))),
+        }
+    }
+}
+
 impl VMValueCast<Vec<u64>> for Value {
     fn cast(self) -> PartialVMResult<Vec<u64>> {
         match self.0 {
@@ -1576,12 +1596,32 @@ impl VMValueCast<Vec<u64>> for Value {
     }
 }
 
+impl VMValueCast<Vec<u128>> for Value {
+    fn cast(self) -> PartialVMResult<Vec<u128>> {
+        match self.0 {
+            ValueImpl::Container(Container::VecU128(r)) => take_unique_ownership(r),
+            v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                .with_message(format!("cannot cast {:?} to vector<u128>", v,))),
+        }
+    }
+}
+
+impl VMValueCast<Vec<u256::U256>> for Value {
+    fn cast(self) -> PartialVMResult<Vec<u256::U256>> {
+        match self.0 {
+            ValueImpl::Container(Container::VecU256(r)) => take_unique_ownership(r),
+            v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                .with_message(format!("cannot cast {:?} to vector<u256>", v,))),
+        }
+    }
+}
+
 impl VMValueCast<Vec<AccountAddress>> for Value {
     fn cast(self) -> PartialVMResult<Vec<AccountAddress>> {
         match self.0 {
             ValueImpl::Container(Container::VecAddress(r)) => take_unique_ownership(r),
             v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                .with_message(format!("cannot cast {:?} to vector<AccountAddress>", v,))),
+                .with_message(format!("cannot cast {:?} to vector<address>", v,))),
         }
     }
 }

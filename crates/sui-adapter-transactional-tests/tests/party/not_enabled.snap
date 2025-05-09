@@ -1,0 +1,44 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+task 1, lines 6-35:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7638000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 37-39:
+//# run ex::m::mint
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 40-42:
+//# run ex::m::create_party
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::party_transfer_impl (function index 13) at offset 0, Abort Code: 5
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 13, instruction: 0, function_name: Some("party_transfer_impl") }, 5), source: Some(VMError { major_status: ABORTED, sub_status: Some(5), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(13), 0)] }), command: Some(0) } }
+
+task 4, lines 43-48:
+//# programmable --inputs object(2,0) @0
+//> 0: sui::party::single_owner(Input(1));
+//> ex::m::priv_party(Input(0), Result(0))
+// Aborts since party transfer is not enabled
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::party_transfer_impl (function index 13) at offset 0, Abort Code: 5
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 13, instruction: 0, function_name: Some("party_transfer_impl") }, 5), source: Some(VMError { major_status: ABORTED, sub_status: Some(5), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(13), 0)] }), command: Some(1) } }
+
+task 5, lines 49-53:
+//# programmable --inputs object(2,1) @0
+//> 0: sui::party::single_owner(Input(1));
+//> ex::m::pub_party(Input(0), Result(0))
+// Aborts since party transfer is not enabled
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::party_transfer_impl (function index 13) at offset 0, Abort Code: 5
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 13, instruction: 0, function_name: Some("party_transfer_impl") }, 5), source: Some(VMError { major_status: ABORTED, sub_status: Some(5), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(13), 0)] }), command: Some(1) } }
+
+task 6, lines 54-56:
+//# programmable --inputs object(2,1) @0
+//> 0: sui::party::single_owner(Input(1));
+//> sui::transfer::public_party_transfer<ex::m::Pub>(Input(0), Result(0))
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::party_transfer_impl (function index 13) at offset 0, Abort Code: 5
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 13, instruction: 0, function_name: Some("party_transfer_impl") }, 5), source: Some(VMError { major_status: ABORTED, sub_status: Some(5), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(13), 0)] }), command: Some(1) } }

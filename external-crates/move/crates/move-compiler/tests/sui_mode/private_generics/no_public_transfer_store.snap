@@ -13,7 +13,7 @@ error[Sui E02009]: invalid private transfer call
 10 │         transfer::transfer(s, @0x100);
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::transfer' is restricted to being called in the object's module, 'a::other'
    ·
-27 │     struct S has key, store {
+31 │     struct S has key, store {
    │                       ----- The object has 'store' so 'sui::transfer::public_transfer' can be called instead
 
 error[Sui E02009]: invalid private transfer call
@@ -24,7 +24,7 @@ error[Sui E02009]: invalid private transfer call
 14 │         transfer::freeze_object(s);
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::freeze_object' is restricted to being called in the object's module, 'a::other'
    ·
-27 │     struct S has key, store {
+31 │     struct S has key, store {
    │                       ----- The object has 'store' so 'sui::transfer::public_freeze_object' can be called instead
 
 error[Sui E02009]: invalid private transfer call
@@ -35,7 +35,7 @@ error[Sui E02009]: invalid private transfer call
 18 │         transfer::share_object(s);
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::share_object' is restricted to being called in the object's module, 'a::other'
    ·
-27 │     struct S has key, store {
+31 │     struct S has key, store {
    │                       ----- The object has 'store' so 'sui::transfer::public_share_object' can be called instead
 
 error[Sui E02009]: invalid private transfer call
@@ -46,5 +46,16 @@ error[Sui E02009]: invalid private transfer call
 22 │         transfer::receive(p, s)
    │         ^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::receive' is restricted to being called in the object's module, 'a::other'
    ·
-27 │     struct S has key, store {
+31 │     struct S has key, store {
    │                       ----- The object has 'store' so 'sui::transfer::public_receive' can be called instead
+
+error[Sui E02009]: invalid private transfer call
+   ┌─ tests/sui_mode/private_generics/no_public_transfer_store.move:26:9
+   │
+25 │     public fun t6(s: other::S, p: sui::party::Party) {
+   │                      -------- The type 'a::other::S' is not declared in the current module
+26 │         transfer::party_transfer(s, p);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::party_transfer' is restricted to being called in the object's module, 'a::other'
+   ·
+31 │     struct S has key, store {
+   │                       ----- The object has 'store' so 'sui::transfer::public_party_transfer' can be called instead

@@ -36,3 +36,11 @@ error[Sui E02009]: invalid private transfer call
    │                                             -------- The type 'a::other::S' is not declared in the current module
 21 │         transfer::receive(p, s)
    │         ^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::receive' is restricted to being called in the object's module, 'a::other'
+
+error[Sui E02009]: invalid private transfer call
+   ┌─ tests/sui_mode/private_generics/no_public_transfer.move:29:9
+   │
+28 │     public fun t6(s: other::S, p: sui::party::Party) {
+   │                      -------- The type 'a::other::S' is not declared in the current module
+29 │         transfer::party_transfer(s, p);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::party_transfer' is restricted to being called in the object's module, 'a::other'
