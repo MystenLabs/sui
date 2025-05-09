@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    analysis::DefMap,
+    analysis::{DefMap, add_member_use_def},
     symbols::{
-        add_member_use_def,
         cursor::{CursorContext, CursorDefinition, CursorPosition},
         ignored_function,
         mod_defs::{AutoImportInsertionInfo, AutoImportInsertionKind, CallInfo, ModuleDefs},

@@ -2,12 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    analysis::DefMap,
+    analysis::{DefMap, add_member_use_def, find_datatype},
     compiler_info::CompilerInfo,
     symbols::{
-        add_member_use_def,
         def_info::DefInfo,
-        find_datatype,
         mod_defs::{MemberDefInfo, ModuleDefs},
         type_def_loc,
         use_def::{References, UseDef, UseDefMap},

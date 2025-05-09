@@ -7,7 +7,8 @@ use crate::{
         compilation::{CompiledPkgInfo, SymbolsComputationData},
         cursor::CursorContext,
         def_info::DefInfo,
-        use_def::UseDefMap,
+        mod_defs::ModuleDefs,
+        use_def::{References, UseDef, UseDefMap},
     },
     utils::expansion_mod_ident_to_map_key,
 };
@@ -23,6 +24,7 @@ use move_compiler::{
     typing::{ast::ModuleDefinition, visitor::TypingVisitorContext},
 };
 use move_ir_types::location::Loc;
+use move_symbol_pool::Symbol;
 
 pub mod parsing_analysis;
 pub mod typing_analysis;
@@ -85,6 +87,18 @@ pub fn run_typing_analysis(
     computation_data
 }
 
+pub fn find_datatype(mod_defs: &ModuleDefs, datatype_name: &Symbol) -> Option<Loc> {
+    mod_defs.structs.get(datatype_name).map_or_else(
+        || {
+            mod_defs
+                .enums
+                .get(datatype_name)
+                .map(|enum_def| enum_def.name_loc)
+        },
+        |struct_def| Some(struct_def.name_loc),
+    )
+}
+
 fn process_typed_modules<'a>(
     typed_modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
     mod_to_alias_lengths: &'a BTreeMap<String, BTreeMap<Position, usize>>,
@@ -100,4 +114,53 @@ fn process_typed_modules<'a>(
         let use_defs = std::mem::replace(&mut typing_symbolicator.use_defs, UseDefMap::new());
         mod_use_defs.insert(mod_ident_str, use_defs);
     }
+}
+
+/// Add use of a function, method, struct or enum identifier
+fn add_member_use_def(
+    member_def_name: &Symbol, // may be different from use_name for methods
+    files: &MappedFiles,
+    mod_defs: &ModuleDefs,
+    use_name: &Symbol,
+    use_loc: &Loc,
+    references: &mut References,
+    def_info: &DefMap,
+    use_defs: &mut UseDefMap,
+    alias_lengths: &BTreeMap<Position, usize>,
+) -> Option<UseDef> {
+    let Some(name_file_start) = files.start_position_opt(use_loc) else {
+        debug_assert!(false);
+        return None;
+    };
+    let name_start = Position {
+        line: name_file_start.line_offset() as u32,
+        character: name_file_start.column_offset() as u32,
+    };
+    if let Some(member_def) = mod_defs
+        .functions
+        .get(member_def_name)
+        .or_else(|| mod_defs.structs.get(member_def_name))
+        .or_else(|| mod_defs.enums.get(member_def_name))
+    {
+        let member_info = def_info.get(&member_def.name_loc).unwrap();
+        // type def location exists only for structs and enums (and not for functions)
+        let ident_type_def_loc = match member_info {
+            DefInfo::Struct(_, name, ..) | DefInfo::Enum(_, name, ..) => {
+                find_datatype(mod_defs, name)
+            }
+            _ => None,
+        };
+        let ud = UseDef::new(
+            references,
+            alias_lengths,
+            use_loc.file_hash(),
+            name_start,
+            member_def.name_loc,
+            use_name,
+            ident_type_def_loc,
+        );
+        use_defs.insert(name_start.line, ud.clone());
+        return Some(ud);
+    }
+    None
 }
