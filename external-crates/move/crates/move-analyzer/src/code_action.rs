@@ -8,8 +8,8 @@ use crate::{
     },
     context::Context,
     symbols::{
+        compilation::get_compiled_pkg,
         cursor::{ChainInfo, CursorContext},
-        get_compiled_pkg,
         runner::SymbolicatorRunner,
         types::{CompiledPkgInfo, PrecomputedPkgInfo, Symbols},
     },
