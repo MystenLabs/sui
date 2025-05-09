@@ -25,7 +25,15 @@ use crate::{
     completions::on_completion_request,
     context::Context,
     inlay_hints,
-    symbols::{self, runner::SymbolicatorRunner, types::PrecomputedPkgInfo},
+    symbols::{
+        self,
+        requests::{
+            on_document_symbol_request, on_go_to_def_request, on_go_to_type_def_request,
+            on_hover_request, on_references_request,
+        },
+        runner::SymbolicatorRunner,
+        types::PrecomputedPkgInfo,
+    },
     vfs::on_text_document_sync_notification,
 };
 use url::Url;
@@ -330,19 +338,19 @@ fn on_request(
             implicit_deps,
         ),
         lsp_types::request::GotoDefinition::METHOD => {
-            symbols::on_go_to_def_request(context, request);
+            on_go_to_def_request(context, request);
         }
         lsp_types::request::GotoTypeDefinition::METHOD => {
-            symbols::on_go_to_type_def_request(context, request);
+            on_go_to_type_def_request(context, request);
         }
         lsp_types::request::References::METHOD => {
-            symbols::on_references_request(context, request);
+            on_references_request(context, request);
         }
         lsp_types::request::HoverRequest::METHOD => {
-            symbols::on_hover_request(context, request);
+            on_hover_request(context, request);
         }
         lsp_types::request::DocumentSymbolRequest::METHOD => {
-            symbols::on_document_symbol_request(context, request);
+            on_document_symbol_request(context, request);
         }
         lsp_types::request::InlayHintRequest::METHOD => {
             inlay_hints::on_inlay_hint_request(context, request);

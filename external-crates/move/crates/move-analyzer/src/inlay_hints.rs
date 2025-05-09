@@ -5,7 +5,7 @@ use crate::{
     context::Context,
     symbols::{
         ide_strings::type_to_ide_string,
-        on_hover_markup,
+        requests::on_hover_markup,
         runner::SymbolicatorRunner,
         types::{DefInfo, ModuleDefs, Symbols},
     },
