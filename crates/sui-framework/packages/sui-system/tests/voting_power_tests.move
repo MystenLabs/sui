@@ -106,10 +106,7 @@ fun test_medium_validator_sets_2() {
 }
 
 /// Create a validator set with the given stake amounts
-fun create_validators_with_stakes(
-    stakes: vector<u64>,
-    ctx: &mut TxContext,
-): vector<Validator> {
+fun create_validators_with_stakes(stakes: vector<u64>, ctx: &mut TxContext): vector<Validator> {
     vector::tabulate!(stakes.length(), |i| {
         validator_builder::new()
             .initial_stake(stakes[i])
