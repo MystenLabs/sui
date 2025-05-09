@@ -73,7 +73,9 @@ impl MovePackage {
         object: &Object,
         ctx: &Context<'_>,
     ) -> Result<Option<Self>, RpcError<object::Error>> {
-        let Some(super_contents) = object.contents(ctx).await? else {
+        let super_ = object.inflated(ctx).await?;
+
+        let Some(super_contents) = &super_.contents else {
             return Ok(None);
         };
 
@@ -81,7 +83,6 @@ impl MovePackage {
             return Ok(None);
         };
 
-        let super_ = Object::from_contents(super_contents);
         Ok(Some(Self { super_, contents }))
     }
 }

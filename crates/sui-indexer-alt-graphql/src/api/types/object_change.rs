@@ -4,12 +4,13 @@
 use async_graphql::Object;
 use sui_types::effects::{IDOperation, ObjectChange as NativeObjectChange};
 
-use crate::api::scalars::sui_address::SuiAddress;
+use crate::{api::scalars::sui_address::SuiAddress, scope::Scope};
 
 use super::{addressable::Addressable, object::Object};
 
 pub(crate) struct ObjectChange {
-    pub native: NativeObjectChange,
+    pub(crate) scope: Scope,
+    pub(crate) native: NativeObjectChange,
 }
 
 #[Object]
@@ -31,7 +32,7 @@ impl ObjectChange {
             return None;
         };
 
-        let addressable = Addressable::with_address(id.into());
+        let addressable = Addressable::with_address(self.scope.clone(), id.into());
         Some(Object::with_ref(addressable, version, digest))
     }
 
@@ -47,7 +48,7 @@ impl ObjectChange {
             return None;
         };
 
-        let addressable = Addressable::with_address(id.into());
+        let addressable = Addressable::with_address(self.scope.clone(), id.into());
         Some(Object::with_ref(addressable, version, digest))
     }
 

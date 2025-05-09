@@ -5,11 +5,12 @@ use async_graphql::{Context, Object};
 use futures::future::try_join_all;
 use sui_types::digests::ChainIdentifier;
 
-use crate::error::RpcError;
+use crate::{error::RpcError, scope::Scope};
 
 use super::{
     scalars::{digest::Digest, sui_address::SuiAddress, uint53::UInt53},
     types::{
+        checkpoint::Checkpoint,
         object::{self, Object, ObjectKey},
         service_config::ServiceConfig,
         transaction::Transaction,
@@ -17,7 +18,12 @@ use super::{
     },
 };
 
-pub struct Query;
+#[derive(Default)]
+pub struct Query {
+    /// Queries will use this scope if it is populated, instead of creating a fresh scope from
+    /// information in the request-wide [Context].
+    pub(crate) scope: Option<Scope>,
+}
 
 #[Object]
 impl Query {
@@ -25,6 +31,37 @@ impl Query {
     async fn chain_identifier(&self, ctx: &Context<'_>) -> Result<String, RpcError> {
         let chain_id: ChainIdentifier = *ctx.data()?;
         Ok(chain_id.to_string())
+    }
+
+    /// Fetch a checkpoint by its sequence number, or the latest checkpoint if no sequence number is provided.
+    ///
+    /// Returns `null` if the checkpoint does not exist in the store, either because it never existed or because it was pruned.
+    async fn checkpoint(
+        &self,
+        ctx: &Context<'_>,
+        sequence_number: Option<UInt53>,
+    ) -> Result<Option<Checkpoint>, RpcError> {
+        let scope = self.scope(ctx)?;
+        let sequence_number = sequence_number
+            .map(|s| s.into())
+            .unwrap_or(scope.checkpoint_viewed_at());
+
+        Ok(Checkpoint::with_sequence_number(scope, sequence_number))
+    }
+
+    /// Fetch checkpoints by their sequence numbers.
+    ///
+    /// Returns a list of checkpoints that is guaranteed to be the same length as `keys`. If a checkpoint in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the checkpoint does not exist yet, or because it was pruned.
+    async fn multi_get_checkpoints(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<UInt53>,
+    ) -> Result<Vec<Option<Checkpoint>>, RpcError> {
+        let scope = self.scope(ctx)?;
+        Ok(keys
+            .into_iter()
+            .map(|k| Checkpoint::with_sequence_number(scope.clone(), k.into()))
+            .collect())
     }
 
     /// Fetch objects by their keys.
@@ -35,7 +72,11 @@ impl Query {
         ctx: &Context<'_>,
         keys: Vec<ObjectKey>,
     ) -> Result<Vec<Option<Object>>, RpcError<object::Error>> {
-        let objects = keys.into_iter().map(|k| Object::by_key(ctx, k));
+        let scope = self.scope(ctx)?;
+        let objects = keys
+            .into_iter()
+            .map(|k| Object::by_key(ctx, scope.clone(), k));
+
         try_join_all(objects).await
     }
 
@@ -47,7 +88,11 @@ impl Query {
         ctx: &Context<'_>,
         keys: Vec<Digest>,
     ) -> Result<Vec<Option<Transaction>>, RpcError> {
-        let transactions = keys.into_iter().map(|d| Transaction::fetch(ctx, d));
+        let scope = self.scope(ctx)?;
+        let transactions = keys
+            .into_iter()
+            .map(|d| Transaction::fetch(ctx, scope.clone(), d));
+
         try_join_all(transactions).await
     }
 
@@ -59,7 +104,11 @@ impl Query {
         ctx: &Context<'_>,
         keys: Vec<Digest>,
     ) -> Result<Vec<Option<TransactionEffects>>, RpcError> {
-        let effects = keys.into_iter().map(|d| TransactionEffects::fetch(ctx, d));
+        let scope = self.scope(ctx)?;
+        let effects = keys
+            .into_iter()
+            .map(|d| TransactionEffects::fetch(ctx, scope.clone(), d));
+
         try_join_all(effects).await
     }
 
@@ -75,7 +124,9 @@ impl Query {
     ///
     /// If `atCheckpoint` is specified, the object will be fetched at the latest version as of this checkpoint.
     ///
-    /// It is an error to specify both `version` and `rootVersion`, or to specify neither.
+    /// If none of the above are specified, the object is fetched at the latest checkpoint.
+    ///
+    /// It is an error to specify more than one of `version`, `rootVersion`, or `atCheckpoint`.
     ///
     /// Returns `null` if an object cannot be found that meets this criteria.
     async fn object(
@@ -88,6 +139,7 @@ impl Query {
     ) -> Result<Option<Object>, RpcError<object::Error>> {
         Object::by_key(
             ctx,
+            self.scope(ctx)?,
             ObjectKey {
                 address,
                 version,
@@ -111,7 +163,7 @@ impl Query {
         ctx: &Context<'_>,
         digest: Digest,
     ) -> Result<Option<Transaction>, RpcError> {
-        Transaction::fetch(ctx, digest).await
+        Transaction::fetch(ctx, self.scope(ctx)?, digest).await
     }
 
     /// Fetch transaction effects by its transaction's digest.
@@ -122,6 +174,13 @@ impl Query {
         ctx: &Context<'_>,
         digest: Digest,
     ) -> Result<Option<TransactionEffects>, RpcError> {
-        TransactionEffects::fetch(ctx, digest).await
+        TransactionEffects::fetch(ctx, self.scope(ctx)?, digest).await
+    }
+}
+
+impl Query {
+    /// The scope under which all queries are supposed to be queried.
+    fn scope<E: std::error::Error>(&self, ctx: &Context<'_>) -> Result<Scope, RpcError<E>> {
+        self.scope.clone().map_or_else(|| Scope::new(ctx), Ok)
     }
 }
