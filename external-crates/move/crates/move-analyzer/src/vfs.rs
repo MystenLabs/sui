@@ -10,7 +10,7 @@
 //! basically just a mapping from file identifier (this could be the file's path were it to be
 //! saved) to its textual contents.
 
-use crate::symbols;
+use crate::symbols::runner::SymbolicatorRunner;
 use lsp_server::Notification;
 use lsp_types::{
     DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
@@ -51,7 +51,7 @@ impl VirtualFileSystem {
 /// Updates the given virtual file system based on the text document sync notification that was sent.
 pub fn on_text_document_sync_notification(
     ide_files_root: VfsPath,
-    symbolicator_runner: &symbols::SymbolicatorRunner,
+    symbolicator_runner: &SymbolicatorRunner,
     notification: &Notification,
 ) {
     fn vfs_file_create(

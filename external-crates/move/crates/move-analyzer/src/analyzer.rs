@@ -21,8 +21,12 @@ use std::{
 };
 
 use crate::{
-    code_action, completions::on_completion_request, context::Context, inlay_hints, symbols,
-    symbols::types::PrecomputedPkgInfo, vfs::on_text_document_sync_notification,
+    code_action,
+    completions::on_completion_request,
+    context::Context,
+    inlay_hints,
+    symbols::{self, runner::SymbolicatorRunner, types::PrecomputedPkgInfo},
+    vfs::on_text_document_sync_notification,
 };
 use url::Url;
 use vfs::{VfsPath, impls::memory::MemoryFS};
@@ -140,7 +144,7 @@ pub fn run(implicit_deps: Dependencies) {
     };
     eprintln!("linting level {:?}", lint);
 
-    let symbolicator_runner = symbols::SymbolicatorRunner::new(
+    let symbolicator_runner = SymbolicatorRunner::new(
         ide_files_root.clone(),
         symbols_map.clone(),
         pkg_deps.clone(),
@@ -156,7 +160,7 @@ pub fn run(implicit_deps: Dependencies) {
     // to be available right after the client is initialized.
     if let Some(uri) = initialize_params.root_uri {
         let build_path = uri.to_file_path().unwrap();
-        if let Some(p) = symbols::SymbolicatorRunner::root_dir(&build_path) {
+        if let Some(p) = SymbolicatorRunner::root_dir(&build_path) {
             if let Ok((Some(new_symbols), _)) = symbols::get_symbols(
                 Arc::new(Mutex::new(BTreeMap::new())),
                 ide_files_root.clone(),
@@ -376,7 +380,7 @@ fn on_response(_context: &Context, _response: &Response) {
 
 fn on_notification(
     ide_files_root: VfsPath,
-    symbolicator_runner: &symbols::SymbolicatorRunner,
+    symbolicator_runner: &SymbolicatorRunner,
     notification: &Notification,
 ) {
     match notification.method.as_str() {

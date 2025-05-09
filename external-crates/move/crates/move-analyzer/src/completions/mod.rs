@@ -11,7 +11,8 @@ use crate::{
     },
     context::Context,
     symbols::{
-        self, SymbolicatorRunner,
+        self,
+        runner::SymbolicatorRunner,
         types::{CursorContext, PrecomputedPkgInfo, Symbols},
     },
 };
