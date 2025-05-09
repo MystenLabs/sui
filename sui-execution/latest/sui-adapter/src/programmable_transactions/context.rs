@@ -15,9 +15,9 @@ mod checked {
         },
         gas_charger::GasCharger,
         gas_meter::SuiGasMeter,
-        programmable_transactions::{
-            data_store::{PackageStore, SuiDataStore},
-            linkage_view::LinkageView,
+        programmable_transactions::data_store::{
+            PackageStore, cached_data_store::CachedPackageStore, linkage_view::LinkageView,
+            sui_data_store::SuiDataStore,
         },
         type_resolver::TypeTagResolver,
     };
@@ -147,7 +147,9 @@ mod checked {
         where
             'a: 'state,
         {
-            let mut linkage_view = LinkageView::new(Box::new(state_view.as_sui_resolver()));
+            let mut linkage_view = LinkageView::new(Box::new(CachedPackageStore::new(Box::new(
+                state_view.as_sui_resolver(),
+            ))));
             let mut input_object_map = BTreeMap::new();
             let inputs = inputs
                 .into_iter()

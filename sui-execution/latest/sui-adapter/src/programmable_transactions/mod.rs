@@ -4,4 +4,3 @@
 pub mod context;
 pub mod data_store;
 pub mod execution;
-pub mod linkage_view;

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::programmable_transactions::linkage_view::LinkageView;
+use crate::programmable_transactions::data_store::{PackageStore, linkage_view::LinkageView};
 use move_binary_format::errors::{Location, PartialVMError, PartialVMResult, VMResult};
 use move_core_types::{
     account_address::AccountAddress, identifier::IdentStr, language_storage::ModuleId,
@@ -9,9 +9,7 @@ use move_core_types::{
 };
 use move_vm_types::data_store::DataStore;
 use std::rc::Rc;
-use sui_types::{
-    base_types::ObjectID, error::SuiResult, move_package::MovePackage, storage::BackingPackageStore,
-};
+use sui_types::{base_types::ObjectID, error::SuiResult, move_package::MovePackage};
 
 // Implementation of the `DataStore` trait for the Move VM.
 // When used during execution it may have a list of new packages that have
@@ -98,21 +96,6 @@ impl DataStore for SuiDataStore<'_, '_> {
         // we cannot panic here because during execution and publishing this is
         // currently called from the publish flow in the Move runtime
         Ok(())
-    }
-}
-
-// A unifying trait that allows us to load move packages that may not be objects just yet (e.g., if
-// they were published in the current transaction). Note that this needs to load `MovePackage`s and
-// not `MovePackageObject`s.
-pub trait PackageStore {
-    fn get_package(&self, id: &ObjectID) -> SuiResult<Option<Rc<MovePackage>>>;
-}
-
-impl<T: BackingPackageStore> PackageStore for T {
-    fn get_package(&self, id: &ObjectID) -> SuiResult<Option<Rc<MovePackage>>> {
-        Ok(self
-            .get_package_object(id)?
-            .map(|x| Rc::new(x.move_package().clone())))
     }
 }
 

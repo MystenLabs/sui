@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::programmable_transactions::context::load_type_from_struct;
-use crate::programmable_transactions::linkage_view::LinkageView;
+use crate::programmable_transactions::data_store::cached_data_store::CachedPackageStore;
+use crate::programmable_transactions::data_store::linkage_view::LinkageView;
 use move_core_types::annotated_value as A;
 use move_core_types::language_storage::StructTag;
 use move_vm_runtime::move_vm::MoveVM;
@@ -26,7 +27,9 @@ struct NullSuiResolver<'state>(Box<dyn TypeLayoutStore + 'state>);
 
 impl<'state, 'vm> TypeLayoutResolver<'state, 'vm> {
     pub fn new(vm: &'vm MoveVM, state_view: Box<dyn TypeLayoutStore + 'state>) -> Self {
-        let linkage_view = LinkageView::new(Box::new(NullSuiResolver(state_view)));
+        let linkage_view = LinkageView::new(Box::new(CachedPackageStore::new(Box::new(
+            NullSuiResolver(state_view),
+        ))));
         Self { vm, linkage_view }
     }
 }
