@@ -140,10 +140,10 @@ pub(crate) struct ObjectKey {
 #[derive(InputObject, Default, Debug)]
 pub(crate) struct VersionFilter {
     /// Filter to versions that are strictly newer than this one, defaults to fetching from the earliest version known to this RPC (this could be the initial version, or some later version if the initial version has been pruned).
-    after_version: Option<UInt53>,
+    pub(crate) after_version: Option<UInt53>,
 
     /// Filter to versions that are strictly older than this one, defaults to fetching up to the latest version (inclusive).
-    before_version: Option<UInt53>,
+    pub(crate) before_version: Option<UInt53>,
 }
 
 #[derive(thiserror::Error, Debug, Clone)]
