@@ -10,6 +10,7 @@ use sui_indexer_alt_reader::{
     pg_reader::PgReader,
 };
 use sui_indexer_alt_schema::epochs::{StoredEpochEnd, StoredEpochStart};
+use sui_types::SUI_DENY_LIST_OBJECT_ID;
 
 use crate::{
     api::scalars::{big_int::BigInt, date_time::DateTime, uint53::UInt53},
@@ -17,16 +18,19 @@ use crate::{
     scope::Scope,
 };
 
-use super::protocol_configs::ProtocolConfigs;
+use super::{
+    object::{self, Object},
+    protocol_configs::ProtocolConfigs,
+};
 
 pub(crate) struct Epoch {
     pub(crate) epoch_id: u64,
-    pub(crate) scope: Scope,
     start: EpochStart,
 }
 
 #[derive(Clone)]
 struct EpochStart {
+    scope: Scope,
     contents: Option<Arc<StoredEpochStart>>,
 }
 
@@ -54,17 +58,37 @@ impl Epoch {
 
     #[graphql(flatten)]
     async fn start(&self, ctx: &Context<'_>) -> Result<EpochStart, RpcError> {
-        self.start.fetch(ctx, &self.scope, self.epoch_id).await
+        self.start.fetch(ctx, self.epoch_id).await
     }
 
     #[graphql(flatten)]
     async fn end(&self, ctx: &Context<'_>) -> Result<EpochEnd, RpcError> {
-        EpochEnd::fetch(ctx, &self.scope, self.epoch_id).await
+        EpochEnd::fetch(ctx, &self.start.scope, self.epoch_id).await
     }
 }
 
 #[Object]
 impl EpochStart {
+    /// State of the Coin DenyList object (0x403) at the start of this epoch.
+    ///
+    /// The DenyList controls access to Regulated Coins. Writes to the DenyList are accumulated and only take effect on the next epoch boundary. Consequently, it's possible to determine the state of the DenyList for a transaction by reading it at the start of the epoch the transaction is in.
+    async fn coin_deny_list(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<Object>, RpcError<object::Error>> {
+        let Some(contents) = &self.contents else {
+            return Ok(None);
+        };
+
+        Object::checkpoint_bounded(
+            ctx,
+            self.scope.clone(),
+            SUI_DENY_LIST_OBJECT_ID.into(),
+            (contents.cp_lo as u64).saturating_sub(1).into(),
+        )
+        .await
+    }
+
     /// The epoch's corresponding protocol configuration, including the feature flags and the configuration options.
     async fn protocol_configs(&self) -> Option<ProtocolConfigs> {
         let Some(contents) = &self.contents else {
@@ -114,8 +138,7 @@ impl Epoch {
     pub(crate) fn with_id(scope: Scope, epoch_id: u64) -> Self {
         Self {
             epoch_id,
-            scope,
-            start: EpochStart::empty(),
+            start: EpochStart::empty(scope),
         }
     }
 
@@ -127,9 +150,7 @@ impl Epoch {
         scope: Scope,
         epoch_id: UInt53,
     ) -> Result<Option<Self>, RpcError> {
-        let start = EpochStart::empty()
-            .fetch(ctx, &scope, epoch_id.into())
-            .await?;
+        let start = EpochStart::empty(scope).fetch(ctx, epoch_id.into()).await?;
 
         let Some(contents) = &start.contents else {
             return Ok(None);
@@ -137,27 +158,24 @@ impl Epoch {
 
         Ok(Some(Self {
             epoch_id: contents.epoch as u64,
-            scope,
             start,
         }))
     }
 }
 
 impl EpochStart {
-    fn empty() -> Self {
-        Self { contents: None }
+    fn empty(scope: Scope) -> Self {
+        Self {
+            scope,
+            contents: None,
+        }
     }
 
     /// Attempt to fill the contents. If the contents are already filled, returns a clone,
     /// otherwise attempts to fetch from the store. The resulting value may still have an empty
     /// contents field, because it could not be found in the store, or the epoch started after the
     /// checkpoint being viewed.
-    async fn fetch(
-        &self,
-        ctx: &Context<'_>,
-        scope: &Scope,
-        epoch_id: u64,
-    ) -> Result<Self, RpcError> {
+    async fn fetch(&self, ctx: &Context<'_>, epoch_id: u64) -> Result<Self, RpcError> {
         if self.contents.is_some() {
             return Ok(self.clone());
         }
@@ -171,11 +189,12 @@ impl EpochStart {
             return Ok(self.clone());
         };
 
-        if stored.cp_lo as u64 > scope.checkpoint_viewed_at() {
+        if stored.cp_lo as u64 > self.scope.checkpoint_viewed_at() {
             return Ok(self.clone());
         }
 
         Ok(Self {
+            scope: self.scope.clone(),
             contents: Some(Arc::new(stored)),
         })
     }
