@@ -1,0 +1,170 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0)
+
+task 1, line 6:
+//# advance-epoch
+Epoch advanced: 0
+
+task 2, lines 8-25:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch": {
+      "systemPackages": {
+        "pageInfo": {
+          "hasPreviousPage": false,
+          "hasNextPage": false,
+          "startCursor": "IAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB",
+          "endCursor": "IAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAN7p"
+        },
+        "nodes": [
+          {
+            "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
+            "version": 1
+          },
+          {
+            "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
+            "version": 1
+          },
+          {
+            "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
+            "version": 1
+          },
+          {
+            "address": "0x000000000000000000000000000000000000000000000000000000000000000b",
+            "version": 1
+          },
+          {
+            "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
+            "version": 1
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 3, lines 27-45:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch": {
+      "systemPackages": {
+        "pageInfo": {
+          "hasPreviousPage": false,
+          "hasNextPage": false,
+          "startCursor": "IAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB",
+          "endCursor": "IAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAN7p"
+        },
+        "nodes": [
+          {
+            "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
+            "version": 1
+          },
+          {
+            "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
+            "version": 1
+          },
+          {
+            "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
+            "version": 1
+          },
+          {
+            "address": "0x000000000000000000000000000000000000000000000000000000000000000b",
+            "version": 1
+          },
+          {
+            "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
+            "version": 1
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 4, lines 47-64:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch": {
+      "systemPackages": {
+        "pageInfo": {
+          "hasPreviousPage": false,
+          "hasNextPage": true,
+          "startCursor": "IAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB",
+          "endCursor": "IAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC"
+        },
+        "nodes": [
+          {
+            "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
+            "version": 1
+          },
+          {
+            "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
+            "version": 1
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 5, lines 66-83:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch": {
+      "systemPackages": {
+        "pageInfo": {
+          "hasPreviousPage": true,
+          "hasNextPage": false,
+          "startCursor": "IAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL",
+          "endCursor": "IAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAN7p"
+        },
+        "nodes": [
+          {
+            "address": "0x000000000000000000000000000000000000000000000000000000000000000b",
+            "version": 1
+          },
+          {
+            "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
+            "version": 1
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 6, lines 85-102:
+//# run-graphql --cursors bcs(0x2)
+Response: {
+  "data": {
+    "epoch": {
+      "systemPackages": {
+        "pageInfo": {
+          "hasPreviousPage": true,
+          "hasNextPage": true,
+          "startCursor": "IAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD",
+          "endCursor": "IAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAL"
+        },
+        "nodes": [
+          {
+            "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
+            "version": 1
+          },
+          {
+            "address": "0x000000000000000000000000000000000000000000000000000000000000000b",
+            "version": 1
+          }
+        ]
+      }
+    }
+  }
+}
