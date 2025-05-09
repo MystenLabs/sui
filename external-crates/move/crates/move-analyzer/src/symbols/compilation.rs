@@ -7,11 +7,15 @@
 use crate::{
     compiler_info::CompilerInfo,
     diagnostics::{lsp_diagnostics, lsp_empty_diagnostics},
-    symbols::types::{AnalyzedPkgInfo, CompiledPkgInfo, CompiledProgram, PrecomputedPkgInfo},
+    symbols::{
+        def_info::DefInfo,
+        mod_defs::ModuleDefs,
+        use_def::{UseDefMap, UseLoc},
+    },
 };
 
 use anyhow::Result;
-use lsp_types::Diagnostic;
+use lsp_types::{Diagnostic, Position};
 use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -28,7 +32,9 @@ use vfs::{
 use move_command_line_common::files::FileHash;
 use move_compiler::{
     PASS_CFGIR, PASS_PARSER, PASS_TYPING,
+    command_line::compiler::FullyCompiledProgram,
     command_line::compiler::construct_pre_compiled_lib,
+    editions::Edition,
     editions::Flavor,
     expansion::ast::ModuleIdent,
     linters::LintLevel,
@@ -36,6 +42,7 @@ use move_compiler::{
     shared::{files::MappedFiles, unique_map::UniqueMap},
     typing::ast::ModuleDefinition,
 };
+use move_ir_types::location::Loc;
 use move_package::{
     compilation::{build_plan::BuildPlan, compiled_package::ModuleFormat},
     resolution::resolution_graph::ResolvedGraph,
@@ -43,6 +50,106 @@ use move_package::{
 };
 
 pub const MANIFEST_FILE_NAME: &str = "Move.toml";
+
+/// Information about compiled program (ASTs at different levels)
+#[derive(Clone)]
+pub struct CompiledProgram {
+    pub parsed: P::Program,
+    pub typed_modules: UniqueMap<ModuleIdent, ModuleDefinition>,
+}
+
+/// Information about the compiled package and data structures
+/// computed during compilation and analysis
+#[derive(Clone)]
+pub struct CompiledPkgInfo {
+    /// Package path
+    pub path: PathBuf,
+    /// Manifest hash
+    pub manifest_hash: Option<FileHash>,
+    /// A combined hash for manifest files of the dependencies
+    pub deps_hash: String,
+    /// Information about cached dependencies
+    pub cached_deps: Option<AnalyzedPkgInfo>,
+    /// Compiled user program
+    pub program: CompiledProgram,
+    /// Maped files
+    pub mapped_files: MappedFiles,
+    /// Edition of the compiler
+    pub edition: Option<Edition>,
+    /// Compiler info
+    pub compiler_info: Option<CompilerInfo>,
+}
+
+/// Precomputed information about the package and its dependencies
+/// cached with the purpose of being re-used during the analysis.
+#[derive(Clone)]
+pub struct PrecomputedPkgInfo {
+    /// Hash of the manifest file for a given package
+    pub manifest_hash: Option<FileHash>,
+    /// Hash of dependency source files
+    pub deps_hash: String,
+    /// Precompiled deps
+    pub deps: Arc<FullyCompiledProgram>,
+    /// Symbols computation data
+    pub deps_symbols_data: Arc<SymbolsComputationData>,
+    /// Compiled user program
+    pub program: Arc<CompiledProgram>,
+    /// Mapping from file paths to file hashes
+    pub file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
+    /// Edition of the compiler used to build this package
+    pub edition: Option<Edition>,
+    /// Compiler info
+    pub compiler_info: Option<CompilerInfo>,
+}
+
+/// Package data used during compilation and analysis
+#[derive(Clone)]
+pub struct AnalyzedPkgInfo {
+    /// Cached fully compiled program representing dependencies
+    pub program_deps: Arc<FullyCompiledProgram>,
+    /// Cached symbols computation data for dependencies
+    pub symbols_data: Option<Arc<SymbolsComputationData>>,
+    /// Compiled user program
+    pub program: Option<Arc<CompiledProgram>>,
+    /// Mapping from file paths to file hashes
+    pub file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
+}
+
+/// Data used during symbols computation
+#[derive(Clone)]
+pub struct SymbolsComputationData {
+    /// Outermost definitions in a module (structs, consts, functions), keyed on a ModuleIdent
+    /// string
+    pub mod_outer_defs: BTreeMap<String, ModuleDefs>,
+    /// A UseDefMap for a given module (needs to be appropriately set before the module
+    /// processing starts) keyed on a ModuleIdent string
+    pub mod_use_defs: BTreeMap<String, UseDefMap>,
+    /// Uses (references) for a definition at a given location
+    pub references: BTreeMap<Loc, BTreeSet<UseLoc>>,
+    /// Additional information about a definitions at a given location
+    pub def_info: BTreeMap<Loc, DefInfo>,
+    /// Module name lengths in access paths for a given module (needs to be appropriately
+    /// set before the module processing starts) keyed on a ModuleIdent string
+    pub mod_to_alias_lengths: BTreeMap<String, BTreeMap<Position, usize>>,
+}
+
+impl Default for SymbolsComputationData {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SymbolsComputationData {
+    pub fn new() -> Self {
+        Self {
+            mod_outer_defs: BTreeMap::new(),
+            mod_use_defs: BTreeMap::new(),
+            references: BTreeMap::new(),
+            def_info: BTreeMap::new(),
+            mod_to_alias_lengths: BTreeMap::new(),
+        }
+    }
+}
 
 /// Builds a package at a given path and, if successful, returns parsed AST
 /// and typed AST as well as (regardless of success) diagnostics.

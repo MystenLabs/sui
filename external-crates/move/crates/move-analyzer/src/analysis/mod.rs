@@ -4,8 +4,8 @@
 use crate::{
     compiler_info::CompilerInfo,
     symbols::{
+        compilation::{CompiledPkgInfo, SymbolsComputationData},
         cursor::CursorContext,
-        types::{CompiledPkgInfo, SymbolsComputationData},
         use_def::UseDefMap,
     },
     utils::expansion_mod_ident_to_map_key,

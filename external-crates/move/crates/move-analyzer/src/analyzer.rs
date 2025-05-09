@@ -27,12 +27,12 @@ use crate::{
     inlay_hints,
     symbols::{
         self,
+        compilation::PrecomputedPkgInfo,
         requests::{
             on_document_symbol_request, on_go_to_def_request, on_go_to_type_def_request,
             on_hover_request, on_references_request,
         },
         runner::SymbolicatorRunner,
-        types::PrecomputedPkgInfo,
     },
     vfs::on_text_document_sync_notification,
 };

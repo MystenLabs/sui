@@ -7,7 +7,7 @@ use crate::{
         cursor::CursorContext,
         def_info::DefInfo,
         mod_defs::ModuleDefs,
-        use_def::{References, UseDefMap, UseLoc},
+        use_def::{References, UseDefMap},
     },
 };
 
@@ -15,123 +15,11 @@ use std::{
     cmp,
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
-    sync::Arc,
 };
 
-use lsp_types::Position;
-
-use move_command_line_common::files::FileHash;
-use move_compiler::{
-    command_line::compiler::FullyCompiledProgram,
-    editions::Edition,
-    expansion::ast::ModuleIdent,
-    naming::ast::Type,
-    parser::ast as P,
-    shared::{files::MappedFiles, unique_map::UniqueMap},
-    typing::ast::ModuleDefinition,
-};
+use move_compiler::{naming::ast::Type, shared::files::MappedFiles};
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-
-/// Information about compiled program (ASTs at different levels)
-#[derive(Clone)]
-pub struct CompiledProgram {
-    pub parsed: P::Program,
-    pub typed_modules: UniqueMap<ModuleIdent, ModuleDefinition>,
-}
-
-/// Package data used during compilation and analysis
-#[derive(Clone)]
-pub struct AnalyzedPkgInfo {
-    /// Cached fully compiled program representing dependencies
-    pub program_deps: Arc<FullyCompiledProgram>,
-    /// Cached symbols computation data for dependencies
-    pub symbols_data: Option<Arc<SymbolsComputationData>>,
-    /// Compiled user program
-    pub program: Option<Arc<CompiledProgram>>,
-    /// Mapping from file paths to file hashes
-    pub file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
-}
-
-/// Information about the compiled package and data structures
-/// computed during compilation and analysis
-#[derive(Clone)]
-pub struct CompiledPkgInfo {
-    /// Package path
-    pub path: PathBuf,
-    /// Manifest hash
-    pub manifest_hash: Option<FileHash>,
-    /// A combined hash for manifest files of the dependencies
-    pub deps_hash: String,
-    /// Information about cached dependencies
-    pub cached_deps: Option<AnalyzedPkgInfo>,
-    /// Compiled user program
-    pub program: CompiledProgram,
-    /// Maped files
-    pub mapped_files: MappedFiles,
-    /// Edition of the compiler
-    pub edition: Option<Edition>,
-    /// Compiler info
-    pub compiler_info: Option<CompilerInfo>,
-}
-
-/// Data used during symbols computation
-#[derive(Clone)]
-pub struct SymbolsComputationData {
-    /// Outermost definitions in a module (structs, consts, functions), keyed on a ModuleIdent
-    /// string
-    pub mod_outer_defs: BTreeMap<String, ModuleDefs>,
-    /// A UseDefMap for a given module (needs to be appropriately set before the module
-    /// processing starts) keyed on a ModuleIdent string
-    pub mod_use_defs: BTreeMap<String, UseDefMap>,
-    /// Uses (references) for a definition at a given location
-    pub references: BTreeMap<Loc, BTreeSet<UseLoc>>,
-    /// Additional information about a definitions at a given location
-    pub def_info: BTreeMap<Loc, DefInfo>,
-    /// Module name lengths in access paths for a given module (needs to be appropriately
-    /// set before the module processing starts) keyed on a ModuleIdent string
-    pub mod_to_alias_lengths: BTreeMap<String, BTreeMap<Position, usize>>,
-}
-
-impl Default for SymbolsComputationData {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl SymbolsComputationData {
-    pub fn new() -> Self {
-        Self {
-            mod_outer_defs: BTreeMap::new(),
-            mod_use_defs: BTreeMap::new(),
-            references: BTreeMap::new(),
-            def_info: BTreeMap::new(),
-            mod_to_alias_lengths: BTreeMap::new(),
-        }
-    }
-}
-
-/// Precomputed information about the package and its dependencies
-/// cached with the purpose of being re-used during the analysis.
-#[derive(Clone)]
-pub struct PrecomputedPkgInfo {
-    /// Hash of the manifest file for a given package
-    pub manifest_hash: Option<FileHash>,
-    /// Hash of dependency source files
-    pub deps_hash: String,
-    /// Precompiled deps
-    pub deps: Arc<FullyCompiledProgram>,
-    /// Symbols computation data
-    pub deps_symbols_data: Arc<SymbolsComputationData>,
-    /// Compiled user program
-    pub program: Arc<CompiledProgram>,
-    /// Mapping from file paths to file hashes
-    pub file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
-    /// Edition of the compiler used to build this package
-    pub edition: Option<Edition>,
-    /// Compiler info
-    pub compiler_info: Option<CompilerInfo>,
-}
 
 /// Definition of a local (or parameter)
 #[derive(Debug, Clone, Eq, PartialEq)]

@@ -6,9 +6,9 @@
 //! in the analyzer.
 
 use crate::symbols::{
-    compilation::MANIFEST_FILE_NAME,
+    compilation::{MANIFEST_FILE_NAME, PrecomputedPkgInfo},
     get_symbols,
-    types::{PrecomputedPkgInfo, Symbols},
+    types::Symbols,
 };
 
 use anyhow::{Result, anyhow};

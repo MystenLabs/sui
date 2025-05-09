@@ -55,15 +55,15 @@ use crate::{
     analysis::{run_parsing_analysis, run_typing_analysis},
     compiler_info::CompilerInfo,
     symbols::{
-        compilation::get_compiled_pkg,
+        compilation::{
+            CompiledPkgInfo, CompiledProgram, PrecomputedPkgInfo, SymbolsComputationData,
+            get_compiled_pkg,
+        },
         cursor::CursorContext,
         def_info::{DefInfo, FunType, VariantInfo},
         ide_strings::{const_val_to_ide_string, mod_ident_to_ide_string},
         mod_defs::{FieldDef, MemberDef, MemberDefInfo, ModuleDefs},
-        types::{
-            CompiledPkgInfo, CompiledProgram, DefMap, FieldOrderInfo, FileModules, FileUseDefs,
-            PrecomputedPkgInfo, Symbols, SymbolsComputationData,
-        },
+        types::{DefMap, FieldOrderInfo, FileModules, FileUseDefs, Symbols},
         use_def::{References, UseDef, UseDefMap},
     },
     utils::{expansion_mod_ident_to_map_key, loc_start_to_lsp_position_opt, lsp_position_to_loc},
