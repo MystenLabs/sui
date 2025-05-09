@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "82",
+              "maxSupportedProtocolVersion": "83",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_passkey_in_multisig": false,
@@ -1364,6 +1364,7 @@
                 "relocate_event_module": false,
                 "reshare_at_same_initial_version": false,
                 "resolve_abort_locations_to_package_id": false,
+                "resolve_type_input_ids_to_defining_id": false,
                 "rethrow_serialization_type_layout_errors": false,
                 "scoring_decision_with_validity_cutoff": true,
                 "shared_object_deletion": false,

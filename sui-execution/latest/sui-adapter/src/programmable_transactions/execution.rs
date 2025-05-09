@@ -14,15 +14,18 @@ mod checked {
         },
         gas_charger::GasCharger,
         programmable_transactions::{context::*, data_store::SuiDataStore},
+        type_resolver::TypeTagResolver,
     };
+    use move_binary_format::file_format::AbilitySet;
     use move_binary_format::{
         CompiledModule,
         compatibility::{Compatibility, InclusionCheck},
         errors::{Location, PartialVMResult, VMResult},
-        file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
+        file_format::{CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
         file_format_common::VERSION_6,
         normalized,
     };
+    use move_core_types::language_storage::StructTag;
     use move_core_types::{
         account_address::AccountAddress,
         identifier::{IdentStr, Identifier},
@@ -67,7 +70,7 @@ mod checked {
         storage::{PackageObject, get_package_objects},
         transaction::{Command, ProgrammableMoveCall, ProgrammableTransaction},
         transfer::RESOLVED_RECEIVING_STRUCT,
-        type_input::TypeInput,
+        type_input::{StructInput, TypeInput},
     };
     use sui_verifier::{
         INIT_FN_NAME,
@@ -1499,22 +1502,84 @@ mod checked {
         }
     }
 
+    // Convert a type input which may refer to a type by multiple different IDs and convert it to a
+    // TypeTag that only uses defining IDs.
+    //
+    // It's suboptimal to traverse the type, load, and then go back to a typetag to resolve to
+    // defining IDs in the typetag, but it's the cleanest solution ATM without adding in additional
+    // machinery. With the new linkage resolution that we will be adding this will
+    // be much cleaner however, we'll hold off on adding that in here, and instead add it in the
+    // new execution code.
     fn to_type_tag(
         context: &mut ExecutionContext<'_, '_, '_>,
         type_input: TypeInput,
     ) -> Result<TypeTag, ExecutionError> {
-        if context.protocol_config.validate_identifier_inputs() {
-            type_input.into_type_tag().map_err(|e| {
-                ExecutionError::new_with_source(
-                    ExecutionErrorKind::VMInvariantViolation,
-                    e.to_string(),
-                )
-            })
+        let type_tag_no_def_ids = to_type_tag_(context, type_input)?;
+        if context
+            .protocol_config
+            .resolve_type_input_ids_to_defining_id()
+        {
+            let ty = context
+                .load_type(&type_tag_no_def_ids)
+                .map_err(|e| context.convert_type_argument_error(0, e))?;
+            context.get_type_tag(&ty)
         } else {
-            // SAFETY: Preserving existing behaviour for identifier deserialization within type
-            // tags and inputs.
-            Ok(unsafe { type_input.into_type_tag_unchecked() })
+            Ok(type_tag_no_def_ids)
         }
+    }
+
+    fn to_type_tag_(
+        context: &mut ExecutionContext<'_, '_, '_>,
+        type_input: TypeInput,
+    ) -> Result<TypeTag, ExecutionError> {
+        use TypeInput as I;
+        use TypeTag as T;
+        let validate_identifiers = context.protocol_config.validate_identifier_inputs();
+        let to_ident = |s: String| {
+            if validate_identifiers {
+                Identifier::new(s).map_err(|e| {
+                    ExecutionError::new_with_source(
+                        ExecutionErrorKind::VMInvariantViolation,
+                        e.to_string(),
+                    )
+                })
+            } else {
+                // SAFETY: Preserving existing behaviour for identifier deserialization within type
+                // tags and inputs.
+                unsafe { Ok(Identifier::new_unchecked(s)) }
+            }
+        };
+
+        Ok(match type_input {
+            I::Bool => T::Bool,
+            I::U8 => T::U8,
+            I::U16 => T::U16,
+            I::U32 => T::U32,
+            I::U64 => T::U64,
+            I::U128 => T::U128,
+            I::U256 => T::U256,
+            I::Address => T::Address,
+            I::Signer => T::Signer,
+            I::Vector(t) => T::Vector(Box::new(to_type_tag_(context, *t)?)),
+            I::Struct(s) => {
+                let StructInput {
+                    address,
+                    module,
+                    name,
+                    type_params,
+                } = *s;
+                let type_params = type_params
+                    .into_iter()
+                    .map(|t| to_type_tag_(context, t))
+                    .collect::<Result<_, _>>()?;
+                T::Struct(Box::new(StructTag {
+                    address,
+                    module: to_ident(module)?,
+                    name: to_ident(name)?,
+                    type_params,
+                }))
+            }
+        })
     }
 
     fn get_datatype_ident(s: &CachedDatatype) -> (&AccountAddress, &IdentStr, &IdentStr) {
