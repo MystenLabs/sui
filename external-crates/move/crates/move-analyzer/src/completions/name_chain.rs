@@ -18,8 +18,11 @@ use crate::{
         import_insertion_info, mod_defs,
     },
     symbols::{
-        AutoImportInsertionInfo, ChainCompletionKind, ChainInfo, CursorContext, DefInfo, FunType,
-        MemberDef, MemberDefInfo, ModuleDefs, Symbols, VariantInfo, expansion_mod_ident_to_map_key,
+        expansion_mod_ident_to_map_key,
+        types::{
+            AutoImportInsertionInfo, ChainCompletionKind, ChainInfo, CursorContext, DefInfo,
+            FunType, MemberDef, MemberDefInfo, ModuleDefs, Symbols, VariantInfo,
+        },
     },
 };
 use itertools::Itertools;

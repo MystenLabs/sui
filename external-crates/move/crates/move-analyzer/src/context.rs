@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::symbols::Symbols;
+use crate::symbols::types::Symbols;
 use lsp_server::Connection;
 use std::{
     collections::BTreeMap,

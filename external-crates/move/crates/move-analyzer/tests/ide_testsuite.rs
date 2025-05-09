@@ -16,9 +16,9 @@ use move_analyzer::{
     completions::{compute_completions_with_symbols, utils::compute_cursor},
     inlay_hints::inlay_hints_internal,
     symbols::{
-        CompiledPkgInfo, Symbols, SymbolsComputationData, UseDefMap, compute_symbols,
-        compute_symbols_parsed_program, compute_symbols_pre_process, def_info_doc_string,
-        get_compiled_pkg, maybe_convert_for_guard,
+        compute_symbols, compute_symbols_parsed_program, compute_symbols_pre_process,
+        def_info_doc_string, get_compiled_pkg, maybe_convert_for_guard,
+        types::{CompiledPkgInfo, Symbols, SymbolsComputationData, UseDefMap},
     },
 };
 use move_command_line_common::testing::insta_assert;

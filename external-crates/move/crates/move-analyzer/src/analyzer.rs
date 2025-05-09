@@ -22,7 +22,7 @@ use std::{
 
 use crate::{
     code_action, completions::on_completion_request, context::Context, inlay_hints, symbols,
-    vfs::on_text_document_sync_notification,
+    symbols::types::PrecomputedPkgInfo, vfs::on_text_document_sync_notification,
 };
 use url::Url;
 use vfs::{VfsPath, impls::memory::MemoryFS};
@@ -47,9 +47,7 @@ pub fn run(implicit_deps: Dependencies) {
 
     let (connection, io_threads) = Connection::stdio();
     let symbols_map = Arc::new(Mutex::new(BTreeMap::new()));
-    let pkg_deps = Arc::new(Mutex::new(
-        BTreeMap::<PathBuf, symbols::PrecomputedPkgInfo>::new(),
-    ));
+    let pkg_deps = Arc::new(Mutex::new(BTreeMap::<PathBuf, PrecomputedPkgInfo>::new()));
     let ide_files_root: VfsPath = MemoryFS::new().into();
 
     let (id, client_response) = connection
@@ -300,7 +298,7 @@ fn on_request(
     context: &Context,
     request: &Request,
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, symbols::PrecomputedPkgInfo>>>,
+    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
     shutdown_request_received: bool,
     implicit_deps: Dependencies,
 ) -> bool {
