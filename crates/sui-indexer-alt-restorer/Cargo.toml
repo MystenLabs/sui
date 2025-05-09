@@ -19,9 +19,9 @@ diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connect
 indicatif.workspace = true
 object_store.workspace = true
 prometheus.workspace = true
-sui-archival.workspace = true
 sui-config.workspace = true
 sui-core.workspace = true
+sui-data-ingestion-core.workspace = true
 sui-field-count.workspace = true
 sui-indexer-alt-schema.workspace = true
 sui-indexer-alt-framework.workspace = true
