@@ -18,8 +18,8 @@ pub struct LocalDependency {
 
 impl LocalDependency {
     /// Returns the path to the local dependency
-    pub fn path(self) -> PathBuf {
-        self.local
+    pub fn path(&self) -> &PathBuf {
+        &self.local
     }
 }
 
