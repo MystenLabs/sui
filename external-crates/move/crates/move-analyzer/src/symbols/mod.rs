@@ -61,9 +61,9 @@ use crate::{
         types::{
             CompiledPkgInfo, CompiledProgram, DefInfo, DefMap, FieldDef, FieldOrderInfo,
             FileModules, FileUseDefs, FunType, MemberDef, MemberDefInfo, ModuleDefs,
-            PrecomputedPkgInfo, References, Symbols, SymbolsComputationData, UseDef, UseDefMap,
-            VariantInfo,
+            PrecomputedPkgInfo, Symbols, SymbolsComputationData, VariantInfo,
         },
+        use_def::{References, UseDef, UseDefMap},
     },
     utils::{expansion_mod_ident_to_map_key, loc_start_to_lsp_position_opt, lsp_position_to_loc},
 };
@@ -102,6 +102,7 @@ pub mod ide_strings;
 pub mod requests;
 pub mod runner;
 pub mod types;
+pub mod use_def;
 
 impl Symbols {
     pub fn line_uses(&self, use_fpath: &Path, use_line: u32) -> BTreeSet<UseDef> {

@@ -5,9 +5,8 @@ use crate::{
     compiler_info::CompilerInfo,
     symbols::{
         add_member_use_def, find_datatype, type_def_loc,
-        types::{
-            DefInfo, DefMap, LocalDef, MemberDefInfo, ModuleDefs, References, UseDef, UseDefMap,
-        },
+        types::{DefInfo, DefMap, LocalDef, MemberDefInfo, ModuleDefs},
+        use_def::{References, UseDef, UseDefMap},
     },
     utils::{expansion_mod_ident_to_map_key, ignored_function, loc_start_to_lsp_position_opt},
 };

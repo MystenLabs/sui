@@ -19,7 +19,8 @@ use move_analyzer::{
         compilation::get_compiled_pkg,
         compute_symbols, compute_symbols_parsed_program, compute_symbols_pre_process,
         requests::{def_info_doc_string, maybe_convert_for_guard},
-        types::{CompiledPkgInfo, Symbols, SymbolsComputationData, UseDefMap},
+        types::{CompiledPkgInfo, Symbols, SymbolsComputationData},
+        use_def::UseDefMap,
     },
 };
 use move_command_line_common::testing::insta_assert;
@@ -156,7 +157,7 @@ impl UseDefTest {
         };
         use_def.render(
             output,
-            symbols,
+            &symbols.files,
             lsp_use_line,
             &use_file_content,
             &def_file_content,
