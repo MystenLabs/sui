@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::programmable_transactions::data_store::PackageStore;
+use crate::data_store::PackageStore;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
