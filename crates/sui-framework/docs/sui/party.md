@@ -8,13 +8,11 @@ title: Module `sui::party`
 -  [Struct `Permissions`](#sui_party_Permissions)
 -  [Constants](#@Constants_0)
 -  [Function `single_owner`](#sui_party_single_owner)
--  [Function `legacy_shared`](#sui_party_legacy_shared)
 -  [Macro function `transfer`](#sui_party_transfer)
 -  [Macro function `public_transfer`](#sui_party_public_transfer)
 -  [Function `empty`](#sui_party_empty)
 -  [Function `set_permissions`](#sui_party_set_permissions)
 -  [Function `is_single_owner`](#sui_party_is_single_owner)
--  [Function `is_legacy_shared`](#sui_party_is_legacy_shared)
 -  [Function `into_native`](#sui_party_into_native)
 
 
@@ -152,18 +150,6 @@ No permissions.
 
 
 
-<a name="sui_party_LEGACY_SHARED"></a>
-
-Permissions corresponding to shared objects as defined by <code><a href="../sui/transfer.md#sui_transfer_share_object">sui::transfer::share_object</a></code>.
-However, unlike shared objects, it will be possible to "upgrade" a normal object into a
-legacy shared object--although this upgrade feature is not yet implemented.
-
-
-<pre><code><b>const</b> <a href="../sui/party.md#sui_party_LEGACY_SHARED">LEGACY_SHARED</a>: u64 = 7;
-</code></pre>
-
-
-
 <a name="sui_party_ALL_PERMISSIONS"></a>
 
 All permissions.
@@ -194,35 +180,6 @@ has any permissions. And there are no default permissions.
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/party.md#sui_party_single_owner">single_owner</a>(owner: <b>address</b>): <a href="../sui/party.md#sui_party_Party">Party</a> {
     <b>let</b> <b>mut</b> mp = <a href="../sui/party.md#sui_party_empty">empty</a>();
     mp.<a href="../sui/party.md#sui_party_set_permissions">set_permissions</a>(owner, <a href="../sui/party.md#sui_party_Permissions">Permissions</a>(<a href="../sui/party.md#sui_party_ALL_PERMISSIONS">ALL_PERMISSIONS</a>));
-    mp
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_party_legacy_shared"></a>
-
-## Function `legacy_shared`
-
-Creates a <code><a href="../sui/party.md#sui_party_Party">Party</a></code> value with permissions matching shared objects as defined by
-<code><a href="../sui/transfer.md#sui_transfer_share_object">sui::transfer::share_object</a></code>. NOTE: This does not currently support upgrading non-shared
-objects (i.e. objects must be created in the same transaction).
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/party.md#sui_party_legacy_shared">legacy_shared</a>(): <a href="../sui/party.md#sui_party_Party">sui::party::Party</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/party.md#sui_party_legacy_shared">legacy_shared</a>(): <a href="../sui/party.md#sui_party_Party">Party</a> {
-    <b>let</b> <b>mut</b> mp = <a href="../sui/party.md#sui_party_empty">empty</a>();
-    mp.default = <a href="../sui/party.md#sui_party_Permissions">Permissions</a>(<a href="../sui/party.md#sui_party_LEGACY_SHARED">LEGACY_SHARED</a>);
     mp
 }
 </code></pre>
@@ -356,31 +313,6 @@ m.members.insert(<b>address</b>, permissions);
     m.default.0 == <a href="../sui/party.md#sui_party_NO_PERMISSIONS">NO_PERMISSIONS</a> &&
     m.members.size() == 1 &&
     { <b>let</b> (_, p) = m.members.get_entry_by_idx(0); p.0 == <a href="../sui/party.md#sui_party_ALL_PERMISSIONS">ALL_PERMISSIONS</a> }
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_party_is_legacy_shared"></a>
-
-## Function `is_legacy_shared`
-
-
-
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/party.md#sui_party_is_legacy_shared">is_legacy_shared</a>(m: &<a href="../sui/party.md#sui_party_Party">sui::party::Party</a>): bool
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/party.md#sui_party_is_legacy_shared">is_legacy_shared</a>(m: &<a href="../sui/party.md#sui_party_Party">Party</a>): bool {
-    m.default.0 == <a href="../sui/party.md#sui_party_LEGACY_SHARED">LEGACY_SHARED</a> &&
-    m.members.size() == 0
 }
 </code></pre>
 

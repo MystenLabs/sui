@@ -219,7 +219,7 @@ The object must have <code>store</code> to be transferred outside of its module.
 ## Function `party_transfer`
 
 NOT YET SUPPORTED. The function will abort with <code><a href="../sui/transfer.md#sui_transfer_ENotSupported">ENotSupported</a></code> if used on a network,
-e.g. mainnet, where party objects other than <code>legacy_shared</code> are not yet supported.
+e.g. mainnet, where party objects are not yet supported.
 Transfer ownership of <code>obj</code> to the <code><a href="../sui/party.md#sui_party">party</a></code>. This transfer behaves similar to both
 <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> and <code><a href="../sui/transfer.md#sui_transfer_share_object">share_object</a></code>. It is similar to <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> in that the object be authenticated
 only by the recipient(s), in this case the <code><a href="../sui/party.md#sui_party">party</a></code>. This means that only the members
@@ -242,13 +242,9 @@ to transfer an object with <code>store</code> outside of its module.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer_party_transfer">party_transfer</a>&lt;T: key&gt;(obj: T, <a href="../sui/party.md#sui_party">party</a>: <a href="../sui/party.md#sui_party_Party">sui::party::Party</a>) {
-    <b>if</b> (<a href="../sui/party.md#sui_party">party</a>.is_legacy_shared()) {
-        <a href="../sui/transfer.md#sui_transfer_share_object_impl">share_object_impl</a>(obj)
-    } <b>else</b> {
-        <b>assert</b>!(<a href="../sui/party.md#sui_party">party</a>.is_single_owner(), <a href="../sui/transfer.md#sui_transfer_EInvalidPartyPermissions">EInvalidPartyPermissions</a>);
-        <b>let</b> (default, addresses, permissions) = <a href="../sui/party.md#sui_party">party</a>.into_native();
-        <a href="../sui/transfer.md#sui_transfer_party_transfer_impl">party_transfer_impl</a>(obj, default, addresses, permissions)
-    }
+    <b>assert</b>!(<a href="../sui/party.md#sui_party">party</a>.is_single_owner(), <a href="../sui/transfer.md#sui_transfer_EInvalidPartyPermissions">EInvalidPartyPermissions</a>);
+    <b>let</b> (default, addresses, permissions) = <a href="../sui/party.md#sui_party">party</a>.into_native();
+    <a href="../sui/transfer.md#sui_transfer_party_transfer_impl">party_transfer_impl</a>(obj, default, addresses, permissions)
 }
 </code></pre>
 
@@ -261,7 +257,7 @@ to transfer an object with <code>store</code> outside of its module.
 ## Function `public_party_transfer`
 
 NOT YET SUPPORTED. The function will abort with <code><a href="../sui/transfer.md#sui_transfer_ENotSupported">ENotSupported</a></code> if used on a network,
-e.g. mainnet, where party objects other than <code>legacy_shared</code> are not yet supported.
+e.g. mainnet, where party objects are not yet supported.
 Transfer ownership of <code>obj</code> to the <code><a href="../sui/party.md#sui_party">party</a></code>. This transfer behaves similar to both
 <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> and <code><a href="../sui/transfer.md#sui_transfer_share_object">share_object</a></code>. It is similar to <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> in that the object be authenticated
 only by the recipient(s), in this case the <code><a href="../sui/party.md#sui_party">party</a></code>. This means that only the members
@@ -285,13 +281,9 @@ The object must have <code>store</code> to be transferred outside of its module.
     obj: T,
     <a href="../sui/party.md#sui_party">party</a>: <a href="../sui/party.md#sui_party_Party">sui::party::Party</a>,
 ) {
-    <b>if</b> (<a href="../sui/party.md#sui_party">party</a>.is_legacy_shared()) {
-        <a href="../sui/transfer.md#sui_transfer_share_object_impl">share_object_impl</a>(obj)
-    } <b>else</b> {
-        <b>assert</b>!(<a href="../sui/party.md#sui_party">party</a>.is_single_owner(), <a href="../sui/transfer.md#sui_transfer_EInvalidPartyPermissions">EInvalidPartyPermissions</a>);
-        <b>let</b> (default, addresses, permissions) = <a href="../sui/party.md#sui_party">party</a>.into_native();
-        <a href="../sui/transfer.md#sui_transfer_party_transfer_impl">party_transfer_impl</a>(obj, default, addresses, permissions)
-    }
+    <b>assert</b>!(<a href="../sui/party.md#sui_party">party</a>.is_single_owner(), <a href="../sui/transfer.md#sui_transfer_EInvalidPartyPermissions">EInvalidPartyPermissions</a>);
+    <b>let</b> (default, addresses, permissions) = <a href="../sui/party.md#sui_party">party</a>.into_native();
+    <a href="../sui/transfer.md#sui_transfer_party_transfer_impl">party_transfer_impl</a>(obj, default, addresses, permissions)
 }
 </code></pre>
 

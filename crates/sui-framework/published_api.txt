@@ -1249,9 +1249,6 @@ Permissions
 single_owner
 	public fun
 	0x2::party
-legacy_shared
-	public fun
-	0x2::party
 empty
 	fun
 	0x2::party
@@ -1259,9 +1256,6 @@ set_permissions
 	fun
 	0x2::party
 is_single_owner
-	public(package) fun
-	0x2::party
-is_legacy_shared
 	public(package) fun
 	0x2::party
 into_native
