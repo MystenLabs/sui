@@ -19,12 +19,12 @@ use crate::{
     },
     symbols::{
         cursor::{ChainCompletionKind, ChainInfo, CursorContext},
-        expansion_mod_ident_to_map_key,
         types::{
             AutoImportInsertionInfo, DefInfo, FunType, MemberDef, MemberDefInfo, ModuleDefs,
             Symbols, VariantInfo,
         },
     },
+    utils::expansion_mod_ident_to_map_key,
 };
 use itertools::Itertools;
 use lsp_types::{CompletionItem, CompletionItemKind, CompletionItemLabelDetails, InsertTextFormat};

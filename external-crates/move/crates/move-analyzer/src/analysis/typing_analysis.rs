@@ -4,12 +4,12 @@
 use crate::{
     compiler_info::CompilerInfo,
     symbols::{
-        add_member_use_def, expansion_mod_ident_to_map_key, find_datatype, type_def_loc,
+        add_member_use_def, find_datatype, type_def_loc,
         types::{
             DefInfo, DefMap, LocalDef, MemberDefInfo, ModuleDefs, References, UseDef, UseDefMap,
         },
     },
-    utils::{ignored_function, loc_start_to_lsp_position_opt},
+    utils::{expansion_mod_ident_to_map_key, ignored_function, loc_start_to_lsp_position_opt},
 };
 
 use move_compiler::{

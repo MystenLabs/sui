@@ -52,7 +52,7 @@
 #![allow(clippy::non_canonical_partial_ord_impl)]
 
 use crate::{
-    analysis::{parsing_analysis, typing_analysis},
+    analysis::{run_parsing_analysis, run_typing_analysis},
     compiler_info::CompilerInfo,
     symbols::{
         compilation::get_compiled_pkg,
@@ -65,11 +65,10 @@ use crate::{
             VariantInfo,
         },
     },
-    utils::{loc_start_to_lsp_position_opt, lsp_position_to_loc},
+    utils::{expansion_mod_ident_to_map_key, loc_start_to_lsp_position_opt, lsp_position_to_loc},
 };
 
 use anyhow::Result;
-use im::ordmap::OrdMap;
 use lsp_types::{Diagnostic, Position};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -90,7 +89,7 @@ use move_compiler::{
     shared::{
         Identifier, NamedAddressMap, NamedAddressMaps, files::MappedFiles, unique_map::UniqueMap,
     },
-    typing::{ast::ModuleDefinition, visitor::TypingVisitorContext},
+    typing::ast::ModuleDefinition,
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
 };
 use move_ir_types::location::*;
@@ -196,32 +195,6 @@ pub fn compute_symbols_pre_process(
     cursor_context
 }
 
-/// Run parsing analysis for either main program or dependencies
-fn run_parsing_analysis(
-    computation_data: &mut SymbolsComputationData,
-    compiled_pkg_info: &CompiledPkgInfo,
-    cursor_context: Option<&mut CursorContext>,
-    parsed_program: &P::Program,
-) {
-    let mut parsing_symbolicator = parsing_analysis::ParsingAnalysisContext {
-        mod_outer_defs: &mut computation_data.mod_outer_defs,
-        files: &compiled_pkg_info.mapped_files,
-        references: &mut computation_data.references,
-        def_info: &mut computation_data.def_info,
-        use_defs: UseDefMap::new(),
-        current_mod_ident_str: None,
-        alias_lengths: BTreeMap::new(),
-        pkg_addresses: &NamedAddressMap::new(),
-        cursor: cursor_context,
-    };
-
-    parsing_symbolicator.prog_symbols(
-        parsed_program,
-        &mut computation_data.mod_use_defs,
-        &mut computation_data.mod_to_alias_lengths,
-    );
-}
-
 /// Process parsed program for symbols computation.
 pub fn compute_symbols_parsed_program(
     computation_data: &mut SymbolsComputationData,
@@ -249,36 +222,6 @@ pub fn compute_symbols_parsed_program(
         }
     }
     cursor_context
-}
-
-/// Run typing analysis for either main program or dependencies
-fn run_typing_analysis(
-    mut computation_data: SymbolsComputationData,
-    mapped_files: &MappedFiles,
-    compiler_info: &mut CompilerInfo,
-    typed_program_modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
-) -> SymbolsComputationData {
-    let mut typing_symbolicator = typing_analysis::TypingAnalysisContext {
-        mod_outer_defs: &mut computation_data.mod_outer_defs,
-        files: mapped_files,
-        references: &mut computation_data.references,
-        def_info: &mut computation_data.def_info,
-        use_defs: UseDefMap::new(),
-        current_mod_ident_str: None,
-        alias_lengths: &BTreeMap::new(),
-        traverse_only: false,
-        compiler_info,
-        type_params: BTreeMap::new(),
-        expression_scope: OrdMap::new(),
-    };
-
-    process_typed_modules(
-        typed_program_modules,
-        &computation_data.mod_to_alias_lengths,
-        &mut typing_symbolicator,
-        &mut computation_data.mod_use_defs,
-    );
-    computation_data
 }
 
 // Given use-defs for a the main program or dependencies, update the per-file
@@ -604,43 +547,6 @@ fn pre_process_typed_modules(
         );
         mod_outer_defs.insert(mod_ident_str.clone(), defs);
         mod_use_defs.insert(mod_ident_str, symbols);
-    }
-}
-
-fn process_typed_modules<'a>(
-    typed_modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
-    mod_to_alias_lengths: &'a BTreeMap<String, BTreeMap<Position, usize>>,
-    typing_symbolicator: &mut typing_analysis::TypingAnalysisContext<'a>,
-    mod_use_defs: &mut BTreeMap<String, UseDefMap>,
-) {
-    for (module_ident, module_def) in typed_modules.key_cloned_iter() {
-        let mod_ident_str = expansion_mod_ident_to_map_key(&module_ident.value);
-        typing_symbolicator.use_defs = mod_use_defs.remove(&mod_ident_str).unwrap();
-        typing_symbolicator.alias_lengths = mod_to_alias_lengths.get(&mod_ident_str).unwrap();
-        typing_symbolicator.visit_module(module_ident, module_def);
-
-        let use_defs = std::mem::replace(&mut typing_symbolicator.use_defs, UseDefMap::new());
-        mod_use_defs.insert(mod_ident_str, use_defs);
-    }
-}
-
-/// Produces module ident string of the form pkg::module to be used as a map key
-/// It's important that these are consistent between parsing AST and typed AST.
-pub fn expansion_mod_ident_to_map_key(mod_ident: &E::ModuleIdent_) -> String {
-    use E::Address as A;
-    match mod_ident.address {
-        A::Numerical {
-            name,
-            value,
-            name_conflict: _,
-        } => {
-            if let Some(n) = name {
-                format!("({n}={value})::{}", mod_ident.module).to_string()
-            } else {
-                format!("{value}::{}", mod_ident.module).to_string()
-            }
-        }
-        A::NamedUnassigned(n) => format!("{n}::{}", mod_ident.module).to_string(),
     }
 }
 
