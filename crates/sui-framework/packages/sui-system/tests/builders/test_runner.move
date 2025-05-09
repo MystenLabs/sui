@@ -32,6 +32,7 @@ public struct TestRunnerBuilder {
     protocol_version: Option<u64>,
     stake_distribution_counter: Option<u64>,
     start_epoch: Option<u64>,
+    epoch_duration: Option<u64>,
 }
 
 public fun new(): TestRunnerBuilder {
@@ -43,6 +44,7 @@ public fun new(): TestRunnerBuilder {
         validators_initial_stake: option::none(),
         protocol_version: option::none(),
         stake_distribution_counter: option::none(),
+        epoch_duration: option::none(),
         start_epoch: option::none(),
     }
 }
@@ -58,6 +60,7 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
         validators_initial_stake,
         protocol_version,
         stake_distribution_counter,
+        epoch_duration,
         start_epoch,
     } = builder;
 
@@ -70,7 +73,7 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
     // create system parameters
     // TODO: make this configurable
     let system_parameters = sui_system_state_inner::create_system_parameters(
-        42, // epoch_duration_ms, doesn't matter what number we put here
+        epoch_duration.destroy_or!(42), // epoch_duration_ms, doesn't matter what number we put here
         0, // stake_subsidy_start_epoch
         150, // max_validator_count
         1, // min_validator_joining_stake
@@ -123,6 +126,11 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
     });
 
     runner
+}
+
+public fun epoch_duration(mut builder: TestRunnerBuilder, epoch_duration: u64): TestRunnerBuilder {
+    builder.epoch_duration = option::some(epoch_duration);
+    builder
 }
 
 public fun validators(
@@ -411,6 +419,27 @@ public fun stake_with(runner: &mut TestRunner, validator: address, amount: u64) 
             ctx,
         );
     });
+}
+
+/// Call the `request_add_stake_non_entry` function on the system state.
+public fun stake_with_and_take(
+    runner: &mut TestRunner,
+    validator: address,
+    amount: u64,
+): StakedSui {
+    let TestRunner { scenario, sender } = runner;
+    let staked_sui;
+    scenario.next_tx(*sender);
+    runner.system_tx!(|system, ctx| {
+        staked_sui =
+            system.request_add_stake_non_entry(
+                coin::mint_for_testing(amount * MIST_PER_SUI, ctx),
+                validator,
+                ctx,
+            );
+    });
+
+    staked_sui
 }
 
 /// Call the `request_withdraw_stake` function on the system state.

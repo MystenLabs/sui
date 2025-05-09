@@ -13,14 +13,11 @@ use sui::balance;
 use sui::coin;
 use sui::sui::SUI;
 use sui::test_scenario::{Self, Scenario};
-use sui::test_utils::destroy;
 use sui::url;
 use sui_system::governance_test_utils::{
     advance_epoch,
     set_up_sui_system_state,
-    create_sui_system_state_for_testing,
-    stake_with,
-    unstake
+    create_sui_system_state_for_testing
 };
 use sui_system::sui_system::SuiSystemState;
 use sui_system::sui_system_state_inner;
@@ -29,6 +26,8 @@ use sui_system::validator::{Self, Validator};
 use sui_system::validator_builder;
 use sui_system::validator_cap::UnverifiedValidatorOperationCap;
 use sui_system::validator_set;
+
+const MIST_PER_SUI: u64 = 1_000_000_000;
 
 #[test]
 // Scenario: perform a series of report and undo report operations on a validator.
@@ -411,6 +410,152 @@ fun staking_pool_mappings() {
 
     runner.finish();
 }
+
+#[random_test]
+/// Check that the stake subsidy distribution counter is incremented correctly,
+/// depending on the configured epoch duration and the timestamp of the epoch start.
+///
+/// The test is parameterized by the epoch duration, which is chosen randomly.
+fun skip_stake_subsidy(epoch_duration: u16) {
+    let epoch_duration = epoch_duration as u64;
+    let mut runner = test_runner::new()
+        .epoch_duration(epoch_duration)
+        .validators(vector[
+            validator_builder::new().sui_address(@1).initial_stake(100),
+            validator_builder::new().sui_address(@2).initial_stake(100),
+        ])
+        .build();
+
+    // Advance epoch with the epoch duration timestamp.
+    // Expect the counter to be incremented.
+    let time = epoch_duration;
+    let opts = runner.advance_epoch_opts().epoch_start_time(time);
+    runner.advance_epoch(option::some(opts)).destroy_for_testing();
+    runner.system_tx!(|system, _| {
+        let counter = system.get_stake_subsidy_distribution_counter();
+        assert_eq!(counter, 1);
+    });
+
+    // Advance epoch with the epoch duration slightly less than the timestamp.
+    // Expect the counter to not be incremented.
+    let time = time + epoch_duration - 1;
+    let opts = runner.advance_epoch_opts().epoch_start_time(time);
+    runner.advance_epoch(option::some(opts)).destroy_for_testing();
+    runner.system_tx!(|system, _| {
+        let counter = system.get_stake_subsidy_distribution_counter();
+        assert_eq!(counter, 1);
+    });
+
+    // Advance epoch with the full epoch duration.
+    // Expect the counter to be incremented.
+    let time = time + epoch_duration;
+    let opts = runner.advance_epoch_opts().epoch_start_time(time);
+    runner.advance_epoch(option::some(opts)).destroy_for_testing();
+    runner.system_tx!(|system, _| {
+        let counter = system.get_stake_subsidy_distribution_counter();
+        assert_eq!(counter, 2);
+    });
+
+    runner.finish();
+}
+
+#[random_test]
+// Stake random amount of SUI and check that the pending and withdraw amounts are correct.
+fun withdraw_inactive_stake(stake: u16) {
+    let stake_amount = stake as u64;
+    let validator = validator_builder::new().sui_address(@1).initial_stake(100);
+    let mut runner = test_runner::new().validators(vector[validator]).build();
+
+    // Check initial staking values.
+    runner.system_tx!(|system, _| {
+        let pool = system.active_validator_by_address(@1).get_staking_pool_ref();
+        assert_eq!(pool.pending_stake_amount(), 0);
+        assert_eq!(pool.pending_stake_withdraw_amount(), 0);
+        assert_eq!(pool.sui_balance(), 100 * MIST_PER_SUI);
+    });
+
+    // Stake 1 SUI.
+    runner.set_sender(@5).stake_with(@1, stake_amount);
+
+    // Check that pending stake amount is 1 SUI.
+    runner.system_tx!(|system, _| {
+        let pool = system.active_validator_by_address(@1).get_staking_pool_ref();
+        assert_eq!(pool.pending_stake_amount(), stake_amount * MIST_PER_SUI);
+        assert_eq!(pool.pending_stake_withdraw_amount(), 0);
+        assert_eq!(pool.sui_balance(), 100 * MIST_PER_SUI);
+    });
+
+    // Unstake before activation epoch.
+    runner.set_sender(@5).unstake(0);
+
+    // Check that pending stake amount is 0.
+    runner.system_tx!(|system, _| {
+        let pool = system.active_validator_by_address(@1).get_staking_pool_ref();
+        assert_eq!(pool.pending_stake_amount(), 0);
+        assert_eq!(pool.pending_stake_withdraw_amount(), 0);
+        assert_eq!(pool.sui_balance(), 100 * MIST_PER_SUI);
+    });
+
+    runner.finish();
+}
+
+#[test]
+fun convert_to_fungible_staked_sui_and_redeem_2() {
+    let mut runner = test_runner::new()
+        .validators(vector[
+            validator_builder::new().sui_address(@1).initial_stake(100),
+            validator_builder::new().sui_address(@2).initial_stake(100),
+        ])
+        .build();
+
+    // Check initial stake values.
+    runner.system_tx!(|system, _| {
+        let pool = system.active_validator_by_address(@1).get_staking_pool_ref();
+        assert_eq!(pool.pending_stake_amount(), 0);
+        assert_eq!(pool.pending_stake_withdraw_amount(), 0);
+        assert_eq!(pool.sui_balance(), 100 * MIST_PER_SUI);
+    });
+
+    let staked_sui = runner.set_sender(@5).stake_with_and_take(@1, 100);
+
+    assert_eq!(staked_sui.amount(), 100 * MIST_PER_SUI);
+
+    // Stake is now active. Check that the stake amount is correct.
+    runner.advance_epoch(option::none()).destroy_for_testing();
+    runner.system_tx!(|system, _| {
+        let pool = system.active_validator_by_address(@1).get_staking_pool_ref();
+        assert_eq!(pool.pending_stake_amount(), 0);
+        assert_eq!(pool.pending_stake_withdraw_amount(), 0);
+        assert_eq!(pool.sui_balance(), 200 * MIST_PER_SUI);
+    });
+
+    // Convert to fungible staked SUI.
+    let fungible_staked_sui;
+    runner.system_tx!(|system, _| {
+        fungible_staked_sui = system.convert_to_fungible_staked_sui(staked_sui, runner.ctx());
+    });
+
+    assert_eq!(fungible_staked_sui.value(), 100 * MIST_PER_SUI);
+
+    let sui;
+    runner.system_tx!(|system, _| {
+        sui = system.redeem_fungible_staked_sui(fungible_staked_sui, runner.ctx());
+    });
+
+    assert_eq!(sui.destroy_for_testing(), 100 * MIST_PER_SUI);
+
+    runner.advance_epoch(option::none()).destroy_for_testing();
+    runner.system_tx!(|system, _| {
+        let pool = system.active_validator_by_address(@1).get_staking_pool_ref();
+        assert_eq!(pool.pending_stake_amount(), 0);
+        assert_eq!(pool.pending_stake_withdraw_amount(), 0);
+        assert_eq!(pool.sui_balance(), 100 * MIST_PER_SUI);
+    });
+
+    runner.finish();
+}
+
+// === Metadata Tests ===
 
 #[test]
 fun active_validator_update_metadata() {
@@ -861,158 +1006,6 @@ fun add_validator_candidate_failure_duplicate_with_active() {
         scenario.ctx(),
     );
     test_scenario::return_shared(system_state);
-    scenario_val.end();
-}
-
-#[test]
-fun skip_stake_subsidy() {
-    let mut scenario_val = test_scenario::begin(@0x0);
-    let scenario = &mut scenario_val;
-    // Epoch duration is set to be 42 here.
-    set_up_sui_system_state(vector[@0x1, @0x2]);
-
-    // If the epoch length is less than 42 then the stake subsidy distribution counter should not be incremented. Otherwise it should.
-    advance_epoch_and_check_distribution_counter(scenario, 42, true);
-    advance_epoch_and_check_distribution_counter(scenario, 32, false);
-    advance_epoch_and_check_distribution_counter(scenario, 52, true);
-    scenario_val.end();
-}
-
-fun advance_epoch_and_check_distribution_counter(
-    scenario: &mut Scenario,
-    epoch_length: u64,
-    should_increment_counter: bool,
-) {
-    scenario.next_tx(@0x0);
-    let new_epoch = scenario.ctx().epoch() + 1;
-    let mut system_state = scenario.take_shared<SuiSystemState>();
-    let prev_epoch_time = system_state.epoch_start_timestamp_ms();
-    let prev_counter = system_state.get_stake_subsidy_distribution_counter();
-
-    let rebate = system_state.advance_epoch_for_testing(
-        new_epoch,
-        1,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        prev_epoch_time + epoch_length,
-        scenario.ctx(),
-    );
-    destroy(rebate);
-    assert_eq!(
-        system_state.get_stake_subsidy_distribution_counter(),
-        prev_counter + (if (should_increment_counter) 1 else 0),
-    );
-    test_scenario::return_shared(system_state);
-    scenario.next_epoch(@0x0);
-}
-
-#[test]
-fun withdraw_inactive_stake() {
-    let mut scenario_val = test_scenario::begin(@0x0);
-    let scenario = &mut scenario_val;
-    // Epoch duration is set to be 42 here.
-    set_up_sui_system_state(vector[@0x1, @0x2]);
-
-    {
-        scenario.next_tx(@0x0);
-        let mut system_state = scenario.take_shared<SuiSystemState>();
-        let staking_pool = system_state.active_validator_by_address(@0x1).get_staking_pool_ref();
-
-        assert!(staking_pool.pending_stake_amount() == 0, 0);
-        assert!(staking_pool.pending_stake_withdraw_amount() == 0, 0);
-        assert!(staking_pool.sui_balance() == 100 * 1_000_000_000, 0);
-
-        test_scenario::return_shared(system_state);
-    };
-
-    stake_with(@0x0, @0x1, 1, scenario);
-
-    {
-        scenario.next_tx(@0x0);
-        let mut system_state = scenario.take_shared<SuiSystemState>();
-        let staking_pool = system_state.active_validator_by_address(@0x1).get_staking_pool_ref();
-
-        assert!(staking_pool.pending_stake_amount() == 1_000_000_000, 0);
-        assert!(staking_pool.pending_stake_withdraw_amount() == 0, 0);
-        assert!(staking_pool.sui_balance() == 100 * 1_000_000_000, 0);
-
-        test_scenario::return_shared(system_state);
-    };
-
-    unstake(@0x0, 0, scenario);
-
-    {
-        scenario.next_tx(@0x0);
-        let mut system_state = scenario.take_shared<SuiSystemState>();
-        let staking_pool = system_state.active_validator_by_address(@0x1).get_staking_pool_ref();
-
-        assert!(staking_pool.pending_stake_amount() == 0, 0);
-        assert!(staking_pool.pending_stake_withdraw_amount() == 0, 0);
-        assert!(staking_pool.sui_balance() == 100 * 1_000_000_000, 0);
-
-        test_scenario::return_shared(system_state);
-    };
-
-    scenario_val.end();
-}
-
-#[test]
-fun convert_to_fungible_staked_sui_and_redeem() {
-    let mut scenario_val = test_scenario::begin(@0x0);
-    let scenario = &mut scenario_val;
-    // Epoch duration is set to be 42 here.
-    set_up_sui_system_state(vector[@0x1, @0x2]);
-
-    {
-        scenario.next_tx(@0x0);
-        let mut system_state = scenario.take_shared<SuiSystemState>();
-        let staking_pool = system_state.active_validator_by_address(@0x1).get_staking_pool_ref();
-
-        assert!(staking_pool.pending_stake_amount() == 0, 0);
-        assert!(staking_pool.pending_stake_withdraw_amount() == 0, 0);
-        assert!(staking_pool.sui_balance() == 100 * 1_000_000_000, 0);
-
-        test_scenario::return_shared(system_state);
-    };
-
-    scenario.next_tx(@0x0);
-    let mut system_state = scenario.take_shared<SuiSystemState>();
-
-    let staked_sui = system_state.request_add_stake_non_entry(
-        coin::mint_for_testing(100_000_000_000, scenario.ctx()),
-        @0x1,
-        scenario.ctx(),
-    );
-
-    assert!(staked_sui.amount() == 100_000_000_000, 0);
-
-    test_scenario::return_shared(system_state);
-    advance_epoch(scenario);
-
-    let mut system_state = scenario.take_shared<SuiSystemState>();
-    let fungible_staked_sui = system_state.convert_to_fungible_staked_sui(
-        staked_sui,
-        scenario.ctx(),
-    );
-
-    assert!(fungible_staked_sui.value() == 100_000_000_000, 0);
-
-    let sui = system_state.redeem_fungible_staked_sui(
-        fungible_staked_sui,
-        scenario.ctx(),
-    );
-
-    assert!(sui.value() == 100_000_000_000, 0);
-
-    test_scenario::return_shared(system_state);
-
-    advance_epoch(scenario);
-
-    sui::test_utils::destroy(sui);
     scenario_val.end();
 }
 
