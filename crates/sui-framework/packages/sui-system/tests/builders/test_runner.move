@@ -313,6 +313,7 @@ public fun finish(runner: TestRunner) {
 
 // === Macros ===
 
+/// Get a mutable reference to Scenario and call a function $f on it.
 public macro fun scenario_fn($runner: &mut TestRunner, $f: |&mut Scenario|) {
     let sender = sender($runner);
     let scenario = scenario_mut($runner);
@@ -320,6 +321,7 @@ public macro fun scenario_fn($runner: &mut TestRunner, $f: |&mut Scenario|) {
     $f(scenario);
 }
 
+/// Get an object from the sender's inventory and call a function $f on it.
 public macro fun owned_tx<$Object>($runner: &mut TestRunner, $f: |$Object|) {
     let sender = sender($runner);
     let scenario = scenario_mut($runner);
@@ -327,7 +329,7 @@ public macro fun owned_tx<$Object>($runner: &mut TestRunner, $f: |$Object|) {
     $f(scenario.take_from_sender<$Object>());
 }
 
-/// Run a transaction on the system state
+/// Run a transaction on the system state.
 public macro fun system_tx($runner: &mut TestRunner, $f: |&mut SuiSystemState, &mut TxContext|) {
     let sender = sender($runner);
     let scenario = scenario_mut($runner);
@@ -342,16 +344,19 @@ public macro fun system_tx($runner: &mut TestRunner, $f: |&mut SuiSystemState, &
 ///
 /// ```rust
 /// // default, no rewards
-/// runner.advance_epoch(option::none());
+/// runner.advance_epoch(option::none()).destroy_for_testing();
 ///
-/// // custom options
+/// // custom options, supports any combination of the following:
 /// let opts = runner.advance_epoch_opts()
 ///     .storage_charge(100)
 ///     .computation_charge(200)
 ///     .storage_rebate(10)
+///     .non_refundable_storage_fee(10)
+///     .storage_fund_reinvest_rate(10)
+///     .protocol_version(2)
 ///     .reward_slashing_rate(10);
 ///
-/// runner.advance_epoch(option::some(opts));
+/// runner.advance_epoch(option::some(opts)).destroy_for_testing();
 /// ```
 public fun advance_epoch(
     runner: &mut TestRunner,

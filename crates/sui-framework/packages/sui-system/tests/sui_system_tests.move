@@ -16,9 +16,7 @@ use sui::test_scenario::{Self, Scenario};
 use sui::test_utils::destroy;
 use sui::url;
 use sui_system::governance_test_utils::{
-    add_validator_full_flow,
     advance_epoch,
-    remove_validator,
     set_up_sui_system_state,
     create_sui_system_state_for_testing,
     stake_with,
@@ -339,285 +337,79 @@ fun validator_address_by_pool_id() {
 
 #[test]
 fun staking_pool_mappings() {
-    let mut scenario_val = test_scenario::begin(@0x0);
-    let scenario = &mut scenario_val;
+    let mut runner = test_runner::new()
+        .validators(vector[
+            validator_builder::new().sui_address(@1).initial_stake(100),
+            validator_builder::new().sui_address(@2).initial_stake(100),
+            validator_builder::new().sui_address(@3).initial_stake(100),
+            validator_builder::new().sui_address(@4).initial_stake(100),
+        ])
+        .build();
 
-    set_up_sui_system_state(vector[@0x1, @0x2, @0x3, @0x4]);
-    scenario.next_tx(@0x1);
-    let mut system_state = scenario.take_shared<SuiSystemState>();
-    let pool_id_1 = system_state.validator_staking_pool_id(@0x1);
-    let pool_id_2 = system_state.validator_staking_pool_id(@0x2);
-    let pool_id_3 = system_state.validator_staking_pool_id(@0x3);
-    let pool_id_4 = system_state.validator_staking_pool_id(@0x4);
-    let mut pool_mappings = system_state.validator_staking_pool_mappings();
-    assert_eq!(pool_mappings.length(), 4);
-    assert_eq!(pool_mappings[pool_id_1], @0x1);
-    assert_eq!(pool_mappings[pool_id_2], @0x2);
-    assert_eq!(pool_mappings[pool_id_3], @0x3);
-    assert_eq!(pool_mappings[pool_id_4], @0x4);
-    test_scenario::return_shared(system_state);
+    // Check that the pool mappings are correct.
+    runner.system_tx!(|system, _| {
+        let pool_id_1 = system.validator_staking_pool_id(@1);
+        let pool_id_2 = system.validator_staking_pool_id(@2);
+        let pool_id_3 = system.validator_staking_pool_id(@3);
+        let pool_id_4 = system.validator_staking_pool_id(@4);
+        let pool_mappings = system.validator_staking_pool_mappings();
 
-    let new_validator_addr = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
-    scenario.next_tx(new_validator_addr);
-    // Seed [0; 32]
-    let pubkey =
-        x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
-    // Generated with [fn test_proof_of_possession]
-    let pop =
-        x"b01cc86f421beca7ab4cfca87c0799c4d038c199dd399fbec1924d4d4367866dba9e84d514710b91feb65316e4ceef43";
+        assert_eq!(pool_mappings.length(), 4);
+        assert_eq!(pool_mappings[pool_id_1], @1);
+        assert_eq!(pool_mappings[pool_id_2], @2);
+        assert_eq!(pool_mappings[pool_id_3], @3);
+        assert_eq!(pool_mappings[pool_id_4], @4);
+    });
 
-    // Add a validator
-    add_validator_full_flow(
-        new_validator_addr,
-        b"name2",
-        b"/ip4/127.0.0.1/udp/82",
-        100,
-        pubkey,
-        pop,
-        scenario,
-    );
-    advance_epoch(scenario);
+    // Add a new validator.
+    runner.set_sender(@0);
+    let validator = validator_builder::preset().initial_stake(100).build(runner.ctx());
+    let new_validator = validator.sui_address();
+    runner.add_validator_candidate(validator);
+    runner.set_sender(new_validator).add_validator();
+    runner.advance_epoch(option::none()).destroy_for_testing();
 
-    scenario.next_tx(@0x1);
-    let mut system_state = scenario.take_shared<SuiSystemState>();
-    let pool_id_5 = system_state.validator_staking_pool_id(new_validator_addr);
-    pool_mappings = system_state.validator_staking_pool_mappings();
-    // Check that the previous mappings didn't change as well.
-    assert_eq!(pool_mappings.length(), 5);
-    assert_eq!(pool_mappings[pool_id_1], @0x1);
-    assert_eq!(pool_mappings[pool_id_2], @0x2);
-    assert_eq!(pool_mappings[pool_id_3], @0x3);
-    assert_eq!(pool_mappings[pool_id_4], @0x4);
-    assert_eq!(pool_mappings[pool_id_5], new_validator_addr);
-    test_scenario::return_shared(system_state);
+    // save this for later.
+    let pool_id_1;
+
+    // Check that the pool mappings are correct.
+    runner.system_tx!(|system, _| {
+        pool_id_1 = system.validator_staking_pool_id(@1);
+        let pool_id_2 = system.validator_staking_pool_id(@2);
+        let pool_id_3 = system.validator_staking_pool_id(@3);
+        let pool_id_4 = system.validator_staking_pool_id(@4);
+        let pool_id_5 = system.validator_staking_pool_id(new_validator);
+        let pool_mappings = system.validator_staking_pool_mappings();
+
+        assert_eq!(pool_mappings.length(), 5);
+        assert_eq!(pool_mappings[pool_id_1], @1);
+        assert_eq!(pool_mappings[pool_id_2], @2);
+        assert_eq!(pool_mappings[pool_id_3], @3);
+        assert_eq!(pool_mappings[pool_id_4], @4);
+        assert_eq!(pool_mappings[pool_id_5], new_validator);
+    });
 
     // Remove one of the original validators.
-    remove_validator(@0x1, scenario);
-    advance_epoch(scenario);
+    runner.set_sender(@1).remove_validator();
+    runner.advance_epoch(option::none()).destroy_for_testing();
 
-    scenario.next_tx(@0x1);
-    let mut system_state = scenario.take_shared<SuiSystemState>();
-    pool_mappings = system_state.validator_staking_pool_mappings();
-    // Check that the previous mappings didn't change as well.
-    assert_eq!(pool_mappings.length(), 4);
-    assert_eq!(pool_mappings.contains(pool_id_1), false);
-    assert_eq!(pool_mappings[pool_id_2], @0x2);
-    assert_eq!(pool_mappings[pool_id_3], @0x3);
-    assert_eq!(pool_mappings[pool_id_4], @0x4);
-    assert_eq!(pool_mappings[pool_id_5], new_validator_addr);
-    test_scenario::return_shared(system_state);
+    // Check pool mappings one last time. Validator 1 is expected to be removed.
+    runner.system_tx!(|system, _| {
+        let pool_id_2 = system.validator_staking_pool_id(@2);
+        let pool_id_3 = system.validator_staking_pool_id(@3);
+        let pool_id_4 = system.validator_staking_pool_id(@4);
+        let pool_id_5 = system.validator_staking_pool_id(new_validator);
+        let pool_mappings = system.validator_staking_pool_mappings();
 
-    scenario_val.end();
-}
+        assert!(!pool_mappings.contains(pool_id_1));
+        assert_eq!(pool_mappings.length(), 4);
+        assert_eq!(pool_mappings[pool_id_2], @2);
+        assert_eq!(pool_mappings[pool_id_3], @3);
+        assert_eq!(pool_mappings[pool_id_4], @4);
+        assert_eq!(pool_mappings[pool_id_5], new_validator);
+    });
 
-fun update_candidate(
-    scenario: &mut Scenario,
-    system_state: &mut SuiSystemState,
-    name: vector<u8>,
-    protocol_pub_key: vector<u8>,
-    pop: vector<u8>,
-    network_address: vector<u8>,
-    p2p_address: vector<u8>,
-    commission_rate: u64,
-    gas_price: u64,
-) {
-    let ctx = scenario.ctx();
-    system_state.update_validator_name(name, ctx);
-    system_state.update_validator_description(b"new_desc", ctx);
-    system_state.update_validator_image_url(b"new_image_url", ctx);
-    system_state.update_validator_project_url(b"new_project_url", ctx);
-    system_state.update_candidate_validator_network_address(network_address, ctx);
-    system_state.update_candidate_validator_p2p_address(p2p_address, ctx);
-    system_state.update_candidate_validator_primary_address(b"/ip4/127.0.0.1/udp/80", ctx);
-    system_state.update_candidate_validator_worker_address(b"/ip4/127.0.0.1/udp/80", ctx);
-    system_state.update_candidate_validator_protocol_pubkey(
-        protocol_pub_key,
-        pop,
-        ctx,
-    );
-
-    // prettier-ignore
-    system_state.update_candidate_validator_worker_pubkey(
-        vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
-        ctx,
-    );
-    // prettier-ignore
-    system_state.update_candidate_validator_network_pubkey(
-        vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
-        ctx,
-    );
-
-    system_state.set_candidate_validator_commission_rate(commission_rate, ctx);
-    let cap = scenario.take_from_sender<UnverifiedValidatorOperationCap>();
-    system_state.set_candidate_validator_gas_price(&cap, gas_price);
-    scenario.return_to_sender(cap);
-}
-
-fun verify_candidate(
-    validator: &Validator,
-    name: vector<u8>,
-    protocol_pub_key: vector<u8>,
-    pop: vector<u8>,
-    network_address: vector<u8>,
-    p2p_address: vector<u8>,
-    commission_rate: u64,
-    gas_price: u64,
-) {
-    // prettier-ignore
-    verify_current_epoch_metadata(
-        validator,
-        name,
-        protocol_pub_key,
-        pop,
-        b"/ip4/127.0.0.1/udp/80",
-        b"/ip4/127.0.0.1/udp/80",
-        network_address,
-        p2p_address,
-        vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
-        vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
-    );
-    assert!(validator.commission_rate() == commission_rate);
-    assert!(validator.gas_price() == gas_price);
-}
-
-// Note: `pop` MUST be a valid signature using sui_address and protocol_pubkey_bytes.
-// To produce a valid PoP, run [fn test_proof_of_possession].
-fun update_metadata(
-    scenario: &mut Scenario,
-    system_state: &mut SuiSystemState,
-    name: vector<u8>,
-    protocol_pub_key: vector<u8>,
-    pop: vector<u8>,
-    network_address: vector<u8>,
-    p2p_address: vector<u8>,
-    network_pubkey: vector<u8>,
-    worker_pubkey: vector<u8>,
-) {
-    let ctx = scenario.ctx();
-    system_state.update_validator_name(name, ctx);
-    system_state.update_validator_description(b"new_desc", ctx);
-    system_state.update_validator_image_url(b"new_image_url", ctx);
-    system_state.update_validator_project_url(b"new_project_url", ctx);
-    system_state.update_validator_next_epoch_network_address(network_address, ctx);
-    system_state.update_validator_next_epoch_p2p_address(p2p_address, ctx);
-    system_state.update_validator_next_epoch_primary_address(b"/ip4/168.168.168.168/udp/80", ctx);
-    system_state.update_validator_next_epoch_worker_address(b"/ip4/168.168.168.168/udp/80", ctx);
-    system_state.update_validator_next_epoch_protocol_pubkey(
-        protocol_pub_key,
-        pop,
-        ctx,
-    );
-    system_state.update_validator_next_epoch_network_pubkey(network_pubkey, ctx);
-    system_state.update_validator_next_epoch_worker_pubkey(worker_pubkey, ctx);
-}
-
-fun verify_metadata(
-    validator: &Validator,
-    name: vector<u8>,
-    protocol_pub_key: vector<u8>,
-    pop: vector<u8>,
-    network_address: vector<u8>,
-    p2p_address: vector<u8>,
-    network_pubkey: vector<u8>,
-    worker_pubkey: vector<u8>,
-    new_protocol_pub_key: vector<u8>,
-    new_pop: vector<u8>,
-    new_network_address: vector<u8>,
-    new_p2p_address: vector<u8>,
-    new_network_pubkey: vector<u8>,
-    new_worker_pubkey: vector<u8>,
-) {
-    // Current epoch
-    verify_current_epoch_metadata(
-        validator,
-        name,
-        protocol_pub_key,
-        pop,
-        b"/ip4/127.0.0.1/udp/80",
-        b"/ip4/127.0.0.1/udp/80",
-        network_address,
-        p2p_address,
-        network_pubkey,
-        worker_pubkey,
-    );
-
-    // Next epoch
-    assert!(
-        validator.next_epoch_network_address() == &option::some(new_network_address.to_string()),
-    );
-    assert!(validator.next_epoch_p2p_address() == &option::some(new_p2p_address.to_string()));
-    assert!(
-        validator.next_epoch_primary_address() == &option::some(b"/ip4/168.168.168.168/udp/80".to_string()),
-    );
-    assert!(
-        validator.next_epoch_worker_address() == &option::some(b"/ip4/168.168.168.168/udp/80".to_string()),
-    );
-    assert!(validator.next_epoch_protocol_pubkey_bytes() == &option::some(new_protocol_pub_key), 0);
-    assert!(validator.next_epoch_proof_of_possession() == &option::some(new_pop), 0);
-    assert!(validator.next_epoch_worker_pubkey_bytes() == &option::some(new_worker_pubkey), 0);
-    assert!(validator.next_epoch_network_pubkey_bytes() == &option::some(new_network_pubkey), 0);
-}
-
-fun verify_current_epoch_metadata(
-    validator: &Validator,
-    name: vector<u8>,
-    protocol_pub_key: vector<u8>,
-    pop: vector<u8>,
-    primary_address: vector<u8>,
-    worker_address: vector<u8>,
-    network_address: vector<u8>,
-    p2p_address: vector<u8>,
-    network_pubkey_bytes: vector<u8>,
-    worker_pubkey_bytes: vector<u8>,
-) {
-    // Current epoch
-    assert!(validator.name() == &name.to_string());
-    assert!(validator.description() == &b"new_desc".to_string());
-    assert!(validator.image_url() == &url::new_unsafe_from_bytes(b"new_image_url"));
-    assert!(validator.project_url() == &url::new_unsafe_from_bytes(b"new_project_url"));
-    assert!(validator.network_address() == &network_address.to_string());
-    assert!(validator.p2p_address() == &p2p_address.to_string());
-    assert!(validator.primary_address() == &primary_address.to_string());
-    assert!(validator.worker_address() == &worker_address.to_string());
-    assert!(validator.protocol_pubkey_bytes() == &protocol_pub_key);
-    assert!(validator.proof_of_possession() == &pop);
-    assert!(validator.worker_pubkey_bytes() == &worker_pubkey_bytes);
-    assert!(validator.network_pubkey_bytes() == &network_pubkey_bytes);
-}
-
-fun verify_metadata_after_advancing_epoch(
-    validator: &Validator,
-    name: vector<u8>,
-    protocol_pub_key: vector<u8>,
-    pop: vector<u8>,
-    network_address: vector<u8>,
-    p2p_address: vector<u8>,
-    network_pubkey: vector<u8>,
-    worker_pubkey: vector<u8>,
-) {
-    // Current epoch
-    verify_current_epoch_metadata(
-        validator,
-        name,
-        protocol_pub_key,
-        pop,
-        b"/ip4/168.168.168.168/udp/80",
-        b"/ip4/168.168.168.168/udp/80",
-        network_address,
-        p2p_address,
-        network_pubkey,
-        worker_pubkey,
-    );
-
-    // Next epoch
-    assert!(validator.next_epoch_network_address().is_none());
-    assert!(validator.next_epoch_p2p_address().is_none());
-    assert!(validator.next_epoch_primary_address().is_none());
-    assert!(validator.next_epoch_worker_address().is_none());
-    assert!(validator.next_epoch_protocol_pubkey_bytes().is_none());
-    assert!(validator.next_epoch_proof_of_possession().is_none());
-    assert!(validator.next_epoch_worker_pubkey_bytes().is_none());
-    assert!(validator.next_epoch_network_pubkey_bytes().is_none());
+    runner.finish();
 }
 
 #[test]
@@ -1222,4 +1014,214 @@ fun convert_to_fungible_staked_sui_and_redeem() {
 
     sui::test_utils::destroy(sui);
     scenario_val.end();
+}
+
+fun update_candidate(
+    scenario: &mut Scenario,
+    system_state: &mut SuiSystemState,
+    name: vector<u8>,
+    protocol_pub_key: vector<u8>,
+    pop: vector<u8>,
+    network_address: vector<u8>,
+    p2p_address: vector<u8>,
+    commission_rate: u64,
+    gas_price: u64,
+) {
+    let ctx = scenario.ctx();
+    system_state.update_validator_name(name, ctx);
+    system_state.update_validator_description(b"new_desc", ctx);
+    system_state.update_validator_image_url(b"new_image_url", ctx);
+    system_state.update_validator_project_url(b"new_project_url", ctx);
+    system_state.update_candidate_validator_network_address(network_address, ctx);
+    system_state.update_candidate_validator_p2p_address(p2p_address, ctx);
+    system_state.update_candidate_validator_primary_address(b"/ip4/127.0.0.1/udp/80", ctx);
+    system_state.update_candidate_validator_worker_address(b"/ip4/127.0.0.1/udp/80", ctx);
+    system_state.update_candidate_validator_protocol_pubkey(
+        protocol_pub_key,
+        pop,
+        ctx,
+    );
+
+    // prettier-ignore
+    system_state.update_candidate_validator_worker_pubkey(
+        vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
+        ctx,
+    );
+    // prettier-ignore
+    system_state.update_candidate_validator_network_pubkey(
+        vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
+        ctx,
+    );
+
+    system_state.set_candidate_validator_commission_rate(commission_rate, ctx);
+    let cap = scenario.take_from_sender<UnverifiedValidatorOperationCap>();
+    system_state.set_candidate_validator_gas_price(&cap, gas_price);
+    scenario.return_to_sender(cap);
+}
+
+fun verify_candidate(
+    validator: &Validator,
+    name: vector<u8>,
+    protocol_pub_key: vector<u8>,
+    pop: vector<u8>,
+    network_address: vector<u8>,
+    p2p_address: vector<u8>,
+    commission_rate: u64,
+    gas_price: u64,
+) {
+    // prettier-ignore
+    verify_current_epoch_metadata(
+        validator,
+        name,
+        protocol_pub_key,
+        pop,
+        b"/ip4/127.0.0.1/udp/80",
+        b"/ip4/127.0.0.1/udp/80",
+        network_address,
+        p2p_address,
+        vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
+        vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
+    );
+    assert!(validator.commission_rate() == commission_rate);
+    assert!(validator.gas_price() == gas_price);
+}
+
+// Note: `pop` MUST be a valid signature using sui_address and protocol_pubkey_bytes.
+// To produce a valid PoP, run [fn test_proof_of_possession].
+fun update_metadata(
+    scenario: &mut Scenario,
+    system_state: &mut SuiSystemState,
+    name: vector<u8>,
+    protocol_pub_key: vector<u8>,
+    pop: vector<u8>,
+    network_address: vector<u8>,
+    p2p_address: vector<u8>,
+    network_pubkey: vector<u8>,
+    worker_pubkey: vector<u8>,
+) {
+    let ctx = scenario.ctx();
+    system_state.update_validator_name(name, ctx);
+    system_state.update_validator_description(b"new_desc", ctx);
+    system_state.update_validator_image_url(b"new_image_url", ctx);
+    system_state.update_validator_project_url(b"new_project_url", ctx);
+    system_state.update_validator_next_epoch_network_address(network_address, ctx);
+    system_state.update_validator_next_epoch_p2p_address(p2p_address, ctx);
+    system_state.update_validator_next_epoch_primary_address(b"/ip4/168.168.168.168/udp/80", ctx);
+    system_state.update_validator_next_epoch_worker_address(b"/ip4/168.168.168.168/udp/80", ctx);
+    system_state.update_validator_next_epoch_protocol_pubkey(
+        protocol_pub_key,
+        pop,
+        ctx,
+    );
+    system_state.update_validator_next_epoch_network_pubkey(network_pubkey, ctx);
+    system_state.update_validator_next_epoch_worker_pubkey(worker_pubkey, ctx);
+}
+
+fun verify_metadata(
+    validator: &Validator,
+    name: vector<u8>,
+    protocol_pub_key: vector<u8>,
+    pop: vector<u8>,
+    network_address: vector<u8>,
+    p2p_address: vector<u8>,
+    network_pubkey: vector<u8>,
+    worker_pubkey: vector<u8>,
+    new_protocol_pub_key: vector<u8>,
+    new_pop: vector<u8>,
+    new_network_address: vector<u8>,
+    new_p2p_address: vector<u8>,
+    new_network_pubkey: vector<u8>,
+    new_worker_pubkey: vector<u8>,
+) {
+    // Current epoch
+    verify_current_epoch_metadata(
+        validator,
+        name,
+        protocol_pub_key,
+        pop,
+        b"/ip4/127.0.0.1/udp/80",
+        b"/ip4/127.0.0.1/udp/80",
+        network_address,
+        p2p_address,
+        network_pubkey,
+        worker_pubkey,
+    );
+
+    // Next epoch
+    assert!(
+        validator.next_epoch_network_address() == &option::some(new_network_address.to_string()),
+    );
+    assert!(validator.next_epoch_p2p_address() == &option::some(new_p2p_address.to_string()));
+    assert!(
+        validator.next_epoch_primary_address() == &option::some(b"/ip4/168.168.168.168/udp/80".to_string()),
+    );
+    assert!(
+        validator.next_epoch_worker_address() == &option::some(b"/ip4/168.168.168.168/udp/80".to_string()),
+    );
+    assert!(validator.next_epoch_protocol_pubkey_bytes() == &option::some(new_protocol_pub_key), 0);
+    assert!(validator.next_epoch_proof_of_possession() == &option::some(new_pop), 0);
+    assert!(validator.next_epoch_worker_pubkey_bytes() == &option::some(new_worker_pubkey), 0);
+    assert!(validator.next_epoch_network_pubkey_bytes() == &option::some(new_network_pubkey), 0);
+}
+
+fun verify_current_epoch_metadata(
+    validator: &Validator,
+    name: vector<u8>,
+    protocol_pub_key: vector<u8>,
+    pop: vector<u8>,
+    primary_address: vector<u8>,
+    worker_address: vector<u8>,
+    network_address: vector<u8>,
+    p2p_address: vector<u8>,
+    network_pubkey_bytes: vector<u8>,
+    worker_pubkey_bytes: vector<u8>,
+) {
+    // Current epoch
+    assert!(validator.name() == &name.to_string());
+    assert!(validator.description() == &b"new_desc".to_string());
+    assert!(validator.image_url() == &url::new_unsafe_from_bytes(b"new_image_url"));
+    assert!(validator.project_url() == &url::new_unsafe_from_bytes(b"new_project_url"));
+    assert!(validator.network_address() == &network_address.to_string());
+    assert!(validator.p2p_address() == &p2p_address.to_string());
+    assert!(validator.primary_address() == &primary_address.to_string());
+    assert!(validator.worker_address() == &worker_address.to_string());
+    assert!(validator.protocol_pubkey_bytes() == &protocol_pub_key);
+    assert!(validator.proof_of_possession() == &pop);
+    assert!(validator.worker_pubkey_bytes() == &worker_pubkey_bytes);
+    assert!(validator.network_pubkey_bytes() == &network_pubkey_bytes);
+}
+
+fun verify_metadata_after_advancing_epoch(
+    validator: &Validator,
+    name: vector<u8>,
+    protocol_pub_key: vector<u8>,
+    pop: vector<u8>,
+    network_address: vector<u8>,
+    p2p_address: vector<u8>,
+    network_pubkey: vector<u8>,
+    worker_pubkey: vector<u8>,
+) {
+    // Current epoch
+    verify_current_epoch_metadata(
+        validator,
+        name,
+        protocol_pub_key,
+        pop,
+        b"/ip4/168.168.168.168/udp/80",
+        b"/ip4/168.168.168.168/udp/80",
+        network_address,
+        p2p_address,
+        network_pubkey,
+        worker_pubkey,
+    );
+
+    // Next epoch
+    assert!(validator.next_epoch_network_address().is_none());
+    assert!(validator.next_epoch_p2p_address().is_none());
+    assert!(validator.next_epoch_primary_address().is_none());
+    assert!(validator.next_epoch_worker_address().is_none());
+    assert!(validator.next_epoch_protocol_pubkey_bytes().is_none());
+    assert!(validator.next_epoch_proof_of_possession().is_none());
+    assert!(validator.next_epoch_worker_pubkey_bytes().is_none());
+    assert!(validator.next_epoch_network_pubkey_bytes().is_none());
 }
