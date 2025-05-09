@@ -646,13 +646,16 @@ fun staking_pool_exchange_rate_getter() {
     runner.system_tx!(|system, _| {
         let rates = system.pool_exchange_rates(&pool_id);
         assert_eq!(rates.length(), 3);
-        assert_exchange_rate_eq(rates, 0, 0, 0); // no tokens at epoch 0
-        assert_exchange_rate_eq(rates, 1, 200, 200); // 200 SUI of self + delegate stake at epoch 1
-        assert_exchange_rate_eq(rates, 2, 210, 200); // 10 SUI of rewards at epoch 2
+        rates.assert_exchange_rate_eq(0, 0, 0); // no tokens at epoch 0
+        rates.assert_exchange_rate_eq(1, 200, 200); // 200 SUI of self + delegate stake at epoch 1
+        rates.assert_exchange_rate_eq(2, 210, 200); // 10 SUI of rewards at epoch 2
     });
 
     runner.finish();
 }
+
+// trick or treat
+use fun assert_exchange_rate_eq as Table.assert_exchange_rate_eq;
 
 fun assert_exchange_rate_eq(
     rates: &Table<u64, PoolTokenExchangeRate>,
