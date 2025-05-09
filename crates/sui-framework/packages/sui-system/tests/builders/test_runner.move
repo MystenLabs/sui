@@ -29,6 +29,9 @@ public struct TestRunnerBuilder {
     /// Mutually exclusive with `validators`
     validators_count: Option<u64>,
     validators_initial_stake: Option<u64>,
+    protocol_version: Option<u64>,
+    stake_distribution_counter: Option<u64>,
+    start_epoch: Option<u64>,
 }
 
 public fun new(): TestRunnerBuilder {
@@ -38,6 +41,9 @@ public fun new(): TestRunnerBuilder {
         sui_supply_amount: option::none(),
         storage_fund_amount: option::none(),
         validators_initial_stake: option::none(),
+        protocol_version: option::none(),
+        stake_distribution_counter: option::none(),
+        start_epoch: option::none(),
     }
 }
 
@@ -50,6 +56,9 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
         storage_fund_amount,
         validators_count,
         validators_initial_stake,
+        protocol_version,
+        stake_distribution_counter,
+        start_epoch,
     } = builder;
 
     let validators = validators.destroy_or!({
@@ -58,6 +67,8 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
         })
     });
 
+    // create system parameters
+    // TODO: make this configurable
     let system_parameters = sui_system_state_inner::create_system_parameters(
         42, // epoch_duration_ms, doesn't matter what number we put here
         0, // stake_subsidy_start_epoch
@@ -69,6 +80,7 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
         scenario.ctx(),
     );
 
+    // create stake subsidy
     let stake_subsidy = stake_subsidy::create(
         balance::create_for_testing<SUI>(sui_supply_amount.destroy_or!(1000) * MIST_PER_SUI), // sui_supply
         0, // stake subsidy initial distribution amount
@@ -77,21 +89,40 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
         scenario.ctx(),
     );
 
+    // create sui system state
     sui_system::create(
         object::new(scenario.ctx()), // it doesn't matter what ID sui system state has in tests
         validators.map!(|v| v.is_active_at_genesis(true).build(scenario.ctx())),
         balance::create_for_testing<SUI>(storage_fund_amount.destroy_or!(0) * MIST_PER_SUI), // storage_fund
-        1, // protocol version
+        protocol_version.destroy_or!(1), // protocol version
         0, // chain_start_timestamp_ms
         system_parameters,
         stake_subsidy,
         scenario.ctx(),
     );
 
-    TestRunner {
+    let mut runner = TestRunner {
         scenario,
         sender: @0,
-    }
+    };
+
+    // set stake distribution counter if provided
+    stake_distribution_counter.do!(|counter| {
+        runner.system_tx!(|system, _| {
+            system.set_stake_subsidy_distribution_counter(counter);
+        });
+    });
+
+    // set start epoch if provided, useful for testing safe mode
+    // TODO: what else could be configured for safe mode?
+    start_epoch.do!(|epoch| {
+        runner.scenario.skip_to_epoch(epoch);
+        runner.system_tx!(|system, _| {
+            system.set_epoch_for_testing(epoch);
+        });
+    });
+
+    runner
 }
 
 public fun validators(
@@ -134,8 +165,31 @@ public fun validators_initial_stake(
     builder
 }
 
-// === Advance Epoch Options ===
+public fun start_epoch(
+    mut builder: TestRunnerBuilder,
+    start_epoch: u64,
+): TestRunnerBuilder {
+    builder.start_epoch = option::some(start_epoch);
+    builder
+}
 
+public fun protocol_version(
+    mut builder: TestRunnerBuilder,
+    protocol_version: u64,
+): TestRunnerBuilder {
+    builder.protocol_version = option::some(protocol_version);
+    builder
+}
+
+public fun stake_distribution_counter(
+    mut builder: TestRunnerBuilder,
+    stake_distribution_counter: u64,
+): TestRunnerBuilder {
+    builder.stake_distribution_counter = option::some(stake_distribution_counter);
+    builder
+}
+
+// === Advance Epoch Options ===
 public struct AdvanceEpochOptions has drop {
     protocol_version: Option<u64>,
     storage_charge: Option<u64>,
@@ -160,7 +214,9 @@ public fun advance_epoch_opts(_: &TestRunner): AdvanceEpochOptions {
     }
 }
 
-public fun protocol_version(
+public use fun protocol_version_opts as AdvanceEpochOptions.protocol_version;
+
+public fun protocol_version_opts(
     mut opts: AdvanceEpochOptions,
     protocol_version: u64,
 ): AdvanceEpochOptions {
