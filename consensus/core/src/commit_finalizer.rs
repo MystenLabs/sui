@@ -52,6 +52,7 @@ pub(crate) struct CommitFinalizer {
     blocks: BTreeMap<BlockRef, BlockState>,
 }
 
+#[allow(dead_code)]
 impl CommitFinalizer {
     fn new(
         context: Arc<Context>,
@@ -79,27 +80,11 @@ impl CommitFinalizer {
         CommitFinalizerHandle { sender }
     }
 
-    async fn run(mut self, mut receiver: UnboundedReceiver<(CommittedSubDag, bool)>) {
-        if self.context.protocol_config.mysticeti_fastpath() {
-            while let Some((committed_sub_dag, direct)) = receiver.recv().await {
-                let finalized_commits = self.process_commit(committed_sub_dag, direct);
-                for commit in finalized_commits {
-                    if let Err(e) = self.commit_sender.send(commit) {
-                        tracing::warn!(
-                            "Failed to send to commit handler, probably due to shutdown: {e:?}"
-                        );
-                        return;
-                    }
-                }
-            }
-        } else {
-            while let Some((committed_sub_dag, _direct)) = receiver.recv().await {
-                if let Err(e) = self.commit_sender.send(committed_sub_dag) {
-                    tracing::warn!(
-                        "Failed to send to commit handler, probably due to shutdown: {e:?}"
-                    );
-                    return;
-                }
+    async fn run(self, mut receiver: UnboundedReceiver<(CommittedSubDag, bool)>) {
+        while let Some((committed_sub_dag, _direct)) = receiver.recv().await {
+            if let Err(e) = self.commit_sender.send(committed_sub_dag) {
+                tracing::warn!("Failed to send to commit handler, probably due to shutdown: {e:?}");
+                return;
             }
         }
     }
