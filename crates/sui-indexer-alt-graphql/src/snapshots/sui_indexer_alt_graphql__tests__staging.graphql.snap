@@ -65,6 +65,10 @@ type Epoch {
 	"""
 	epochId: UInt53!
 	"""
+	The epoch's corresponding protocol configuration, including the feature flags and the configuration options.
+	"""
+	protocolConfigs: ProtocolConfigs
+	"""
 	The minimum gas price that a quorum of validators are guaranteed to sign a transaction for in this epoch.
 	"""
 	referenceGasPrice: BigInt
@@ -76,6 +80,20 @@ type Epoch {
 	The timestamp associated with the last checkpoint in the epoch (or `null` if the epoch has not finished yet).
 	"""
 	endTimestamp: DateTime
+}
+
+"""
+A boolean protocol configuration.
+"""
+type FeatureFlag {
+	"""
+	Feature flag name.
+	"""
+	key: String!
+	"""
+	Feature flag value.
+	"""
+	value: Boolean!
 }
 
 
@@ -302,6 +320,45 @@ type PageInfo {
 	endCursor: String
 }
 
+"""
+A protocol configuration that can hold an arbitrary value (or no value at all).
+"""
+type ProtocolConfig {
+	"""
+	Configuration name.
+	"""
+	key: String!
+	"""
+	Configuration value.
+	"""
+	value: String
+}
+
+"""
+Constants that control how the chain operates.
+
+These can only change during protocol upgrades which happen on epoch boundaries. Configuration is split into feature flags (which are just booleans), and configs which can take any value (including no value at all), and will be represented by a string.
+"""
+type ProtocolConfigs {
+	protocolVersion: UInt53!
+	"""
+	Query for the value of the configuration with name `key`.
+	"""
+	config(key: String!): ProtocolConfig
+	"""
+	List all available configurations and their values.
+	"""
+	configs: [ProtocolConfig!]!
+	"""
+	Query for the state of the feature flag with name `key`.
+	"""
+	featureFlag(key: String!): FeatureFlag
+	"""
+	List all available feature flags and their values.
+	"""
+	featureFlags: [FeatureFlag!]!
+}
+
 type Query {
 	"""
 	First four bytes of the network's genesis checkpoint digest (uniquely identifies the network), hex-encoded.
@@ -389,6 +446,10 @@ type Query {
 	Note that this interpretation of `version` and "latest" differs from the one used by `Query.object`, because non-system package upgrades generate objects with different IDs. To fetch a package using the versioning semantics of objects, use `Object.asMovePackage` nested under `Query.object`.
 	"""
 	package(address: SuiAddress!, version: UInt53, atCheckpoint: UInt53): MovePackage
+	"""
+	Fetch the protocol config by protocol version.
+	"""
+	protocolConfigs(version: UInt53!): ProtocolConfigs
 	"""
 	Configuration for this RPC service.
 	"""

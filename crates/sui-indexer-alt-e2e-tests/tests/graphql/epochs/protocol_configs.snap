@@ -1,0 +1,1586 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, line 6:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 2, lines 8-20:
+//# run-graphql
+Response: {
+  "data": {
+    "before": {
+      "protocolVersion": 69,
+      "configs": []
+    },
+    "after": {
+      "protocolVersion": 71,
+      "configs": []
+    }
+  }
+}
+
+task 3, lines 22-28:
+//# run-graphql
+Response: {
+  "data": {
+    "protocolConfigs": {
+      "config": {
+        "key": "max_move_object_size",
+        "value": "256000"
+      },
+      "featureFlag": {
+        "key": "enable_effects_v2",
+        "value": true
+      }
+    }
+  }
+}
+
+task 4, lines 30-40:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch": {
+      "protocolConfigs": {
+        "protocolVersion": 70
+      }
+    },
+    "protocolConfigs": {
+      "protocolVersion": 70,
+      "configs": [
+        {
+          "key": "address_from_bytes_cost_base",
+          "value": "52"
+        },
+        {
+          "key": "address_from_u256_cost_base",
+          "value": "52"
+        },
+        {
+          "key": "address_to_u256_cost_base",
+          "value": "52"
+        },
+        {
+          "key": "allowed_txn_cost_overage_burst_per_object_in_commit",
+          "value": null
+        },
+        {
+          "key": "base_tx_cost_fixed",
+          "value": "1000"
+        },
+        {
+          "key": "base_tx_cost_per_byte",
+          "value": "0"
+        },
+        {
+          "key": "bcs_failure_cost",
+          "value": "52"
+        },
+        {
+          "key": "bcs_legacy_min_output_size_cost",
+          "value": "1"
+        },
+        {
+          "key": "bcs_per_byte_serialized_cost",
+          "value": "2"
+        },
+        {
+          "key": "binary_address_identifiers",
+          "value": "100"
+        },
+        {
+          "key": "binary_constant_pool",
+          "value": "4000"
+        },
+        {
+          "key": "binary_enum_def_instantiations",
+          "value": null
+        },
+        {
+          "key": "binary_enum_defs",
+          "value": null
+        },
+        {
+          "key": "binary_field_handles",
+          "value": "500"
+        },
+        {
+          "key": "binary_field_instantiations",
+          "value": "250"
+        },
+        {
+          "key": "binary_friend_decls",
+          "value": "100"
+        },
+        {
+          "key": "binary_function_defs",
+          "value": "1000"
+        },
+        {
+          "key": "binary_function_handles",
+          "value": "1500"
+        },
+        {
+          "key": "binary_function_instantiations",
+          "value": "750"
+        },
+        {
+          "key": "binary_identifiers",
+          "value": "10000"
+        },
+        {
+          "key": "binary_module_handles",
+          "value": "100"
+        },
+        {
+          "key": "binary_signatures",
+          "value": "1000"
+        },
+        {
+          "key": "binary_struct_def_instantiations",
+          "value": "100"
+        },
+        {
+          "key": "binary_struct_defs",
+          "value": "200"
+        },
+        {
+          "key": "binary_struct_handles",
+          "value": "300"
+        },
+        {
+          "key": "binary_variant_handles",
+          "value": null
+        },
+        {
+          "key": "binary_variant_instantiation_handles",
+          "value": null
+        },
+        {
+          "key": "bls12381_bls12381_min_pk_verify_cost_base",
+          "value": "49282"
+        },
+        {
+          "key": "bls12381_bls12381_min_pk_verify_msg_cost_per_block",
+          "value": "2"
+        },
+        {
+          "key": "bls12381_bls12381_min_pk_verify_msg_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "bls12381_bls12381_min_sig_verify_cost_base",
+          "value": "44064"
+        },
+        {
+          "key": "bls12381_bls12381_min_sig_verify_msg_cost_per_block",
+          "value": "2"
+        },
+        {
+          "key": "bls12381_bls12381_min_sig_verify_msg_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "bridge_should_try_to_finalize_committee",
+          "value": "true"
+        },
+        {
+          "key": "buffer_stake_for_protocol_upgrade_bps",
+          "value": "5000"
+        },
+        {
+          "key": "check_zklogin_id_cost_base",
+          "value": "200"
+        },
+        {
+          "key": "check_zklogin_issuer_cost_base",
+          "value": "200"
+        },
+        {
+          "key": "checkpoint_summary_version_specific_data",
+          "value": "1"
+        },
+        {
+          "key": "config_read_setting_impl_cost_base",
+          "value": "100"
+        },
+        {
+          "key": "config_read_setting_impl_cost_per_byte",
+          "value": "40"
+        },
+        {
+          "key": "consensus_bad_nodes_stake_threshold",
+          "value": "20"
+        },
+        {
+          "key": "consensus_commit_rate_estimation_window_size",
+          "value": null
+        },
+        {
+          "key": "consensus_gc_depth",
+          "value": null
+        },
+        {
+          "key": "consensus_max_num_transactions_in_block",
+          "value": "512"
+        },
+        {
+          "key": "consensus_max_transaction_size_bytes",
+          "value": "262144"
+        },
+        {
+          "key": "consensus_max_transactions_in_block_bytes",
+          "value": "524288"
+        },
+        {
+          "key": "consensus_voting_rounds",
+          "value": "40"
+        },
+        {
+          "key": "crypto_invalid_arguments_cost",
+          "value": "100"
+        },
+        {
+          "key": "debug_print_base_cost",
+          "value": "52"
+        },
+        {
+          "key": "debug_print_stack_trace_base_cost",
+          "value": "52"
+        },
+        {
+          "key": "dynamic_field_add_child_object_cost_base",
+          "value": "100"
+        },
+        {
+          "key": "dynamic_field_add_child_object_struct_tag_cost_per_byte",
+          "value": "10"
+        },
+        {
+          "key": "dynamic_field_add_child_object_type_cost_per_byte",
+          "value": "10"
+        },
+        {
+          "key": "dynamic_field_add_child_object_value_cost_per_byte",
+          "value": "10"
+        },
+        {
+          "key": "dynamic_field_borrow_child_object_child_ref_cost_per_byte",
+          "value": "10"
+        },
+        {
+          "key": "dynamic_field_borrow_child_object_cost_base",
+          "value": "100"
+        },
+        {
+          "key": "dynamic_field_borrow_child_object_type_cost_per_byte",
+          "value": "10"
+        },
+        {
+          "key": "dynamic_field_has_child_object_cost_base",
+          "value": "100"
+        },
+        {
+          "key": "dynamic_field_has_child_object_with_ty_cost_base",
+          "value": "100"
+        },
+        {
+          "key": "dynamic_field_has_child_object_with_ty_type_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "dynamic_field_hash_type_and_key_cost_base",
+          "value": "100"
+        },
+        {
+          "key": "dynamic_field_hash_type_and_key_type_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "dynamic_field_hash_type_and_key_type_tag_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "dynamic_field_hash_type_and_key_value_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "dynamic_field_remove_child_object_child_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "dynamic_field_remove_child_object_cost_base",
+          "value": "100"
+        },
+        {
+          "key": "dynamic_field_remove_child_object_type_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "ecdsa_k1_decompress_pubkey_cost_base",
+          "value": "52"
+        },
+        {
+          "key": "ecdsa_k1_ecrecover_keccak256_cost_base",
+          "value": "500"
+        },
+        {
+          "key": "ecdsa_k1_ecrecover_keccak256_msg_cost_per_block",
+          "value": "2"
+        },
+        {
+          "key": "ecdsa_k1_ecrecover_keccak256_msg_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "ecdsa_k1_ecrecover_sha256_cost_base",
+          "value": "500"
+        },
+        {
+          "key": "ecdsa_k1_ecrecover_sha256_msg_cost_per_block",
+          "value": "2"
+        },
+        {
+          "key": "ecdsa_k1_ecrecover_sha256_msg_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "ecdsa_k1_secp256k1_verify_keccak256_cost_base",
+          "value": "1470"
+        },
+        {
+          "key": "ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_block",
+          "value": "2"
+        },
+        {
+          "key": "ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "ecdsa_k1_secp256k1_verify_sha256_cost_base",
+          "value": "1470"
+        },
+        {
+          "key": "ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_block",
+          "value": "2"
+        },
+        {
+          "key": "ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "ecdsa_r1_ecrecover_keccak256_cost_base",
+          "value": "1173"
+        },
+        {
+          "key": "ecdsa_r1_ecrecover_keccak256_msg_cost_per_block",
+          "value": "2"
+        },
+        {
+          "key": "ecdsa_r1_ecrecover_keccak256_msg_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "ecdsa_r1_ecrecover_sha256_cost_base",
+          "value": "1173"
+        },
+        {
+          "key": "ecdsa_r1_ecrecover_sha256_msg_cost_per_block",
+          "value": "2"
+        },
+        {
+          "key": "ecdsa_r1_ecrecover_sha256_msg_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "ecdsa_r1_secp256r1_verify_keccak256_cost_base",
+          "value": "4225"
+        },
+        {
+          "key": "ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_block",
+          "value": "2"
+        },
+        {
+          "key": "ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "ecdsa_r1_secp256r1_verify_sha256_cost_base",
+          "value": "4225"
+        },
+        {
+          "key": "ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_block",
+          "value": "2"
+        },
+        {
+          "key": "ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "ecvrf_ecvrf_verify_alpha_string_cost_per_block",
+          "value": "2"
+        },
+        {
+          "key": "ecvrf_ecvrf_verify_alpha_string_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "ecvrf_ecvrf_verify_cost_base",
+          "value": "4848"
+        },
+        {
+          "key": "ed25519_ed25519_verify_cost_base",
+          "value": "1802"
+        },
+        {
+          "key": "ed25519_ed25519_verify_msg_cost_per_block",
+          "value": "2"
+        },
+        {
+          "key": "ed25519_ed25519_verify_msg_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "event_emit_cost_base",
+          "value": "52"
+        },
+        {
+          "key": "event_emit_output_cost_per_byte",
+          "value": "10"
+        },
+        {
+          "key": "event_emit_tag_size_derivation_cost_per_byte",
+          "value": "5"
+        },
+        {
+          "key": "event_emit_value_size_derivation_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "execution_version",
+          "value": "3"
+        },
+        {
+          "key": "gas_budget_based_txn_cost_absolute_cap_commit_count",
+          "value": "50"
+        },
+        {
+          "key": "gas_budget_based_txn_cost_cap_factor",
+          "value": "400000"
+        },
+        {
+          "key": "gas_model_version",
+          "value": "9"
+        },
+        {
+          "key": "gas_rounding_step",
+          "value": "1000"
+        },
+        {
+          "key": "groth16_prepare_verifying_key_bls12381_cost_base",
+          "value": "53838"
+        },
+        {
+          "key": "groth16_prepare_verifying_key_bn254_cost_base",
+          "value": "82010"
+        },
+        {
+          "key": "groth16_verify_groth16_proof_internal_bls12381_cost_base",
+          "value": "72090"
+        },
+        {
+          "key": "groth16_verify_groth16_proof_internal_bls12381_cost_per_public_input",
+          "value": "8213"
+        },
+        {
+          "key": "groth16_verify_groth16_proof_internal_bn254_cost_base",
+          "value": "115502"
+        },
+        {
+          "key": "groth16_verify_groth16_proof_internal_bn254_cost_per_public_input",
+          "value": "9484"
+        },
+        {
+          "key": "groth16_verify_groth16_proof_internal_public_input_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "group_ops_bls12381_decode_g1_cost",
+          "value": "2848"
+        },
+        {
+          "key": "group_ops_bls12381_decode_g2_cost",
+          "value": "3770"
+        },
+        {
+          "key": "group_ops_bls12381_decode_gt_cost",
+          "value": "3068"
+        },
+        {
+          "key": "group_ops_bls12381_decode_scalar_cost",
+          "value": "7"
+        },
+        {
+          "key": "group_ops_bls12381_g1_add_cost",
+          "value": "1556"
+        },
+        {
+          "key": "group_ops_bls12381_g1_div_cost",
+          "value": "5091"
+        },
+        {
+          "key": "group_ops_bls12381_g1_hash_to_base_cost",
+          "value": "2962"
+        },
+        {
+          "key": "group_ops_bls12381_g1_hash_to_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "group_ops_bls12381_g1_msm_base_cost",
+          "value": "62648"
+        },
+        {
+          "key": "group_ops_bls12381_g1_msm_base_cost_per_input",
+          "value": "1333"
+        },
+        {
+          "key": "group_ops_bls12381_g1_mul_cost",
+          "value": "4842"
+        },
+        {
+          "key": "group_ops_bls12381_g1_sub_cost",
+          "value": "1550"
+        },
+        {
+          "key": "group_ops_bls12381_g1_to_uncompressed_g1_cost",
+          "value": "2099"
+        },
+        {
+          "key": "group_ops_bls12381_g2_add_cost",
+          "value": "3048"
+        },
+        {
+          "key": "group_ops_bls12381_g2_div_cost",
+          "value": "9206"
+        },
+        {
+          "key": "group_ops_bls12381_g2_hash_to_base_cost",
+          "value": "8688"
+        },
+        {
+          "key": "group_ops_bls12381_g2_hash_to_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "group_ops_bls12381_g2_msm_base_cost",
+          "value": "131192"
+        },
+        {
+          "key": "group_ops_bls12381_g2_msm_base_cost_per_input",
+          "value": "3216"
+        },
+        {
+          "key": "group_ops_bls12381_g2_mul_cost",
+          "value": "9108"
+        },
+        {
+          "key": "group_ops_bls12381_g2_sub_cost",
+          "value": "3019"
+        },
+        {
+          "key": "group_ops_bls12381_gt_add_cost",
+          "value": "188"
+        },
+        {
+          "key": "group_ops_bls12381_gt_div_cost",
+          "value": "27804"
+        },
+        {
+          "key": "group_ops_bls12381_gt_mul_cost",
+          "value": "27490"
+        },
+        {
+          "key": "group_ops_bls12381_gt_sub_cost",
+          "value": "497"
+        },
+        {
+          "key": "group_ops_bls12381_msm_max_len",
+          "value": "32"
+        },
+        {
+          "key": "group_ops_bls12381_pairing_cost",
+          "value": "26897"
+        },
+        {
+          "key": "group_ops_bls12381_scalar_add_cost",
+          "value": "10"
+        },
+        {
+          "key": "group_ops_bls12381_scalar_div_cost",
+          "value": "91"
+        },
+        {
+          "key": "group_ops_bls12381_scalar_mul_cost",
+          "value": "11"
+        },
+        {
+          "key": "group_ops_bls12381_scalar_sub_cost",
+          "value": "10"
+        },
+        {
+          "key": "group_ops_bls12381_uncompressed_g1_sum_base_cost",
+          "value": "77"
+        },
+        {
+          "key": "group_ops_bls12381_uncompressed_g1_sum_cost_per_term",
+          "value": "26"
+        },
+        {
+          "key": "group_ops_bls12381_uncompressed_g1_sum_max_terms",
+          "value": "1200"
+        },
+        {
+          "key": "group_ops_bls12381_uncompressed_g1_to_g1_cost",
+          "value": "677"
+        },
+        {
+          "key": "hash_blake2b256_cost_base",
+          "value": "10"
+        },
+        {
+          "key": "hash_blake2b256_data_cost_per_block",
+          "value": "2"
+        },
+        {
+          "key": "hash_blake2b256_data_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "hash_keccak256_cost_base",
+          "value": "10"
+        },
+        {
+          "key": "hash_keccak256_data_cost_per_block",
+          "value": "2"
+        },
+        {
+          "key": "hash_keccak256_data_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "hash_sha2_256_base_cost",
+          "value": "52"
+        },
+        {
+          "key": "hash_sha2_256_legacy_min_input_len_cost",
+          "value": "1"
+        },
+        {
+          "key": "hash_sha2_256_per_byte_cost",
+          "value": "2"
+        },
+        {
+          "key": "hash_sha3_256_base_cost",
+          "value": "52"
+        },
+        {
+          "key": "hash_sha3_256_legacy_min_input_len_cost",
+          "value": "1"
+        },
+        {
+          "key": "hash_sha3_256_per_byte_cost",
+          "value": "2"
+        },
+        {
+          "key": "hmac_hmac_sha3_256_cost_base",
+          "value": "52"
+        },
+        {
+          "key": "hmac_hmac_sha3_256_input_cost_per_block",
+          "value": "2"
+        },
+        {
+          "key": "hmac_hmac_sha3_256_input_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit",
+          "value": "3700000"
+        },
+        {
+          "key": "max_accumulated_txn_cost_per_object_in_mysticeti_commit",
+          "value": "18500000"
+        },
+        {
+          "key": "max_accumulated_txn_cost_per_object_in_narwhal_commit",
+          "value": "40"
+        },
+        {
+          "key": "max_age_of_jwk_in_epochs",
+          "value": "1"
+        },
+        {
+          "key": "max_arguments",
+          "value": "512"
+        },
+        {
+          "key": "max_back_edges_per_function",
+          "value": "10000"
+        },
+        {
+          "key": "max_back_edges_per_module",
+          "value": "10000"
+        },
+        {
+          "key": "max_basic_blocks",
+          "value": "1024"
+        },
+        {
+          "key": "max_checkpoint_size_bytes",
+          "value": "31457280"
+        },
+        {
+          "key": "max_deferral_rounds_for_congestion_control",
+          "value": "10"
+        },
+        {
+          "key": "max_dependency_depth",
+          "value": "100"
+        },
+        {
+          "key": "max_event_emit_size",
+          "value": "256000"
+        },
+        {
+          "key": "max_event_emit_size_total",
+          "value": "65536000"
+        },
+        {
+          "key": "max_fields_in_struct",
+          "value": "32"
+        },
+        {
+          "key": "max_function_definitions",
+          "value": "1000"
+        },
+        {
+          "key": "max_function_parameters",
+          "value": "128"
+        },
+        {
+          "key": "max_gas_computation_bucket",
+          "value": "5000000"
+        },
+        {
+          "key": "max_gas_payment_objects",
+          "value": "256"
+        },
+        {
+          "key": "max_gas_price",
+          "value": "100000"
+        },
+        {
+          "key": "max_generic_instantiation_length",
+          "value": "32"
+        },
+        {
+          "key": "max_input_objects",
+          "value": "2048"
+        },
+        {
+          "key": "max_jwk_votes_per_validator_per_epoch",
+          "value": "240"
+        },
+        {
+          "key": "max_loop_depth",
+          "value": "5"
+        },
+        {
+          "key": "max_meter_ticks_per_module",
+          "value": "16000000"
+        },
+        {
+          "key": "max_meter_ticks_per_package",
+          "value": "16000000"
+        },
+        {
+          "key": "max_modules_in_publish",
+          "value": "64"
+        },
+        {
+          "key": "max_move_enum_variants",
+          "value": null
+        },
+        {
+          "key": "max_move_identifier_len",
+          "value": "128"
+        },
+        {
+          "key": "max_move_object_size",
+          "value": "256000"
+        },
+        {
+          "key": "max_move_package_size",
+          "value": "102400"
+        },
+        {
+          "key": "max_move_value_depth",
+          "value": "128"
+        },
+        {
+          "key": "max_move_vector_len",
+          "value": "262144"
+        },
+        {
+          "key": "max_num_deleted_move_object_ids",
+          "value": "2048"
+        },
+        {
+          "key": "max_num_deleted_move_object_ids_system_tx",
+          "value": "32768"
+        },
+        {
+          "key": "max_num_event_emit",
+          "value": "1024"
+        },
+        {
+          "key": "max_num_new_move_object_ids",
+          "value": "2048"
+        },
+        {
+          "key": "max_num_new_move_object_ids_system_tx",
+          "value": "32768"
+        },
+        {
+          "key": "max_num_transferred_move_object_ids",
+          "value": "2048"
+        },
+        {
+          "key": "max_num_transferred_move_object_ids_system_tx",
+          "value": "32768"
+        },
+        {
+          "key": "max_package_dependencies",
+          "value": "32"
+        },
+        {
+          "key": "max_programmable_tx_commands",
+          "value": "1024"
+        },
+        {
+          "key": "max_ptb_value_size",
+          "value": null
+        },
+        {
+          "key": "max_publish_or_upgrade_per_ptb",
+          "value": "5"
+        },
+        {
+          "key": "max_pure_argument_size",
+          "value": "16384"
+        },
+        {
+          "key": "max_push_size",
+          "value": "10000"
+        },
+        {
+          "key": "max_serialized_tx_effects_size_bytes",
+          "value": "524288"
+        },
+        {
+          "key": "max_serialized_tx_effects_size_bytes_system_tx",
+          "value": "8388608"
+        },
+        {
+          "key": "max_size_written_objects",
+          "value": "5000000"
+        },
+        {
+          "key": "max_size_written_objects_system_tx",
+          "value": "50000000"
+        },
+        {
+          "key": "max_soft_bundle_size",
+          "value": "5"
+        },
+        {
+          "key": "max_struct_definitions",
+          "value": "200"
+        },
+        {
+          "key": "max_transactions_per_checkpoint",
+          "value": "10000"
+        },
+        {
+          "key": "max_tx_gas",
+          "value": "50000000000"
+        },
+        {
+          "key": "max_tx_size_bytes",
+          "value": "131072"
+        },
+        {
+          "key": "max_txn_cost_overage_per_object_in_commit",
+          "value": "18446744073709551615"
+        },
+        {
+          "key": "max_type_argument_depth",
+          "value": "16"
+        },
+        {
+          "key": "max_type_arguments",
+          "value": "16"
+        },
+        {
+          "key": "max_type_nodes",
+          "value": "256"
+        },
+        {
+          "key": "max_type_to_layout_nodes",
+          "value": "512"
+        },
+        {
+          "key": "max_value_stack_size",
+          "value": "1024"
+        },
+        {
+          "key": "max_verifier_meter_ticks_per_function",
+          "value": "16000000"
+        },
+        {
+          "key": "min_checkpoint_interval_ms",
+          "value": "200"
+        },
+        {
+          "key": "min_move_binary_format_version",
+          "value": "6"
+        },
+        {
+          "key": "move_binary_format_version",
+          "value": "7"
+        },
+        {
+          "key": "nitro_attestation_parse_base_cost",
+          "value": null
+        },
+        {
+          "key": "nitro_attestation_parse_cost_per_byte",
+          "value": null
+        },
+        {
+          "key": "nitro_attestation_verify_base_cost",
+          "value": null
+        },
+        {
+          "key": "nitro_attestation_verify_cost_per_cert",
+          "value": null
+        },
+        {
+          "key": "obj_access_cost_delete_per_byte",
+          "value": "40"
+        },
+        {
+          "key": "obj_access_cost_mutate_per_byte",
+          "value": "40"
+        },
+        {
+          "key": "obj_access_cost_read_per_byte",
+          "value": "15"
+        },
+        {
+          "key": "obj_access_cost_verify_per_byte",
+          "value": "200"
+        },
+        {
+          "key": "obj_data_cost_refundable",
+          "value": "100"
+        },
+        {
+          "key": "obj_metadata_cost_non_refundable",
+          "value": "50"
+        },
+        {
+          "key": "object_borrow_uid_cost_base",
+          "value": "52"
+        },
+        {
+          "key": "object_delete_impl_cost_base",
+          "value": "52"
+        },
+        {
+          "key": "object_record_new_uid_cost_base",
+          "value": "52"
+        },
+        {
+          "key": "object_runtime_max_num_cached_objects",
+          "value": "1000"
+        },
+        {
+          "key": "object_runtime_max_num_cached_objects_system_tx",
+          "value": "16000"
+        },
+        {
+          "key": "object_runtime_max_num_store_entries",
+          "value": "1000"
+        },
+        {
+          "key": "object_runtime_max_num_store_entries_system_tx",
+          "value": "16000"
+        },
+        {
+          "key": "package_publish_cost_fixed",
+          "value": "1000"
+        },
+        {
+          "key": "package_publish_cost_per_byte",
+          "value": "80"
+        },
+        {
+          "key": "poseidon_bn254_cost_base",
+          "value": "260"
+        },
+        {
+          "key": "poseidon_bn254_cost_per_block",
+          "value": "388"
+        },
+        {
+          "key": "random_beacon_dkg_timeout_round",
+          "value": "3000"
+        },
+        {
+          "key": "random_beacon_dkg_version",
+          "value": "1"
+        },
+        {
+          "key": "random_beacon_min_round_interval_ms",
+          "value": "500"
+        },
+        {
+          "key": "random_beacon_reduction_allowed_delta",
+          "value": "800"
+        },
+        {
+          "key": "random_beacon_reduction_lower_bound",
+          "value": "500"
+        },
+        {
+          "key": "reward_slashing_rate",
+          "value": "10000"
+        },
+        {
+          "key": "sip_45_consensus_amplification_threshold",
+          "value": null
+        },
+        {
+          "key": "storage_fund_reinvest_rate",
+          "value": "500"
+        },
+        {
+          "key": "storage_gas_price",
+          "value": "76"
+        },
+        {
+          "key": "storage_rebate_rate",
+          "value": "9900"
+        },
+        {
+          "key": "string_check_utf8_base_cost",
+          "value": "52"
+        },
+        {
+          "key": "string_check_utf8_per_byte_cost",
+          "value": "2"
+        },
+        {
+          "key": "string_index_of_base_cost",
+          "value": "52"
+        },
+        {
+          "key": "string_index_of_per_byte_pattern_cost",
+          "value": "2"
+        },
+        {
+          "key": "string_index_of_per_byte_searched_cost",
+          "value": "2"
+        },
+        {
+          "key": "string_is_char_boundary_base_cost",
+          "value": "52"
+        },
+        {
+          "key": "string_sub_string_base_cost",
+          "value": "52"
+        },
+        {
+          "key": "string_sub_string_per_byte_cost",
+          "value": "2"
+        },
+        {
+          "key": "transfer_freeze_object_cost_base",
+          "value": "52"
+        },
+        {
+          "key": "transfer_receive_object_cost_base",
+          "value": "52"
+        },
+        {
+          "key": "transfer_share_object_cost_base",
+          "value": "52"
+        },
+        {
+          "key": "transfer_transfer_internal_cost_base",
+          "value": "52"
+        },
+        {
+          "key": "tx_context_derive_id_cost_base",
+          "value": "52"
+        },
+        {
+          "key": "tx_context_epoch_cost_base",
+          "value": null
+        },
+        {
+          "key": "tx_context_epoch_timestamp_ms_cost_base",
+          "value": null
+        },
+        {
+          "key": "tx_context_fresh_id_cost_base",
+          "value": null
+        },
+        {
+          "key": "tx_context_gas_budget_cost_base",
+          "value": null
+        },
+        {
+          "key": "tx_context_gas_price_cost_base",
+          "value": null
+        },
+        {
+          "key": "tx_context_ids_created_cost_base",
+          "value": null
+        },
+        {
+          "key": "tx_context_replace_cost_base",
+          "value": null
+        },
+        {
+          "key": "tx_context_sender_cost_base",
+          "value": null
+        },
+        {
+          "key": "tx_context_sponsor_cost_base",
+          "value": null
+        },
+        {
+          "key": "type_name_get_base_cost",
+          "value": "52"
+        },
+        {
+          "key": "type_name_get_per_byte_cost",
+          "value": "2"
+        },
+        {
+          "key": "types_is_one_time_witness_cost_base",
+          "value": "52"
+        },
+        {
+          "key": "types_is_one_time_witness_type_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "types_is_one_time_witness_type_tag_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "use_object_per_epoch_marker_table_v2",
+          "value": null
+        },
+        {
+          "key": "validator_validate_metadata_cost_base",
+          "value": "20000"
+        },
+        {
+          "key": "validator_validate_metadata_data_cost_per_byte",
+          "value": "2"
+        },
+        {
+          "key": "vdf_hash_to_input_cost",
+          "value": "100"
+        },
+        {
+          "key": "vdf_verify_vdf_cost",
+          "value": "1500"
+        },
+        {
+          "key": "vector_borrow_base_cost",
+          "value": "52"
+        },
+        {
+          "key": "vector_destroy_empty_base_cost",
+          "value": "52"
+        },
+        {
+          "key": "vector_empty_base_cost",
+          "value": "52"
+        },
+        {
+          "key": "vector_length_base_cost",
+          "value": "52"
+        },
+        {
+          "key": "vector_pop_back_base_cost",
+          "value": "52"
+        },
+        {
+          "key": "vector_push_back_base_cost",
+          "value": "52"
+        },
+        {
+          "key": "vector_push_back_legacy_per_abstract_memory_unit_cost",
+          "value": "2"
+        },
+        {
+          "key": "vector_swap_base_cost",
+          "value": "52"
+        }
+      ],
+      "featureFlags": [
+        {
+          "key": "accept_passkey_in_multisig",
+          "value": false
+        },
+        {
+          "key": "accept_zklogin_in_multisig",
+          "value": true
+        },
+        {
+          "key": "advance_epoch_start_time_in_safe_mode",
+          "value": true
+        },
+        {
+          "key": "advance_to_highest_supported_protocol_version",
+          "value": true
+        },
+        {
+          "key": "allow_receiving_object_id",
+          "value": true
+        },
+        {
+          "key": "authority_capabilities_v2",
+          "value": true
+        },
+        {
+          "key": "ban_entry_init",
+          "value": true
+        },
+        {
+          "key": "bridge",
+          "value": true
+        },
+        {
+          "key": "commit_root_state_digest",
+          "value": true
+        },
+        {
+          "key": "consensus_batched_block_sync",
+          "value": false
+        },
+        {
+          "key": "consensus_distributed_vote_scoring_strategy",
+          "value": true
+        },
+        {
+          "key": "consensus_linearize_subdag_v2",
+          "value": false
+        },
+        {
+          "key": "consensus_median_based_commit_timestamp",
+          "value": false
+        },
+        {
+          "key": "consensus_order_end_of_epoch_last",
+          "value": true
+        },
+        {
+          "key": "consensus_round_prober",
+          "value": true
+        },
+        {
+          "key": "consensus_round_prober_probe_accepted_rounds",
+          "value": true
+        },
+        {
+          "key": "consensus_smart_ancestor_selection",
+          "value": true
+        },
+        {
+          "key": "consensus_zstd_compression",
+          "value": false
+        },
+        {
+          "key": "convert_type_argument_error",
+          "value": false
+        },
+        {
+          "key": "disable_invariant_violation_check_in_swap_loc",
+          "value": true
+        },
+        {
+          "key": "disallow_adding_abilities_on_upgrade",
+          "value": true
+        },
+        {
+          "key": "disallow_change_struct_type_params_on_upgrade",
+          "value": true
+        },
+        {
+          "key": "disallow_new_modules_in_deps_only_packages",
+          "value": true
+        },
+        {
+          "key": "enable_coin_deny_list",
+          "value": true
+        },
+        {
+          "key": "enable_coin_deny_list_v2",
+          "value": true
+        },
+        {
+          "key": "enable_effects_v2",
+          "value": true
+        },
+        {
+          "key": "enable_group_ops_native_function_msm",
+          "value": true
+        },
+        {
+          "key": "enable_group_ops_native_functions",
+          "value": true
+        },
+        {
+          "key": "enable_jwk_consensus_updates",
+          "value": true
+        },
+        {
+          "key": "enable_nitro_attestation",
+          "value": false
+        },
+        {
+          "key": "enable_poseidon",
+          "value": true
+        },
+        {
+          "key": "enable_vdf",
+          "value": true
+        },
+        {
+          "key": "end_of_epoch_transaction_supported",
+          "value": true
+        },
+        {
+          "key": "enforce_checkpoint_timestamp_monotonicity",
+          "value": false
+        },
+        {
+          "key": "fresh_vm_on_framework_upgrade",
+          "value": true
+        },
+        {
+          "key": "hardened_otw_check",
+          "value": true
+        },
+        {
+          "key": "include_consensus_digest_in_prologue",
+          "value": true
+        },
+        {
+          "key": "loaded_child_object_format",
+          "value": true
+        },
+        {
+          "key": "loaded_child_object_format_type",
+          "value": true
+        },
+        {
+          "key": "loaded_child_objects_fixed",
+          "value": true
+        },
+        {
+          "key": "max_ptb_value_size_v2",
+          "value": false
+        },
+        {
+          "key": "minimize_child_object_mutations",
+          "value": false
+        },
+        {
+          "key": "missing_type_is_compatibility_error",
+          "value": true
+        },
+        {
+          "key": "move_native_context",
+          "value": false
+        },
+        {
+          "key": "mysticeti_fastpath",
+          "value": true
+        },
+        {
+          "key": "mysticeti_leader_scoring_and_schedule",
+          "value": true
+        },
+        {
+          "key": "mysticeti_use_committed_subdag_digest",
+          "value": true
+        },
+        {
+          "key": "narwhal_certificate_v2",
+          "value": true
+        },
+        {
+          "key": "narwhal_new_leader_election_schedule",
+          "value": true
+        },
+        {
+          "key": "narwhal_versioned_metadata",
+          "value": true
+        },
+        {
+          "key": "native_charging_v2",
+          "value": true
+        },
+        {
+          "key": "no_extraneous_module_bytes",
+          "value": true
+        },
+        {
+          "key": "normalize_ptb_arguments",
+          "value": false
+        },
+        {
+          "key": "package_digest_hash_module",
+          "value": true
+        },
+        {
+          "key": "package_upgrades",
+          "value": true
+        },
+        {
+          "key": "passkey_auth",
+          "value": true
+        },
+        {
+          "key": "prepend_prologue_tx_in_consensus_commit_in_checkpoints",
+          "value": true
+        },
+        {
+          "key": "random_beacon",
+          "value": true
+        },
+        {
+          "key": "receive_objects",
+          "value": true
+        },
+        {
+          "key": "recompute_has_public_transfer_in_execution",
+          "value": true
+        },
+        {
+          "key": "record_additional_state_digest_in_prologue",
+          "value": false
+        },
+        {
+          "key": "record_consensus_determined_version_assignments_in_prologue",
+          "value": true
+        },
+        {
+          "key": "record_consensus_determined_version_assignments_in_prologue_v2",
+          "value": false
+        },
+        {
+          "key": "reject_mutable_random_on_entry_functions",
+          "value": true
+        },
+        {
+          "key": "relocate_event_module",
+          "value": true
+        },
+        {
+          "key": "reshare_at_same_initial_version",
+          "value": true
+        },
+        {
+          "key": "resolve_abort_locations_to_package_id",
+          "value": true
+        },
+        {
+          "key": "rethrow_serialization_type_layout_errors",
+          "value": true
+        },
+        {
+          "key": "scoring_decision_with_validity_cutoff",
+          "value": true
+        },
+        {
+          "key": "shared_object_deletion",
+          "value": true
+        },
+        {
+          "key": "simple_conservation_checks",
+          "value": true
+        },
+        {
+          "key": "simplified_unwrap_then_delete",
+          "value": true
+        },
+        {
+          "key": "soft_bundle",
+          "value": true
+        },
+        {
+          "key": "throughput_aware_consensus_submission",
+          "value": false
+        },
+        {
+          "key": "txn_base_cost_as_multiplier",
+          "value": true
+        },
+        {
+          "key": "uncompressed_g1_group_elements",
+          "value": true
+        },
+        {
+          "key": "upgraded_multisig_supported",
+          "value": true
+        },
+        {
+          "key": "validate_identifier_inputs",
+          "value": true
+        },
+        {
+          "key": "variant_nodes",
+          "value": false
+        },
+        {
+          "key": "verify_legacy_zklogin_address",
+          "value": true
+        },
+        {
+          "key": "zklogin_auth",
+          "value": true
+        }
+      ]
+    }
+  }
+}
