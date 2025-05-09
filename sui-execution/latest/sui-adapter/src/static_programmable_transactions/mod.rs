@@ -14,7 +14,7 @@ use sui_types::{
 };
 
 // TODO we might replace this with a new one
-pub use crate::programmable_transactions::linkage_view::LinkageView;
+pub use crate::data_store::linkage_view::LinkageView;
 
 pub mod env;
 pub mod execution;
