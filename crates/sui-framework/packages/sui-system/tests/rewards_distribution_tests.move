@@ -213,7 +213,6 @@ fun test_validator_commission() {
 
     // V1: 200, V2: 300, V3: 300, V4: 400
     runner.set_sender(VALIDATOR_ADDR_2).system_tx!(|system, ctx| {
-
         // validator 2 now has 20% commission
         system.request_set_commission_rate(2000, ctx);
 

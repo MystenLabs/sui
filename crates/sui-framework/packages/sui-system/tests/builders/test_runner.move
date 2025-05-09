@@ -142,7 +142,7 @@ public struct AdvanceEpochOptions has drop {
     computation_charge: Option<u64>,
     storage_rebate: Option<u64>,
     non_refundable_storage_fee: Option<u64>,
-    computation_rebate: Option<u64>,
+    storage_fund_reinvest_rate: Option<u64>,
     reward_slashing_rate: Option<u64>,
     epoch_start_time: Option<u64>,
 }
@@ -154,7 +154,7 @@ public fun advance_epoch_opts(_: &TestRunner): AdvanceEpochOptions {
         computation_charge: option::none(),
         storage_rebate: option::none(),
         non_refundable_storage_fee: option::none(),
-        computation_rebate: option::none(),
+        storage_fund_reinvest_rate: option::none(),
         reward_slashing_rate: option::none(),
         epoch_start_time: option::none(),
     }
@@ -194,11 +194,11 @@ public fun non_refundable_storage_fee(
     opts
 }
 
-public fun computation_rebate(
+public fun storage_fund_reinvest_rate(
     mut opts: AdvanceEpochOptions,
-    computation_rebate: u64,
+    storage_fund_reinvest_rate: u64,
 ): AdvanceEpochOptions {
-    opts.computation_rebate = option::some(computation_rebate);
+    opts.storage_fund_reinvest_rate = option::some(storage_fund_reinvest_rate);
     opts
 }
 
@@ -315,7 +315,7 @@ public fun advance_epoch(
         computation_charge,
         storage_rebate,
         non_refundable_storage_fee,
-        computation_rebate,
+        storage_fund_reinvest_rate,
         reward_slashing_rate,
         epoch_start_time,
     } = options;
@@ -330,7 +330,7 @@ public fun advance_epoch(
                 computation_charge.destroy_or!(0) * MIST_PER_SUI,
                 storage_rebate.destroy_or!(0),
                 non_refundable_storage_fee.destroy_or!(0),
-                computation_rebate.destroy_or!(0),
+                storage_fund_reinvest_rate.destroy_or!(0),
                 reward_slashing_rate.destroy_or!(0),
                 epoch_start_time.destroy_or!(0),
                 ctx,
@@ -397,6 +397,16 @@ public fun add_validator(runner: &mut TestRunner) {
 public fun remove_validator(runner: &mut TestRunner) {
     runner.system_tx!(|system, ctx| {
         system.validators_mut().request_remove_validator(ctx);
+    });
+}
+
+/// Report another validator as malicious.
+public fun report_validator(runner: &mut TestRunner, validator: address) {
+    runner.owned_tx!(|cap| {
+        runner.system_tx!(|system, _ctx| {
+            system.report_validator(&cap, validator);
+        });
+        runner.keep(cap);
     });
 }
 
