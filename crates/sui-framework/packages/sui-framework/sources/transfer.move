@@ -66,7 +66,7 @@ public fun public_transfer<T: key + store>(obj: T, recipient: address) {
 }
 
 /// NOT YET SUPPORTED. The function will abort with `ENotSupported` if used on a network,
-/// e.g. mainnet, where party objects other than `legacy_shared` are not yet supported.
+/// e.g. mainnet, where party objects are not yet supported.
 /// Transfer ownership of `obj` to the `party`. This transfer behaves similar to both
 /// `transfer` and `share_object`. It is similar to `transfer` in that the object be authenticated
 /// only by the recipient(s), in this case the `party`. This means that only the members
@@ -78,17 +78,13 @@ public fun public_transfer<T: key + store>(obj: T, recipient: address) {
 /// is an object defined in the module where `transfer` is invoked. Use `public_party_transfer`
 /// to transfer an object with `store` outside of its module.
 public fun party_transfer<T: key>(obj: T, party: sui::party::Party) {
-    if (party.is_legacy_shared()) {
-        share_object_impl(obj)
-    } else {
-        assert!(party.is_single_owner(), EInvalidPartyPermissions);
-        let (default, addresses, permissions) = party.into_native();
-        party_transfer_impl(obj, default, addresses, permissions)
-    }
+    assert!(party.is_single_owner(), EInvalidPartyPermissions);
+    let (default, addresses, permissions) = party.into_native();
+    party_transfer_impl(obj, default, addresses, permissions)
 }
 
 /// NOT YET SUPPORTED. The function will abort with `ENotSupported` if used on a network,
-/// e.g. mainnet, where party objects other than `legacy_shared` are not yet supported.
+/// e.g. mainnet, where party objects are not yet supported.
 /// Transfer ownership of `obj` to the `party`. This transfer behaves similar to both
 /// `transfer` and `share_object`. It is similar to `transfer` in that the object be authenticated
 /// only by the recipient(s), in this case the `party`. This means that only the members
@@ -101,13 +97,9 @@ public fun public_party_transfer<T: key + store>(
     obj: T,
     party: sui::party::Party,
 ) {
-    if (party.is_legacy_shared()) {
-        share_object_impl(obj)
-    } else {
-        assert!(party.is_single_owner(), EInvalidPartyPermissions);
-        let (default, addresses, permissions) = party.into_native();
-        party_transfer_impl(obj, default, addresses, permissions)
-    }
+    assert!(party.is_single_owner(), EInvalidPartyPermissions);
+    let (default, addresses, permissions) = party.into_native();
+    party_transfer_impl(obj, default, addresses, permissions)
 }
 
 /// Freeze `obj`. After freezing `obj` becomes immutable and can no longer be transferred or

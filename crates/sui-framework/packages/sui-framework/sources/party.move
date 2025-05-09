@@ -24,11 +24,6 @@ const TRANSFER: u8 = 0x08;
 /// No permissions.
 const NO_PERMISSIONS: u64 = 0;
 
-/// Permissions corresponding to shared objects as defined by `sui::transfer::share_object`.
-/// However, unlike shared objects, it will be possible to "upgrade" a normal object into a
-/// legacy shared object--although this upgrade feature is not yet implemented.
-const LEGACY_SHARED: u64 = (READ | WRITE | DELETE) as u64;
-
 /// All permissions.
 const ALL_PERMISSIONS: u64 = (READ | WRITE | DELETE | TRANSFER) as u64;
 
@@ -56,15 +51,6 @@ public struct Permissions(u64) has copy, drop;
 public fun single_owner(owner: address): Party {
     let mut mp = empty();
     mp.set_permissions(owner, Permissions(ALL_PERMISSIONS));
-    mp
-}
-
-/// Creates a `Party` value with permissions matching shared objects as defined by
-/// `sui::transfer::share_object`. NOTE: This does not currently support upgrading non-shared
-/// objects (i.e. objects must be created in the same transaction).
-public fun legacy_shared(): Party {
-    let mut mp = empty();
-    mp.default = Permissions(LEGACY_SHARED);
     mp
 }
 
@@ -98,11 +84,6 @@ public(package) fun is_single_owner(m: &Party): bool {
     m.default.0 == NO_PERMISSIONS &&
     m.members.size() == 1 &&
     { let (_, p) = m.members.get_entry_by_idx(0); p.0 == ALL_PERMISSIONS }
-}
-
-public(package) fun is_legacy_shared(m: &Party): bool {
-    m.default.0 == LEGACY_SHARED &&
-    m.members.size() == 0
 }
 
 public(package) fun into_native(
