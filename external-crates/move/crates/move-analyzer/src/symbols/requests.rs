@@ -6,8 +6,9 @@
 use crate::{
     context::Context,
     symbols::{
+        def_info::DefInfo,
         runner::SymbolicatorRunner,
-        types::{DefInfo, MemberDef, MemberDefInfo, ModuleDefs, Symbols},
+        types::{MemberDef, MemberDefInfo, ModuleDefs, Symbols},
         use_def::UseDef,
     },
     utils::lsp_position_to_loc,

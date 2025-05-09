@@ -19,10 +19,8 @@ use crate::{
     },
     symbols::{
         cursor::{ChainCompletionKind, ChainInfo, CursorContext},
-        types::{
-            AutoImportInsertionInfo, DefInfo, FunType, MemberDef, MemberDefInfo, ModuleDefs,
-            Symbols, VariantInfo,
-        },
+        def_info::{DefInfo, FunType, VariantInfo},
+        types::{AutoImportInsertionInfo, MemberDef, MemberDefInfo, ModuleDefs, Symbols},
     },
     utils::expansion_mod_ident_to_map_key,
 };

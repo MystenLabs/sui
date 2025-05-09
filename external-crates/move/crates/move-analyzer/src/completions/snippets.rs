@@ -8,7 +8,8 @@ use crate::{
     completions::utils::mod_defs,
     symbols::{
         cursor::{CursorContext, CursorDefinition},
-        types::{DefInfo, Symbols},
+        def_info::DefInfo,
+        types::Symbols,
     },
 };
 use lsp_types::{CompletionItem, CompletionItemKind, Documentation, InsertTextFormat, Position};

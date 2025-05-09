@@ -57,11 +57,12 @@ use crate::{
     symbols::{
         compilation::get_compiled_pkg,
         cursor::CursorContext,
+        def_info::{DefInfo, FunType, VariantInfo},
         ide_strings::{const_val_to_ide_string, mod_ident_to_ide_string},
         types::{
-            CompiledPkgInfo, CompiledProgram, DefInfo, DefMap, FieldDef, FieldOrderInfo,
-            FileModules, FileUseDefs, FunType, MemberDef, MemberDefInfo, ModuleDefs,
-            PrecomputedPkgInfo, Symbols, SymbolsComputationData, VariantInfo,
+            CompiledPkgInfo, CompiledProgram, DefMap, FieldDef, FieldOrderInfo, FileModules,
+            FileUseDefs, MemberDef, MemberDefInfo, ModuleDefs, PrecomputedPkgInfo, Symbols,
+            SymbolsComputationData,
         },
         use_def::{References, UseDef, UseDefMap},
     },
@@ -98,6 +99,7 @@ use move_symbol_pool::Symbol;
 
 pub mod compilation;
 pub mod cursor;
+pub mod def_info;
 pub mod ide_strings;
 pub mod requests;
 pub mod runner;
