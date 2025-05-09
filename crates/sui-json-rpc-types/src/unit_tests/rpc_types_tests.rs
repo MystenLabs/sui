@@ -161,20 +161,24 @@ fn test_move_type_serde() {
         SNT::Signer,
         SNT::Vector(Box::new(SNT::U8)),
         SNT::Struct {
-            address: SUI_FRAMEWORK_ADDRESS.to_string(),
-            module: "coin".to_owned(),
-            name: "Coin".to_owned(),
-            type_arguments: vec![SNT::Address],
+            inner: Box::new(SM::SuiMoveNormalizedStructType {
+                address: SUI_FRAMEWORK_ADDRESS.to_string(),
+                module: "coin".to_owned(),
+                name: "Coin".to_owned(),
+                type_arguments: vec![SNT::Address],
+            }),
         },
         SNT::Vector(Box::new(SNT::U16)),
         SNT::Vector(Box::new(SNT::Vector(Box::new(SNT::U8)))),
         SNT::TypeParameter(0),
         SNT::Reference(Box::new(SNT::U8)),
         SNT::MutableReference(Box::new(SNT::Struct {
-            address: SUI_FRAMEWORK_ADDRESS.to_string(),
-            module: "coin".to_owned(),
-            name: "Coin".to_owned(),
-            type_arguments: vec![SNT::Address],
+            inner: Box::new(SM::SuiMoveNormalizedStructType {
+                address: SUI_FRAMEWORK_ADDRESS.to_string(),
+                module: "coin".to_owned(),
+                name: "Coin".to_owned(),
+                type_arguments: vec![SNT::Address],
+            }),
         })),
     ];
 
@@ -219,10 +223,12 @@ fn test_move_type_serde() {
             vec![
                 SNT::U32,
                 SNT::Struct {
-                    address: SUI_FRAMEWORK_ADDRESS.to_string(),
-                    module: "coin".to_owned(),
-                    name: "Coin".to_owned(),
-                    type_arguments: vec![SNT::Address],
+                    inner: Box::new(SM::SuiMoveNormalizedStructType {
+                        address: SUI_FRAMEWORK_ADDRESS.to_string(),
+                        module: "coin".to_owned(),
+                        name: "Coin".to_owned(),
+                        type_arguments: vec![SNT::Address],
+                    }),
                 },
             ],
         ),
