@@ -52,7 +52,10 @@
 #![allow(clippy::non_canonical_partial_ord_impl)]
 
 use crate::{
-    analysis::{DefMap, run_parsing_analysis, run_typing_analysis},
+    analysis::{
+        DefMap, parsing_analysis::parsing_mod_def_to_map_key, run_parsing_analysis,
+        run_typing_analysis,
+    },
     compiler_info::CompilerInfo,
     symbols::{
         compilation::{
@@ -103,7 +106,6 @@ pub mod ide_strings;
 pub mod mod_defs;
 pub mod requests;
 pub mod runner;
-pub mod types;
 pub mod use_def;
 
 /// Result of the symbolication process
@@ -582,34 +584,6 @@ pub fn parsed_address(ln: P::LeadingNameAccess, pkg_addresses: &NamedAddressMap)
             None => E::Address::NamedUnassigned(name),
         },
     }
-}
-
-/// Produces module ident string of the form pkg::module to be used as a map key.
-/// It's important that these are consistent between parsing AST and typed AST.
-pub fn parsing_leading_and_mod_names_to_map_key(
-    pkg_addresses: &NamedAddressMap,
-    ln: P::LeadingNameAccess,
-    name: P::ModuleName,
-) -> String {
-    let parsed_addr = parsed_address(ln, pkg_addresses);
-    format!("{}::{}", parsed_addr, name).to_string()
-}
-
-/// Produces module ident string of the form pkg::module to be used as a map key.
-/// It's important that these are consistent between parsing AST and typed AST.
-pub fn parsing_mod_def_to_map_key(
-    pkg_addresses: &NamedAddressMap,
-    mod_def: &P::ModuleDefinition,
-) -> Option<String> {
-    // we assume that modules are declared using the PkgName::ModName pattern (which seems to be the
-    // standard practice) and while Move allows other ways of defining modules (i.e., with address
-    // preceding a sequence of modules), this method is now deprecated.
-    //
-    // TODO: make this function simply return String when the other way of defining modules is
-    // removed
-    mod_def
-        .address
-        .map(|a| parsing_leading_and_mod_names_to_map_key(pkg_addresses, a, mod_def.name))
 }
 
 /// Get empty symbols
