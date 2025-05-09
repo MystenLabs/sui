@@ -73,24 +73,24 @@ public macro fun public_transfer<$T: key + store>($self: Party, $obj: $T) {
     }
 }
 
-/* public */ fun set_permissions(m: &mut Party, address: address, permissions: Permissions) {
-    if (m.members.contains(&address)) {
-        m.members.remove(&address);
+/* public */ fun set_permissions(p: &mut Party, address: address, permissions: Permissions) {
+    if (p.members.contains(&address)) {
+        p.members.remove(&address);
     };
-    m.members.insert(address, permissions);
+    p.members.insert(address, permissions);
 }
 
-public(package) fun is_single_owner(m: &Party): bool {
-    m.default.0 == NO_PERMISSIONS &&
-    m.members.size() == 1 &&
-    { let (_, p) = m.members.get_entry_by_idx(0); p.0 == ALL_PERMISSIONS }
+public(package) fun is_single_owner(p: &Party): bool {
+    p.default.0 == NO_PERMISSIONS &&
+    p.members.size() == 1 &&
+    { let (_, m) = p.members.get_entry_by_idx(0); m.0 == ALL_PERMISSIONS }
 }
 
 public(package) fun into_native(
-    m: Party,
+    p: Party,
 ): (u64, vector<address>, vector<u64>) {
-    let Party { default, members } = m;
+    let Party { default, members } = p;
     let (addresses, permissions) = members.into_keys_values();
-    let permissions = permissions.map!(|Permissions(p)| p);
+    let permissions = permissions.map!(|Permissions(x)| x);
     (default.0, addresses, permissions)
 }

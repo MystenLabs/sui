@@ -273,7 +273,7 @@ members: <a href="../sui/vec_map.md#sui_vec_map_empty">vec_map::empty</a>(),
 
 
 
-<pre><code><b>fun</b> <a href="../sui/party.md#sui_party_set_permissions">set_permissions</a>(m: &<b>mut</b> <a href="../sui/party.md#sui_party_Party">sui::party::Party</a>, <b>address</b>: <b>address</b>, permissions: <a href="../sui/party.md#sui_party_Permissions">sui::party::Permissions</a>)
+<pre><code><b>fun</b> <a href="../sui/party.md#sui_party_set_permissions">set_permissions</a>(p: &<b>mut</b> <a href="../sui/party.md#sui_party_Party">sui::party::Party</a>, <b>address</b>: <b>address</b>, permissions: <a href="../sui/party.md#sui_party_Permissions">sui::party::Permissions</a>)
 </code></pre>
 
 
@@ -282,11 +282,11 @@ members: <a href="../sui/vec_map.md#sui_vec_map_empty">vec_map::empty</a>(),
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui/party.md#sui_party_set_permissions">set_permissions</a>(m: &<b>mut</b> <a href="../sui/party.md#sui_party_Party">Party</a>, <b>address</b>: <b>address</b>, permissions: <a href="../sui/party.md#sui_party_Permissions">Permissions</a>) {
-<b>if</b> (m.members.contains(&<b>address</b>)) {
-m.members.remove(&<b>address</b>);
+<pre><code><b>fun</b> <a href="../sui/party.md#sui_party_set_permissions">set_permissions</a>(p: &<b>mut</b> <a href="../sui/party.md#sui_party_Party">Party</a>, <b>address</b>: <b>address</b>, permissions: <a href="../sui/party.md#sui_party_Permissions">Permissions</a>) {
+<b>if</b> (p.members.contains(&<b>address</b>)) {
+p.members.remove(&<b>address</b>);
 };
-m.members.insert(<b>address</b>, permissions);
+p.members.insert(<b>address</b>, permissions);
 }
 </code></pre>
 
@@ -300,7 +300,7 @@ m.members.insert(<b>address</b>, permissions);
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/party.md#sui_party_is_single_owner">is_single_owner</a>(m: &<a href="../sui/party.md#sui_party_Party">sui::party::Party</a>): bool
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/party.md#sui_party_is_single_owner">is_single_owner</a>(p: &<a href="../sui/party.md#sui_party_Party">sui::party::Party</a>): bool
 </code></pre>
 
 
@@ -309,10 +309,10 @@ m.members.insert(<b>address</b>, permissions);
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/party.md#sui_party_is_single_owner">is_single_owner</a>(m: &<a href="../sui/party.md#sui_party_Party">Party</a>): bool {
-    m.default.0 == <a href="../sui/party.md#sui_party_NO_PERMISSIONS">NO_PERMISSIONS</a> &&
-    m.members.size() == 1 &&
-    { <b>let</b> (_, p) = m.members.get_entry_by_idx(0); p.0 == <a href="../sui/party.md#sui_party_ALL_PERMISSIONS">ALL_PERMISSIONS</a> }
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/party.md#sui_party_is_single_owner">is_single_owner</a>(p: &<a href="../sui/party.md#sui_party_Party">Party</a>): bool {
+    p.default.0 == <a href="../sui/party.md#sui_party_NO_PERMISSIONS">NO_PERMISSIONS</a> &&
+    p.members.size() == 1 &&
+    { <b>let</b> (_, m) = p.members.get_entry_by_idx(0); m.0 == <a href="../sui/party.md#sui_party_ALL_PERMISSIONS">ALL_PERMISSIONS</a> }
 }
 </code></pre>
 
@@ -326,7 +326,7 @@ m.members.insert(<b>address</b>, permissions);
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/party.md#sui_party_into_native">into_native</a>(m: <a href="../sui/party.md#sui_party_Party">sui::party::Party</a>): (u64, vector&lt;<b>address</b>&gt;, vector&lt;u64&gt;)
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/party.md#sui_party_into_native">into_native</a>(p: <a href="../sui/party.md#sui_party_Party">sui::party::Party</a>): (u64, vector&lt;<b>address</b>&gt;, vector&lt;u64&gt;)
 </code></pre>
 
 
@@ -336,11 +336,11 @@ m.members.insert(<b>address</b>, permissions);
 
 
 <pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/party.md#sui_party_into_native">into_native</a>(
-    m: <a href="../sui/party.md#sui_party_Party">Party</a>,
+    p: <a href="../sui/party.md#sui_party_Party">Party</a>,
 ): (u64, vector&lt;<b>address</b>&gt;, vector&lt;u64&gt;) {
-    <b>let</b> <a href="../sui/party.md#sui_party_Party">Party</a> { default, members } = m;
+    <b>let</b> <a href="../sui/party.md#sui_party_Party">Party</a> { default, members } = p;
     <b>let</b> (addresses, permissions) = members.into_keys_values();
-    <b>let</b> permissions = permissions.map!(|<a href="../sui/party.md#sui_party_Permissions">Permissions</a>(p)| p);
+    <b>let</b> permissions = permissions.map!(|<a href="../sui/party.md#sui_party_Permissions">Permissions</a>(x)| x);
     (default.0, addresses, permissions)
 }
 </code></pre>
