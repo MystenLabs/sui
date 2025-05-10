@@ -7,6 +7,7 @@ use std::{
     time::Duration,
 };
 
+use serde::{Deserialize, Serialize};
 use sui_default_config::DefaultConfig;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use tracing::warn;
@@ -52,6 +53,14 @@ pub struct HealthLayer {
 
     #[serde(flatten)]
     pub extra: toml::Table,
+}
+
+/// Config for an indexer writing to a database used by this RPC service. It is simplified w.r.t.
+/// to the actual indexer config to focus on extracting the names of pipelines enabled on that
+/// indexer.
+#[derive(Serialize, Deserialize, Default, Clone, Debug)]
+pub struct IndexerConfig {
+    pub pipeline: toml::Table,
 }
 
 pub struct Limits {
@@ -142,16 +151,12 @@ pub struct LimitsLayer {
 pub struct WatermarkConfig {
     /// How long to wait between updating the watermark.
     pub watermark_polling_interval: Duration,
-
-    /// Pipelines from the database that are tracked for watermark purposes.
-    pub pg_pipelines: Vec<String>,
 }
 
 #[DefaultConfig]
 #[derive(Default, Clone, Debug)]
 pub struct WatermarkLayer {
     pub watermark_polling_interval_ms: Option<u64>,
-    pub pg_pipelines: Option<Vec<String>>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -186,6 +191,13 @@ impl HealthLayer {
                 .map(Duration::from_millis)
                 .unwrap_or(base.max_checkpoint_lag),
         }
+    }
+}
+
+impl IndexerConfig {
+    /// Pipelines detected as enabled in this indexer configuration.
+    pub fn pipelines(&self) -> impl Iterator<Item = &str> {
+        self.pipeline.iter().map(|(k, _)| k.as_str())
     }
 }
 
@@ -282,7 +294,6 @@ impl WatermarkLayer {
                 .watermark_polling_interval_ms
                 .map(Duration::from_millis)
                 .unwrap_or(base.watermark_polling_interval),
-            pg_pipelines: self.pg_pipelines.unwrap_or(base.pg_pipelines),
         }
     }
 }
@@ -323,7 +334,6 @@ impl From<WatermarkConfig> for WatermarkLayer {
     fn from(value: WatermarkConfig) -> Self {
         Self {
             watermark_polling_interval_ms: Some(value.watermark_polling_interval.as_millis() as u64),
-            pg_pipelines: Some(value.pg_pipelines),
             extra: Default::default(),
         }
     }
@@ -388,29 +398,6 @@ impl Default for WatermarkConfig {
     fn default() -> Self {
         Self {
             watermark_polling_interval: Duration::from_millis(500),
-            pg_pipelines: vec![
-                "coin_balance_buckets".to_owned(),
-                "cp_sequence_numbers".to_owned(),
-                "ev_emit_mod".to_owned(),
-                "ev_struct_inst".to_owned(),
-                "kv_checkpoints".to_owned(),
-                "kv_epoch_ends".to_owned(),
-                "kv_epoch_starts".to_owned(),
-                "kv_feature_flags".to_owned(),
-                "kv_objects".to_owned(),
-                "kv_packages".to_owned(),
-                "kv_protocol_configs".to_owned(),
-                "kv_transactions".to_owned(),
-                "obj_info".to_owned(),
-                "obj_versions".to_owned(),
-                "sum_displays".to_owned(),
-                "tx_affected_addresses".to_owned(),
-                "tx_affected_objects".to_owned(),
-                "tx_balance_changes".to_owned(),
-                "tx_calls".to_owned(),
-                "tx_digests".to_owned(),
-                "tx_kinds".to_owned(),
-            ],
         }
     }
 }
