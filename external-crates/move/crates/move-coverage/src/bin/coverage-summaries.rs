@@ -17,7 +17,7 @@ use std::{
 };
 
 #[derive(Debug, Parser)]
-#[clap(
+#[arg(
     name = "coverage-summaries",
     about = "Creates a coverage summary from the trace data collected from the Move VM",
     author,
@@ -25,28 +25,28 @@ use std::{
 )]
 struct Args {
     /// The path to the coverage map or trace file
-    #[clap(long = "input-trace-path", short = 't')]
+    #[arg(long = "input-trace-path", short = 't')]
     pub input_trace_path: String,
     /// Whether the passed-in file is a raw trace file or a serialized coverage map
-    #[clap(long = "is-raw-trace", short = 'r')]
+    #[arg(long = "is-raw-trace", short = 'r')]
     pub is_raw_trace_file: bool,
     /// The path to the module binary
-    #[clap(long = "module-path", short = 'b')]
+    #[arg(long = "module-path", short = 'b')]
     pub module_binary_path: Option<String>,
     /// Optional path for summaries. Printed to stdout if not present.
-    #[clap(long = "summary-path", short = 'o')]
+    #[arg(long = "summary-path", short = 'o')]
     pub summary_path: Option<String>,
     /// Whether function coverage summaries should be displayed
-    #[clap(long = "summarize-functions", short = 'f')]
+    #[arg(long = "summarize-functions", short = 'f')]
     pub summarize_functions: bool,
     /// The path to the standard library binary directory for Move
-    #[clap(long = "stdlib-path", short = 's')]
+    #[arg(long = "stdlib-path", short = 's')]
     pub stdlib_path: Option<String>,
     /// Whether path coverage should be derived (default is instruction coverage)
-    #[clap(long = "derive-path-coverage", short = 'p')]
+    #[arg(long = "derive-path-coverage", short = 'p')]
     pub derive_path_coverage: bool,
     /// Output CSV data of coverage
-    #[clap(long = "csv", short = 'c')]
+    #[arg(long = "csv", short = 'c')]
     pub csv_output: bool,
 }
 

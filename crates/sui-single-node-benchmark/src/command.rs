@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use strum_macros::EnumIter;
 
 #[derive(Parser)]
-#[clap(
+#[command(
     name = "sui-single-node-benchmark",
     about = "Benchmark a single validator node",
     rename_all = "kebab-case",
@@ -44,7 +44,7 @@ pub struct Command {
         help = "Which component to benchmark"
     )]
     pub component: Component,
-    #[clap(subcommand)]
+    #[command(subcommand)]
     pub workload: WorkloadKind,
 }
 

@@ -48,17 +48,17 @@ mod timeout;
 #[derive(clap::Args, Debug, Clone)]
 pub struct RpcArgs {
     /// Address to listen to for incoming JSON-RPC connections.
-    #[clap(long, default_value_t = Self::default().rpc_listen_address)]
+    #[arg(long, default_value_t = Self::default().rpc_listen_address)]
     pub rpc_listen_address: SocketAddr,
 
     /// The maximum number of concurrent requests to accept. If the service receives more than this
     /// many requests, it will start responding with 429.
-    #[clap(long, default_value_t = Self::default().max_in_flight_requests)]
+    #[arg(long, default_value_t = Self::default().max_in_flight_requests)]
     pub max_in_flight_requests: u32,
 
     /// Requests that take longer than this (in milliseconds) to respond to will be terminated, and
     /// the query itself will be logged as a warning.
-    #[clap(long, default_value_t = Self::default().request_timeout_ms)]
+    #[arg(long, default_value_t = Self::default().request_timeout_ms)]
     pub request_timeout_ms: u64,
 }
 

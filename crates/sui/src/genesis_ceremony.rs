@@ -26,13 +26,13 @@ use crate::genesis_inspector::examine_genesis_checkpoint;
 
 #[derive(Parser)]
 pub struct Ceremony {
-    #[clap(long)]
+    #[arg(long)]
     path: Option<PathBuf>,
 
-    #[clap(long)]
+    #[arg(long)]
     protocol_version: Option<u64>,
 
-    #[clap(subcommand)]
+    #[command(subcommand)]
     command: CeremonyCommand,
 }
 
@@ -49,29 +49,29 @@ pub enum CeremonyCommand {
     ValidateState,
 
     AddValidator {
-        #[clap(long)]
+        #[arg(long)]
         name: String,
-        #[clap(long)]
+        #[arg(long)]
         validator_key_file: PathBuf,
-        #[clap(long)]
+        #[arg(long)]
         worker_key_file: PathBuf,
-        #[clap(long)]
+        #[arg(long)]
         account_key_file: PathBuf,
-        #[clap(long)]
+        #[arg(long)]
         network_key_file: PathBuf,
-        #[clap(long)]
+        #[arg(long)]
         network_address: Multiaddr,
-        #[clap(long)]
+        #[arg(long)]
         p2p_address: Multiaddr,
-        #[clap(long)]
+        #[arg(long)]
         narwhal_primary_address: Multiaddr,
-        #[clap(long)]
+        #[arg(long)]
         narwhal_worker_address: Multiaddr,
-        #[clap(long)]
+        #[arg(long)]
         description: String,
-        #[clap(long)]
+        #[arg(long)]
         image_url: String,
-        #[clap(long)]
+        #[arg(long)]
         project_url: String,
     },
 
@@ -82,7 +82,7 @@ pub enum CeremonyCommand {
     ExamineGenesisCheckpoint,
 
     VerifyAndSign {
-        #[clap(long)]
+        #[arg(long)]
         key_file: PathBuf,
     },
 

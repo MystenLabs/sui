@@ -16,18 +16,18 @@ use url::Url;
 const OBJECTS_HISTORY_EPOCHS_TO_KEEP: u64 = 2;
 
 #[derive(Parser, Clone, Debug)]
-#[clap(
+#[command(
     name = "Sui indexer",
     about = "An off-fullnode service serving data from Sui protocol"
 )]
 pub struct IndexerConfig {
-    #[clap(long, alias = "db-url")]
+    #[arg(long, alias = "db-url")]
     pub database_url: Url,
 
-    #[clap(flatten)]
+    #[command(flatten)]
     pub connection_pool_config: ConnectionPoolConfig,
 
-    #[clap(long, default_value = "0.0.0.0:9184")]
+    #[arg(long, default_value = "0.0.0.0:9184")]
     pub metrics_address: SocketAddr,
 
     #[command(subcommand)]
@@ -82,10 +82,10 @@ pub struct JsonRpcConfig {
     #[command(flatten)]
     pub name_service_options: NameServiceOptions,
 
-    #[clap(long, default_value = "0.0.0.0:9000")]
+    #[arg(long, default_value = "0.0.0.0:9000")]
     pub rpc_address: SocketAddr,
 
-    #[clap(long)]
+    #[arg(long)]
     pub rpc_client_url: String,
 }
 
@@ -104,7 +104,7 @@ pub struct IngestionSources {
 
 #[derive(Args, Debug, Clone)]
 pub struct IngestionConfig {
-    #[clap(flatten)]
+    #[command(flatten)]
     pub sources: IngestionSources,
 
     #[arg(
@@ -210,11 +210,11 @@ pub enum Command {
     },
     JsonRpcService(JsonRpcConfig),
     ResetDatabase {
-        #[clap(long)]
+        #[arg(long)]
         force: bool,
         /// If true, only drop all tables but do not run the migrations.
         /// That is, no tables will exist in the DB after the reset.
-        #[clap(long, default_value_t = false)]
+        #[arg(long, default_value_t = false)]
         skip_migrations: bool,
     },
     /// Run through the migration scripts.
@@ -233,7 +233,7 @@ pub enum Command {
         start: usize,
         /// End of the range to backfill, inclusive.
         end: usize,
-        #[clap(subcommand)]
+        #[command(subcommand)]
         runner_kind: BackfillTaskKind,
         #[command(flatten)]
         backfill_config: BackFillConfig,

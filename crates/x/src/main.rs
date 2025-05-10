@@ -9,18 +9,18 @@ mod lint;
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None)]
+#[command(author, version, about, long_about = None)]
 struct Args {
-    #[clap(subcommand)]
+    #[command(subcommand)]
     cmd: Command,
 }
 
 #[derive(Debug, Parser)]
 enum Command {
-    #[clap(name = "lint")]
+    #[command(name = "lint")]
     /// Run lints
     Lint(lint::Args),
-    #[clap(name = "external-crates-tests")]
+    #[command(name = "external-crates-tests")]
     /// Run external crate tests
     ExternalCratesTests,
 }

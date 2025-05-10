@@ -17,18 +17,18 @@ use std::path::PathBuf;
 #[group(id = "sui-move-disassemmble")]
 pub struct Disassemble {
     /// Path to a .mv file to disassemble
-    #[clap(name = "module_path")]
+    #[arg(name = "module_path")]
     module_path: PathBuf,
 
     /// Whether to display the disassembly in raw Debug format
-    #[clap(long = "Xdebug")]
+    #[arg(long = "Xdebug")]
     debug: bool,
 
-    #[clap(short = 'i', long = "interactive")]
+    #[arg(short = 'i', long = "interactive")]
     interactive: bool,
 
     /// Print the "bytecode map" (source map for disassembled bytecode)
-    #[clap(long = "bytecode-map")]
+    #[arg(long = "bytecode-map")]
     pub bytecode_map: bool,
 }
 

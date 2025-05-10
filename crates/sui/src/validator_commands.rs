@@ -68,9 +68,9 @@ mod validator_tests;
 const DEFAULT_GAS_BUDGET: u64 = 200_000_000; // 0.2 SUI
 
 #[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case")]
 pub enum SuiValidatorCommand {
-    #[clap(name = "make-validator-info")]
+    #[command(name = "make-validator-info")]
     MakeValidatorInfo {
         name: String,
         description: String,
@@ -79,132 +79,132 @@ pub enum SuiValidatorCommand {
         host_name: String,
         gas_price: u64,
     },
-    #[clap(name = "become-candidate")]
+    #[command(name = "become-candidate")]
     BecomeCandidate {
-        #[clap(name = "validator-info-path")]
+        #[arg(name = "validator-info-path")]
         file: PathBuf,
-        #[clap(name = "gas-budget", long)]
+        #[arg(name = "gas-budget", long)]
         gas_budget: Option<u64>,
     },
-    #[clap(name = "join-committee")]
+    #[command(name = "join-committee")]
     JoinCommittee {
         /// Gas budget for this transaction.
-        #[clap(name = "gas-budget", long)]
+        #[arg(name = "gas-budget", long)]
         gas_budget: Option<u64>,
     },
-    #[clap(name = "leave-committee")]
+    #[command(name = "leave-committee")]
     LeaveCommittee {
         /// Gas budget for this transaction.
-        #[clap(name = "gas-budget", long)]
+        #[arg(name = "gas-budget", long)]
         gas_budget: Option<u64>,
     },
-    #[clap(name = "display-metadata")]
+    #[command(name = "display-metadata")]
     DisplayMetadata {
-        #[clap(name = "validator-address")]
+        #[arg(name = "validator-address")]
         validator_address: Option<SuiAddress>,
-        #[clap(name = "json", long)]
+        #[arg(name = "json", long)]
         json: Option<bool>,
     },
-    #[clap(name = "update-metadata")]
+    #[command(name = "update-metadata")]
     UpdateMetadata {
-        #[clap(subcommand)]
+        #[command(subcommand)]
         metadata: MetadataUpdate,
         /// Gas budget for this transaction.
-        #[clap(name = "gas-budget", long)]
+        #[arg(name = "gas-budget", long)]
         gas_budget: Option<u64>,
     },
     /// Update gas price that is used to calculate Reference Gas Price
-    #[clap(name = "update-gas-price")]
+    #[command(name = "update-gas-price")]
     UpdateGasPrice {
         /// Optional when sender is the validator itself and it holds the Cap object.
         /// Required when sender is not the validator itself.
         /// Validator's OperationCap ID can be found by using the `display-metadata` subcommand.
-        #[clap(name = "operation-cap-id", long)]
+        #[arg(name = "operation-cap-id", long)]
         operation_cap_id: Option<ObjectID>,
-        #[clap(name = "gas-price")]
+        #[arg(name = "gas-price")]
         gas_price: u64,
         /// Gas budget for this transaction.
-        #[clap(name = "gas-budget", long)]
+        #[arg(name = "gas-budget", long)]
         gas_budget: Option<u64>,
     },
     /// Report or un-report a validator.
-    #[clap(name = "report-validator")]
+    #[command(name = "report-validator")]
     ReportValidator {
         /// Optional when sender is reporter validator itself and it holds the Cap object.
         /// Required when sender is not the reporter validator itself.
         /// Validator's OperationCap ID can be found by using the `display-metadata` subcommand.
-        #[clap(name = "operation-cap-id", long)]
+        #[arg(name = "operation-cap-id", long)]
         operation_cap_id: Option<ObjectID>,
         /// The Sui Address of the validator is being reported or un-reported
-        #[clap(name = "reportee-address")]
+        #[arg(name = "reportee-address")]
         reportee_address: SuiAddress,
         /// If true, undo an existing report.
-        #[clap(name = "undo-report", long)]
+        #[arg(name = "undo-report", long)]
         undo_report: Option<bool>,
         /// Gas budget for this transaction.
-        #[clap(name = "gas-budget", long)]
+        #[arg(name = "gas-budget", long)]
         gas_budget: Option<u64>,
     },
     /// Serialize the payload that is used to generate Proof of Possession.
     /// This is useful to take the payload offline for an Authority protocol keypair to sign.
-    #[clap(name = "serialize-payload-pop")]
+    #[command(name = "serialize-payload-pop")]
     SerializePayloadForPoP {
         /// Authority account address encoded in hex with 0x prefix.
-        #[clap(name = "account-address", long)]
+        #[arg(name = "account-address", long)]
         account_address: SuiAddress,
         /// Authority protocol public key encoded in hex.
-        #[clap(name = "protocol-public-key", long)]
+        #[arg(name = "protocol-public-key", long)]
         protocol_public_key: AuthorityPublicKeyBytes,
     },
     /// Print out the serialized data of a transaction that sets the gas price quote for a validator.
     DisplayGasPriceUpdateRawTxn {
         /// Address of the transaction sender.
-        #[clap(name = "sender-address", long)]
+        #[arg(name = "sender-address", long)]
         sender_address: SuiAddress,
         /// Object ID of a validator's OperationCap, used for setting gas price and reportng validators.
-        #[clap(name = "operation-cap-id", long)]
+        #[arg(name = "operation-cap-id", long)]
         operation_cap_id: ObjectID,
         /// Gas price to be set to.
-        #[clap(name = "new-gas-price", long)]
+        #[arg(name = "new-gas-price", long)]
         new_gas_price: u64,
         /// Gas budget for this transaction.
-        #[clap(name = "gas-budget", long)]
+        #[arg(name = "gas-budget", long)]
         gas_budget: Option<u64>,
     },
     /// Sui native bridge committee member registration
-    #[clap(name = "register-bridge-committee")]
+    #[command(name = "register-bridge-committee")]
     RegisterBridgeCommittee {
         /// Path to Bridge Authority Key file.
-        #[clap(long)]
+        #[arg(long)]
         bridge_authority_key_path: PathBuf,
         /// Bridge authority URL which clients collects action signatures from.
-        #[clap(long)]
+        #[arg(long)]
         bridge_authority_url: String,
         /// If true, only print the unsigned transaction and do not execute it.
         /// This is useful for offline signing.
-        #[clap(name = "print-only", long, default_value = "false")]
+        #[arg(name = "print-only", long, default_value = "false")]
         print_unsigned_transaction_only: bool,
         /// Must present if `print_unsigned_transaction_only` is true.
-        #[clap(long)]
+        #[arg(long)]
         validator_address: Option<SuiAddress>,
         /// Gas budget for this transaction.
-        #[clap(name = "gas-budget", long)]
+        #[arg(name = "gas-budget", long)]
         gas_budget: Option<u64>,
     },
     /// Update sui native bridge committee node url
     UpdateBridgeCommitteeNodeUrl {
         /// New node url to be registered in the on chain bridge object.
-        #[clap(long)]
+        #[arg(long)]
         bridge_authority_url: String,
         /// If true, only print the unsigned transaction and do not execute it.
         /// This is useful for offline signing.
-        #[clap(name = "print-only", long, default_value = "false")]
+        #[arg(name = "print-only", long, default_value = "false")]
         print_unsigned_transaction_only: bool,
         /// Must be present if `print_unsigned_transaction_only` is true.
-        #[clap(long)]
+        #[arg(long)]
         validator_address: Option<SuiAddress>,
         /// Gas budget for this transaction.
-        #[clap(name = "gas-budget", long)]
+        #[arg(name = "gas-budget", long)]
         gas_budget: Option<u64>,
     },
 }
@@ -1106,7 +1106,7 @@ async fn get_pending_candidate_summary(
 }
 
 #[derive(Subcommand)]
-#[clap(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case")]
 pub enum MetadataUpdate {
     /// Update name. Effectuate immediately.
     Name { name: String },
@@ -1126,17 +1126,17 @@ pub enum MetadataUpdate {
     P2pAddress { p2p_address: Multiaddr },
     /// Update Network Public Key. Effectuate from next epoch.
     NetworkPubKey {
-        #[clap(name = "network-key-path")]
+        #[arg(name = "network-key-path")]
         file: PathBuf,
     },
     /// Update Worker Public Key. Effectuate from next epoch.
     WorkerPubKey {
-        #[clap(name = "worker-key-path")]
+        #[arg(name = "worker-key-path")]
         file: PathBuf,
     },
     /// Update Protocol Public Key and Proof and Possession. Effectuate from next epoch.
     ProtocolPubKey {
-        #[clap(name = "protocol-key-path")]
+        #[arg(name = "protocol-key-path")]
         file: PathBuf,
     },
 }

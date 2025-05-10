@@ -10,7 +10,7 @@ use clap::Parser;
 
 #[derive(Debug, Parser)]
 pub struct Options {
-    #[clap(subcommand)]
+    #[command(subcommand)]]
     command: Command,
 }
 

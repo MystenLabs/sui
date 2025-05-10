@@ -19,11 +19,11 @@ use tracing::info;
 bin_version::bin_version!();
 
 #[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
-#[clap(name = env!("CARGO_BIN_NAME"))]
-#[clap(version = VERSION)]
+#[command(rename_all = "kebab-case")]
+#[command(name = env!("CARGO_BIN_NAME"))]
+#[command(version = VERSION)]
 struct Args {
-    #[clap(long)]
+    #[arg(long)]
     pub config_path: PathBuf,
 }
 

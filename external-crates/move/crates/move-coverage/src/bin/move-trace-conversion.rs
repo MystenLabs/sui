@@ -9,7 +9,7 @@ use move_coverage::coverage_map::{CoverageMap, TraceMap, output_map_to_file};
 use std::path::Path;
 
 #[derive(Debug, Parser)]
-#[clap(
+#[arg(
     name = "move-trace-conversion",
     about = "Creates a coverage map from the raw data collected from the Move VM",
     author,
@@ -17,16 +17,16 @@ use std::path::Path;
 )]
 struct Args {
     /// The path to the input file
-    #[clap(long = "input-file-path", short = 'f')]
+    #[arg(long = "input-file-path", short = 'f')]
     pub input_file_path: String,
     /// The path to the output file location
-    #[clap(long = "output-file-path", short = 'o')]
+    #[arg(long = "output-file-path", short = 'o')]
     pub output_file_path: String,
     /// Add traces from `input_file_path` to an existing coverage map at `update_coverage_map`
-    #[clap(long = "update", short = 'u')]
+    #[arg(long = "update", short = 'u')]
     pub update: Option<String>,
     /// Collect structured trace instead of aggregated coverage information
-    #[clap(long = "use-trace-map", short = 't')]
+    #[arg(long = "use-trace-map", short = 't')]
     pub use_trace_map: bool,
 }
 

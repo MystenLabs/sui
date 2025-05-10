@@ -29,12 +29,12 @@ enum Action {
 }
 
 #[derive(Debug, Parser)]
-#[clap(
+#[arg(
     name = "Sui format generator",
     about = "Trace serde (de)serialization to generate format descriptions for Sui types"
 )]
 struct Options {
-    #[clap(value_enum, default_value = "Record", ignore_case = true)]
+    #[arg(value_enum, default_value = "Record", ignore_case = true)]
     action: Action,
 }
 

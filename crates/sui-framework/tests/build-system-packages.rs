@@ -244,7 +244,7 @@ fn relocate_docs(files: &[(String, String)], output: &mut BTreeMap<String, Strin
     // +title: Module `0x2::display`
     // +---
     //```
-    let re = regex::Regex::new(r"(?s).*\n#\s+(.*?)\n").unwrap();
+    let re = regex::Regex::new(r"(?s).*\n#[command(subcommand)]+(.*?)\n").unwrap();
     for (file_name, file_content) in files {
         if file_name.contains("dependencies") {
             // we don't need to keep the dependency version of each doc since it will be generated
