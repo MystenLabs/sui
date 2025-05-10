@@ -32,8 +32,7 @@ fun test_split_join_staked_sui() {
         ])
         .build();
 
-    runner.set_sender(STAKER_ADDR_1);
-    runner.stake_with(VALIDATOR_ADDR_1, 60);
+    runner.set_sender(STAKER_ADDR_1).stake_with(VALIDATOR_ADDR_1, 60);
 
     runner.owned_tx!<StakedSui>(|mut stake| {
         stake.split_to_sender(20 * MIST_PER_SUI, runner.ctx());
@@ -66,10 +65,10 @@ fun test_join_different_epochs() {
         ])
         .build();
 
-    runner.set_sender(STAKER_ADDR_1); // stake 1
-    runner.stake_with(VALIDATOR_ADDR_1, 60);
+    // stake 1
+    runner.set_sender(STAKER_ADDR_1).stake_with(VALIDATOR_ADDR_1, 60);
     runner.advance_epoch(option::none()).destroy_for_testing();
-    runner.stake_with(VALIDATOR_ADDR_1, 60); // stake 2
+    runner.set_sender(STAKER_ADDR_1).stake_with(VALIDATOR_ADDR_1, 60);
 
     // aborts trying to join stakes with different epoch activations
     runner.scenario_fn!(|scenario| {
@@ -326,7 +325,8 @@ fun test_add_stake_post_active_flow() {
 
     // Now try and stake to the old validator/staking pool. This should fail!
     runner.stake_with(VALIDATOR_ADDR_1, 60);
-    runner.finish();
+
+    abort
 }
 
 #[test]
