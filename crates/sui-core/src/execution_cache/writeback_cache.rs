@@ -46,7 +46,7 @@ use crate::authority::backpressure::BackpressureManager;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::authority::AuthorityStore;
 use crate::fallback_fetch::{do_fallback_lookup, do_fallback_lookup_fallible};
-use crate::state_accumulator::AccumulatorStore;
+use crate::object_state_hasher::ObjectStateHashStore;
 use crate::transaction_outputs::TransactionOutputs;
 
 use dashmap::mapref::entry::Entry as DashMapEntry;
@@ -64,7 +64,6 @@ use std::sync::Arc;
 use sui_config::ExecutionCacheConfig;
 use sui_macros::fail_point;
 use sui_protocol_config::ProtocolVersion;
-use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{
     EpochId, FullObjectID, ObjectID, ObjectRef, SequenceNumber, VerifiedExecutionData,
 };
@@ -76,6 +75,7 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
+use sui_types::object_state_hash::ObjectStateHash;
 use sui_types::storage::{
     FullObjectKey, MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject,
 };
@@ -194,7 +194,7 @@ impl IsNewer for LatestObjectCacheEntry {
 
 type MarkerKey = (EpochId, FullObjectID);
 
-/// UncommitedData stores execution outputs that are not yet written to the db. Entries in this
+/// UncommittedData stores execution outputs that are not yet written to the db. Entries in this
 /// struct can only be purged after they are committed.
 struct UncommittedData {
     /// The object dirty set. All writes go into this table first. After we flush the data to the
@@ -944,7 +944,7 @@ impl WritebackCache {
                 // This can happen in the following rare case:
                 // All transactions in the checkpoint are committed to the db (by commit_transaction_outputs,
                 // called in CheckpointExecutor::process_executed_transactions), but the process crashes before
-                // the checkpoint water mark is bumped. We will then re-commit thhe checkpoint at startup,
+                // the checkpoint water mark is bumped. We will then re-commit the checkpoint at startup,
                 // despite that all transactions are already executed.
                 warn!("Attempt to commit unknown transaction {:?}", tx);
                 continue;
@@ -1219,7 +1219,7 @@ impl WritebackCache {
     fn revert_state_update_impl(&self, tx: &TransactionDigest) {
         // TODO: remove revert_state_update_impl entirely, and simply drop all dirty
         // state when clear_state_end_of_epoch_impl is called.
-        // Futher, once we do this, we can delay the insertion of the transaction into
+        // Further, once we do this, we can delay the insertion of the transaction into
         // pending_consensus_transactions until after the transaction has executed.
         let Some((_, outputs)) = self.dirty.pending_transaction_writes.remove(tx) else {
             assert!(
@@ -2065,7 +2065,7 @@ impl ExecutionCacheWrite for WritebackCache {
 
 implement_passthrough_traits!(WritebackCache);
 
-impl AccumulatorStore for WritebackCache {
+impl ObjectStateHashStore for WritebackCache {
     fn get_object_ref_prior_to_key_deprecated(
         &self,
         object_id: &ObjectID,
@@ -2118,27 +2118,27 @@ impl AccumulatorStore for WritebackCache {
         Ok(candidates.pop())
     }
 
-    fn get_root_state_accumulator_for_epoch(
+    fn get_root_state_hash_for_epoch(
         &self,
         epoch: EpochId,
-    ) -> SuiResult<Option<(CheckpointSequenceNumber, Accumulator)>> {
-        self.store.get_root_state_accumulator_for_epoch(epoch)
+    ) -> SuiResult<Option<(CheckpointSequenceNumber, ObjectStateHash)>> {
+        self.store.get_root_state_hash_for_epoch(epoch)
     }
 
-    fn get_root_state_accumulator_for_highest_epoch(
+    fn get_root_state_hash_for_highest_epoch(
         &self,
-    ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, Accumulator))>> {
-        self.store.get_root_state_accumulator_for_highest_epoch()
+    ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, ObjectStateHash))>> {
+        self.store.get_root_state_hash_for_highest_epoch()
     }
 
-    fn insert_state_accumulator_for_epoch(
+    fn insert_state_hash_for_epoch(
         &self,
         epoch: EpochId,
         checkpoint_seq_num: &CheckpointSequenceNumber,
-        acc: &Accumulator,
+        acc: &ObjectStateHash,
     ) -> SuiResult {
         self.store
-            .insert_state_accumulator_for_epoch(epoch, checkpoint_seq_num, acc)
+            .insert_state_hash_for_epoch(epoch, checkpoint_seq_num, acc)
     }
 
     fn iter_live_object_set(

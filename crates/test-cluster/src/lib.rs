@@ -34,7 +34,7 @@ use sui_swarm_config::genesis_config::{
 };
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::{
-    ProtocolVersionsConfig, StateAccumulatorV2EnabledCallback, StateAccumulatorV2EnabledConfig,
+    ObjectStateHashV2EnabledCallback, ObjectStateHashV2EnabledConfig, ProtocolVersionsConfig,
     SupportedProtocolVersionsCallback,
 };
 use sui_swarm_config::node_config_builder::{FullnodeConfigBuilder, ValidatorConfigBuilder};
@@ -845,7 +845,7 @@ pub struct TestClusterBuilder {
 
     max_submit_position: Option<usize>,
     submit_delay_step_override_millis: Option<u64>,
-    validator_state_accumulator_v2_enabled_config: StateAccumulatorV2EnabledConfig,
+    validator_object_state_hash_v2_enabled_config: ObjectStateHashV2EnabledConfig,
 
     indexer_backed_rpc: bool,
 
@@ -880,7 +880,7 @@ impl TestClusterBuilder {
             fullnode_fw_config: None,
             max_submit_position: None,
             submit_delay_step_override_millis: None,
-            validator_state_accumulator_v2_enabled_config: StateAccumulatorV2EnabledConfig::Global(
+            validator_object_state_hash_v2_enabled_config: ObjectStateHashV2EnabledConfig::Global(
                 true,
             ),
             indexer_backed_rpc: false,
@@ -1019,12 +1019,12 @@ impl TestClusterBuilder {
         self
     }
 
-    pub fn with_state_accumulator_v2_enabled_callback(
+    pub fn with_object_state_hash_v2_enabled_callback(
         mut self,
-        func: StateAccumulatorV2EnabledCallback,
+        func: ObjectStateHashV2EnabledCallback,
     ) -> Self {
-        self.validator_state_accumulator_v2_enabled_config =
-            StateAccumulatorV2EnabledConfig::PerValidator(func);
+        self.validator_object_state_hash_v2_enabled_config =
+            ObjectStateHashV2EnabledConfig::PerValidator(func);
         self
     }
 
@@ -1209,8 +1209,8 @@ impl TestClusterBuilder {
             .with_supported_protocol_versions_config(
                 self.validator_supported_protocol_versions_config.clone(),
             )
-            .with_state_accumulator_v2_enabled_config(
-                self.validator_state_accumulator_v2_enabled_config.clone(),
+            .with_object_state_hash_v2_enabled_config(
+                self.validator_object_state_hash_v2_enabled_config.clone(),
             )
             .with_fullnode_count(1)
             .with_fullnode_supported_protocol_versions_config(

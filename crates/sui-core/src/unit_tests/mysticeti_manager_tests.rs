@@ -23,14 +23,14 @@ use crate::{
     },
     consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
     mysticeti_adapter::LazyMysticetiClient,
-    state_accumulator::StateAccumulator,
+    object_state_hasher::ObjectStateHasher,
 };
 
 pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<CheckpointService> {
     let (output, _result) = mpsc::channel::<(CheckpointContents, CheckpointSummary)>(10);
     let epoch_store = state.epoch_store_for_testing();
-    let accumulator = Arc::new(StateAccumulator::new_for_tests(
-        state.get_accumulator_store().clone(),
+    let accumulator = Arc::new(ObjectStateHasher::new_for_tests(
+        state.get_object_state_hash_store().clone(),
     ));
     let (certified_output, _certified_result) = mpsc::channel::<CertifiedCheckpointSummary>(10);
 

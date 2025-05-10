@@ -12,12 +12,12 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
-use sui_core::state_accumulator::StateAccumulator;
+use sui_core::object_state_hasher::ObjectStateHasher;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::accumulator::Accumulator;
 use sui_types::base_types::ObjectID;
 use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use sui_types::object::Object;
+use sui_types::object_state_hash::ObjectStateHash;
 use tempfile::tempdir;
 
 fn temp_dir() -> std::path::PathBuf {
@@ -58,12 +58,12 @@ fn compare_live_objects(
 fn accumulate_live_object_set(
     perpetual_db: &AuthorityPerpetualTables,
     include_wrapped_tombstone: bool,
-) -> Accumulator {
-    let mut acc = Accumulator::default();
+) -> ObjectStateHash {
+    let mut acc = ObjectStateHash::default();
     perpetual_db
         .iter_live_object_set(include_wrapped_tombstone)
         .for_each(|live_object| {
-            StateAccumulator::accumulate_live_object(&mut acc, &live_object);
+            ObjectStateHasher::accumulate_live_object(&mut acc, &live_object);
         });
     acc
 }

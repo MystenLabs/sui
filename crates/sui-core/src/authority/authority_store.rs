@@ -11,8 +11,8 @@ use crate::authority::authority_store_pruner::{
 };
 use crate::authority::authority_store_types::{get_store_object, StoreObject, StoreObjectWrapper};
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
+use crate::object_state_hasher::ObjectStateHashStore;
 use crate::rpc_index::RpcIndexStore;
-use crate::state_accumulator::AccumulatorStore;
 use crate::transaction_outputs::TransactionOutputs;
 use either::Either;
 use fastcrypto::hash::{HashFunction, MultisetHash, Sha3_256};
@@ -23,11 +23,11 @@ use serde::{Deserialize, Serialize};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_macros::fail_point_arg;
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
-use sui_types::accumulator::Accumulator;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::error::UserInputError;
 use sui_types::execution::TypeLayoutStore;
 use sui_types::message_envelope::Message;
+use sui_types::object_state_hash::ObjectStateHash;
 use sui_types::storage::{
     get_module, BackingPackageStore, FullObjectKey, MarkerValue, ObjectKey, ObjectOrTombstone,
     ObjectStore,
@@ -115,7 +115,8 @@ pub struct AuthorityStore {
 
     pub(crate) perpetual_tables: Arc<AuthorityPerpetualTables>,
 
-    pub(crate) root_state_notify_read: NotifyRead<EpochId, (CheckpointSequenceNumber, Accumulator)>,
+    pub(crate) root_state_notify_read:
+        NotifyRead<EpochId, (CheckpointSequenceNumber, ObjectStateHash)>,
 
     /// Whether to enable expensive SUI conservation check at epoch boundaries.
     enable_epoch_sui_conservation_check: bool,
@@ -231,8 +232,10 @@ impl AuthorityStore {
         let store = Arc::new(Self {
             mutex_table: MutexTable::new(NUM_SHARDS),
             perpetual_tables,
-            root_state_notify_read:
-                NotifyRead::<EpochId, (CheckpointSequenceNumber, Accumulator)>::new(),
+            root_state_notify_read: NotifyRead::<
+                EpochId,
+                (CheckpointSequenceNumber, ObjectStateHash),
+            >::new(),
             enable_epoch_sui_conservation_check,
             metrics: AuthorityStoreMetrics::new(registry),
         });
@@ -293,8 +296,10 @@ impl AuthorityStore {
         let store = Arc::new(Self {
             mutex_table: MutexTable::new(NUM_SHARDS),
             perpetual_tables,
-            root_state_notify_read:
-                NotifyRead::<EpochId, (CheckpointSequenceNumber, Accumulator)>::new(),
+            root_state_notify_read: NotifyRead::<
+                EpochId,
+                (CheckpointSequenceNumber, ObjectStateHash),
+            >::new(),
             enable_epoch_sui_conservation_check,
             metrics: AuthorityStoreMetrics::new(registry),
         });
@@ -454,7 +459,7 @@ impl AuthorityStore {
     pub async fn notify_read_root_state_hash(
         &self,
         epoch: EpochId,
-    ) -> SuiResult<(CheckpointSequenceNumber, Accumulator)> {
+    ) -> SuiResult<(CheckpointSequenceNumber, ObjectStateHash)> {
         // We need to register waiters _before_ reading from the database to avoid race conditions
         let registration = self.root_state_notify_read.register_one(&epoch);
         let hash = self.perpetual_tables.root_state_hash_by_epoch.get(&epoch)?;
@@ -829,7 +834,7 @@ impl AuthorityStore {
             )?;
         }
 
-        // Continue writting events into the old table for now keyed off of events digest
+        // Continue writing events into the old table for now keyed off of events digest
         let event_digest = events.digest();
         let events = events
             .data
@@ -1629,7 +1634,7 @@ impl AuthorityStore {
                 }));
             }
             let (last_checkpoint_of_epoch, cur_accumulator) = self
-                .get_root_state_accumulator_for_epoch(cur_epoch_store.epoch())
+                .get_root_state_hash_for_epoch(cur_epoch_store.epoch())
                 .expect("read cannot fail")
                 .expect("accumulator must exist");
             let (accumulator, total_objects_scanned, total_wrapped_objects) =
@@ -1659,7 +1664,7 @@ impl AuthorityStore {
                 "[Re-accumulate] New accumulator value: {:?}",
                 accumulator.digest()
             );
-            self.insert_state_accumulator_for_epoch(
+            self.insert_state_hash_for_epoch(
                 cur_epoch_store.epoch(),
                 &last_checkpoint_of_epoch,
                 &accumulator,
@@ -1732,7 +1737,7 @@ impl AuthorityStore {
     }
 }
 
-impl AccumulatorStore for AuthorityStore {
+impl ObjectStateHashStore for AuthorityStore {
     fn get_object_ref_prior_to_key_deprecated(
         &self,
         object_id: &ObjectID,
@@ -1741,19 +1746,19 @@ impl AccumulatorStore for AuthorityStore {
         self.get_object_ref_prior_to_key(object_id, version)
     }
 
-    fn get_root_state_accumulator_for_epoch(
+    fn get_root_state_hash_for_epoch(
         &self,
         epoch: EpochId,
-    ) -> SuiResult<Option<(CheckpointSequenceNumber, Accumulator)>> {
+    ) -> SuiResult<Option<(CheckpointSequenceNumber, ObjectStateHash)>> {
         self.perpetual_tables
             .root_state_hash_by_epoch
             .get(&epoch)
             .map_err(Into::into)
     }
 
-    fn get_root_state_accumulator_for_highest_epoch(
+    fn get_root_state_hash_for_highest_epoch(
         &self,
-    ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, Accumulator))>> {
+    ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, ObjectStateHash))>> {
         Ok(self
             .perpetual_tables
             .root_state_hash_by_epoch
@@ -1762,11 +1767,11 @@ impl AccumulatorStore for AuthorityStore {
             .transpose()?)
     }
 
-    fn insert_state_accumulator_for_epoch(
+    fn insert_state_hash_for_epoch(
         &self,
         epoch: EpochId,
         last_checkpoint_of_epoch: &CheckpointSequenceNumber,
-        acc: &Accumulator,
+        acc: &ObjectStateHash,
     ) -> SuiResult {
         self.perpetual_tables
             .root_state_hash_by_epoch

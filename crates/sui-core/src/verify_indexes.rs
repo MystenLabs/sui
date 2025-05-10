@@ -11,11 +11,13 @@ use tracing::info;
 use typed_store::traits::Map;
 
 use crate::authority::AuthorityState;
-use crate::{authority::authority_store_tables::LiveObject, state_accumulator::AccumulatorStore};
+use crate::{
+    authority::authority_store_tables::LiveObject, object_state_hasher::ObjectStateHashStore,
+};
 
 /// This is a very expensive function that verifies some of the secondary indexes. This is done by
 /// iterating through the live object set and recalculating these secodary indexes.
-pub fn verify_indexes(store: &dyn AccumulatorStore, indexes: Arc<IndexStore>) -> Result<()> {
+pub fn verify_indexes(store: &dyn ObjectStateHashStore, indexes: Arc<IndexStore>) -> Result<()> {
     info!("Begin running index verification checks");
 
     let mut owner_index = BTreeMap::new();

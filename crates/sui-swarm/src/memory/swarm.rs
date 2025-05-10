@@ -23,7 +23,7 @@ use sui_protocol_config::{Chain, ProtocolVersion};
 use sui_swarm_config::genesis_config::{AccountConfig, GenesisConfig, ValidatorGenesisConfig};
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::{
-    CommitteeConfig, ConfigBuilder, ProtocolVersionsConfig, StateAccumulatorV2EnabledConfig,
+    CommitteeConfig, ConfigBuilder, ObjectStateHashV2EnabledConfig, ProtocolVersionsConfig,
     SupportedProtocolVersionsCallback,
 };
 use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
@@ -59,7 +59,7 @@ pub struct SwarmBuilder<R = OsRng> {
     fullnode_fw_config: Option<RemoteFirewallConfig>,
     max_submit_position: Option<usize>,
     submit_delay_step_override_millis: Option<u64>,
-    state_accumulator_v2_enabled_config: StateAccumulatorV2EnabledConfig,
+    object_state_hash_v2_enabled_config: ObjectStateHashV2EnabledConfig,
     disable_fullnode_pruning: bool,
 }
 
@@ -90,7 +90,7 @@ impl SwarmBuilder {
             fullnode_fw_config: None,
             max_submit_position: None,
             submit_delay_step_override_millis: None,
-            state_accumulator_v2_enabled_config: StateAccumulatorV2EnabledConfig::Global(true),
+            object_state_hash_v2_enabled_config: ObjectStateHashV2EnabledConfig::Global(true),
             disable_fullnode_pruning: false,
         }
     }
@@ -123,7 +123,7 @@ impl<R> SwarmBuilder<R> {
             fullnode_fw_config: self.fullnode_fw_config,
             max_submit_position: self.max_submit_position,
             submit_delay_step_override_millis: self.submit_delay_step_override_millis,
-            state_accumulator_v2_enabled_config: self.state_accumulator_v2_enabled_config,
+            object_state_hash_v2_enabled_config: self.object_state_hash_v2_enabled_config,
             disable_fullnode_pruning: self.disable_fullnode_pruning,
         }
     }
@@ -239,11 +239,11 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
-    pub fn with_state_accumulator_v2_enabled_config(
+    pub fn with_object_state_hash_v2_enabled_config(
         mut self,
-        c: StateAccumulatorV2EnabledConfig,
+        c: ObjectStateHashV2EnabledConfig,
     ) -> Self {
-        self.state_accumulator_v2_enabled_config = c;
+        self.object_state_hash_v2_enabled_config = c;
         self
     }
 
@@ -387,8 +387,8 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
                 .with_supported_protocol_versions_config(
                     self.supported_protocol_versions_config.clone(),
                 )
-                .with_state_accumulator_v2_enabled_config(
-                    self.state_accumulator_v2_enabled_config.clone(),
+                .with_object_state_hash_v2_enabled_config(
+                    self.object_state_hash_v2_enabled_config.clone(),
                 )
                 .build()
         });

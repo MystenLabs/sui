@@ -15,7 +15,7 @@ use sui_core::consensus_adapter::{
     ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
 };
 use sui_core::mock_consensus::{ConsensusMode, MockConsensusClient};
-use sui_core::state_accumulator::StateAccumulator;
+use sui_core::object_state_hasher::ObjectStateHasher;
 use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
 use sui_types::base_types::{AuthorityName, ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::committee::Committee;
@@ -273,8 +273,8 @@ impl SingleValidator {
             self.epoch_store.clone(),
             validator.get_checkpoint_store().clone(),
             validator.clone(),
-            Arc::new(StateAccumulator::new_for_tests(
-                validator.get_accumulator_store().clone(),
+            Arc::new(ObjectStateHasher::new_for_tests(
+                validator.get_object_state_hash_store().clone(),
             )),
         )
     }
@@ -282,7 +282,7 @@ impl SingleValidator {
     pub(crate) fn create_in_memory_store(&self) -> InMemoryObjectStore {
         let objects: HashMap<_, _> = self
             .get_validator()
-            .get_accumulator_store()
+            .get_object_state_hash_store()
             .iter_cached_live_object_set_for_testing(false)
             .map(|o| match o {
                 LiveObject::Normal(object) => (object.id(), object),

@@ -7,7 +7,7 @@ use crate::authority::backpressure::BackpressureManager;
 use crate::authority::epoch_start_configuration::EpochFlag;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::AuthorityStore;
-use crate::state_accumulator::AccumulatorStore;
+use crate::object_state_hasher::ObjectStateHashStore;
 use crate::transaction_outputs::TransactionOutputs;
 use mysten_common::fatal;
 use sui_types::bridge::Bridge;
@@ -62,7 +62,7 @@ pub struct ExecutionCacheTraitPointers {
     pub backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
     pub object_store: Arc<dyn ObjectStore + Send + Sync>,
     pub reconfig_api: Arc<dyn ExecutionCacheReconfigAPI>,
-    pub accumulator_store: Arc<dyn AccumulatorStore>,
+    pub object_state_hash_store: Arc<dyn ObjectStateHashStore>,
     pub checkpoint_cache: Arc<dyn CheckpointCache>,
     pub state_sync_store: Arc<dyn StateSyncAPI>,
     pub cache_commit: Arc<dyn ExecutionCacheCommit>,
@@ -79,7 +79,7 @@ impl ExecutionCacheTraitPointers {
             + BackingPackageStore
             + ObjectStore
             + ExecutionCacheReconfigAPI
-            + AccumulatorStore
+            + ObjectStateHashStore
             + CheckpointCache
             + StateSyncAPI
             + ExecutionCacheCommit
@@ -94,7 +94,7 @@ impl ExecutionCacheTraitPointers {
             backing_package_store: cache.clone(),
             object_store: cache.clone(),
             reconfig_api: cache.clone(),
-            accumulator_store: cache.clone(),
+            object_state_hash_store: cache.clone(),
             checkpoint_cache: cache.clone(),
             state_sync_store: cache.clone(),
             cache_commit: cache.clone(),
@@ -261,7 +261,7 @@ pub trait ObjectCacheRead: Send + Sync {
         ) {
             assert!(
                 input_key.version().is_none() || input_key.version().unwrap().is_valid(),
-                "Shared objects in cancelled transaction should always be available immediately, 
+                "Shared objects in cancelled transaction should always be available immediately,
                  but it appears that transaction manager is waiting for {:?} to become available",
                 input_key
             );
@@ -397,7 +397,7 @@ pub trait ObjectCacheRead: Send + Sync {
         version: SequenceNumber,
         epoch_id: EpochId,
     ) -> bool {
-        let full_id = FullObjectID::Fastpath(object_id); // function explicilty assumes "fastpath"
+        let full_id = FullObjectID::Fastpath(object_id); // function explicitly assumes "fastpath"
         matches!(
             self.get_latest_marker(full_id, epoch_id),
             Some((marker_version, MarkerValue::FastpathStreamEnded)) if marker_version >= version
