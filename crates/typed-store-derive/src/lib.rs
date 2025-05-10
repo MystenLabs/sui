@@ -237,7 +237,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
             /// Returns a list of the tables name and type pairs
             pub fn describe_tables() -> std::collections::BTreeMap<String, (String, String)> {
                 vec![#(
-                    (stringify!(#field_names).to_owned(), (stringify!(#key_names).to_owned(), stringify!(#value_names).to_owned())),
+                    (stringify!(#cf_names).to_owned(), (stringify!(#key_names).to_owned(), stringify!(#value_names).to_owned())),
                 )*].into_iter().collect()
             }
         }
@@ -328,7 +328,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
 
             pub fn describe_tables() -> std::collections::BTreeMap<String, (String, String)> {
                 vec![#(
-                    (stringify!(#field_names).to_owned(), (stringify!(#key_names).to_owned(), stringify!(#value_names).to_owned())),
+                    (stringify!(#cf_names).to_owned(), (stringify!(#key_names).to_owned(), stringify!(#value_names).to_owned())),
                 )*].into_iter().collect()
             }
 
