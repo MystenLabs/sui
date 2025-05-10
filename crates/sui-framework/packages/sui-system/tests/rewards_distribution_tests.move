@@ -70,12 +70,12 @@ fun test_validator_rewards() {
 #[test]
 fun test_stake_subsidy() {
     let mut runner = test_runner::new()
-        .sui_supply_amount(1000000000)
+        .sui_supply_amount(1_000_000_000)
         .validators(vector[
-            validator_builder::new().initial_stake(100000000).sui_address(VALIDATOR_ADDR_1),
-            validator_builder::new().initial_stake(200000000).sui_address(VALIDATOR_ADDR_2),
-            validator_builder::new().initial_stake(300000000).sui_address(VALIDATOR_ADDR_3),
-            validator_builder::new().initial_stake(400000000).sui_address(VALIDATOR_ADDR_4),
+            validator_builder::new().initial_stake(100_000_000).sui_address(VALIDATOR_ADDR_1),
+            validator_builder::new().initial_stake(200_000_000).sui_address(VALIDATOR_ADDR_2),
+            validator_builder::new().initial_stake(300_000_000).sui_address(VALIDATOR_ADDR_3),
+            validator_builder::new().initial_stake(400_000_000).sui_address(VALIDATOR_ADDR_4),
         ])
         .build();
 
@@ -158,12 +158,12 @@ fun test_stake_rewards() {
 #[test]
 fun test_stake_tiny_rewards() {
     let mut runner = test_runner::new()
-        .sui_supply_amount(1000000000)
+        .sui_supply_amount(1_000_000_000)
         .validators(vector[
-            validator_builder::new().initial_stake(100000000).sui_address(VALIDATOR_ADDR_1),
-            validator_builder::new().initial_stake(200000000).sui_address(VALIDATOR_ADDR_2),
-            validator_builder::new().initial_stake(300000000).sui_address(VALIDATOR_ADDR_3),
-            validator_builder::new().initial_stake(400000000).sui_address(VALIDATOR_ADDR_4),
+            validator_builder::new().initial_stake(100_000_000).sui_address(VALIDATOR_ADDR_1),
+            validator_builder::new().initial_stake(200_000_000).sui_address(VALIDATOR_ADDR_2),
+            validator_builder::new().initial_stake(300_000_000).sui_address(VALIDATOR_ADDR_3),
+            validator_builder::new().initial_stake(400_000_000).sui_address(VALIDATOR_ADDR_4),
         ])
         .build();
 
