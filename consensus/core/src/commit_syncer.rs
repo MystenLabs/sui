@@ -686,9 +686,6 @@ impl<C: NetworkClient> CommitSyncer<C> {
         }
 
         // 10. Add blocks in certified commits to the transaction certifier.
-        if inner.context.protocol_config.mysticeti_fastpath() {
-            inner.transaction_certifier.run_gc();
-        }
         for commit in &certified_commits {
             for block in commit.blocks() {
                 // Only account for reject votes in the block, since they may vote on uncommitted

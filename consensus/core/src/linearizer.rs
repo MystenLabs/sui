@@ -1,9 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashSet},
+    sync::Arc,
+};
 
-use consensus_config::{AuthorityIndex, Stake};
+use consensus_config::Stake;
 use itertools::Itertools;
 use parking_lot::RwLock;
 
@@ -12,8 +15,7 @@ use crate::{
     commit::{sort_sub_dag_blocks, Commit, CommittedSubDag, TrustedCommit},
     context::Context,
     dag_state::DagState,
-    leader_schedule::LeaderSchedule,
-    Round, TransactionIndex,
+    Round,
 };
 
 /// The `StorageAPI` trait provides an interface for the block store and has been
@@ -60,20 +62,11 @@ pub(crate) struct Linearizer {
     /// In memory block store representing the dag state
     context: Arc<Context>,
     dag_state: Arc<RwLock<DagState>>,
-    leader_schedule: Arc<LeaderSchedule>,
 }
 
 impl Linearizer {
-    pub(crate) fn new(
-        context: Arc<Context>,
-        dag_state: Arc<RwLock<DagState>>,
-        leader_schedule: Arc<LeaderSchedule>,
-    ) -> Self {
-        Self {
-            dag_state,
-            leader_schedule,
-            context,
-        }
+    pub(crate) fn new(context: Arc<Context>, dag_state: Arc<RwLock<DagState>>) -> Self {
+        Self { context, dag_state }
     }
 
     /// Collect the sub-dag and the corresponding commit from a specific leader excluding any duplicates or
@@ -81,7 +74,6 @@ impl Linearizer {
     fn collect_sub_dag_and_commit(
         &mut self,
         leader_block: VerifiedBlock,
-        reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
     ) -> (CommittedSubDag, TrustedCommit) {
         let _s = self
             .context
@@ -99,7 +91,7 @@ impl Linearizer {
         let last_committed_rounds = dag_state.last_committed_rounds();
 
         // Now linearize the sub-dag starting from the leader block
-        let (to_commit, rejected_transactions) = Self::linearize_sub_dag(
+        let to_commit = Self::linearize_sub_dag(
             &self.context,
             leader_block.clone(),
             last_committed_rounds,
@@ -135,10 +127,10 @@ impl Linearizer {
         let sub_dag = CommittedSubDag::new(
             leader_block.reference(),
             to_commit,
-            rejected_transactions,
+            BTreeMap::new(),
             timestamp_ms,
             commit.reference(),
-            reputation_scores_desc,
+            vec![],
         );
 
         (sub_dag, commit)
@@ -190,7 +182,7 @@ impl Linearizer {
         leader_block: VerifiedBlock,
         last_committed_rounds: Vec<u32>,
         dag_state: &mut impl BlockStoreAPI,
-    ) -> (Vec<VerifiedBlock>, Vec<Vec<TransactionIndex>>) {
+    ) -> Vec<VerifiedBlock> {
         let gc_enabled = dag_state.gc_enabled();
         // The GC round here is calculated based on the last committed round of the leader block. The algorithm will attempt to
         // commit blocks up to this GC round. Once this commit has been processed and written to DagState, then gc round will update
@@ -287,11 +279,7 @@ impl Linearizer {
         // Sort the blocks of the sub-dag blocks
         sort_sub_dag_blocks(&mut to_commit);
 
-        // TODO(fastpath): determine rejected transactions from voting.
-        // Get rejected transactions.
-        let rejected_transactions = vec![vec![]; to_commit.len()];
-
-        (to_commit, rejected_transactions)
+        to_commit
     }
 
     // This function should be called whenever a new commit is observed. This will
@@ -305,27 +293,10 @@ impl Linearizer {
             return vec![];
         }
 
-        // We check whether the leader schedule has been updated. If yes, then we'll send the scores as
-        // part of the first sub dag.
-        let schedule_updated = self
-            .leader_schedule
-            .leader_schedule_updated(&self.dag_state);
-
         let mut committed_sub_dags = vec![];
-        for (i, leader_block) in committed_leaders.into_iter().enumerate() {
-            let reputation_scores_desc = if schedule_updated && i == 0 {
-                self.leader_schedule
-                    .leader_swap_table
-                    .read()
-                    .reputation_scores_desc
-                    .clone()
-            } else {
-                vec![]
-            };
-
+        for leader_block in committed_leaders {
             // Collect the sub-dag generated using each of these leaders and the corresponding commit.
-            let (sub_dag, commit) =
-                self.collect_sub_dag_and_commit(leader_block, reputation_scores_desc);
+            let (sub_dag, commit) = self.collect_sub_dag_and_commit(leader_block);
 
             self.update_blocks_pruned_metric(&sub_dag);
 
@@ -438,6 +409,7 @@ fn median_timestamps_by_stake_inner(
 
 #[cfg(test)]
 mod tests {
+    use consensus_config::AuthorityIndex;
     use rstest::rstest;
 
     use super::*;
@@ -467,11 +439,7 @@ mod tests {
             context.clone(),
             Arc::new(MemStore::new()),
         )));
-        let leader_schedule = Arc::new(LeaderSchedule::new(
-            context.clone(),
-            LeaderSwapTable::default(),
-        ));
-        let mut linearizer = Linearizer::new(context.clone(), dag_state.clone(), leader_schedule);
+        let mut linearizer = Linearizer::new(context.clone(), dag_state.clone());
 
         // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 3.
         let num_rounds: u32 = 10;
@@ -526,75 +494,6 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_handle_commit_with_schedule_update() {
-        telemetry_subscribers::init_for_testing();
-        let num_authorities = 4;
-        let context = Arc::new(Context::new_for_test(num_authorities).0);
-        let dag_state = Arc::new(RwLock::new(DagState::new(
-            context.clone(),
-            Arc::new(MemStore::new()),
-        )));
-        const NUM_OF_COMMITS_PER_SCHEDULE: u64 = 10;
-        let leader_schedule = Arc::new(
-            LeaderSchedule::new(context.clone(), LeaderSwapTable::default())
-                .with_num_commits_per_schedule(NUM_OF_COMMITS_PER_SCHEDULE),
-        );
-        let mut linearizer =
-            Linearizer::new(context.clone(), dag_state.clone(), leader_schedule.clone());
-
-        // Populate fully connected test blocks for round 0 ~ 20, authorities 0 ~ 3.
-        let num_rounds: u32 = 20;
-        let mut dag_builder = DagBuilder::new(context.clone());
-        dag_builder
-            .layers(1..=num_rounds)
-            .build()
-            .persist_layers(dag_state.clone());
-
-        // Take the first 10 leaders
-        let leaders = dag_builder
-            .leader_blocks(1..=10)
-            .into_iter()
-            .map(Option::unwrap)
-            .collect::<Vec<_>>();
-
-        // Create some commits
-        let commits = linearizer.handle_commit(leaders.clone());
-
-        // Write them in DagState
-        dag_state.write().add_scoring_subdags(commits);
-
-        // Now update the leader schedule
-        leader_schedule.update_leader_schedule_v2(&dag_state);
-
-        assert!(
-            leader_schedule.leader_schedule_updated(&dag_state),
-            "Leader schedule should have been updated"
-        );
-
-        // Try to commit now the rest of the 10 leaders
-        let leaders = dag_builder
-            .leader_blocks(11..=20)
-            .into_iter()
-            .map(Option::unwrap)
-            .collect::<Vec<_>>();
-
-        // Now on the commits only the first one should contain the updated scores, the other should be empty
-        let commits = linearizer.handle_commit(leaders.clone());
-        assert_eq!(commits.len(), 10);
-        let scores = vec![
-            (AuthorityIndex::new_for_test(1), 29),
-            (AuthorityIndex::new_for_test(0), 29),
-            (AuthorityIndex::new_for_test(3), 29),
-            (AuthorityIndex::new_for_test(2), 29),
-        ];
-        assert_eq!(commits[0].reputation_scores_desc, scores);
-
-        for commit in commits.into_iter().skip(1) {
-            assert_eq!(commit.reputation_scores_desc, vec![]);
-        }
-    }
-
     #[rstest]
     #[tokio::test]
     async fn test_handle_already_committed(
@@ -617,8 +516,7 @@ mod tests {
             context.clone(),
             LeaderSwapTable::default(),
         ));
-        let mut linearizer =
-            Linearizer::new(context.clone(), dag_state.clone(), leader_schedule.clone());
+        let mut linearizer = Linearizer::new(context.clone(), dag_state.clone());
         let wave_length = DEFAULT_WAVE_LENGTH;
 
         let leader_round_wave_1 = 3;
@@ -763,11 +661,7 @@ mod tests {
             context.clone(),
             Arc::new(MemStore::new()),
         )));
-        let leader_schedule = Arc::new(LeaderSchedule::new(
-            context.clone(),
-            LeaderSwapTable::default(),
-        ));
-        let mut linearizer = Linearizer::new(context.clone(), dag_state.clone(), leader_schedule);
+        let mut linearizer = Linearizer::new(context.clone(), dag_state.clone());
 
         // Authorities of index 0->2 will always creates blocks that see each other, but until round 5 they won't see the blocks of authority 3.
         // For authority 3 we create blocks that connect to all the other authorities.
@@ -904,11 +798,7 @@ mod tests {
             context.clone(),
             Arc::new(MemStore::new()),
         )));
-        let leader_schedule = Arc::new(LeaderSchedule::new(
-            context.clone(),
-            LeaderSwapTable::default(),
-        ));
-        let mut linearizer = Linearizer::new(context.clone(), dag_state.clone(), leader_schedule);
+        let mut linearizer = Linearizer::new(context.clone(), dag_state.clone());
 
         // Authority D will create an "orphaned" block on round 1 as it won't reference to it on the block of round 2. Similar, no other authority will reference to it on round 2.
         // Then on round 3 the authorities A, B & C will link to block D1. Once the DAG gets committed we should see the block D1 getting committed as well. Normally ,as block D2 would

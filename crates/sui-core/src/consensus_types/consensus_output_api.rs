@@ -68,10 +68,14 @@ impl ConsensusCommitAPI for consensus_core::CommittedSubDag {
     }
 
     fn transactions(&self) -> Vec<(AuthorityIndex, Vec<ParsedTransaction>)> {
+        let no_transaction = vec![];
         self.blocks
             .iter()
-            .zip(self.rejected_transactions_by_block.iter())
-            .map(|(block, rejected_transactions)| {
+            .map(|block| {
+                let rejected_transactions = self
+                    .rejected_transactions_by_block
+                    .get(&block.reference())
+                    .unwrap_or(&no_transaction);
                 (
                     block.author().value() as AuthorityIndex,
                     parse_block_transactions(block, rejected_transactions),
