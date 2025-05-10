@@ -79,7 +79,6 @@ pub fn receive_object_internal(
         parent,
         child_id,
         child_receiver_sequence_number,
-        &child_ty,
         &layout,
         &annotated_layout,
         MoveObjectType::from(tag),
@@ -233,13 +232,16 @@ fn object_runtime_transfer(
     ty: Type,
     obj: Value,
 ) -> PartialVMResult<TransferResult> {
-    if !matches!(context.type_to_type_tag(&ty)?, TypeTag::Struct(_)) {
-        return Err(
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message("Sui verifier guarantees this is a struct".to_string()),
-        );
-    }
+    let object_type = match context.type_to_type_tag(&ty)? {
+        TypeTag::Struct(s) => MoveObjectType::from(*s),
+        _ => {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Sui verifier guarantees this is a struct".to_string()),
+            );
+        }
+    };
 
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
-    obj_runtime.transfer(owner, ty, obj)
+    obj_runtime.transfer(owner, object_type, obj)
 }

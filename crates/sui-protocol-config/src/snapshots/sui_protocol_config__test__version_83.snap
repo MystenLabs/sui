@@ -95,6 +95,7 @@ feature_flags:
   enforce_checkpoint_timestamp_monotonicity: true
   max_ptb_value_size_v2: true
   resolve_type_input_ids_to_defining_id: true
+  type_tags_in_object_runtime: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

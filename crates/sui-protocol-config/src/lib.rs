@@ -684,6 +684,10 @@ struct FeatureFlags {
     // If true, resolves all type input ids to be defining ID based in the adapter
     #[serde(skip_serializing_if = "is_false")]
     resolve_type_input_ids_to_defining_id: bool,
+
+    // Signifies the cut-over of using type tags instead of `Type`s in the object runtime.
+    #[serde(skip_serializing_if = "is_false")]
+    type_tags_in_object_runtime: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1957,6 +1961,10 @@ impl ProtocolConfig {
 
     pub fn resolve_type_input_ids_to_defining_id(&self) -> bool {
         self.feature_flags.resolve_type_input_ids_to_defining_id
+    }
+
+    pub fn type_tags_in_object_runtime(&self) -> bool {
+        self.feature_flags.type_tags_in_object_runtime
     }
 }
 
@@ -3495,6 +3503,7 @@ impl ProtocolConfig {
                 }
                 83 => {
                     cfg.feature_flags.resolve_type_input_ids_to_defining_id = true;
+                    cfg.feature_flags.type_tags_in_object_runtime = true;
                 }
                 // Use this template when making changes:
                 //

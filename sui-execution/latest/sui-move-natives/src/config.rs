@@ -87,7 +87,6 @@ pub fn read_setting_impl(
 
     let read_value_opt = consistent_value_before_current_epoch(
         object_runtime,
-        &field_setting_ty,
         field_setting_tag,
         &field_setting_layout,
         &setting_value_ty,
@@ -111,7 +110,6 @@ pub fn read_setting_impl(
 
 fn consistent_value_before_current_epoch(
     object_runtime: &mut ObjectRuntime,
-    field_setting_ty: &Type,
     field_setting_tag: StructTag,
     field_setting_layout: &R::MoveTypeLayout,
     _setting_value_ty: &Type,
@@ -125,7 +123,6 @@ fn consistent_value_before_current_epoch(
     let Some(field) = object_runtime.config_setting_unsequenced_read(
         config_addr.into(),
         name_df_addr.into(),
-        field_setting_ty,
         field_setting_layout,
         &field_setting_obj_ty,
     ) else {
