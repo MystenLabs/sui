@@ -271,6 +271,7 @@ pub async fn start_rpc(
     system_package_task_args: SystemPackageTaskArgs,
     version: &'static str,
     config: RpcConfig,
+    pg_pipelines: Vec<String>,
     registry: &Registry,
     cancel: CancellationToken,
 ) -> anyhow::Result<JoinHandle<()>> {
@@ -329,6 +330,7 @@ pub async fn start_rpc(
 
     let watermark_task = WatermarkTask::new(
         config.watermark,
+        pg_pipelines,
         pg_reader.clone(),
         bigtable_reader,
         cancel.child_token(),

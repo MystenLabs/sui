@@ -53,6 +53,11 @@ pub enum Command {
         /// the configuration will be set.
         #[arg(long)]
         config: Option<PathBuf>,
+
+        /// Path to indexer configuration TOML files (multiple can be supplied). These are used to
+        /// identify the pipelines that the RPC will monitor for watermark purposes.
+        #[arg(long, action = clap::ArgAction::Append)]
+        indexer_config: Vec<PathBuf>,
     },
 
     /// Output the contents of the default configuration to STDOUT.

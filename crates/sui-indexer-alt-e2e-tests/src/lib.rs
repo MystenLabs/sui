@@ -316,7 +316,7 @@ impl OffchainCluster {
         .await
         .context("Failed to setup indexer")?;
 
-        let pipelines = indexer.pipelines().collect();
+        let pipelines: Vec<_> = indexer.pipelines().collect();
         let indexer = indexer.run().await.context("Failed to start indexer")?;
 
         let jsonrpc = start_jsonrpc(
@@ -343,6 +343,7 @@ impl OffchainCluster {
             SystemPackageTaskArgs::default(),
             "0.0.0",
             graphql_config,
+            pipelines.iter().map(|p| p.to_string()).collect(),
             registry,
             cancel.child_token(),
         )
