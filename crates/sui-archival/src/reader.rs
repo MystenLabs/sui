@@ -9,7 +9,6 @@ use bytes::buf::Reader;
 use bytes::{Buf, Bytes};
 use futures::{StreamExt, TryStreamExt};
 use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
-use std::borrow::Borrow;
 use std::future;
 use std::ops::Range;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -186,104 +185,6 @@ impl ArchiveReader {
                     futures::future::ready(result)
                 },
             )
-            .await
-    }
-
-    /// Load checkpoints from archive into the input store `S` for the given checkpoint
-    /// range. Summaries are downloaded out of order and inserted without verification
-    pub async fn read_summaries_for_range_no_verify<S>(
-        &self,
-        store: S,
-        checkpoint_range: Range<CheckpointSequenceNumber>,
-        checkpoint_counter: Arc<AtomicU64>,
-    ) -> Result<()>
-    where
-        S: WriteStore + Clone,
-    {
-        let (summary_files, start_index, end_index) = self
-            .get_summary_files_for_range(checkpoint_range.clone())
-            .await?;
-        let remote_object_store = self.remote_object_store.clone();
-        let stream = futures::stream::iter(summary_files.iter())
-            .enumerate()
-            .filter(|(index, _s)| future::ready(*index >= start_index && *index < end_index))
-            .map(|(_, summary_metadata)| {
-                let remote_object_store = remote_object_store.clone();
-                async move {
-                    let summary_data =
-                        get(&remote_object_store, &summary_metadata.file_path()).await?;
-                    Ok::<Bytes, anyhow::Error>(summary_data)
-                }
-            })
-            .boxed();
-        stream
-            .buffer_unordered(self.concurrency)
-            .try_for_each(|summary_data| {
-                let result: Result<(), anyhow::Error> =
-                    make_iterator::<CertifiedCheckpointSummary, Reader<Bytes>>(
-                        SUMMARY_FILE_MAGIC,
-                        summary_data.reader(),
-                    )
-                    .and_then(|summary_iter| {
-                        summary_iter
-                            .filter(|s| {
-                                s.sequence_number >= checkpoint_range.start
-                                    && s.sequence_number < checkpoint_range.end
-                            })
-                            .try_for_each(|summary| {
-                                Self::insert_certified_checkpoint(&store, summary)?;
-                                checkpoint_counter.fetch_add(1, Ordering::Relaxed);
-                                Ok::<(), anyhow::Error>(())
-                            })
-                    });
-                futures::future::ready(result)
-            })
-            .await
-    }
-
-    /// Load given list of checkpoints from archive into the input store `S`.
-    /// Summaries are downloaded out of order and inserted without verification
-    pub async fn read_summaries_for_list_no_verify<S>(
-        &self,
-        store: S,
-        skiplist: Vec<CheckpointSequenceNumber>,
-        checkpoint_counter: Arc<AtomicU64>,
-    ) -> Result<()>
-    where
-        S: WriteStore + Clone,
-    {
-        let summary_files = self.get_summary_files_for_list(skiplist.clone()).await?;
-        let remote_object_store = self.remote_object_store.clone();
-        let stream = futures::stream::iter(summary_files.iter())
-            .map(|summary_metadata| {
-                let remote_object_store = remote_object_store.clone();
-                async move {
-                    let summary_data =
-                        get(&remote_object_store, &summary_metadata.file_path()).await?;
-                    Ok::<Bytes, anyhow::Error>(summary_data)
-                }
-            })
-            .boxed();
-
-        stream
-            .buffer_unordered(self.concurrency)
-            .try_for_each(|summary_data| {
-                let result: Result<(), anyhow::Error> =
-                    make_iterator::<CertifiedCheckpointSummary, Reader<Bytes>>(
-                        SUMMARY_FILE_MAGIC,
-                        summary_data.reader(),
-                    )
-                    .and_then(|summary_iter| {
-                        summary_iter
-                            .filter(|s| skiplist.contains(&s.sequence_number))
-                            .try_for_each(|summary| {
-                                Self::insert_certified_checkpoint(&store, summary)?;
-                                checkpoint_counter.fetch_add(1, Ordering::Relaxed);
-                                Ok::<(), anyhow::Error>(())
-                            })
-                    });
-                futures::future::ready(result)
-            })
             .await
     }
 
@@ -471,19 +372,6 @@ impl ArchiveReader {
         let mut locked = manifest.lock().await;
         *locked = new_manifest;
         Ok(())
-    }
-
-    /// Insert checkpoint summary without verifying it
-    fn insert_certified_checkpoint<S>(
-        store: &S,
-        certified_checkpoint: CertifiedCheckpointSummary,
-    ) -> Result<()>
-    where
-        S: WriteStore + Clone,
-    {
-        store
-            .insert_checkpoint(VerifiedCheckpoint::new_unchecked(certified_checkpoint).borrow())
-            .map_err(|e| anyhow!("Failed to insert checkpoint: {e}"))
     }
 
     /// Insert checkpoint summary if it doesn't already exist after verifying it

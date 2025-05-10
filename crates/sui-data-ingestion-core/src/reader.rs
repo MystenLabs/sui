@@ -101,7 +101,7 @@ impl CheckpointReader {
             || self.data_limiter.exceeds()
     }
 
-    async fn fetch_from_object_store(
+    pub async fn fetch_from_object_store(
         store: &dyn ObjectStore,
         checkpoint_number: CheckpointSequenceNumber,
     ) -> Result<(Arc<CheckpointData>, usize)> {
