@@ -4,7 +4,7 @@
 
 use clap::{Parser, Subcommand};
 use move_package_alt::{
-    cli::{Build, Parse},
+    cli::{Build, New, Parse},
     errors::PackageResult,
 };
 
@@ -18,6 +18,7 @@ pub struct Cli {
 #[derive(Debug, Clone, Subcommand)]
 pub enum Commands {
     Build(Build),
+    New(New),
     /// Run tests for the package
     Test,
     /// Parse a manifest or lockfile, or both
@@ -28,6 +29,7 @@ impl Commands {
     pub async fn execute(&self) -> PackageResult<()> {
         match self {
             Commands::Build(b) => b.execute().await,
+            Commands::New(n) => n.execute(),
             Commands::Test => todo!(),
             Commands::Parse(p) => p.execute(),
         }
