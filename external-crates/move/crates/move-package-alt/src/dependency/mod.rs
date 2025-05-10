@@ -9,6 +9,7 @@ mod git;
 mod local;
 
 pub use dependency_set::DependencySet;
+
 use std::{
     collections::BTreeMap,
     fmt::{self, Debug},
@@ -241,12 +242,39 @@ fn add_implicit_deps<F: MoveFlavor>(
     todo!()
 }
 
-/// Ensure that all dependencies are stored locally and return the paths to their contents. The
-/// returned map is guaranteed to have the same keys as [deps].
-fn fetch<F: MoveFlavor>(
+/// Fetch and ensure that all dependencies are stored locally and return the paths to their
+/// contents. The returned map is guaranteed to have the same keys as [deps].
+async fn fetch<F: MoveFlavor>(
+    flavor: &F,
     deps: DependencySet<PinnedDependencyInfo<F>>,
 ) -> PackageResult<DependencySet<PathBuf>> {
-    // TODO: check if dependency is a Move project.
+    use PinnedDependencyInfo as P;
 
-    todo!()
+    let mut gits = DependencySet::new();
+    let mut locs = DependencySet::new();
+    let mut flav = DependencySet::new();
+
+    for (env, package_name, dep) in deps.into_iter() {
+        match dep {
+            PinnedDependencyInfo::Git(info) => gits.insert(env, package_name, info),
+            PinnedDependencyInfo::Local(info) => locs.insert(env, package_name, info),
+            PinnedDependencyInfo::FlavorSpecific(info) => flav.insert(env, package_name, info),
+        }
+    }
+
+    let mut git_paths = DependencySet::new();
+    for (env, package, dep) in gits {
+        let repo = GitRepo::from(dep);
+        let path = repo.fetch().await?;
+        git_paths.insert(env, package, path);
+    }
+
+    let mut loc_paths = DependencySet::new();
+    for (env, package, dep) in locs {
+        loc_paths.insert(env, package, dep.path().clone());
+    }
+
+    let flav_deps_path = flavor.fetch(flav)?;
+
+    Ok(DependencySet::merge([git_paths, loc_paths, flav_deps_path]))
 }

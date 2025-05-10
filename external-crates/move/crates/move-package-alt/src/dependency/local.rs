@@ -16,6 +16,13 @@ pub struct LocalDependency {
     local: PathBuf,
 }
 
+impl LocalDependency {
+    /// Returns the path to the local dependency
+    pub fn path(&self) -> &PathBuf {
+        &self.local
+    }
+}
+
 impl TryFrom<(&Path, toml_edit::Value)> for LocalDependency {
     type Error = anyhow::Error; // TODO
 
