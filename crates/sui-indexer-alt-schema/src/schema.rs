@@ -167,16 +167,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    sum_packages (package_id) {
-        package_id -> Bytea,
-        original_id -> Bytea,
-        package_version -> Int8,
-        move_package -> Bytea,
-        cp_sequence_number -> Int8,
-    }
-}
-
-diesel::table! {
     tx_affected_addresses (affected, tx_sequence_number) {
         affected -> Bytea,
         tx_sequence_number -> Int8,
@@ -253,7 +243,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     obj_info,
     obj_versions,
     sum_displays,
-    sum_packages,
     tx_affected_addresses,
     tx_affected_objects,
     tx_balance_changes,

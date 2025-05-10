@@ -10,10 +10,9 @@ use handlers::{
     kv_epoch_ends::KvEpochEnds, kv_epoch_starts::KvEpochStarts, kv_feature_flags::KvFeatureFlags,
     kv_objects::KvObjects, kv_packages::KvPackages, kv_protocol_configs::KvProtocolConfigs,
     kv_transactions::KvTransactions, obj_info::ObjInfo, obj_versions::ObjVersions,
-    sum_displays::SumDisplays, sum_packages::SumPackages,
-    tx_affected_addresses::TxAffectedAddresses, tx_affected_objects::TxAffectedObjects,
-    tx_balance_changes::TxBalanceChanges, tx_calls::TxCalls, tx_digests::TxDigests,
-    tx_kinds::TxKinds,
+    sum_displays::SumDisplays, tx_affected_addresses::TxAffectedAddresses,
+    tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
+    tx_calls::TxCalls, tx_digests::TxDigests, tx_kinds::TxKinds,
 };
 use prometheus::Registry;
 use sui_indexer_alt_framework::{
@@ -64,7 +63,6 @@ pub async fn setup_indexer(
 
     let PipelineLayer {
         sum_displays,
-        sum_packages,
         coin_balance_buckets,
         cp_sequence_numbers,
         ev_emit_mod,
@@ -198,7 +196,6 @@ pub async fn setup_indexer(
 
     // Summary tables (without write-ahead log)
     add_sequential!(SumDisplays, sum_displays);
-    add_sequential!(SumPackages, sum_packages);
 
     // Unpruned concurrent pipelines
     add_concurrent!(CpSequenceNumbers, cp_sequence_numbers);

@@ -4,15 +4,16 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{dataloader::DataLoader, Context, InputObject, Object};
+use async_graphql::{dataloader::DataLoader, Context, InputObject, Interface, Object};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer_alt_reader::{
     kv_loader::KvLoader,
     object_versions::{CheckpointBoundedObjectVersionKey, VersionBoundedObjectVersionKey},
     pg_reader::PgReader,
 };
+use sui_indexer_alt_schema::objects::StoredObjVersion;
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress as NativeSuiAddress},
+    base_types::{SequenceNumber, SuiAddress as NativeSuiAddress},
     digests::ObjectDigest,
     object::Object as NativeObject,
 };
@@ -22,18 +23,51 @@ use crate::{
     error::{bad_user_input, RpcError},
 };
 
-use super::transaction::Transaction;
+use super::{
+    addressable::{Addressable, AddressableImpl},
+    move_package::MovePackage,
+    transaction::Transaction,
+};
 
-pub(crate) struct Object {
-    address: NativeSuiAddress,
-    version: SequenceNumber,
-    digest: ObjectDigest,
-    contents: ObjectContents,
+/// Interface implemented by versioned on-chain values that are addressable by an ID (also referred to as its address). This includes Move objects and packages.
+#[derive(Interface)]
+#[graphql(
+    name = "IObject",
+    field(
+        name = "version",
+        ty = "UInt53",
+        desc = "The version of this object that this content comes from.",
+    ),
+    field(
+        name = "digest",
+        ty = "String",
+        desc = "32-byte hash that identifies the object's contents, encoded in Base58.",
+    ),
+    field(
+        name = "object_bcs",
+        ty = "Result<Option<Base64>, RpcError>",
+        desc = "The Base64-encoded BCS serialization of this object, as an `Object`."
+    ),
+    field(
+        name = "previous_transaction",
+        ty = "Result<Option<Transaction>, RpcError>",
+        desc = "The transaction that created this version of the object"
+    )
+)]
+pub(crate) enum IObject {
+    MovePackage(MovePackage),
+    Object(Object),
 }
 
-/// The lazily loaded contents of an object.
-#[derive(Clone)]
-pub(crate) struct ObjectContents(Option<Arc<NativeObject>>);
+pub(crate) struct Object {
+    pub(crate) super_: Addressable,
+    version: SequenceNumber,
+    digest: ObjectDigest,
+    contents: Option<Arc<NativeObject>>,
+}
+
+/// Type to implement GraphQL fields that are shared by all Objects.
+pub(crate) struct ObjectImpl<'o>(&'o Object);
 
 /// Identifies a specific version of an object.
 ///
@@ -74,49 +108,39 @@ pub(crate) enum Error {
 #[Object]
 impl Object {
     /// The Object's ID.
-    async fn address(&self) -> SuiAddress {
-        self.address.into()
+    pub(crate) async fn address(&self) -> SuiAddress {
+        AddressableImpl::from(&self.super_).address()
     }
 
     /// The version of this object that this content comes from.
     async fn version(&self) -> UInt53 {
-        self.version.into()
+        ObjectImpl::from(self).version()
     }
 
     /// 32-byte hash that identifies the object's contents, encoded in Base58.
     async fn digest(&self) -> String {
-        Base58::encode(self.digest.inner())
+        ObjectImpl::from(self).digest()
     }
 
-    #[graphql(flatten)]
-    async fn contents(&self, ctx: &Context<'_>) -> Result<ObjectContents, RpcError<Error>> {
-        Ok(if self.contents.0.is_some() {
-            self.contents.clone()
-        } else {
-            ObjectContents::fetch(ctx, self.address.into(), self.version.into()).await?
-        })
+    /// Attempts to convert the object into a MovePackage.
+    async fn as_move_package(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<MovePackage>, RpcError<Error>> {
+        MovePackage::from_object(self, ctx).await
     }
-}
 
-#[Object]
-impl ObjectContents {
     /// The Base64-encoded BCS serialization of this object, as an `Object`.
-    async fn object_bcs(&self) -> Result<Option<Base64>, RpcError> {
-        let Some(object) = &self.0 else {
-            return Ok(None);
-        };
-
-        let bytes = bcs::to_bytes(object.as_ref()).context("Failed to serialize object")?;
-        Ok(Some(Base64(bytes)))
+    async fn object_bcs(&self, ctx: &Context<'_>) -> Result<Option<Base64>, RpcError<Error>> {
+        ObjectImpl::from(self).object_bcs(ctx).await
     }
 
     /// The transaction that created this version of the object.
-    async fn previous_transaction(&self) -> Result<Option<Transaction>, RpcError> {
-        let Some(object) = &self.0 else {
-            return Ok(None);
-        };
-
-        Ok(Some(Transaction::with_id(object.previous_transaction)))
+    async fn previous_transaction(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<Transaction>, RpcError<Error>> {
+        ObjectImpl::from(self).previous_transaction(ctx).await
     }
 }
 
@@ -125,15 +149,15 @@ impl Object {
     /// does not check whether the object exists, so should not be used to "fetch" an object based
     /// on an address and/or version provided as user input.
     pub(crate) fn with_ref(
-        address: ObjectID,
+        addressable: Addressable,
         version: SequenceNumber,
         digest: ObjectDigest,
     ) -> Self {
         Self {
-            address: address.into(),
+            super_: addressable,
             version,
             digest,
-            contents: ObjectContents(None),
+            contents: None,
         }
     }
 
@@ -180,17 +204,7 @@ impl Object {
             return Ok(None);
         };
 
-        // Lack of an object digest indicates that the object was deleted or wrapped at this
-        // version.
-        let Some(digest) = stored.object_digest else {
-            return Ok(None);
-        };
-
-        Ok(Some(Object::with_ref(
-            ObjectID::from_bytes(stored.object_id).context("Failed to deserialize Object ID")?,
-            SequenceNumber::from_u64(stored.object_version as u64),
-            ObjectDigest::try_from(&digest[..]).context("Failed to deserialize Object Digest")?,
-        )))
+        Object::from_stored_version(stored)
     }
 
     /// Fetch the latest version of the object at the given address as of the checkpoint with
@@ -213,17 +227,7 @@ impl Object {
             return Ok(None);
         };
 
-        // Lack of an object digest indicates that the object was deleted or wrapped at this
-        // version.
-        let Some(digest) = stored.object_digest else {
-            return Ok(None);
-        };
-
-        Ok(Some(Object::with_ref(
-            ObjectID::from_bytes(stored.object_id).context("Failed to deserialize Object ID")?,
-            SequenceNumber::from_u64(stored.object_version as u64),
-            ObjectDigest::try_from(&digest[..]).context("Failed to deserialize Object Digest")?,
-        )))
+        Object::from_stored_version(stored)
     }
 
     /// Load the object at the given ID and version from the store, and return it fully inflated
@@ -234,33 +238,113 @@ impl Object {
         address: SuiAddress,
         version: UInt53,
     ) -> Result<Option<Self>, RpcError<Error>> {
-        let contents = ObjectContents::fetch(ctx, address, version).await?;
-        let Some(object) = &contents.0 else {
+        let Some(c) = contents(ctx, address, version).await? else {
             return Ok(None);
         };
 
-        Ok(Some(Object {
-            address: object.id().into(),
-            version: object.version(),
-            digest: object.digest(),
-            contents,
-        }))
+        Ok(Some(Self::from_contents(c)))
+    }
+
+    /// Construct a GraphQL representation of an `Object` from its native representation.
+    pub(crate) fn from_contents(contents: Arc<NativeObject>) -> Self {
+        let addressable = Addressable::with_address(contents.id().into());
+
+        Self {
+            super_: addressable,
+            version: contents.version(),
+            digest: contents.digest(),
+            contents: Some(contents),
+        }
+    }
+
+    /// Construct a GraphQL representation of an `Object` from versioning information. This
+    /// representation does not pre-fetch object contents.
+    pub(crate) fn from_stored_version(
+        stored: StoredObjVersion,
+    ) -> Result<Option<Self>, RpcError<Error>> {
+        // Lack of an object digest indicates that the object was deleted or wrapped at this
+        // version.
+        let Some(digest) = stored.object_digest else {
+            return Ok(None);
+        };
+
+        let addressable = Addressable::with_address(
+            NativeSuiAddress::from_bytes(stored.object_id)
+                .context("Failed to deserialize SuiAddress")?,
+        );
+
+        Ok(Some(Object::with_ref(
+            addressable,
+            SequenceNumber::from_u64(stored.object_version as u64),
+            ObjectDigest::try_from(&digest[..]).context("Failed to deserialize Object Digest")?,
+        )))
+    }
+
+    /// Return a copy of the object's contents, either cached in the object or fetched from the KV
+    /// store.
+    pub(crate) async fn contents(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<Arc<NativeObject>>, RpcError<Error>> {
+        if self.contents.is_some() {
+            Ok(self.contents.clone())
+        } else {
+            contents(ctx, self.super_.address.into(), self.version.into()).await
+        }
     }
 }
 
-impl ObjectContents {
-    pub(crate) async fn fetch(
-        ctx: &Context<'_>,
-        address: SuiAddress,
-        version: UInt53,
-    ) -> Result<Self, RpcError<Error>> {
-        let kv_loader: &KvLoader = ctx.data()?;
-
-        let object = kv_loader
-            .load_one_object(address.into(), version.into())
-            .await
-            .context("Failed to fetch object contents")?;
-
-        Ok(Self(object.map(Arc::new)))
+impl ObjectImpl<'_> {
+    pub(crate) fn version(&self) -> UInt53 {
+        self.0.version.into()
     }
+
+    pub(crate) fn digest(&self) -> String {
+        Base58::encode(self.0.digest.inner())
+    }
+
+    pub(crate) async fn object_bcs(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<Base64>, RpcError<Error>> {
+        let Some(object) = self.0.contents(ctx).await? else {
+            return Ok(None);
+        };
+
+        let bytes = bcs::to_bytes(object.as_ref()).context("Failed to serialize object")?;
+        Ok(Some(Base64(bytes)))
+    }
+
+    pub(crate) async fn previous_transaction(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<Transaction>, RpcError<Error>> {
+        let Some(object) = self.0.contents(ctx).await? else {
+            return Ok(None);
+        };
+
+        Ok(Some(Transaction::with_id(
+            object.as_ref().previous_transaction,
+        )))
+    }
+}
+
+impl<'o> From<&'o Object> for ObjectImpl<'o> {
+    fn from(value: &'o Object) -> Self {
+        ObjectImpl(value)
+    }
+}
+
+/// Lazily load the contents of the object from the store.
+async fn contents(
+    ctx: &Context<'_>,
+    address: SuiAddress,
+    version: UInt53,
+) -> Result<Option<Arc<NativeObject>>, RpcError<Error>> {
+    let kv_loader: &KvLoader = ctx.data()?;
+    Ok(kv_loader
+        .load_one_object(address.into(), version.into())
+        .await
+        .context("Failed to fetch object contents")?
+        .map(Arc::new))
 }

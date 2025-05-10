@@ -1,18 +1,83 @@
 """
+An entity that has an address, could be an account or an object (but never both).
+"""
+type Addressable implements IAddressable {
+	address: SuiAddress!
+}
+
+"""
 String containing Base64-encoded binary data.
 """
 scalar Base64
 
 
 
+"""
+Interface implemented by GraphQL types representing entities that are identified by an address.
 
+An address uniquely represents either the public key of an account, or an object's ID, but never both. It is not possible to determine which type an address represents up-front. If an object is wrapped, its contents will not be accessible via its address, but it will still be possible to access other objects it owns.
+"""
+interface IAddressable {
+	address: SuiAddress!
+}
+
+
+"""
+Interface implemented by versioned on-chain values that are addressable by an ID (also referred to as its address). This includes Move objects and packages.
+"""
+interface IObject {
+	"""
+	The version of this object that this content comes from.
+	"""
+	version: UInt53!
+	"""
+	32-byte hash that identifies the object's contents, encoded in Base58.
+	"""
+	digest: String!
+	"""
+	The Base64-encoded BCS serialization of this object, as an `Object`.
+	"""
+	objectBcs: Base64
+	"""
+	The transaction that created this version of the object
+	"""
+	previousTransaction: Transaction
+}
+
+
+type MovePackage implements IAddressable & IObject {
+	"""
+	The MovePackage's ID.
+	"""
+	address: SuiAddress!
+	"""
+	The version of this package that this content comes from.
+	"""
+	version: UInt53!
+	"""
+	32-byte hash that identifies the package's contents, encoded in Base58.
+	"""
+	digest: String!
+	"""
+	The Base64-encoded BCS serialization of this package, as an `Object`.
+	"""
+	objectBcs: Base64
+	"""
+	The Base64-encoded BCS serialization of this package, as a `MovePackage`.
+	"""
+	packageBcs: Base64
+	"""
+	The transaction that created this version of the object.
+	"""
+	previousTransaction: Transaction
+}
 
 """
 An Object on Sui is either a typed value (a Move Object) or a Package (modules containing functions and types).
 
 Every object on Sui is identified by a unique address, and has a version number that increases with every modification. Objects also hold metadata detailing their current owner (who can sign for access to the object and whether that access can modify and/or delete the object), and the digest of the last transaction that modified the object.
 """
-type Object {
+type Object implements IAddressable & IObject {
 	"""
 	The Object's ID.
 	"""
@@ -25,6 +90,10 @@ type Object {
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
 	digest: String!
+	"""
+	Attempts to convert the object into a MovePackage.
+	"""
+	asMovePackage: MovePackage
 	"""
 	The Base64-encoded BCS serialization of this object, as an `Object`.
 	"""
