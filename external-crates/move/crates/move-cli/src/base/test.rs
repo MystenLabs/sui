@@ -33,14 +33,14 @@ compile_error!("Unsupported OS, currently we only support windows and unix famil
 #[command(name = "test")]
 pub struct Test {
     /// Bound the amount of gas used by any one test.
-    #[arg(name = "gas-limit", short = 'i', long = "gas-limit")]
+    #[arg(value_name = "gas-limit", short = 'i', long = "gas-limit")]
     pub gas_limit: Option<u64>,
     /// An optional filter string to determine which unit tests to run. A unit test will be run only if it
     /// contains this string in its fully qualified (<addr>::<module_name>::<fn_name>) name.
     #[arg(name = "filter")]
     pub filter: Option<String>,
     /// List all tests
-    #[arg(name = "list", short = 'l', long = "list")]
+    #[arg(value_name = "list", short = 'l', long = "list")]
     pub list: bool,
     /// Number of threads to use for running tests.
     #[arg(
@@ -51,7 +51,7 @@ pub struct Test {
     )]
     pub num_threads: usize,
     /// Report test statistics at the end of testing. CSV report generated if 'csv' passed
-    #[arg(name = "report-statistics", short = 's', long = "statistics")]
+    #[arg(value_name = "report-statistics", short = 's', long = "statistics")]
     pub report_statistics: Option<Option<String>>,
 
     /// Verbose mode

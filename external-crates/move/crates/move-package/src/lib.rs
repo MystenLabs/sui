@@ -46,7 +46,7 @@ pub struct BuildConfig {
     /// Compile in 'dev' mode. The 'dev-addresses' and 'dev-dependencies' fields will be used if
     /// this flag is set. This flag is useful for development of packages that expose named
     /// addresses that are not set to a specific value.
-    #[arg(name = "dev-mode", short = 'd', long = "dev", global = true)]
+    #[arg(value_name = "dev-mode", short = 'd', long = "dev", global = true)]
     pub dev_mode: bool,
 
     /// Compile in 'test' mode. The 'dev-addresses' and 'dev-dependencies' fields will be used

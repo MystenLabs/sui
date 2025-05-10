@@ -28,9 +28,9 @@ pub enum Command {
 }
 #[derive(Parser)]
 pub struct Calib {
-    #[arg(name = "runs", short = 'r', long = "runs", default_value = "1")]
+    #[arg(value_name = "runs", short = 'r', long = "runs", default_value = "1")]
     runs: usize,
-    #[arg(name = "summarize", short = 's', long = "summarize")]
+    #[arg(value_name = "summarize", short = 's', long = "summarize")]
     summarize: bool,
 }
 

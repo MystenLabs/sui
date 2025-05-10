@@ -38,15 +38,15 @@ const TRACE_FLAG: &str = "trace-execution";
 #[command(author, version, about)]
 pub struct UnitTestingConfig {
     /// Bound the gas limit for any one test. If using custom gas table, this is the max number of instructions.
-    #[arg(name = "gas-limit", short = 'i', long = "gas-limit")]
+    #[arg(value_name = "gas-limit", short = 'i', long = "gas-limit")]
     pub gas_limit: Option<u64>,
 
     /// A filter string to determine which unit tests to run
-    #[arg(name = "filter", short = 'f', long = "filter")]
+    #[arg(value_name = "filter", short = 'f', long = "filter")]
     pub filter: Option<String>,
 
     /// List all tests
-    #[arg(name = "list", short = 'l', long = "list")]
+    #[arg(value_name = "list", short = 'l', long = "list")]
     pub list: bool,
 
     /// Number of threads to use for running tests.
@@ -78,7 +78,7 @@ pub struct UnitTestingConfig {
     pub bytecode_deps_files: Vec<String>,
 
     /// Report test statistics at the end of testing. CSV report generated if 'csv' passed
-    #[arg(name = "report-statistics", short = 's', long = "statistics")]
+    #[arg(value_name = "report-statistics", short = 's', long = "statistics")]
     pub report_statistics: Option<Option<String>>,
 
     #[arg(

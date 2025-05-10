@@ -11,7 +11,7 @@ use clap::{Command, Parser, Subcommand};
 #[derive(Debug, Clone, Parser)]
 pub struct Build {
     /// Path to the project
-    #[arg(name = "path", short = 'p', long = "path", default_value = ".")]
+    #[arg(value_name = "path", short = 'p', long = "path", default_value = ".")]
     path: Option<PathBuf>,
 }
 
