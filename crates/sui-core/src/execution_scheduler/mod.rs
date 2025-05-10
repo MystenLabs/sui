@@ -12,6 +12,7 @@ use std::{collections::HashSet, sync::Arc};
 use sui_config::node::AuthorityOverloadConfig;
 use sui_types::{
     base_types::FullObjectID,
+    committee::EpochId,
     digests::{TransactionDigest, TransactionEffectsDigest},
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
@@ -125,14 +126,58 @@ impl ExecutionScheduler {
             }
         });
 
-        for cert in certs {
+        for (cert, expected_effects_digest) in certs {
+            if !self.pending_certificates.write().insert(*cert.digest()) {
+                continue;
+            }
+
+            self.overload_tracker.add_pending_certificate(cert.data());
+            let tx_data = cert.transaction_data();
+            let input_object_kinds = tx_data
+                .input_objects()
+                .expect("input_objects() cannot fail");
+            let input_object_keys: Vec<_> =
+                match epoch_store.get_input_object_keys(&cert.key(), &input_object_kinds) {
+                    Ok(keys) => keys,
+                    Err(_) => {
+                        // This is possible if the transaction is already executed.
+                        // TODO: Eventually we could pass assigned shared object versions
+                        // to the scheduler so that this call cannot return Err.
+                        assert!(self
+                            .transaction_cache_read
+                            .is_tx_already_executed(cert.digest()));
+                        return;
+                    }
+                }
+                .into_iter()
+                .collect();
+            let receiving_object_keys: HashSet<_> = tx_data
+                .receiving_objects()
+                .into_iter()
+                .map(|entry| {
+                    InputKey::VersionedObject {
+                        // TODO: Add support for receiving ConsensusV2 objects. For now this assumes fastpath.
+                        id: FullObjectID::new(entry.0, None),
+                        version: entry.1,
+                    }
+                })
+                .collect();
+            let input_and_receiving_keys = [
+                input_object_keys,
+                receiving_object_keys.iter().cloned().collect(),
+            ]
+            .concat();
+
             let scheduler = self.clone();
+            let epoch = epoch_store.epoch();
             let epoch_store = epoch_store.clone();
             spawn_monitored_task!(
                 epoch_store.within_alive_epoch(scheduler.schedule_transaction(
-                    cert.0,
-                    cert.1,
-                    &epoch_store,
+                    cert,
+                    expected_effects_digest,
+                    input_and_receiving_keys,
+                    receiving_object_keys,
+                    epoch,
                 ))
             );
         }
@@ -146,55 +191,14 @@ impl ExecutionScheduler {
         self,
         cert: VerifiedExecutableTransaction,
         expected_effects_digest: Option<TransactionEffectsDigest>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
+        input_and_receiving_keys: Vec<InputKey>,
+        receiving_object_keys: HashSet<InputKey>,
+        epoch: EpochId,
     ) {
-        if !self.pending_certificates.write().insert(*cert.digest()) {
-            return;
-        }
         let digest = cert.digest();
-        tracing::debug!(?digest, "Schedule_transaction");
-
-        self.overload_tracker.add_pending_certificate(cert.data());
-        let enqueue_time = Instant::now();
-        let tx_data = cert.transaction_data();
-        let input_object_kinds = tx_data
-            .input_objects()
-            .expect("input_objects() cannot fail");
-
-        let input_object_keys: Vec<_> =
-            match epoch_store.get_input_object_keys(&cert.key(), &input_object_kinds) {
-                Ok(keys) => keys,
-                Err(_) => {
-                    // This is possible if the transaction is already executed.
-                    // TODO: Eventually we could pass assigned shared object versions
-                    // to the scheduler so that this call cannot return Err.
-                    assert!(self.transaction_cache_read.is_tx_already_executed(digest));
-                    return;
-                }
-            }
-            .into_iter()
-            .collect();
-        let receiving_object_keys: HashSet<_> = tx_data
-            .receiving_objects()
-            .into_iter()
-            .map(|entry| {
-                InputKey::VersionedObject {
-                    // TODO: Add support for receiving ConsensusV2 objects. For now this assumes fastpath.
-                    id: FullObjectID::new(entry.0, None),
-                    version: entry.1,
-                }
-            })
-            .collect();
-
-        let input_and_receiving_keys = [
-            input_object_keys,
-            receiving_object_keys.iter().cloned().collect(),
-        ]
-        .concat();
-
-        let epoch = epoch_store.epoch();
         let digests = [*digest];
-        let queue_time = Instant::now();
+        tracing::debug!(?digest, "Schedule_transaction");
+        let enqueue_time = Instant::now();
         tracing::trace!(
             ?digests,
             "Waiting for input objects: {:?}",
@@ -207,7 +211,7 @@ impl ExecutionScheduler {
                 => {
                     self.metrics
                         .transaction_manager_transaction_queue_age_s
-                        .observe(queue_time.elapsed().as_secs_f64());
+                        .observe(enqueue_time.elapsed().as_secs_f64());
                     tracing::debug!(?digests, "Input objects available");
                     // TODO: Eventually we could fold execution_driver into the scheduler.
                     let _ = self.tx_ready_certificates.send(PendingCertificate {
@@ -251,7 +255,7 @@ impl ExecutionScheduler {
     }
 
     #[cfg(test)]
-    fn num_pending_certificates(&self) -> usize {
+    pub(crate) fn num_pending_certificates(&self) -> usize {
         self.pending_certificates.read().len()
     }
 }
