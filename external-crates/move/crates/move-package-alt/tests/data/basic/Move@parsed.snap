@@ -52,7 +52,7 @@ Manifest {
             rename_from: None,
         },
     },
-    dep_overrides: {
+    dep_replacements: {
         "mainnet": {
             "bar": ManifestDependencyOverride {
                 dependency: Some(

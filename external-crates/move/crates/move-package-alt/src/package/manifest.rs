@@ -36,8 +36,10 @@ pub struct Manifest<F: MoveFlavor> {
 
     #[serde(default)]
     dependencies: BTreeMap<PackageName, ManifestDependency<F>>,
+    /// Replace dependencies for the given environment.
     #[serde(default)]
-    dep_overrides: BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyOverride<F>>>,
+    dep_replacements:
+        BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyOverride<F>>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -141,7 +143,7 @@ impl<F: MoveFlavor> Manifest<F> {
             deps.insert(None, name.clone(), dep.dependency_info.clone());
         }
 
-        for (env, overrides) in &self.dep_overrides {
+        for (env, overrides) in &self.dep_replacements {
             for (name, dep) in overrides {
                 if let Some(dep) = &dep.dependency {
                     deps.insert(Some(env.clone()), name.clone(), dep.dependency_info.clone());
