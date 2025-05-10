@@ -48,7 +48,7 @@ fi
 
 cd $SUI_OPS_REPO
 
-cmd="gh workflow run .github/workflows/run-antithesis-tests.yaml -f sui_commit=$COMMIT -f test_duration=$TEST_DURATION"
+cmd="gh workflow run run-antithesis-tests.yaml -f sui_commit=$COMMIT -f test_duration=$TEST_DURATION"
 
 if [ -n "$DESCRIPTION" ]; then
   cmd="$cmd -f description='$DESCRIPTION'"
@@ -56,7 +56,7 @@ fi
 
 if [ -n "$ALT_COMMIT" ]; then
   cmd="$cmd -f sui_commit_alt=$ALT_COMMIT"
-fi 
+fi
 
 if [ "$UPGRADE" = true ]; then
   cmd="$cmd -f test_type=upgrade"
