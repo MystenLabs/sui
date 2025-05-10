@@ -45,8 +45,8 @@ use tracing::{debug, info, instrument, warn};
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::backpressure::BackpressureManager;
 use crate::authority::AuthorityState;
+use crate::execution_scheduler::ExecutionScheduler;
 use crate::state_accumulator::StateAccumulator;
-use crate::transaction_manager::TransactionManager;
 use crate::{
     checkpoints::CheckpointStore,
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
@@ -120,7 +120,7 @@ pub struct CheckpointExecutor {
     checkpoint_store: Arc<CheckpointStore>,
     object_cache_reader: Arc<dyn ObjectCacheRead>,
     transaction_cache_reader: Arc<dyn TransactionCacheRead>,
-    tx_manager: Arc<TransactionManager>,
+    execution_scheduler: Arc<ExecutionScheduler>,
     accumulator: Arc<StateAccumulator>,
     backpressure_manager: Arc<BackpressureManager>,
     config: CheckpointExecutorConfig,
@@ -146,7 +146,7 @@ impl CheckpointExecutor {
             checkpoint_store,
             object_cache_reader: state.get_object_cache_reader().clone(),
             transaction_cache_reader: state.get_transaction_cache_reader().clone(),
-            tx_manager: state.transaction_manager().clone(),
+            execution_scheduler: state.execution_scheduler().clone(),
             accumulator,
             backpressure_manager,
             config,
@@ -802,7 +802,7 @@ impl CheckpointExecutor {
         }
 
         // Enqueue unexecuted transactions with their expected effects digests
-        self.tx_manager
+        self.execution_scheduler
             .enqueue_with_expected_effects_digest(unexecuted_txns, &self.epoch_store);
 
         unexecuted_tx_digests
@@ -852,10 +852,11 @@ impl CheckpointExecutor {
             change_epoch_tx.digest(),
             change_epoch_fx.digest()
         );
-        self.tx_manager.enqueue_with_expected_effects_digest(
-            vec![(change_epoch_tx.clone(), change_epoch_fx.digest())],
-            &self.epoch_store,
-        );
+        self.execution_scheduler
+            .enqueue_with_expected_effects_digest(
+                vec![(change_epoch_tx.clone(), change_epoch_fx.digest())],
+                &self.epoch_store,
+            );
 
         self.transaction_cache_reader
             .notify_read_executed_effects_digests(&[*change_epoch_tx.digest()])

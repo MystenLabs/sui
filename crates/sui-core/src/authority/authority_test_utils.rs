@@ -418,7 +418,7 @@ pub async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertifica
         .unwrap();
 
     authority
-        .transaction_manager()
+        .execution_scheduler()
         .enqueue(certs, &authority.epoch_store_for_testing());
 }
 

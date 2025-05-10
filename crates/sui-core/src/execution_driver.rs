@@ -12,7 +12,7 @@ use tokio::sync::{mpsc::UnboundedReceiver, oneshot, Semaphore};
 use tracing::{error_span, info, trace, warn, Instrument};
 
 use crate::authority::AuthorityState;
-use crate::transaction_manager::PendingCertificate;
+use crate::execution_scheduler::PendingCertificate;
 
 #[cfg(test)]
 #[path = "unit_tests/execution_driver_tests.rs"]
@@ -44,7 +44,7 @@ pub async fn execution_process(
                 if let Some(pending_cert) = result {
                     certificate = pending_cert.certificate;
                     expected_effects_digest = pending_cert.expected_effects_digest;
-                    txn_ready_time = pending_cert.stats.ready_time.unwrap();
+                    txn_ready_time = pending_cert.stats.ready_time;
                 } else {
                     // Should only happen after the AuthorityState has shut down and tx_ready_certificate
                     // has been dropped by TransactionManager.

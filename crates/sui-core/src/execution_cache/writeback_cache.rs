@@ -2174,6 +2174,11 @@ impl ExecutionCacheWrite for WritebackCache {
     fn write_transaction_outputs(&self, epoch_id: EpochId, tx_outputs: Arc<TransactionOutputs>) {
         WritebackCache::write_transaction_outputs(self, epoch_id, tx_outputs);
     }
+
+    #[cfg(test)]
+    fn write_object_entry_for_test(&self, object: Object) {
+        self.write_object_entry(&object.id(), object.version(), object.into());
+    }
 }
 
 implement_passthrough_traits!(WritebackCache);

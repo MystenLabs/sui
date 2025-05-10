@@ -256,7 +256,7 @@ pub fn make_consensus_adapter_for_test(
 
             if self.execute {
                 self.state
-                    .transaction_manager()
+                    .execution_scheduler()
                     .enqueue(transactions, epoch_store);
             }
 
