@@ -702,6 +702,16 @@ pub enum SuiError {
 
     #[error("Nitro attestation verify failed: {0}")]
     NitroAttestationFailedToVerify(String),
+
+    // TODO: Use a nested enum for the different reasons for rejection instead of a string.
+    #[error("Transaction rejected by consensus, reason: {reason}")]
+    TransactionRejectedByConsensus { reason: String },
+
+    #[error("Failed to serialize {type_info:?}, error: {error:?}")]
+    GrpcMessageSerializeError { type_info: String, error: String },
+
+    #[error("Failed to deserialize {type_info:?}, error: {error:?}")]
+    GrpcMessageDeserializeError { type_info: String, error: String },
 }
 
 #[repr(u64)]

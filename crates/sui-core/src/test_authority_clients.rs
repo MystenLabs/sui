@@ -18,6 +18,7 @@ use sui_types::{
     error::SuiError,
     executable_transaction::VerifiedExecutableTransaction,
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
+    messages_grpc::{RawWaitForEffectsRequest, RawWaitForEffectsResponse},
     transaction::{CertifiedTransaction, Transaction, VerifiedTransaction},
 };
 use sui_types::{
@@ -272,6 +273,14 @@ impl AuthorityAPI for LocalAuthorityClient {
         unimplemented!()
     }
 
+    async fn wait_for_effects(
+        &self,
+        _request: RawWaitForEffectsRequest,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<RawWaitForEffectsResponse, SuiError> {
+        unimplemented!()
+    }
+
     async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
@@ -470,6 +479,14 @@ impl AuthorityAPI for MockAuthorityApi {
         unimplemented!()
     }
 
+    async fn wait_for_effects(
+        &self,
+        _request: RawWaitForEffectsRequest,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<RawWaitForEffectsResponse, SuiError> {
+        unimplemented!()
+    }
+
     /// Handle Object information requests for this account.
     async fn handle_object_info_request(
         &self,
@@ -575,6 +592,14 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         _request: HandleSoftBundleCertificatesRequestV3,
         _client_addr: Option<SocketAddr>,
     ) -> Result<HandleSoftBundleCertificatesResponseV3, SuiError> {
+        unimplemented!()
+    }
+
+    async fn wait_for_effects(
+        &self,
+        _request: RawWaitForEffectsRequest,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<RawWaitForEffectsResponse, SuiError> {
         unimplemented!()
     }
 

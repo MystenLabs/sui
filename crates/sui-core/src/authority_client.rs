@@ -29,7 +29,8 @@ use sui_types::messages_grpc::{
     HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
     HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
     HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
-    RawSubmitTxResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+    RawSubmitTxResponse, RawWaitForEffectsRequest, RawWaitForEffectsResponse, SystemStateRequest,
+    TransactionInfoRequest, TransactionInfoResponse,
 };
 
 #[async_trait]
@@ -67,6 +68,14 @@ pub trait AuthorityAPI {
         request: HandleSoftBundleCertificatesRequestV3,
         client_addr: Option<SocketAddr>,
     ) -> Result<HandleSoftBundleCertificatesResponseV3, SuiError>;
+
+    /// Wait for effects of a transaction that has been submitted to the network
+    /// through the `submit_transaction` API.
+    async fn wait_for_effects(
+        &self,
+        request: RawWaitForEffectsRequest,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<RawWaitForEffectsResponse, SuiError>;
 
     /// Handle Object information requests for this account.
     async fn handle_object_info_request(
@@ -236,6 +245,21 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map(tonic::Response::into_inner);
 
         response.map_err(Into::into)
+    }
+
+    async fn wait_for_effects(
+        &self,
+        request: RawWaitForEffectsRequest,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<RawWaitForEffectsResponse, SuiError> {
+        let mut request = request.into_request();
+        insert_metadata(&mut request, client_addr);
+
+        self.client()?
+            .wait_for_effects(request)
+            .await
+            .map(tonic::Response::into_inner)
+            .map_err(Into::into)
     }
 
     async fn handle_object_info_request(
