@@ -806,6 +806,14 @@ public(package) fun get_validator_mut(
 }
 
 #[test_only]
+public(package) fun get_validator_by_address_mut(
+    self: &mut ValidatorSet,
+    addr: address,
+): &mut Validator {
+    self.get_candidate_or_active_validator_mut(addr)
+}
+
+#[test_only]
 public(package) fun get_validator(
     validators: &vector<Validator>,
     validator_address: address,

@@ -646,6 +646,12 @@ public fun validators(wrapper: &mut SuiSystemState): &ValidatorSet {
 }
 
 #[test_only]
+/// Return a mutable reference to the validator set
+public fun validators_mut(wrapper: &mut SuiSystemState): &mut ValidatorSet {
+    wrapper.load_system_state_mut().validators_mut()
+}
+
+#[test_only]
 /// Return the currently active validator by address
 public fun active_validator_by_address(
     self: &mut SuiSystemState,
