@@ -10,12 +10,12 @@ use sui_oracle::{config::OracleNodeConfig, OracleNode};
 use sui_sdk::wallet_context::WalletContext;
 
 #[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
-#[clap(name = env!("CARGO_BIN_NAME"))]
+#[command(rename_all = "kebab-case")]
+#[command(name = env!("CARGO_BIN_NAME"))]
 struct Args {
-    #[clap(long)]
+    #[arg(long)]
     pub oracle_config_path: PathBuf,
-    #[clap(long)]
+    #[arg(long)]
     pub client_config_path: PathBuf,
 }
 

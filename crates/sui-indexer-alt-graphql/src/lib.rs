@@ -63,11 +63,11 @@ mod task;
 #[derive(clap::Args, Clone, Debug)]
 pub struct RpcArgs {
     /// Address to accept incoming RPC connections on.
-    #[clap(long, default_value_t = Self::default().rpc_listen_address)]
+    #[arg(long, default_value_t = Self::default().rpc_listen_address)]
     pub rpc_listen_address: SocketAddr,
 
     /// Do not expose the GraphiQL IDE.
-    #[clap(long, default_value_t = Self::default().no_ide)]
+    #[arg(long, default_value_t = Self::default().no_ide)]
     pub no_ide: bool,
 }
 

@@ -9,7 +9,7 @@ use std::path::Path;
 #[derive(Parser)]
 #[group(id = "sui-move-migrate")]
 pub struct Migrate {
-    #[clap(flatten)]
+    #[command(flatten)]
     pub migrate: migrate::Migrate,
 }
 

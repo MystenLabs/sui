@@ -14,7 +14,7 @@ use crate::{package_resolver::PackageResolver, pg_reader::PgReader};
 #[derive(clap::Args, Debug, Clone)]
 pub struct SystemPackageTaskArgs {
     /// How long to wait between checking for epoch changes.
-    #[clap(long, default_value_t = Self::default().epoch_polling_interval_ms)]
+    #[arg(long, default_value_t = Self::default().epoch_polling_interval_ms)]
     epoch_polling_interval_ms: u64,
 }
 

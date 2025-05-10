@@ -14,7 +14,7 @@ pub const MOVE_STDLIB_ADDR_VALUE: &str = "0x1";
 /// Create a new Move package with name `name` at `path`. If `path` is not provided the package
 /// will be created in the directory `name`.
 #[derive(Parser)]
-#[clap(name = "new")]
+#[command(name = "new")]
 pub struct New {
     /// The name of the package to be created.
     pub name: String,

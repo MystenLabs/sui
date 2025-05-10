@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use crate::config::{ConnectionConfig, Ide, TxExecFullNodeConfig};
 
 #[derive(Parser)]
-#[clap(
+#[command(
     name = "sui-graphql-rpc",
     about = "Sui GraphQL RPC",
     rename_all = "kebab-case",
@@ -23,17 +23,17 @@ pub enum Command {
     },
 
     StartServer {
-        #[clap(flatten)]
+        #[command(flatten)]
         ide: Ide,
 
-        #[clap(flatten)]
+        #[command(flatten)]
         connection: ConnectionConfig,
 
         /// Path to TOML file containing configuration for service.
-        #[clap(short, long)]
+        #[arg(short, long)]
         config: Option<PathBuf>,
 
-        #[clap(flatten)]
+        #[command(flatten)]
         tx_exec_full_node: TxExecFullNodeConfig,
     },
 }

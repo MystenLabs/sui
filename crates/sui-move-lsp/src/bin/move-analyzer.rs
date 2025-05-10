@@ -10,7 +10,7 @@ use sui_package_management::system_package_versions::latest_system_packages;
 bin_version::bin_version!();
 
 #[derive(Parser)]
-#[clap(
+#[command(
     name = env!("CARGO_BIN_NAME"),
     rename_all = "kebab-case",
     author,

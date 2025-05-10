@@ -9,7 +9,7 @@ use std::{fs::create_dir_all, io::Write, path::Path};
 #[derive(Parser)]
 #[group(id = "sui-move-new")]
 pub struct New {
-    #[clap(flatten)]
+    #[command(flatten)]
     pub new: new::New,
 }
 

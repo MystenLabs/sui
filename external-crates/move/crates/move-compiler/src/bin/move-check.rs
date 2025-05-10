@@ -12,7 +12,7 @@ use move_compiler::{
 };
 
 #[derive(Debug, Parser)]
-#[clap(
+#[arg(
     name = "move-check",
     about = "Check Move source code, without compiling to bytecode",
     author,
@@ -20,7 +20,7 @@ use move_compiler::{
 )]
 pub struct Options {
     /// The source files to check
-    #[clap(
+    #[arg(
         name = "PATH_TO_SOURCE_FILE",
         num_args(1..),
         action = clap::ArgAction::Append,
@@ -28,7 +28,7 @@ pub struct Options {
     pub source_files: Vec<String>,
 
     /// The library files needed as dependencies
-    #[clap(
+    #[arg(
         name = "PATH_TO_DEPENDENCY_FILE",
         short = cli::DEPENDENCY_SHORT,
         long = cli::DEPENDENCY,
@@ -37,7 +37,7 @@ pub struct Options {
 
     /// The output directory for saved artifacts, namely any 'move' interface files generated from
     /// 'mv' files
-    #[clap(
+    #[arg(
         name = "PATH_TO_OUTPUT_DIRECTORY",
         short = cli::OUT_DIR_SHORT,
         long = cli::OUT_DIR,
@@ -45,7 +45,7 @@ pub struct Options {
     pub out_dir: Option<String>,
 
     /// Named address mapping
-    #[clap(
+    #[arg(
         name = "NAMED_ADDRESSES",
         short = 'a',
         long = "addresses",
@@ -53,7 +53,7 @@ pub struct Options {
     )]
     pub named_addresses: Vec<(String, NumericalAddress)>,
 
-    #[clap(flatten)]
+    #[command(flatten)]
     pub flags: Flags,
 }
 

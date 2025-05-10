@@ -11,9 +11,9 @@ use sui_edge_proxy::metrics::AppMetrics;
 use tracing::info;
 
 #[derive(Parser, Debug)]
-#[clap(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case")]
 struct Args {
-    #[clap(
+    #[arg(
         long,
         short,
         default_value = "./sui-edge-proxy.yaml",

@@ -14,7 +14,7 @@ pub struct Parse {
     /// The path to the project
     path: Option<PathBuf>,
     /// The path to the manifest file
-    #[clap(
+    #[arg(
         name = "manifest",
         short = 'm',
         long = "manifest",
@@ -22,7 +22,7 @@ pub struct Parse {
     )]
     manifest: Option<PathBuf>,
     /// The path to the lockfile
-    #[clap(
+    #[arg(
         name = "lockfile",
         short = 'l',
         long = "lockfile",

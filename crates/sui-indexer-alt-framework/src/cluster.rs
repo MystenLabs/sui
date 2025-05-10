@@ -27,15 +27,15 @@ use crate::{
 #[derive(clap::Parser, Debug)]
 pub struct Args {
     /// What to index and in what time range.
-    #[clap(flatten)]
+    #[command(flatten)]
     indexer_args: IndexerArgs,
 
     /// Where to get checkpoint data from.
-    #[clap(flatten)]
+    #[command(flatten)]
     client_args: ClientArgs,
 
     /// How to expose metrics.
-    #[clap(flatten)]
+    #[command(flatten)]
     metrics_args: MetricsArgs,
 }
 

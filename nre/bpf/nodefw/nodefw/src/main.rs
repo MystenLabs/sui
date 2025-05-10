@@ -17,11 +17,11 @@ use tracing::{debug, info, warn};
 
 #[derive(Debug, Parser)]
 struct Opt {
-    #[clap(short, long, default_value = "lo")]
+    #[arg(short, long, default_value = "lo")]
     iface: String,
-    #[clap(short, long, value_enum, default_value_t=Mode::Default)]
+    #[arg(short, long, value_enum, default_value_t=Mode::Default)]
     mode: Mode,
-    #[clap(short, long)]
+    #[arg(short, long)]
     drain_file: String,
 }
 

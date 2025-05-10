@@ -14,7 +14,7 @@ pub mod gql_queries;
 pub mod replay_txn;
 
 #[derive(Parser, Clone, Debug)]
-#[clap(
+#[command(
     name = "Sui Replay Tool",
     about = "Replay executed transactions.",
     rename_all = "kebab-case"

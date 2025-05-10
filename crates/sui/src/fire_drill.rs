@@ -39,13 +39,13 @@ pub enum FireDrill {
 #[derive(Parser)]
 pub struct MetadataRotation {
     /// Path to sui node config.
-    #[clap(long = "sui-node-config-path")]
+    #[arg(long = "sui-node-config-path")]
     sui_node_config_path: PathBuf,
     /// Path to account key file.
-    #[clap(long = "account-key-path")]
+    #[arg(long = "account-key-path")]
     account_key_path: PathBuf,
     /// Jsonrpc url for a reliable fullnode.
-    #[clap(long = "fullnode-rpc-url")]
+    #[arg(long = "fullnode-rpc-url")]
     fullnode_rpc_url: String,
 }
 

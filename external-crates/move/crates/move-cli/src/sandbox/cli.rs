@@ -28,23 +28,23 @@ fn parse_move_value(s: &str) -> Result<MoveValue> {
 #[derive(Parser)]
 pub enum SandboxCommand {
     /// Compile the modules in this package and its dependencies and publish the resulting bytecodes in global storage.
-    #[clap(name = "publish")]
+    #[command(name = "publish")]
     Publish {
         /// By default, code that might cause breaking changes for bytecode
         /// linking or data layout compatibility checks will not be published.
         /// Set this flag to ignore breaking changes checks and publish anyway.
-        #[clap(long = "ignore-breaking-changes")]
+        #[arg(long = "ignore-breaking-changes")]
         ignore_breaking_changes: bool,
         /// If set, publish not only the modules in this package but also
         /// modules in all its dependencies.
-        #[clap(long = "with-deps")]
+        #[arg(long = "with-deps")]
         with_deps: bool,
         /// If set, all modules at once as a bundle. The default is to publish
         /// modules sequentially.
-        #[clap(long = "bundle")]
+        #[arg(long = "bundle")]
         bundle: bool,
         /// Manually specify the publishing order of modules.
-        #[clap(
+        #[arg(
             long = "override-ordering",
             num_args(1..),
             action = clap::ArgAction::Append,
@@ -53,17 +53,17 @@ pub enum SandboxCommand {
     },
     /// Run a Move script that reads/writes resources stored on disk in `storage-dir`.
     /// The script must be defined in the package.
-    #[clap(name = "run")]
+    #[command(name = "run")]
     Run {
         /// Path to .mv file containing either module bytecodes.
-        #[clap(name = "module")]
+        #[arg(name = "module")]
         module_file: PathBuf,
         /// Name of the function inside the module specified in `module_file` to call.
-        #[clap(name = "name")]
+        #[arg(name = "name")]
         function_name: String,
         /// Possibly-empty list of signers for the current transaction (e.g., `account` in
         /// `main(&account: signer)`). Must match the number of signers expected by `script_file`.
-        #[clap(
+        #[arg(
             long = "signers",
             num_args(1..),
             action = clap::ArgAction::Append,
@@ -77,7 +77,7 @@ pub enum SandboxCommand {
         /// address literals (e.g., 0x12, 0x0000000000000000000000000000000f),
         /// hexadecimal strings (e.g., x"0012" will parse as the vector<u8> value [00, 12]), and
         /// ASCII strings (e.g., 'b"hi" will parse as the vector<u8> value [68, 69]).
-        #[clap(
+        #[arg(
             long = "args",
             value_parser = parse_move_value,
             num_args(1..),
@@ -86,7 +86,7 @@ pub enum SandboxCommand {
         args: Vec<MoveValue>,
         /// Possibly-empty list of type arguments passed to the transaction (e.g., `T` in
         /// `main<T>()`). Must match the type arguments kinds expected by `script_file`.
-        #[clap(
+        #[arg(
             long = "type-args",
             num_args(1..),
             action = clap::ArgAction::Append,
@@ -95,43 +95,43 @@ pub enum SandboxCommand {
         /// Maximum number of gas units to be consumed by execution.
         /// When the budget is exhaused, execution will abort.
         /// By default, no `gas-budget` is specified and gas metering is disabled.
-        #[clap(long = "gas-budget", short = 'g')]
+        #[arg(long = "gas-budget", short = 'g')]
         gas_budget: Option<u64>,
         /// If set, the effects of executing `script_file` (i.e., published, updated, and
         /// deleted resources) will NOT be committed to disk.
-        #[clap(long = "dry-run", short = 'n')]
+        #[arg(long = "dry-run", short = 'n')]
         dry_run: bool,
     },
     /// Run expected value tests using the given batch file.
-    #[clap(name = "exp-test")]
+    #[command(name = "exp-test")]
     Test {
         /// Use an ephemeral directory to serve as the testing workspace.
         /// By default, the directory containing the `args.txt` will be the workspace.
-        #[clap(long = "use-temp-dir")]
+        #[arg(long = "use-temp-dir")]
         use_temp_dir: bool,
         /// Show coverage information after tests are done.
         /// By default, coverage will not be tracked nor shown.
-        #[clap(long = "track-cov")]
+        #[arg(long = "track-cov")]
         track_cov: bool,
     },
     /// View Move resources, events files, and modules stored on disk.
-    #[clap(name = "view")]
+    #[command(name = "view")]
     View {
         /// Path to a resource, events file, or module stored on disk.
-        #[clap(name = "file")]
+        #[arg(name = "file")]
         file: PathBuf,
     },
     /// Delete all resources, events, and modules stored on disk under `storage-dir`.
     /// Does *not* delete anything in `src`.
     Clean {},
     /// Run well-formedness checks on the `storage-dir` and `install-dir` directories.
-    #[clap(name = "doctor")]
+    #[command(name = "doctor")]
     Doctor {},
     /// Generate struct layout bindings for the modules stored on disk under `storage-dir`
     // TODO: expand this to generate script bindings, etc.?.
-    #[clap(name = "generate")]
+    #[command(name = "generate")]
     Generate {
-        #[clap(subcommand)]
+        #[command(subcommand)]
         cmd: GenerateCommand,
     },
 }
@@ -139,24 +139,24 @@ pub enum SandboxCommand {
 #[derive(Parser)]
 pub enum GenerateCommand {
     /// Generate struct layout bindings for the modules stored on disk under `storage-dir`.
-    #[clap(name = "struct-layouts")]
+    #[command(name = "struct-layouts")]
     StructLayouts {
         /// Path to a module stored on disk.
-        #[clap(long)]
+        #[arg(long)]
         module: PathBuf,
         /// If set, generate bindings for the specified struct and type arguments. If unset,
         /// generate bindings for all closed struct definitions.
-        #[clap(flatten)]
+        #[command(flatten)]
         options: StructLayoutOptions,
     },
 }
 #[derive(Parser)]
 pub struct StructLayoutOptions {
     /// Generate layout bindings for this struct.
-    #[clap(id = "struct", long = "struct")]
+    #[arg(id = "struct", long = "struct")]
     struct_: Option<String>,
     /// Generate layout bindings for `struct` bound to these type arguments.
-    #[clap(
+    #[arg(
         long = "type-args",
         requires="struct",
         action = clap::ArgAction::Append,
@@ -166,21 +166,21 @@ pub struct StructLayoutOptions {
     /// If set, replace all Move source syntax separators ("::" for address/struct/module name
     /// separation, "<", ">", and "," for generics separation) with this string.
     /// If unset, use the same syntax as Move source
-    #[clap(long = "separator")]
+    #[arg(long = "separator")]
     separator: Option<String>,
     /// If true, do not include addresses in fully qualified type names.
     /// If there is a name conflict (e.g., the registry we're building has both
     /// 0x1::M::T and 0x2::M::T), layout generation will fail when this option is true.
-    #[clap(long = "omit-addresses")]
+    #[arg(long = "omit-addresses")]
     omit_addresses: bool,
     /// If true, do not include phantom types in fully qualified type names, since they do not contribute to the layout
     /// E.g., if we have `struct S<phantom T> { u: 64 }` and try to generate bindings for this struct with `T = u8`,
     /// the name for `S` in the registry will be `S<u64>` when this option is false, and `S` when this option is true
-    #[clap(long = "ignore-phantom-types")]
+    #[arg(long = "ignore-phantom-types")]
     ignore_phantom_types: bool,
     /// If set, generate bindings only for the struct passed in.
     /// When unset, generates bindings for the struct and all of its transitive dependencies.
-    #[clap(long = "shallow")]
+    #[arg(long = "shallow")]
     shallow: bool,
 }
 

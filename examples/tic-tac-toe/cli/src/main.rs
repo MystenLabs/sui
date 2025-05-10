@@ -6,12 +6,12 @@ use clap::Parser;
 use tic_tac_toe::command::Command;
 
 #[derive(Parser, Debug)]
-#[clap(
+#[arg(
     name = env!("CARGO_BIN_NAME"),
     about = "A CLI for playing tic-tac-toe on-chain.",
 )]
 struct Args {
-    #[clap(subcommand)]
+    #[command(subcommand)]]
     command: Command,
 }
 

@@ -17,7 +17,7 @@ use std::{
 };
 
 #[derive(Debug, Parser)]
-#[clap(
+#[arg(
     name = "source-coverage",
     about = "Annotate Move Source Code with Coverage Information",
     author,
@@ -25,19 +25,19 @@ use std::{
 )]
 struct Args {
     /// The path to the coverage map or trace file
-    #[clap(long = "input-trace-path", short = 't')]
+    #[arg(long = "input-trace-path", short = 't')]
     pub input_trace_path: String,
     /// Whether the passed-in file is a raw trace file or a serialized coverage map
-    #[clap(long = "is-raw-trace", short = 'r')]
+    #[arg(long = "is-raw-trace", short = 'r')]
     pub is_raw_trace_file: bool,
     /// The path to the module binary
-    #[clap(long = "module-path", short = 'b')]
+    #[arg(long = "module-path", short = 'b')]
     pub module_binary_path: String,
     /// The path to the source file
-    #[clap(long = "source-path", short = 's')]
+    #[arg(long = "source-path", short = 's')]
     pub source_file_path: String,
     /// Optional path to save coverage. Printed to stdout if not present.
-    #[clap(long = "coverage-path", short = 'o')]
+    #[arg(long = "coverage-path", short = 'o')]
     pub coverage_path: Option<String>,
 }
 

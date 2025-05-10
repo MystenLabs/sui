@@ -22,115 +22,115 @@ use crate::payload::{
 };
 
 #[derive(Parser)]
-#[clap(
+#[command(
     name = "Sui RPC Load Generator",
     version = "0.1",
     about = "A load test application for Sui RPC"
 )]
 struct Opts {
     // TODO(chris): support running multiple commands at once
-    #[clap(subcommand)]
+    #[command(subcommand)]
     pub command: ClapCommand,
-    #[clap(long, default_value_t = 1)]
+    #[arg(long, default_value_t = 1)]
     pub num_threads: usize,
-    #[clap(long, default_value_t = true)]
+    #[arg(long, default_value_t = true)]
     pub cross_validate: bool,
-    #[clap(long, num_args(1..), default_value = "http://127.0.0.1:9000")]
+    #[arg(long, num_args(1..), default_value = "http://127.0.0.1:9000")]
     pub urls: Vec<String>,
     /// the path to log file directory
-    #[clap(long, default_value = "~/.sui/sui_config/logs")]
+    #[arg(long, default_value = "~/.sui/sui_config/logs")]
     logs_directory: String,
 
-    #[clap(long, default_value = "~/.sui/loadgen/data")]
+    #[arg(long, default_value = "~/.sui/loadgen/data")]
     data_directory: String,
 }
 
 #[derive(Parser)]
 pub struct CommonOptions {
-    #[clap(short, long, default_value_t = 0)]
+    #[arg(short, long, default_value_t = 0)]
     pub repeat: usize,
 
-    #[clap(short, long, default_value_t = 0)]
+    #[arg(short, long, default_value_t = 0)]
     pub interval_in_ms: u64,
 
     /// different chunks will be executed concurrently on the same thread
-    #[clap(long, default_value_t = 1)]
+    #[arg(long, default_value_t = 1)]
     num_chunks_per_thread: usize,
 }
 
 #[derive(Parser)]
 pub enum ClapCommand {
-    #[clap(name = "dry-run")]
+    #[command(name = "dry-run")]
     DryRun {
-        #[clap(flatten)]
+        #[command(flatten)]
         common: CommonOptions,
     },
-    #[clap(name = "get-checkpoints")]
+    #[command(name = "get-checkpoints")]
     GetCheckpoints {
         /// Default to start from checkpoint 0
-        #[clap(short, long, default_value_t = 0)]
+        #[arg(short, long, default_value_t = 0)]
         start: u64,
 
         /// inclusive, uses `getLatestCheckpointSequenceNumber` if `None`
-        #[clap(short, long)]
+        #[arg(short, long)]
         end: Option<u64>,
 
-        #[clap(long)]
+        #[arg(long)]
         skip_verify_transactions: bool,
 
-        #[clap(long)]
+        #[arg(long)]
         skip_verify_objects: bool,
 
         // Whether to record data from checkpoint
-        #[clap(long)]
+        #[arg(long)]
         skip_record: bool,
 
-        #[clap(flatten)]
+        #[command(flatten)]
         common: CommonOptions,
     },
-    #[clap(name = "pay-sui")]
+    #[command(name = "pay-sui")]
     PaySui {
         // TODO(chris) customize recipients and amounts
-        #[clap(flatten)]
+        #[command(flatten)]
         common: CommonOptions,
     },
-    #[clap(name = "query-transaction-blocks")]
+    #[command(name = "query-transaction-blocks")]
     QueryTransactionBlocks {
-        #[clap(long, ignore_case = true)]
+        #[arg(long, ignore_case = true)]
         address_type: AddressQueryType,
 
-        #[clap(flatten)]
+        #[command(flatten)]
         common: CommonOptions,
     },
-    #[clap(name = "multi-get-transaction-blocks")]
+    #[command(name = "multi-get-transaction-blocks")]
     MultiGetTransactionBlocks {
-        #[clap(flatten)]
+        #[command(flatten)]
         common: CommonOptions,
     },
-    #[clap(name = "multi-get-objects")]
+    #[command(name = "multi-get-objects")]
     MultiGetObjects {
-        #[clap(flatten)]
+        #[command(flatten)]
         common: CommonOptions,
     },
-    #[clap(name = "get-object")]
+    #[command(name = "get-object")]
     GetObject {
-        #[clap(long)]
+        #[arg(long)]
         chunk_size: usize,
 
-        #[clap(flatten)]
+        #[command(flatten)]
         common: CommonOptions,
     },
-    #[clap(name = "get-all-balances")]
+    #[command(name = "get-all-balances")]
     GetAllBalances {
-        #[clap(long)]
+        #[arg(long)]
         chunk_size: usize,
 
-        #[clap(flatten)]
+        #[command(flatten)]
         common: CommonOptions,
     },
-    #[clap(name = "get-reference-gas-price")]
+    #[command(name = "get-reference-gas-price")]
     GetReferenceGasPrice {
-        #[clap(flatten)]
+        #[command(flatten)]
         common: CommonOptions,
     },
 }

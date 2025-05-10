@@ -44,24 +44,24 @@ const MAX_OUTPUT_SIZE: usize = 1024 * 1024;
 #[derive(Debug, Default, Parser)]
 pub struct DisassemblerOptions {
     /// Only print non-private functions
-    #[clap(long = "only-public")]
+    #[arg(long = "only-public")]
     pub only_externally_visible: bool,
 
     /// Print the bytecode for the instructions within the function.
-    #[clap(long = "print-code")]
+    #[arg(long = "print-code")]
     pub print_code: bool,
 
     /// Print the basic blocks of the bytecode.
-    #[clap(long = "print-basic-blocks")]
+    #[arg(long = "print-basic-blocks")]
     pub print_basic_blocks: bool,
 
     /// Print the locals inside each function body.
-    #[clap(long = "print-locals")]
+    #[arg(long = "print-locals")]
     pub print_locals: bool,
 
     /// Maximum size of the output. If the output exceeds this size, the disassembler will return
     /// an error.
-    #[clap(long = "max-output-size")]
+    #[arg(long = "max-output-size")]
     pub max_output_size: Option<usize>,
 }
 

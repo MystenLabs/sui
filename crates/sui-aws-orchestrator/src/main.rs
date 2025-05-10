@@ -41,7 +41,7 @@ type BenchmarkType = NarwhalBenchmarkType;
 pub struct Opts {
     /// The path to the settings file. This file contains basic information to deploy testbeds
     /// and run benchmarks such as the url of the git repo, the commit to deploy, etc.
-    #[clap(
+    #[arg(
         long,
         value_name = "FILE",
         default_value = "crates/sui-aws-orchestrator/assets/settings.json",
@@ -50,7 +50,7 @@ pub struct Opts {
     settings_path: String,
 
     /// The type of operation to run.
-    #[clap(subcommand)]
+    #[command(subcommand)]
     operation: Operation,
 }
 
@@ -58,7 +58,7 @@ pub struct Opts {
 pub enum Operation {
     /// Get or modify the status of the testbed.
     Testbed {
-        #[clap(subcommand)]
+        #[command(subcommand)]
         action: TestbedAction,
     },
 
@@ -66,77 +66,77 @@ pub enum Operation {
     Benchmark {
         /// Percentage of shared vs owned objects; 0 means only owned objects and 100 means
         /// only shared objects.
-        #[clap(long, default_value = "0", global = true)]
+        #[arg(long, default_value = "0", global = true)]
         benchmark_type: String,
 
         /// The committee size to deploy.
-        #[clap(long, value_name = "INT")]
+        #[arg(long, value_name = "INT")]
         committee: usize,
 
         /// Number of faulty nodes.
-        #[clap(long, value_name = "INT", default_value = "0", global = true)]
+        #[arg(long, value_name = "INT", default_value = "0", global = true)]
         faults: usize,
 
         /// Whether the faulty nodes recover.
-        #[clap(long, action, default_value = "false", global = true)]
+        #[arg(long, action, default_value = "false", global = true)]
         crash_recovery: bool,
 
         /// The interval to crash nodes in seconds.
-        #[clap(long, value_parser = parse_duration, default_value = "60", global = true)]
+        #[arg(long, value_parser = parse_duration, default_value = "60", global = true)]
         crash_interval: Duration,
 
         /// The minimum duration of the benchmark in seconds.
-        #[clap(long, value_parser = parse_duration, default_value = "600", global = true)]
+        #[arg(long, value_parser = parse_duration, default_value = "600", global = true)]
         duration: Duration,
 
         /// The interval between measurements collection in seconds.
-        #[clap(long, value_parser = parse_duration, default_value = "15", global = true)]
+        #[arg(long, value_parser = parse_duration, default_value = "15", global = true)]
         scrape_interval: Duration,
 
         /// Whether to skip testbed updates before running benchmarks.
-        #[clap(long, action, default_value = "false", global = true)]
+        #[arg(long, action, default_value = "false", global = true)]
         skip_testbed_update: bool,
 
         /// Whether to skip testbed configuration before running benchmarks.
-        #[clap(long, action, default_value = "false", global = true)]
+        #[arg(long, action, default_value = "false", global = true)]
         skip_testbed_configuration: bool,
 
         /// Whether to download and analyze the client and node log files.
-        #[clap(long, action, default_value = "false", global = true)]
+        #[arg(long, action, default_value = "false", global = true)]
         log_processing: bool,
 
         /// The number of instances running exclusively load generators. If set to zero the
         /// orchestrator collocates one load generator with each node.
-        #[clap(long, value_name = "INT", default_value = "0", global = true)]
+        #[arg(long, value_name = "INT", default_value = "0", global = true)]
         dedicated_clients: usize,
 
         /// Whether to forgo a grafana and prometheus instance and leave the testbed unmonitored.
-        #[clap(long, action, default_value = "false", global = true)]
+        #[arg(long, action, default_value = "false", global = true)]
         skip_monitoring: bool,
 
         /// The timeout duration for ssh commands (in seconds).
-        #[clap(long, action, value_parser = parse_duration, default_value = "30", global = true)]
+        #[arg(long, action, value_parser = parse_duration, default_value = "30", global = true)]
         timeout: Duration,
 
         /// The number of times the orchestrator should retry an ssh command.
-        #[clap(long, value_name = "INT", default_value = "5", global = true)]
+        #[arg(long, value_name = "INT", default_value = "5", global = true)]
         retries: usize,
 
         /// The load to submit to the system.
-        #[clap(subcommand)]
+        #[command(subcommand)]
         load_type: Load,
     },
 
     /// Print a summary of the specified measurements collection.
     Summarize {
         /// The path to the settings file.
-        #[clap(long, value_name = "FILE")]
+        #[arg(long, value_name = "FILE")]
         path: String,
     },
 }
 
 #[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case")]
 pub enum TestbedAction {
     /// Display the testbed status.
     Status,
@@ -144,20 +144,20 @@ pub enum TestbedAction {
     /// Deploy the specified number of instances in all regions specified by in the setting file.
     Deploy {
         /// Number of instances to deploy.
-        #[clap(long)]
+        #[arg(long)]
         instances: usize,
 
         /// The region where to deploy the instances. If this parameter is not specified, the
         /// command deploys the specified number of instances in all regions listed in the
         /// setting file.
-        #[clap(long)]
+        #[arg(long)]
         region: Option<String>,
     },
 
     /// Start at most the specified number of instances per region on an existing testbed.
     Start {
         /// Number of instances to deploy.
-        #[clap(long, default_value = "200")]
+        #[arg(long, default_value = "200")]
         instances: usize,
     },
 
@@ -173,7 +173,7 @@ pub enum Load {
     /// The fixed loads (in tx/s) to submit to the nodes.
     FixedLoad {
         /// A list of fixed load (tx/s).
-        #[clap(
+        #[arg(
             long,
             value_name = "INT",
             num_args(1..),
@@ -185,10 +185,10 @@ pub enum Load {
     /// Search for the maximum load that the system can sustainably handle.
     Search {
         /// The initial load (in tx/s) to test and use a baseline.
-        #[clap(long, value_name = "INT", default_value = "250")]
+        #[arg(long, value_name = "INT", default_value = "250")]
         starting_load: usize,
         /// The maximum number of iterations before converging on a breaking point.
-        #[clap(long, value_name = "INT", default_value = "5")]
+        #[arg(long, value_name = "INT", default_value = "5")]
         max_iterations: usize,
     },
 }

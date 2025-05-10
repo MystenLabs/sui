@@ -30,20 +30,20 @@ compile_error!("Unsupported OS, currently we only support windows and unix famil
 
 /// Run Move unit tests in this package.
 #[derive(Parser)]
-#[clap(name = "test")]
+#[command(name = "test")]
 pub struct Test {
     /// Bound the amount of gas used by any one test.
-    #[clap(name = "gas-limit", short = 'i', long = "gas-limit")]
+    #[arg(name = "gas-limit", short = 'i', long = "gas-limit")]
     pub gas_limit: Option<u64>,
     /// An optional filter string to determine which unit tests to run. A unit test will be run only if it
     /// contains this string in its fully qualified (<addr>::<module_name>::<fn_name>) name.
-    #[clap(name = "filter")]
+    #[arg(name = "filter")]
     pub filter: Option<String>,
     /// List all tests
-    #[clap(name = "list", short = 'l', long = "list")]
+    #[arg(name = "list", short = 'l', long = "list")]
     pub list: bool,
     /// Number of threads to use for running tests.
-    #[clap(
+    #[arg(
         name = "num-threads",
         default_value = "8",
         short = 't',
@@ -51,26 +51,26 @@ pub struct Test {
     )]
     pub num_threads: usize,
     /// Report test statistics at the end of testing. CSV report generated if 'csv' passed
-    #[clap(name = "report-statistics", short = 's', long = "statistics")]
+    #[arg(name = "report-statistics", short = 's', long = "statistics")]
     pub report_statistics: Option<Option<String>>,
 
     /// Verbose mode
-    #[clap(long = "verbose")]
+    #[arg(long = "verbose")]
     pub verbose_mode: bool,
     /// Collect coverage information for later use with the various `move coverage` subcommands. Currently supported only in debug builds.
-    #[clap(long = "coverage")]
+    #[arg(long = "coverage")]
     pub compute_coverage: bool,
 
     /// The seed to use for the randomness generator.
-    #[clap(name = "seed", long = "seed")]
+    #[arg(name = "seed", long = "seed")]
     pub seed: Option<u64>,
 
     /// The number of iterations to run each test that uses generated values (only used with #[random_test]).
-    #[clap(name = "rand-num-iters", long = "rand-num-iters")]
+    #[arg(name = "rand-num-iters", long = "rand-num-iters")]
     pub rand_num_iters: Option<u64>,
 
     // Enable tracing for tests
-    #[clap(long = "trace-execution")]
+    #[arg(long = "trace-execution")]
     pub trace_execution: bool,
 }
 

@@ -35,22 +35,22 @@ const SEED_FLAG: &str = "seed";
 const TRACE_FLAG: &str = "trace-execution";
 
 #[derive(Debug, Parser, Clone)]
-#[clap(author, version, about)]
+#[command(author, version, about)]
 pub struct UnitTestingConfig {
     /// Bound the gas limit for any one test. If using custom gas table, this is the max number of instructions.
-    #[clap(name = "gas-limit", short = 'i', long = "gas-limit")]
+    #[arg(name = "gas-limit", short = 'i', long = "gas-limit")]
     pub gas_limit: Option<u64>,
 
     /// A filter string to determine which unit tests to run
-    #[clap(name = "filter", short = 'f', long = "filter")]
+    #[arg(name = "filter", short = 'f', long = "filter")]
     pub filter: Option<String>,
 
     /// List all tests
-    #[clap(name = "list", short = 'l', long = "list")]
+    #[arg(name = "list", short = 'l', long = "list")]
     pub list: bool,
 
     /// Number of threads to use for running tests.
-    #[clap(
+    #[arg(
         name = "num-threads",
         default_value = "8",
         short = 't',
@@ -59,7 +59,7 @@ pub struct UnitTestingConfig {
     pub num_threads: usize,
 
     /// Dependency files
-    #[clap(
+    #[arg(
         name = "dependencies",
         long = "dependencies",
         short = 'd',
@@ -69,7 +69,7 @@ pub struct UnitTestingConfig {
     pub dep_files: Vec<String>,
 
     /// Bytecode dependency files
-    #[clap(
+    #[arg(
         name = "bytecode-depencencies",
         long = "bytecode-dependencies",
         num_args(1..),
@@ -78,10 +78,10 @@ pub struct UnitTestingConfig {
     pub bytecode_deps_files: Vec<String>,
 
     /// Report test statistics at the end of testing. CSV report generated if 'csv' passed
-    #[clap(name = "report-statistics", short = 's', long = "statistics")]
+    #[arg(name = "report-statistics", short = 's', long = "statistics")]
     pub report_statistics: Option<Option<String>>,
 
-    #[clap(
+    #[arg(
         name = "report_stacktrace_on_abort",
         short = 'r',
         long = "stacktrace_on_abort"
@@ -89,7 +89,7 @@ pub struct UnitTestingConfig {
     pub report_stacktrace_on_abort: bool,
 
     /// Named address mapping
-    #[clap(
+    #[arg(
         name = "NAMED_ADDRESSES",
         short = 'a',
         long = "addresses",
@@ -98,7 +98,7 @@ pub struct UnitTestingConfig {
     pub named_address_values: Vec<(String, NumericalAddress)>,
 
     /// Source files
-    #[clap(
+    #[arg(
         name = "sources",
         num_args(1..),
         action = clap::ArgAction::Append,
@@ -106,24 +106,24 @@ pub struct UnitTestingConfig {
     pub source_files: Vec<String>,
 
     /// Verbose mode
-    #[clap(short = 'v', long = "verbose")]
+    #[arg(short = 'v', long = "verbose")]
     pub verbose: bool,
 
     /// Number of iterations to run each test if arguments are being generated
-    #[clap(long = RAND_NUM_ITERS_FLAG)]
+    #[arg(long = RAND_NUM_ITERS_FLAG)]
     pub rand_num_iters: Option<u64>,
 
     /// Seed to use for generating arguments
-    #[clap(long = SEED_FLAG)]
+    #[arg(long = SEED_FLAG)]
     pub seed: Option<u64>,
 
     // Deterministically generate the same arguments for #[random_test]s between test runs.
     // WARNING: You should only use this flag for debugging and meta-testing purposes!
-    #[clap(skip)]
+    #[arg(skip)]
     pub deterministic_generation: bool,
 
     // Enable tracing for tests
-    #[clap(long = TRACE_FLAG)]
+    #[arg(long = TRACE_FLAG)]
     pub trace_execution: bool,
 }
 

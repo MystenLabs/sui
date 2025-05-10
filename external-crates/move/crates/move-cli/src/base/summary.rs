@@ -14,25 +14,25 @@ const DEFAULT_OUTPUT_DIRECTORY: &str = "package_summaries";
 
 /// Generate a serialized summary of a Move package (e.g., functions, structs, annotations, etc.)
 #[derive(Parser)]
-#[clap(name = COMMAND_NAME)]
+#[command(name = COMMAND_NAME)]
 pub struct Summary {
     /// The output format the summary should be generated in.
     #[arg(value_enum, long, short, default_value_t = SummaryOutputFormat::Json)]
     output_format: SummaryOutputFormat,
     /// Directory that all generated summaries should be nested under.
-    #[clap(long = "output-directory", value_name = "PATH", default_value = DEFAULT_OUTPUT_DIRECTORY)]
+    #[arg(long = "output-directory", value_name = "PATH", default_value = DEFAULT_OUTPUT_DIRECTORY)]
     output_directory: String,
     /// Whether we are generating a summary for a package or for a directory of bytecode modules.
     /// All `.mv` files under the path supplied (or current directory if none supplied) will be summarized.
-    #[clap(long = "bytecode")]
+    #[arg(long = "bytecode")]
     bytecode: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum SummaryOutputFormat {
-    #[clap(name = "json")]
+    #[value(name = "json")]
     Json,
-    #[clap(name = "yaml")]
+    #[value(name = "yaml")]
     Yaml,
 }
 

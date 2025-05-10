@@ -15,25 +15,25 @@ use std::path::Path;
 #[derive(Parser)]
 pub enum CoverageSummaryOptions {
     /// Display a coverage summary for all modules in this package
-    #[clap(name = "summary")]
+    #[command(name = "summary")]
     Summary {
         /// Whether function coverage summaries should be displayed
-        #[clap(long = "summarize-functions")]
+        #[arg(long = "summarize-functions")]
         functions: bool,
         /// Output CSV data of coverage
-        #[clap(long = "csv")]
+        #[arg(long = "csv")]
         output_csv: bool,
     },
     /// Display coverage information about the module against source code
-    #[clap(name = "source")]
+    #[command(name = "source")]
     Source {
-        #[clap(long = "module")]
+        #[arg(long = "module")]
         module_name: String,
     },
     /// Display coverage information about the module against disassembled bytecode
-    #[clap(name = "bytecode")]
+    #[command(name = "bytecode")]
     Bytecode {
-        #[clap(long = "module")]
+        #[arg(long = "module")]
         module_name: String,
     },
 }
@@ -41,9 +41,9 @@ pub enum CoverageSummaryOptions {
 /// Inspect test coverage for this package. A previous test run with the `--coverage` flag must
 /// have previously been run.
 #[derive(Parser)]
-#[clap(name = "coverage")]
+#[command(name = "coverage")]
 pub struct Coverage {
-    #[clap(subcommand)]
+    #[command(subcommand)]
     pub options: CoverageSummaryOptions,
 }
 

@@ -47,7 +47,7 @@ use sui_sdk::SuiClientBuilder;
 #[derive(Parser, Clone, Debug)]
 struct Args {
     /// Path to a yaml config
-    #[clap(long, short)]
+    #[arg(long, short)]
     config_path: Option<PathBuf>,
 }
 

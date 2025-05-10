@@ -8,26 +8,26 @@ pub const DEFAULT_AMOUNT: u64 = 200_000_000_000;
 pub const DEFAULT_NUM_COINS: usize = 5;
 
 #[derive(Parser, Clone)]
-#[clap(
+#[command(
     name = "Sui Faucet",
     about = "Faucet for requesting test tokens on Sui",
     rename_all = "kebab-case"
 )]
 pub struct FaucetConfig {
-    #[clap(long, default_value_t = 5003)]
+    #[arg(long, default_value_t = 5003)]
     pub port: u16,
 
-    #[clap(long, default_value = "127.0.0.1")]
+    #[arg(long, default_value = "127.0.0.1")]
     pub host_ip: Ipv4Addr,
 
     /// Amount of SUI per each dispensed coin.
-    #[clap(long, default_value_t = DEFAULT_AMOUNT)]
+    #[arg(long, default_value_t = DEFAULT_AMOUNT)]
     pub amount: u64,
 
-    #[clap(long, default_value_t = DEFAULT_NUM_COINS)]
+    #[arg(long, default_value_t = DEFAULT_NUM_COINS)]
     pub num_coins: usize,
 
-    #[clap(long, default_value_t = 60)]
+    #[arg(long, default_value_t = 60)]
     pub wallet_client_timeout_secs: u64,
 }
 

@@ -17,17 +17,17 @@ use tracing::info;
 #[derive(clap::Parser, Debug, Clone)]
 pub struct Config {
     /// Directory to write the ingestion data to.
-    #[clap(long)]
+    #[arg(long)]
     pub ingestion_dir: PathBuf,
     /// Customize the first checkpoint sequence number in the workload.
     /// This is useful if we want to generate workload to benchmark a non-empty database.
-    #[clap(long, default_value_t = 0)]
+    #[arg(long, default_value_t = 0)]
     pub starting_checkpoint: u64,
     /// Total number of synthetic checkpoints to generate.
-    #[clap(long, default_value_t = 2000)]
+    #[arg(long, default_value_t = 2000)]
     pub num_checkpoints: u64,
     /// Number of transactions in a checkpoint.
-    #[clap(long, default_value_t = 200)]
+    #[arg(long, default_value_t = 200)]
     pub checkpoint_size: u64,
 }
 

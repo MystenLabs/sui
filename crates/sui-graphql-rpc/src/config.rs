@@ -43,26 +43,26 @@ pub struct ServerConfig {
 #[derive(clap::Args, Clone, Eq, PartialEq, Debug)]
 pub struct ConnectionConfig {
     /// Port to bind the server to
-    #[clap(short, long, default_value_t = ConnectionConfig::default().port)]
+    #[arg(short, long, default_value_t = ConnectionConfig::default().port)]
     pub port: u16,
     /// Host to bind the server to
-    #[clap(long, default_value_t = ConnectionConfig::default().host)]
+    #[arg(long, default_value_t = ConnectionConfig::default().host)]
     pub host: String,
     /// DB URL for data fetching
-    #[clap(short, long, default_value_t = ConnectionConfig::default().db_url)]
+    #[arg(short, long, default_value_t = ConnectionConfig::default().db_url)]
     pub db_url: String,
     /// Pool size for DB connections
-    #[clap(long, default_value_t = ConnectionConfig::default().db_pool_size)]
+    #[arg(long, default_value_t = ConnectionConfig::default().db_pool_size)]
     pub db_pool_size: u32,
     /// Host to bind the prom server to
-    #[clap(long, default_value_t = ConnectionConfig::default().prom_host)]
+    #[arg(long, default_value_t = ConnectionConfig::default().prom_host)]
     pub prom_host: String,
     /// Port to bind the prom server to
-    #[clap(long, default_value_t = ConnectionConfig::default().prom_port)]
+    #[arg(long, default_value_t = ConnectionConfig::default().prom_port)]
     pub prom_port: u16,
     /// Skip checking whether the service is compatible with the DB it is about to connect to, on
     /// start-up.
-    #[clap(long, default_value_t = ConnectionConfig::default().skip_migration_consistency_check)]
+    #[arg(long, default_value_t = ConnectionConfig::default().skip_migration_consistency_check)]
     pub skip_migration_consistency_check: bool,
 }
 
@@ -190,7 +190,7 @@ impl Version {
 #[derive(clap::Args, Clone, Debug)]
 pub struct Ide {
     /// The title to display at the top of the web-based GraphiQL IDE.
-    #[clap(short, long, default_value_t = Ide::default().ide_title)]
+    #[arg(short, long, default_value_t = Ide::default().ide_title)]
     pub ide_title: String,
 }
 
@@ -221,7 +221,7 @@ pub struct InternalFeatureConfig {
 #[derive(clap::Args, Clone, Default, Debug)]
 pub struct TxExecFullNodeConfig {
     /// RPC URL for the fullnode to send transactions to execute and dry-run.
-    #[clap(long)]
+    #[arg(long)]
     pub(crate) node_rpc_url: Option<String>,
 }
 

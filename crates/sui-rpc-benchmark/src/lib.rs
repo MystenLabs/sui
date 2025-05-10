@@ -19,49 +19,49 @@ use crate::direct::query_executor::QueryExecutor;
 use crate::direct::query_template_generator::QueryTemplateGenerator;
 
 #[derive(Parser)]
-#[clap(
+#[command(
     name = "sui-rpc-benchmark",
     about = "Benchmark tool for comparing Sui RPC access methods"
 )]
 pub struct Opts {
-    #[clap(subcommand)]
+    #[command(subcommand)]
     pub command: Command,
 }
 
 #[derive(Subcommand)]
 pub enum Command {
     /// Benchmark direct database queries
-    #[clap(name = "direct")]
+    #[command(name = "direct")]
     DirectQuery {
-        #[clap(
+        #[arg(
             long,
             default_value = "postgres://postgres:postgres@localhost:5432/sui",
             value_parser = value_parser!(Url)
         )]
         db_url: Url,
-        #[clap(long, default_value = "50")]
+        #[arg(long, default_value = "50")]
         concurrency: usize,
-        #[clap(long, default_value = "30")]
+        #[arg(long, default_value = "30")]
         duration_secs: u64,
     },
     /// Benchmark JSON RPC endpoints
-    #[clap(name = "jsonrpc")]
+    #[command(name = "jsonrpc")]
     JsonRpc {
-        #[clap(long, default_value = "http://127.0.0.1:9000")]
+        #[arg(long, default_value = "http://127.0.0.1:9000")]
         endpoint: String,
-        #[clap(long, default_value = "50")]
+        #[arg(long, default_value = "50")]
         concurrency: usize,
-        #[clap(long)]
+        #[arg(long)]
         duration_secs: Option<u64>,
-        #[clap(long, default_value = "requests.jsonl")]
+        #[arg(long, default_value = "requests.jsonl")]
         requests_file: String,
-        #[clap(long, value_delimiter = ',')]
+        #[arg(long, value_delimiter = ',')]
         methods_to_skip: Vec<String>,
     },
     /// Benchmark GraphQL queries
-    #[clap(name = "graphql")]
+    #[command(name = "graphql")]
     GraphQL {
-        #[clap(long, default_value = "http://127.0.0.1:9000/graphql")]
+        #[arg(long, default_value = "http://127.0.0.1:9000/graphql")]
         endpoint: String,
     },
 }

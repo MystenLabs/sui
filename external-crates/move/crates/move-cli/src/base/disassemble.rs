@@ -11,21 +11,21 @@ use std::path::Path;
 
 /// Disassemble the Move bytecode pointed to
 #[derive(Parser)]
-#[clap(name = "disassemble")]
+#[command(name = "disassemble")]
 pub struct Disassemble {
-    #[clap(long = "interactive")]
+    #[arg(long = "interactive")]
     /// Start a disassembled bytecode-to-source explorer
     pub interactive: bool,
-    #[clap(long = "package")]
+    #[arg(long = "package")]
     /// The package name. If not provided defaults to current package modules only
     pub package_name: Option<String>,
-    #[clap(long = "name")]
+    #[arg(long = "name")]
     /// The name of the module or script in the package to disassemble
     pub module_or_script_name: String,
-    #[clap(long = "Xdebug")]
+    #[arg(long = "Xdebug")]
     /// Also print the raw disassembly using Rust's Debug output, at the end.
     pub debug: bool,
-    #[clap(long = "bytecode-map")]
+    #[arg(long = "bytecode-map")]
     /// Print the "bytecode map" (source map for disassembled bytecode)
     pub bytecode_map: bool,
 }

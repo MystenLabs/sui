@@ -8,7 +8,7 @@ use std::path::Path;
 
 /// Print address information.
 #[derive(Parser)]
-#[clap(name = "info")]
+#[command(name = "info")]
 pub struct Info;
 
 impl Info {

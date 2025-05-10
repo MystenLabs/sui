@@ -17,21 +17,21 @@ pub enum Env {
 }
 
 #[derive(derive_more::Debug, Parser)]
-#[clap(name = "", rename_all = "kebab-case")]
+#[command(name = "", rename_all = "kebab-case")]
 pub struct ClusterTestOpt {
-    #[clap(value_enum)]
+    #[arg(value_enum)]
     pub env: Env,
-    #[clap(long)]
+    #[arg(long)]
     pub faucet_address: Option<String>,
-    #[clap(long)]
+    #[arg(long)]
     pub fullnode_address: Option<String>,
-    #[clap(long)]
+    #[arg(long)]
     pub epoch_duration_ms: Option<u64>,
     /// URL for the indexer RPC server
-    #[clap(long)]
+    #[arg(long)]
     pub indexer_address: Option<String>,
     /// URL for the Indexer Postgres DB
-    #[clap(long)]
+    #[arg(long)]
     #[debug("{}", match pg_address {
         None => "None".into(),
         Some(val) => Regex::new(r":.*@")
@@ -39,15 +39,15 @@ pub struct ClusterTestOpt {
             .replace_all(val.as_str(), ":*****@"),
     })]
     pub pg_address: Option<String>,
-    #[clap(long)]
+    #[arg(long)]
     pub config_dir: Option<PathBuf>,
     /// URL for the indexer RPC server
-    #[clap(long)]
+    #[arg(long)]
     pub graphql_address: Option<String>,
     /// Indicate that an indexer and graphql service should be started
     ///
     /// Only used with a local cluster
-    #[clap(long)]
+    #[arg(long)]
     pub with_indexer_and_graphql: bool,
 }
 

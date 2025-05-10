@@ -11,16 +11,16 @@ use crate::build_ebpf::{build_ebpf, Architecture, Options as BuildOptions};
 #[derive(Debug, Parser)]
 pub struct Options {
     /// Set the endianness of the BPF target
-    #[clap(default_value = "bpfel-unknown-none", long)]
+    #[arg(default_value = "bpfel-unknown-none", long)]
     pub bpf_target: Architecture,
     /// Build and run the release target
-    #[clap(long)]
+    #[arg(long)]
     pub release: bool,
     /// The command used to wrap your application
-    #[clap(short, long, default_value = "sudo -E")]
+    #[arg(short, long, default_value = "sudo -E")]
     pub runner: String,
     /// Arguments to pass to your application
-    #[clap(name = "args", last = true)]
+    #[command(name = "args", last = true)]
     pub run_args: Vec<String>,
 }
 

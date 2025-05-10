@@ -35,10 +35,10 @@ impl std::fmt::Display for Architecture {
 #[derive(Debug, Parser)]
 pub struct Options {
     /// Set the endianness of the BPF target
-    #[clap(default_value = "bpfel-unknown-none", long)]
+    #[arg(default_value = "bpfel-unknown-none", long)]
     pub target: Architecture,
     /// Build the release target
-    #[clap(long)]
+    #[arg(long)]
     pub release: bool,
 }
 
