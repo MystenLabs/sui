@@ -11,7 +11,7 @@ use sui::test_utils::destroy;
 use sui_system::staking_pool::{Self, StakingPool};
 
 #[test]
-fun test_join_fungible_staked_sui_happy() {
+fun join_fungible_staked_sui_happy() {
     let mut scenario = test_scenario::begin(@0x0);
     let staking_pool = staking_pool::new(scenario.ctx());
 
@@ -35,7 +35,7 @@ fun test_join_fungible_staked_sui_happy() {
 }
 
 #[test, expected_failure(abort_code = staking_pool::EWrongPool)]
-fun test_join_fungible_staked_sui_fail() {
+fun join_fungible_staked_sui_fail() {
     let mut scenario = test_scenario::begin(@0x0);
     let staking_pool_1 = staking_pool::new(scenario.ctx());
     let staking_pool_2 = staking_pool::new(scenario.ctx());
@@ -51,15 +51,11 @@ fun test_join_fungible_staked_sui_fail() {
 
     fungible_staked_sui_1.join(fungible_staked_sui_2);
 
-    destroy(staking_pool_1);
-    destroy(staking_pool_2);
-    destroy(fungible_staked_sui_1);
-
-    scenario.end();
+    abort
 }
 
 #[test]
-fun test_split_fungible_staked_sui_happy() {
+fun split_fungible_staked_sui_happy() {
     let mut scenario = test_scenario::begin(@0x0);
     let staking_pool = staking_pool::new(scenario.ctx());
 
@@ -81,7 +77,7 @@ fun test_split_fungible_staked_sui_happy() {
 }
 
 #[test, expected_failure(abort_code = staking_pool::EInsufficientPoolTokenBalance)]
-fun test_split_fungible_staked_sui_fail_too_much() {
+fun split_fungible_staked_sui_fail_too_much() {
     let mut scenario = test_scenario::begin(@0x0);
     let staking_pool = staking_pool::new(scenario.ctx());
 
@@ -90,17 +86,13 @@ fun test_split_fungible_staked_sui_fail_too_much() {
         scenario.ctx(),
     );
 
-    let fungible_staked_sui_2 = fungible_staked_sui_1.split(100_000_000_000 + 1, scenario.ctx());
+    let _fungible_staked_sui_2 = fungible_staked_sui_1.split(100_000_000_000 + 1, scenario.ctx());
 
-    destroy(staking_pool);
-    destroy(fungible_staked_sui_1);
-    destroy(fungible_staked_sui_2);
-
-    scenario.end();
+    abort
 }
 
 #[test, expected_failure(abort_code = staking_pool::ECannotMintFungibleStakedSuiYet)]
-fun test_convert_to_fungible_staked_sui_fail_too_early() {
+fun convert_to_fungible_staked_sui_fail_too_early() {
     let mut scenario = test_scenario::begin(@0x0);
     let mut staking_pool = staking_pool::new(scenario.ctx());
 
@@ -110,19 +102,16 @@ fun test_convert_to_fungible_staked_sui_fail_too_early() {
         scenario.ctx().epoch() + 1,
         scenario.ctx(),
     );
-    let fungible_staked_sui = staking_pool.convert_to_fungible_staked_sui(
+    let _fungible_staked_sui = staking_pool.convert_to_fungible_staked_sui(
         staked_sui,
         scenario.ctx(),
     );
 
-    destroy(staking_pool);
-    destroy(fungible_staked_sui);
-
-    scenario.end();
+    abort
 }
 
 #[test, expected_failure(abort_code = staking_pool::EPoolPreactiveOrInactive)]
-fun test_convert_to_fungible_staked_sui_fail_too_early_preactive() {
+fun convert_to_fungible_staked_sui_fail_too_early_preactive() {
     let mut scenario = test_scenario::begin(@0x0);
     let mut staking_pool = staking_pool::new(scenario.ctx());
 
@@ -135,19 +124,16 @@ fun test_convert_to_fungible_staked_sui_fail_too_early_preactive() {
     );
 
     scenario.skip_to_epoch(activation_epoch);
-    let fungible_staked_sui = staking_pool.convert_to_fungible_staked_sui(
+    let _fungible_staked_sui = staking_pool.convert_to_fungible_staked_sui(
         staked_sui,
         scenario.ctx(),
     );
 
-    destroy(staking_pool);
-    destroy(fungible_staked_sui);
-
-    scenario.end();
+    abort
 }
 
 #[test, expected_failure(abort_code = staking_pool::EPoolPreactiveOrInactive)]
-fun test_convert_to_fungible_staked_sui_fail_too_early_inactive() {
+fun convert_to_fungible_staked_sui_fail_too_early_inactive() {
     let mut scenario = test_scenario::begin(@0x0);
     let mut staking_pool = staking_pool::new(scenario.ctx());
 
@@ -161,19 +147,16 @@ fun test_convert_to_fungible_staked_sui_fail_too_early_inactive() {
 
     scenario.skip_to_epoch(activation_epoch);
     staking_pool.deactivate_staking_pool(0);
-    let fungible_staked_sui = staking_pool.convert_to_fungible_staked_sui(
+    let _fungible_staked_sui = staking_pool.convert_to_fungible_staked_sui(
         staked_sui,
         scenario.ctx(),
     );
 
-    destroy(staking_pool);
-    destroy(fungible_staked_sui);
-
-    scenario.end();
+    abort
 }
 
 #[test, expected_failure(abort_code = staking_pool::EWrongPool)]
-fun test_convert_to_fungible_staked_sui_fail_wrong_pool() {
+fun convert_to_fungible_staked_sui_fail_wrong_pool() {
     let mut scenario = test_scenario::begin(@0x0);
     let mut staking_pool_1 = staking_pool::new(scenario.ctx());
     let mut staking_pool_2 = staking_pool::new(scenario.ctx());
@@ -185,20 +168,16 @@ fun test_convert_to_fungible_staked_sui_fail_wrong_pool() {
         scenario.ctx(),
     );
 
-    let fungible_staked_sui = staking_pool_2.convert_to_fungible_staked_sui(
+    let _fungible_staked_sui = staking_pool_2.convert_to_fungible_staked_sui(
         staked_sui,
         scenario.ctx(),
     );
 
-    destroy(staking_pool_1);
-    destroy(staking_pool_2);
-    destroy(fungible_staked_sui);
-
-    scenario.end();
+    abort
 }
 
 #[test]
-fun test_convert_to_fungible_staked_sui_happy() {
+fun convert_to_fungible_staked_sui_happy() {
     let mut scenario = test_scenario::begin(@0x0);
     let mut staking_pool = staking_pool::new(scenario.ctx());
     staking_pool.activate_staking_pool(0);
@@ -271,7 +250,7 @@ fun test_convert_to_fungible_staked_sui_happy() {
 }
 
 #[test]
-fun test_redeem_fungible_staked_sui_happy() {
+fun redeem_fungible_staked_sui_happy() {
     let mut scenario = test_scenario::begin(@0x0);
     let mut staking_pool = staking_pool::new(scenario.ctx());
     staking_pool.activate_staking_pool(0);
@@ -379,7 +358,7 @@ fun test_redeem_fungible_staked_sui_happy() {
 }
 
 #[test]
-fun test_redeem_fungible_staked_sui_regression_rounding() {
+fun redeem_fungible_staked_sui_regression_rounding() {
     let mut scenario = test_scenario::begin(@0x0);
     let mut staking_pool = staking_pool::new(scenario.ctx());
     staking_pool.activate_staking_pool(0);
