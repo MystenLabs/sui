@@ -677,7 +677,7 @@ fun stake_subsidy_with_safe_mode_epoch_562_to_563() {
 }
 
 #[test]
-fun stake_subsidy_with_safe_mode_epoch_562_to_563_2() {
+fun stake_subsidy_with_safe_mode_epoch_563_to_564() {
     let epoch_duration = 1000;
     let epoch_start_time = 100000000000;
     let start_distribution_counter = 540;
