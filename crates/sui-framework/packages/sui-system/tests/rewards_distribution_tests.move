@@ -98,6 +98,8 @@ fun stake_rewards() {
         ])
         .build();
 
+    let validators = runner.genesis_validator_addresses();
+
     runner.set_sender(STAKER_ADDR_1).stake_with(VALIDATOR_ADDR_1, 200);
     runner.set_sender(STAKER_ADDR_2).stake_with(VALIDATOR_ADDR_2, 100);
 
@@ -116,7 +118,7 @@ fun stake_rewards() {
     // check total stake and rewards for each validator
     assert_stake_rewards_for_addresses(
         &mut runner,
-        vector[VALIDATOR_ADDR_1, VALIDATOR_ADDR_2, VALIDATOR_ADDR_3, VALIDATOR_ADDR_4],
+        validators,
         vector[100 * MIST_PER_SUI, 200 * MIST_PER_SUI, 300 * MIST_PER_SUI, 400 * MIST_PER_SUI],
     );
 
@@ -126,7 +128,7 @@ fun stake_rewards() {
     // check total stake and rewards for each validator
     assert_stake_rewards_for_addresses(
         &mut runner,
-        vector[VALIDATOR_ADDR_1, VALIDATOR_ADDR_2, VALIDATOR_ADDR_3, VALIDATOR_ADDR_4],
+        validators,
         vector[110 * MIST_PER_SUI, 220 * MIST_PER_SUI, 330 * MIST_PER_SUI, 430 * MIST_PER_SUI],
     );
 
@@ -139,7 +141,7 @@ fun stake_rewards() {
 
     assert_stake_rewards_for_addresses(
         &mut runner,
-        vector[VALIDATOR_ADDR_1, VALIDATOR_ADDR_2, VALIDATOR_ADDR_3, VALIDATOR_ADDR_4],
+        validators,
         vector[140 * MIST_PER_SUI, 240 * MIST_PER_SUI, 360 * MIST_PER_SUI, 460 * MIST_PER_SUI],
     );
 
@@ -211,6 +213,8 @@ fun validator_commission() {
         ])
         .build();
 
+    let validators = runner.genesis_validator_addresses();
+
     runner.set_sender(STAKER_ADDR_1).stake_with(VALIDATOR_ADDR_1, 100);
     runner.set_sender(STAKER_ADDR_2).stake_with(VALIDATOR_ADDR_2, 100);
 
@@ -250,7 +254,7 @@ fun validator_commission() {
 
     assert_stake_rewards_for_addresses(
         &mut runner,
-        vector[VALIDATOR_ADDR_1, VALIDATOR_ADDR_2, VALIDATOR_ADDR_3, VALIDATOR_ADDR_4],
+        validators,
         vector[115 * MIST_PER_SUI, 222 * MIST_PER_SUI, 330 * MIST_PER_SUI, 430 * MIST_PER_SUI],
     );
 
@@ -284,7 +288,7 @@ fun validator_commission() {
 
     assert_stake_rewards_for_addresses(
         &mut runner,
-        vector[VALIDATOR_ADDR_1, VALIDATOR_ADDR_2, VALIDATOR_ADDR_3, VALIDATOR_ADDR_4],
+        validators,
         vector[148 * MIST_PER_SUI, 266290909091, 390 * MIST_PER_SUI, 490 * MIST_PER_SUI],
     );
 
@@ -315,6 +319,8 @@ fun rewards_slashing() {
         ])
         .build();
 
+    let validators = runner.genesis_validator_addresses();
+
     runner.set_sender(STAKER_ADDR_1).stake_with(VALIDATOR_ADDR_1, 100);
     runner.set_sender(STAKER_ADDR_2).stake_with(VALIDATOR_ADDR_2, 100);
     runner.advance_epoch(option::none()).destroy_for_testing();
@@ -334,7 +340,7 @@ fun rewards_slashing() {
     // so the unslashed validators each get their share of additional rewards, which is 30.
     assert_stake_rewards_for_addresses(
         &mut runner,
-        vector[VALIDATOR_ADDR_1, VALIDATOR_ADDR_2, VALIDATOR_ADDR_3, VALIDATOR_ADDR_4],
+        validators,
         vector[565 * MIST_PER_SUI, 740 * MIST_PER_SUI, 1230 * MIST_PER_SUI, 1330 * MIST_PER_SUI],
     );
 
@@ -359,6 +365,8 @@ fun entire_rewards_slashing() {
         ])
         .build();
 
+    let validators = runner.genesis_validator_addresses();
+
     runner.set_sender(STAKER_ADDR_1).stake_with(VALIDATOR_ADDR_1, 100);
     runner.set_sender(STAKER_ADDR_2).stake_with(VALIDATOR_ADDR_2, 100);
     runner.advance_epoch(option::none()).destroy_for_testing();
@@ -379,7 +387,7 @@ fun entire_rewards_slashing() {
     // so the unslashed validators each get their share of additional rewards, which is 300.
     assert_stake_rewards_for_addresses(
         &mut runner,
-        vector[VALIDATOR_ADDR_1, VALIDATOR_ADDR_2, VALIDATOR_ADDR_3, VALIDATOR_ADDR_4],
+        validators,
         vector[
             (550 + 150) * MIST_PER_SUI,
             200 * MIST_PER_SUI,
@@ -411,6 +419,8 @@ fun rewards_slashing_with_storage_fund() {
         ])
         .build();
 
+    let validators = runner.genesis_validator_addresses();
+
     let opts = runner.advance_epoch_opts().storage_charge(300);
     runner.advance_epoch(option::some(opts)).destroy_for_testing();
 
@@ -440,7 +450,7 @@ fun rewards_slashing_with_storage_fund() {
     // Validator 4's should get 300 * 4/5 * (1 - 20%) = 192 in computation rewards and 75 * (1 - 20%) = 60 in storage rewards.
     assert_stake_rewards_for_addresses(
         &mut runner,
-        vector[VALIDATOR_ADDR_1, VALIDATOR_ADDR_2, VALIDATOR_ADDR_3, VALIDATOR_ADDR_4],
+        validators,
         vector[500 * MIST_PER_SUI, 600 * MIST_PER_SUI, 620 * MIST_PER_SUI, 652 * MIST_PER_SUI],
     );
 
@@ -469,6 +479,8 @@ fun everyone_slashed() {
             validator_builder::new().initial_stake(400).sui_address(VALIDATOR_ADDR_4),
         ])
         .build();
+
+    let validators = runner.genesis_validator_addresses();
 
     // Report all validators to validator 4.
     runner.set_sender(VALIDATOR_ADDR_1).report_validator(VALIDATOR_ADDR_4);
@@ -500,7 +512,7 @@ fun everyone_slashed() {
     // All validators should have 0 rewards added so their stake stays the same.
     assert_stake_rewards_for_addresses(
         &mut runner,
-        vector[VALIDATOR_ADDR_1, VALIDATOR_ADDR_2, VALIDATOR_ADDR_3, VALIDATOR_ADDR_4],
+        validators,
         vector[100 * MIST_PER_SUI, 200 * MIST_PER_SUI, 300 * MIST_PER_SUI, 400 * MIST_PER_SUI],
     );
 

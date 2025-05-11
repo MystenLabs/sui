@@ -95,10 +95,13 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
         scenario.ctx(),
     );
 
+    let validators = validators.map!(|v| v.is_active_at_genesis(true).build(scenario.ctx()));
+    let genesis_validator_addresses = validators.map_ref!(|v| v.sui_address());
+
     // create sui system state
     sui_system::create(
         object::new(scenario.ctx()), // it doesn't matter what ID sui system state has in tests
-        validators.map!(|v| v.is_active_at_genesis(true).build(scenario.ctx())),
+        validators,
         balance::create_for_testing<SUI>(storage_fund_amount.destroy_or!(0) * MIST_PER_SUI), // storage_fund
         protocol_version.destroy_or!(1), // protocol version
         0, // chain_start_timestamp_ms
@@ -110,6 +113,7 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
     let mut runner = TestRunner {
         scenario,
         sender: @0,
+        genesis_validator_addresses,
     };
 
     // set stake distribution counter if provided
@@ -288,6 +292,7 @@ public fun epoch_start_time(
 public struct TestRunner {
     scenario: Scenario,
     sender: address,
+    genesis_validator_addresses: vector<address>,
 }
 
 /// Set the sender of the next transaction.
@@ -300,18 +305,28 @@ public fun set_sender(runner: &mut TestRunner, sender: address): &mut TestRunner
 /// Get the current transaction context.
 public fun ctx(runner: &mut TestRunner): &mut TxContext { runner.scenario.ctx() }
 
+/// Get a mutable reference to the scenario.
 public fun scenario_mut(runner: &mut TestRunner): &mut Scenario { &mut runner.scenario }
 
+/// Get the initial validator addresses specified in the builder.
+public fun genesis_validator_addresses(runner: &TestRunner): vector<address> {
+    runner.genesis_validator_addresses
+}
+
+/// Keep an object in the sender's inventory.
 public fun keep<T: key + store>(runner: &TestRunner, object: T) {
     transfer::public_transfer(object, runner.sender);
 }
 
+/// Get the sender of the next transaction.
 public fun sender(runner: &mut TestRunner): address { runner.sender }
 
+/// Mint a SUI balance for testing.
 public fun mint(amount: u64): Balance<SUI> {
     balance::create_for_testing(amount * MIST_PER_SUI)
 }
 
+/// Destroy an object.
 public fun destroy<T>(v: T) {
     sui::test_utils::destroy(v);
 }
@@ -432,7 +447,7 @@ public fun advance_epoch_safe_mode(runner: &mut TestRunner) {
 
 /// Call the `request_add_stake` function on the system state.
 public fun stake_with(runner: &mut TestRunner, validator: address, amount: u64) {
-    let TestRunner { scenario, sender } = runner;
+    let TestRunner { scenario, sender, .. } = runner;
     scenario.next_tx(*sender);
     runner.system_tx!(|system, ctx| {
         system.request_add_stake(
@@ -449,7 +464,7 @@ public fun stake_with_and_take(
     validator: address,
     amount: u64,
 ): StakedSui {
-    let TestRunner { scenario, sender } = runner;
+    let TestRunner { scenario, sender, .. } = runner;
     let staked_sui;
     scenario.next_tx(*sender);
     runner.system_tx!(|system, ctx| {
