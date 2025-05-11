@@ -181,7 +181,7 @@ impl MoveType {
         &self,
         resolver: &PackageResolver,
     ) -> Result<Option<A::MoveTypeLayout>, Error> {
-        let Ok(tag) = self.native.as_type_tag() else {
+        let Ok(tag) = self.native.to_type_tag() else {
             return Ok(None);
         };
 
@@ -197,7 +197,7 @@ impl MoveType {
         &self,
         resolver: &PackageResolver,
     ) -> Result<Option<AbilitySet>, Error> {
-        let Ok(tag) = self.native.as_type_tag() else {
+        let Ok(tag) = self.native.to_type_tag() else {
             return Ok(None);
         };
 

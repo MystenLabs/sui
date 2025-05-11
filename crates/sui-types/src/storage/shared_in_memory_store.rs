@@ -3,7 +3,7 @@
 
 use super::error::Result;
 use super::ObjectStore;
-use crate::base_types::{EpochId, TransactionDigest};
+use crate::base_types::{EpochId, ExecutionData, TransactionDigest};
 use crate::committee::Committee;
 use crate::digests::{CheckpointContentsDigest, CheckpointDigest};
 use crate::effects::{TransactionEffects, TransactionEvents};
@@ -70,19 +70,8 @@ impl ReadStore for SharedInMemoryStore {
         sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
     ) -> Option<FullCheckpointContents> {
-        // First look to see if we saved the complete contents already.
-        let inner = self.inner();
-        let contents = sequence_number
-            .or_else(|| inner.get_sequence_number_by_contents_digest(digest))
-            .and_then(|seq_num| inner.full_checkpoint_contents.get(&seq_num).cloned());
-        if contents.is_some() {
-            return contents;
-        }
-
-        // Otherwise gather it from the individual components.
-        inner.get_checkpoint_contents(digest).and_then(|contents| {
-            FullCheckpointContents::from_checkpoint_contents(self, contents.to_owned())
-        })
+        self.inner()
+            .get_full_checkpoint_contents(sequence_number, digest)
     }
 
     fn get_committee(&self, epoch: EpochId) -> Option<Arc<Committee>> {
@@ -227,6 +216,39 @@ impl InMemoryStore {
         self.sequence_number_to_digest
             .get(&sequence_number)
             .and_then(|digest| self.get_checkpoint_by_digest(digest))
+    }
+
+    fn get_full_checkpoint_contents(
+        &self,
+        sequence_number: Option<CheckpointSequenceNumber>,
+        digest: &CheckpointContentsDigest,
+    ) -> Option<FullCheckpointContents> {
+        let contents = sequence_number
+            .or_else(|| self.get_sequence_number_by_contents_digest(digest))
+            .and_then(|seq_num| self.full_checkpoint_contents.get(&seq_num).cloned());
+        if contents.is_some() {
+            return contents;
+        }
+
+        let contents = self.get_checkpoint_contents(digest)?;
+
+        let mut transactions = Vec::with_capacity(contents.size());
+
+        for tx in contents.iter() {
+            if let (Some(t), Some(e)) = (
+                self.get_transaction_block(&tx.transaction),
+                self.get_transaction_effects(&tx.transaction),
+            ) {
+                transactions.push(ExecutionData::new((*t).clone().into_inner(), e.clone()))
+            } else {
+                return None;
+            }
+        }
+
+        Some(FullCheckpointContents::from_contents_and_execution_data(
+            contents.to_owned(),
+            transactions.into_iter(),
+        ))
     }
 
     pub fn get_sequence_number_by_contents_digest(

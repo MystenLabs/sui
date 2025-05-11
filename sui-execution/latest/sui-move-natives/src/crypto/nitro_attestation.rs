@@ -8,7 +8,7 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
     pop_arg,
-    values::{Struct, Value, Vector, VectorRef},
+    values::{Struct, Value, Vector, VectorRef, VectorSpecialization},
 };
 use std::collections::VecDeque;
 use sui_types::nitro_attestation::{parse_nitro_attestation, verify_nitro_attestation};
@@ -119,16 +119,15 @@ pub fn load_nitro_attestation_internal(
 
 // Build an Option<vector<u8>> value
 fn to_option_vector_u8(value: Option<Vec<u8>>) -> PartialVMResult<Value> {
-    let vector_u8_type = Type::Vector(Box::new(Type::U8));
     match value {
         // Some(<vector<u8>>) = { vector[ <vector<u8>> ] }
         Some(vec) => Ok(Value::struct_(Struct::pack(vec![Vector::pack(
-            &vector_u8_type,
+            VectorSpecialization::Container,
             vec![Value::vector_u8(vec)],
         )?]))),
         // None = { vector[ ] }
         None => Ok(Value::struct_(Struct::pack(vec![Vector::empty(
-            &vector_u8_type,
+            VectorSpecialization::Container,
         )?]))),
     }
 }
@@ -148,5 +147,5 @@ fn to_indexed_struct(pcrs: Vec<Vec<u8>>) -> PartialVMResult<Value> {
             Value::vector_u8(pcr.to_vec()),
         ])));
     }
-    Ok(Value::vector_for_testing_only(indexed_struct))
+    Vector::pack(VectorSpecialization::Container, indexed_struct)
 }
