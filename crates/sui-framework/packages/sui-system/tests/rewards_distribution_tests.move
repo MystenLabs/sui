@@ -6,12 +6,6 @@ module sui_system::rewards_distribution_tests;
 
 use std::unit_test::assert_eq;
 use sui::address;
-use sui::balance;
-use sui::test_scenario;
-use sui_system::governance_test_utils::{
-    create_validator_for_testing,
-    create_sui_system_state_for_testing
-};
 use sui_system::sui_system::SuiSystemState;
 use sui_system::test_runner;
 use sui_system::validator_builder;
@@ -620,197 +614,143 @@ fun uncapped_rewards() {
 }
 
 #[test]
-// TODO: come back to me once safe mode emulation is implemented
 fun stake_subsidy_with_safe_mode_epoch_562_to_563() {
-    set_up_sui_system_state_with_big_amounts();
-
-    let mut test = test_scenario::begin(VALIDATOR_ADDR_1);
-    let mut sui_system = test.take_shared<SuiSystemState>();
-    let ctx = test.ctx();
-    // mimic state during epoch 562, if we're in safe mode since the 560 -> 561 epoch change
-    let start_epoch: u64 = 562;
-    let start_distribution_counter = 540;
+    let epoch_duration = 1000;
     let epoch_start_time = 100000000000;
-    let epoch_duration = sui_system.inner_mut_for_testing().epoch_duration_ms();
+    let start_distribution_counter = 540;
+    let mut runner = test_runner::new()
+        .validators_count(4)
+        .validators_initial_stake(1_000_000_000)
+        .sui_supply_amount(1_000_000_000)
+        .stake_distribution_counter(start_distribution_counter)
+        .epoch_duration(epoch_duration)
+        .start_epoch(562)
+        .build();
 
-    // increment epoch number (safe mode emulation)
-    start_epoch.do!(|_| ctx.increment_epoch_number());
-    sui_system.set_epoch_for_testing(start_epoch);
-    sui_system.set_stake_subsidy_distribution_counter(start_distribution_counter);
-
-    assert!(ctx.epoch() == start_epoch);
-    assert!(ctx.epoch() == sui_system.epoch());
-    assert!(sui_system.get_stake_subsidy_distribution_counter() == start_distribution_counter);
+    // mimic state during epoch 562, if we're in safe mode since the 560 -> 561 epoch change
+    runner.system_tx!(|system, ctx| {
+        assert_eq!(ctx.epoch(), 562);
+        assert_eq!(system.epoch(), 562);
+        assert_eq!(system.get_stake_subsidy_distribution_counter(), start_distribution_counter);
+    });
 
     // perform advance epoch
-    sui_system
-        .inner_mut_for_testing()
-        .advance_epoch(
-            start_epoch + 1,
-            65,
-            balance::zero(),
-            balance::zero(),
-            0,
-            0,
-            0,
-            0,
-            epoch_start_time,
-            ctx,
-        )
-        .destroy_for_testing(); // balance returned from `advance_epoch`
-    ctx.increment_epoch_number();
+    let opts = runner.advance_epoch_opts().protocol_version(65).epoch_start_time(epoch_start_time);
+    runner.advance_epoch(option::some(opts)).destroy_for_testing();
 
     // should distribute 3 epochs worth of subsidies: 560, 561, 562
-    assert_eq!(sui_system.get_stake_subsidy_distribution_counter(), start_distribution_counter + 3);
-    check_distribution_counter_invariant(&mut sui_system, ctx);
+    runner.system_tx!(|system, ctx| {
+        assert_eq!(ctx.epoch(), 563);
+        assert_eq!(system.epoch(), 563);
+        assert_eq!(system.get_stake_subsidy_distribution_counter(), start_distribution_counter + 3);
+        check_distribution_counter_invariant(system, ctx);
+    });
 
     // ensure that next epoch change only distributes one epoch's worth
-    sui_system
-        .inner_mut_for_testing()
-        .advance_epoch(
-            start_epoch + 2,
-            65,
-            balance::zero(),
-            balance::zero(),
-            0,
-            0,
-            0,
-            0,
-            epoch_start_time + epoch_duration,
-            ctx,
-        )
-        .destroy_for_testing(); // balance returned from `advance_epoch`
-    ctx.increment_epoch_number();
+    let opts = runner
+        .advance_epoch_opts()
+        .protocol_version(65)
+        .epoch_start_time(epoch_start_time + epoch_duration);
+    runner.advance_epoch(option::some(opts)).destroy_for_testing();
 
     // should distribute 1 epoch's worth of subsidies: 563 only
-    assert_eq!(sui_system.get_stake_subsidy_distribution_counter(), start_distribution_counter + 4);
-    check_distribution_counter_invariant(&mut sui_system, ctx);
+    runner.system_tx!(|system, ctx| {
+        assert_eq!(ctx.epoch(), 564);
+        assert_eq!(system.epoch(), 564);
+        assert_eq!(system.get_stake_subsidy_distribution_counter(), start_distribution_counter + 4);
+        check_distribution_counter_invariant(system, ctx);
+    });
 
-    test_scenario::return_shared(sui_system);
-    test.end();
+    runner.finish();
 }
 
 #[test]
-// TODO: come back to me once safe mode emulation is implemented
-fun stake_subsidy_with_safe_mode_epoch_563_to_564() {
-    set_up_sui_system_state_with_big_amounts();
-
-    let mut test = test_scenario::begin(VALIDATOR_ADDR_1);
-    let mut sui_system = test.take_shared<SuiSystemState>();
-    let ctx = test.ctx();
-    // mimic state during epoch 563, if we're in safe mode since the 560 -> 561 epoch change
-    let start_epoch: u64 = 563;
-    let start_distribution_counter = 540;
+fun stake_subsidy_with_safe_mode_epoch_562_to_563_2() {
+    let epoch_duration = 1000;
     let epoch_start_time = 100000000000;
-    let epoch_duration = sui_system.inner_mut_for_testing().epoch_duration_ms();
+    let start_distribution_counter = 540;
+    let mut runner = test_runner::new()
+        .validators_count(4)
+        .validators_initial_stake(1_000_000_000)
+        .sui_supply_amount(1_000_000_000)
+        .stake_distribution_counter(start_distribution_counter)
+        .epoch_duration(epoch_duration)
+        .start_epoch(563)
+        .build();
 
-    // increment epoch number (safe mode emulation)
-    start_epoch.do!(|_| ctx.increment_epoch_number());
-    sui_system.set_epoch_for_testing(start_epoch);
-    sui_system.set_stake_subsidy_distribution_counter(start_distribution_counter);
-
-    assert!(ctx.epoch() == start_epoch);
-    assert!(ctx.epoch() == sui_system.epoch());
-    assert!(sui_system.get_stake_subsidy_distribution_counter() == start_distribution_counter);
+    // check initial state
+    runner.system_tx!(|system, ctx| {
+        assert_eq!(ctx.epoch(), 563);
+        assert_eq!(system.epoch(), 563);
+        assert_eq!(system.get_stake_subsidy_distribution_counter(), start_distribution_counter);
+    });
 
     // perform advance epoch
-    sui_system
-        .inner_mut_for_testing()
-        .advance_epoch(
-            start_epoch + 1,
-            65,
-            balance::zero(),
-            balance::zero(),
-            0,
-            0,
-            0,
-            0,
-            epoch_start_time,
-            ctx,
-        )
-        .destroy_for_testing(); // balance returned from `advance_epoch`
-    ctx.increment_epoch_number();
+    let opts = runner.advance_epoch_opts().protocol_version(65).epoch_start_time(epoch_start_time);
+    runner.advance_epoch(option::some(opts)).destroy_for_testing();
 
     // should distribute 4 epochs worth of subsidies: 560, 561, 562, 563
-    assert_eq!(sui_system.get_stake_subsidy_distribution_counter(), start_distribution_counter + 4);
-    check_distribution_counter_invariant(&mut sui_system, ctx);
+    runner.system_tx!(|system, ctx| {
+        assert_eq!(ctx.epoch(), 564);
+        assert_eq!(system.epoch(), 564);
+        assert_eq!(system.get_stake_subsidy_distribution_counter(), start_distribution_counter + 4);
+        check_distribution_counter_invariant(system, ctx);
+    });
 
     // ensure that next epoch change only distributes one epoch's worth
-    sui_system
-        .inner_mut_for_testing()
-        .advance_epoch(
-            start_epoch + 2,
-            65,
-            balance::zero(),
-            balance::zero(),
-            0,
-            0,
-            0,
-            0,
-            epoch_start_time + epoch_duration,
-            ctx,
-        )
-        .destroy_for_testing(); // balance returned from `advance_epoch`
-    ctx.increment_epoch_number();
+    let opts = runner
+        .advance_epoch_opts()
+        .protocol_version(65)
+        .epoch_start_time(epoch_start_time + epoch_duration);
+    runner.advance_epoch(option::some(opts)).destroy_for_testing();
 
-    // should distribute 1 epoch's worth of subsidies
-    assert_eq!(sui_system.get_stake_subsidy_distribution_counter(), start_distribution_counter + 5);
-    check_distribution_counter_invariant(&mut sui_system, ctx);
+    // should distribute 1 epoch's worth of subsidies: 564 only
+    runner.system_tx!(|system, ctx| {
+        assert_eq!(ctx.epoch(), 565);
+        assert_eq!(system.epoch(), 565);
+        assert_eq!(system.get_stake_subsidy_distribution_counter(), start_distribution_counter + 5);
+        check_distribution_counter_invariant(system, ctx);
+    });
 
-    test_scenario::return_shared(sui_system);
-    test.end();
+    runner.finish();
 }
 
 #[test]
 // TODO: come back to me once safe mode emulation is implemented
-// Test that the fix for the subsidy distribution doesn't affect testnet,
-// where the distribution has no epoch delay, and the condition could result
-// in arithmetic error.
 fun stake_subsidy_with_safe_mode_testnet() {
-    set_up_sui_system_state_with_big_amounts();
+    let mut runner = test_runner::new()
+        .validators_count(4)
+        .validators_initial_stake(1_000_000_000)
+        .sui_supply_amount(1_000_000_000)
+        .stake_distribution_counter(540)
+        .epoch_duration(1000)
+        .start_epoch(540)
+        .build();
 
-    let mut test = test_scenario::begin(VALIDATOR_ADDR_1);
-    let mut sui_system = test.take_shared<SuiSystemState>();
-
-    let ctx = test.ctx();
-
-    // increment epoch number (safe mode emulation)
-    540u64.do!(|_| ctx.increment_epoch_number());
-    sui_system.set_epoch_for_testing(540);
-    sui_system.set_stake_subsidy_distribution_counter(540);
-
-    assert!(ctx.epoch() == 540);
-    assert!(sui_system.get_stake_subsidy_distribution_counter() == 540);
+    // check initial state
+    runner.system_tx!(|system, ctx| {
+        assert_eq!(ctx.epoch(), 540);
+        assert_eq!(system.epoch(), 540);
+        assert_eq!(system.get_stake_subsidy_distribution_counter(), 540);
+    });
 
     // perform advance epoch
-    sui_system
-        .inner_mut_for_testing()
-        .advance_epoch(541, 65, balance::zero(), balance::zero(), 0, 0, 0, 0, 100000000000, ctx)
-        .destroy_for_testing(); // balance returned from `advance_epoch`
+    let opts = runner.advance_epoch_opts().protocol_version(65).epoch_start_time(100000000000);
+    runner.advance_epoch(option::some(opts)).destroy_for_testing();
 
-    assert_eq!(sui_system.get_stake_subsidy_distribution_counter(), 541);
+    // check that the distribution counter is incremented
+    runner.system_tx!(|system, ctx| {
+        assert_eq!(ctx.epoch(), 541);
+        assert_eq!(system.epoch(), 541);
+        assert_eq!(system.get_stake_subsidy_distribution_counter(), 541);
+    });
 
-    test_scenario::return_shared(sui_system);
-    test.end();
+    runner.finish();
 }
 
-fun set_up_sui_system_state_with_big_amounts() {
-    let mut scenario_val = test_scenario::begin(@0x0);
-    let scenario = &mut scenario_val;
-    let ctx = scenario.ctx();
-
-    let validators = vector[
-        create_validator_for_testing(VALIDATOR_ADDR_1, 100000000, ctx),
-        create_validator_for_testing(VALIDATOR_ADDR_2, 200000000, ctx),
-        create_validator_for_testing(VALIDATOR_ADDR_3, 300000000, ctx),
-        create_validator_for_testing(VALIDATOR_ADDR_4, 400000000, ctx),
-    ];
-    create_sui_system_state_for_testing(validators, 1000000000, 0, ctx);
-    scenario_val.end();
-}
-
+// TODO: potentially remove and inline this function.
 fun check_distribution_counter_invariant(system: &mut SuiSystemState, ctx: &TxContext) {
-    assert!(ctx.epoch() == system.epoch());
+    assert_eq!(ctx.epoch(), system.epoch());
     // first subsidy distribution was at epoch 20, so counter should always be ahead by 20
     assert_eq!(system.get_stake_subsidy_distribution_counter() + 20, ctx.epoch());
 }
