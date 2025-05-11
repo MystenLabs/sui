@@ -33,6 +33,7 @@ public struct TestRunnerBuilder {
     stake_distribution_counter: Option<u64>,
     start_epoch: Option<u64>,
     epoch_duration: Option<u64>,
+    low_stake_grace_period: Option<u64>,
 }
 
 public fun new(): TestRunnerBuilder {
@@ -46,6 +47,7 @@ public fun new(): TestRunnerBuilder {
         stake_distribution_counter: option::none(),
         epoch_duration: option::none(),
         start_epoch: option::none(),
+        low_stake_grace_period: option::none(),
     }
 }
 
@@ -62,6 +64,7 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
         stake_distribution_counter,
         epoch_duration,
         start_epoch,
+        low_stake_grace_period,
     } = builder;
 
     let validators = validators.destroy_or!({
@@ -76,10 +79,10 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
         epoch_duration.destroy_or!(42), // epoch_duration_ms, doesn't matter what number we put here
         0, // stake_subsidy_start_epoch
         150, // max_validator_count
-        1, // min_validator_joining_stake
-        1, // validator_low_stake_threshold
-        0, // validator_very_low_stake_threshold
-        7, // validator_low_stake_grace_period
+        1, // DEPRECATED: min_validator_joining_stake
+        1, // DEPRECATED: validator_low_stake_threshold
+        0, // DEPRECATED: validator_very_low_stake_threshold
+        low_stake_grace_period.destroy_or!(7), // validator_low_stake_grace_period
         scenario.ctx(),
     );
 
@@ -350,6 +353,9 @@ public macro fun system_tx($runner: &mut TestRunner, $f: |&mut SuiSystemState, &
 /// Advance the epoch of the system state. Takes an optional `AdvanceEpochOptions` struct
 /// to configure the epoch advance. Returns the storage rebate balance.
 ///
+/// Switches to 0x0 for the sender of the `advance_epoch` transaction and then
+/// switches back to the sender of the TestRunner.
+///
 /// ```rust
 /// // default, no rewards
 /// runner.advance_epoch(option::none()).destroy_for_testing();
@@ -406,6 +412,18 @@ public fun advance_epoch(
     runner.scenario.next_epoch(@0);
     runner.set_sender(sender);
     storage_rebate_balance
+}
+
+/// Simulates safe mode by changing the epoch value in the system object without
+/// triggering the epoch change logic.
+public fun advance_epoch_safe_mode(runner: &mut TestRunner) {
+    let sender = runner.sender;
+    runner.set_sender(@0);
+    runner.system_tx!(|system, ctx| {
+        system.set_epoch_for_testing(ctx.epoch() + 1);
+    });
+    runner.scenario.next_epoch(@0);
+    runner.set_sender(sender);
 }
 
 /// Call the `request_add_stake` function on the system state.
