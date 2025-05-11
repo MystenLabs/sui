@@ -531,15 +531,15 @@ fun convert_to_fungible_staked_sui_and_redeem(stake: u16) {
 
     // Convert to fungible staked SUI.
     let fungible_staked_sui;
-    runner.system_tx!(|system, _| {
-        fungible_staked_sui = system.convert_to_fungible_staked_sui(staked_sui, runner.ctx());
+    runner.system_tx!(|system, ctx| {
+        fungible_staked_sui = system.convert_to_fungible_staked_sui(staked_sui, ctx);
     });
 
     assert_eq!(fungible_staked_sui.value(), stake_amount * MIST_PER_SUI);
 
     let sui;
-    runner.system_tx!(|system, _| {
-        sui = system.redeem_fungible_staked_sui(fungible_staked_sui, runner.ctx());
+    runner.system_tx!(|system, ctx| {
+        sui = system.redeem_fungible_staked_sui(fungible_staked_sui, ctx);
     });
 
     assert_eq!(sui.destroy_for_testing(), stake_amount * MIST_PER_SUI);

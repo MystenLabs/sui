@@ -228,9 +228,9 @@ fun remove_stake_post_active_flow(should_distribute_rewards: bool) {
     runner.set_sender(STAKER_ADDR_1);
     runner.owned_tx!<StakedSui>(|stake| {
         assert_eq!(stake.amount(), 100 * MIST_PER_SUI);
-        runner.system_tx!(|system, _| {
+        runner.system_tx!(|system, ctx| {
             assert!(!system.validators().is_active_validator_by_sui_address(VALIDATOR_ADDR_1));
-            system.request_withdraw_stake(stake, runner.ctx());
+            system.request_withdraw_stake(stake, ctx);
         });
     });
 
@@ -277,9 +277,9 @@ fun earns_rewards_at_last_epoch() {
     runner.set_sender(STAKER_ADDR_1);
     runner.owned_tx!<StakedSui>(|stake| {
         assert_eq!(stake.amount(), 100 * MIST_PER_SUI);
-        runner.system_tx!(|system, _| {
+        runner.system_tx!(|system, ctx| {
             // Make sure stake withdrawal happens
-            system.request_withdraw_stake(stake, runner.ctx());
+            system.request_withdraw_stake(stake, ctx);
         });
     });
 

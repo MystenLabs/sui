@@ -341,13 +341,17 @@ public macro fun owned_tx<$Object>($runner: &mut TestRunner, $f: |$Object|) {
 }
 
 /// Run a transaction on the system state.
-public macro fun system_tx($runner: &mut TestRunner, $f: |&mut SuiSystemState, &mut TxContext|) {
+public macro fun system_tx(
+    $runner: &mut TestRunner,
+    $f: |&mut SuiSystemState, &mut TxContext|,
+): &mut TestRunner {
     let sender = sender($runner);
     let scenario = scenario_mut($runner);
     scenario.next_tx(sender);
     let mut system_state = scenario.take_shared<SuiSystemState>();
     $f(&mut system_state, scenario.ctx());
     test_scenario::return_shared(system_state);
+    $runner
 }
 
 /// Advance the epoch of the system state. Takes an optional `AdvanceEpochOptions` struct
