@@ -181,6 +181,17 @@ const guides = [
 					// 'guides/developer/app-examples/auction',
 				],
 			},
+			{
+				type: 'category',
+				label: 'Community Solutions',
+				link: {
+					type: 'doc',
+					id: 'guides/developer/integrations',
+				},
+				items: [
+					'guides/developer/integrations/decentralized-web',
+				],
+			},
 			'guides/developer/starter-templates',
 			'guides/developer/zklogin-onboarding',
 			'guides/developer/dev-cheat-sheet',
