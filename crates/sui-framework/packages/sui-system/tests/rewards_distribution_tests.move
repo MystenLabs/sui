@@ -295,18 +295,6 @@ fun validator_commission() {
     runner.finish();
 }
 
-fun assert_stake_rewards_for_addresses(
-    runner: &mut test_runner::TestRunner,
-    validator_addresses: vector<address>,
-    expected_amounts: vector<u64>,
-) {
-    validator_addresses.zip_do!(expected_amounts, |validator_address, expected_amount| {
-        let sum_rewards = runner.set_sender(validator_address).staking_rewards_balance();
-
-        assert_eq!(sum_rewards, expected_amount);
-    });
-}
-
 #[test]
 fun rewards_slashing() {
     let mut runner = test_runner::new()
@@ -754,4 +742,16 @@ fun check_distribution_counter_invariant(system: &mut SuiSystemState, ctx: &TxCo
     assert_eq!(ctx.epoch(), system.epoch());
     // first subsidy distribution was at epoch 20, so counter should always be ahead by 20
     assert_eq!(system.get_stake_subsidy_distribution_counter() + 20, ctx.epoch());
+}
+
+/// Utility function to assert that the stake rewards for a list of addresses are as expected.
+fun assert_stake_rewards_for_addresses(
+    runner: &mut test_runner::TestRunner,
+    validator_addresses: vector<address>,
+    expected_amounts: vector<u64>,
+) {
+    validator_addresses.zip_do!(expected_amounts, |validator_address, expected_amount| {
+        let sum_rewards = runner.set_sender(validator_address).staking_rewards_balance();
+        assert_eq!(sum_rewards, expected_amount);
+    });
 }
