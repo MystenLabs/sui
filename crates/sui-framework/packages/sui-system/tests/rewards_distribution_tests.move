@@ -325,10 +325,9 @@ fun rewards_slashing() {
     runner.set_sender(STAKER_ADDR_2).stake_with(VALIDATOR_ADDR_2, 100);
     runner.advance_epoch(option::none()).destroy_for_testing();
 
-    runner.set_sender(VALIDATOR_ADDR_1).report_validator(VALIDATOR_ADDR_2);
-    runner.set_sender(VALIDATOR_ADDR_3).report_validator(VALIDATOR_ADDR_2);
-    runner.set_sender(VALIDATOR_ADDR_4).report_validator(VALIDATOR_ADDR_2);
-    runner.set_sender(VALIDATOR_ADDR_3).report_validator(VALIDATOR_ADDR_1);
+    vector[VALIDATOR_ADDR_1, VALIDATOR_ADDR_3, VALIDATOR_ADDR_4].do!(|validator_address| {
+        runner.set_sender(validator_address).report_validator(VALIDATOR_ADDR_2);
+    });
 
     let opts = runner.advance_epoch_opts().computation_charge(3600).reward_slashing_rate(1000);
     runner.advance_epoch(option::some(opts)).destroy_for_testing();
@@ -372,9 +371,9 @@ fun entire_rewards_slashing() {
     runner.advance_epoch(option::none()).destroy_for_testing();
 
     // validator_2 is reported by 3 other validators, so 75% of total stake.
-    runner.set_sender(VALIDATOR_ADDR_1).report_validator(VALIDATOR_ADDR_2);
-    runner.set_sender(VALIDATOR_ADDR_3).report_validator(VALIDATOR_ADDR_2);
-    runner.set_sender(VALIDATOR_ADDR_4).report_validator(VALIDATOR_ADDR_2);
+    vector[VALIDATOR_ADDR_1, VALIDATOR_ADDR_3, VALIDATOR_ADDR_4].do!(|validator_address| {
+        runner.set_sender(validator_address).report_validator(VALIDATOR_ADDR_2);
+    });
 
     // 3600 SUI of total rewards, 100% reward slashing.
     // So validator_2 is the only one whose rewards should get slashed.
@@ -430,9 +429,9 @@ fun rewards_slashing_with_storage_fund() {
     runner.advance_epoch(option::none()).destroy_for_testing();
 
     // validator_4 is reported by 3 other validators, so 75% of total stake.
-    runner.set_sender(VALIDATOR_ADDR_1).report_validator(VALIDATOR_ADDR_4);
-    runner.set_sender(VALIDATOR_ADDR_2).report_validator(VALIDATOR_ADDR_4);
-    runner.set_sender(VALIDATOR_ADDR_3).report_validator(VALIDATOR_ADDR_4);
+    vector[VALIDATOR_ADDR_1, VALIDATOR_ADDR_2, VALIDATOR_ADDR_3].do!(|validator_address| {
+        runner.set_sender(validator_address).report_validator(VALIDATOR_ADDR_4);
+    });
 
     // 1000 SUI of storage rewards, 1500 SUI of computation rewards, 50% slashing threshold
     // and 20% slashing rate
@@ -482,25 +481,14 @@ fun everyone_slashed() {
 
     let validators = runner.genesis_validator_addresses();
 
-    // Report all validators to validator 4.
-    runner.set_sender(VALIDATOR_ADDR_1).report_validator(VALIDATOR_ADDR_4);
-    runner.set_sender(VALIDATOR_ADDR_2).report_validator(VALIDATOR_ADDR_4);
-    runner.set_sender(VALIDATOR_ADDR_3).report_validator(VALIDATOR_ADDR_4);
-
-    // Report all validators to validator 3.
-    runner.set_sender(VALIDATOR_ADDR_1).report_validator(VALIDATOR_ADDR_3);
-    runner.set_sender(VALIDATOR_ADDR_2).report_validator(VALIDATOR_ADDR_3);
-    runner.set_sender(VALIDATOR_ADDR_4).report_validator(VALIDATOR_ADDR_3);
-
-    // Report all validators to validator 2.
-    runner.set_sender(VALIDATOR_ADDR_1).report_validator(VALIDATOR_ADDR_2);
-    runner.set_sender(VALIDATOR_ADDR_3).report_validator(VALIDATOR_ADDR_2);
-    runner.set_sender(VALIDATOR_ADDR_4).report_validator(VALIDATOR_ADDR_2);
-
-    // Report all validators to validator 1.
-    runner.set_sender(VALIDATOR_ADDR_2).report_validator(VALIDATOR_ADDR_1);
-    runner.set_sender(VALIDATOR_ADDR_3).report_validator(VALIDATOR_ADDR_1);
-    runner.set_sender(VALIDATOR_ADDR_4).report_validator(VALIDATOR_ADDR_1);
+    // Each validator reports all other validators but themselves
+    validators.do!(|validator_address| {
+        validators.do!(|other_validator_address| {
+            if (other_validator_address != validator_address) {
+                runner.set_sender(validator_address).report_validator(other_validator_address);
+            }
+        });
+    });
 
     let opts = runner
         .advance_epoch_opts()
@@ -602,7 +590,8 @@ fun mul_rewards_withdraws_at_same_epoch() {
 
 #[test]
 fun uncapped_rewards() {
-    let validators = vector::tabulate!(20, |i| {
+    let num_validators = 20;
+    let validators = vector::tabulate!(num_validators, |i| {
         validator_builder::new()
             .initial_stake(481 + i * 2)
             .sui_address(address::from_u256(i as u256))
@@ -611,12 +600,12 @@ fun uncapped_rewards() {
     let mut runner = test_runner::new().sui_supply_amount(1000).validators(validators).build();
 
     // Each validator's stake gets doubled.
-    let opts = runner.advance_epoch_opts().computation_charge(10000);
+    let opts = runner.advance_epoch_opts().computation_charge(10_000);
     runner.advance_epoch(option::some(opts)).destroy_for_testing();
 
     // Check that each validator has the correct amount of SUI in their stake pool.
     runner.system_tx!(|system, _| {
-        20u64.do!(|i| {
+        num_validators.do!(|i| {
             let addr = address::from_u256(i as u256);
             assert_eq!(system.validator_stake_amount(addr), (962 + i * 4) * MIST_PER_SUI);
         });
