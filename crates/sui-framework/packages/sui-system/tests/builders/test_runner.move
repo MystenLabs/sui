@@ -548,6 +548,31 @@ public fun sui_balance(runner: &mut TestRunner): u64 {
     })
 }
 
+/// Get the sum of the StakedSui objects' principal and the rewards for these objects.
+public fun staking_rewards_balance(runner: &mut TestRunner): u64 {
+    let sender = runner.sender;
+    let scenario = runner.scenario_mut();
+    let mut system = scenario.take_shared<SuiSystemState>();
+    let current_epoch = scenario.ctx().epoch();
+
+    scenario.next_tx(sender);
+    let total_balance = scenario.ids_for_sender<StakedSui>().fold!(0, |mut sum, staked_sui_id| {
+        let staked_sui = scenario.take_from_sender_by_id<StakedSui>(staked_sui_id);
+        let validator = system.validator_address_by_pool_id(&staked_sui.pool_id());
+        let rewards = system
+            .active_validator_by_address(validator)
+            .get_staking_pool_ref()
+            .calculate_rewards(&staked_sui, current_epoch);
+
+        sum = sum + rewards;
+        scenario.return_to_sender(staked_sui);
+        sum
+    });
+
+    test_scenario::return_shared(system);
+    total_balance
+}
+
 #[test]
 fun test_runner_builder() {
     let mut runner = Self::new().validators_count(4).validators_initial_stake(1_000_000).build();

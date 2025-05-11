@@ -21,10 +21,10 @@ const VALIDATOR_ADDR_2: address = @02;
 const VALIDATOR_ADDR_3: address = @03;
 const VALIDATOR_ADDR_4: address = @04;
 
-const STAKER_ADDR_1: address = @0x42;
-const STAKER_ADDR_2: address = @0x43;
-const STAKER_ADDR_3: address = @0x44;
-const STAKER_ADDR_4: address = @0x45;
+const STAKER_ADDR_1: address = @42;
+const STAKER_ADDR_2: address = @43;
+const STAKER_ADDR_3: address = @44;
+const STAKER_ADDR_4: address = @45;
 
 const MIST_PER_SUI: u64 = 1_000_000_000;
 
@@ -117,12 +117,24 @@ fun test_stake_rewards() {
         assert_eq!(system.validator_stake_amount(VALIDATOR_ADDR_2), 300 * MIST_PER_SUI);
         assert_eq!(system.validator_stake_amount(VALIDATOR_ADDR_3), 300 * MIST_PER_SUI);
         assert_eq!(system.validator_stake_amount(VALIDATOR_ADDR_4), 400 * MIST_PER_SUI);
-
-        // TODO: maybe check self stake amount by subtracting the rewards and extra stake from total
     });
+
+    // check total stake and rewards for each validator
+    assert_validator_self_stake_amounts(
+        &mut runner,
+        vector[VALIDATOR_ADDR_1, VALIDATOR_ADDR_2, VALIDATOR_ADDR_3, VALIDATOR_ADDR_4],
+        vector[100 * MIST_PER_SUI, 200 * MIST_PER_SUI, 300 * MIST_PER_SUI, 400 * MIST_PER_SUI],
+    );
 
     let opts = runner.advance_epoch_opts().computation_charge(120);
     runner.advance_epoch(option::some(opts)).destroy_for_testing();
+
+    // check total stake and rewards for each validator
+    assert_validator_self_stake_amounts(
+        &mut runner,
+        vector[VALIDATOR_ADDR_1, VALIDATOR_ADDR_2, VALIDATOR_ADDR_3, VALIDATOR_ADDR_4],
+        vector[110 * MIST_PER_SUI, 220 * MIST_PER_SUI, 330 * MIST_PER_SUI, 430 * MIST_PER_SUI],
+    );
 
     runner.set_sender(STAKER_ADDR_1).unstake(0);
     runner.set_sender(STAKER_ADDR_2).stake_with(VALIDATOR_ADDR_1, 600);
@@ -130,6 +142,12 @@ fun test_stake_rewards() {
     // Each pool gets 30 SUI.
     let opts = runner.advance_epoch_opts().computation_charge(120);
     runner.advance_epoch(option::some(opts)).destroy_for_testing();
+
+    assert_validator_self_stake_amounts(
+        &mut runner,
+        vector[VALIDATOR_ADDR_1, VALIDATOR_ADDR_2, VALIDATOR_ADDR_3, VALIDATOR_ADDR_4],
+        vector[140 * MIST_PER_SUI, 240 * MIST_PER_SUI, 360 * MIST_PER_SUI, 460 * MIST_PER_SUI],
+    );
 
     // staker 1 receives only 20 SUI of rewards, not 40 since we are using pre-epoch exchange rate.
     assert_eq!(runner.set_sender(STAKER_ADDR_1).sui_balance(), 220 * MIST_PER_SUI);
@@ -232,10 +250,11 @@ fun test_validator_commission() {
     //     vector[115 * MIST_PER_SUI, 108 * MIST_PER_SUI, 0, 0],
     //     scenario,
     // );
+
     // assert_validator_self_stake_amounts(
-    //     validator_addrs(),
+    //     &mut runner,
+    //     vector[VALIDATOR_ADDR_1, VALIDATOR_ADDR_2, VALIDATOR_ADDR_3, VALIDATOR_ADDR_4],
     //     vector[115 * MIST_PER_SUI, 222 * MIST_PER_SUI, 330 * MIST_PER_SUI, 430 * MIST_PER_SUI],
-    //     scenario,
     // );
 
     runner.set_sender(VALIDATOR_ADDR_1).system_tx!(|system, ctx| {
@@ -263,12 +282,26 @@ fun test_validator_commission() {
     //     scenario,
     // );
     // assert_validator_self_stake_amounts(
-    //     validator_addrs(),
+    //     &mut runner,
+    //     vector[VALIDATOR_ADDR_1, VALIDATOR_ADDR_2, VALIDATOR_ADDR_3, VALIDATOR_ADDR_4],
     //     vector[148 * MIST_PER_SUI, 266290909091, 390 * MIST_PER_SUI, 490 * MIST_PER_SUI],
-    //     scenario,
     // );
 
     runner.finish();
+}
+
+fun assert_validator_self_stake_amounts(
+    runner: &mut test_runner::TestRunner,
+    validator_addresses: vector<address>,
+    expected_amounts: vector<u64>,
+) {
+    validator_addresses.zip_do!(expected_amounts, |validator_address, expected_amount| {
+        let sum_rewards = runner
+            .set_sender(validator_address)
+            .staking_rewards_balance();
+
+        assert_eq!(sum_rewards, expected_amount);
+    });
 }
 
 #[test]
