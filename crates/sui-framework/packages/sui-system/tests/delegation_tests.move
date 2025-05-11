@@ -18,19 +18,19 @@ const STAKER_ADDR_1: address = @42;
 const STAKER_ADDR_2: address = @43;
 const STAKER_ADDR_3: address = @44;
 
-const NEW_VALIDATOR_ADDR: address =
-    @0x1a4623343cd42be47d67314fce0ad042f3c82685544bc91d8c11d24e74ba7357;
-
+// prettier-ignore
+const NEW_VALIDATOR_ADDR: address = @0x1a4623343cd42be47d67314fce0ad042f3c82685544bc91d8c11d24e74ba7357;
 const MIST_PER_SUI: u64 = 1_000_000_000;
 
 #[test]
+// Scenario:
+// 1. Stake 60 SUI to VALIDATOR_ADDR_1
+// 2. Split the stake into 20 and 40
+// 3. Join the 20 and 40 back together
+// 4. Check that the stake is 60 again
 fun split_join_staked_sui() {
-    let mut runner = test_runner::new()
-        .validators(vector[
-            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1),
-            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_2),
-        ])
-        .build();
+    let validator = validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1);
+    let mut runner = test_runner::new().validators(vector[validator]).build();
 
     runner.set_sender(STAKER_ADDR_1).stake_with(VALIDATOR_ADDR_1, 60);
 
@@ -53,17 +53,18 @@ fun split_join_staked_sui() {
         runner.keep(stake_1);
     });
 
+    runner.owned_tx!<StakedSui>(|stake| {
+        assert_eq!(stake.amount(), 60 * MIST_PER_SUI);
+        runner.keep(stake);
+    });
+
     runner.finish();
 }
 
 #[test, expected_failure(abort_code = staking_pool::EIncompatibleStakedSui)]
 fun join_different_epochs() {
-    let mut runner = test_runner::new()
-        .validators(vector[
-            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1),
-            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_2),
-        ])
-        .build();
+    let validator = validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1);
+    let mut runner = test_runner::new().validators(vector[validator]).build();
 
     // stake 1
     runner.set_sender(STAKER_ADDR_1).stake_with(VALIDATOR_ADDR_1, 60);
@@ -84,12 +85,8 @@ fun join_different_epochs() {
 
 #[test, expected_failure(abort_code = staking_pool::EStakedSuiBelowThreshold)]
 fun split_below_threshold() {
-    let mut runner = test_runner::new()
-        .validators(vector[
-            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1),
-            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_2),
-        ])
-        .build();
+    let validator = validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1);
+    let mut runner = test_runner::new().validators(vector[validator]).build();
 
     // Stake 2 SUI to the validator.
     runner.set_sender(STAKER_ADDR_1).stake_with(VALIDATOR_ADDR_1, 2);
@@ -103,12 +100,8 @@ fun split_below_threshold() {
 
 #[test, expected_failure(abort_code = staking_pool::EStakedSuiBelowThreshold)]
 fun split_nonentry_below_threshold() {
-    let mut runner = test_runner::new()
-        .validators(vector[
-            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1),
-            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_2),
-        ])
-        .build();
+    let validator = validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1);
+    let mut runner = test_runner::new().validators(vector[validator]).build();
 
     // Stake 2 SUI to the validator.
     runner.set_sender(STAKER_ADDR_1).stake_with(VALIDATOR_ADDR_1, 2);
@@ -252,7 +245,7 @@ fun earns_rewards_at_last_epoch() {
     let mut runner = test_runner::new()
         .validators(vector[
             validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1),
-            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_2),
+            validator_builder::new().initial_stake(100),
         ])
         .sui_supply_amount(300)
         .storage_fund_amount(100)
@@ -302,7 +295,7 @@ fun add_stake_post_active_flow() {
     let mut runner = test_runner::new()
         .validators(vector[
             validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1),
-            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_2),
+            validator_builder::new().initial_stake(100),
         ])
         .build();
 
@@ -336,13 +329,7 @@ fun add_stake_post_active_flow() {
 // 3. Advance epoch twice with some rewards
 // 4. Unstake from the preactive validator. There should be no rewards earned.
 fun add_preactive_remove_preactive() {
-    let mut runner = test_runner::new()
-        .validators(vector[
-            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1),
-            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_2),
-        ])
-        .build();
-
+    let mut runner = test_runner::new().validators_initial_stake(100).validators_count(2).build();
     let validator = validator_builder::preset().sui_address(NEW_VALIDATOR_ADDR).build(runner.ctx());
 
     runner.add_validator_candidate(validator);
@@ -370,13 +357,7 @@ fun add_preactive_remove_preactive() {
 // 3. Request to add the validator candidate to the active validator set.
 // 4. Try staking to the validator candidate. This should fail because the validator candidate is pending.
 fun add_preactive_remove_pending_failure() {
-    let mut runner = test_runner::new()
-        .validators(vector[
-            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1),
-            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_2),
-        ])
-        .build();
-
+    let mut runner = test_runner::new().validators_initial_stake(100).validators_count(2).build();
     let validator = validator_builder::preset().sui_address(NEW_VALIDATOR_ADDR).build(runner.ctx());
 
     // Add the validator candidate.
@@ -484,13 +465,7 @@ fun add_preactive_remove_active() {
 
 #[test]
 fun add_preactive_remove_post_active() {
-    let mut runner = test_runner::new()
-        .validators(vector[
-            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1),
-            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_2),
-        ])
-        .build();
-
+    let mut runner = test_runner::new().validators_initial_stake(100).validators_count(2).build();
     let validator = validator_builder::preset().sui_address(NEW_VALIDATOR_ADDR).build(runner.ctx());
 
     // Add the validator candidate.
@@ -526,13 +501,7 @@ fun add_preactive_remove_post_active() {
 #[test, expected_failure]
 // TODO: fix the reason this test is failing as a separate feature
 fun add_remove_stake_preactive_candidate() {
-    let mut runner = test_runner::new()
-        .validators(vector[
-            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1),
-            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_2),
-        ])
-        .build();
-
+    let mut runner = test_runner::new().validators_initial_stake(100).validators_count(2).build();
     let validator = validator_builder::preset().sui_address(NEW_VALIDATOR_ADDR).build(runner.ctx());
     runner.add_validator_candidate(validator);
 
@@ -580,13 +549,7 @@ fun add_remove_stake_preactive_candidate() {
 // 4. Remove the candidate
 // 5. Staker unstakes and gets no rewards.
 fun add_preactive_candidate_drop_out() {
-    let mut runner = test_runner::new()
-        .validators(vector[
-            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1),
-            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_2),
-        ])
-        .build();
-
+    let mut runner = test_runner::new().validators_initial_stake(100).validators_count(2).build();
     let validator = validator_builder::preset().sui_address(NEW_VALIDATOR_ADDR).build(runner.ctx());
     runner.add_validator_candidate(validator);
 
