@@ -32,4 +32,5 @@ sui-indexer-alt-schema.workspace = true
 sui-kvstore.workspace = true
 sui-package-resolver.workspace = true
 sui-pg-db.workspace = true
+sui-sql-macro.workspace = true
 sui-types.workspace = true

@@ -3,8 +3,12 @@
 
 use std::time::Duration;
 
-use diesel::{sql_query, sql_types::BigInt, QueryableByName};
-use sui_types::SYSTEM_PACKAGE_ADDRESSES;
+use diesel::{
+    sql_types::{BigInt, Bytea},
+    QueryableByName,
+};
+use move_core_types::account_address::AccountAddress;
+use sui_sql_macro::query;
 use tokio::{task::JoinHandle, time};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
@@ -93,18 +97,32 @@ impl SystemPackageTask {
                         struct Watermark {
                             #[diesel(sql_type = BigInt)]
                             epoch_hi_inclusive: i64,
+
+                            #[diesel(sql_type = BigInt)]
+                            checkpoint_hi_inclusive: i64,
                         }
 
-                        let query = sql_query(r#"
-                            SELECT epoch_hi_inclusive FROM watermarks WHERE pipeline = 'sum_packages'
-                        "#);
+                        let query = query!(
+                            r#"
+                            SELECT
+                                epoch_hi_inclusive,
+                                checkpoint_hi_inclusive
+                            FROM
+                                watermarks
+                            WHERE
+                                pipeline = 'kv_packages'
+                            "#
+                        );
 
-                        let Watermark { epoch_hi_inclusive: next_epoch } = match conn
+                        let Watermark {
+                            epoch_hi_inclusive: next_epoch,
+                            checkpoint_hi_inclusive,
+                        } = match conn
                             .results(query)
                             .await
                             .as_deref()
                         {
-                            Ok([epoch]) => *epoch,
+                            Ok([watermark]) => *watermark,
 
                             Ok([]) => {
                                 info!("Package index isn't populated yet, no epoch information");
@@ -122,11 +140,52 @@ impl SystemPackageTask {
                             }
                         };
 
-                        if next_epoch > last_epoch {
-                            info!(last_epoch, next_epoch, "Detected epoch boundary, evicting system packages from cache");
-                            last_epoch = next_epoch;
-                            package_resolver.package_store().evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied())
+                        if next_epoch <= last_epoch {
+                            continue;
                         }
+
+                        info!(last_epoch, next_epoch, "Detected epoch boundary");
+                        last_epoch = next_epoch;
+
+                        #[derive(QueryableByName, Clone)]
+                        struct SystemPackage {
+                            #[diesel(sql_type = Bytea)]
+                            original_id: Vec<u8>,
+                        }
+
+                        let query = query!(
+                            r#"
+                            SELECT DISTINCT
+                                original_id
+                            FROM
+                                kv_packages
+                            WHERE
+                                is_system_package
+                            AND cp_sequence_number <= {BigInt}
+                            "#,
+                            checkpoint_hi_inclusive
+                        );
+
+                        let system_packages: Vec<SystemPackage> = match conn.results(query).await {
+                            Ok(system_packages) => system_packages,
+
+                            Err(e) => {
+                                error!("Failed to fetch system packages: {e}");
+                                continue;
+                            }
+                        };
+
+                        let Ok(system_packages) = system_packages
+                            .into_iter()
+                            .map(|pkg| AccountAddress::from_bytes(pkg.original_id))
+                            .collect::<Result<Vec<_>, _>>()
+                        else {
+                            error!("Failed to deserialize system package addresses");
+                            continue;
+                        };
+
+                        info!(system_packages = ?system_packages, "Evicting...");
+                        package_resolver.package_store().evict(system_packages)
                     }
                 }
             }
