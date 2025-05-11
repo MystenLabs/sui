@@ -29,7 +29,7 @@ const STAKER_ADDR_4: address = @45;
 const MIST_PER_SUI: u64 = 1_000_000_000;
 
 #[test]
-fun test_validator_rewards() {
+fun validator_rewards() {
     let mut runner = test_runner::new()
         .sui_supply_amount(1000)
         .validators(vector[
@@ -68,7 +68,7 @@ fun test_validator_rewards() {
 }
 
 #[test]
-fun test_stake_subsidy() {
+fun stake_subsidy() {
     let mut runner = test_runner::new()
         .sui_supply_amount(1_000_000_000)
         .validators(vector[
@@ -93,7 +93,7 @@ fun test_stake_subsidy() {
 }
 
 #[test]
-fun test_stake_rewards() {
+fun stake_rewards() {
     let mut runner = test_runner::new()
         .sui_supply_amount(1000)
         .validators(vector[
@@ -174,7 +174,7 @@ fun test_stake_rewards() {
 }
 
 #[test]
-fun test_stake_tiny_rewards() {
+fun stake_tiny_rewards() {
     let mut runner = test_runner::new()
         .sui_supply_amount(1_000_000_000)
         .validators(vector[
@@ -206,7 +206,7 @@ fun test_stake_tiny_rewards() {
 }
 
 #[test]
-fun test_validator_commission() {
+fun validator_commission() {
     let mut runner = test_runner::new()
         .sui_supply_amount(1000)
         .validators(vector[
@@ -310,7 +310,7 @@ fun assert_stake_rewards_for_addresses(
 }
 
 #[test]
-fun test_rewards_slashing() {
+fun rewards_slashing() {
     let mut runner = test_runner::new()
         .sui_supply_amount(1000)
         .validators(vector[
@@ -354,7 +354,7 @@ fun test_rewards_slashing() {
 }
 
 #[test]
-fun test_entire_rewards_slashing() {
+fun entire_rewards_slashing() {
     let mut runner = test_runner::new()
         .sui_supply_amount(1000)
         .validators(vector[
@@ -406,7 +406,7 @@ fun test_entire_rewards_slashing() {
 }
 
 #[test]
-fun test_rewards_slashing_with_storage_fund() {
+fun rewards_slashing_with_storage_fund() {
     let mut runner = test_runner::new()
         .sui_supply_amount(1000)
         .validators(vector[
@@ -465,7 +465,7 @@ fun test_rewards_slashing_with_storage_fund() {
 #[test]
 // This test is to make sure that if everyone is slashed, our protocol works as expected without aborting
 // and all rewards go to the storage fund.
-fun test_everyone_slashed() {
+fun everyone_slashed() {
     let mut runner = test_runner::new()
         .sui_supply_amount(1000)
         .validators(vector[
@@ -521,7 +521,7 @@ fun test_everyone_slashed() {
 }
 
 #[test]
-fun test_mul_rewards_withdraws_at_same_epoch() {
+fun mul_rewards_withdraws_at_same_epoch() {
     let mut runner = test_runner::new()
         .sui_supply_amount(1000)
         .validators(vector[
@@ -595,7 +595,7 @@ fun test_mul_rewards_withdraws_at_same_epoch() {
 }
 
 #[test]
-fun test_uncapped_rewards() {
+fun uncapped_rewards() {
     let validators = vector::tabulate!(20, |i| {
         validator_builder::new()
             .initial_stake(481 + i * 2)
@@ -621,7 +621,7 @@ fun test_uncapped_rewards() {
 
 #[test]
 // TODO: come back to me once safe mode emulation is implemented
-fun test_stake_subsidy_with_safe_mode_epoch_562_to_563() {
+fun stake_subsidy_with_safe_mode_epoch_562_to_563() {
     set_up_sui_system_state_with_big_amounts();
 
     let mut test = test_scenario::begin(VALIDATOR_ADDR_1);
@@ -692,7 +692,7 @@ fun test_stake_subsidy_with_safe_mode_epoch_562_to_563() {
 
 #[test]
 // TODO: come back to me once safe mode emulation is implemented
-fun test_stake_subsidy_with_safe_mode_epoch_563_to_564() {
+fun stake_subsidy_with_safe_mode_epoch_563_to_564() {
     set_up_sui_system_state_with_big_amounts();
 
     let mut test = test_scenario::begin(VALIDATOR_ADDR_1);
@@ -766,7 +766,7 @@ fun test_stake_subsidy_with_safe_mode_epoch_563_to_564() {
 // Test that the fix for the subsidy distribution doesn't affect testnet,
 // where the distribution has no epoch delay, and the condition could result
 // in arithmetic error.
-fun test_stake_subsidy_with_safe_mode_testnet() {
+fun stake_subsidy_with_safe_mode_testnet() {
     set_up_sui_system_state_with_big_amounts();
 
     let mut test = test_scenario::begin(VALIDATOR_ADDR_1);
