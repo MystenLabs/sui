@@ -29,7 +29,7 @@ fun check(stakes: vector<u64>, voting_power: vector<u64>, ctx: &mut TxContext) {
 }
 
 #[test]
-fun test_small_validator_sets() {
+fun small_validator_sets() {
     let ctx = &mut tx_context::dummy();
 
     check(vector[1], vector[TOTAL_VOTING_POWER], ctx);
@@ -69,7 +69,7 @@ fun test_small_validator_sets() {
 }
 
 #[test]
-fun test_medium_validator_sets() {
+fun medium_validator_sets() {
     let ctx = &mut tx_context::dummy();
     // >10 validators. now things get a bit more interesting because we can redistribute stake away from the max validators
     check(
@@ -95,7 +95,7 @@ fun test_medium_validator_sets() {
 }
 
 #[test]
-fun test_medium_validator_sets_2() {
+fun medium_validator_sets_2() {
     let ctx = &mut tx_context::dummy();
 
     // more validators, harder to reach max
