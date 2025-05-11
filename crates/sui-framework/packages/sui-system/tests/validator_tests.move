@@ -112,6 +112,7 @@ fun metadata_invalid_pubkey() {
         .build_metadata(ctx);
 
     metadata.validate();
+
     abort
 }
 
@@ -123,6 +124,7 @@ fun metadata_invalid_net_pubkey() {
         .build_metadata(ctx);
 
     metadata.validate();
+
     abort
 }
 
@@ -134,6 +136,7 @@ fun metadata_invalid_worker_pubkey() {
         .build_metadata(ctx);
 
     metadata.validate();
+
     abort
 }
 
@@ -143,6 +146,7 @@ fun metadata_invalid_net_addr() {
     let metadata = validator_builder::preset().net_address(b"incorrect").build_metadata(ctx);
 
     metadata.validate();
+
     abort
 }
 
@@ -152,6 +156,7 @@ fun metadata_invalid_p2p_addr() {
     let metadata = validator_builder::preset().p2p_address(b"incorrect").build_metadata(ctx);
 
     metadata.validate();
+
     abort
 }
 
@@ -161,6 +166,7 @@ fun metadata_invalid_consensus_addr() {
     let metadata = validator_builder::preset().primary_address(b"incorrect").build_metadata(ctx);
 
     metadata.validate();
+
     abort
 }
 
@@ -170,6 +176,7 @@ fun metadata_invalid_worker_addr() {
     let metadata = validator_builder::preset().worker_address(b"incorrect").build_metadata(ctx);
 
     metadata.validate();
+
     abort
 }
 
