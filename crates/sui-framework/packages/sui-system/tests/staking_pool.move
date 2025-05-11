@@ -424,6 +424,7 @@ fun redeem_fungible_staked_sui_regression_rounding() {
     scenario.end();
 }
 
+#[test_only]
 fun distribute_rewards_and_advance_epoch(
     staking_pool: &mut StakingPool,
     scenario: &mut Scenario,

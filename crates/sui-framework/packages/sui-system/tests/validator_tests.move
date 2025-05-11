@@ -10,7 +10,6 @@ use sui::test_utils;
 use sui::url;
 use sui_system::staking_pool::StakedSui;
 use sui_system::test_runner;
-use sui_system::validator;
 use sui_system::validator_builder;
 
 const DEFAULT_STAKE: u64 = 10;
@@ -104,7 +103,7 @@ fun metadata() {
     test_utils::destroy(metadata);
 }
 
-#[test, expected_failure(abort_code = validator::EMetadataInvalidPubkey)]
+#[test, expected_failure(abort_code = sui_system::validator::EMetadataInvalidPubkey)]
 fun metadata_invalid_pubkey() {
     let ctx = &mut tx_context::dummy();
     let metadata = validator_builder::preset()
@@ -116,7 +115,7 @@ fun metadata_invalid_pubkey() {
     abort
 }
 
-#[test, expected_failure(abort_code = validator::EMetadataInvalidNetPubkey)]
+#[test, expected_failure(abort_code = sui_system::validator::EMetadataInvalidNetPubkey)]
 fun metadata_invalid_net_pubkey() {
     let ctx = &mut tx_context::dummy();
     let metadata = validator_builder::preset()
@@ -128,7 +127,7 @@ fun metadata_invalid_net_pubkey() {
     abort
 }
 
-#[test, expected_failure(abort_code = validator::EMetadataInvalidWorkerPubkey)]
+#[test, expected_failure(abort_code = sui_system::validator::EMetadataInvalidWorkerPubkey)]
 fun metadata_invalid_worker_pubkey() {
     let ctx = &mut tx_context::dummy();
     let metadata = validator_builder::preset()
@@ -140,7 +139,7 @@ fun metadata_invalid_worker_pubkey() {
     abort
 }
 
-#[test, expected_failure(abort_code = validator::EMetadataInvalidNetAddr)]
+#[test, expected_failure(abort_code = sui_system::validator::EMetadataInvalidNetAddr)]
 fun metadata_invalid_net_addr() {
     let ctx = &mut tx_context::dummy();
     let metadata = validator_builder::preset().net_address(b"incorrect").build_metadata(ctx);
@@ -150,7 +149,7 @@ fun metadata_invalid_net_addr() {
     abort
 }
 
-#[test, expected_failure(abort_code = validator::EMetadataInvalidP2pAddr)]
+#[test, expected_failure(abort_code = sui_system::validator::EMetadataInvalidP2pAddr)]
 fun metadata_invalid_p2p_addr() {
     let ctx = &mut tx_context::dummy();
     let metadata = validator_builder::preset().p2p_address(b"incorrect").build_metadata(ctx);
@@ -160,7 +159,7 @@ fun metadata_invalid_p2p_addr() {
     abort
 }
 
-#[test, expected_failure(abort_code = validator::EMetadataInvalidPrimaryAddr)]
+#[test, expected_failure(abort_code = sui_system::validator::EMetadataInvalidPrimaryAddr)]
 fun metadata_invalid_consensus_addr() {
     let ctx = &mut tx_context::dummy();
     let metadata = validator_builder::preset().primary_address(b"incorrect").build_metadata(ctx);
@@ -170,7 +169,7 @@ fun metadata_invalid_consensus_addr() {
     abort
 }
 
-#[test, expected_failure(abort_code = validator::EMetadataInvalidWorkerAddr)]
+#[test, expected_failure(abort_code = sui_system::validator::EMetadataInvalidWorkerAddr)]
 fun metadata_invalid_worker_addr() {
     let ctx = &mut tx_context::dummy();
     let metadata = validator_builder::preset().worker_address(b"incorrect").build_metadata(ctx);
@@ -260,7 +259,7 @@ fun validator_update_metadata_ok() {
     test_utils::destroy(validator);
 }
 
-#[test, expected_failure(abort_code = validator::EInvalidProofOfPossession)]
+#[test, expected_failure(abort_code = sui_system::validator::EInvalidProofOfPossession)]
 fun validator_update_metadata_invalid_proof_of_possession() {
     let ctx = &mut tx_context::dummy();
     let mut validator = validator_builder::preset().build(ctx);
@@ -273,7 +272,7 @@ fun validator_update_metadata_invalid_proof_of_possession() {
     abort
 }
 
-#[test, expected_failure(abort_code = validator::EMetadataInvalidNetPubkey)]
+#[test, expected_failure(abort_code = sui_system::validator::EMetadataInvalidNetPubkey)]
 fun validator_update_metadata_invalid_network_key() {
     let ctx = &mut tx_context::dummy();
     let mut validator = validator_builder::preset().build(ctx);
@@ -283,7 +282,7 @@ fun validator_update_metadata_invalid_network_key() {
     abort
 }
 
-#[test, expected_failure(abort_code = validator::EMetadataInvalidWorkerPubkey)]
+#[test, expected_failure(abort_code = sui_system::validator::EMetadataInvalidWorkerPubkey)]
 fun validator_update_metadata_invalid_worker_key() {
     let ctx = &mut tx_context::dummy();
     let mut validator = validator_builder::preset().build(ctx);
@@ -293,7 +292,7 @@ fun validator_update_metadata_invalid_worker_key() {
     abort
 }
 
-#[test, expected_failure(abort_code = validator::EMetadataInvalidNetAddr)]
+#[test, expected_failure(abort_code = sui_system::validator::EMetadataInvalidNetAddr)]
 fun validator_update_metadata_invalid_network_addr() {
     let ctx = &mut tx_context::dummy();
     let mut validator = validator_builder::preset().build(ctx);
@@ -303,7 +302,7 @@ fun validator_update_metadata_invalid_network_addr() {
     abort
 }
 
-#[test, expected_failure(abort_code = validator::EMetadataInvalidPrimaryAddr)]
+#[test, expected_failure(abort_code = sui_system::validator::EMetadataInvalidPrimaryAddr)]
 fun validator_update_metadata_invalid_primary_addr() {
     let ctx = &mut tx_context::dummy();
     let mut validator = validator_builder::preset().build(ctx);
@@ -313,7 +312,7 @@ fun validator_update_metadata_invalid_primary_addr() {
     abort
 }
 
-#[test, expected_failure(abort_code = validator::EMetadataInvalidWorkerAddr)]
+#[test, expected_failure(abort_code = sui_system::validator::EMetadataInvalidWorkerAddr)]
 fun validator_update_metadata_invalid_worker_addr() {
     let ctx = &mut tx_context::dummy();
     let mut validator = validator_builder::preset().build(ctx);
@@ -323,7 +322,7 @@ fun validator_update_metadata_invalid_worker_addr() {
     abort
 }
 
-#[test, expected_failure(abort_code = validator::EMetadataInvalidP2pAddr)]
+#[test, expected_failure(abort_code = sui_system::validator::EMetadataInvalidP2pAddr)]
 fun validator_update_metadata_invalid_p2p_address() {
     let ctx = &mut tx_context::dummy();
     let mut validator = validator_builder::preset().build(ctx);
@@ -333,7 +332,12 @@ fun validator_update_metadata_invalid_p2p_address() {
     abort
 }
 
-#[test, expected_failure(abort_code = validator::EValidatorMetadataExceedingLengthLimit)]
+#[
+    test,
+    expected_failure(
+        abort_code = sui_system::validator::EValidatorMetadataExceedingLengthLimit,
+    ),
+]
 fun validator_update_metadata_primary_address_too_long() {
     let ctx = &mut tx_context::dummy();
     let mut validator = validator_builder::preset().build(ctx);
@@ -342,7 +346,12 @@ fun validator_update_metadata_primary_address_too_long() {
     abort
 }
 
-#[test, expected_failure(abort_code = validator::EValidatorMetadataExceedingLengthLimit)]
+#[
+    test,
+    expected_failure(
+        abort_code = sui_system::validator::EValidatorMetadataExceedingLengthLimit,
+    ),
+]
 fun validator_update_metadata_net_address_too_long() {
     let ctx = &mut tx_context::dummy();
     let mut validator = validator_builder::preset().build(ctx);
@@ -352,7 +361,12 @@ fun validator_update_metadata_net_address_too_long() {
     abort
 }
 
-#[test, expected_failure(abort_code = validator::EValidatorMetadataExceedingLengthLimit)]
+#[
+    test,
+    expected_failure(
+        abort_code = sui_system::validator::EValidatorMetadataExceedingLengthLimit,
+    ),
+]
 fun validator_update_metadata_worker_address_too_long() {
     let ctx = &mut tx_context::dummy();
     let mut validator = validator_builder::preset().build(ctx);
@@ -362,7 +376,12 @@ fun validator_update_metadata_worker_address_too_long() {
     abort
 }
 
-#[test, expected_failure(abort_code = validator::EValidatorMetadataExceedingLengthLimit)]
+#[
+    test,
+    expected_failure(
+        abort_code = sui_system::validator::EValidatorMetadataExceedingLengthLimit,
+    ),
+]
 fun validator_update_metadata_p2p_address_too_long() {
     let ctx = &mut tx_context::dummy();
     let mut validator = validator_builder::preset().build(ctx);
@@ -372,7 +391,12 @@ fun validator_update_metadata_p2p_address_too_long() {
     abort
 }
 
-#[test, expected_failure(abort_code = validator::EValidatorMetadataExceedingLengthLimit)]
+#[
+    test,
+    expected_failure(
+        abort_code = sui_system::validator::EValidatorMetadataExceedingLengthLimit,
+    ),
+]
 fun validator_update_name_too_long() {
     let ctx = &mut tx_context::dummy();
     let mut validator = validator_builder::preset().build(ctx);
@@ -382,7 +406,12 @@ fun validator_update_name_too_long() {
     abort
 }
 
-#[test, expected_failure(abort_code = validator::EValidatorMetadataExceedingLengthLimit)]
+#[
+    test,
+    expected_failure(
+        abort_code = sui_system::validator::EValidatorMetadataExceedingLengthLimit,
+    ),
+]
 fun validator_update_description_too_long() {
     let ctx = &mut tx_context::dummy();
     let mut validator = validator_builder::preset().build(ctx);
@@ -392,7 +421,12 @@ fun validator_update_description_too_long() {
     abort
 }
 
-#[test, expected_failure(abort_code = validator::EValidatorMetadataExceedingLengthLimit)]
+#[
+    test,
+    expected_failure(
+        abort_code = sui_system::validator::EValidatorMetadataExceedingLengthLimit,
+    ),
+]
 fun validator_update_project_url_too_long() {
     let ctx = &mut tx_context::dummy();
     let mut validator = validator_builder::preset().build(ctx);
@@ -402,7 +436,12 @@ fun validator_update_project_url_too_long() {
     abort
 }
 
-#[test, expected_failure(abort_code = validator::EValidatorMetadataExceedingLengthLimit)]
+#[
+    test,
+    expected_failure(
+        abort_code = sui_system::validator::EValidatorMetadataExceedingLengthLimit,
+    ),
+]
 fun validator_update_image_url_too_long() {
     let ctx = &mut tx_context::dummy();
     let mut validator = validator_builder::preset().build(ctx);

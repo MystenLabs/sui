@@ -25,9 +25,9 @@ const MIST_PER_SUI: u64 = 1_000_000_000;
 fun report_validator() {
     let mut runner = test_runner::new()
         .validators(vector[
-            validator_builder::new().sui_address(@1).initial_stake(100),
-            validator_builder::new().sui_address(@2).initial_stake(100),
-            validator_builder::new().sui_address(@3).initial_stake(100),
+            validator_builder::new().sui_address(@1),
+            validator_builder::new().sui_address(@2),
+            validator_builder::new().sui_address(@3),
         ])
         .build();
 
@@ -92,18 +92,20 @@ fun report_validator() {
     runner.finish();
 }
 
-#[test]
+#[random_test]
 // Scenario: transfer the validator cap object to different addresses and check
 //   that everything works as expected.
 //
 // TODO: discovered that pending validator does not set the gas price for the
 //   first active epoch, but for an epoch after that. Confirm, that this is the
 //   expected behavior.
-fun report_validator_by_stakee_ok() {
+fun report_validator_by_stakee_ok(initial_stake: u8) {
+    let initial_stake = initial_stake.max(1) as u64;
     let mut runner = test_runner::new()
+        .validators_initial_stake(initial_stake)
         .validators(vector[
-            validator_builder::new().sui_address(@1).initial_stake(100),
-            validator_builder::new().sui_address(@2).initial_stake(100),
+            validator_builder::new().sui_address(@1),
+            validator_builder::new().sui_address(@2),
         ])
         .build();
 
@@ -144,7 +146,7 @@ fun report_validator_by_stakee_ok() {
 
     // Add a new pending validator
     runner.set_sender(@0);
-    let validator = validator_builder::preset().initial_stake(100).build(runner.ctx());
+    let validator = validator_builder::preset().initial_stake(initial_stake).build(runner.ctx());
     let new_validator = validator.sui_address();
     runner.add_validator_candidate(validator);
     runner.set_sender(new_validator).add_validator();
@@ -180,8 +182,8 @@ fun report_validator_by_stakee_ok() {
 fun report_validator_by_stakee_revoked() {
     let mut runner = test_runner::new()
         .validators(vector[
-            validator_builder::new().sui_address(@1).initial_stake(100),
-            validator_builder::new().sui_address(@2).initial_stake(100),
+            validator_builder::new().sui_address(@1),
+            validator_builder::new().sui_address(@2),
         ])
         .build();
 
@@ -209,8 +211,8 @@ fun report_validator_by_stakee_revoked() {
 fun set_reference_gas_price_by_stakee_revoked() {
     let mut runner = test_runner::new()
         .validators(vector[
-            validator_builder::new().sui_address(@1).initial_stake(100),
-            validator_builder::new().sui_address(@2).initial_stake(100),
+            validator_builder::new().sui_address(@1),
+            validator_builder::new().sui_address(@2),
         ])
         .build();
 
@@ -236,7 +238,7 @@ fun set_reference_gas_price_by_stakee_revoked() {
 
 #[test, expected_failure(abort_code = sui_system::validator::EGasPriceHigherThanThreshold)]
 fun set_gas_price_failure() {
-    let validator = validator_builder::new().sui_address(@1).initial_stake(100);
+    let validator = validator_builder::new().sui_address(@1);
     let mut runner = test_runner::new().validators(vector[validator]).build();
 
     // Fails here since the gas price is too high.
@@ -247,7 +249,7 @@ fun set_gas_price_failure() {
 
 #[test, expected_failure(abort_code = sui_system::validator::ECommissionRateTooHigh)]
 fun set_commission_rate_failure() {
-    let validator = validator_builder::new().sui_address(@1).initial_stake(100);
+    let validator = validator_builder::new().sui_address(@1);
     let mut runner = test_runner::new().validators(vector[validator]).build();
 
     // Fails here since the gas price is too high.
@@ -260,7 +262,7 @@ fun set_commission_rate_failure() {
 
 #[test, expected_failure(abort_code = sui_system::sui_system_state_inner::ENotValidator)]
 fun report_non_validator_failure() {
-    let validator = validator_builder::new().sui_address(@1).initial_stake(100);
+    let validator = validator_builder::new().sui_address(@1);
     let mut runner = test_runner::new().validators(vector[validator]).build();
 
     // Report a non-validator.
@@ -272,7 +274,7 @@ fun report_non_validator_failure() {
 #[test, expected_failure(abort_code = sui_system::sui_system_state_inner::EReportRecordNotFound)]
 // TODO: the error expected here is not correct. Maybe we could improve this.
 fun undo_report_non_validator_failure() {
-    let validator = validator_builder::new().sui_address(@1).initial_stake(100);
+    let validator = validator_builder::new().sui_address(@1);
     let mut runner = test_runner::new().validators(vector[validator]).build();
 
     // Undo a report on a non-validator.
@@ -283,7 +285,7 @@ fun undo_report_non_validator_failure() {
 
 #[test, expected_failure(abort_code = sui_system::sui_system_state_inner::ECannotReportOneself)]
 fun report_self_failure() {
-    let validator = validator_builder::new().sui_address(@1).initial_stake(100);
+    let validator = validator_builder::new().sui_address(@1);
     let mut runner = test_runner::new().validators(vector[validator]).build();
 
     // Report oneself.
@@ -296,8 +298,8 @@ fun report_self_failure() {
 fun undo_report_failure() {
     let mut runner = test_runner::new()
         .validators(vector[
-            validator_builder::new().sui_address(@1).initial_stake(100),
-            validator_builder::new().sui_address(@2).initial_stake(100),
+            validator_builder::new().sui_address(@1),
+            validator_builder::new().sui_address(@2),
         ])
         .build();
 
@@ -309,7 +311,7 @@ fun undo_report_failure() {
 
 #[test]
 fun validator_address_by_pool_id() {
-    let validator = validator_builder::new().sui_address(@1).initial_stake(100);
+    let validator = validator_builder::new().sui_address(@1);
     let mut runner = test_runner::new().validators(vector[validator]).build();
 
     runner.system_tx!(|system, _| {
@@ -324,10 +326,10 @@ fun validator_address_by_pool_id() {
 fun staking_pool_mappings() {
     let mut runner = test_runner::new()
         .validators(vector[
-            validator_builder::new().sui_address(@1).initial_stake(100),
-            validator_builder::new().sui_address(@2).initial_stake(100),
-            validator_builder::new().sui_address(@3).initial_stake(100),
-            validator_builder::new().sui_address(@4).initial_stake(100),
+            validator_builder::new().sui_address(@1),
+            validator_builder::new().sui_address(@2),
+            validator_builder::new().sui_address(@3),
+            validator_builder::new().sui_address(@4),
         ])
         .build();
 
@@ -407,8 +409,8 @@ fun skip_stake_subsidy(epoch_duration: u16) {
     let mut runner = test_runner::new()
         .epoch_duration(epoch_duration)
         .validators(vector[
-            validator_builder::new().sui_address(@1).initial_stake(100),
-            validator_builder::new().sui_address(@2).initial_stake(100),
+            validator_builder::new().sui_address(@1),
+            validator_builder::new().sui_address(@2),
         ])
         .build();
 

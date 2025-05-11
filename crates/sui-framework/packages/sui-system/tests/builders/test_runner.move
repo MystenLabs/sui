@@ -69,7 +69,7 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
 
     let validators = validators.destroy_or!({
         vector::tabulate!(validators_count.destroy_or!(4), |_| {
-            validator_builder::new().initial_stake(validators_initial_stake.destroy_or!(1_000_000))
+            validator_builder::new().initial_stake(validators_initial_stake.destroy_or!(100))
         })
     });
 
@@ -95,7 +95,12 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
         scenario.ctx(),
     );
 
-    let validators = validators.map!(|v| v.is_active_at_genesis(true).build(scenario.ctx()));
+    let validators = validators.map!(
+        |v| v
+            .is_active_at_genesis(true)
+            .try_initial_stake(validators_initial_stake.destroy_or!(100))
+            .build(scenario.ctx()),
+    );
     let genesis_validator_addresses = validators.map_ref!(|v| v.sui_address());
 
     // create sui system state

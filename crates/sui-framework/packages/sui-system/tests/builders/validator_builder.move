@@ -307,8 +307,16 @@ public fun commission_rate(mut builder: ValidatorBuilder, commission_rate: u64):
     builder
 }
 
+/// Set the genesis stake for the validator.
 public fun initial_stake(mut builder: ValidatorBuilder, initial_stake: u64): ValidatorBuilder {
     builder.initial_stake = option::some(initial_stake);
+    builder
+}
+
+/// Try to set the genesis stake if it is not already set.
+/// Used by the `TestRunner` to set the initial stake for a validator in genesis.
+public fun try_initial_stake(mut builder: ValidatorBuilder, initial_stake: u64): ValidatorBuilder {
+    if (builder.initial_stake.is_none()) builder.initial_stake.fill(initial_stake);
     builder
 }
 
