@@ -16,7 +16,6 @@ dashmap.workspace = true
 tower.workspace = true
 shared-crypto.workspace = true
 
-sui-archival.workspace = true
 sui-macros.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true

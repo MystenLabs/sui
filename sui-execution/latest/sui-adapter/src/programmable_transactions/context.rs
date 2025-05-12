@@ -5,6 +5,38 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
+    use crate::{
+        adapter::new_native_extensions,
+        error::convert_vm_error,
+        execution_mode::ExecutionMode,
+        execution_value::{
+            CommandKind, ExecutionState, InputObjectMetadata, InputValue, ObjectContents,
+            ObjectValue, RawValueType, ResultValue, SizeBound, TryFromValue, UsageKind, Value,
+        },
+        gas_charger::GasCharger,
+        gas_meter::SuiGasMeter,
+        programmable_transactions::{data_store::SuiDataStore, linkage_view::LinkageView},
+        type_resolver::TypeTagResolver,
+    };
+    use move_binary_format::{
+        CompiledModule,
+        errors::{Location, PartialVMError, VMError, VMResult},
+        file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
+    };
+    use move_core_types::{
+        account_address::AccountAddress,
+        identifier::IdentStr,
+        language_storage::{ModuleId, StructTag, TypeTag},
+        vm_status::StatusCode,
+    };
+    use move_trace_format::format::MoveTraceBuilder;
+    use move_vm_runtime::{
+        move_vm::MoveVM,
+        native_extensions::NativeContextExtensions,
+        session::{LoadedFunctionInstantiation, SerializedReturnValues},
+    };
+    use move_vm_types::loaded_data::runtime_types::Type;
+    use mysten_common::debug_fatal;
     use std::{
         borrow::Borrow,
         cell::RefCell,
@@ -12,60 +44,24 @@ mod checked {
         rc::Rc,
         sync::Arc,
     };
-
-    use crate::error::convert_vm_error;
-    use crate::execution_mode::ExecutionMode;
-    use crate::execution_value::{CommandKind, ObjectContents, TryFromValue, Value};
-    use crate::execution_value::{
-        ExecutionState, InputObjectMetadata, InputValue, ObjectValue, RawValueType, ResultValue,
-        UsageKind,
-    };
-    use crate::gas_charger::GasCharger;
-    use crate::gas_meter::SuiGasMeter;
-    use crate::programmable_transactions::linkage_view::LinkageView;
-    use crate::type_resolver::TypeTagResolver;
-    use crate::{adapter::new_native_extensions, execution_value::SizeBound};
-    use move_binary_format::{
-        CompiledModule,
-        errors::{Location, PartialVMError, PartialVMResult, VMError, VMResult},
-        file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
-    };
-    use move_core_types::resolver::ModuleResolver;
-    use move_core_types::vm_status::StatusCode;
-    use move_core_types::{
-        account_address::AccountAddress,
-        identifier::IdentStr,
-        language_storage::{ModuleId, StructTag, TypeTag},
-    };
-    use move_trace_format::format::MoveTraceBuilder;
-    use move_vm_runtime::native_extensions::NativeContextExtensions;
-    use move_vm_runtime::{
-        move_vm::MoveVM,
-        session::{LoadedFunctionInstantiation, SerializedReturnValues},
-    };
-    use move_vm_types::data_store::DataStore;
-    use move_vm_types::loaded_data::runtime_types::Type;
-    use mysten_common::debug_fatal;
     use sui_move_natives::object_runtime::{
         self, LoadedRuntimeObject, ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
     };
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::storage::{DenyListResult, PackageObject};
     use sui_types::{
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
         coin::Coin,
-        error::{ExecutionError, ExecutionErrorKind},
+        error::{ExecutionError, ExecutionErrorKind, command_argument_error},
         event::Event,
-        execution::ExecutionResultsV2,
+        execution::{ExecutionResults, ExecutionResultsV2},
+        execution_status::CommandArgumentError,
         metrics::LimitsMetrics,
         move_package::MovePackage,
-        object::{Data, MoveObject, Object, ObjectInner, Owner},
-        storage::BackingPackageStore,
+        object::{Authenticator, Data, MoveObject, Object, ObjectInner, Owner},
+        storage::{BackingPackageStore, DenyListResult, PackageObject},
         transaction::{Argument, CallArg, ObjectArg},
     };
-    use sui_types::{error::command_argument_error, execution_status::CommandArgumentError};
-    use sui_types::{execution::ExecutionResults, object::Authenticator};
     use tracing::instrument;
 
     /// Maintains all runtime state specific to programmable transactions
@@ -1708,94 +1704,6 @@ mod checked {
                 contents,
                 protocol_config,
             )
-        }
-    }
-
-    // Implementation of the `DataStore` trait for the Move VM.
-    // When used during execution it may have a list of new packages that have
-    // just been published in the current context. Those are used for module/type
-    // resolution when executing module init.
-    // It may be created with an empty slice of packages either when no publish/upgrade
-    // are performed or when a type is requested not during execution.
-    pub(crate) struct SuiDataStore<'state, 'a> {
-        linkage_view: &'a LinkageView<'state>,
-        new_packages: &'a [MovePackage],
-    }
-
-    impl<'state, 'a> SuiDataStore<'state, 'a> {
-        pub(crate) fn new(
-            linkage_view: &'a LinkageView<'state>,
-            new_packages: &'a [MovePackage],
-        ) -> Self {
-            Self {
-                linkage_view,
-                new_packages,
-            }
-        }
-
-        fn get_module(&self, module_id: &ModuleId) -> Option<&Vec<u8>> {
-            for package in self.new_packages {
-                let module = package.get_module(module_id);
-                if module.is_some() {
-                    return module;
-                }
-            }
-            None
-        }
-    }
-
-    // TODO: `DataStore` will be reworked and this is likely to disappear.
-    //       Leaving this comment around until then as testament to better days to come...
-    impl DataStore for SuiDataStore<'_, '_> {
-        fn link_context(&self) -> AccountAddress {
-            self.linkage_view.link_context()
-        }
-
-        fn relocate(&self, module_id: &ModuleId) -> PartialVMResult<ModuleId> {
-            self.linkage_view.relocate(module_id).map_err(|err| {
-                PartialVMError::new(StatusCode::LINKER_ERROR)
-                    .with_message(format!("Error relocating {module_id}: {err:?}"))
-            })
-        }
-
-        fn defining_module(
-            &self,
-            runtime_id: &ModuleId,
-            struct_: &IdentStr,
-        ) -> PartialVMResult<ModuleId> {
-            self.linkage_view
-                .defining_module(runtime_id, struct_)
-                .map_err(|err| {
-                    PartialVMError::new(StatusCode::LINKER_ERROR).with_message(format!(
-                        "Error finding defining module for {runtime_id}::{struct_}: {err:?}"
-                    ))
-                })
-        }
-
-        fn load_module(&self, module_id: &ModuleId) -> VMResult<Vec<u8>> {
-            if let Some(bytes) = self.get_module(module_id) {
-                return Ok(bytes.clone());
-            }
-            match self.linkage_view.get_module(module_id) {
-                Ok(Some(bytes)) => Ok(bytes),
-                Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
-                    .with_message(format!("Cannot find {:?} in data cache", module_id))
-                    .finish(Location::Undefined)),
-                Err(err) => {
-                    let msg = format!("Unexpected storage error: {:?}", err);
-                    Err(
-                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                            .with_message(msg)
-                            .finish(Location::Undefined),
-                    )
-                }
-            }
-        }
-
-        fn publish_module(&mut self, _module_id: &ModuleId, _blob: Vec<u8>) -> VMResult<()> {
-            // we cannot panic here because during execution and publishing this is
-            // currently called from the publish flow in the Move runtime
-            Ok(())
         }
     }
 

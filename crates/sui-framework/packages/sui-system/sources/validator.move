@@ -271,7 +271,7 @@ public(package) fun new(
     );
 
     // Checks that the keys & addresses & PoP are valid.
-    metadata.validate_metadata();
+    metadata.validate();
     metadata.new_from_metadata(gas_price, commission_rate, ctx)
 }
 
@@ -705,7 +705,7 @@ public(package) fun update_next_epoch_network_address(
     );
     let net_address = net_address.to_ascii_string().to_string();
     self.metadata.next_epoch_net_address = option::some(net_address);
-    self.metadata.validate_metadata();
+    self.metadata.validate();
 }
 
 /// Update network address of this candidate validator
@@ -720,7 +720,7 @@ public(package) fun update_candidate_network_address(
     );
     let net_address = net_address.to_ascii_string().to_string();
     self.metadata.net_address = net_address;
-    self.metadata.validate_metadata();
+    self.metadata.validate();
 }
 
 /// Update p2p address of this validator, taking effects from next epoch
@@ -731,7 +731,7 @@ public(package) fun update_next_epoch_p2p_address(self: &mut Validator, p2p_addr
     );
     let p2p_address = p2p_address.to_ascii_string().to_string();
     self.metadata.next_epoch_p2p_address = option::some(p2p_address);
-    self.metadata.validate_metadata();
+    self.metadata.validate();
 }
 
 /// Update p2p address of this candidate validator
@@ -743,7 +743,7 @@ public(package) fun update_candidate_p2p_address(self: &mut Validator, p2p_addre
     );
     let p2p_address = p2p_address.to_ascii_string().to_string();
     self.metadata.p2p_address = p2p_address;
-    self.metadata.validate_metadata();
+    self.metadata.validate();
 }
 
 /// Update primary address of this validator, taking effects from next epoch
@@ -757,7 +757,7 @@ public(package) fun update_next_epoch_primary_address(
     );
     let primary_address = primary_address.to_ascii_string().to_string();
     self.metadata.next_epoch_primary_address = option::some(primary_address);
-    self.metadata.validate_metadata();
+    self.metadata.validate();
 }
 
 /// Update primary address of this candidate validator
@@ -772,7 +772,7 @@ public(package) fun update_candidate_primary_address(
     );
     let primary_address = primary_address.to_ascii_string().to_string();
     self.metadata.primary_address = primary_address;
-    self.metadata.validate_metadata();
+    self.metadata.validate();
 }
 
 /// Update worker address of this validator, taking effects from next epoch
@@ -786,7 +786,7 @@ public(package) fun update_next_epoch_worker_address(
     );
     let worker_address = worker_address.to_ascii_string().to_string();
     self.metadata.next_epoch_worker_address = option::some(worker_address);
-    self.metadata.validate_metadata();
+    self.metadata.validate();
 }
 
 /// Update worker address of this candidate validator
@@ -801,7 +801,7 @@ public(package) fun update_candidate_worker_address(
     );
     let worker_address = worker_address.to_ascii_string().to_string();
     self.metadata.worker_address = worker_address;
-    self.metadata.validate_metadata();
+    self.metadata.validate();
 }
 
 /// Update protocol public key of this validator, taking effects from next epoch
@@ -812,7 +812,7 @@ public(package) fun update_next_epoch_protocol_pubkey(
 ) {
     self.metadata.next_epoch_protocol_pubkey_bytes = option::some(protocol_pubkey);
     self.metadata.next_epoch_proof_of_possession = option::some(proof_of_possession);
-    self.metadata.validate_metadata();
+    self.metadata.validate();
 }
 
 /// Update protocol public key of this candidate validator
@@ -824,7 +824,7 @@ public(package) fun update_candidate_protocol_pubkey(
     assert!(self.is_preactive(), ENotValidatorCandidate);
     self.metadata.protocol_pubkey_bytes = protocol_pubkey;
     self.metadata.proof_of_possession = proof_of_possession;
-    self.metadata.validate_metadata();
+    self.metadata.validate();
 }
 
 /// Update network public key of this validator, taking effects from next epoch
@@ -833,7 +833,7 @@ public(package) fun update_next_epoch_network_pubkey(
     network_pubkey: vector<u8>,
 ) {
     self.metadata.next_epoch_network_pubkey_bytes = option::some(network_pubkey);
-    self.metadata.validate_metadata();
+    self.metadata.validate();
 }
 
 /// Update network public key of this candidate validator
@@ -843,7 +843,7 @@ public(package) fun update_candidate_network_pubkey(
 ) {
     assert!(self.is_preactive(), ENotValidatorCandidate);
     self.metadata.network_pubkey_bytes = network_pubkey;
-    self.metadata.validate_metadata();
+    self.metadata.validate();
 }
 
 /// Update Narwhal worker public key of this validator, taking effects from next epoch
@@ -852,7 +852,7 @@ public(package) fun update_next_epoch_worker_pubkey(
     worker_pubkey: vector<u8>,
 ) {
     self.metadata.next_epoch_worker_pubkey_bytes = option::some(worker_pubkey);
-    self.metadata.validate_metadata();
+    self.metadata.validate();
 }
 
 /// Update Narwhal worker public key of this candidate validator
@@ -862,7 +862,7 @@ public(package) fun update_candidate_worker_pubkey(
 ) {
     assert!(self.is_preactive(), ENotValidatorCandidate);
     self.metadata.worker_pubkey_bytes = worker_pubkey;
-    self.metadata.validate_metadata();
+    self.metadata.validate();
 }
 
 /// Effectutate all staged next epoch metadata for this validator.
@@ -900,6 +900,8 @@ macro fun do_extract<$T>($o: &mut Option<$T>, $f: |$T|) {
         $f(o.extract());
     }
 }
+
+public use fun validate_metadata as ValidatorMetadata.validate;
 
 /// Aborts if validator metadata is valid
 public fun validate_metadata(metadata: &ValidatorMetadata) {

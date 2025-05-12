@@ -243,8 +243,8 @@ pub fn run_one(
             let cmd_output = command.output()?;
 
             writeln!(&mut output, "External Command `{}`:", external_cmd)?;
-            output += std::str::from_utf8(&cmd_output.stdout)?;
-            output += std::str::from_utf8(&cmd_output.stderr)?;
+            output += std::str::from_utf8(cmd_output.stdout.trim_ascii_start())?;
+            output += std::str::from_utf8(cmd_output.stderr.trim_ascii_start())?;
 
             continue;
         }

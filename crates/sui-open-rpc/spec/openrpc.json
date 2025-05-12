@@ -1365,6 +1365,7 @@
                 "relocate_event_module": false,
                 "reshare_at_same_initial_version": false,
                 "resolve_abort_locations_to_package_id": false,
+                "resolve_type_input_ids_to_defining_id": false,
                 "rethrow_serialization_type_layout_errors": false,
                 "scoring_decision_with_validity_cutoff": true,
                 "shared_object_deletion": false,
@@ -9040,6 +9041,16 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SuiMoveStructTypeParameter"
+            }
+          },
+          "variantDeclarationOrder": {
+            "default": null,
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
             }
           },
           "variants": {
