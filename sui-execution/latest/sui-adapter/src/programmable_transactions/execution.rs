@@ -9,8 +9,8 @@ mod checked {
         adapter::substitute_package_id,
         execution_mode::ExecutionMode,
         execution_value::{
-            CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
-            ensure_serialized_size,
+            ensure_serialized_size, CommandKind, ExecutionState, ObjectContents, ObjectValue,
+            RawValueType, Value,
         },
         gas_charger::GasCharger,
         programmable_transactions::{context::*, data_store::SuiDataStore},
@@ -18,12 +18,11 @@ mod checked {
     };
     use move_binary_format::file_format::AbilitySet;
     use move_binary_format::{
-        CompiledModule,
         compatibility::{Compatibility, InclusionCheck},
         errors::{Location, PartialVMResult, VMResult},
         file_format::{CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
         file_format_common::VERSION_6,
-        normalized,
+        normalized, CompiledModule,
     };
     use move_core_types::language_storage::StructTag;
     use move_core_types::{
@@ -32,13 +31,13 @@ mod checked {
         language_storage::{ModuleId, TypeTag},
         u256::U256,
     };
-    use move_trace_format::format::MoveTraceBuilder;
+    use move_trace_format::format::{MoveTraceBuilder, RefType, TraceEvent, TypeTagWithRefs};
     use move_vm_runtime::{
         move_vm::MoveVM,
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
     };
     use move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
-    use serde::{Deserialize, de::DeserializeSeed};
+    use serde::{de::DeserializeSeed, Deserialize};
     use std::{
         cell::{OnceCell, RefCell},
         collections::{BTreeMap, BTreeSet},
@@ -50,31 +49,32 @@ mod checked {
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
-        SUI_FRAMEWORK_ADDRESS,
         base_types::{
-            MoveLegacyTxContext, MoveObjectType, ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION,
-            RESOLVED_UTF8_STR, SuiAddress, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
-            TxContext, TxContextKind,
+            MoveLegacyTxContext, MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind,
+            RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME,
+            TX_CONTEXT_STRUCT_NAME,
         },
         coin::Coin,
-        error::{ExecutionError, ExecutionErrorKind, command_argument_error},
+        error::{command_argument_error, ExecutionError, ExecutionErrorKind},
         execution::{ExecutionTiming, ResultWithTimings},
         execution_config_utils::to_binary_config,
         execution_status::{CommandArgumentError, PackageUpgradeError},
         id::RESOLVED_SUI_ID,
         metrics::LimitsMetrics,
         move_package::{
-            MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt, UpgradeTicket,
-            normalize_deserialized_modules,
+            normalize_deserialized_modules, MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt,
+            UpgradeTicket,
         },
-        storage::{PackageObject, get_package_objects},
+        ptb_trace::{PTBCommandInfo, PTBExternalEvent, SplitCoinsEvent},
+        storage::{get_package_objects, PackageObject},
         transaction::{Command, ProgrammableMoveCall, ProgrammableTransaction},
         transfer::RESOLVED_RECEIVING_STRUCT,
         type_input::{StructInput, TypeInput},
+        SUI_FRAMEWORK_ADDRESS,
     };
     use sui_verifier::{
-        INIT_FN_NAME,
         private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
+        INIT_FN_NAME,
     };
     use tracing::instrument;
 
@@ -128,6 +128,33 @@ mod checked {
             gas_charger,
             inputs,
         )?;
+        if let Some(trace_builder) = trace_builder_opt {
+            trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
+                PTBExternalEvent::Summary(
+                    commands
+                        .iter()
+                        .map(|c| match c {
+                            Command::MoveCall(move_call) => {
+                                let pkg = move_call.package.to_string();
+                                let module = move_call.module.clone();
+                                let function = move_call.function.clone();
+                                PTBCommandInfo::MoveCall {
+                                    pkg,
+                                    module,
+                                    function,
+                                }
+                            }
+                            Command::TransferObjects(..) => PTBCommandInfo::TransferObjects,
+                            Command::SplitCoins(..) => PTBCommandInfo::SplitCoins,
+                            Command::MergeCoins(..) => PTBCommandInfo::MergeCoins,
+                            Command::Publish(..) => PTBCommandInfo::Publish,
+                            Command::MakeMoveVec(..) => PTBCommandInfo::MakeMoveVec,
+                            Command::Upgrade(..) => PTBCommandInfo::Upgrade,
+                        })
+                        .collect(),
+                )
+            ))));
+        }
         // execute commands
         let mut mode_results = Mode::empty_results();
         for (idx, command) in commands.into_iter().enumerate() {
@@ -290,7 +317,7 @@ mod checked {
                     let msg = "Expected a coin but got an non coin object".to_owned();
                     return Err(ExecutionError::new_with_source(e, msg));
                 };
-                let split_coins = amount_args
+                let (split_coins, split_balances) = amount_args
                     .into_iter()
                     .map(|amount_arg| {
                         let amount: u64 =
@@ -301,9 +328,19 @@ mod checked {
                         // safe because we are propagating the coin type, and relying on the internal
                         // invariant that coin values have a coin type
                         let new_coin = unsafe { ObjectValue::coin(coin_type, new_coin) };
-                        Ok(Value::Object(new_coin))
+                        Ok((Value::Object(new_coin), amount))
                     })
                     .collect::<Result<_, ExecutionError>>()?;
+
+                push_trace_event_with_type_tag(context, &obj.type_, trace_builder_opt, |type_| {
+                    TraceEvent::External(Box::new(serde_json::json!(PTBExternalEvent::SplitCoins(
+                        SplitCoinsEvent {
+                            type_,
+                            balance: coin.value(),
+                            split_balances,
+                        }
+                    ))))
+                })?;
                 context.restore_arg::<Mode>(&mut argument_updates, coin_arg, Value::Object(obj))?;
                 split_coins
             }
@@ -357,6 +394,11 @@ mod checked {
                     type_arguments,
                     arguments,
                 } = *move_call;
+                if let Some(trace_builder) = trace_builder_opt {
+                    trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
+                        PTBExternalEvent::MoveCallStart
+                    ))));
+                }
                 let arguments = context.splat_args(0, arguments)?;
 
                 let module = to_identifier(context, module)?;
@@ -386,6 +428,11 @@ mod checked {
                     /* is_init */ false,
                     trace_builder_opt,
                 );
+                if let Some(trace_builder) = trace_builder_opt {
+                    trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
+                        PTBExternalEvent::MoveCallEnd
+                    ))));
+                }
 
                 context.linkage_view.reset_linkage();
                 return_values?
@@ -1500,6 +1547,64 @@ mod checked {
             // SAFETY: Preserving existing behaviour for identifier deserialization.
             Ok(unsafe { Identifier::new_unchecked(ident) })
         }
+    }
+
+    /// Pushes event to the trace builder if tracing is enabled.
+    /// Event is created via `create_event` function taking TypeTagWithRefs
+    /// as an argument that is created from `type_` inside this function.
+    /// This somewhat complicated code structure was introduced to make sure
+    /// that the invariant violation that can result from tag creation failure
+    /// will only trigger when tracing is enabled.
+    fn push_trace_event_with_type_tag(
+        context: &mut ExecutionContext<'_, '_, '_>,
+        type_: &Type,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
+        create_event: impl FnOnce(TypeTagWithRefs) -> TraceEvent,
+    ) -> Result<(), ExecutionError> {
+        if let Some(trace_builder) = trace_builder_opt {
+            let (deref_type, ref_type) = match type_ {
+                Type::Reference(t) => (t.as_ref(), Some(RefType::Imm)),
+                Type::MutableReference(t) => (t.as_ref(), Some(RefType::Mut)),
+                t => (t, None),
+            };
+            // this invariant violation will only trigger when tracing
+            let type_tag = context
+                .vm
+                .get_runtime()
+                .get_type_tag(deref_type)
+                .map_err(|e| {
+                    ExecutionError::new_with_source(ExecutionErrorKind::InvariantViolation, e)
+                })?;
+            let type_tag_with_ref = TypeTagWithRefs {
+                type_: type_tag,
+                ref_type,
+            };
+            trace_builder.push_event(create_event(type_tag_with_ref));
+        }
+        Ok(())
+    }
+
+    /// Converts a type to type tag format used in tracing.
+    /// SHOULD ONLY BE USED WHEN TRACING IS ENABLED as it may
+    /// cause invariant violation.
+    fn trace_type_to_type_tag_with_refs(
+        context: &mut ExecutionContext<'_, '_, '_>,
+        t: &Type,
+    ) -> Result<TypeTagWithRefs, ExecutionError> {
+        let (deref_type, ref_type) = match t {
+            Type::Reference(t) => (t.as_ref(), Some(RefType::Imm)),
+            Type::MutableReference(t) => (t.as_ref(), Some(RefType::Mut)),
+            t => (t, None),
+        };
+        // this invariant violation will only trigger when tracing
+        let type_ = context
+            .vm
+            .get_runtime()
+            .get_type_tag(deref_type)
+            .map_err(|e| {
+                ExecutionError::new_with_source(ExecutionErrorKind::InvariantViolation, e)
+            })?;
+        Ok(TypeTagWithRefs { type_, ref_type })
     }
 
     // Convert a type input which may refer to a type by multiple different IDs and convert it to a
