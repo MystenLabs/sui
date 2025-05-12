@@ -330,6 +330,8 @@ public fun is_active_at_genesis(
 
 // === Constants Access ===
 
+public fun valid_protocol_pubkey(): vector<u8> { VALID_PUBKEY }
+
 public fun valid_net_pubkey(): vector<u8> { VALID_NET_PUBKEY }
 
 public fun valid_worker_pubkey(): vector<u8> { VALID_WORKER_PUBKEY }
