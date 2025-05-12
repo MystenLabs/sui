@@ -9,7 +9,7 @@
 		"start": "npx ts-node --esm src/index.ts"
 	},
 	"dependencies": {
-		"@mysten/bcs": "^1.2.0",
+		"@mysten/bcs": "^1.6.1",
 		"@mysten/sui": "^1.18.0",
 		"p-limit": "^6.1.0"
 	},
