@@ -9,35 +9,38 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::errors::PackageResult;
+use crate::{errors::PackageResult, package::PackageName};
 use anyhow::{Context, ensure};
 use clap::{Command, Parser, Subcommand};
 use move_core_types::identifier::Identifier;
 use move_package::source_package::layout::SourcePackageLayout;
 
+const MAINNET_CHAIN_ID: &str = "35834a8a";
+const TESTNET_CHAIN_ID: &str = "4c78adac";
+
 /// Build the package
 #[derive(Debug, Clone, Parser)]
 pub struct New {
-    name: String,
+    name: PackageName,
     /// Path to the project
     path: Option<PathBuf>,
 }
 
 impl New {
     pub fn execute(&self) -> PackageResult<()> {
-        if !Identifier::is_valid(&self.name) {
-            return Err(crate::errors::PackageError::Generic(
-                "Invalid package name. Package name must start with a letter or underscore \
-                     and consist only of letters, numbers, and underscores."
-                    .to_string(),
-            ));
-        }
+        // if !Identifier::is_valid(&self.name) {
+        //     return Err(crate::errors::PackageError::Generic(
+        //         "Invalid package name. Package name must start with a letter or underscore \
+        //              and consist only of letters, numbers, and underscores."
+        //             .to_string(),
+        //     ));
+        // }
 
         let path = match self.path {
             Some(ref path) => path,
             None => {
                 let current_dir = std::env::current_dir()?;
-                &current_dir.join(&self.name)
+                &current_dir.join(&self.name.to_string())
             }
         };
 
@@ -93,46 +96,43 @@ module {name}::{name};
         let Self { name, path: _ } = self;
 
         let mut w = std::fs::File::create(path.join(SourcePackageLayout::Manifest.path()))?;
-        let toml_content = r#"[package]
+        let toml_content = r#"# Full documentation for Move.toml can be found at: docs.sui.io
+
+[package]
 name = "{name}"
-edition = "2024" # edition = "legacy" to use legacy (pre-2024) Move
+edition = "2025"         # use "2024" for Move 2024 edition
 # license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
 # authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
-# implicit-deps = true
 # flavor = sui
 
-[environments] # add the environment names and their chain ids here
-mainnet = "35834a8a"
-# testnet = "4c78adac"
+[environments]           # add the environment names and their chain ids here
+mainnet = "{MAINNET_CHAIN_ID}"
+testnet = "{TESTNET_CHAIN_ID}"
 
 [dependencies]
-# Add your dependencies here or leave empty and set implicit-deps true above
+# Add your dependencies here or leave empty.
 
-# Local dep
-# bar_local = { path = "<path>" }
+# Depedency on local package in the directory `../bar`, which can be referred to in the Move code as "bar::module::function"
+# bar = { path = "../bar" }
 
 # Git dependency
-# foo = { git = "https://example.com/foo.git", rev = "releases/v1", rename-from = "Foo"}
+# foo = { git = "https://example.com/foo.git", rev = "releases/v1"}
 
-# To resolve a version conflict and force a specific version for dependency
-# override use `override = true`
-# foo = { git = "https://example.com/foo.git", rev = "releases/v1", rename-from = "Foo", override = true}
+# Setting `override = true` forces your dependencies to use this version of the package.
+# This is required if you need to link against a different version from one of your dependencies, or if
+# two of your dependencies depend on different versions of the same package
+# foo = { git = "https://example.com/foo.git", rev = "releases/v1", override = true}
 
-# External dep via mvr
-# qwer = { r.mvr = "@pkg/qwer" }
+[dep-replacements.mainnet.foo]
+# Dep-replacements should be used to replace dependencies for specific environments
 
-[dep-overrides]
-# used to override dependencies for specific environments
-# mainnet.foo = { git = "https://example.com/foo.git", original-id = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", published-at = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", use-environment = "mainnet_alpha" }
-
-[dep-overrides.mainnet.foo]
 git = "https://example.com/foo.git"
 original-id = "0x12g0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
 published-at = "0x12ga0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
 use-environment = "mainnet_beta"
 ""#;
 
-        let toml_content = toml_content.replace("{name}", name);
+        let toml_content = toml_content.replace("{name}", &name.to_string());
         let toml_path = path.join("Move.toml");
         std::fs::write(&toml_path, toml_content)?;
 

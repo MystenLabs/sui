@@ -7,7 +7,9 @@ Manifest {
             file: "tests/data/invalid_authors/Move.toml",
             value: Spanned {
                 span: 17..23,
-                value: "name",
+                value: Identifier(
+                    "name",
+                ),
             },
         },
         edition: Located {
