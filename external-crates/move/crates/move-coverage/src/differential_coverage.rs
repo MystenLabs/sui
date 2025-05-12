@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::lcov::PackageRecordKeeper;
-use lcov::{report::section as LRS, Reader, Report};
+use lcov::{Reader, Report, report::section as LRS};
 use std::{collections::BTreeMap, fmt::Write};
 
 /// A Differential report is one that shows the lines that are covered by both passing and failing
