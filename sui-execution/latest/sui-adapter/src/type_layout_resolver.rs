@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::data_store::cached_data_store::CachedPackageStore;
-use crate::data_store::linkage_view::LinkageView;
+use crate::data_store::cached_package_store::CachedPackageStore;
+use crate::data_store::legacy::linkage_view::LinkageView;
 use crate::programmable_transactions::context::load_type_from_struct;
 use move_core_types::annotated_value as A;
 use move_core_types::language_storage::StructTag;

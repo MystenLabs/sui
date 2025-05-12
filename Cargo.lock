@@ -13101,6 +13101,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
+ "indexmap 2.8.0",
  "leb128",
  "move-binary-format",
  "move-bytecode-utils",

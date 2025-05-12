@@ -236,6 +236,9 @@ pub enum ExecutionFailureStatus {
         value_size: u64,
         max_scaled_size: u64,
     },
+
+    #[error("A valid linkage was unable to be determined for the transaction")]
+    InvalidLinkage,
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }

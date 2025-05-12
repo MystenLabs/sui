@@ -16,6 +16,7 @@ bcs.workspace = true
 leb128.workspace = true
 tracing.workspace = true
 serde.workspace = true
+indexmap.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
