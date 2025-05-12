@@ -34,37 +34,7 @@ Lockfile {
                 ),
             },
         },
-        dep_overrides: {
-            "mainnet": UnpublishedDependencies {
-                pinned: {
-                    "foo": Git(
-                        PinnedGitDependency {
-                            repo: "",
-                            rev: "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0",
-                            path: "",
-                        },
-                    ),
-                    "std": Git(
-                        PinnedGitDependency {
-                            repo: "",
-                            rev: "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0",
-                            path: "",
-                        },
-                    ),
-                },
-                unpinned: {
-                    "foo": Git(
-                        UnpinnedGitDependency {
-                            repo: "",
-                            rev: Some(
-                                "rev",
-                            ),
-                            path: "",
-                        },
-                    ),
-                },
-            },
-        },
+        dep_replacements: {},
     },
     published: {
         "mainnet": Publication {

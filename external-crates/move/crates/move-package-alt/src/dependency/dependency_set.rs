@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Conveniences for managing the entire collection of dependencies (including overrides) for a
+//! Conveniences for managing the entire collection of dependencies (including replacements) for a
 //! package
 
 use std::{
@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::package::{EnvironmentName, PackageName};
 
-/// A set of default dependencies and dep overrides. Within each environment, package names are
+/// A set of default dependencies and dep replacements. Within each environment, package names are
 /// unique.
 ///
 /// Iterating over a dependency set produces Option<[EnvironmentName]>, [PackageName], T) tuples for
@@ -32,9 +32,9 @@ pub struct DependencySet<T> {
     #[serde(flatten)]
     defaults: BTreeMap<PackageName, T>,
 
-    /// The declared overrides
-    // Invariant: if e is in overrides, then overrides[e] is nonempty
-    overrides: BTreeMap<EnvironmentName, BTreeMap<PackageName, T>>,
+    /// The declared dependency replacements
+    // Invariant: if e is in replacements, then replacements[e] is nonempty
+    replacements: BTreeMap<EnvironmentName, BTreeMap<PackageName, T>>,
 }
 
 impl<T> DependencySet<T> {
@@ -42,13 +42,13 @@ impl<T> DependencySet<T> {
     pub fn new() -> Self {
         Self {
             defaults: BTreeMap::new(),
-            overrides: BTreeMap::new(),
+            replacements: BTreeMap::new(),
         }
     }
 
     /// Return true if [self] has no dependencies
     pub fn is_empty(&self) -> bool {
-        self.defaults.is_empty() && self.overrides.iter().all(|(_, it)| it.is_empty())
+        self.defaults.is_empty() && self.replacements.iter().all(|(_, it)| it.is_empty())
     }
 
     /// Combine all elements of [sets] into one. Any duplicate entries (with the same environment
@@ -63,12 +63,12 @@ impl<T> DependencySet<T> {
     }
 
     /// Return all of the dependencies for [env]: this includes the default dependencies along with
-    /// any overrides (if the same package name has both, the override is returned).
+    /// any replacements (if the same package name has both, the replacement is returned).
     pub fn deps_for_env(&self, env: &EnvironmentName) -> BTreeMap<PackageName, &T> {
         let mut result: BTreeMap<PackageName, &T> = BTreeMap::new();
         result.extend(self.defaults.iter().map(|(k, t)| (k.clone(), t)));
 
-        if let Some(deps) = self.overrides.get(env) {
+        if let Some(deps) = self.replacements.get(env) {
             result.extend(deps.iter().map(|(k, t)| (k.clone(), t)));
         }
 
@@ -91,7 +91,7 @@ impl<T> DependencySet<T> {
     /// Set `self[env][package_name] = value` (dropping previous value if any)
     pub fn insert(&mut self, env: Option<EnvironmentName>, package_name: PackageName, value: T) {
         match env {
-            Some(env) => self.overrides.entry(env).or_default(),
+            Some(env) => self.replacements.entry(env).or_default(),
             None => &mut self.defaults,
         }
         .insert(package_name, value);
@@ -106,7 +106,7 @@ impl<T> DependencySet<T> {
     pub fn contains(&self, env: &Option<EnvironmentName>, package_name: &PackageName) -> bool {
         match env {
             Some(env) => self
-                .overrides
+                .replacements
                 .get(env)
                 .is_some_and(|deps| deps.contains_key(package_name)),
             None => self.defaults.contains_key(package_name),
@@ -118,7 +118,7 @@ impl<T> DependencySet<T> {
     pub fn get(&self, env: &Option<EnvironmentName>, package_name: &PackageName) -> Option<&T> {
         match env {
             Some(env) => self
-                .overrides
+                .replacements
                 .get(env)
                 .and_then(|deps| deps.get(package_name)),
             None => self.defaults.get(package_name),
@@ -144,7 +144,7 @@ impl<T> DependencySet<T> {
         }
     }
 
-    /// Remove any override entries from [self] that are the same as the default entries.
+    /// Remove any replacement entries from [self] that are the same as the default entries.
     ///
     /// Calling [collapse] changes the results of iteration but leaves the `deps_for...` methods
     /// unchanged
@@ -152,10 +152,11 @@ impl<T> DependencySet<T> {
     where
         T: Eq,
     {
-        for (env, values) in self.overrides.iter_mut() {
+        for (env, values) in self.replacements.iter_mut() {
             values.retain(|name, value| self.defaults.get(name) != Some(value));
         }
-        self.overrides.retain(|env, packages| !packages.is_empty());
+        self.replacements
+            .retain(|env, packages| !packages.is_empty());
     }
 }
 
@@ -198,7 +199,7 @@ impl<T> IntoIterator for DependencySet<T> {
         IntoIter {
             environment_name: None,
             inner: self.defaults.into_iter(),
-            outer: self.overrides.into_iter(),
+            outer: self.replacements.into_iter(),
         }
     }
 }
@@ -241,7 +242,7 @@ impl<'a, T> IntoIterator for &'a DependencySet<T> {
         Iter {
             environment_name: None,
             inner: self.defaults.iter(),
-            outer: self.overrides.iter(),
+            outer: self.replacements.iter(),
         }
     }
 }

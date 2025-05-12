@@ -63,7 +63,7 @@ Manifest {
     },
     dep_replacements: {
         "mainnet": {
-            "foo": ManifestDependencyOverride {
+            "foo": ManifestDependencyReplacement {
                 dependency: Some(
                     ManifestDependency {
                         dependency_info: Git(

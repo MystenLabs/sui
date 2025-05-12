@@ -39,7 +39,7 @@ pub struct Manifest<F: MoveFlavor> {
     /// Replace dependencies for the given environment.
     #[serde(default)]
     dep_replacements:
-        BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyOverride<F>>>,
+        BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyReplacement<F>>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -69,7 +69,7 @@ pub struct ManifestDependency<F: MoveFlavor> {
 #[derive(Debug, Deserialize)]
 #[serde(bound = "")]
 #[serde(rename_all = "kebab-case")]
-pub struct ManifestDependencyOverride<F: MoveFlavor> {
+pub struct ManifestDependencyReplacement<F: MoveFlavor> {
     #[serde(flatten, default)]
     dependency: Option<ManifestDependency<F>>,
 
@@ -135,7 +135,7 @@ impl<F: MoveFlavor> Manifest<F> {
         Ok(())
     }
 
-    /// Return the dependency set of this manifest, including overrides.
+    /// Return the dependency set of this manifest, including replacements.
     pub fn dependencies(&self) -> DependencySet<ManifestDependencyInfo<F>> {
         let mut deps = DependencySet::new();
 
@@ -143,8 +143,8 @@ impl<F: MoveFlavor> Manifest<F> {
             deps.insert(None, name.clone(), dep.dependency_info.clone());
         }
 
-        for (env, overrides) in &self.dep_replacements {
-            for (name, dep) in overrides {
+        for (env, replacements) in &self.dep_replacements {
+            for (name, dep) in replacements {
                 if let Some(dep) = &dep.dependency {
                     deps.insert(Some(env.clone()), name.clone(), dep.dependency_info.clone());
                 }

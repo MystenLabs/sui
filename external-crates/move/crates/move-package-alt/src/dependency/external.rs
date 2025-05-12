@@ -80,8 +80,9 @@ impl ExternalDependency {
     /// resolvers.
     ///
     /// Note that the set of entries may be changed because external dependencies may be resolved
-    /// differently for different environments - this may cause the addition of a new dep-override;
-    /// this method may also optimize by removing unnecessary dep-overrides.
+    /// differently for different environments - this may cause the addition of a new
+    /// dep-replacement;
+    /// this method may also optimize by removing unnecessary dep-replacements.
     ///
     /// Expects all environments in [deps] to also be contained in [envs]
     pub async fn resolve<F: MoveFlavor>(

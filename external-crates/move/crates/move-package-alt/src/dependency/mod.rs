@@ -186,7 +186,7 @@ fn split<F: MoveFlavor>(
 
 /// Replace all dependencies with their pinned versions. The returned set may have a different set
 /// of keys than the input, for example if new implicit dependencies are added or if external
-/// resolvers resolve default deps to dep-overrides, or if dep-overrides are identical to the
+/// resolvers resolve default deps to dep-replacements, or if dep-replacements are identical to the
 /// default deps.
 pub async fn pin<F: MoveFlavor>(
     flavor: &F,

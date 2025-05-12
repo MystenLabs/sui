@@ -42,7 +42,7 @@ Manifest {
     },
     dep_replacements: {
         "mainnet": {
-            "foo": ManifestDependencyOverride {
+            "foo": ManifestDependencyReplacement {
                 dependency: None,
                 address_info: Some(
                     (),
