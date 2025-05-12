@@ -70,12 +70,14 @@ pub const FREEZE_FUNCTION_NAME: Symbol = symbol!("freeze_object");
 pub const SHARE_FUNCTION_NAME: Symbol = symbol!("share_object");
 pub const RECEIVE_FUNCTION_NAME: Symbol = symbol!("receive");
 pub const RECEIVING_TYPE_NAME: Symbol = symbol!("Receiving");
+pub const PARTY_FUNCTION_NAME: Symbol = symbol!("party_transfer");
 
 pub const PRIVATE_TRANSFER_FUNCTIONS: &[Symbol] = &[
     TRANSFER_FUNCTION_NAME,
     FREEZE_FUNCTION_NAME,
     SHARE_FUNCTION_NAME,
     RECEIVE_FUNCTION_NAME,
+    PARTY_FUNCTION_NAME,
 ];
 
 //**************************************************************************************************

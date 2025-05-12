@@ -684,6 +684,10 @@ struct FeatureFlags {
     // If true, resolves all type input ids to be defining ID based in the adapter
     #[serde(skip_serializing_if = "is_false")]
     resolve_type_input_ids_to_defining_id: bool,
+
+    // Enable native function for party transfer
+    #[serde(skip_serializing_if = "is_false")]
+    enable_party_transfer: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1155,6 +1159,8 @@ pub struct ProtocolConfig {
     // Transfer
     // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
     transfer_transfer_internal_cost_base: Option<u64>,
+    // Cost params for the Move native function `party_transfer_impl<T: key>(obj: T, party_members: vector<address>)`
+    transfer_party_transfer_internal_cost_base: Option<u64>,
     // Cost params for the Move native function `freeze_object<T: key>(obj: T)`
     transfer_freeze_object_cost_base: Option<u64>,
     // Cost params for the Move native function `share_object<T: key>(obj: T)`
@@ -1958,6 +1964,10 @@ impl ProtocolConfig {
     pub fn resolve_type_input_ids_to_defining_id(&self) -> bool {
         self.feature_flags.resolve_type_input_ids_to_defining_id
     }
+
+    pub fn enable_party_transfer(&self) -> bool {
+        self.feature_flags.enable_party_transfer
+    }
 }
 
 #[cfg(not(msim))]
@@ -2242,6 +2252,8 @@ impl ProtocolConfig {
             // `transfer` module
             // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
             transfer_transfer_internal_cost_base: Some(52),
+            // Cost params for the Move native function `party_transfer_impl<T: key>(obj: T, party_members: vector<address>)`
+            transfer_party_transfer_internal_cost_base: None,
             // Cost params for the Move native function `freeze_object<T: key>(obj: T)`
             transfer_freeze_object_cost_base: Some(52),
             // Cost params for the Move native function `share_object<T: key>(obj: T)`
@@ -3495,6 +3507,7 @@ impl ProtocolConfig {
                 }
                 83 => {
                     cfg.feature_flags.resolve_type_input_ids_to_defining_id = true;
+                    cfg.transfer_party_transfer_internal_cost_base = Some(52);
                 }
                 // Use this template when making changes:
                 //

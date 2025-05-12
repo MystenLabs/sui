@@ -1327,6 +1327,7 @@
                 "enable_group_ops_native_functions": false,
                 "enable_jwk_consensus_updates": false,
                 "enable_nitro_attestation": false,
+                "enable_party_transfer": false,
                 "enable_poseidon": false,
                 "enable_vdf": false,
                 "end_of_epoch_transaction_supported": false,
@@ -1946,6 +1947,7 @@
                 "transfer_freeze_object_cost_base": {
                   "u64": "52"
                 },
+                "transfer_party_transfer_internal_cost_base": null,
                 "transfer_receive_object_cost_base": null,
                 "transfer_share_object_cost_base": {
                   "u64": "52"
