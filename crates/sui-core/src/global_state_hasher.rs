@@ -21,22 +21,22 @@ use fastcrypto::hash::MultisetHash;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::SuiResult;
+use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, ECMHLiveObjectSetDigest};
-use sui_types::object_state_hash::ObjectStateHash;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_tables::LiveObject;
 
-pub struct ObjectStateHashMetrics {
+pub struct GlobalStateHashMetrics {
     inconsistent_state: IntGauge,
 }
 
-impl ObjectStateHashMetrics {
+impl GlobalStateHashMetrics {
     pub fn new(registry: &Registry) -> Arc<Self> {
         let this = Self {
             inconsistent_state: register_int_gauge_with_registry!(
-                "object_state_hasher_inconsistent_state",
-                "1 if accumulated live object set differs from ObjectStateHasher root state hash for the previous epoch",
+                "global_state_hasher_inconsistent_state",
+                "1 if accumulated live object set differs from GlobalStateHasher root state hash for the previous epoch",
                 registry
             )
             .unwrap(),
@@ -45,12 +45,12 @@ impl ObjectStateHashMetrics {
     }
 }
 
-pub struct ObjectStateHasher {
-    store: Arc<dyn ObjectStateHashStore>,
-    metrics: Arc<ObjectStateHashMetrics>,
+pub struct GlobalStateHasher {
+    store: Arc<dyn GlobalStateHashStore>,
+    metrics: Arc<GlobalStateHashMetrics>,
 }
 
-pub trait ObjectStateHashStore: ObjectStore + Send + Sync {
+pub trait GlobalStateHashStore: ObjectStore + Send + Sync {
     /// This function is only called in older protocol versions, and should no longer be used.
     /// It creates an explicit dependency to tombstones which is not desired.
     fn get_object_ref_prior_to_key_deprecated(
@@ -62,17 +62,17 @@ pub trait ObjectStateHashStore: ObjectStore + Send + Sync {
     fn get_root_state_hash_for_epoch(
         &self,
         epoch: EpochId,
-    ) -> SuiResult<Option<(CheckpointSequenceNumber, ObjectStateHash)>>;
+    ) -> SuiResult<Option<(CheckpointSequenceNumber, GlobalStateHash)>>;
 
     fn get_root_state_hash_for_highest_epoch(
         &self,
-    ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, ObjectStateHash))>>;
+    ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, GlobalStateHash))>>;
 
     fn insert_state_hash_for_epoch(
         &self,
         epoch: EpochId,
         checkpoint_seq_num: &CheckpointSequenceNumber,
-        acc: &ObjectStateHash,
+        acc: &GlobalStateHash,
     ) -> SuiResult;
 
     fn iter_live_object_set(
@@ -88,7 +88,7 @@ pub trait ObjectStateHashStore: ObjectStore + Send + Sync {
     }
 }
 
-impl ObjectStateHashStore for InMemoryStorage {
+impl GlobalStateHashStore for InMemoryStorage {
     fn get_object_ref_prior_to_key_deprecated(
         &self,
         _object_id: &ObjectID,
@@ -100,13 +100,13 @@ impl ObjectStateHashStore for InMemoryStorage {
     fn get_root_state_hash_for_epoch(
         &self,
         _epoch: EpochId,
-    ) -> SuiResult<Option<(CheckpointSequenceNumber, ObjectStateHash)>> {
+    ) -> SuiResult<Option<(CheckpointSequenceNumber, GlobalStateHash)>> {
         unreachable!("not used for testing")
     }
 
     fn get_root_state_hash_for_highest_epoch(
         &self,
-    ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, ObjectStateHash))>> {
+    ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, GlobalStateHash))>> {
         unreachable!("not used for testing")
     }
 
@@ -114,7 +114,7 @@ impl ObjectStateHashStore for InMemoryStorage {
         &self,
         _epoch: EpochId,
         _checkpoint_seq_num: &CheckpointSequenceNumber,
-        _acc: &ObjectStateHash,
+        _acc: &GlobalStateHash,
     ) -> SuiResult {
         unreachable!("not used for testing")
     }
@@ -151,10 +151,10 @@ pub fn accumulate_effects<T, S>(
     store: S,
     effects: &[TransactionEffects],
     protocol_config: &ProtocolConfig,
-) -> ObjectStateHash
+) -> GlobalStateHash
 where
     S: std::ops::Deref<Target = T>,
-    T: ObjectStateHashStore + ?Sized,
+    T: GlobalStateHashStore + ?Sized,
 {
     if protocol_config.enable_effects_v2() {
         accumulate_effects_v3(effects)
@@ -169,12 +169,12 @@ fn accumulate_effects_v1<T, S>(
     store: S,
     effects: &[TransactionEffects],
     protocol_config: &ProtocolConfig,
-) -> ObjectStateHash
+) -> GlobalStateHash
 where
     S: std::ops::Deref<Target = T>,
-    T: ObjectStateHashStore + ?Sized,
+    T: GlobalStateHashStore + ?Sized,
 {
-    let mut acc = ObjectStateHash::default();
+    let mut acc = GlobalStateHash::default();
 
     // process insertions to the set
     acc.insert_all(
@@ -298,12 +298,12 @@ where
     acc
 }
 
-fn accumulate_effects_v2<T, S>(store: S, effects: &[TransactionEffects]) -> ObjectStateHash
+fn accumulate_effects_v2<T, S>(store: S, effects: &[TransactionEffects]) -> GlobalStateHash
 where
     S: std::ops::Deref<Target = T>,
-    T: ObjectStateHashStore + ?Sized,
+    T: GlobalStateHashStore + ?Sized,
 {
-    let mut acc = ObjectStateHash::default();
+    let mut acc = GlobalStateHash::default();
 
     // process insertions to the set
     acc.insert_all(
@@ -342,8 +342,8 @@ where
     acc
 }
 
-fn accumulate_effects_v3(effects: &[TransactionEffects]) -> ObjectStateHash {
-    let mut acc = ObjectStateHash::default();
+fn accumulate_effects_v3(effects: &[TransactionEffects]) -> GlobalStateHash {
+    let mut acc = GlobalStateHash::default();
 
     // process insertions to the set
     acc.insert_all(
@@ -372,16 +372,16 @@ fn accumulate_effects_v3(effects: &[TransactionEffects]) -> ObjectStateHash {
     acc
 }
 
-impl ObjectStateHasher {
-    pub fn new(store: Arc<dyn ObjectStateHashStore>, metrics: Arc<ObjectStateHashMetrics>) -> Self {
+impl GlobalStateHasher {
+    pub fn new(store: Arc<dyn GlobalStateHashStore>, metrics: Arc<GlobalStateHashMetrics>) -> Self {
         Self { store, metrics }
     }
 
-    pub fn new_for_tests(store: Arc<dyn ObjectStateHashStore>) -> Self {
-        Self::new(store, ObjectStateHashMetrics::new(&Registry::new()))
+    pub fn new_for_tests(store: Arc<dyn GlobalStateHashStore>) -> Self {
+        Self::new(store, GlobalStateHashMetrics::new(&Registry::new()))
     }
 
-    pub fn metrics(&self) -> Arc<ObjectStateHashMetrics> {
+    pub fn metrics(&self) -> Arc<GlobalStateHashMetrics> {
         self.metrics.clone()
     }
 
@@ -397,7 +397,7 @@ impl ObjectStateHasher {
         effects: &[TransactionEffects],
         checkpoint_seq_num: CheckpointSequenceNumber,
         epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiResult<ObjectStateHash> {
+    ) -> SuiResult<GlobalStateHash> {
         let _scope = monitored_scope("AccumulateCheckpoint");
         if let Some(acc) = epoch_store.get_state_hash_for_checkpoint(&checkpoint_seq_num)? {
             return Ok(acc);
@@ -418,7 +418,7 @@ impl ObjectStateHasher {
     pub fn accumulate_cached_live_object_set_for_testing(
         &self,
         include_wrapped_tombstone: bool,
-    ) -> ObjectStateHash {
+    ) -> GlobalStateHash {
         Self::accumulate_live_object_set_impl(
             self.store
                 .iter_cached_live_object_set_for_testing(include_wrapped_tombstone),
@@ -426,21 +426,21 @@ impl ObjectStateHasher {
     }
 
     /// Returns the result of accumulating the live object set, without side effects
-    pub fn accumulate_live_object_set(&self, include_wrapped_tombstone: bool) -> ObjectStateHash {
+    pub fn accumulate_live_object_set(&self, include_wrapped_tombstone: bool) -> GlobalStateHash {
         Self::accumulate_live_object_set_impl(
             self.store.iter_live_object_set(include_wrapped_tombstone),
         )
     }
 
-    fn accumulate_live_object_set_impl(iter: impl Iterator<Item = LiveObject>) -> ObjectStateHash {
-        let mut acc = ObjectStateHash::default();
+    fn accumulate_live_object_set_impl(iter: impl Iterator<Item = LiveObject>) -> GlobalStateHash {
+        let mut acc = GlobalStateHash::default();
         iter.for_each(|live_object| {
             Self::accumulate_live_object(&mut acc, &live_object);
         });
         acc
     }
 
-    pub fn accumulate_live_object(acc: &mut ObjectStateHash, live_object: &LiveObject) {
+    pub fn accumulate_live_object(acc: &mut GlobalStateHash, live_object: &LiveObject) {
         match live_object {
             LiveObject::Normal(object) => {
                 acc.insert(object.compute_object_reference().2);
@@ -504,9 +504,9 @@ impl ObjectStateHasher {
         &self,
         epoch_store: &AuthorityPerEpochStore,
         checkpoint_seq_num: CheckpointSequenceNumber,
-    ) -> SuiResult<ObjectStateHash> {
+    ) -> SuiResult<GlobalStateHash> {
         if checkpoint_seq_num == 0 {
-            return Ok(ObjectStateHash::default());
+            return Ok(GlobalStateHash::default());
         }
 
         if let Some((prev_epoch, (last_checkpoint_prev_epoch, prev_acc))) =
@@ -536,7 +536,7 @@ impl ObjectStateHasher {
         &self,
         epoch_store: &AuthorityPerEpochStore,
         checkpoint_seq_num: CheckpointSequenceNumber,
-        checkpoint_acc: Option<ObjectStateHash>,
+        checkpoint_acc: Option<GlobalStateHash>,
     ) -> SuiResult {
         let _scope = monitored_scope("AccumulateRunningRoot");
         tracing::info!(
@@ -578,7 +578,7 @@ impl ObjectStateHasher {
         &self,
         epoch_store: Arc<AuthorityPerEpochStore>,
         last_checkpoint_of_epoch: CheckpointSequenceNumber,
-    ) -> SuiResult<ObjectStateHash> {
+    ) -> SuiResult<GlobalStateHash> {
         let _scope = monitored_scope("AccumulateEpochV2");
         let running_root = epoch_store
             .get_running_root_state_hash(last_checkpoint_of_epoch)?
@@ -601,7 +601,7 @@ impl ObjectStateHasher {
         &self,
         effects: &[TransactionEffects],
         protocol_config: &ProtocolConfig,
-    ) -> ObjectStateHash {
+    ) -> GlobalStateHash {
         accumulate_effects(&*self.store, effects, protocol_config)
     }
 }

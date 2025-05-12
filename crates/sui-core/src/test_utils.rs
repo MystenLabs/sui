@@ -32,7 +32,7 @@ use tokio::time::timeout;
 use tracing::{info, warn};
 
 use crate::authority::AuthorityState;
-use crate::object_state_hasher::ObjectStateHasher;
+use crate::global_state_hasher::GlobalStateHasher;
 
 const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -64,7 +64,7 @@ pub async fn send_and_confirm_transaction(
     // We also check the incremental effects of the transaction on the live object set against StateAccumulator
     // for testing and regression detection
     let state_acc =
-        ObjectStateHasher::new_for_tests(authority.get_object_state_hash_store().clone());
+        GlobalStateHasher::new_for_tests(authority.get_global_state_hash_store().clone());
     let include_wrapped_tombstone = !authority
         .epoch_store_for_testing()
         .protocol_config()

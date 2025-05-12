@@ -15,7 +15,7 @@ pub use crate::checkpoints::checkpoint_output::{
 };
 pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::execution_cache::TransactionCacheRead;
-use crate::object_state_hasher::ObjectStateHasher;
+use crate::global_state_hasher::GlobalStateHasher;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
 use diffy::create_patch;
 use itertools::Itertools;
@@ -1024,14 +1024,14 @@ pub enum CheckpointWatermark {
 
 struct CheckpointStateHasher {
     epoch_store: Arc<AuthorityPerEpochStore>,
-    hasher: Weak<ObjectStateHasher>,
+    hasher: Weak<GlobalStateHasher>,
     receive_from_builder: mpsc::Receiver<(CheckpointSequenceNumber, Vec<TransactionEffects>)>,
 }
 
 impl CheckpointStateHasher {
     fn new(
         epoch_store: Arc<AuthorityPerEpochStore>,
-        hasher: Weak<ObjectStateHasher>,
+        hasher: Weak<GlobalStateHasher>,
         receive_from_builder: mpsc::Receiver<(CheckpointSequenceNumber, Vec<TransactionEffects>)>,
     ) -> Self {
         Self {
@@ -1067,7 +1067,7 @@ pub struct CheckpointBuilder {
     notify_aggregator: Arc<Notify>,
     last_built: watch::Sender<CheckpointSequenceNumber>,
     effects_store: Arc<dyn TransactionCacheRead>,
-    object_state_hasher: Weak<ObjectStateHasher>,
+    global_state_hasher: Weak<GlobalStateHasher>,
     send_to_hasher: mpsc::Sender<(CheckpointSequenceNumber, Vec<TransactionEffects>)>,
     output: Box<dyn CheckpointOutput>,
     metrics: Arc<CheckpointMetrics>,
@@ -1105,7 +1105,7 @@ impl CheckpointBuilder {
         notify: Arc<Notify>,
         effects_store: Arc<dyn TransactionCacheRead>,
         // for synchronous accumulation of end-of-epoch checkpoint
-        object_state_hasher: Weak<ObjectStateHasher>,
+        global_state_hasher: Weak<GlobalStateHasher>,
         // for asynchronous/concurrent accumulation of regular checkpoints
         send_to_hasher: mpsc::Sender<(CheckpointSequenceNumber, Vec<TransactionEffects>)>,
         output: Box<dyn CheckpointOutput>,
@@ -1121,7 +1121,7 @@ impl CheckpointBuilder {
             epoch_store,
             notify,
             effects_store,
-            object_state_hasher,
+            global_state_hasher,
             send_to_hasher,
             output,
             notify_aggregator,
@@ -1734,7 +1734,7 @@ impl CheckpointBuilder {
                 // otherwise we will not capture the change_epoch tx.
                 let root_state_digest = {
                     let state_acc = self
-                        .object_state_hasher
+                        .global_state_hasher
                         .upgrade()
                         .expect("No checkpoints should be getting built after local configuration");
                     let acc = state_acc.accumulate_checkpoint(
@@ -2554,7 +2554,7 @@ impl CheckpointService {
         checkpoint_store: Arc<CheckpointStore>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         effects_store: Arc<dyn TransactionCacheRead>,
-        object_state_hasher: Weak<ObjectStateHasher>,
+        global_state_hasher: Weak<GlobalStateHasher>,
         checkpoint_output: Box<dyn CheckpointOutput>,
         certified_checkpoint_output: Box<dyn CertifiedCheckpointOutput>,
         metrics: Arc<CheckpointMetrics>,
@@ -2595,7 +2595,7 @@ impl CheckpointService {
 
         let ckpt_state_hasher = CheckpointStateHasher::new(
             epoch_store.clone(),
-            object_state_hasher.clone(),
+            global_state_hasher.clone(),
             receive_from_builder,
         );
 
@@ -2605,7 +2605,7 @@ impl CheckpointService {
             epoch_store.clone(),
             notify_builder.clone(),
             effects_store,
-            object_state_hasher,
+            global_state_hasher,
             send_to_hasher,
             checkpoint_output,
             notify_aggregator.clone(),
@@ -2928,8 +2928,8 @@ mod tests {
         let checkpoint_store = CheckpointStore::new(ckpt_dir.path());
         let epoch_store = state.epoch_store_for_testing();
 
-        let object_state_hasher = Arc::new(ObjectStateHasher::new_for_tests(
-            state.get_object_state_hash_store().clone(),
+        let global_state_hasher = Arc::new(GlobalStateHasher::new_for_tests(
+            state.get_global_state_hash_store().clone(),
         ));
 
         let checkpoint_service = CheckpointService::build(
@@ -2937,7 +2937,7 @@ mod tests {
             checkpoint_store,
             epoch_store.clone(),
             store,
-            Arc::downgrade(&object_state_hasher),
+            Arc::downgrade(&global_state_hasher),
             Box::new(output),
             Box::new(certified_output),
             CheckpointMetrics::new_for_tests(),

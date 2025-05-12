@@ -8,7 +8,7 @@ use std::path::Path;
 use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::object_state_hash::ObjectStateHash;
+use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::storage::{FullObjectKey, MarkerValue};
 use tracing::error;
 use typed_store::metrics::SamplingInterval;
@@ -114,7 +114,7 @@ pub struct AuthorityPerpetualTables {
     // of last checkpoint of epoch. These values should only ever be written once
     // and never changed
     pub(crate) root_state_hash_by_epoch:
-        DBMap<EpochId, (CheckpointSequenceNumber, ObjectStateHash)>,
+        DBMap<EpochId, (CheckpointSequenceNumber, GlobalStateHash)>,
 
     /// Parameters of the system fixed at the epoch start
     pub(crate) epoch_start_configuration: DBMap<(), EpochStartConfiguration>,
@@ -623,7 +623,7 @@ impl AuthorityPerpetualTables {
     pub fn get_root_state_hash(
         &self,
         epoch: EpochId,
-    ) -> SuiResult<Option<(CheckpointSequenceNumber, ObjectStateHash)>> {
+    ) -> SuiResult<Option<(CheckpointSequenceNumber, GlobalStateHash)>> {
         Ok(self.root_state_hash_by_epoch.get(&epoch)?)
     }
 
@@ -631,7 +631,7 @@ impl AuthorityPerpetualTables {
         &self,
         epoch: EpochId,
         last_checkpoint_of_epoch: CheckpointSequenceNumber,
-        hash: ObjectStateHash,
+        hash: GlobalStateHash,
     ) -> SuiResult {
         self.root_state_hash_by_epoch
             .insert(&epoch, &(last_checkpoint_of_epoch, hash))?;

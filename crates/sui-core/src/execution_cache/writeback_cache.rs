@@ -46,7 +46,7 @@ use crate::authority::backpressure::BackpressureManager;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::authority::AuthorityStore;
 use crate::fallback_fetch::{do_fallback_lookup, do_fallback_lookup_fallible};
-use crate::object_state_hasher::ObjectStateHashStore;
+use crate::global_state_hasher::GlobalStateHashStore;
 use crate::transaction_outputs::TransactionOutputs;
 
 use dashmap::mapref::entry::Entry as DashMapEntry;
@@ -72,10 +72,10 @@ use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDige
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
-use sui_types::object_state_hash::ObjectStateHash;
 use sui_types::storage::{
     FullObjectKey, MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject,
 };
@@ -2065,7 +2065,7 @@ impl ExecutionCacheWrite for WritebackCache {
 
 implement_passthrough_traits!(WritebackCache);
 
-impl ObjectStateHashStore for WritebackCache {
+impl GlobalStateHashStore for WritebackCache {
     fn get_object_ref_prior_to_key_deprecated(
         &self,
         object_id: &ObjectID,
@@ -2121,13 +2121,13 @@ impl ObjectStateHashStore for WritebackCache {
     fn get_root_state_hash_for_epoch(
         &self,
         epoch: EpochId,
-    ) -> SuiResult<Option<(CheckpointSequenceNumber, ObjectStateHash)>> {
+    ) -> SuiResult<Option<(CheckpointSequenceNumber, GlobalStateHash)>> {
         self.store.get_root_state_hash_for_epoch(epoch)
     }
 
     fn get_root_state_hash_for_highest_epoch(
         &self,
-    ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, ObjectStateHash))>> {
+    ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, GlobalStateHash))>> {
         self.store.get_root_state_hash_for_highest_epoch()
     }
 
@@ -2135,7 +2135,7 @@ impl ObjectStateHashStore for WritebackCache {
         &self,
         epoch: EpochId,
         checkpoint_seq_num: &CheckpointSequenceNumber,
-        acc: &ObjectStateHash,
+        acc: &GlobalStateHash,
     ) -> SuiResult {
         self.store
             .insert_state_hash_for_epoch(epoch, checkpoint_seq_num, acc)

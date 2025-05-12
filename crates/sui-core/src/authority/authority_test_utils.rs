@@ -88,7 +88,7 @@ pub async fn execute_certificate_with_execution_error(
     // We must do this before sending to consensus, otherwise consensus may already
     // lead to transaction execution and state change.
     let state_acc =
-        ObjectStateHasher::new_for_tests(authority.get_object_state_hash_store().clone());
+        GlobalStateHasher::new_for_tests(authority.get_global_state_hash_store().clone());
     let include_wrapped_tombstone = !authority
         .epoch_store_for_testing()
         .protocol_config()

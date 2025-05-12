@@ -36,7 +36,7 @@ use sui_core::consensus_adapter::ConsensusClient;
 use sui_core::consensus_manager::UpdatableConsensusClient;
 use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::build_execution_cache;
-use sui_core::object_state_hasher::ObjectStateHashMetrics;
+use sui_core::global_state_hasher::GlobalStateHashMetrics;
 use sui_core::storage::RestReadStore;
 use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_json_rpc::bridge_api::BridgeReadApi;
@@ -95,9 +95,9 @@ use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::epoch::consensus_store_pruner::ConsensusStorePruner;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
+use sui_core::global_state_hasher::GlobalStateHasher;
 use sui_core::jsonrpc_index::IndexStore;
 use sui_core::module_cache_metrics::ResolverMetrics;
-use sui_core::object_state_hasher::ObjectStateHasher;
 use sui_core::overload_monitor::overload_monitor;
 use sui_core::rpc_index::RpcIndexStore;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
@@ -249,7 +249,7 @@ pub struct SuiNode {
     state_sync_handle: state_sync::Handle,
     randomness_handle: randomness::Handle,
     checkpoint_store: Arc<CheckpointStore>,
-    object_state_hasher: Mutex<Option<Arc<ObjectStateHasher>>>,
+    global_state_hasher: Mutex<Option<Arc<GlobalStateHasher>>>,
     connection_monitor_status: Arc<ConnectionMonitorStatus>,
 
     /// Broadcast channel to send the starting system state for the next epoch.
@@ -768,7 +768,7 @@ impl SuiNode {
         {
             if let Some(indexes) = state.indexes.clone() {
                 sui_core::verify_indexes::verify_indexes(
-                    state.get_object_state_hash_store().as_ref(),
+                    state.get_global_state_hash_store().as_ref(),
                     indexes,
                 )
                 .expect("secondary indexes are inconsistent");
@@ -802,9 +802,9 @@ impl SuiNode {
         )
         .await?;
 
-        let object_state_hasher = Arc::new(ObjectStateHasher::new(
-            cache_traits.object_state_hash_store.clone(),
-            ObjectStateHashMetrics::new(&prometheus_registry),
+        let global_state_hasher = Arc::new(GlobalStateHasher::new(
+            cache_traits.global_state_hash_store.clone(),
+            GlobalStateHashMetrics::new(&prometheus_registry),
         ));
 
         let authority_names_to_peer_ids = epoch_store
@@ -849,7 +849,7 @@ impl SuiNode {
                     checkpoint_store.clone(),
                     state_sync_handle.clone(),
                     randomness_handle.clone(),
-                    Arc::downgrade(&object_state_hasher),
+                    Arc::downgrade(&global_state_hasher),
                     backpressure_manager.clone(),
                     connection_monitor_status.clone(),
                     &registry_service,
@@ -886,7 +886,7 @@ impl SuiNode {
             state_sync_handle,
             randomness_handle,
             checkpoint_store,
-            object_state_hasher: Mutex::new(Some(object_state_hasher)),
+            global_state_hasher: Mutex::new(Some(global_state_hasher)),
             end_of_epoch_channel,
             connection_monitor_status,
             trusted_peer_change_tx,
@@ -1207,7 +1207,7 @@ impl SuiNode {
         checkpoint_store: Arc<CheckpointStore>,
         state_sync_handle: state_sync::Handle,
         randomness_handle: randomness::Handle,
-        object_state_hasher: Weak<ObjectStateHasher>,
+        global_state_hasher: Weak<GlobalStateHasher>,
         backpressure_manager: Arc<BackpressureManager>,
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
         registry_service: &RegistryService,
@@ -1281,7 +1281,7 @@ impl SuiNode {
             randomness_handle,
             consensus_manager,
             consensus_store_pruner,
-            object_state_hasher,
+            global_state_hasher,
             backpressure_manager,
             validator_server_handle,
             validator_overload_monitor_handle,
@@ -1302,7 +1302,7 @@ impl SuiNode {
         randomness_handle: randomness::Handle,
         consensus_manager: ConsensusManager,
         consensus_store_pruner: ConsensusStorePruner,
-        state_hasher: Weak<ObjectStateHasher>,
+        state_hasher: Weak<GlobalStateHasher>,
         backpressure_manager: Arc<BackpressureManager>,
         validator_server_handle: SpawnOnce,
         validator_overload_monitor_handle: Option<JoinHandle<()>>,
@@ -1434,7 +1434,7 @@ impl SuiNode {
         epoch_store: Arc<AuthorityPerEpochStore>,
         state: Arc<AuthorityState>,
         state_sync_handle: state_sync::Handle,
-        state_hasher: Weak<ObjectStateHasher>,
+        state_hasher: Weak<GlobalStateHasher>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
     ) -> Arc<CheckpointService> {
         let epoch_start_timestamp_ms = epoch_store.epoch_start_state().epoch_start_timestamp_ms();
@@ -1704,7 +1704,7 @@ impl SuiNode {
             CheckpointExecutorMetrics::new(&self.registry_service.default_registry());
 
         loop {
-            let mut hasher_guard = self.object_state_hasher.lock().await;
+            let mut hasher_guard = self.global_state_hasher.lock().await;
             let hasher = hasher_guard.take().unwrap();
             info!(
                 "Creating checkpoint executor for epoch {}",
@@ -1892,12 +1892,12 @@ impl SuiNode {
 
                 // No other components should be holding a strong reference to state hasher
                 // at this point. Confirm here before we swap in the new hasher.
-                let object_state_hasher_metrics = Arc::into_inner(hasher)
+                let global_state_hasher_metrics = Arc::into_inner(hasher)
                     .expect("Object state hasher should have no other references at this point")
                     .metrics();
-                let new_hasher = Arc::new(ObjectStateHasher::new(
-                    self.state.get_object_state_hash_store().clone(),
-                    object_state_hasher_metrics,
+                let new_hasher = Arc::new(GlobalStateHasher::new(
+                    self.state.get_global_state_hash_store().clone(),
+                    global_state_hasher_metrics,
                 ));
                 let weak_hasher = Arc::downgrade(&new_hasher);
                 *hasher_guard = Some(new_hasher);
@@ -1934,12 +1934,12 @@ impl SuiNode {
             } else {
                 // No other components should be holding a strong reference to state hasher
                 // at this point. Confirm here before we swap in the new hasher.
-                let object_state_hasher_metrics = Arc::into_inner(hasher)
+                let global_state_hasher_metrics = Arc::into_inner(hasher)
                     .expect("Object state hasher should have no other references at this point")
                     .metrics();
-                let new_hasher = Arc::new(ObjectStateHasher::new(
-                    self.state.get_object_state_hash_store().clone(),
-                    object_state_hasher_metrics,
+                let new_hasher = Arc::new(GlobalStateHasher::new(
+                    self.state.get_global_state_hash_store().clone(),
+                    global_state_hasher_metrics,
                 ));
                 let weak_hasher = Arc::downgrade(&new_hasher);
                 *hasher_guard = Some(new_hasher);
@@ -2010,7 +2010,7 @@ impl SuiNode {
         cur_epoch_store: &AuthorityPerEpochStore,
         next_epoch_committee: Committee,
         next_epoch_start_system_state: EpochStartSystemState,
-        object_state_hasher: Arc<ObjectStateHasher>,
+        global_state_hasher: Arc<GlobalStateHasher>,
     ) -> Arc<AuthorityPerEpochStore> {
         let next_epoch = next_epoch_committee.epoch();
 
@@ -2044,7 +2044,7 @@ impl SuiNode {
                 self.config.supported_protocol_versions.unwrap(),
                 next_epoch_committee,
                 epoch_start_configuration,
-                object_state_hasher,
+                global_state_hasher,
                 &self.config.expensive_safety_check_config,
                 last_checkpoint_seq,
             )

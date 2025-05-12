@@ -11,7 +11,7 @@ use crate::authority::authority_store_pruner::{
 };
 use crate::authority::authority_store_types::{get_store_object, StoreObject, StoreObjectWrapper};
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
-use crate::object_state_hasher::ObjectStateHashStore;
+use crate::global_state_hasher::GlobalStateHashStore;
 use crate::rpc_index::RpcIndexStore;
 use crate::transaction_outputs::TransactionOutputs;
 use either::Either;
@@ -26,8 +26,8 @@ use sui_storage::mutex_table::{MutexGuard, MutexTable};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::error::UserInputError;
 use sui_types::execution::TypeLayoutStore;
+use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::Message;
-use sui_types::object_state_hash::ObjectStateHash;
 use sui_types::storage::{
     get_module, BackingPackageStore, FullObjectKey, MarkerValue, ObjectKey, ObjectOrTombstone,
     ObjectStore,
@@ -116,7 +116,7 @@ pub struct AuthorityStore {
     pub(crate) perpetual_tables: Arc<AuthorityPerpetualTables>,
 
     pub(crate) root_state_notify_read:
-        NotifyRead<EpochId, (CheckpointSequenceNumber, ObjectStateHash)>,
+        NotifyRead<EpochId, (CheckpointSequenceNumber, GlobalStateHash)>,
 
     /// Whether to enable expensive SUI conservation check at epoch boundaries.
     enable_epoch_sui_conservation_check: bool,
@@ -234,7 +234,7 @@ impl AuthorityStore {
             perpetual_tables,
             root_state_notify_read: NotifyRead::<
                 EpochId,
-                (CheckpointSequenceNumber, ObjectStateHash),
+                (CheckpointSequenceNumber, GlobalStateHash),
             >::new(),
             enable_epoch_sui_conservation_check,
             metrics: AuthorityStoreMetrics::new(registry),
@@ -298,7 +298,7 @@ impl AuthorityStore {
             perpetual_tables,
             root_state_notify_read: NotifyRead::<
                 EpochId,
-                (CheckpointSequenceNumber, ObjectStateHash),
+                (CheckpointSequenceNumber, GlobalStateHash),
             >::new(),
             enable_epoch_sui_conservation_check,
             metrics: AuthorityStoreMetrics::new(registry),
@@ -459,7 +459,7 @@ impl AuthorityStore {
     pub async fn notify_read_root_state_hash(
         &self,
         epoch: EpochId,
-    ) -> SuiResult<(CheckpointSequenceNumber, ObjectStateHash)> {
+    ) -> SuiResult<(CheckpointSequenceNumber, GlobalStateHash)> {
         // We need to register waiters _before_ reading from the database to avoid race conditions
         let registration = self.root_state_notify_read.register_one(&epoch);
         let hash = self.perpetual_tables.root_state_hash_by_epoch.get(&epoch)?;
@@ -1737,7 +1737,7 @@ impl AuthorityStore {
     }
 }
 
-impl ObjectStateHashStore for AuthorityStore {
+impl GlobalStateHashStore for AuthorityStore {
     fn get_object_ref_prior_to_key_deprecated(
         &self,
         object_id: &ObjectID,
@@ -1749,7 +1749,7 @@ impl ObjectStateHashStore for AuthorityStore {
     fn get_root_state_hash_for_epoch(
         &self,
         epoch: EpochId,
-    ) -> SuiResult<Option<(CheckpointSequenceNumber, ObjectStateHash)>> {
+    ) -> SuiResult<Option<(CheckpointSequenceNumber, GlobalStateHash)>> {
         self.perpetual_tables
             .root_state_hash_by_epoch
             .get(&epoch)
@@ -1758,7 +1758,7 @@ impl ObjectStateHashStore for AuthorityStore {
 
     fn get_root_state_hash_for_highest_epoch(
         &self,
-    ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, ObjectStateHash))>> {
+    ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, GlobalStateHash))>> {
         Ok(self
             .perpetual_tables
             .root_state_hash_by_epoch
@@ -1771,7 +1771,7 @@ impl ObjectStateHashStore for AuthorityStore {
         &self,
         epoch: EpochId,
         last_checkpoint_of_epoch: &CheckpointSequenceNumber,
-        acc: &ObjectStateHash,
+        acc: &GlobalStateHash,
     ) -> SuiResult {
         self.perpetual_tables
             .root_state_hash_by_epoch

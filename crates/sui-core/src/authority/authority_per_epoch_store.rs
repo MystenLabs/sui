@@ -54,6 +54,7 @@ use sui_types::executable_transaction::{
     TrustedExecutableTransaction, VerifiedExecutableTransaction,
 };
 use sui_types::execution::{ExecutionTimeObservationKey, ExecutionTiming};
+use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::TrustedEnvelope;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
@@ -63,7 +64,6 @@ use sui_types::messages_consensus::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
     ExecutionTimeObservation, TimestampMs, VersionedDkgConfirmation,
 };
-use sui_types::object_state_hash::ObjectStateHash;
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{BackingPackageStore, InputKey, ObjectStore};
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
@@ -346,9 +346,9 @@ pub struct AuthorityPerEpochStore {
     /// within for certs within the current epoch.
     pub(crate) signature_verifier: SignatureVerifier,
 
-    pub(crate) checkpoint_state_notify_read: NotifyRead<CheckpointSequenceNumber, ObjectStateHash>,
+    pub(crate) checkpoint_state_notify_read: NotifyRead<CheckpointSequenceNumber, GlobalStateHash>,
 
-    running_root_notify_read: NotifyRead<CheckpointSequenceNumber, ObjectStateHash>,
+    running_root_notify_read: NotifyRead<CheckpointSequenceNumber, GlobalStateHash>,
 
     executed_digests_notify_read: NotifyRead<TransactionKey, TransactionDigest>,
 
@@ -535,14 +535,14 @@ pub struct AuthorityEpochTables {
     // Maps checkpoint sequence number to an accumulator with accumulated state
     // only for the checkpoint that the key references. Append-only, i.e.,
     // the accumulator is complete wrt the checkpoint
-    pub state_hash_by_checkpoint: DBMap<CheckpointSequenceNumber, ObjectStateHash>,
+    pub state_hash_by_checkpoint: DBMap<CheckpointSequenceNumber, GlobalStateHash>,
 
     /// Maps checkpoint sequence number to the running (non-finalized) root state
     /// accumulator up th that checkpoint. This should be equivalent to the root
     /// state hash at end of epoch. Guaranteed to be written to in checkpoint
     /// sequence number order.
     #[rename = "running_root_accumulators"]
-    pub running_root_state_hash: DBMap<CheckpointSequenceNumber, ObjectStateHash>,
+    pub running_root_state_hash: DBMap<CheckpointSequenceNumber, GlobalStateHash>,
 
     /// Record of the capabilities advertised by each authority.
     authority_capabilities: DBMap<AuthorityName, AuthorityCapabilitiesV1>,
@@ -1138,7 +1138,7 @@ impl AuthorityPerEpochStore {
     pub fn get_state_hash_for_checkpoint(
         &self,
         checkpoint: &CheckpointSequenceNumber,
-    ) -> SuiResult<Option<ObjectStateHash>> {
+    ) -> SuiResult<Option<GlobalStateHash>> {
         Ok(self
             .tables()?
             .state_hash_by_checkpoint
@@ -1149,7 +1149,7 @@ impl AuthorityPerEpochStore {
     pub fn insert_state_hash_for_checkpoint(
         &self,
         checkpoint: &CheckpointSequenceNumber,
-        accumulator: &ObjectStateHash,
+        accumulator: &GlobalStateHash,
     ) -> SuiResult {
         self.tables()?
             .state_hash_by_checkpoint
@@ -1161,7 +1161,7 @@ impl AuthorityPerEpochStore {
     pub fn get_running_root_state_hash(
         &self,
         checkpoint: CheckpointSequenceNumber,
-    ) -> SuiResult<Option<ObjectStateHash>> {
+    ) -> SuiResult<Option<GlobalStateHash>> {
         Ok(self
             .tables()?
             .running_root_state_hash
@@ -1171,7 +1171,7 @@ impl AuthorityPerEpochStore {
 
     pub fn get_highest_running_root_state_hash(
         &self,
-    ) -> SuiResult<Option<(CheckpointSequenceNumber, ObjectStateHash)>> {
+    ) -> SuiResult<Option<(CheckpointSequenceNumber, GlobalStateHash)>> {
         Ok(self
             .tables()?
             .running_root_state_hash
@@ -1183,7 +1183,7 @@ impl AuthorityPerEpochStore {
     pub fn insert_running_root_state_hash(
         &self,
         checkpoint: &CheckpointSequenceNumber,
-        hash: &ObjectStateHash,
+        hash: &GlobalStateHash,
     ) -> SuiResult {
         self.tables()?
             .running_root_state_hash
@@ -1600,7 +1600,7 @@ impl AuthorityPerEpochStore {
         &self,
         from_checkpoint: CheckpointSequenceNumber,
         to_checkpoint: CheckpointSequenceNumber,
-    ) -> SuiResult<Vec<(CheckpointSequenceNumber, ObjectStateHash)>> {
+    ) -> SuiResult<Vec<(CheckpointSequenceNumber, GlobalStateHash)>> {
         self.tables()?
             .state_hash_by_checkpoint
             .safe_range_iter(from_checkpoint..=to_checkpoint)
@@ -1613,7 +1613,7 @@ impl AuthorityPerEpochStore {
     pub async fn notify_read_checkpoint_state_hasher(
         &self,
         checkpoints: &[CheckpointSequenceNumber],
-    ) -> SuiResult<Vec<ObjectStateHash>> {
+    ) -> SuiResult<Vec<GlobalStateHash>> {
         let tables = self.tables()?;
         Ok(self
             .checkpoint_state_notify_read
@@ -1629,7 +1629,7 @@ impl AuthorityPerEpochStore {
     pub async fn notify_read_running_root(
         &self,
         checkpoint: CheckpointSequenceNumber,
-    ) -> SuiResult<ObjectStateHash> {
+    ) -> SuiResult<GlobalStateHash> {
         let registration = self.running_root_notify_read.register_one(&checkpoint);
         let acc = self.tables()?.running_root_state_hash.get(&checkpoint)?;
 

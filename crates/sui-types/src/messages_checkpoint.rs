@@ -13,8 +13,8 @@ use crate::digests::Digest;
 use crate::effects::{TestEffectsBuilder, TransactionEffectsAPI};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
+use crate::global_state_hash::GlobalStateHash;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
-use crate::object_state_hash::ObjectStateHash;
 use crate::signature::GenericSignature;
 use crate::sui_serde::AsProtocolVersion;
 use crate::sui_serde::BigInt;
@@ -115,7 +115,7 @@ impl From<fastcrypto::hash::Digest<32>> for ECMHLiveObjectSetDigest {
 
 impl Default for ECMHLiveObjectSetDigest {
     fn default() -> Self {
-        ObjectStateHash::default().digest().into()
+        GlobalStateHash::default().digest().into()
     }
 }
 
