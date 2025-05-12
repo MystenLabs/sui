@@ -270,6 +270,8 @@ pub fn dump_table(
                     page_number,
                 )
             } else {
+                let perpetual_tables = AuthorityPerpetualTables::describe_tables();
+                assert!(perpetual_tables.contains_key(table_name));
                 AuthorityPerpetualTables::open_readonly(&db_path).dump(
                     table_name,
                     page_size,
