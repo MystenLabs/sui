@@ -13259,37 +13259,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-archival"
-version = "1.49.0"
-dependencies = [
- "anyhow",
- "byteorder",
- "bytes",
- "ed25519-consensus",
- "fastcrypto",
- "futures",
- "indicatif",
- "more-asserts",
- "move-binary-format",
- "move-core-types",
- "num_enum 0.6.1",
- "object_store",
- "prometheus",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "sui-config",
- "sui-macros",
- "sui-simulator",
- "sui-storage",
- "sui-swarm-config",
- "sui-types",
- "tempfile",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "sui-authority-aggregation"
 version = "0.1.0"
 dependencies = [
@@ -13645,7 +13614,6 @@ dependencies = [
  "static_assertions",
  "strum 0.27.1",
  "strum_macros 0.27.1",
- "sui-archival",
  "sui-authority-aggregation",
  "sui-config",
  "sui-execution",
@@ -13718,7 +13686,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml 0.8.26",
- "sui-archival",
  "sui-data-ingestion-core",
  "sui-kvstore",
  "sui-storage",
@@ -15137,7 +15104,6 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "shared-crypto",
- "sui-archival",
  "sui-config",
  "sui-data-ingestion-core",
  "sui-macros",

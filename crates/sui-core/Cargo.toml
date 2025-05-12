@@ -75,7 +75,6 @@ typed-store.workspace = true
 
 mysten-metrics.workspace = true
 shared-crypto.workspace = true
-sui-archival.workspace = true
 sui-config.workspace = true
 sui-authority-aggregation.workspace = true
 sui-execution.workspace = true
