@@ -37,7 +37,7 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 8, lines 91-104:
 //# publish --dependencies test
 Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::u::f. Invalid call to 'sui::transfer::multiparty_transfer' on an object of type 'test::m::KeyStruct'. The transferred object's type must be defined in the current module. If the object has the 'store' type ability, you can use the non-internal variant instead, i.e. 'sui::transfer::public_multiparty_transfer'"), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::u::f. Invalid call to 'sui::transfer::party_transfer' on an object of type 'test::m::KeyStruct'. The transferred object's type must be defined in the current module. If the object has the 'store' type ability, you can use the non-internal variant instead, i.e. 'sui::transfer::public_party_transfer'"), command: Some(0) } }
 
 task 9, lines 106-116:
 //# publish --dependencies test
@@ -62,7 +62,7 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 13, lines 156-169:
 //# publish --dependencies test
 Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::u::f. Invalid call to 'sui::transfer::multiparty_transfer' on an object of type 'test::m::KeyStoreStruct'. The transferred object's type must be defined in the current module. If the object has the 'store' type ability, you can use the non-internal variant instead, i.e. 'sui::transfer::public_multiparty_transfer'"), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::u::f. Invalid call to 'sui::transfer::party_transfer' on an object of type 'test::m::KeyStoreStruct'. The transferred object's type must be defined in the current module. If the object has the 'store' type ability, you can use the non-internal variant instead, i.e. 'sui::transfer::public_party_transfer'"), command: Some(0) } }
 
 task 14, lines 171-181:
 //# publish --dependencies test

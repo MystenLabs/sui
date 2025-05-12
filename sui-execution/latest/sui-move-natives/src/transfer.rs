@@ -208,6 +208,7 @@ pub fn party_transfer_internal(
     let permissions = pop_arg!(args, Vec<u64>);
     let addresses = pop_arg!(args, Vec<AccountAddress>);
     let default_permissions = pop_arg!(args, u64);
+    let obj = args.pop_back().unwrap();
     let Ok([permissions]): Result<[u64; 1], _> = permissions.try_into() else {
         return Err(
             PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -227,7 +228,6 @@ pub fn party_transfer_internal(
                 .with_message("Party transfer only supports one party member".to_string()),
         );
     };
-    let obj = args.pop_back().unwrap();
 
     // Dummy version, to be filled with the correct initial version when the effects of the
     // transaction are written to storage.

@@ -41,7 +41,7 @@ const ESharedObjectOperationNotSupported: u64 = 4;
 /// Operation is not yet supported by the network. The functionality might still be in development.
 const ENotSupported: u64 = 5;
 
-#[error]
+#[error(code = 6)]
 const EInvalidPartyPermissions: vector<u8> = b"Party transfer is currently limited to one party.";
 
 /// Transfer ownership of `obj` to `recipient`. `obj` must have the `key` attribute,
