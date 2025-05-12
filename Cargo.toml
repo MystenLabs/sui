@@ -90,7 +90,6 @@ members = [
   "crates/sui-adapter-transactional-tests",
   "crates/sui-analytics-indexer",
   "crates/sui-analytics-indexer-derive",
-  "crates/sui-archival",
   "crates/sui-authority-aggregation",
   "crates/sui-aws-orchestrator",
   "crates/sui-benchmark",
@@ -666,7 +665,6 @@ sui = { path = "crates/sui" }
 sui-adapter-transactional-tests = { path = "crates/sui-adapter-transactional-tests" }
 sui-analytics-indexer = { path = "crates/sui-analytics-indexer" }
 sui-analytics-indexer-derive = { path = "crates/sui-analytics-indexer-derive" }
-sui-archival = { path = "crates/sui-archival" }
 sui-authority-aggregation = { path = "crates/sui-authority-aggregation" }
 sui-benchmark = { path = "crates/sui-benchmark" }
 sui-bridge = { path = "crates/sui-bridge" }
