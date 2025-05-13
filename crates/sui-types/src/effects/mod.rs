@@ -18,7 +18,7 @@ use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::object::Owner;
-use crate::storage::WriteKind;
+use crate::storage::{InputKey, WriteKind};
 use effects_v1::TransactionEffectsV1;
 pub use effects_v2::UnchangedSharedKind;
 use enum_dispatch::enum_dispatch;
@@ -367,6 +367,11 @@ pub trait TransactionEffectsAPI {
 
     /// Returns all root shared objects (i.e. not child object) that are read-only in the transaction.
     fn unchanged_shared_objects(&self) -> Vec<(ObjectID, UnchangedSharedKind)>;
+
+    /// Returns all output object keys for the transaction.
+    /// This is used by the transaction manager to notify any transactions that depend on these objects
+    /// as inputs (i.e. this transaction's output keys are the input keys of other transactions).
+    fn get_output_keys(&self) -> Vec<InputKey>;
 
     // All of these should be #[cfg(test)], but they are used by tests in other crates, and
     // dependencies don't get built with cfg(test) set as far as I can tell.
