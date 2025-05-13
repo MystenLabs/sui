@@ -237,6 +237,7 @@ const MAX_PROTOCOL_VERSION: u64 = 83;
 //             Increase threshold for bad nodes that won't be considered leaders in consensus in mainnet
 // Version 82: Relax bounding of size of values created in the adapter.
 // Version 83: Resolve `TypeInput` IDs to defining ID when converting to `TypeTag`s in the adapter.
+//             Enable multiparty transfer in devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3508,6 +3509,10 @@ impl ProtocolConfig {
                 83 => {
                     cfg.feature_flags.resolve_type_input_ids_to_defining_id = true;
                     cfg.transfer_party_transfer_internal_cost_base = Some(52);
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_party_transfer = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
