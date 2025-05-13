@@ -53,7 +53,7 @@ use crate::{
     consensus_throughput_calculator::ConsensusThroughputCalculator,
     consensus_types::consensus_output_api::{parse_block_transactions, ConsensusCommitAPI},
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
-    execution_scheduler::ExecutionScheduler,
+    execution_scheduler::{ExecutionSchedulerAPI, ExecutionSchedulerWrapper},
     scoring_decision::update_low_scoring_authorities,
 };
 
@@ -493,10 +493,10 @@ pub struct ConsensusHandler<C> {
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
 
 impl<C> ConsensusHandler<C> {
-    pub fn new(
+    pub(crate) fn new(
         epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint_service: Arc<C>,
-        execution_scheduler: Arc<ExecutionScheduler>,
+        execution_scheduler: Arc<ExecutionSchedulerWrapper>,
         cache_reader: Arc<dyn ObjectCacheRead>,
         tx_reader: Arc<dyn TransactionCacheRead>,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
@@ -856,7 +856,7 @@ pub(crate) struct TransactionManagerSender {
 
 impl TransactionManagerSender {
     fn start(
-        execution_scheduler: Arc<ExecutionScheduler>,
+        execution_scheduler: Arc<ExecutionSchedulerWrapper>,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) -> Self {
         let (sender, recv) = monitored_mpsc::unbounded_channel("transaction_manager_sender");
@@ -870,7 +870,7 @@ impl TransactionManagerSender {
 
     async fn run(
         mut recv: monitored_mpsc::UnboundedReceiver<Vec<VerifiedExecutableTransaction>>,
-        execution_scheduler: Arc<ExecutionScheduler>,
+        execution_scheduler: Arc<ExecutionSchedulerWrapper>,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) {
         while let Some(transactions) = recv.recv().await {
@@ -1584,7 +1584,7 @@ mod tests {
         }
 
         // THEN check for no inflight or suspended transactions.
-        assert_eq!(state.execution_scheduler().num_pending_certificates(), 0);
+        state.execution_scheduler().check_empty_for_testing();
 
         // WHEN processing the same output multiple times
         // THEN the consensus stats do not update
@@ -1713,7 +1713,7 @@ mod tests {
         }
 
         // THEN check for no inflight or suspended transactions.
-        assert_eq!(state.execution_scheduler().num_pending_certificates(), 0);
+        state.execution_scheduler().check_empty_for_testing();
 
         // THEN check that rejected transactions are not executed.
         for (i, t) in transactions.iter().enumerate() {
