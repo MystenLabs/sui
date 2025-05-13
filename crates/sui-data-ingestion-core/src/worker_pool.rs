@@ -84,7 +84,7 @@ impl<W: Worker + 'static> WorkerPool<W> {
                             let result = backoff::future::retry(backoff, || async {
                                 worker
                                     .clone()
-                                    .process_checkpoint_arc(checkpoint.clone())
+                                    .process_checkpoint_arc(&checkpoint)
                                     .await
                                     .map_err(|err| {
                                         info!("transient worker execution error {:?} for checkpoint {}", err, sequence_number);
