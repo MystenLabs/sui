@@ -47,7 +47,7 @@ async fn main() -> Result<()> {
     let data_limit = config.data_limit;
     let timeout_secs = config.remote_store_timeout_secs;
 
-    let (processors, package_cache) = config.create_checkpoint_processors(metrics).await?;
+    let (processors, maybe_package_cache) = config.create_checkpoint_processors(metrics).await?;
 
     let mut watermarks = HashMap::new();
     let mut min_watermark = processors
@@ -64,23 +64,29 @@ async fn main() -> Result<()> {
         min_watermark = watermark.min(min_watermark);
         watermarks.insert(processor.task_name.clone(), watermark);
     }
-    watermarks.insert(PACKAGE_CACHE_WORKER_NAME.to_string(), min_watermark);
+
+    let num_workers = processors.len() + if maybe_package_cache.is_some() { 1 } else { 0 };
+
+    if maybe_package_cache.is_some() {
+        watermarks.insert(PACKAGE_CACHE_WORKER_NAME.to_string(), min_watermark);
+    }
 
     let progress_store = ShimIndexerProgressStore::new(watermarks);
     let mut executor = IndexerExecutor::new(
         progress_store,
-        processors.len() + 1,
+        num_workers,
         DataIngestionMetrics::new(&registry),
     );
-
-    let worker = PackageCacheWorker::new(package_cache);
-    executor
-        .register(WorkerPool::new(
-            worker,
-            PACKAGE_CACHE_WORKER_NAME.to_string(),
-            1,
-        ))
-        .await?;
+    if let Some(package_cache) = maybe_package_cache {
+        let worker = PackageCacheWorker::new(package_cache);
+        executor
+            .register(WorkerPool::new(
+                worker,
+                PACKAGE_CACHE_WORKER_NAME.to_string(),
+                1,
+            ))
+            .await?;
+    }
 
     for processor in processors {
         let task_name = processor.task_name.clone();
