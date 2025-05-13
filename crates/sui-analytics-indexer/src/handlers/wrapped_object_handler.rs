@@ -37,7 +37,7 @@ impl WrappedObjectHandler {
 impl AnalyticsHandler<WrappedObjectEntry> for WrappedObjectHandler {
     async fn process_checkpoint(
         &self,
-        checkpoint_data: Arc<CheckpointData>,
+        checkpoint_data: &Arc<CheckpointData>,
     ) -> Result<Vec<WrappedObjectEntry>> {
         wait_for_cache(&checkpoint_data, &self.package_cache).await;
         Ok(process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?)
