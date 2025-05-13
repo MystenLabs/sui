@@ -461,8 +461,6 @@ pub struct RawWaitForEffectsResponseRejected {
     pub reason: i32,
     #[prost(string, optional, tag = "2")]
     pub message: Option<String>, // Only for string-carrying variants
-    #[prost(bool, tag = "3")]
-    pub is_quorum: bool,
 }
 
 #[derive(Clone, Debug, prost::Enumeration)]

@@ -1113,12 +1113,10 @@ impl ValidatorService {
         );
         let mut cur_status = match first_status {
             NotifyReadConsensusTxStatusResult::Status(status) => match status {
-                ConsensusTxStatus::QuorumRejected | ConsensusTxStatus::IndirectlyRejected => {
-                    let is_quorum = status == ConsensusTxStatus::QuorumRejected;
+                ConsensusTxStatus::Rejected => {
                     let response = WaitForEffectsResponse::Rejected {
                         // TODO(fastpath): Add reject reason.
                         reason: RejectReason::None,
-                        is_quorum,
                     };
                     return Ok(response);
                 }
@@ -1144,11 +1142,8 @@ impl ValidatorService {
                     );
                     match second_status {
                         NotifyReadConsensusTxStatusResult::Status(status) => {
-                            if status == ConsensusTxStatus::IndirectlyRejected {
-                                return Ok(WaitForEffectsResponse::Rejected {
-                                    reason: RejectReason::None,
-                                    is_quorum: false,
-                                });
+                            if status == ConsensusTxStatus::Rejected {
+                                return Ok(WaitForEffectsResponse::Rejected { reason: RejectReason::None });
                             }
                             assert!(matches!(status, ConsensusTxStatus::Finalized));
                             // Update the current status so that notify_read_transaction_status will no

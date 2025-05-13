@@ -62,8 +62,6 @@ pub(crate) enum WaitForEffectsResponse {
     Rejected {
         // The rejection reason known locally.
         reason: RejectReason,
-        // Whether the rejection is due to a quorum of reject votes.
-        is_quorum: bool,
     },
     // The transaction position is expired at the committed round.
     Expired(Round),
@@ -175,10 +173,7 @@ impl TryFrom<RawWaitForEffectsResponse> for WaitForEffectsResponse {
                     }
                     RawRejectReason::CoinDenyList => RejectReason::CoinDenyList,
                 };
-                Ok(Self::Rejected {
-                    reason,
-                    is_quorum: rejected.is_quorum,
-                })
+                Ok(Self::Rejected { reason })
             }
             Some(RawWaitForEffectsResponseInner::Expired(round)) => Ok(Self::Expired(round)),
             None => Err(SuiError::GrpcMessageDeserializeError {
@@ -287,7 +282,7 @@ impl TryFrom<WaitForEffectsResponse> for RawWaitForEffectsResponse {
                     details,
                 })
             }
-            WaitForEffectsResponse::Rejected { reason, is_quorum } => {
+            WaitForEffectsResponse::Rejected { reason } => {
                 let (reason, message) = match reason {
                     RejectReason::None => (RawRejectReason::None, None),
                     RejectReason::LockConflict(message) => {
@@ -302,7 +297,6 @@ impl TryFrom<WaitForEffectsResponse> for RawWaitForEffectsResponse {
                 RawWaitForEffectsResponseInner::Rejected(RawWaitForEffectsResponseRejected {
                     reason: reason as i32,
                     message,
-                    is_quorum,
                 })
             }
             WaitForEffectsResponse::Expired(round) => {

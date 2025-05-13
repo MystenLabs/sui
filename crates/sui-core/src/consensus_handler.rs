@@ -718,28 +718,24 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 // TODO: consider only messages within 1~3 rounds of the leader?
                 self.last_consensus_stats.stats.inc_num_messages(author);
                 for (tx_index, parsed) in parsed_transactions.into_iter().enumerate() {
-                    if matches!(
-                        parsed.transaction.kind,
-                        ConsensusTransactionKind::UserTransaction(_)
-                    ) {
-                        let position = ConsensusTxPosition {
-                            block,
-                            index: tx_index as TransactionIndex,
-                        };
-                        if parsed.rejected {
-                            self.epoch_store.set_consensus_tx_status(
-                                position,
-                                ConsensusTxStatus::QuorumRejected,
-                            );
-                            // Skip executing rejected transactions. Unlocking is the responsibility of the
-                            // consensus transaction handler.
-                            continue;
-                        } else {
-                            self.epoch_store.set_consensus_tx_status(
-                                position,
-                                ConsensusTxStatus::FastpathCertified,
-                            );
+                    let position = ConsensusTxPosition {
+                        block,
+                        index: tx_index as TransactionIndex,
+                    };
+                    if parsed.rejected {
+                        if parsed.transaction.kind.is_user_transaction() {
+                            self.epoch_store
+                                .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
                         }
+                        // Skip executing rejected transactions. Unlocking is the responsibility of the
+                        // consensus transaction handler.
+                        continue;
+                    }
+                    if parsed.transaction.kind.is_user_transaction() {
+                        self.epoch_store.set_consensus_tx_status(
+                            position,
+                            ConsensusTxStatus::FastpathCertified,
+                        );
                     }
                     let kind = classify(&parsed.transaction);
                     self.metrics
@@ -1282,16 +1278,16 @@ impl ConsensusBlockHandler {
                     // TODO(fastpath): unlock rejected transactions.
                     // TODO(fastpath): maybe avoid parsing blocks twice between commit and transaction handling?
                     self.epoch_store
-                        .set_consensus_tx_status(position, ConsensusTxStatus::QuorumRejected);
+                        .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
                     self.metrics
                         .consensus_block_handler_txn_processed
                         .with_label_values(&["rejected"])
                         .inc();
                     continue;
-                } else {
-                    self.epoch_store
-                        .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
                 }
+                self.epoch_store
+                    .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
+
                 self.metrics
                     .consensus_block_handler_txn_processed
                     .with_label_values(&["certified"])

@@ -203,7 +203,7 @@ async fn test_wait_for_effects_post_commit_rejected() {
         let epoch_store = state_clone.epoch_store_for_testing();
         epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::FastpathCertified);
         tokio::time::sleep(Duration::from_millis(100)).await;
-        epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::IndirectlyRejected);
+        epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Rejected);
     });
 
     let response = test_context
@@ -215,10 +215,9 @@ async fn test_wait_for_effects_post_commit_rejected() {
         .unwrap();
 
     match response {
-        WaitForEffectsResponse::Rejected { reason, is_quorum } => {
+        WaitForEffectsResponse::Rejected { reason } => {
             // TODO(fastpath): Test reject reason.
             assert_eq!(reason, RejectReason::None);
-            assert!(!is_quorum);
         }
         _ => panic!("Expected Rejected response"),
     }
@@ -298,7 +297,7 @@ async fn test_wait_for_effects_quorum_rejected() {
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
         let epoch_store = state_clone.epoch_store_for_testing();
-        epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::QuorumRejected);
+        epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Rejected);
     });
 
     let response = test_context
@@ -310,9 +309,8 @@ async fn test_wait_for_effects_quorum_rejected() {
         .unwrap();
 
     match response {
-        WaitForEffectsResponse::Rejected { reason, is_quorum } => {
+        WaitForEffectsResponse::Rejected { reason } => {
             assert_eq!(reason, RejectReason::None);
-            assert!(is_quorum);
         }
         _ => panic!("Expected Rejected response"),
     }

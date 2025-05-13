@@ -15,15 +15,10 @@ use crate::wait_for_effects_request::ConsensusTxPosition;
 pub(crate) enum ConsensusTxStatus {
     // Transaction is voted to accept by a quorum of validators on fastpath.
     FastpathCertified,
-    // Transaction is rejected by a quorum of validators,
-    // on fastpath or post commit.
-    QuorumRejected,
+    // Transaction is rejected, either by a quorum of validators or indirectly post-commit.
+    Rejected,
     // Transaction is finalized post commit.
     Finalized,
-    // Transaction does not have a quorum of rejected votes,
-    // but indirectly rejected poast commit.
-    // TODO(fastpath): Set this properly from consensus.
-    IndirectlyRejected,
 }
 
 #[derive(Debug, Clone)]
