@@ -3520,6 +3520,9 @@ impl ProtocolConfig {
                                 max_estimate_us: 1_500_000, // 1.5s
                             },
                         );
+
+                    // Enable the new depth-first block sync logic.
+                    cfg.feature_flags.consensus_batched_block_sync = true;
                 }
                 // Use this template when making changes:
                 //
