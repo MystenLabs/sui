@@ -458,8 +458,9 @@ pub struct AuthorityEpochTables {
     /// Next available shared object versions for each shared object.
     next_shared_object_versions_v2: DBMap<ConsensusObjectSequenceKey, SequenceNumber>,
 
-    // TODO: delete after DQ is rolled out
-    pub(crate) pending_execution: DBMap<TransactionDigest, TrustedExecutableTransaction>,
+    #[allow(dead_code)]
+    #[deprecated]
+    pending_execution: DBMap<TransactionDigest, TrustedExecutableTransaction>,
 
     /// Track which transactions have been processed in handle_consensus_transaction. We must be
     /// sure to advance next_shared_object_versions exactly once for each transaction we receive from
@@ -1639,16 +1640,6 @@ impl AuthorityPerEpochStore {
         .await;
 
         Ok(result)
-    }
-
-    /// Gets all pending certificates. Used during recovery.
-    pub fn all_pending_execution(&self) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
-        Ok(self
-            .tables()?
-            .pending_execution
-            .safe_iter()
-            .map(|item| item.map(|(_, cert)| cert.into()))
-            .collect::<Result<Vec<_>, _>>()?)
     }
 
     /// Called when transaction outputs are committed to disk
