@@ -52,12 +52,12 @@ pub enum ProtocolVersionsConfig {
     PerValidator(SupportedProtocolVersionsCallback),
 }
 
-pub type StateAccumulatorV2EnabledCallback = Arc<dyn Fn(usize) -> bool + Send + Sync + 'static>;
+pub type GlobalStateHashV2EnabledCallback = Arc<dyn Fn(usize) -> bool + Send + Sync + 'static>;
 
 #[derive(Clone)]
-pub enum StateAccumulatorV2EnabledConfig {
+pub enum GlobalStateHashV2EnabledConfig {
     Global(bool),
-    PerValidator(StateAccumulatorV2EnabledCallback),
+    PerValidator(GlobalStateHashV2EnabledCallback),
 }
 
 pub struct ConfigBuilder<R = OsRng> {
@@ -78,7 +78,7 @@ pub struct ConfigBuilder<R = OsRng> {
     firewall_config: Option<RemoteFirewallConfig>,
     max_submit_position: Option<usize>,
     submit_delay_step_override_millis: Option<u64>,
-    state_accumulator_v2_enabled_config: Option<StateAccumulatorV2EnabledConfig>,
+    global_state_hash_v2_enabled_config: Option<GlobalStateHashV2EnabledConfig>,
 }
 
 impl ConfigBuilder {
@@ -103,7 +103,7 @@ impl ConfigBuilder {
             firewall_config: None,
             max_submit_position: None,
             submit_delay_step_override_millis: None,
-            state_accumulator_v2_enabled_config: None,
+            global_state_hash_v2_enabled_config: None,
         }
     }
 
@@ -227,26 +227,26 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
-    pub fn with_state_accumulator_v2_enabled(mut self, enabled: bool) -> Self {
-        self.state_accumulator_v2_enabled_config =
-            Some(StateAccumulatorV2EnabledConfig::Global(enabled));
+    pub fn with_global_state_hash_v2_enabled(mut self, enabled: bool) -> Self {
+        self.global_state_hash_v2_enabled_config =
+            Some(GlobalStateHashV2EnabledConfig::Global(enabled));
         self
     }
 
-    pub fn with_state_accumulator_v2_enabled_callback(
+    pub fn with_global_state_hash_v2_enabled_callback(
         mut self,
-        func: StateAccumulatorV2EnabledCallback,
+        func: GlobalStateHashV2EnabledCallback,
     ) -> Self {
-        self.state_accumulator_v2_enabled_config =
-            Some(StateAccumulatorV2EnabledConfig::PerValidator(func));
+        self.global_state_hash_v2_enabled_config =
+            Some(GlobalStateHashV2EnabledConfig::PerValidator(func));
         self
     }
 
-    pub fn with_state_accumulator_v2_enabled_config(
+    pub fn with_global_state_hash_v2_enabled_config(
         mut self,
-        c: StateAccumulatorV2EnabledConfig,
+        c: GlobalStateHashV2EnabledConfig,
     ) -> Self {
-        self.state_accumulator_v2_enabled_config = Some(c);
+        self.global_state_hash_v2_enabled_config = Some(c);
         self
     }
 
@@ -302,7 +302,7 @@ impl<R> ConfigBuilder<R> {
             firewall_config: self.firewall_config,
             max_submit_position: self.max_submit_position,
             submit_delay_step_override_millis: self.submit_delay_step_override_millis,
-            state_accumulator_v2_enabled_config: self.state_accumulator_v2_enabled_config,
+            global_state_hash_v2_enabled_config: self.global_state_hash_v2_enabled_config,
         }
     }
 
@@ -491,13 +491,13 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     };
                     builder = builder.with_supported_protocol_versions(supported_versions);
                 }
-                if let Some(acc_v2_config) = &self.state_accumulator_v2_enabled_config {
-                    let state_accumulator_v2_enabled: bool = match acc_v2_config {
-                        StateAccumulatorV2EnabledConfig::Global(enabled) => *enabled,
-                        StateAccumulatorV2EnabledConfig::PerValidator(func) => func(idx),
+                if let Some(acc_v2_config) = &self.global_state_hash_v2_enabled_config {
+                    let global_state_hash_v2_enabled: bool = match acc_v2_config {
+                        GlobalStateHashV2EnabledConfig::Global(enabled) => *enabled,
+                        GlobalStateHashV2EnabledConfig::PerValidator(func) => func(idx),
                     };
                     builder =
-                        builder.with_state_accumulator_v2_enabled(state_accumulator_v2_enabled);
+                        builder.with_global_state_hash_v2_enabled(global_state_hash_v2_enabled);
                 }
                 if let Some(num_unpruned_validators) = self.num_unpruned_validators {
                     if idx < num_unpruned_validators {

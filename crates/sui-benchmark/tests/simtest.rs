@@ -117,7 +117,7 @@ mod test {
                 ..Default::default()
             })
             .with_submit_delay_step_override_millis(3000)
-            .with_state_accumulator_v2_enabled_callback(Arc::new(|idx| idx % 2 == 0))
+            .with_global_state_hash_v2_enabled_callback(Arc::new(|idx| idx % 2 == 0))
             .build()
             .await
             .into();

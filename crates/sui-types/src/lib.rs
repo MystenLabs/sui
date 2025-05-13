@@ -26,7 +26,6 @@ use crate::{base_types::RESOLVED_STD_OPTION, id::RESOLVED_SUI_ID};
 #[macro_use]
 pub mod error;
 
-pub mod accumulator;
 pub mod authenticator_state;
 pub mod balance;
 pub mod balance_change;
@@ -54,6 +53,7 @@ pub mod full_checkpoint_content;
 pub mod gas;
 pub mod gas_coin;
 pub mod gas_model;
+pub mod global_state_hash;
 pub mod governance;
 pub mod id;
 pub mod in_memory_storage;
