@@ -57,7 +57,7 @@ jobs:
       # Cargo clean and git restore on any left over files from git checkout, and deletes all remote tracking branches
       - name: Environment clean
         run: |
-          tsh -vv -i "$TELEPORT_IDENTITY_FILE" ssh ubuntu@simtest-01 echo 'teleport OK'
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 echo 'teleport OK'
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && rm -rf ~/sui"
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/ && git clone git@github.com:MystenLabs/sui.git"
  
