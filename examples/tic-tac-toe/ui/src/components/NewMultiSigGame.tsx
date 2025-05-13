@@ -50,7 +50,10 @@ export function NewMultiSigGame(): ReactElement {
 
     return (
         <>
-            <ComputedField value={bytes && toBase64(new Uint8Array(bytes))} label="Your public key" />
+            <ComputedField
+                value={bytes && toBase64(new Uint8Array(bytes))}
+                label="Your public key"
+            />
             <ComputedField value={address} label="Your address" />
             <TextField.Root
                 size="2"
