@@ -1584,7 +1584,7 @@ mod tests {
         }
 
         // THEN check for no inflight or suspended transactions.
-        //state.transaction_manager().check_empty_for_testing();
+        assert_eq!(state.execution_scheduler().num_pending_certificates(), 0);
 
         // WHEN processing the same output multiple times
         // THEN the consensus stats do not update
@@ -1713,7 +1713,7 @@ mod tests {
         }
 
         // THEN check for no inflight or suspended transactions.
-        //state.transaction_manager().check_empty_for_testing();
+        assert_eq!(state.execution_scheduler().num_pending_certificates(), 0);
 
         // THEN check that rejected transactions are not executed.
         for (i, t) in transactions.iter().enumerate() {
