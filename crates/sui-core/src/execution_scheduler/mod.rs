@@ -223,7 +223,7 @@ impl ExecutionScheduler {
                         },
                     });
                 }
-            _ = self.transaction_cache_read.notify_read_executed_effects(&digests) => {
+            _ = self.transaction_cache_read.notify_read_executed_effects_digests(&digests) => {
                 tracing::debug!(?digests, "Transaction already executed");
                 // We need to remove the pending certificate information explicitly here,
                 // because the transaction may have been executed before we enqueued it.
