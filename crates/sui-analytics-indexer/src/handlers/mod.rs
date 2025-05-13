@@ -4,7 +4,7 @@
 use crate::package_store::PackageCache;
 use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
 use crate::FileType;
-use crate::ASYNC_TRANSACTIONS_TO_BUFFER;
+use crate::TRANSACTION_CONCURRENCY_LIMIT;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use futures::stream::{self, StreamExt};
@@ -83,7 +83,7 @@ where
             let processor = processor.clone();
             tokio::spawn(async move { processor.process_transaction(idx, &checkpoint).await })
         })
-        .buffered(*ASYNC_TRANSACTIONS_TO_BUFFER);
+        .buffered(*TRANSACTION_CONCURRENCY_LIMIT);
 
     while let Some(join_res) = stream.next().await {
         match join_res {

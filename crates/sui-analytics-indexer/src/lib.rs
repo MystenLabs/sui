@@ -72,24 +72,24 @@ const DYNAMIC_FIELD_PREFIX: &str = "dynamic_field";
 
 const WRAPPED_OBJECT_PREFIX: &str = "wrapped_object";
 
-const ASYNC_TRANSACTIONS_TO_BUFFER_VAR_NAME: &str = "ASYNC_TRANSACTIONS_TO_BUFFER";
-const DEFAULT_ASYNC_TRANSACTIONS_TO_BUFFER: usize = 64;
-pub static ASYNC_TRANSACTIONS_TO_BUFFER: Lazy<usize> = Lazy::new(|| {
-    let async_transactions_opt = std::env::var(ASYNC_TRANSACTIONS_TO_BUFFER_VAR_NAME)
+const TRANSACTION_CONCURRENCY_LIMIT_VAR_NAME: &str = "ASYNC_TRANSACTIONS_TO_BUFFER";
+const DEFAULT_TRANSACTION_CONCURRENCY_LIMIT: usize = 64;
+pub static TRANSACTION_CONCURRENCY_LIMIT: Lazy<usize> = Lazy::new(|| {
+    let async_transactions_opt = std::env::var(TRANSACTION_CONCURRENCY_LIMIT_VAR_NAME)
         .ok()
         .and_then(|s| s.parse().ok());
     if let Some(async_transactions) = async_transactions_opt {
         info!(
             "Using custom value for '{}' max checkpoints in progress: {}",
-            ASYNC_TRANSACTIONS_TO_BUFFER_VAR_NAME, async_transactions
+            TRANSACTION_CONCURRENCY_LIMIT_VAR_NAME, async_transactions
         );
         async_transactions
     } else {
         info!(
             "Using default value for '{}' -- max checkpoints in progress: {}",
-            ASYNC_TRANSACTIONS_TO_BUFFER_VAR_NAME, DEFAULT_ASYNC_TRANSACTIONS_TO_BUFFER
+            TRANSACTION_CONCURRENCY_LIMIT_VAR_NAME, DEFAULT_TRANSACTION_CONCURRENCY_LIMIT
         );
-        DEFAULT_ASYNC_TRANSACTIONS_TO_BUFFER
+        DEFAULT_TRANSACTION_CONCURRENCY_LIMIT
     }
 });
 
