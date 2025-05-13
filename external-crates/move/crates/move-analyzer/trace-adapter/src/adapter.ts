@@ -21,9 +21,13 @@ import {
     IRuntimeVariableScope,
     CompoundType,
     IRuntimeRefValue,
-    ExecutionResult
+    ExecutionResult,
+    IMoveCallStack
 } from './runtime';
+import { PTB_START_FRAME_ID } from './trace_utils';
 
+
+const SUMMARY_FRAME_SRC_REF = 42;
 
 const enum LogLevel {
     Log = 'log',
@@ -201,9 +205,9 @@ export class MoveDebugSession extends LoggingDebugSession {
             this.runtime.toggleSource();
             this.sendEvent(new StoppedEvent('toggle source', MoveDebugSession.THREAD_ID));
         } else if (request.command === 'fileChanged') {
-            const newFile = String(request.arguments);
-            const changedFile = this.runtime.setCurrentMoveFileFromPath(newFile);
-            logger.log('Current Move file changed to ' + changedFile);
+            const newFilePath = String(request.arguments);
+            const changedFilePath = this.runtime.setCurrentMoveFileFromPath(newFilePath);
+            logger.log('Current Move file changed to ' + changedFilePath);
         } else {
             super.dispatchRequest(request);
         }
@@ -240,32 +244,83 @@ export class MoveDebugSession extends LoggingDebugSession {
         _args: DebugProtocol.StackTraceArguments
     ): void {
         try {
-            const runtimeStack = this.runtime.stack();
-            const stack_height = runtimeStack.frames.length;
+            const stackFrames = [];
+            let optimizedLines: number[] = [];
+            const ptbStack = this.runtime.stack();
+            if (ptbStack.summaryFrame) {
+                const name = 'PTB Summary';
+                let summaryFrameSrc = new Source(name);
+                summaryFrameSrc.sourceReference = SUMMARY_FRAME_SRC_REF;
+                const summaryFrame = new StackFrame(
+                    ptbStack.summaryFrame.id,
+                    name,
+                    summaryFrameSrc,
+                    ptbStack.summaryFrame.line
+                );
+                stackFrames.push(summaryFrame);
+            }
+            const cmdFrame = ptbStack.commandFrame;
+            if (cmdFrame) {
+                if ('frames' in cmdFrame && 'globals' in cmdFrame) {
+                    const moveCallStack = cmdFrame as IMoveCallStack;
+                    const stack_height = moveCallStack.frames.length;
+                    stackFrames.push(...moveCallStack.frames.map(frame => {
+                        const fileName = frame.disassemblyModeTriggered
+                            ? path.basename(frame.bcodeFilePath!)
+                            : path.basename(frame.srcFilePath);
+                        const frameSource = frame.disassemblyModeTriggered
+                            ? new Source(fileName, frame.bcodeFilePath!)
+                            : new Source(fileName, frame.srcFilePath);
+                        const currentLine = frame.disassemblyModeTriggered
+                            ? frame.bcodeLine!
+                            : frame.srcLine;
+                        return new StackFrame(frame.id, frame.name, frameSource, currentLine);
+                    }));
+                    if (stack_height > 0) {
+                        optimizedLines = moveCallStack.frames[stack_height - 1].disassemblyModeTriggered
+                            ? moveCallStack.frames[stack_height - 1].optimizedBcodeLines!
+                            : moveCallStack.frames[stack_height - 1].optimizedSrcLines;
+                    }
+                } else {
+                    // TODO: create and push a frame for native PTB command
+                }
+            }
             response.body = {
-                stackFrames: runtimeStack.frames.map(frame => {
-                    const fileName = frame.disassemblyModeTriggered
-                        ? path.basename(frame.bcodeFilePath!)
-                        : path.basename(frame.srcFilePath);
-                    const frameSource = frame.disassemblyModeTriggered
-                        ? new Source(fileName, frame.bcodeFilePath!)
-                        : new Source(fileName, frame.srcFilePath);
-                    const currentLine = frame.disassemblyModeTriggered
-                        ? frame.bcodeLine!
-                        : frame.srcLine;
-                    return new StackFrame(frame.id, frame.name, frameSource, currentLine);
-                }).reverse(),
-                totalFrames: stack_height,
-                optimizedLines: stack_height > 0
-                    ? (runtimeStack.frames[stack_height - 1].disassemblyModeTriggered
-                        ? runtimeStack.frames[stack_height - 1].optimizedBcodeLines!
-                        : runtimeStack.frames[stack_height - 1].optimizedSrcLines)
-                    : []
+                stackFrames: stackFrames.reverse(),
+                optimizedLines
             };
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);
         }
+        this.sendResponse(response);
+    }
+
+    protected sourceRequest(
+        response: DebugProtocol.SourceResponse,
+        args: DebugProtocol.SourceArguments
+    ): void {
+        let content = '';
+        if (args.sourceReference === SUMMARY_FRAME_SRC_REF) {
+            const summaryFrame = this.runtime.stack().summaryFrame;
+            if (summaryFrame) {
+                for (const summary of summaryFrame.summary) {
+                    const summaryStr = typeof summary === 'string'
+                        ? summary
+                        : summary.pkg + '::' + summary.module + '::' + summary.function;
+                    content += summaryStr + '\n';
+                }
+
+            } else {
+                content = 'No PTB summary available';
+            };
+        } else {
+            content = 'Unknown source';
+        }
+        response.body = {
+            content,
+            mimeType: 'text/plain',
+        };
         this.sendResponse(response);
     }
 
@@ -277,25 +332,36 @@ export class MoveDebugSession extends LoggingDebugSession {
      * @throws Error with a descriptive error message if scopes cannot be retrieved.
      */
     private getScopes(frameID: number): DebugProtocol.Scope[] {
-        const runtimeStack = this.runtime.stack();
-        const frame = runtimeStack.frames.find(frame => frame.id === frameID);
-        if (!frame) {
-            throw new Error(`No frame found for id: ${frameID} when getting scopes`);
-        }
         const scopes: DebugProtocol.Scope[] = [];
-        if (frame.locals.length > 0) {
-            for (let i = frame.locals.length - 1; i > 0; i--) {
-                const shadowedScopeReference = this.variableHandles.create({ locals: frame.locals[i] });
-                const shadowedScope = new Scope(`shadowed(${i}): ${frame.name}`, shadowedScopeReference, false);
-                scopes.push(shadowedScope);
-            }
+        if (frameID === PTB_START_FRAME_ID) {
+            // no scopes for the summary frame
+            return scopes;
         }
-        // don't have to check if scope 0 exists as it's created whenever a new frame is created
-        // and it's never disposed of
-        const localScopeReference = this.variableHandles.create({ locals: frame.locals[0] });
-        const localScope = new Scope(`locals: ${frame.name}`, localScopeReference, false);
-        scopes.push(localScope);
-
+        const ptbStack = this.runtime.stack();
+        const cmdFrame = ptbStack.commandFrame;
+        if (!cmdFrame) {
+            return scopes;
+        }
+        if ('frames' in cmdFrame && 'globals' in cmdFrame) {
+            const frame = cmdFrame.frames.find(frame => frame.id === frameID);
+            if (!frame) {
+                throw new Error(`No frame found for id: ${frameID} when getting scopes`);
+            }
+            if (frame.locals.length > 0) {
+                for (let i = frame.locals.length - 1; i > 0; i--) {
+                    const shadowedScopeReference = this.variableHandles.create({ locals: frame.locals[i] });
+                    const shadowedScope = new Scope(`shadowed(${i}): ${frame.name}`, shadowedScopeReference, false);
+                    scopes.push(shadowedScope);
+                }
+            }
+            // don't have to check if scope 0 exists as it's created whenever a new frame is created
+            // and it's never disposed of
+            const localScopeReference = this.variableHandles.create({ locals: frame.locals[0] });
+            const localScope = new Scope(`locals: ${frame.name}`, localScopeReference, false);
+            scopes.push(localScope);
+        } else {
+            // TODO: return scopes for a native  PTB command
+        }
         return scopes;
     }
 
@@ -321,40 +387,41 @@ export class MoveDebugSession extends LoggingDebugSession {
     }
 
     /**
-     * Converts a runtime reference value to a DAP variable.
+     * Converts a Move reference value to a DAP variable.
      *
+     * @param moveCallStack the current Move call stack
      * @param value reference value.
      * @param name name of variable containing the reference value.
      * @param type optional type of the variable containing the reference value.
      * @returns a DAP variable.
      * @throws Error with a descriptive error message if conversion fails.
      */
-    private convertRefValue(
+    private convertMoveRefValue(
+        moveCallStack: IMoveCallStack,
         value: IRuntimeRefValue,
         name: string,
         type?: string
     ): DebugProtocol.Variable {
         const indexedLoc = value.indexedLoc;
-        const runtimeStack = this.runtime.stack();
         if ('globalIndex' in indexedLoc.loc) {
             // global location
-            const globalValue = runtimeStack.globals.get(indexedLoc.loc.globalIndex);
+            const globalValue = moveCallStack.globals.get(indexedLoc.loc.globalIndex);
             if (!globalValue) {
                 throw new Error('No global found for index '
                     + indexedLoc.loc.globalIndex
-                    + ' when converting ref value ');
+                    + ' when converting Move call ref value ');
             }
             const indexPath = [...indexedLoc.indexPath];
-            return this.convertRuntimeValue(globalValue, name, indexPath, type);
+            return this.convertMoveValue(moveCallStack, globalValue, name, indexPath, type);
         } else if ('frameID' in indexedLoc.loc && 'localIndex' in indexedLoc.loc) {
             // local variable
             const frameID = indexedLoc.loc.frameID;
             const localIndex = indexedLoc.loc.localIndex;
-            const frame = runtimeStack.frames.find(frame => frame.id === frameID);
+            const frame = moveCallStack.frames.find(frame => frame.id === frameID);
             if (!frame) {
                 throw new Error('No frame found for id '
                     + frameID
-                    + ' when converting ref value for local index '
+                    + ' when converting Move call ref value for local index '
                     + localIndex);
             }
             // a local will be in one of the scopes at a position corresponding to its local index
@@ -368,19 +435,20 @@ export class MoveDebugSession extends LoggingDebugSession {
             if (!local) {
                 throw new Error('No local found for index '
                     + localIndex
-                    + ' when converting ref value for frame id '
+                    + ' when converting Move call ref value for frame id '
                     + frameID);
             }
             const indexPath = [...indexedLoc.indexPath];
-            return this.convertRuntimeValue(local.value, name, indexPath, type);
+            return this.convertMoveValue(moveCallStack, local.value, name, indexPath, type);
         } else {
-            throw new Error('Invalid runtime location');
+            throw new Error('Invalid runtime location when comverting Move call ref value');
         }
     }
 
     /**
-     * Converts a runtime value to a DAP variable.
+     * Converts a Move value to a DAP variable.
      *
+     * @param moveCallStack the current Move call stack
      * @param value variable value
      * @param name variable name
      * @param indexPath a path to actual value for compound types (e.g, [1, 7] means
@@ -389,11 +457,12 @@ export class MoveDebugSession extends LoggingDebugSession {
      * @returns a DAP variable.
      * @throws Error with a descriptive error message if conversion has failed.
      */
-    private convertRuntimeValue(
+    private convertMoveValue(
+        moveCallStack: IMoveCallStack,
         value: RuntimeValueType,
         name: string,
         indexPath: number[],
-        type?: string
+        type?: string,
     ): DebugProtocol.Variable {
         if (typeof value === 'string') {
             if (indexPath.length > 0) {
@@ -411,7 +480,7 @@ export class MoveDebugSession extends LoggingDebugSession {
                 if (index === undefined || index >= value.length) {
                     throw new Error('Index path for an array is invalid');
                 }
-                return this.convertRuntimeValue(value[index], name, indexPath, type);
+                return this.convertMoveValue(moveCallStack, value[index], name, indexPath, type);
             }
             const compoundValueReference = this.variableHandles.create(value);
             return {
@@ -426,7 +495,7 @@ export class MoveDebugSession extends LoggingDebugSession {
                 if (index === undefined || index >= value.fields.length) {
                     throw new Error('Index path for a compound type is invalid');
                 }
-                return this.convertRuntimeValue(value.fields[index][1], name, indexPath, type);
+                return this.convertMoveValue(moveCallStack, value.fields[index][1], name, indexPath, type);
             }
             const compoundValueReference = this.variableHandles.create(value);
             // use type if available as it will have information about whether
@@ -451,7 +520,7 @@ export class MoveDebugSession extends LoggingDebugSession {
             if (indexPath.length > 0) {
                 throw new Error('Cannot index into a reference value');
             }
-            return this.convertRefValue(value, name, type);
+            return this.convertMoveRefValue(moveCallStack, value, name, type);
         }
     }
 
@@ -461,7 +530,10 @@ export class MoveDebugSession extends LoggingDebugSession {
      * @param runtimeScope runtime variables scope,
      * @returns an array of DAP variables.
      */
-    private convertRuntimeVariables(runtimeScope: IRuntimeVariableScope): DebugProtocol.Variable[] {
+    private convertRuntimeVariables(
+        runtimeScope: IRuntimeVariableScope,
+        moveCallStack: IMoveCallStack
+    ): DebugProtocol.Variable[] {
         const variables: DebugProtocol.Variable[] = [];
         const runtimeVariables = runtimeScope.locals;
         let disassemblyView = false;
@@ -471,7 +543,7 @@ export class MoveDebugSession extends LoggingDebugSession {
             // the same frame)
             const firstVar = runtimeVariables.find(v => v);
             if (firstVar) {
-                const varFrame = this.runtime.stack().frames[firstVar.frameIdx];
+                const varFrame = moveCallStack.frames[firstVar.frameIdx];
                 if (varFrame) {
                     disassemblyView = varFrame.disassemblyView;
                 }
@@ -482,7 +554,7 @@ export class MoveDebugSession extends LoggingDebugSession {
                 const varName = disassemblyView
                     ? v.info.internalName
                     : v.info.name;
-                const dapVar = this.convertRuntimeValue(v.value, varName, [], v.type);
+                const dapVar = this.convertMoveValue(moveCallStack, v.value, varName, [], v.type);
                 if (disassemblyView || !varName.includes('%')) {
                     // Don't show "artificial" variables generated by the compiler
                     // for enum and macro execution when showing source code as they
@@ -501,24 +573,37 @@ export class MoveDebugSession extends LoggingDebugSession {
         args: DebugProtocol.VariablesArguments
     ): void {
         try {
-            const variableHandle = this.variableHandles.get(args.variablesReference);
             let variables: DebugProtocol.Variable[] = [];
-            if (variableHandle) {
-                if ('locals' in variableHandle) {
-                    // we are dealing with a scope
-                    variables = this.convertRuntimeVariables(variableHandle);
-                } else {
-                    // we are dealing with a compound value
-                    if (Array.isArray(variableHandle)) {
-                        for (let i = 0; i < variableHandle.length; i++) {
-                            const v = variableHandle[i];
-                            variables.push(this.convertRuntimeValue(v, String(i), []));
+            const ptbStack = this.runtime.stack();
+            const cmdFrame = ptbStack.commandFrame;
+            if (ptbStack.summaryFrame && !cmdFrame) {
+                // no variables for summary frame
+                this.sendResponse(response);
+            }
+            if (cmdFrame) {
+                if ('frames' in cmdFrame && 'globals' in cmdFrame) {
+                    const moveCallStack = cmdFrame as IMoveCallStack;
+                    const variableHandle = this.variableHandles.get(args.variablesReference);
+                    if (variableHandle) {
+                        if ('locals' in variableHandle) {
+                            // we are dealing with a scope
+                            variables = this.convertRuntimeVariables(variableHandle, moveCallStack);
+                        } else {
+                            // we are dealing with a compound value
+                            if (Array.isArray(variableHandle)) {
+                                for (let i = 0; i < variableHandle.length; i++) {
+                                    const v = variableHandle[i];
+                                    variables.push(this.convertMoveValue(moveCallStack, v, String(i), []));
+                                }
+                            } else {
+                                variableHandle.fields.forEach(([fname, fvalue]) => {
+                                    variables.push(this.convertMoveValue(moveCallStack, fvalue, fname, []));
+                                });
+                            }
                         }
-                    } else {
-                        variableHandle.fields.forEach(([fname, fvalue]) => {
-                            variables.push(this.convertRuntimeValue(fvalue, fname, []));
-                        });
                     }
+                } else {
+                    // TODO: handle variables for native PTB commands
                 }
             }
             if (variables.length > 0) {
