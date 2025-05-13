@@ -82,6 +82,7 @@ feature_flags:
   move_native_context: true
   consensus_median_based_commit_timestamp: true
   normalize_ptb_arguments: true
+  consensus_batched_block_sync: true
   enforce_checkpoint_timestamp_monotonicity: true
   max_ptb_value_size_v2: true
   resolve_type_input_ids_to_defining_id: true
