@@ -50,7 +50,10 @@ jobs:
           # Specify the length of time that the generated credentials should be
           # valid for. This is optional and defaults to "1h"
           certificate-ttl: 2h
-
+      - name: Show Teleport cert details
+        run: tsh -i ${{ steps.auth.outputs.identity-file }} status
+        env:
+          TELEPORT_IDENTITY_FILE: ${{ env.TELEPORT_IDENTITY_FILE }}
       # Cargo clean and git restore on any left over files from git checkout, and deletes all remote tracking branches
       - name: Environment clean
         run: | 
