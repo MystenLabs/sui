@@ -61,9 +61,9 @@ Manifest {
             rename_from: None,
         },
     },
-    dep_overrides: {
+    dep_replacements: {
         "mainnet": {
-            "foo": ManifestDependencyOverride {
+            "foo": ManifestDependencyReplacement {
                 dependency: Some(
                     ManifestDependency {
                         dependency_info: Git(

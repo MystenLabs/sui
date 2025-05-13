@@ -1,5 +1,5 @@
 ---
-source: crates/move-package-alt/tests/pinning_tests.rs
+source: crates/move-package-alt/tests/test_runner.rs
 ---
 {
   "mock1": {
@@ -8,5 +8,5 @@ source: crates/move-package-alt/tests/pinning_tests.rs
   "mock2": {
     "local": "for-res-2"
   },
-  "overrides": {}
+  "replacements": {}
 }

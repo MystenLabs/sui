@@ -53,7 +53,7 @@ struct UnpublishedTable<F: MoveFlavor + fmt::Debug> {
     dependencies: UnpublishedDependencies<F>,
 
     #[serde(default)]
-    dep_overrides: BTreeMap<EnvironmentName, UnpublishedDependencies<F>>,
+    dep_replacements: BTreeMap<EnvironmentName, UnpublishedDependencies<F>>,
 }
 
 #[derive(fmt::Debug, Serialize, Deserialize)]
@@ -151,7 +151,7 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
         flatten_toml(&mut toml["unpublished"]["dependencies"]["pinned"]);
         flatten_toml(&mut toml["unpublished"]["dependencies"]["unpinned"]);
         flatten_toml(&mut toml["unpublished"]["dependencies"]["unpinned"]);
-        for (_, chain) in toml["unpublished"]["dep-overrides"]
+        for (_, chain) in toml["unpublished"]["dep-replacements"]
             .as_table_like_mut()
             .unwrap()
             .iter_mut()
@@ -170,7 +170,7 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
         toml.to_string()
     }
 
-    /// Return the pinned dependencies in the lockfile, including the overrides dependencies.
+    /// Return the pinned dependencies in the lockfile, including the replacements dependencies.
     // TODO: This needs to be fixed after we finalize the new design
     fn pinned_deps(&self) -> DependencySet<PinnedDependencyInfo<F>> {
         let mut dep_set = DependencySet::new();
@@ -179,7 +179,7 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
             dep_set.insert(None, pkg_name.clone(), dep_info.clone());
         }
 
-        for (env, deps) in &self.unpublished.dep_overrides {
+        for (env, deps) in &self.unpublished.dep_replacements {
             for (pkg_name, dep_info) in deps.pinned.iter() {
                 dep_set.insert(Some(env.clone()), pkg_name.clone(), dep_info.clone());
             }
@@ -188,7 +188,7 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
         dep_set
     }
 
-    /// Return the unpinned dependencies in the lockfile, including the overrides dependencies.
+    /// Return the unpinned dependencies in the lockfile, including the replacements dependencies.
     // TODO: This needs to be fixed after we finalize the new design
     fn unpinned_deps(&self) -> DependencySet<ManifestDependencyInfo<F>> {
         let mut dep_set = DependencySet::new();
@@ -197,7 +197,7 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
             dep_set.insert(None, pkg_name.clone(), dep_info.clone());
         }
 
-        for (env, deps) in &self.unpublished.dep_overrides {
+        for (env, deps) in &self.unpublished.dep_replacements {
             for (pkg_name, dep_info) in deps.unpinned.iter() {
                 dep_set.insert(Some(env.clone()), pkg_name.clone(), dep_info.clone());
             }
@@ -283,14 +283,14 @@ impl<F: MoveFlavor> UnpublishedTable<F> {
     ) -> Self {
         let mut dependencies = UnpublishedDependencies::default();
 
-        let mut dep_overrides: BTreeMap<EnvironmentName, UnpublishedDependencies<F>> =
+        let mut dep_replacements: BTreeMap<EnvironmentName, UnpublishedDependencies<F>> =
             BTreeMap::new();
 
         for (env, pkg, dep) in pinned_deps {
             match env {
-                // update dep overrides if there's an env
+                // update dep replacements if there's an env
                 Some(env) => {
-                    dep_overrides
+                    dep_replacements
                         .entry(env)
                         .or_default()
                         .pinned
@@ -305,9 +305,9 @@ impl<F: MoveFlavor> UnpublishedTable<F> {
 
         for (env, pkg, dep) in unpinned_deps {
             match env {
-                // update dep overrides if there's an env
+                // update dep replacements if there's an env
                 Some(env) => {
-                    dep_overrides
+                    dep_replacements
                         .entry(env)
                         .or_default()
                         .unpinned
@@ -322,7 +322,7 @@ impl<F: MoveFlavor> UnpublishedTable<F> {
 
         Self {
             dependencies,
-            dep_overrides,
+            dep_replacements,
         }
     }
 }
