@@ -603,9 +603,15 @@ fun uncapped_rewards() {
 }
 
 #[test]
+// Safe Mode Testing Scenario:
+// - mimic state during epoch 562, if we're in safe mode since the 560 -> 561 epoch change
+// - advance epoch to 563
+// - ensure that all previous epochs are distributed
+// - ensure that next epoch change only distributes one epoch's worth
 fun stake_subsidy_with_safe_mode_epoch_562_to_563() {
     let epoch_duration = 1000;
     let epoch_start_time = 100000000000;
+    // distribution counter is lagging behind by 20 epochs on mainnet and testnet
     let start_distribution_counter = 540;
     let mut runner = test_runner::new()
         .validators_count(4)
@@ -654,9 +660,15 @@ fun stake_subsidy_with_safe_mode_epoch_562_to_563() {
 }
 
 #[test]
+// Safe Mode Testing Scenario:
+// - mimic state during epoch 563, if we're in safe mode since the 560 -> 561 epoch change
+// - advance epoch to 564
+// - ensure that all previous epochs are distributed
+// - ensure that next epoch change only distributes one epoch's worth
 fun stake_subsidy_with_safe_mode_epoch_563_to_564() {
     let epoch_duration = 1000;
     let epoch_start_time = 100000000000;
+    // distribution counter is lagging behind by 20 epochs on mainnet and testnet
     let start_distribution_counter = 540;
     let mut runner = test_runner::new()
         .validators_count(4)
