@@ -28,7 +28,7 @@ const EBpsTooLarge: u64 = 5;
 const ESafeModeGasNotProcessed: u64 = 7;
 const EAdvancedToWrongEpoch: u64 = 8;
 
-const BASIS_POINT_DENOMINATOR: u64 = 10000;
+const BASIS_POINT_DENOMINATOR: u64 = 100_00;
 
 // same as in validator_set
 const ACTIVE_VALIDATOR_ONLY: u8 = 1;
@@ -68,7 +68,7 @@ public struct SystemParameters has store {
     extra_fields: Bag,
 }
 
-/// Added min_validator_count.
+/// Added `min_validator_count`.
 public struct SystemParametersV2 has store {
     /// The duration of an epoch, in milliseconds.
     epoch_duration_ms: u64,
@@ -490,7 +490,7 @@ public(package) fun request_add_stake(
 public(package) fun request_add_stake_mul_coin(
     self: &mut SuiSystemStateInnerV2,
     stakes: vector<Coin<SUI>>,
-    stake_amount: option::Option<u64>,
+    stake_amount: Option<u64>,
     validator_address: address,
     ctx: &mut TxContext,
 ): StakedSui {
@@ -564,7 +564,7 @@ fun report_validator_impl(
     if (!validator_report_records.contains(&reportee_addr)) {
         validator_report_records.insert(reportee_addr, vec_set::singleton(reporter_address));
     } else {
-        let reporters = validator_report_records.get_mut(&reportee_addr);
+        let reporters = &mut validator_report_records[&reportee_addr];
         if (!reporters.contains(&reporter_address)) {
             reporters.insert(reporter_address);
         }
@@ -577,7 +577,7 @@ fun undo_report_validator_impl(
     validator_report_records: &mut VecMap<address, VecSet<address>>,
 ) {
     assert!(validator_report_records.contains(&reportee_addr), EReportRecordNotFound);
-    let reporters = validator_report_records.get_mut(&reportee_addr);
+    let reporters = &mut validator_report_records[&reportee_addr];
 
     let reporter_addr = *verified_cap.verified_operation_cap_address();
     assert!(reporters.contains(&reporter_addr), EReportRecordNotFound);
@@ -604,7 +604,6 @@ public(package) fun update_validator_name(
     ctx: &TxContext,
 ) {
     let validator = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
-
     validator.update_name(name);
 }
 
@@ -647,7 +646,7 @@ public(package) fun update_validator_next_epoch_network_address(
 ) {
     let validator = self.validators.get_validator_mut_with_ctx(ctx);
     validator.update_next_epoch_network_address(network_address);
-    let validator: &Validator = validator; // Force immutability for the following call
+    let validator: &Validator = validator; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(validator);
 }
 
@@ -670,7 +669,7 @@ public(package) fun update_validator_next_epoch_p2p_address(
 ) {
     let validator = self.validators.get_validator_mut_with_ctx(ctx);
     validator.update_next_epoch_p2p_address(p2p_address);
-    let validator: &Validator = validator; // Force immutability for the following call
+    let validator: &Validator = validator; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(validator);
 }
 
@@ -736,7 +735,7 @@ public(package) fun update_validator_next_epoch_protocol_pubkey(
 ) {
     let validator = self.validators.get_validator_mut_with_ctx(ctx);
     validator.update_next_epoch_protocol_pubkey(protocol_pubkey, proof_of_possession);
-    let validator: &Validator = validator; // Force immutability for the following call
+    let validator: &Validator = validator; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(validator);
 }
 
@@ -760,7 +759,7 @@ public(package) fun update_validator_next_epoch_worker_pubkey(
 ) {
     let validator = self.validators.get_validator_mut_with_ctx(ctx);
     validator.update_next_epoch_worker_pubkey(worker_pubkey);
-    let validator: &Validator = validator; // Force immutability for the following call
+    let validator: &Validator = validator; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(validator);
 }
 
@@ -783,7 +782,7 @@ public(package) fun update_validator_next_epoch_network_pubkey(
 ) {
     let validator = self.validators.get_validator_mut_with_ctx(ctx);
     validator.update_next_epoch_network_pubkey(network_pubkey);
-    let validator: &Validator = validator; // Force immutability for the following call
+    let validator: &Validator = validator; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(validator);
 }
 
@@ -812,8 +811,9 @@ public(package) fun advance_epoch(
     mut computation_reward: Balance<SUI>,
     mut storage_rebate_amount: u64,
     mut non_refundable_storage_fee_amount: u64,
-    storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
+    // share of storage fund's rewards that's reinvested
     // into storage fund, in basis point.
+    storage_fund_reinvest_rate: u64,
     reward_slashing_rate: u64, // how much rewards are slashed to punish a validator, in bps.
     epoch_start_timestamp_ms: u64, // Timestamp of the epoch start
     ctx: &mut TxContext,
@@ -1072,7 +1072,7 @@ public(package) fun active_validator_addresses(self: &SuiSystemStateInnerV2): ve
 /// Extract required Balance from vector of Coin<SUI>, transfer the remainder back to sender.
 fun extract_coin_balance(
     mut coins: vector<Coin<SUI>>,
-    amount: option::Option<u64>,
+    amount: Option<u64>,
     ctx: &mut TxContext,
 ): Balance<SUI> {
     let acc = coins.pop_back();
@@ -1166,10 +1166,9 @@ public(package) fun epoch_duration_ms(self: &SuiSystemStateInnerV2): u64 {
     self.parameters.epoch_duration_ms
 }
 
-// CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.  Creates a
-// candidate validator - bypassing the proof of possession check and other metadata validation
-// in the process.
 #[test_only]
+/// Creates a candidate validator - bypassing the proof of possession check and other
+/// metadata validation in the process.
 public(package) fun request_add_validator_candidate_for_testing(
     self: &mut SuiSystemStateInnerV2,
     pubkey_bytes: vector<u8>,

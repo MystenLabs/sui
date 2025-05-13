@@ -308,7 +308,11 @@ fun validator_candidate_update() {
 // 5. Request removal of the validator
 // 6. Submit the same validator again
 fun duplicate_metadata_resubmission_after_inactive() {
-    let mut runner = test_runner::new().validators_initial_stake(1_000_000).validators_count(3).build();
+    let mut runner = test_runner::new()
+        .validators_initial_stake(1_000_000)
+        .validators_count(3)
+        .build();
+
     let validator = validator_builder::preset().build(runner.ctx());
     let validator_address = validator.sui_address();
 
