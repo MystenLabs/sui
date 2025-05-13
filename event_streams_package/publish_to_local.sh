@@ -14,3 +14,5 @@ sleep 5
 $sui client publish --gas-budget 50000000
 
 # sui client ptb --move-call "$PKG::event_streams_package::create" modest-amethyst
+
+# sui client ptb --move-call "$PKG::event_streams_package::emit_event" @obj 10

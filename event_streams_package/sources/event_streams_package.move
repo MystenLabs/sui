@@ -3,7 +3,6 @@
 // For Move coding conventions, see
 // https://docs.sui.io/concepts/sui-move-concepts/conventions
 
-
 module event_streams_package::event_streams_package {
     use sui::event;
 
@@ -30,9 +29,7 @@ module event_streams_package::event_streams_package {
         )
     }
 
-    // test that reading o2 and updating o1 works
     public entry fun emit_event(o: &mut Object, value: u64) {
-        // emit an event so the world can see the new value
         let ev = AuthEvent { value };
         o.event_stream_cap.emit(ev);
     }
