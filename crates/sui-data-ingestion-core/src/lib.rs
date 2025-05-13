@@ -30,9 +30,9 @@ pub trait Worker: Send + Sync {
     type Result: Send + Sync + Clone;
     async fn process_checkpoint_arc(
         &self,
-        checkpoint: Arc<CheckpointData>,
+        checkpoint: &Arc<CheckpointData>,
     ) -> Result<Self::Result> {
-        self.process_checkpoint(&checkpoint).await
+        self.process_checkpoint(checkpoint).await
     }
     /// There is no need to implement this if you implement process_checkpoint_arc. The WorkerPool
     /// will only call process_checkpoint_arc. This method was left in place for backwards
