@@ -26,9 +26,9 @@ impl CheckpointHandler {
 impl AnalyticsHandler<CheckpointEntry> for CheckpointHandler {
     async fn process_checkpoint(
         &self,
-        checkpoint_data: Arc<CheckpointData>,
+        checkpoint_data: &Arc<CheckpointData>,
     ) -> Result<Vec<CheckpointEntry>> {
-        let checkpoint_entry = process_checkpoint_data(&checkpoint_data);
+        let checkpoint_entry = process_checkpoint_data(checkpoint_data);
         Ok(vec![checkpoint_entry])
     }
 

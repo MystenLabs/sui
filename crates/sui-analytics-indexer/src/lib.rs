@@ -15,6 +15,7 @@ use handlers::transaction_bcs_handler::TransactionBCSHandler;
 use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
 use object_store::path::Path;
+use once_cell::sync::Lazy;
 use package_store::{LazyPackageCache, PackageCache};
 use serde::{Deserialize, Serialize};
 use snowflake_api::{QueryResult, SnowflakeApi};
@@ -852,7 +853,7 @@ impl Worker for Processor {
     type Result = ();
 
     #[inline]
-    async fn process_checkpoint_arc(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
+    async fn process_checkpoint_arc(&self, checkpoint_data: &Arc<CheckpointData>) -> Result<()> {
         self.processor.process_checkpoint_arc(checkpoint_data).await
     }
 }
