@@ -44,7 +44,7 @@ pub async fn execution_process(
                 if let Some(pending_cert) = result {
                     certificate = pending_cert.certificate;
                     expected_effects_digest = pending_cert.expected_effects_digest;
-                    txn_ready_time = pending_cert.stats.ready_time;
+                    txn_ready_time = pending_cert.stats.ready_time.unwrap();
                 } else {
                     // Should only happen after the AuthorityState has shut down and tx_ready_certificate
                     // has been dropped by TransactionManager.
