@@ -23,9 +23,9 @@ impl PackageHandler {
 impl AnalyticsHandler<MovePackageEntry> for PackageHandler {
     async fn process_checkpoint(
         &self,
-        checkpoint_data: Arc<CheckpointData>,
+        checkpoint_data: &Arc<CheckpointData>,
     ) -> Result<Vec<MovePackageEntry>> {
-        let results = process_transactions(checkpoint_data, Arc::new(self.clone())).await?;
+        let results = process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?;
         Ok(results)
     }
 

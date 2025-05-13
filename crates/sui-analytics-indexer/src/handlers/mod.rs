@@ -43,7 +43,7 @@ const WRAPPED_INDEXING_DISALLOW_LIST: [&str; 4] = [
 pub trait AnalyticsHandler<S>: Send + Sync {
     /// Process a checkpoint and return an iterator over the rows.
     /// This function is invoked by the analytics processor for each checkpoint.
-    async fn process_checkpoint(&self, checkpoint_data: Arc<CheckpointData>) -> Result<Vec<S>>
+    async fn process_checkpoint(&self, checkpoint_data: &Arc<CheckpointData>) -> Result<Vec<S>>
     where
         S: Send + Sync;
     /// Type of data being written by this processor i.e. checkpoint, object, etc

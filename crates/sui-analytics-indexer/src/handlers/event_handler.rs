@@ -31,7 +31,7 @@ impl EventHandler {
 impl AnalyticsHandler<EventEntry> for EventHandler {
     async fn process_checkpoint(
         &self,
-        checkpoint_data: Arc<CheckpointData>,
+        checkpoint_data: &Arc<CheckpointData>,
     ) -> Result<Vec<EventEntry>> {
         wait_for_cache(&checkpoint_data, &self.package_cache).await;
         Ok(process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?)
