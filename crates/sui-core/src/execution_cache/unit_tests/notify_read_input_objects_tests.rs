@@ -1,12 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 use crate::authority::authority_store_tables::AuthorityPerpetualTables;
 
 use super::*;
+use futures::FutureExt;
 use std::path::Path;
 use std::time::Duration;
 use sui_framework::BuiltInFramework;
@@ -45,12 +43,10 @@ async fn test_immediate_return_canceled_shared() {
     let epoch = &0;
 
     // Should return immediately since canceled shared objects are always available
-    let result = timeout(
-        Duration::from_secs(1),
-        cache.notify_read_input_objects(&[canceled_key], &receiving_keys, epoch),
-    )
-    .await
-    .unwrap();
+    let result = cache
+        .notify_read_input_objects(&[canceled_key], &receiving_keys, epoch)
+        .now_or_never()
+        .unwrap();
     assert_eq!(result.len(), 1);
 
     let congested_key = InputKey::VersionedObject {
@@ -58,12 +54,10 @@ async fn test_immediate_return_canceled_shared() {
         version: SequenceNumber::CONGESTED,
     };
 
-    let result = timeout(
-        Duration::from_secs(1),
-        cache.notify_read_input_objects(&[congested_key], &receiving_keys, epoch),
-    )
-    .await
-    .unwrap();
+    let result = cache
+        .notify_read_input_objects(&[congested_key], &receiving_keys, epoch)
+        .now_or_never()
+        .unwrap();
     assert_eq!(result.len(), 1);
 
     let randomness_unavailable_key = InputKey::VersionedObject {
@@ -71,12 +65,10 @@ async fn test_immediate_return_canceled_shared() {
         version: SequenceNumber::RANDOMNESS_UNAVAILABLE,
     };
 
-    let result = timeout(
-        Duration::from_secs(1),
-        cache.notify_read_input_objects(&[randomness_unavailable_key], &receiving_keys, epoch),
-    )
-    .await
-    .unwrap();
+    let result = cache
+        .notify_read_input_objects(&[randomness_unavailable_key], &receiving_keys, epoch)
+        .now_or_never()
+        .unwrap();
     assert_eq!(result.len(), 1);
 }
 
@@ -98,12 +90,10 @@ async fn test_immediate_return_cached_object() {
     let epoch = &0;
 
     // Should return immediately since object is in cache
-    let result = timeout(
-        Duration::from_secs(1),
-        cache.notify_read_input_objects(&input_keys, &receiving_keys, epoch),
-    )
-    .await
-    .unwrap();
+    let result = cache
+        .notify_read_input_objects(&input_keys, &receiving_keys, epoch)
+        .now_or_never()
+        .unwrap();
 
     assert_eq!(result.len(), 1);
 }
@@ -119,12 +109,10 @@ async fn test_immediate_return_cached_package() {
     let epoch = &0;
 
     // Should return immediately since system package is available by default.
-    let result = timeout(
-        Duration::from_secs(1),
-        cache.notify_read_input_objects(&input_keys, &receiving_keys, epoch),
-    )
-    .await
-    .unwrap();
+    let result = cache
+        .notify_read_input_objects(&input_keys, &receiving_keys, epoch)
+        .now_or_never()
+        .unwrap();
 
     assert_eq!(result.len(), 1);
 }
@@ -151,12 +139,10 @@ async fn test_immediate_return_consensus_stream_ended() {
     let receiving_keys = HashSet::new();
 
     // Should return immediately since object is marked as consensus stream ended
-    let result = timeout(
-        Duration::from_secs(1),
-        cache.notify_read_input_objects(&input_keys, &receiving_keys, &epoch),
-    )
-    .await
-    .unwrap();
+    let result = cache
+        .notify_read_input_objects(&input_keys, &receiving_keys, &epoch)
+        .now_or_never()
+        .unwrap();
 
     assert_eq!(result.len(), 1);
 }
@@ -329,12 +315,10 @@ async fn test_receiving_object_higher_version() {
     let epoch = &0;
 
     // Should return immediately since a higher version exists for receiving object
-    let result = timeout(
-        Duration::from_secs(1),
-        cache.notify_read_input_objects(&input_keys, &receiving_keys, epoch),
-    )
-    .await
-    .unwrap();
+    let result = cache
+        .notify_read_input_objects(&input_keys, &receiving_keys, epoch)
+        .now_or_never()
+        .unwrap();
 
     assert_eq!(result.len(), 1);
 }
