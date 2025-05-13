@@ -9,8 +9,8 @@ mod checked {
         adapter::substitute_package_id,
         execution_mode::ExecutionMode,
         execution_value::{
-            ensure_serialized_size, CommandKind, ExecutionState, ObjectContents, ObjectValue,
-            RawValueType, Value,
+            CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
+            ensure_serialized_size,
         },
         gas_charger::GasCharger,
         programmable_transactions::{context::*, data_store::SuiDataStore},
@@ -18,11 +18,12 @@ mod checked {
     };
     use move_binary_format::file_format::AbilitySet;
     use move_binary_format::{
+        CompiledModule,
         compatibility::{Compatibility, InclusionCheck},
         errors::{Location, PartialVMResult, VMResult},
         file_format::{CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
         file_format_common::VERSION_6,
-        normalized, CompiledModule,
+        normalized,
     };
     use move_core_types::language_storage::StructTag;
     use move_core_types::{
@@ -37,7 +38,7 @@ mod checked {
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
     };
     use move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
-    use serde::{de::DeserializeSeed, Deserialize};
+    use serde::{Deserialize, de::DeserializeSeed};
     use std::{
         cell::{OnceCell, RefCell},
         collections::{BTreeMap, BTreeSet},
@@ -49,32 +50,32 @@ mod checked {
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
+        SUI_FRAMEWORK_ADDRESS,
         base_types::{
-            MoveLegacyTxContext, MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind,
-            RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME,
-            TX_CONTEXT_STRUCT_NAME,
+            MoveLegacyTxContext, MoveObjectType, ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION,
+            RESOLVED_UTF8_STR, SuiAddress, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
+            TxContext, TxContextKind,
         },
         coin::Coin,
-        error::{command_argument_error, ExecutionError, ExecutionErrorKind},
+        error::{ExecutionError, ExecutionErrorKind, command_argument_error},
         execution::{ExecutionTiming, ResultWithTimings},
         execution_config_utils::to_binary_config,
         execution_status::{CommandArgumentError, PackageUpgradeError},
         id::RESOLVED_SUI_ID,
         metrics::LimitsMetrics,
         move_package::{
-            normalize_deserialized_modules, MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt,
-            UpgradeTicket,
+            MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt, UpgradeTicket,
+            normalize_deserialized_modules,
         },
-        ptb_trace::{PTBCommandInfo, PTBExternalEvent, SplitCoinsEvent},
-        storage::{get_package_objects, PackageObject},
+        ptb_trace::{CoinInfo, PTBCommandInfo, PTBExternalEvent, SplitCoinsEvent},
+        storage::{PackageObject, get_package_objects},
         transaction::{Command, ProgrammableMoveCall, ProgrammableTransaction},
         transfer::RESOLVED_RECEIVING_STRUCT,
         type_input::{StructInput, TypeInput},
-        SUI_FRAMEWORK_ADDRESS,
     };
     use sui_verifier::{
-        private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
         INIT_FN_NAME,
+        private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
     };
     use tracing::instrument;
 
@@ -317,7 +318,7 @@ mod checked {
                     let msg = "Expected a coin but got an non coin object".to_owned();
                     return Err(ExecutionError::new_with_source(e, msg));
                 };
-                let (split_coins, split_balances) = amount_args
+                let (split_coins, split_coin_infos) = amount_args
                     .into_iter()
                     .map(|amount_arg| {
                         let amount: u64 =
@@ -328,7 +329,11 @@ mod checked {
                         // safe because we are propagating the coin type, and relying on the internal
                         // invariant that coin values have a coin type
                         let new_coin = unsafe { ObjectValue::coin(coin_type, new_coin) };
-                        Ok((Value::Object(new_coin), amount))
+                        let new_coin_info = CoinInfo {
+                            object_id: new_coin_id,
+                            balance: amount,
+                        };
+                        Ok((Value::Object(new_coin), new_coin_info))
                     })
                     .collect::<Result<_, ExecutionError>>()?;
 
@@ -336,8 +341,11 @@ mod checked {
                     TraceEvent::External(Box::new(serde_json::json!(PTBExternalEvent::SplitCoins(
                         SplitCoinsEvent {
                             type_,
-                            balance: coin.value(),
-                            split_balances,
+                            input: CoinInfo {
+                                object_id: *coin.id.object_id(),
+                                balance: coin.value(),
+                            },
+                            result: split_coin_infos,
                         }
                     ))))
                 })?;
