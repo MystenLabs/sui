@@ -16,7 +16,7 @@ use sui_system::validator_set::{Self, ValidatorSet};
 const MIST_PER_SUI: u64 = 1_000_000_000; // used internally for stakes.
 
 #[test]
-fun test_validator_set_flow() {
+fun validator_set_flow() {
     // Create 4 validators, with stake 100, 200, 300, 400. Only the first validator is an initial validator.
     let mut scenario_val = test_scenario::begin(@0x0);
     let scenario = &mut scenario_val;
@@ -89,7 +89,7 @@ fun test_validator_set_flow() {
 }
 
 #[test]
-fun test_reference_gas_price_derivation() {
+fun reference_gas_price_derivation() {
     // Create 5 validators with different stakes and different gas prices.
     let mut scenario_val = test_scenario::begin(@0x0);
     let scenario = &mut scenario_val;
@@ -142,7 +142,7 @@ fun test_reference_gas_price_derivation() {
 
 #[test]
 #[expected_failure(abort_code = validator_set::EStakingBelowThreshold)]
-fun test_staking_below_threshold() {
+fun staking_below_threshold() {
     let mut scenario_val = test_scenario::begin(@0x0);
     let scenario = &mut scenario_val;
     let ctx = scenario.ctx();
@@ -167,7 +167,7 @@ fun test_staking_below_threshold() {
 }
 
 #[test]
-fun test_staking_min_threshold() {
+fun staking_min_threshold() {
     let mut scenario_val = test_scenario::begin(@0x0);
     let scenario = &mut scenario_val;
     let ctx = scenario.ctx();
@@ -196,7 +196,7 @@ fun test_staking_min_threshold() {
 
 #[test]
 #[expected_failure(abort_code = validator_set::EMinJoiningStakeNotReached)]
-fun test_add_validator_failure_below_min_voting_power() {
+fun add_validator_failure_below_min_voting_power() {
     let mut scenario_val = test_scenario::begin(@0x0);
     let scenario = &mut scenario_val;
 
@@ -248,7 +248,7 @@ fun skip_to_min_stake_v2_final_thresholds(scenario: &mut Scenario) {
 }
 
 #[test]
-fun test_add_validator_with_min_voting_power() {
+fun add_validator_with_min_voting_power() {
     let mut scenario_val = test_scenario::begin(@0x0);
     let scenario = &mut scenario_val;
 
@@ -281,7 +281,7 @@ fun test_add_validator_with_min_voting_power() {
 }
 
 #[test]
-fun test_add_candidate_then_remove() {
+fun add_candidate_then_remove() {
     let mut scenario_val = test_scenario::begin(@0x0);
     let scenario = &mut scenario_val;
     let ctx = scenario.ctx();
@@ -318,7 +318,7 @@ fun test_add_candidate_then_remove() {
 
 #[test]
 #[expected_failure(abort_code = validator_set::ENotAValidator)]
-fun test_request_add_then_pull_stake() {
+fun request_add_then_pull_stake() {
     // get enough stake to be added, then pull it before the epoch change
     let mut scenario_val = test_scenario::begin(@0x0);
     let scenario = &mut scenario_val;
@@ -347,7 +347,7 @@ fun test_request_add_then_pull_stake() {
 }
 
 #[test]
-fun test_withdraw_all() {
+fun withdraw_all() {
     let mut scenario_val = test_scenario::begin(@0x0);
     let scenario = &mut scenario_val;
     // create 10 validators with equal-ish stake so we don't run up against max voting power limits
@@ -384,7 +384,7 @@ fun test_withdraw_all() {
 }
 
 #[test]
-fun test_very_low_voting_power_departure() {
+fun very_low_voting_power_departure() {
     let mut scenario_val = test_scenario::begin(@0x0);
     let scenario = &mut scenario_val;
     // create 10 validators with equal-ish stake so we don't run up against max voting power limits
@@ -425,7 +425,7 @@ fun test_very_low_voting_power_departure() {
 }
 
 #[test]
-fun test_low_voting_power_departure() {
+fun low_voting_power_departure() {
     let mut scenario_val = test_scenario::begin(@0x0);
     let scenario = &mut scenario_val;
     // create 10 validators with equal-ish stake so we don't run up against max voting power limits
@@ -483,7 +483,7 @@ fun test_low_voting_power_departure() {
 }
 
 #[test]
-fun test_low_voting_power_recovery() {
+fun low_voting_power_recovery() {
     // a validator drops below the low voting power threshold, then recovers as stake is added back
     let mut scenario_val = test_scenario::begin(@0x0);
     let scenario = &mut scenario_val;

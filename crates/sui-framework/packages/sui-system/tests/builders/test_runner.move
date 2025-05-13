@@ -29,6 +29,11 @@ public struct TestRunnerBuilder {
     /// Mutually exclusive with `validators`
     validators_count: Option<u64>,
     validators_initial_stake: Option<u64>,
+    protocol_version: Option<u64>,
+    stake_distribution_counter: Option<u64>,
+    start_epoch: Option<u64>,
+    epoch_duration: Option<u64>,
+    low_stake_grace_period: Option<u64>,
 }
 
 public fun new(): TestRunnerBuilder {
@@ -38,6 +43,11 @@ public fun new(): TestRunnerBuilder {
         sui_supply_amount: option::none(),
         storage_fund_amount: option::none(),
         validators_initial_stake: option::none(),
+        protocol_version: option::none(),
+        stake_distribution_counter: option::none(),
+        epoch_duration: option::none(),
+        start_epoch: option::none(),
+        low_stake_grace_period: option::none(),
     }
 }
 
@@ -50,25 +60,33 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
         storage_fund_amount,
         validators_count,
         validators_initial_stake,
+        protocol_version,
+        stake_distribution_counter,
+        epoch_duration,
+        start_epoch,
+        low_stake_grace_period,
     } = builder;
 
     let validators = validators.destroy_or!({
         vector::tabulate!(validators_count.destroy_or!(4), |_| {
-            validator_builder::new().initial_stake(validators_initial_stake.destroy_or!(1_000_000))
+            validator_builder::new().initial_stake(validators_initial_stake.destroy_or!(100))
         })
     });
 
+    // create system parameters
+    // TODO: make this configurable
     let system_parameters = sui_system_state_inner::create_system_parameters(
-        42, // epoch_duration_ms, doesn't matter what number we put here
+        epoch_duration.destroy_or!(42), // epoch_duration_ms, doesn't matter what number we put here
         0, // stake_subsidy_start_epoch
         150, // max_validator_count
-        1, // min_validator_joining_stake
-        1, // validator_low_stake_threshold
-        0, // validator_very_low_stake_threshold
-        7, // validator_low_stake_grace_period
+        1, // DEPRECATED: min_validator_joining_stake
+        1, // DEPRECATED: validator_low_stake_threshold
+        0, // DEPRECATED: validator_very_low_stake_threshold
+        low_stake_grace_period.destroy_or!(7), // validator_low_stake_grace_period
         scenario.ctx(),
     );
 
+    // create stake subsidy
     let stake_subsidy = stake_subsidy::create(
         balance::create_for_testing<SUI>(sui_supply_amount.destroy_or!(1000) * MIST_PER_SUI), // sui_supply
         0, // stake subsidy initial distribution amount
@@ -77,21 +95,54 @@ public fun build(builder: TestRunnerBuilder): TestRunner {
         scenario.ctx(),
     );
 
+    let validators = validators.map!(
+        |v| v
+            .is_active_at_genesis(true)
+            .try_initial_stake(validators_initial_stake.destroy_or!(100))
+            .build(scenario.ctx()),
+    );
+    let genesis_validator_addresses = validators.map_ref!(|v| v.sui_address());
+
+    // create sui system state
     sui_system::create(
         object::new(scenario.ctx()), // it doesn't matter what ID sui system state has in tests
-        validators.map!(|v| v.is_active_at_genesis(true).build(scenario.ctx())),
+        validators,
         balance::create_for_testing<SUI>(storage_fund_amount.destroy_or!(0) * MIST_PER_SUI), // storage_fund
-        1, // protocol version
+        protocol_version.destroy_or!(1), // protocol version
         0, // chain_start_timestamp_ms
         system_parameters,
         stake_subsidy,
         scenario.ctx(),
     );
 
-    TestRunner {
+    let mut runner = TestRunner {
         scenario,
         sender: @0,
-    }
+        genesis_validator_addresses,
+    };
+
+    // set stake distribution counter if provided
+    stake_distribution_counter.do!(|counter| {
+        runner.system_tx!(|system, _| {
+            system.set_stake_subsidy_distribution_counter(counter);
+        });
+    });
+
+    // set start epoch if provided, useful for testing safe mode
+    // TODO: what else could be configured for safe mode?
+    start_epoch.do!(|epoch| {
+        runner.scenario.skip_to_epoch(epoch);
+        runner.system_tx!(|system, _| {
+            system.set_epoch_for_testing(epoch);
+        });
+    });
+
+    runner
+}
+
+public fun epoch_duration(mut builder: TestRunnerBuilder, epoch_duration: u64): TestRunnerBuilder {
+    builder.epoch_duration = option::some(epoch_duration);
+    builder
 }
 
 public fun validators(
@@ -134,15 +185,35 @@ public fun validators_initial_stake(
     builder
 }
 
-// === Advance Epoch Options ===
+public fun start_epoch(mut builder: TestRunnerBuilder, start_epoch: u64): TestRunnerBuilder {
+    builder.start_epoch = option::some(start_epoch);
+    builder
+}
 
+public fun protocol_version(
+    mut builder: TestRunnerBuilder,
+    protocol_version: u64,
+): TestRunnerBuilder {
+    builder.protocol_version = option::some(protocol_version);
+    builder
+}
+
+public fun stake_distribution_counter(
+    mut builder: TestRunnerBuilder,
+    stake_distribution_counter: u64,
+): TestRunnerBuilder {
+    builder.stake_distribution_counter = option::some(stake_distribution_counter);
+    builder
+}
+
+// === Advance Epoch Options ===
 public struct AdvanceEpochOptions has drop {
     protocol_version: Option<u64>,
     storage_charge: Option<u64>,
     computation_charge: Option<u64>,
     storage_rebate: Option<u64>,
     non_refundable_storage_fee: Option<u64>,
-    computation_rebate: Option<u64>,
+    storage_fund_reinvest_rate: Option<u64>,
     reward_slashing_rate: Option<u64>,
     epoch_start_time: Option<u64>,
 }
@@ -154,13 +225,15 @@ public fun advance_epoch_opts(_: &TestRunner): AdvanceEpochOptions {
         computation_charge: option::none(),
         storage_rebate: option::none(),
         non_refundable_storage_fee: option::none(),
-        computation_rebate: option::none(),
+        storage_fund_reinvest_rate: option::none(),
         reward_slashing_rate: option::none(),
         epoch_start_time: option::none(),
     }
 }
 
-public fun protocol_version(
+public use fun protocol_version_opts as AdvanceEpochOptions.protocol_version;
+
+public fun protocol_version_opts(
     mut opts: AdvanceEpochOptions,
     protocol_version: u64,
 ): AdvanceEpochOptions {
@@ -194,11 +267,11 @@ public fun non_refundable_storage_fee(
     opts
 }
 
-public fun computation_rebate(
+public fun storage_fund_reinvest_rate(
     mut opts: AdvanceEpochOptions,
-    computation_rebate: u64,
+    storage_fund_reinvest_rate: u64,
 ): AdvanceEpochOptions {
-    opts.computation_rebate = option::some(computation_rebate);
+    opts.storage_fund_reinvest_rate = option::some(storage_fund_reinvest_rate);
     opts
 }
 
@@ -224,6 +297,7 @@ public fun epoch_start_time(
 public struct TestRunner {
     scenario: Scenario,
     sender: address,
+    genesis_validator_addresses: vector<address>,
 }
 
 /// Set the sender of the next transaction.
@@ -236,18 +310,28 @@ public fun set_sender(runner: &mut TestRunner, sender: address): &mut TestRunner
 /// Get the current transaction context.
 public fun ctx(runner: &mut TestRunner): &mut TxContext { runner.scenario.ctx() }
 
+/// Get a mutable reference to the scenario.
 public fun scenario_mut(runner: &mut TestRunner): &mut Scenario { &mut runner.scenario }
 
+/// Get the initial validator addresses specified in the builder.
+public fun genesis_validator_addresses(runner: &TestRunner): vector<address> {
+    runner.genesis_validator_addresses
+}
+
+/// Keep an object in the sender's inventory.
 public fun keep<T: key + store>(runner: &TestRunner, object: T) {
     transfer::public_transfer(object, runner.sender);
 }
 
+/// Get the sender of the next transaction.
 public fun sender(runner: &mut TestRunner): address { runner.sender }
 
+/// Mint a SUI balance for testing.
 public fun mint(amount: u64): Balance<SUI> {
     balance::create_for_testing(amount * MIST_PER_SUI)
 }
 
+/// Destroy an object.
 public fun destroy<T>(v: T) {
     sui::test_utils::destroy(v);
 }
@@ -260,6 +344,7 @@ public fun finish(runner: TestRunner) {
 
 // === Macros ===
 
+/// Get a mutable reference to Scenario and call a function $f on it.
 public macro fun scenario_fn($runner: &mut TestRunner, $f: |&mut Scenario|) {
     let sender = sender($runner);
     let scenario = scenario_mut($runner);
@@ -267,6 +352,7 @@ public macro fun scenario_fn($runner: &mut TestRunner, $f: |&mut Scenario|) {
     $f(scenario);
 }
 
+/// Get an object from the sender's inventory and call a function $f on it.
 public macro fun owned_tx<$Object>($runner: &mut TestRunner, $f: |$Object|) {
     let sender = sender($runner);
     let scenario = scenario_mut($runner);
@@ -274,31 +360,41 @@ public macro fun owned_tx<$Object>($runner: &mut TestRunner, $f: |$Object|) {
     $f(scenario.take_from_sender<$Object>());
 }
 
-/// Run a transaction on the system state
-public macro fun system_tx($runner: &mut TestRunner, $f: |&mut SuiSystemState, &mut TxContext|) {
+/// Run a transaction on the system state.
+public macro fun system_tx(
+    $runner: &mut TestRunner,
+    $f: |&mut SuiSystemState, &mut TxContext|,
+): &mut TestRunner {
     let sender = sender($runner);
     let scenario = scenario_mut($runner);
     scenario.next_tx(sender);
     let mut system_state = scenario.take_shared<SuiSystemState>();
     $f(&mut system_state, scenario.ctx());
     test_scenario::return_shared(system_state);
+    $runner
 }
 
 /// Advance the epoch of the system state. Takes an optional `AdvanceEpochOptions` struct
 /// to configure the epoch advance. Returns the storage rebate balance.
 ///
+/// Switches to 0x0 for the sender of the `advance_epoch` transaction and then
+/// switches back to the sender of the TestRunner.
+///
 /// ```rust
 /// // default, no rewards
-/// runner.advance_epoch(option::none());
+/// runner.advance_epoch(option::none()).destroy_for_testing();
 ///
-/// // custom options
+/// // custom options, supports any combination of the following:
 /// let opts = runner.advance_epoch_opts()
 ///     .storage_charge(100)
 ///     .computation_charge(200)
 ///     .storage_rebate(10)
+///     .non_refundable_storage_fee(10)
+///     .storage_fund_reinvest_rate(10)
+///     .protocol_version(2)
 ///     .reward_slashing_rate(10);
 ///
-/// runner.advance_epoch(option::some(opts));
+/// runner.advance_epoch(option::some(opts)).destroy_for_testing();
 /// ```
 public fun advance_epoch(
     runner: &mut TestRunner,
@@ -315,7 +411,7 @@ public fun advance_epoch(
         computation_charge,
         storage_rebate,
         non_refundable_storage_fee,
-        computation_rebate,
+        storage_fund_reinvest_rate,
         reward_slashing_rate,
         epoch_start_time,
     } = options;
@@ -330,7 +426,7 @@ public fun advance_epoch(
                 computation_charge.destroy_or!(0) * MIST_PER_SUI,
                 storage_rebate.destroy_or!(0),
                 non_refundable_storage_fee.destroy_or!(0),
-                computation_rebate.destroy_or!(0),
+                storage_fund_reinvest_rate.destroy_or!(0),
                 reward_slashing_rate.destroy_or!(0),
                 epoch_start_time.destroy_or!(0),
                 ctx,
@@ -342,9 +438,21 @@ public fun advance_epoch(
     storage_rebate_balance
 }
 
+/// Simulates safe mode by changing the epoch value in the system object without
+/// triggering the epoch change logic.
+public fun advance_epoch_safe_mode(runner: &mut TestRunner) {
+    let sender = runner.sender;
+    runner.set_sender(@0);
+    runner.system_tx!(|system, ctx| {
+        system.set_epoch_for_testing(ctx.epoch() + 1);
+    });
+    runner.scenario.next_epoch(@0);
+    runner.set_sender(sender);
+}
+
 /// Call the `request_add_stake` function on the system state.
 public fun stake_with(runner: &mut TestRunner, validator: address, amount: u64) {
-    let TestRunner { scenario, sender } = runner;
+    let TestRunner { scenario, sender, .. } = runner;
     scenario.next_tx(*sender);
     runner.system_tx!(|system, ctx| {
         system.request_add_stake(
@@ -353,6 +461,27 @@ public fun stake_with(runner: &mut TestRunner, validator: address, amount: u64) 
             ctx,
         );
     });
+}
+
+/// Call the `request_add_stake_non_entry` function on the system state.
+public fun stake_with_and_take(
+    runner: &mut TestRunner,
+    validator: address,
+    amount: u64,
+): StakedSui {
+    let TestRunner { scenario, sender, .. } = runner;
+    let staked_sui;
+    scenario.next_tx(*sender);
+    runner.system_tx!(|system, ctx| {
+        staked_sui =
+            system.request_add_stake_non_entry(
+                coin::mint_for_testing(amount * MIST_PER_SUI, ctx),
+                validator,
+                ctx,
+            );
+    });
+
+    staked_sui
 }
 
 /// Call the `request_withdraw_stake` function on the system state.
@@ -400,6 +529,36 @@ public fun remove_validator(runner: &mut TestRunner) {
     });
 }
 
+/// Report another validator as malicious.
+public fun report_validator(runner: &mut TestRunner, validator: address) {
+    runner.owned_tx!(|cap| {
+        runner.system_tx!(|system, _| {
+            system.report_validator(&cap, validator);
+        });
+        runner.keep(cap);
+    });
+}
+
+/// Undo report a validator.
+public fun undo_report_validator(runner: &mut TestRunner, validator: address) {
+    runner.owned_tx!(|cap| {
+        runner.system_tx!(|system, _| {
+            system.undo_report_validator(&cap, validator);
+        });
+        runner.keep(cap);
+    });
+}
+
+/// Set the reference gas price for the next epoch.
+public fun set_gas_price(runner: &mut TestRunner, gas_price: u64) {
+    runner.owned_tx!(|cap| {
+        runner.system_tx!(|system, _| {
+            system.request_set_gas_price(&cap, gas_price);
+        });
+        runner.keep(cap);
+    });
+}
+
 /// Get the sum of the balances of all the SUI coins in the sender's account.
 public fun sui_balance(runner: &mut TestRunner): u64 {
     let sender = runner.sender;
@@ -411,6 +570,31 @@ public fun sui_balance(runner: &mut TestRunner): u64 {
         scenario.return_to_sender(coin);
         sum
     })
+}
+
+/// Get the sum of the StakedSui objects' principal and the rewards for these objects.
+public fun staking_rewards_balance(runner: &mut TestRunner): u64 {
+    let sender = runner.sender;
+    let scenario = runner.scenario_mut();
+    let mut system = scenario.take_shared<SuiSystemState>();
+    let current_epoch = scenario.ctx().epoch();
+
+    scenario.next_tx(sender);
+    let total_balance = scenario.ids_for_sender<StakedSui>().fold!(0, |mut sum, staked_sui_id| {
+        let staked_sui = scenario.take_from_sender_by_id<StakedSui>(staked_sui_id);
+        let validator = system.validator_address_by_pool_id(&staked_sui.pool_id());
+        let rewards = system
+            .active_validator_by_address(validator)
+            .get_staking_pool_ref()
+            .calculate_rewards(&staked_sui, current_epoch);
+
+        sum = sum + rewards;
+        scenario.return_to_sender(staked_sui);
+        sum
+    });
+
+    test_scenario::return_shared(system);
+    total_balance
 }
 
 #[test]

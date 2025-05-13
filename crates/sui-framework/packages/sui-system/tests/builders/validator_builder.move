@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
+#[allow(unused_const)]
 /// Validator Builder is a helper module which implements a builder pattern for
 /// creating a `Validator` or `ValidatorMetadata` struct.
 ///
@@ -33,11 +34,32 @@ const VALID_ADDRESS: address = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f
 const VALID_PUBKEY: vector<u8> = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
 // prettier-ignore
 const PROOF_OF_POSSESSION: vector<u8> = x"b01cc86f421beca7ab4cfca87c0799c4d038c199dd399fbec1924d4d4367866dba9e84d514710b91feb65316e4ceef43";
-
 const VALID_NET_ADDR: vector<u8> = b"/ip4/127.0.0.1/tcp/80";
 const VALID_P2P_ADDR: vector<u8> = b"/ip4/127.0.0.1/udp/80";
 const VALID_CONSENSUS_ADDR: vector<u8> = b"/ip4/127.0.0.1/udp/80";
 const VALID_WORKER_ADDR: vector<u8> = b"/ip4/127.0.0.1/udp/80";
+
+// Each of the presets contains the following fields:
+// - Sui address
+// - Protocol pubkey
+// - Proof of possession
+// - Network pubkey
+// - Worker pubkey
+// - Network address
+// - P2P address
+// - Consensus address
+// - Worker address
+const VALIDATOR_PRESET_1: vector<vector<u8>> = vector[
+    x"af76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a",
+    VALID_PUBKEY,
+    PROOF_OF_POSSESSION,
+    VALID_NET_PUBKEY,
+    VALID_WORKER_PUBKEY,
+    VALID_NET_ADDR,
+    VALID_P2P_ADDR,
+    VALID_CONSENSUS_ADDR,
+    VALID_WORKER_ADDR,
+];
 
 /// Builder for a Validator. Contains all the fields that can be set for a
 /// validator with default stabs.
@@ -285,8 +307,16 @@ public fun commission_rate(mut builder: ValidatorBuilder, commission_rate: u64):
     builder
 }
 
+/// Set the genesis stake for the validator.
 public fun initial_stake(mut builder: ValidatorBuilder, initial_stake: u64): ValidatorBuilder {
     builder.initial_stake = option::some(initial_stake);
+    builder
+}
+
+/// Try to set the genesis stake if it is not already set.
+/// Used by the `TestRunner` to set the initial stake for a validator in genesis.
+public fun try_initial_stake(mut builder: ValidatorBuilder, initial_stake: u64): ValidatorBuilder {
+    if (builder.initial_stake.is_none()) builder.initial_stake.fill(initial_stake);
     builder
 }
 
@@ -299,6 +329,8 @@ public fun is_active_at_genesis(
 }
 
 // === Constants Access ===
+
+public fun valid_protocol_pubkey(): vector<u8> { VALID_PUBKEY }
 
 public fun valid_net_pubkey(): vector<u8> { VALID_NET_PUBKEY }
 
