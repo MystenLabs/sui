@@ -28,9 +28,9 @@ impl TransactionObjectsHandler {
 impl AnalyticsHandler<TransactionObjectEntry> for TransactionObjectsHandler {
     async fn process_checkpoint(
         &self,
-        checkpoint_data: Arc<CheckpointData>,
+        checkpoint_data: &Arc<CheckpointData>,
     ) -> Result<Vec<TransactionObjectEntry>> {
-        Ok(process_transactions(checkpoint_data, Arc::new(self.clone())).await?)
+        Ok(process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?)
     }
 
     fn file_type(&self) -> Result<FileType> {
