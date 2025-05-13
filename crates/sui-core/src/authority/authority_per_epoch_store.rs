@@ -2326,37 +2326,35 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult<Vec<Vec<GenericSignature>>> {
         assert_eq!(transactions.len(), digests.len());
 
-        let signatures: Vec<_> = {
+        fn is_signature_expected(transaction: &VerifiedTransaction) -> bool {
+            match transaction.inner().transaction_data().kind() {
+                TransactionKind::RandomnessStateUpdate(_) => false,
+                TransactionKind::ProgrammableTransaction(_) if transaction.is_system_tx() => false,
+                _ => true,
+            }
+        }
+
+        let result: Vec<_> = {
             let mut user_sigs = self
                 .consensus_output_cache
                 .user_signatures_for_checkpoints
                 .lock();
-            digests.iter().map(|d| user_sigs.remove(d)).collect()
+            digests
+                .iter()
+                .zip(transactions.iter())
+                .map(|(d, t)| {
+                    // Some transactions (RandomnessStateUpdate and settlement transactions) don't go through
+                    // consensus, but have system-generated signatures that are guaranteed to be the same,
+                    // so we can just pull them from the transaction.
+                    if is_signature_expected(t) {
+                        user_sigs.remove(d).expect("signature should be available")
+                    } else {
+                        t.tx_signatures().to_vec()
+                    }
+                })
+                .collect()
         };
 
-        let mut result = Vec::with_capacity(digests.len());
-        for (signatures, transaction) in signatures.into_iter().zip(transactions.iter()) {
-            let signatures = if let Some(signatures) = signatures {
-                signatures
-            } else if matches!(
-                transaction.inner().transaction_data().kind(),
-                TransactionKind::RandomnessStateUpdate(_)
-            ) {
-                // RandomnessStateUpdate transactions don't go through consensus, but
-                // have system-generated signatures that are guaranteed to be the same,
-                // so we can just pull it from the transaction.
-                transaction.tx_signatures().to_vec()
-            } else {
-                return Err(SuiError::from(
-                    format!(
-                        "Can not find user signature for checkpoint for transaction {:?}",
-                        transaction.key()
-                    )
-                    .as_str(),
-                ));
-            };
-            result.push(signatures);
-        }
         Ok(result)
     }
 
