@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::ops::Range;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, Result};
 use arrow_array::{Array, Int32Array};
@@ -15,7 +15,7 @@ use handlers::transaction_bcs_handler::TransactionBCSHandler;
 use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
 use object_store::path::Path;
-use package_store::PackageCache;
+use package_store::{LazyPackageCache, PackageCache};
 use serde::{Deserialize, Serialize};
 use snowflake_api::{QueryResult, SnowflakeApi};
 use strum_macros::EnumIter;
@@ -177,8 +177,15 @@ impl JobConfig {
     pub async fn create_checkpoint_processors(
         self,
         metrics: AnalyticsMetrics,
-    ) -> Result<(Vec<Processor>, Arc<PackageCache>)> {
-        let package_cache = Arc::new(PackageCache::new(&self.package_cache_path, &self.rest_url));
+    ) -> Result<(Vec<Processor>, Option<Arc<PackageCache>>)> {
+        use crate::package_store::LazyPackageCache;
+        use std::sync::Mutex;
+
+        let lazy_package_cache = Arc::new(Mutex::new(LazyPackageCache::new(
+            self.package_cache_path.clone(),
+            self.rest_url.clone(),
+        )));
+
         let job_config = Arc::new(self);
         let mut processors = Vec::with_capacity(job_config.task_configs.len());
         let mut task_names = HashSet::new();
@@ -199,11 +206,16 @@ impl JobConfig {
                 config: task_config,
                 checkpoint_dir: Arc::new(temp_dir),
                 metrics: metrics.clone(),
-                package_cache: package_cache.clone(),
+                lazy_package_cache: lazy_package_cache.clone(),
             };
 
             processors.push(task_context.create_analytics_processor().await?);
         }
+
+        let package_cache = lazy_package_cache
+            .lock()
+            .unwrap()
+            .get_cache_if_initialized();
 
         Ok((processors, package_cache))
     }
@@ -265,7 +277,7 @@ pub struct TaskContext {
     pub job_config: Arc<JobConfig>,
     pub checkpoint_dir: Arc<TempDir>,
     pub metrics: AnalyticsMetrics,
-    pub package_cache: Arc<PackageCache>,
+    pub lazy_package_cache: Arc<Mutex<LazyPackageCache>>,
 }
 
 impl TaskContext {
@@ -285,7 +297,11 @@ impl TaskContext {
             }
             FileType::Object => {
                 let package_id_filter = self.config.package_id_filter.clone();
-                let package_cache = self.package_cache.clone();
+                let package_cache = self
+                    .lazy_package_cache
+                    .lock()
+                    .unwrap()
+                    .initialize_or_get_cache();
                 let metrics = self.metrics.clone();
                 self.create_processor_for_handler(Box::new(ObjectHandler::new(
                     package_cache,
@@ -303,7 +319,11 @@ impl TaskContext {
                     .await
             }
             FileType::Event => {
-                let package_cache = self.package_cache.clone();
+                let package_cache = self
+                    .lazy_package_cache
+                    .lock()
+                    .unwrap()
+                    .initialize_or_get_cache();
                 self.create_processor_for_handler(Box::new(EventHandler::new(package_cache)))
                     .await
             }
@@ -320,12 +340,20 @@ impl TaskContext {
                     .await
             }
             FileType::DynamicField => {
-                let package_cache = self.package_cache.clone();
+                let package_cache = self
+                    .lazy_package_cache
+                    .lock()
+                    .unwrap()
+                    .initialize_or_get_cache();
                 self.create_processor_for_handler(Box::new(DynamicFieldHandler::new(package_cache)))
                     .await
             }
             FileType::WrappedObject => {
-                let package_cache = self.package_cache.clone();
+                let package_cache = self
+                    .lazy_package_cache
+                    .lock()
+                    .unwrap()
+                    .initialize_or_get_cache();
                 let metrics = self.metrics.clone();
                 self.create_processor_for_handler(Box::new(WrappedObjectHandler::new(
                     package_cache,

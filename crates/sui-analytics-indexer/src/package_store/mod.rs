@@ -28,6 +28,43 @@ use typed_store::{DBMapUtils, Map, TypedStoreError};
 pub mod cache_coordinator;
 pub mod package_cache_worker;
 
+use std::sync::OnceLock;
+
+/// A lazy-initialized package cache that tracks whether it was ever accessed.
+pub struct LazyPackageCache {
+    cache: Option<OnceLock<Arc<PackageCache>>>,
+    constructor: Box<dyn Fn() -> Arc<PackageCache> + Send + Sync>,
+}
+
+impl LazyPackageCache {
+    pub fn new(path: std::path::PathBuf, rest_url: String) -> Self {
+        let constructor = Box::new(move || Arc::new(PackageCache::new(&path, &rest_url)));
+
+        Self {
+            cache: None,
+            constructor,
+        }
+    }
+
+    /// Initialize the cache if needed and return the package cache.
+    pub fn initialize_or_get_cache(&mut self) -> Arc<PackageCache> {
+        if self.cache.is_none() {
+            self.cache = Some(OnceLock::new());
+        }
+
+        self.cache
+            .as_ref()
+            .unwrap()
+            .get_or_init(|| (self.constructor)())
+            .clone()
+    }
+
+    /// Get the package cache if it was initialized, None otherwise.
+    pub fn get_cache_if_initialized(&self) -> Option<Arc<PackageCache>> {
+        self.cache.as_ref().and_then(|cell| cell.get().cloned())
+    }
+}
+
 const STORE: &str = "RocksDB";
 const MAX_EPOCH_CACHES: usize = 2; // keep at most two epochs in memory
 
