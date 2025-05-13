@@ -69,7 +69,7 @@ async fn main() -> Result<()> {
     let progress_store = ShimIndexerProgressStore::new(watermarks);
     let mut executor = IndexerExecutor::new(
         progress_store,
-        processors.len(),
+        processors.len() + 1,
         DataIngestionMetrics::new(&registry),
     );
 
