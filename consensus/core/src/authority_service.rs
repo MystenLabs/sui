@@ -327,6 +327,10 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .inc_by(missing_ancestors.len() as u64);
             let synchronizer = self.synchronizer.clone();
             spawn_monitored_task!(async move {
+                // This does not wait for the fetch request to complete.
+                // It only waits for synchronizer to queue the request to a peer.
+                // When this fails, it usually means the queue is full.
+                // The fetch will retry from other peers via live and periodic syncs.
                 if let Err(err) = synchronizer.fetch_blocks(missing_ancestors, peer).await {
                     debug!("Failed to fetch missing ancestors via synchronizer: {err}");
                 }
@@ -402,7 +406,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                     .fetch_blocks(missing_excluded_ancestors, peer)
                     .await
                 {
-                    debug!("Failed to fetch missing soft links via synchronizer: {err}");
+                    debug!("Failed to fetch excluded ancestors via synchronizer: {err}");
                 }
             });
         }
