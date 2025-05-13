@@ -25,9 +25,9 @@ impl TransactionBCSHandler {
 impl AnalyticsHandler<TransactionBCSEntry> for TransactionBCSHandler {
     async fn process_checkpoint(
         &self,
-        checkpoint_data: Arc<CheckpointData>,
+        checkpoint_data: &Arc<CheckpointData>,
     ) -> Result<Vec<TransactionBCSEntry>> {
-        Ok(process_transactions(checkpoint_data, Arc::new(self.clone())).await?)
+        Ok(process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?)
     }
 
     fn file_type(&self) -> Result<FileType> {
@@ -96,7 +96,7 @@ mod tests {
         )?;
         let txn_handler = TransactionBCSHandler::new();
         let transaction_entries = txn_handler
-            .process_checkpoint(Arc::new(checkpoint_data))
+            .process_checkpoint(&Arc::new(checkpoint_data))
             .await?;
         assert_eq!(transaction_entries.len(), 1);
         let db_txn = transaction_entries.first().unwrap();

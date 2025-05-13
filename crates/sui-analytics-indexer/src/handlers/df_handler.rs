@@ -128,7 +128,7 @@ impl DynamicFieldHandler {
 impl AnalyticsHandler<DynamicFieldEntry> for DynamicFieldHandler {
     async fn process_checkpoint(
         &self,
-        checkpoint_data: Arc<CheckpointData>,
+        checkpoint_data: &Arc<CheckpointData>,
     ) -> Result<Vec<DynamicFieldEntry>> {
         wait_for_cache(&checkpoint_data, &self.package_cache).await;
         Ok(process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await?)
