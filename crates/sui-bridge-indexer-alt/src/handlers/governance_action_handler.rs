@@ -14,9 +14,9 @@ use sui_bridge::events::{
 };
 use sui_bridge_schema::models::{BridgeDataSource, GovernanceAction, GovernanceActionType};
 use sui_bridge_schema::schema;
-use sui_indexer_alt_framework::db::Db;
 use sui_indexer_alt_framework::pipeline::concurrent::Handler;
 use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::postgres::Db;
 use sui_indexer_alt_framework::store::Store;
 use sui_indexer_alt_framework::types::full_checkpoint_content::CheckpointData;
 use sui_indexer_alt_framework::types::BRIDGE_ADDRESS;
