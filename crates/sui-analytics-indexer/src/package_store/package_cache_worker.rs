@@ -28,9 +28,10 @@ impl PackageCacheWorker {
 impl Worker for PackageCacheWorker {
     type Result = ();
 
-    async fn process_checkpoint_arc(&self, checkpoint_data: Arc<CheckpointData>) -> Result<()> {
+    async fn process_checkpoint_arc(&self, checkpoint_data: &Arc<CheckpointData>) -> Result<()> {
         let sequence_number = *checkpoint_data.checkpoint_summary.sequence_number();
         let cache = self.package_cache.clone();
+        let checkpoint_data = checkpoint_data.clone();
 
         tokio::task::spawn_blocking(move || {
             let all_objects = checkpoint_data
