@@ -96,6 +96,7 @@ members = [
   "crates/sui-bridge",
   "crates/sui-bridge-cli",
   "crates/sui-bridge-indexer",
+  "crates/sui-bridge-schema",
   "crates/sui-cluster-test",
   "crates/sui-config",
   "crates/sui-core",
@@ -668,6 +669,7 @@ sui-analytics-indexer-derive = { path = "crates/sui-analytics-indexer-derive" }
 sui-authority-aggregation = { path = "crates/sui-authority-aggregation" }
 sui-benchmark = { path = "crates/sui-benchmark" }
 sui-bridge = { path = "crates/sui-bridge" }
+sui-bridge-schema = { path = "crates/sui-bridge-schema" }
 sui-cluster-test = { path = "crates/sui-cluster-test" }
 sui-config = { path = "crates/sui-config" }
 sui-core = { path = "crates/sui-core", features = ["rocksdb"] }
