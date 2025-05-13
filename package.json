@@ -41,10 +41,10 @@
 		"@ianvs/prettier-plugin-sort-imports": "^4.4.1",
 		"@manypkg/cli": "^0.21.4",
 		"@tanstack/eslint-plugin-query": "^5.74.7",
-		"@typescript-eslint/eslint-plugin": "^6.21.0",
-		"@typescript-eslint/parser": "^6.21.0",
+		"@typescript-eslint/eslint-plugin": "^6.1.0",
+		"@typescript-eslint/parser": "^6.1.0",
 		"concurrently": "^8.2.2",
-		"eslint": "^8.57.1",
+		"eslint": "^8.45.0",
 		"eslint-config-prettier": "^8.10.0",
 		"eslint-config-react-app": "^7.0.1",
 		"eslint-import-resolver-typescript": "^3.10.1",
@@ -55,11 +55,11 @@
 		"eslint-plugin-tsdoc": "^0.2.17",
 		"eslint-plugin-unused-imports": "^3.2.0",
 		"graphql-config": "^5.1.5",
-		"prettier": "^3.5.3",
+		"prettier": "^3.3.2",
 		"prettier-plugin-tailwindcss": "^0.6.11",
 		"tsx": "^4.19.4",
 		"turbo": "^2.5.3",
-		"typescript": "^5.8.3"
+		"typescript": "^5.5.3"
 	},
 	"packageManager": "pnpm@9.1.1+sha512.14e915759c11f77eac07faba4d019c193ec8637229e62ec99eefb7cf3c3b75c64447882b7c485142451ee3a6b408059cdfb7b7fa0341b975f12d0f7629c71195"
 }
