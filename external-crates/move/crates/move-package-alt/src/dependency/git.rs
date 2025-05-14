@@ -453,6 +453,12 @@ impl From<PinnedGitDependency> for GitRepo {
     }
 }
 
+/// Fetch the given git dependency and return the path to the checked out repo
+pub async fn fetch_dep(dep: PinnedGitDependency) -> PackageResult<PathBuf> {
+    let git_repo = GitRepo::from(&dep);
+    git_repo.fetch().await
+}
+
 /// Deserialize a SHA string to ensure it is well formed.
 pub fn deserialize_sha<'de, D>(deserializer: D) -> Result<String, D::Error>
 where

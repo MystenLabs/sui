@@ -33,7 +33,7 @@ use crate::{
 };
 
 use external::ExternalDependency;
-use git::{GitRepo, PinnedGitDependency, UnpinnedGitDependency};
+use git::{GitRepo, PinnedGitDependency, UnpinnedGitDependency, fetch_dep};
 use local::LocalDependency;
 
 // TODO (potential refactor): consider using objects for manifest dependencies (i.e. `Box<dyn UnpinnedDependency>`).
@@ -283,14 +283,13 @@ async fn fetch<F: MoveFlavor>(
 
     let mut git_paths = DS::new();
     for (env, package, dep) in gits {
-        let repo = GitRepo::from(dep);
-        let path = repo.fetch().await?;
+        let path = fetch_dep(dep).await?;
         git_paths.insert(env, package, path);
     }
 
     let mut loc_paths = DS::new();
     for (env, package, dep) in locs {
-        loc_paths.insert(env, package, dep.path().clone());
+        loc_paths.insert(env, package, dep.path()?);
     }
 
     let flav_deps_path = flavor.fetch(flav)?;
