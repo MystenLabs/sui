@@ -583,7 +583,7 @@ impl AttestationDocument {
                         ));
                     }
 
-                    // legacy parsing in vector.
+                    // legacy parsing that populates a vector.
                     let key_u64 = u64::try_from(key).map_err(|_| {
                         NitroAttestationVerifyError::InvalidAttestationDoc(
                             "invalid PCR index".to_string(),
@@ -595,27 +595,29 @@ impl AttestationDocument {
                         }
                     }
 
-                    // valid key is 0..31, can parse with u8.
-                    let key_u8 = u8::try_from(key).map_err(|_| {
-                        NitroAttestationVerifyError::InvalidAttestationDoc(
-                            "invalid PCR index".to_string(),
-                        )
-                    })?;
+                    // when upgraded parsing is enabled, use btreemap to avoid dup.
+                    if is_upgraded_parsing {
+                        // valid key is 0..31, can parse with u8.
+                        let key_u8 = u8::try_from(key).map_err(|_| {
+                            NitroAttestationVerifyError::InvalidAttestationDoc(
+                                "invalid PCR index".to_string(),
+                            )
+                        })?;
 
-                    // Valid PCR indices are 0, 1, 2, 3, 4, 8 for AWS. Ignores other keys.
-                    // See: <https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html#where>
-                    if !matches!(key_u8, 0 | 1 | 2 | 3 | 4 | 8) {
-                        continue;
+                        // Valid PCR indices are 0, 1, 2, 3, 4, 8 for AWS. Ignores other keys.
+                        // See: <https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html#where>
+                        if !matches!(key_u8, 0 | 1 | 2 | 3 | 4 | 8) {
+                            continue;
+                        }
+
+                        if pcr_map.contains_key(&key_u8) {
+                            return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
+                                format!("duplicate PCR index {}", key_u8),
+                            ));
+                        }
+
+                        pcr_map.insert(key_u8, value.to_vec());
                     }
-
-                    if is_upgraded_parsing && pcr_map.contains_key(&key_u8) {
-                        return Err(NitroAttestationVerifyError::InvalidAttestationDoc(format!(
-                            "duplicate PCR index {}",
-                            key_u8
-                        )));
-                    }
-
-                    pcr_map.insert(key_u8, value.to_vec());
                 }
                 Ok((pcr_vec, pcr_map))
             })?;
