@@ -7,6 +7,9 @@ pub mod collections;
 pub mod references;
 pub mod regex;
 
+#[cfg(test)]
+mod tests;
+
 pub type Result<T> = std::result::Result<T, InvariantViolation>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

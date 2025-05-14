@@ -106,6 +106,8 @@ impl<Lbl> Regex<Lbl> {
     /// "".remove_prefix("") = [""]
     /// "a".remove_prefix("") = ["a"]
     /// "ab".remove_prefix("") = ["ab"]
+    /// ".*".remove_prefix("") = [".*"]
+    /// "a.*".remove_prefix("") = ["a.*"]
     ///
     /// Remove label
     /// "ab".remove_prefix("a") = ["b"]
@@ -124,6 +126,7 @@ impl<Lbl> Regex<Lbl> {
     /// "ab.*".remove_prefix(".*") = ["ab.*", "b.*", ".*", ""] ==> optimized to [".*"]
     ///
     /// Cases where there is no prefix:
+    /// "".remove_prefix("a") = []
     /// "a".remove_prefix("b") = []
     /// "ab".remove_prefix("b") = []
     /// "abc".remove_prefix("b") = []
