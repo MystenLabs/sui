@@ -230,7 +230,7 @@ public fun migrate_metadata_to_registry<T>(
     metadata_v1: CoinMetadata<T>,
     ctx: &mut TxContext,
 ) {
-    registry.register_metadata(from_metadata_v1(&metadata_v1, ctx));
+    if (!registry.exists<T>()) registry.register_metadata(from_metadata_v1(&metadata_v1, ctx));
     metadata_v1.destroy_metadata()
 }
 
@@ -693,8 +693,8 @@ public entry fun update_icon_url<T>(
     metadata.icon_url = option::some(url::new_unsafe(url));
 }
 
-/// Destroy the metadata for a coin type, only called by the registry.
-public(package) fun destroy_metadata<T>(metadata: CoinMetadata<T>) {
+/// Destroy legacy `CoinMetadata` object
+public fun destroy_metadata<T>(metadata: CoinMetadata<T>) {
     let CoinMetadata { id, .. } = metadata;
     id.delete()
 }
