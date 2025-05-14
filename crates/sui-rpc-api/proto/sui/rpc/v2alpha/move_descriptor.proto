@@ -10,11 +10,16 @@ message Descriptor {
   optional string name = 1;
   optional string package_id = 2;
   optional string module = 3;
+  // fully qualified type name
+  optional string type_name = 4;
 
   repeated Ability abilities = 4;
   repeated TypeParameter type_parameters = 5;
 
-  repeated FieldDescriptor field = 10;
+  // TODO do we use oneof to differentiate or an enum?
+  // We'd have to use a wrapper message. Or we have a separate message type for enumes/structs
+  repeated FieldDescriptor fields = 10;
+  repeated VariantDescriptor variants = 11;
 }
 
 enum Ability {
@@ -34,18 +39,7 @@ message FieldDescriptor {
   optional string name = 1;
   optional uint32 position = 2;
 
-  optional Type type = 5;
-
-  optional string type_name = 6;
-  //repeated type_parameters = 7;
-}
-
-message TypeParameterInstantiation {
-  optional Type type = 1;
-  optional uint32 type_parameter = 2;
-  optional string type_name = 3;
-
-
+  optional OpenSignatureBody type = 5;
 }
 
 enum Type {
@@ -61,4 +55,88 @@ enum Type {
   VECTOR = 9;
   DATA_TYPE = 10;
   TYPE_PARAMETER = 11;
+}
+
+message VariantDescriptor {
+  optional string name = 1;
+  optional uint32 position = 2;
+  repeated FieldDescriptor fields = 3;
+}
+
+message OpenSignatureBody {
+  // Type of this signature
+  optional Type type = 1;
+
+  // position of the type parameter as defined in the containing data type descriptor when `type` is `TYPE_PARAMETER`
+  optional uint32 type_parameter = 2;
+
+  // Fully qualified name of the data type when `type` is `DATA_TYPE`
+  optional string type_name = 3;
+
+  // Set when `type` is `VECTOR` or `DATA_TYPE`
+  repeated OpenSignatureBody type_parameter_instantiation = 4;
+}
+
+message FunctionDescriptor {
+  optional string name = 1;
+  optional string package_id = 2;
+  optional string module = 3;
+  // fully qualified function name
+  optional string function_name = 4;
+  
+  optional Visibility visibility = 5;
+  optional bool is_entry = 6;
+  // ability constraints for type parameters
+  repeated Ability type_parameters = 7;
+  repeated OpenSignature parameters = 8;
+  repeated OpenSignature returns = 9;
+}
+
+enum Reference {
+  REFERENCE_UNKNOWN = 0;
+  IMMUTABLE = 1;
+  MUTABLE = 2;
+}
+
+enum Visibility {
+  VISIBILITY_UNKNOWN = 0;
+  PRIVATE = 1;
+  PUBLIC = 2;
+  FRIEND = 3;
+}
+
+message OpenSignature {
+  optional Reference reference = 1;
+  optional OpenSignatureBody body = 2;
+}
+
+message Module {
+  // Name of this module
+  optional name = 1;
+
+  // PackageId of the package where this module is defined.
+  optional package_id = 2;
+
+  repeated Descriptor data_types = 3;
+  repeated FunctionDescriptor functions = 4;
+}
+
+// A Move Package
+message Package {
+  // The PackageId of this package
+  // The Id this package was loaded from on-chain.
+  optional string storage_id = 1;
+
+  // The Id that this package is associated with at runtime.
+  optional string storage_id = 1;
+  optional string runtime_id = 2;
+
+  // What should this be?
+  // optional Linkage linkage = 3;
+
+  // The version of this package
+  optional uint64 version = 4;
+
+  // The modules defined by this package
+  repeated Module modules = 5;
 }
