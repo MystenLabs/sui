@@ -22,27 +22,25 @@ const TESTNET_CHAIN_ID: &str = "4c78adac";
 #[derive(Debug, Clone, Parser)]
 pub struct New {
     name: PackageName,
-    /// Path to the project
+    #[arg(long, short)]
     path: Option<PathBuf>,
 }
 
 impl New {
     pub fn execute(&self) -> PackageResult<()> {
-        // if !Identifier::is_valid(&self.name) {
-        //     return Err(crate::errors::PackageError::Generic(
-        //         "Invalid package name. Package name must start with a letter or underscore \
-        //              and consist only of letters, numbers, and underscores."
-        //             .to_string(),
-        //     ));
-        // }
-
         let path = match self.path {
-            Some(ref path) => path,
+            Some(ref path) => path.join(&self.name.to_string()),
             None => {
                 let current_dir = std::env::current_dir()?;
-                &current_dir.join(&self.name.to_string())
+                current_dir.join(&self.name.to_string())
             }
         };
+
+        if !path.exists() {
+            std::fs::create_dir_all(&path)?;
+        }
+
+        create_dir_all(path.join(SourcePackageLayout::Sources.path()))?;
 
         // create module source file
         let mut w = std::fs::File::create(
@@ -51,21 +49,21 @@ impl New {
         )?;
         writeln!(
             w,
-            r#"/*
+            r#"// For Move coding conventions, see
+// https://docs.sui.io/concepts/sui-move-concepts/conventions
+
 /// Module: {name}
 module {name}::{name};
-*/
 
-// For Move coding conventions, see
-// https://docs.sui.io/concepts/sui-move-concepts/conventions
-"#,
+
+public fun init() {{
+
+}}"#,
             name = self.name
         )?;
 
-        create_dir_all(path.join(SourcePackageLayout::Sources.path()))?;
-
-        self.write_move_toml(path);
-        self.write_gitignore(path)?;
+        self.write_move_toml(&path);
+        self.write_gitignore(&path)?;
         Ok(())
     }
 
@@ -123,14 +121,10 @@ testnet = "{TESTNET_CHAIN_ID}"
 # two of your dependencies depend on different versions of the same package
 # foo = { git = "https://example.com/foo.git", rev = "releases/v1", override = true}
 
-[dep-replacements.mainnet.foo]
-# Dep-replacements should be used to replace dependencies for specific environments
+[dep-replacements.mainnet]
+# Use to replace dependencies for specific environments
 
-git = "https://example.com/foo.git"
-original-id = "0x12g0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
-published-at = "0x12ga0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
-use-environment = "mainnet_beta"
-""#;
+foo = { git = "https://example.com/foo.git", original-id = "0x12g0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", published-at = "0x12ga0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", use-environment = "mainnet_beta" }""#;
 
         let toml_content = toml_content.replace("{name}", &name.to_string());
         let toml_path = path.join("Move.toml");
