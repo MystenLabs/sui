@@ -226,7 +226,7 @@ impl<Lbl> Extension<Lbl> {
     /// Cases where there is no prefix:
     /// "".remove_prefix("a") = []
     /// "".remove_prefix("ab") = []
-    /// "".remove_prefix(".*") = []
+    /// "".remove_prefix("a.*") = []
     /// "a".remove_prefix("b") = []
     /// "a".remove_prefix("bc.*") = []
     /// "a".remove_prefix("ab") = []
@@ -293,7 +293,7 @@ impl<Lbl> Extension<Lbl> {
         }
     }
 
-    fn into_regex(self) -> Regex<Lbl> {
+    pub(crate) fn into_regex(self) -> Regex<Lbl> {
         match self {
             Extension::Epsilon => Regex::epsilon(),
             Extension::Label(lbl) => Regex::label(lbl),
