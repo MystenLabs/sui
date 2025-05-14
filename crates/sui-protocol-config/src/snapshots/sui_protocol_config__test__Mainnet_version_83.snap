@@ -79,6 +79,7 @@ feature_flags:
   variant_nodes: true
   consensus_zstd_compression: true
   minimize_child_object_mutations: true
+  record_additional_state_digest_in_prologue: true
   move_native_context: true
   consensus_median_based_commit_timestamp: true
   normalize_ptb_arguments: true
@@ -378,3 +379,4 @@ gas_budget_based_txn_cost_cap_factor: 400000
 gas_budget_based_txn_cost_absolute_cap_commit_count: 50
 sip_45_consensus_amplification_threshold: 5
 use_object_per_epoch_marker_table_v2: true
+consensus_commit_rate_estimation_window_size: 10
