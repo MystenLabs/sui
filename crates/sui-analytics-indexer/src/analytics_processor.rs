@@ -97,7 +97,7 @@ impl<S: Serialize + ParquetSchema + Send + Sync + 'static> Worker for AnalyticsP
             .with_label_values(&[self.name()])
             .inc();
 
-        let iter = self.handler.process_checkpoint(&checkpoint_data).await?;
+        let iter = self.handler.process_checkpoint(checkpoint_data).await?;
         {
             let mut writer = state.writer.lock().unwrap();
             writer.write(iter)?;
