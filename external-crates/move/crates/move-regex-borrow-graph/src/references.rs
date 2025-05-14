@@ -81,7 +81,7 @@ impl<Loc, Lbl: Ord> Edge<Loc, Lbl> {
 }
 
 impl<Loc, Lbl: Ord> Node<Loc, Lbl> {
-    pub fn new(r: Ref, is_mutable: bool) -> Self {
+    pub(crate) fn new(r: Ref, is_mutable: bool) -> Self {
         Self {
             ref_: r,
             is_mutable,
@@ -92,15 +92,15 @@ impl<Loc, Lbl: Ord> Node<Loc, Lbl> {
         }
     }
 
-    pub fn ref_(&self) -> Ref {
+    pub(crate) fn ref_(&self) -> Ref {
         self.ref_
     }
 
-    pub fn is_mutable(&self) -> bool {
+    pub(crate) fn is_mutable(&self) -> bool {
         self.is_mutable
     }
 
-    pub fn abstract_size(&self) -> usize {
+    pub(crate) fn abstract_size(&self) -> usize {
         self.abstract_size
     }
 }
@@ -124,7 +124,7 @@ impl<Loc, Lbl: Ord> Edge<Loc, Lbl> {
 
 impl<Loc, Lbl: Ord> Node<Loc, Lbl> {
     // Returns size increase
-    pub fn add_regex(&mut self, loc: Loc, regex: Regex<Lbl>, successor: Ref) -> usize {
+    pub(crate) fn add_regex(&mut self, loc: Loc, regex: Regex<Lbl>, successor: Ref) -> usize {
         let r = LocRegex { loc, regex };
         let size_increase = self
             .successors
@@ -135,12 +135,12 @@ impl<Loc, Lbl: Ord> Node<Loc, Lbl> {
         size_increase
     }
 
-    pub fn add_predecessor(&mut self, predecessor: Ref) {
+    pub(crate) fn add_predecessor(&mut self, predecessor: Ref) {
         self.predecessors.insert(predecessor);
     }
 
     // Returns the size decrease
-    pub fn remove_neighbor(&mut self, neighbor: Ref) -> usize {
+    pub(crate) fn remove_neighbor(&mut self, neighbor: Ref) -> usize {
         let successor_edge_opt = self.successors.remove(&neighbor);
         self.predecessors.remove(&neighbor);
         // size_decrease
@@ -159,7 +159,7 @@ impl<Loc: Copy, Lbl: Ord + Clone> Edge<Loc, Lbl> {
         self.regexes
             .iter()
             .map(|r| {
-                let (labels, ends_in_dot_star) = r.regex.pub_path();
+                let (labels, ends_in_dot_star) = r.regex.query_api_path();
                 Path {
                     loc: r.loc,
                     labels,
@@ -171,23 +171,23 @@ impl<Loc: Copy, Lbl: Ord + Clone> Edge<Loc, Lbl> {
 }
 
 impl<Loc, Lbl: Ord> Node<Loc, Lbl> {
-    pub fn successors(&self) -> impl Iterator<Item = Ref> + '_ {
+    pub(crate) fn successors(&self) -> impl Iterator<Item = Ref> + '_ {
         std::iter::once(self.ref_).chain(self.successors.keys().copied())
     }
 
-    pub fn predecessors(&self) -> impl Iterator<Item = Ref> + '_ {
+    pub(crate) fn predecessors(&self) -> impl Iterator<Item = Ref> + '_ {
         std::iter::once(self.ref_).chain(self.predecessors.iter().copied())
     }
 
-    pub fn is_successor(&self, r: &Ref) -> bool {
+    pub(crate) fn is_successor(&self, r: &Ref) -> bool {
         self.ref_ == *r || self.successors.contains_key(r)
     }
 
-    pub fn is_predecessor(&self, r: &Ref) -> bool {
+    pub(crate) fn is_predecessor(&self, r: &Ref) -> bool {
         self.ref_ == *r || self.predecessors.contains(r)
     }
 
-    pub fn regexes(&self, successor: &Ref) -> Result<impl Iterator<Item = &Regex<Lbl>>> {
+    pub(crate) fn regexes(&self, successor: &Ref) -> Result<impl Iterator<Item = &Regex<Lbl>>> {
         Ok(if successor == &self.ref_ {
             Either::Left(std::iter::once(&self.self_epsilon))
         } else {
@@ -200,7 +200,7 @@ impl<Loc, Lbl: Ord> Node<Loc, Lbl> {
         })
     }
 
-    pub fn paths(&self, successor: &Ref) -> Result<Paths<Loc, Lbl>>
+    pub(crate) fn paths(&self, successor: &Ref) -> Result<Paths<Loc, Lbl>>
     where
         Loc: Copy,
         Lbl: Clone,
@@ -248,7 +248,7 @@ impl Ref {
 }
 
 impl<Loc, Lbl: Ord> Node<Loc, Lbl> {
-    pub fn refresh_refs(self) -> Result<Self> {
+    pub(crate) fn refresh_refs(self) -> Result<Self> {
         let Self {
             ref_,
             is_mutable,
@@ -276,7 +276,7 @@ impl<Loc, Lbl: Ord> Node<Loc, Lbl> {
         })
     }
 
-    pub fn canonicalize(self, remapping: &BTreeMap<Ref, usize>) -> Result<Self> {
+    pub(crate) fn canonicalize(self, remapping: &BTreeMap<Ref, usize>) -> Result<Self> {
         let Self {
             ref_,
             is_mutable,
@@ -311,7 +311,7 @@ impl<Loc, Lbl: Ord> Node<Loc, Lbl> {
 
 impl<Loc: Copy, Lbl: Ord + Clone> Node<Loc, Lbl> {
     // adds all edges in other to self, where the successor/predecessor is in mask
-    pub fn join(&mut self, mask: &BTreeSet<Ref>, other: &Self) -> usize {
+    pub(crate) fn join(&mut self, mask: &BTreeSet<Ref>, other: &Self) -> usize {
         let mut size_increase = 0usize;
         for (s, edge) in other.successors.iter().filter(|(s, _)| mask.contains(s)) {
             for LocRegex { loc, regex } in &edge.regexes {
@@ -342,7 +342,7 @@ impl Ref {
 }
 
 impl<Loc, Lbl: Ord> Edge<Loc, Lbl> {
-    pub fn check_invariant(&self) {
+    pub(crate) fn check_invariant(&self) {
         #[cfg(debug_assertions)]
         {
             let mut calculated_size = 0;
@@ -356,7 +356,7 @@ impl<Loc, Lbl: Ord> Edge<Loc, Lbl> {
 }
 
 impl<Loc, Lbl: Ord> Node<Loc, Lbl> {
-    pub fn check_invariant(&self) {
+    pub(crate) fn check_invariant(&self) {
         #[cfg(debug_assertions)]
         {
             let is_canonical = self.ref_.is_canonical();

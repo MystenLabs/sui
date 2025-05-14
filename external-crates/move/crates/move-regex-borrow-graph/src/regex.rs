@@ -31,7 +31,7 @@ pub(crate) enum Extension<Lbl> {
 
 impl<Lbl> Regex<Lbl> {
     /// An empty regular expression
-    pub fn epsilon() -> Self {
+    pub(crate) fn epsilon() -> Self {
         Self {
             labels: vec![],
             ends_in_dot_star: false,
@@ -39,7 +39,7 @@ impl<Lbl> Regex<Lbl> {
     }
 
     /// A single label
-    pub fn label(lbl: Lbl) -> Self {
+    pub(crate) fn label(lbl: Lbl) -> Self {
         Self {
             labels: vec![lbl],
             ends_in_dot_star: false,
@@ -47,7 +47,7 @@ impl<Lbl> Regex<Lbl> {
     }
 
     /// A dot star
-    pub fn dot_star() -> Self {
+    pub(crate) fn dot_star() -> Self {
         Self {
             labels: vec![],
             ends_in_dot_star: true,
@@ -55,19 +55,19 @@ impl<Lbl> Regex<Lbl> {
     }
 
     /// Returns true if the regex is empty (no labels and no dot star)
-    pub fn is_epsilon(&self) -> bool {
+    pub(crate) fn is_epsilon(&self) -> bool {
         self.labels.is_empty() && !self.ends_in_dot_star
     }
 
     /// Used internally for metering of the graph within the bytecode verifier. We consider even
     /// an empty regex to be of size 1. Then we add one for each label and one for the dot star.
     /// In short, `abstract_size` is an abstraction over the Rust allocation size of the regex.
-    pub fn abstract_size(&self) -> usize {
+    pub(crate) fn abstract_size(&self) -> usize {
         1 + self.labels.len() + (self.ends_in_dot_star as usize)
     }
 
     /// Internal helper for the public facing API
-    pub fn pub_path(&self) -> (Vec<Lbl>, bool)
+    pub(crate) fn query_api_path(&self) -> (Vec<Lbl>, bool)
     where
         Lbl: Clone,
     {
@@ -78,7 +78,7 @@ impl<Lbl> Regex<Lbl> {
     /// If the regular expression ends in dot star, then there is no current need to keep track of
     /// the labels after. The additional precision of having labels after the dot star is not
     /// needed currently in Move.
-    pub fn extend(mut self, ext: &Extension<Lbl>) -> Self
+    pub(crate) fn extend(mut self, ext: &Extension<Lbl>) -> Self
     where
         Lbl: Clone,
     {
@@ -128,7 +128,7 @@ impl<Lbl> Regex<Lbl> {
     /// "ab".remove_prefix("b") = []
     /// "abc".remove_prefix("b") = []
     /// "a.*".remove_prefix("b") = []
-    pub fn remove_prefix(&self, p: &Extension<Lbl>) -> Vec<Regex<Lbl>>
+    pub(crate) fn remove_prefix(&self, p: &Extension<Lbl>) -> Vec<Regex<Lbl>>
     where
         Lbl: Clone,
         Lbl: Eq,
@@ -227,7 +227,7 @@ impl<Lbl> Extension<Lbl> {
     /// "a".remove_prefix("b") = []
     /// "a".remove_prefix("bc.*") = []
     /// "a".remove_prefix("ab") = []
-    pub fn remove_prefix(&self, p: &Regex<Lbl>) -> Vec<Regex<Lbl>>
+    pub(crate) fn remove_prefix(&self, p: &Regex<Lbl>) -> Vec<Regex<Lbl>>
     where
         Lbl: Clone,
         Lbl: Eq,
