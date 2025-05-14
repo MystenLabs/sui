@@ -1,4 +1,4 @@
--- Stores information related to to the genesis checkpoint.
+-- Stores information related to the genesis checkpoint.
 CREATE TABLE IF NOT EXISTS kv_genesis
 (
     -- The checkpoint digest of the genesis checkpoint
