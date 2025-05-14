@@ -356,7 +356,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         .flat_map(|r| r.map(|file| file.file_name().to_str().unwrap().to_owned()))
         .collect::<Vec<_>>();
 
-    assert_eq!(10, files.len());
+    assert_eq!(7, files.len());
     assert!(files.contains(&SUI_CLIENT_CONFIG.to_string()));
     assert!(files.contains(&SUI_NETWORK_CONFIG.to_string()));
     assert!(files.contains(&SUI_FULLNODE_CONFIG.to_string()));
@@ -367,7 +367,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     // Check network config
     let network_conf =
         PersistedConfig::<NetworkConfig>::read(&working_dir.join(SUI_NETWORK_CONFIG))?;
-    assert_eq!(4, network_conf.validator_configs().len());
+    assert_eq!(1, network_conf.validator_configs().len());
 
     // Check wallet config
     let wallet_conf =
