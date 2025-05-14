@@ -7,38 +7,76 @@ package sui.rpc.v2alpha;
 
 // Describes a data type.
 message Descriptor {
+  // Name of this DataType
   optional string name = 1;
+
+  // XXX Do we want both storage/runtime info here??
+  // PackageId where this DataType is defined.
   optional string package_id = 2;
+
+  // Name of the module where this DataType is defined
   optional string module = 3;
-  // fully qualified type name
+
+  // Fully qualified name of this DataType.
+  //
+  // This is `<package_id>::<module>::<name>`
   optional string type_name = 4;
 
+  // This type's abilities
   repeated Ability abilities = 4;
+
+  // Ability constraints and phantom status for this type's generic type parameters
   repeated TypeParameter type_parameters = 5;
 
-  // TODO do we use oneof to differentiate or an enum?
+  // XXX do we use oneof to differentiate or an enum?
   // We'd have to use a wrapper message. Or we have a separate message type for enumes/structs
+
+  // Set of fields if this DataType is a struct.
+  //
+  // The order of the entries is the order of how the fields are defined.
   repeated FieldDescriptor fields = 10;
+
+  // Set of variants if this DataType is an enum.
+  //
+  // The order of the entries is the order of how the variants are defined.
   repeated VariantDescriptor variants = 11;
 }
 
+// An `Ability` classifies what operations are permitted for a given type
 enum Ability {
   ABILITY_UNKNOWN = 0;
+
+  // Allows values of types with this ability to be copied
   COPY = 1;
+
+  // Allows values of types with this ability to be dropped.
   DROP = 2;
+
+  // Allows values of types with this ability to exist inside a struct in global storage
   STORE = 3;
+
+  // Allows the type to serve as a key for global storage operations
   KEY = 4;
 }
 
+// A generic type parameter used in the declaration of a struct or enum.
 message TypeParameter {
+  // The type parameter constraints
   repeated Ability constraints = 1;
+
+  // Whether the parameter is declared as phantom
   optional bool is_phantom = 2;
 }
 
+// Descriptor of a field that belongs to a struct or enum variant
 message FieldDescriptor {
+  // Name of the field
   optional string name = 1;
+
+  // Order or position of the field in the struct or enum variant definition.
   optional uint32 position = 2;
 
+  // The type of the field
   optional OpenSignatureBody type = 5;
 }
 
@@ -57,9 +95,15 @@ enum Type {
   TYPE_PARAMETER = 11;
 }
 
+// Descriptor of an enum variant
 message VariantDescriptor {
+  // Name of the variant
   optional string name = 1;
+
+  // Order or position of the variant in the enum definition.
   optional uint32 position = 2;
+
+  // Set of fields defined by this variant.
   repeated FieldDescriptor fields = 3;
 }
 
@@ -77,18 +121,36 @@ message OpenSignatureBody {
   repeated OpenSignatureBody type_parameter_instantiation = 4;
 }
 
+// Descriptor of a Move function
 message FunctionDescriptor {
+  // Name of the function
   optional string name = 1;
+
+  // XXX Do we want both storage/runtime info here??
+  // PackageId where this function is defined.
   optional string package_id = 2;
+
+  // Name of the module where this function is defined
   optional string module = 3;
-  // fully qualified function name
+
+  // Fully qualified name of this function.
+  //
+  // This is `<package_id>::<module>::<name>`
   optional string function_name = 4;
   
+  // Whether the function is `public`, `private` or `public(friend)`
   optional Visibility visibility = 5;
+
+  // Whether the function is marked `entry` or not.
   optional bool is_entry = 6;
-  // ability constraints for type parameters
+
+  // Ability constraints for type parameters
   repeated Ability type_parameters = 7;
+
+  // Formal parameter types.
   repeated OpenSignature parameters = 8;
+
+  // Return types.
   repeated OpenSignature returns = 9;
 }
 
@@ -117,19 +179,25 @@ message Module {
   // PackageId of the package where this module is defined.
   optional package_id = 2;
 
+  // List of DataTypes defined by this module.
   repeated Descriptor data_types = 3;
+
+  // List of Functions defined by this module.
   repeated FunctionDescriptor functions = 4;
+
+  // List of Constants defined by this module.
+  // repeated Constant constants = 5;
 }
 
 // A Move Package
 message Package {
   // The PackageId of this package
   // The Id this package was loaded from on-chain.
-  optional string storage_id = 1;
+  optional string package_id = 1;
 
-  // The Id that this package is associated with at runtime.
-  optional string storage_id = 1;
-  optional string runtime_id = 2;
+  // XXX Do we need/what to distinguish this?
+  // optional string storage_id = 1;
+  // optional string runtime_id = 2;
 
   // What should this be?
   // optional Linkage linkage = 3;
