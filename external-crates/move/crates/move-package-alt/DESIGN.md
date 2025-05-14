@@ -1,5 +1,3 @@
-# TODO: careful rollout plan - parallel with extisting system?
-
 # Package Management Alt Design
 
 In this proposal, the `Move.lock` file contains all the information about the published versions of
@@ -14,17 +12,14 @@ stories][notion-userstories] for a walkthrough of usage scenarios.
 [notion-overview]: https://www.notion.so/Package-management-revamp-overview-1aa6d9dcb4e980128c1bc13063c418c7?pvs=21
 [notion-userstories]: https://www.notion.so/Package-management-user-stories-1bd6d9dcb4e98005a4a7ddea4424f757?pvs=21
 
-# Document status
+# TODOs
 
- - 4/25/25
-     - TODO:
-         - sui move build/test now use the default dependencies unless you ask otherwise
-         - two packages share an identity if they have the same original-id in any environment
-         - maybe need to do additional identity checks when running `--publish-unpublished-deps`
-         - cached deps are read-write but you can’t use dirty ones without asking
-         - non-git local deps are a loud warning
- - 5/5/25
-     - Migrated to monorepo
+ - careful rollout plan - parallel with extisting system?
+ - sui move build/test now use the default dependencies unless you ask otherwise
+ - two packages share an identity if they have the same original-id in any environment
+ - maybe need to do additional identity checks when running `--publish-unpublished-deps`
+ - cached deps are read-write but you can’t use dirty ones without asking
+ - non-git local deps are a loud warning
 
 # Points of contention and remaining questions
 
