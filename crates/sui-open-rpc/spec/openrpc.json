@@ -1327,6 +1327,7 @@
                 "enable_group_ops_native_functions": false,
                 "enable_jwk_consensus_updates": false,
                 "enable_nitro_attestation": false,
+                "enable_nitro_attestation_upgraded_parsing": false,
                 "enable_party_transfer": false,
                 "enable_poseidon": false,
                 "enable_vdf": false,
