@@ -10,7 +10,7 @@ use move_vm_types::{
     pop_arg,
     values::{Struct, Value, Vector, VectorRef, VectorSpecialization},
 };
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use sui_types::nitro_attestation::{parse_nitro_attestation, verify_nitro_attestation};
 
 use crate::{object_runtime::ObjectRuntime, NativesCostTable};
@@ -52,6 +52,14 @@ fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
         .enable_nitro_attestation())
 }
 
+fn is_upgraded(context: &NativeContext) -> PartialVMResult<bool> {
+    Ok(context
+        .extensions()
+        .get::<ObjectRuntime>()?
+        .protocol_config
+        .enable_nitro_attestation_upgraded_parsing())
+}
+
 pub fn load_nitro_attestation_internal(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
@@ -81,7 +89,8 @@ pub fn load_nitro_attestation_internal(
             .parse_cost_per_byte
             .map(|per_byte| base_cost + per_byte * (attestation_bytes.len() as u64).into()))
     );
-    match parse_nitro_attestation(&attestation_bytes) {
+
+    match parse_nitro_attestation(&attestation_bytes, is_upgraded(context)?) {
         Ok((signature, signed_message, payload)) => {
             let cert_chain_length = payload.get_cert_chain_length();
             native_charge_gas_early_exit_option!(
@@ -95,6 +104,11 @@ pub fn load_nitro_attestation_internal(
             match verify_nitro_attestation(&signature, &signed_message, &payload, current_timestamp)
             {
                 Ok(()) => {
+                    let pcrs = if is_upgraded(context)? {
+                        to_indexed_struct(payload.pcr_map)?
+                    } else {
+                        to_indexed_struct_legacy(payload.pcr_vec)?
+                    };
                     // Encapsulate as a lambda and call to allow us to capture any `Err` returns.
                     // Could do this with `and_then` as well if desired.
                     let result = || {
@@ -102,7 +116,7 @@ pub fn load_nitro_attestation_internal(
                             Value::vector_u8(payload.module_id.as_bytes().to_vec()),
                             Value::u64(payload.timestamp),
                             Value::vector_u8(payload.digest.as_bytes().to_vec()),
-                            to_indexed_struct(payload.pcrs)?,
+                            pcrs,
                             to_option_vector_u8(payload.public_key)?,
                             to_option_vector_u8(payload.user_data)?,
                             to_option_vector_u8(payload.nonce)?,
@@ -116,7 +130,6 @@ pub fn load_nitro_attestation_internal(
         Err(_) => Ok(NativeResult::err(context.gas_used(), PARSE_ERROR)),
     }
 }
-
 // Build an Option<vector<u8>> value
 fn to_option_vector_u8(value: Option<Vec<u8>>) -> PartialVMResult<Value> {
     match value {
@@ -132,10 +145,26 @@ fn to_option_vector_u8(value: Option<Vec<u8>>) -> PartialVMResult<Value> {
     }
 }
 
+// Convert a map of index -> PCR to a vector of PCREntry struct with index
+// and value where the indices are [0, 1, 2, 3, 4, 8] since AWS currently
+// supports PCR0, PCR1, PCR2, PCR3, PCR4, PCR8.
+fn to_indexed_struct(pcrs: BTreeMap<u8, Vec<u8>>) -> PartialVMResult<Value> {
+    let mut sorted = pcrs.iter().collect::<Vec<_>>();
+    sorted.sort_by_key(|(key, _)| *key);
+    let mut indexed_struct = vec![];
+    for (index, pcr) in sorted.into_iter() {
+        indexed_struct.push(Value::struct_(Struct::pack(vec![
+            Value::u8(*index),
+            Value::vector_u8(pcr.to_vec()),
+        ])));
+    }
+    Vector::pack(VectorSpecialization::Container, indexed_struct)
+}
+
 // Convert a list of PCRs into a vector of PCREntry struct with index and value,
 // where the indices are [0, 1, 2, 3, 4, 8] since AWS currently supports PCR0,
 // PCR1, PCR2, PCR3, PCR4, PCR8.
-fn to_indexed_struct(pcrs: Vec<Vec<u8>>) -> PartialVMResult<Value> {
+fn to_indexed_struct_legacy(pcrs: Vec<Vec<u8>>) -> PartialVMResult<Value> {
     let indices = [0, 1, 2, 3, 4, 8];
     if pcrs.len() != indices.len() {
         return Err(PartialVMError::new(StatusCode::ABORTED).with_sub_status(INVALID_PCRS_ERROR));
