@@ -101,16 +101,10 @@ impl<C: Cursor> Page<C> {
             .map_err(|e| invalid_params(E::from(e)))?;
 
         let limit = limit.unwrap_or(default_page_size);
-        if limit > max_page_size {
-            return Err(invalid_params(E::from(Error::ExceededMaxPageSize {
-                requested: limit,
-                max: max_page_size,
-            })));
-        }
 
         Ok(Page {
             cursor,
-            limit: limit as i64,
+            limit: std::cmp::min(limit, max_page_size) as i64,
             descending: descending.unwrap_or(false),
         })
     }
