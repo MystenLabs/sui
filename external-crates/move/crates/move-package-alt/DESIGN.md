@@ -15,7 +15,7 @@ stories][notion-userstories] for a walkthrough of usage scenarios.
 # TODOs
 
  - careful rollout plan - parallel with extisting system?
- - sui move build/test now use the default dependencies unless you ask otherwise
+ - sui move build/test now will use the active env from cli to match which dependencies to use
  - two packages share an identity if they have the same original-id in any environment
  - maybe need to do additional identity checks when running `--publish-unpublished-deps`
  - cached deps are read-write but you can’t use dirty ones without asking
@@ -33,9 +33,8 @@ stories][notion-userstories] for a walkthrough of usage scenarios.
          - Con: defers error detection
          - Con: can be easy to forget to test with a specific configuration
          - Con: more complicated CI (where presumably you do actually want to test everything)
-     - **Resolution**: we’ll ignore `[dep-replacements]` in `build` and `test`
-       unless you pass `--env` , i.e. we will use the default environment. We’ll
-       ignore the client environment; we also allow `--all-envs` for `test`,
+     - **Resolution**: it will use the corresponding `[dep-replacements]` in `build` and `test` as per
+       the active environment from the cli, unless you pass `--env`. We also allow `--all-envs` for `test`,
        which runs tests in all environments.
  - For cached deps in `~/.move`: read only?
      - opt 1: read-only
@@ -60,6 +59,12 @@ stories][notion-userstories] for a walkthrough of usage scenarios.
      - Note that "correct" means that the compiled bytecode is the same - there can still be
        changes to macros, comments, etc! We might want to make this more secure in the future, e.g.
        by including some kind of digest or publishing macros on-chain
+
+ - Question: Consider you have pkg A that depends on pkg B, which depends on pkg C.
+        Today, pkg A can directly use pkg C's code due to global inherited addresses.
+        In the new design, should it be allowed, and if yes, how -- which name should A
+        use to refer to the package and its modules?
+        We should also consider how this would work in the case of bytecode dependencies.
 
  - Question: What should we name the new edition that contains these changes?
      - Move 2025!
@@ -101,12 +106,17 @@ testnet = "4c78adac"
 foo = {
 	rename-from = "Foo", # needed for name consistency - see Validation section
 	override = true,     # same as today
-
 	git = "https://.../foo.git", # resolver specific fields
 	rev = "releases/v4",
 }
+
+non = {
+	rename-from = "Foo", # needed for name consistency - see Validation section
+	git = "https://.../non.git", # resolver specific fields
+	rev = "releases/v1",
+}
+
 bar = { r.mvr = "@protocol/bar" }
-baz = { ... }
 
 [dep-replacements]
 # used to replace dependencies for specific environments
@@ -124,43 +134,81 @@ Move.lock (contains `unpublished` and entries for environments defined in `Move.
 [move]
 version = 4
 
-# The `pinned` section contains the entire dependency graph across all environments. Each node in
+# The `pinned` section contains a dependency graph for each environment. Each node in
 # the graph contains the pinned dependency location, a digest of the manifest of the dependency (to
-# detect local changes), and a set of outgoing edges. The edges are labeled by an environment name
-# (or "default") and the name of the dependency.
+# detect local changes), and a set of outgoing edges. The edges are labeled by the name of the dependency.
 #
 # The identities of the nodes are arbitrary, but it seems nice to generate them from the package
-# names that dependencies declare for themselves.
+# names that dependencies declare for themselves. Adding numbers to disambiguate if there are 
+# collision should be added.
 
 # There is also a node for the current package; the only thing that makes it special is that it has
 # the name of the current package as its identity (it will also always have `{local = "."}` as its
 # source)
-[pinned.example]
+[pinned.mainnet.example]
 source = { local = "." }
 manifest_digest = "..."
 
-# in this example, `std` and `sui` have non-default entries because they are system packages that
-# may be resolved differently for different environments; `foo` has an override in the manifest
-# file, and `bar` is externally resolved, and the external resolver may return different source for
-# different chain IDs:
-deps.std = { default: "MoveStdlib_0", mainnet = "MoveStdlib_1", testnet = "MoveStdlib_2" }
-deps.sui = { default: "Sui_0", mainnet = "Sui_1", testnet = "Sui_2" }
-deps.foo = { default: "foo_0", mainnet = "foo_1" }
-deps.bar = { default: "bar_0", testnet = "bar_2" }
-deps.baz = { default: "Baz_0" }
+deps.std = "MoveStdlib"
+deps.sui = "Sui"
+deps.foo = "Foo_0" # ensure rename-from is respected
+deps.non = "Foo_1" # ensure rename-from is respected
+deps.bar = "bar"
 
-[pinned.MoveStdlib_0]
+[pinned.mainnet.MoveStdlib]
 source = { git = "...", path = "...", rev = "1234" }
 manifest_digest = "..."
 deps = {}
 
-[pinned.Sui_0]
-source = ...
-manifest_digest = ...
-deps.MoveStdlib = { default: "MoveStdlib_0" }
+[pinned.mainnet.Sui]
+source = { git = "...", path = "...", rev = "1234" }
+manifest_digest = "..."
+deps.std = "MoveStdlib"
 
-... additional sections for all the identities mentioned in the `deps` sections (e.g.
-`MoveStdlib_1`, `foo_0`, `Baz_0`, etc.
+[pinned.mainnet.Foo_0]
+source = { git = "...", path = "...", rev = "bade" }
+manifest_digest = "..."
+deps.std = "MoveStdlib"
+deps.sui = "Sui"
+
+[pinned.mainnet.Foo_1]
+source = { git = "...", path = "...", rev = "baaa" }
+manifest_digest = "..."
+deps.std = "MoveStdlib"
+deps.sui = "Sui"
+
+[pinned.mainnet.bar]
+source = { git = "...", path = "...", rev = "bara" }
+manifest_digest = "..."
+deps.baz = "baz"
+deps.std = "MoveStdlib"
+deps.sui = "Sui"
+
+[pinned.mainnet.baz]
+source = { git = "...", path = "...", rev = "baza" }
+manifest_digest = "..."
+deps.std = "MoveStdlib"
+deps.sui = "Sui"
+
+[pinned.mainnet.[...]] # other transitive dependencies from example
+
+# the same for testnet environment as above
+[pinned.testnet.MoveStdlib]
+source = { git = "...", path = "...", rev = "1234" }
+manifest_digest = "..."
+deps = {}
+
+[pinned.testnet.Sui]
+source = { git = "...", path = "...", rev = "1234" }
+manifest_digest = "..."
+deps.std = "MoveStdlib"
+
+# the same for other defined environments
+[pinned.env.Sui]
+source = { git = "...", path = "...", rev = "1234" }
+manifest_digest = "..."
+deps.std = "MoveStdlib"
+deps.sui = "Sui"
 
 # The `published` section contains a record for the current versions published on each declared
 # environment (if any).
@@ -203,7 +251,7 @@ version = "0"
 Move.toml
     package
         name : PackageName
-        edition : "Move 2025"
+        edition : "2025"
         version : Optional String
         license : Optional String
         authors : Optional Array of String
@@ -219,16 +267,17 @@ Move.lock
     move
         version : 4
 
-    pinned : PackageID →
+    pinned : EnvironmentName -> PackageID →
         source : PinnedDependencyLoc
         manifest_digest : Digest
-        deps : PackageName → EnvironmentName → PackageID
+        deps : PackageName → PackageID
 
     published : EnvironmentName → PublishedMetadata
 
 Move.<EnvironmentName>.lock
     PublishedMetadata
 
+# TODO - check if this is correct and fix
 DependencyLocation: # information used to locate a dependency
     source: ResolverName
     additional resolver-dependent fields
@@ -285,7 +334,7 @@ Dependencies are always pinned as a group and are only repinned in two situation
    dependencies.
 
 2. The user modifies a `Move.toml` file in their dependency tree. We detect this by comparing
-   the `pinned.ID.manifest_digest` field of the lockfile of the project being built to the manifest
+   the `pinned.environment.ID.manifest_digest` field of the lockfile of the project being built to the manifest
    file of the corresponding dependency.
 
 Note: we had considered only repinning the dependencies that had changed and allowing the user to
@@ -301,8 +350,8 @@ environments using a `[dep-replacements]` section. These have a slightly differe
 information - for example they can include the on-chain addresses for packages (although this should
 only be used in the case of a legacy package whose address isn't recorded in its lockfile).
 
-In the dependency graph, edges are annotated with an environment name (or "default") to handle
-dependency replacements (and also implicit and externally resolved dependencies; see below).
+In the dependency graph, we store a dependency graph for each environment. See the Move.lock example
+above.
 
 ## From start to package graph
 
@@ -341,7 +390,6 @@ dependency replacements (and also implicit and externally resolved dependencies;
       conflict - warn
 
 4. rewrite the dependency graph to the lock file
-    - (optional) collapse down overrides if they match the default environment
 
 ## Invariants
 
@@ -430,8 +478,6 @@ Once this process is complete, bytecode deps are identical to any other dependen
 The only other place where bytecode deps are relevant is during testing - we need to make sure that
 we run the stored bytecode rather than the compiled stubs. However, it is probably best to always
 use the cached build artifacts when testing.
-
-TODO: what do we use as the "default" for on-chain deps?
 
 ## Validation
 
@@ -553,13 +599,13 @@ for the same chain ID, we should require them to specify a specific environment 
 accidentally publishing an alpha version to the beta address, for example).
 
 Although we certainly want to remove `--with-unpublished-deps` (which has bad semantics), there is a
-useful feature we might provide `--publish-unpublished-deps`. This would work by recursively
+useful feature we might provide `--publish-unpublished-deps=env_name`. This would work by recursively
 publishing any packages that haven't yet been published. This would be a nice convenience for
 working with a group of related packages (esp. during testing). We should only allow it for local
-ephemeral environments, since publication relies on the user to update the lockfiles of the
+ephemeral environments and devnet, since publication relies on the user to update the lockfiles of the
 published packages; for non-ephemeral networks these would be sitting in the cache and not easy to
 push back upstream. Put another way, the `Move.lock` files in the cache should be read-only (but the
-`.Move.<env>.lock` files can be created/updated)
+`.Move.<env>.lock` files can be created/updated).
 
 Some users will want to perform the actual publication step outside of the CLI (for example if they
 want to go through a separate signing process for the transaction). For these transactions, I don't
