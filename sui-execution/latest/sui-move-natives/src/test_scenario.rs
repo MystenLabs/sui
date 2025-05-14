@@ -1007,13 +1007,15 @@ fn find_all_wrapped_objects<'a, 'i>(
         // associated with all of these types must be in the type/module cache in the VM -- THIS IS
         // BECAUSE WE ARE IN TEST SCENARIO ONLY AND THIS DOES NOT GENERALLY HOLD IN A
         // MULTI-TRANSACTION SETTING.
-        let Ok(Some(layout)) = context.type_tag_to_layout(&type_tag, &EmptyDataStore) else {
+        let Ok(layout) =
+            context.type_tag_to_layout_for_test_scenario_only(&type_tag, &EmptyDataStore)
+        else {
             debug_assert!(false);
             continue;
         };
 
-        let Ok(Some(annotated_layout)) =
-            context.type_tag_to_fully_annotated_layout(&type_tag, &EmptyDataStore)
+        let Ok(annotated_layout) = context
+            .type_tag_to_fully_annotated_layout_for_test_scenario_only(&type_tag, &EmptyDataStore)
         else {
             debug_assert!(false);
             continue;
