@@ -110,8 +110,9 @@ impl ExecutionSchedulerWrapper {
         let enable_execution_scheduler = if cfg!(test) {
             rand::thread_rng().gen_bool(0.5)
         } else {
-            std::env::var("ENABLE_EXECUTION_SCHEDULER").is_ok()
-                || (epoch_store.get_chain_identifier().chain() == Chain::Unknown)
+            std::env::var("ENABLE_TRANSACTION_MANAGER").is_err()
+                && (std::env::var("ENABLE_EXECUTION_SCHEDULER").is_ok()
+                    || (epoch_store.get_chain_identifier().chain() == Chain::Unknown))
         };
         if enable_execution_scheduler {
             Self::ExecutionScheduler(ExecutionScheduler::new(
