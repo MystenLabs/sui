@@ -46,7 +46,7 @@ use crate::authority::backpressure::BackpressureManager;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::authority::AuthorityStore;
 use crate::fallback_fetch::{do_fallback_lookup, do_fallback_lookup_fallible};
-use crate::state_accumulator::AccumulatorStore;
+use crate::global_state_hasher::GlobalStateHashStore;
 use crate::transaction_outputs::TransactionOutputs;
 
 use dashmap::mapref::entry::Entry as DashMapEntry;
@@ -56,15 +56,13 @@ use moka::sync::SegmentedCache as MokaCache;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::Mutex;
-use prometheus::Registry;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::hash::Hash;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use sui_config::ExecutionCacheConfig;
 use sui_macros::fail_point;
 use sui_protocol_config::ProtocolVersion;
-use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{
     EpochId, FullObjectID, ObjectID, ObjectRef, SequenceNumber, VerifiedExecutionData,
 };
@@ -73,11 +71,12 @@ use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDige
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::{
-    FullObjectKey, MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject,
+    FullObjectKey, InputKey, MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject,
 };
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
 use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
@@ -97,6 +96,10 @@ use super::{
 #[cfg(test)]
 #[path = "unit_tests/writeback_cache_tests.rs"]
 pub mod writeback_cache_tests;
+
+#[cfg(test)]
+#[path = "unit_tests/notify_read_input_objects_tests.rs"]
+mod notify_read_input_objects_tests;
 
 #[derive(Clone, PartialEq, Eq)]
 enum ObjectEntry {
@@ -194,7 +197,7 @@ impl IsNewer for LatestObjectCacheEntry {
 
 type MarkerKey = (EpochId, FullObjectID);
 
-/// UncommitedData stores execution outputs that are not yet written to the db. Entries in this
+/// UncommittedData stores execution outputs that are not yet written to the db. Entries in this
 /// struct can only be purged after they are committed.
 struct UncommittedData {
     /// The object dirty set. All writes go into this table first. After we flush the data to the
@@ -426,6 +429,7 @@ pub struct WritebackCache {
     object_locks: ObjectLocks,
 
     executed_effects_digests_notify_read: NotifyRead<TransactionDigest, TransactionEffectsDigest>,
+    object_notify_read: NotifyRead<InputKey, ()>,
     store: Arc<AuthorityStore>,
     backpressure_threshold: u64,
     backpressure_manager: Arc<BackpressureManager>,
@@ -487,6 +491,7 @@ impl WritebackCache {
             packages,
             object_locks: ObjectLocks::new(),
             executed_effects_digests_notify_read: NotifyRead::new(),
+            object_notify_read: NotifyRead::new(),
             store,
             backpressure_manager,
             backpressure_threshold: config.backpressure_threshold(),
@@ -494,11 +499,11 @@ impl WritebackCache {
         }
     }
 
-    pub fn new_for_tests(store: Arc<AuthorityStore>, registry: &Registry) -> Self {
+    pub fn new_for_tests(store: Arc<AuthorityStore>) -> Self {
         Self::new(
             &Default::default(),
             store,
-            ExecutionCacheMetrics::new(registry).into(),
+            ExecutionCacheMetrics::new(&prometheus::Registry::new()).into(),
             BackpressureManager::new_for_tests(),
         )
     }
@@ -555,7 +560,22 @@ impl WritebackCache {
             // See the comment in `MonotonicCache::insert`.
             .ok();
 
-        entry.insert(version, object);
+        entry.insert(version, object.clone());
+
+        if let ObjectEntry::Object(object) = &object {
+            if object.is_package() {
+                self.object_notify_read
+                    .notify(&InputKey::Package { id: *object_id }, &());
+            } else if !object.is_child_object() {
+                self.object_notify_read.notify(
+                    &InputKey::VersionedObject {
+                        id: object.full_id(),
+                        version: object.version(),
+                    },
+                    &(),
+                );
+            }
+        }
     }
 
     fn write_marker_value(
@@ -572,6 +592,19 @@ impl WritebackCache {
             .or_default()
             .value_mut()
             .insert(object_key.version(), marker_value);
+        // It is possible for a transaction to use a consensus stream ended
+        // object in the input, hence we must notify that it is now available
+        // at the assigned version, so that any transaction waiting for this
+        // object version can start execution.
+        if matches!(marker_value, MarkerValue::ConsensusStreamEnded(_)) {
+            self.object_notify_read.notify(
+                &InputKey::VersionedObject {
+                    id: object_key.id(),
+                    version: object_key.version(),
+                },
+                &(),
+            );
+        }
     }
 
     // lock both the dirty and committed sides of the cache, and then pass the entries to
@@ -944,7 +977,7 @@ impl WritebackCache {
                 // This can happen in the following rare case:
                 // All transactions in the checkpoint are committed to the db (by commit_transaction_outputs,
                 // called in CheckpointExecutor::process_executed_transactions), but the process crashes before
-                // the checkpoint water mark is bumped. We will then re-commit thhe checkpoint at startup,
+                // the checkpoint water mark is bumped. We will then re-commit the checkpoint at startup,
                 // despite that all transactions are already executed.
                 warn!("Attempt to commit unknown transaction {:?}", tx);
                 continue;
@@ -1219,7 +1252,7 @@ impl WritebackCache {
     fn revert_state_update_impl(&self, tx: &TransactionDigest) {
         // TODO: remove revert_state_update_impl entirely, and simply drop all dirty
         // state when clear_state_end_of_epoch_impl is called.
-        // Futher, once we do this, we can delay the insertion of the transaction into
+        // Further, once we do this, we can delay the insertion of the transaction into
         // pending_consensus_transactions until after the transaction has executed.
         let Some((_, outputs)) = self.dirty.pending_transaction_writes.remove(tx) else {
             assert!(
@@ -1765,6 +1798,86 @@ impl ObjectCacheRead for WritebackCache {
             .get_highest_pruned_checkpoint()
             .expect("db error")
     }
+
+    fn notify_read_input_objects<'a>(
+        &'a self,
+        input_and_receiving_keys: &'a [InputKey],
+        receiving_keys: &'a HashSet<InputKey>,
+        epoch: &'a EpochId,
+    ) -> BoxFuture<'a, Vec<()>> {
+        self.object_notify_read
+            .read(input_and_receiving_keys, |keys| {
+                let mut results = vec![None; keys.len()];
+
+                let (keys_with_version, keys_without_version): (Vec<_>, Vec<_>) = keys
+                    .iter()
+                    .enumerate()
+                    .filter(|(idx, key)| {
+                        if key.is_cancelled() {
+                            // Shared objects in canceled transactions are always available.
+                            results[*idx] = Some(());
+                            false
+                        } else {
+                            true
+                        }
+                    })
+                    .partition(|(_, key)| key.version().is_some());
+                let versioned_object_keys: Vec<_> = keys_with_version
+                    .iter()
+                    .map(|(_, key)| ObjectKey(key.id().id(), key.version().unwrap()))
+                    .collect();
+                ObjectCacheRead::multi_get_objects_by_key(self, &versioned_object_keys)
+                    .into_iter()
+                    .zip(keys_with_version.iter())
+                    .for_each(|(o, (idx, input_key))| match o {
+                        Some(_) => results[*idx] = Some(()),
+                        None => {
+                            if receiving_keys.contains(input_key) {
+                                // There could be a more recent version of this object, and the object at the
+                                // specified version could have already been pruned. In such a case `has_key` will
+                                // be false, but since this is a receiving object we should mark it as available if
+                                // we can determine that an object with a version greater than or equal to the
+                                // specified version exists or was deleted. We will then let mark it as available
+                                // to let the transaction through so it can fail at execution.
+                                let is_available =
+                                    ObjectCacheRead::get_object(self, &input_key.id().id())
+                                        .map(|obj| obj.version() >= input_key.version().unwrap())
+                                        .unwrap_or(false)
+                                        || self.fastpath_stream_ended_at_version_or_after(
+                                            input_key.id().id(),
+                                            input_key.version().unwrap(),
+                                            *epoch,
+                                        );
+                                if is_available {
+                                    results[*idx] = Some(());
+                                }
+                            } else if self
+                                .get_consensus_stream_end_tx_digest(
+                                    FullObjectKey::new(
+                                        input_key.id(),
+                                        input_key.version().unwrap(),
+                                    ),
+                                    *epoch,
+                                )
+                                .is_some()
+                            {
+                                // If the object is an already-removed consensus object, mark it as available if the
+                                // version for that object is in the marker table.
+                                results[*idx] = Some(());
+                            }
+                        }
+                    });
+                keys_without_version.iter().for_each(|(idx, key)| {
+                    // unwrap is safe since this only errors when the object is not a package,
+                    // which is impossible if we have a certificate for execution.
+                    if self.get_package_object(&key.id().id()).unwrap().is_some() {
+                        results[*idx] = Some(());
+                    }
+                });
+                results
+            })
+            .boxed()
+    }
 }
 
 impl TransactionCacheRead for WritebackCache {
@@ -2065,7 +2178,7 @@ impl ExecutionCacheWrite for WritebackCache {
 
 implement_passthrough_traits!(WritebackCache);
 
-impl AccumulatorStore for WritebackCache {
+impl GlobalStateHashStore for WritebackCache {
     fn get_object_ref_prior_to_key_deprecated(
         &self,
         object_id: &ObjectID,
@@ -2118,27 +2231,27 @@ impl AccumulatorStore for WritebackCache {
         Ok(candidates.pop())
     }
 
-    fn get_root_state_accumulator_for_epoch(
+    fn get_root_state_hash_for_epoch(
         &self,
         epoch: EpochId,
-    ) -> SuiResult<Option<(CheckpointSequenceNumber, Accumulator)>> {
-        self.store.get_root_state_accumulator_for_epoch(epoch)
+    ) -> SuiResult<Option<(CheckpointSequenceNumber, GlobalStateHash)>> {
+        self.store.get_root_state_hash_for_epoch(epoch)
     }
 
-    fn get_root_state_accumulator_for_highest_epoch(
+    fn get_root_state_hash_for_highest_epoch(
         &self,
-    ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, Accumulator))>> {
-        self.store.get_root_state_accumulator_for_highest_epoch()
+    ) -> SuiResult<Option<(EpochId, (CheckpointSequenceNumber, GlobalStateHash))>> {
+        self.store.get_root_state_hash_for_highest_epoch()
     }
 
-    fn insert_state_accumulator_for_epoch(
+    fn insert_state_hash_for_epoch(
         &self,
         epoch: EpochId,
         checkpoint_seq_num: &CheckpointSequenceNumber,
-        acc: &Accumulator,
+        acc: &GlobalStateHash,
     ) -> SuiResult {
         self.store
-            .insert_state_accumulator_for_epoch(epoch, checkpoint_seq_num, acc)
+            .insert_state_hash_for_epoch(epoch, checkpoint_seq_num, acc)
     }
 
     fn iter_live_object_set(

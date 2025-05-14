@@ -4,8 +4,8 @@
 
 use crate::{
     diagnostics::{
-        warning_filters::{WarningFilters, WarningFiltersTable},
         DiagnosticReporter,
+        warning_filters::{WarningFilters, WarningFiltersTable},
     },
     expansion::ast::{
         Address, Attributes, Fields, Friend, ModuleIdent, Mutability, Value, Visibility,
@@ -16,10 +16,10 @@ use crate::{
         Type, Type_, UseFuns, Var,
     },
     parser::ast::{
-        BinOp, ConstantName, DatatypeName, DocComment, Field, FunctionName, TargetKind, UnaryOp,
-        VariantName, ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
+        BinOp, ConstantName, DatatypeName, DocComment, ENTRY_MODIFIER, Field, FunctionName,
+        MACRO_MODIFIER, NATIVE_MODIFIER, TargetKind, UnaryOp, VariantName,
     },
-    shared::{ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap, Name},
+    shared::{Name, ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap},
 };
 use move_core_types::parsing::address::NumericalAddress;
 use move_ir_types::location::*;

@@ -1177,6 +1177,90 @@ native_sponsor
 derive_id
 	fun
 	0x2::tx_context
+VecMap
+	public struct
+	0x2::vec_map
+Entry
+	public struct
+	0x2::vec_map
+empty
+	public fun
+	0x2::vec_map
+insert
+	public fun
+	0x2::vec_map
+remove
+	public fun
+	0x2::vec_map
+pop
+	public fun
+	0x2::vec_map
+get_mut
+	public fun
+	0x2::vec_map
+get
+	public fun
+	0x2::vec_map
+try_get
+	public fun
+	0x2::vec_map
+contains
+	public fun
+	0x2::vec_map
+size
+	public fun
+	0x2::vec_map
+is_empty
+	public fun
+	0x2::vec_map
+destroy_empty
+	public fun
+	0x2::vec_map
+into_keys_values
+	public fun
+	0x2::vec_map
+from_keys_values
+	public fun
+	0x2::vec_map
+keys
+	public fun
+	0x2::vec_map
+get_idx_opt
+	public fun
+	0x2::vec_map
+get_idx
+	public fun
+	0x2::vec_map
+get_entry_by_idx
+	public fun
+	0x2::vec_map
+get_entry_by_idx_mut
+	public fun
+	0x2::vec_map
+remove_entry_by_idx
+	public fun
+	0x2::vec_map
+Party
+	public struct
+	0x2::party
+Permissions
+	public struct
+	0x2::party
+single_owner
+	public fun
+	0x2::party
+empty
+	fun
+	0x2::party
+set_permissions
+	fun
+	0x2::party
+is_single_owner
+	public(package) fun
+	0x2::party
+into_native
+	public(package) fun
+	0x2::party
 ID
 	public struct
 	0x2::object
@@ -1264,6 +1348,12 @@ transfer
 public_transfer
 	public fun
 	0x2::transfer
+party_transfer
+	public fun
+	0x2::transfer
+public_party_transfer
+	public fun
+	0x2::transfer
 freeze_object
 	public fun
 	0x2::transfer
@@ -1289,6 +1379,9 @@ freeze_object_impl
 	public(package) fun
 	0x2::transfer
 share_object_impl
+	public(package) fun
+	0x2::transfer
+party_transfer_impl
 	public(package) fun
 	0x2::transfer
 transfer_impl
@@ -2233,69 +2326,6 @@ deny_list_remove
 deny_list_contains
 	public fun
 	0x2::coin
-VecMap
-	public struct
-	0x2::vec_map
-Entry
-	public struct
-	0x2::vec_map
-empty
-	public fun
-	0x2::vec_map
-insert
-	public fun
-	0x2::vec_map
-remove
-	public fun
-	0x2::vec_map
-pop
-	public fun
-	0x2::vec_map
-get_mut
-	public fun
-	0x2::vec_map
-get
-	public fun
-	0x2::vec_map
-try_get
-	public fun
-	0x2::vec_map
-contains
-	public fun
-	0x2::vec_map
-size
-	public fun
-	0x2::vec_map
-is_empty
-	public fun
-	0x2::vec_map
-destroy_empty
-	public fun
-	0x2::vec_map
-into_keys_values
-	public fun
-	0x2::vec_map
-from_keys_values
-	public fun
-	0x2::vec_map
-keys
-	public fun
-	0x2::vec_map
-get_idx_opt
-	public fun
-	0x2::vec_map
-get_idx
-	public fun
-	0x2::vec_map
-get_entry_by_idx
-	public fun
-	0x2::vec_map
-get_entry_by_idx_mut
-	public fun
-	0x2::vec_map
-remove_entry_by_idx
-	public fun
-	0x2::vec_map
 Publisher
 	public struct
 	0x2::package

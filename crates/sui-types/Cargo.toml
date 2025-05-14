@@ -80,6 +80,7 @@ p384.workspace = true
 rustls-pemfile.workspace = true
 
 [dev-dependencies]
+base64.workspace = true
 bincode.workspace = true
 criterion.workspace = true
 proptest.workspace = true
@@ -96,7 +97,7 @@ passkey-client.workspace = true
 passkey-authenticator.workspace = true
 
 [[bench]]
-name = "accumulator_bench"
+name = "global_state_hash_bench"
 harness = false
 
 [[bench]]

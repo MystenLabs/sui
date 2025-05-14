@@ -35,7 +35,6 @@ bin-version.workspace = true
 url.workspace = true
 humantime.workspace = true
 
-sui-archival.workspace = true
 sui-tls.workspace = true
 sui-macros.workspace = true
 sui-config.workspace = true

@@ -45,7 +45,7 @@ impl std::fmt::Display for SlowTestPayload {
 impl Payload for SlowTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
         debug_assert!(
-            effects.is_ok(),
+            effects.is_ok() || effects.is_cancelled(),
             "Slow transactions should never abort: {effects:?}",
         );
 

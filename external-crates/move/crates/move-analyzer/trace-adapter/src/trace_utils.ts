@@ -19,7 +19,7 @@ import {
     ILoc,
     IDebugInfoFunction
 } from './debug_info_utils';
-import { decompress } from '@mongodb-js/zstd';
+import { decompress } from 'fzstd';
 
 
 // Data types corresponding to trace file JSON schema.
@@ -33,7 +33,7 @@ interface JSONStructTypeDescription {
     address: string;
     module: string;
     name: string;
-    type_args: string[];
+    type_args: JSONBaseType[];
 }
 
 interface JSONStructType {
@@ -385,7 +385,7 @@ export async function readTrace(
 ): Promise<ITrace> {
     const buf = Buffer.from(fs.readFileSync(traceFilePath));
     const decompressed = await decompress(buf);
-    const [header, ...rest] = decompressed.toString('utf8').trimEnd().split('\n');
+    const [header, ...rest] = new TextDecoder().decode(decompressed).trimEnd().split('\n');
     const jsonVersion: number = JSON.parse(header).version;
     const jsonEvents: JSONTraceEvent[] = rest.map((line) => {
         return JSON.parse(line);
@@ -882,10 +882,38 @@ function processInstructionIfMacro(
 }
 
 
-
+/**
+ * Converts a JSON trace compound type to a string representation.
+ * @param refPrefix prefix for the reference type.
+ * @param address address of the package.
+ * @param module name of the module.
+ * @param name name of the type.
+ * @param typeArgs type arguments of the compound type.
+ * @returns string representation of the compound type.
+ * */
+function JSONCompoundTypeToString(
+    refPrefix: string,
+    address: string,
+    module: string,
+    name: string,
+    typeArgs: JSONBaseType[]
+): string {
+    return refPrefix
+        + JSONTraceAddressToHexString(address)
+        + '::'
+        + module
+        + '::'
+        + name
+        + (typeArgs.length === 0
+            ? ''
+            : '<' + typeArgs.map((t) => JSONTraceTypeToString(t)).join(',') + '>');
+}
 
 /**
  * Converts a JSON trace type to a string representation.
+ * @param baseType base type.
+ * @param refType reference type.
+ * @returns string representation of the type.
  */
 function JSONTraceTypeToString(baseType: JSONBaseType, refType?: JSONTraceRefType): string {
     const refPrefix = refType === JSONTraceRefType.Mut
@@ -898,19 +926,17 @@ function JSONTraceTypeToString(baseType: JSONBaseType, refType?: JSONTraceRefTyp
     } else if ('vector' in baseType) {
         return refPrefix + `vector<${JSONTraceTypeToString(baseType.vector)}>`;
     } else if ('struct' in baseType) {
-        return refPrefix
-            + JSONTraceAddressToHexString(baseType.struct.address)
-            + "::"
-            + baseType.struct.module
-            + "::"
-            + baseType.struct.name;
+        return JSONCompoundTypeToString(refPrefix,
+            baseType.struct.address,
+            baseType.struct.module,
+            baseType.struct.name,
+            baseType.struct.type_args);
     } else {
-        return refPrefix
-            + JSONTraceAddressToHexString(baseType.address)
-            + "::"
-            + baseType.module
-            + "::"
-            + baseType.name;
+        return JSONCompoundTypeToString(refPrefix,
+            baseType.address,
+            baseType.module,
+            baseType.name,
+            baseType.type_args);
     }
 }
 

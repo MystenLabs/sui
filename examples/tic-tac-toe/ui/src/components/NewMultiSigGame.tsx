@@ -24,7 +24,7 @@ export function NewMultiSigGame(): ReactElement {
     const { address, publicKey: bytes } = useCurrentAccount() || {};
     const [opponent, setOpponent] = useState<PublicKey | null>(null);
 
-    const publicKey = bytes && publicKeyFromRawBytes("ED25519", bytes);
+    const publicKey = bytes && publicKeyFromRawBytes("ED25519", new Uint8Array(bytes));
     const hasPlayer = publicKey != null;
     const hasOpponent = opponent != null;
 
@@ -50,7 +50,10 @@ export function NewMultiSigGame(): ReactElement {
 
     return (
         <>
-            <ComputedField value={bytes && toBase64(bytes)} label="Your public key" />
+            <ComputedField
+                value={bytes && toBase64(new Uint8Array(bytes))}
+                label="Your public key"
+            />
             <ComputedField value={address} label="Your address" />
             <TextField.Root
                 size="2"

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::sui_client_config::SuiClientConfig;
+use crate::sui_client_config::{SuiClientConfig, SuiEnv};
 use crate::SuiClient;
 use anyhow::anyhow;
 use shared_crypto::intent::Intent;
@@ -25,14 +25,11 @@ pub struct WalletContext {
     request_timeout: Option<std::time::Duration>,
     client: Arc<RwLock<Option<SuiClient>>>,
     max_concurrent_requests: Option<u64>,
+    env_override: Option<String>,
 }
 
 impl WalletContext {
-    pub fn new(
-        config_path: &Path,
-        request_timeout: Option<std::time::Duration>,
-        max_concurrent_requests: Option<u64>,
-    ) -> Result<Self, anyhow::Error> {
+    pub fn new(config_path: &Path) -> Result<Self, anyhow::Error> {
         let config: SuiClientConfig = PersistedConfig::read(config_path).map_err(|err| {
             anyhow!(
                 "Cannot open wallet config file at {:?}. Err: {err}",
@@ -43,15 +40,35 @@ impl WalletContext {
         let config = config.persisted(config_path);
         let context = Self {
             config,
-            request_timeout,
+            request_timeout: None,
             client: Default::default(),
-            max_concurrent_requests,
+            max_concurrent_requests: None,
+            env_override: None,
         };
         Ok(context)
     }
 
+    pub fn with_request_timeout(mut self, request_timeout: std::time::Duration) -> Self {
+        self.request_timeout = Some(request_timeout);
+        self
+    }
+
+    pub fn with_max_concurrent_requests(mut self, max_concurrent_requests: u64) -> Self {
+        self.max_concurrent_requests = Some(max_concurrent_requests);
+        self
+    }
+
+    pub fn with_env_override(mut self, env_override: String) -> Self {
+        self.env_override = Some(env_override);
+        self
+    }
+
     pub fn get_addresses(&self) -> Vec<SuiAddress> {
         self.config.keystore.addresses()
+    }
+
+    pub fn get_env_override(&self) -> Option<String> {
+        self.env_override.clone()
     }
 
     pub async fn get_client(&self) -> Result<SuiClient, anyhow::Error> {
@@ -62,12 +79,24 @@ impl WalletContext {
         } else {
             drop(read);
             let client = self
-                .config
                 .get_active_env()?
                 .create_rpc_client(self.request_timeout, self.max_concurrent_requests)
                 .await?;
             self.client.write().await.insert(client).clone()
         })
+    }
+
+    pub fn get_active_env(&self) -> Result<&SuiEnv, anyhow::Error> {
+        if self.env_override.is_some() {
+            self.config.get_env(&self.env_override).ok_or_else(|| {
+                anyhow!(
+                    "Environment configuration not found for env [{}]",
+                    self.env_override.as_deref().unwrap_or("None")
+                )
+            })
+        } else {
+            self.config.get_active_env()
+        }
     }
 
     // TODO: Ger rid of mut

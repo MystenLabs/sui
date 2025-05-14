@@ -2,14 +2,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{format_err, Result};
+use anyhow::{Result, format_err};
 use move_binary_format::{
+    CompiledModule,
     file_format::{
         AbilitySet, CodeOffset, CodeUnit, ConstantPoolIndex, EnumDefinition, EnumDefinitionIndex,
         FunctionDefinitionIndex, LocalIndex, MemberCount, ModuleHandleIndex, SignatureIndex,
         StructDefinition, StructDefinitionIndex, TableIndex, VariantTag,
     },
-    CompiledModule,
 };
 use move_command_line_common::files::FileHash;
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};

@@ -4,6 +4,7 @@
 
 use std::{
     collections::BTreeMap,
+    fmt,
     fmt::{Debug, Display, Formatter},
 };
 
@@ -11,8 +12,8 @@ use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    dependency::ManifestDependencyInfo,
-    errors::{with_file, FileHandle, Located, ManifestError, ManifestErrorKind, PackageResult},
+    dependency::{DependencySet, ManifestDependencyInfo},
+    errors::{FileHandle, Located, ManifestError, ManifestErrorKind, PackageResult, with_file},
     flavor::{MoveFlavor, Vanilla},
 };
 
@@ -29,11 +30,16 @@ const ALLOWED_EDITIONS: &[&str] = &["2024", "2024.beta", "legacy"];
 #[serde(bound = "")]
 pub struct Manifest<F: MoveFlavor> {
     package: PackageMetadata<F>,
-    pub environments: BTreeMap<EnvironmentName, F::EnvironmentID>,
+
     #[serde(default)]
-    pub dependencies: BTreeMap<PackageName, ManifestDependency<F>>,
+    environments: BTreeMap<EnvironmentName, F::EnvironmentID>,
+
     #[serde(default)]
-    dep_overrides: BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyOverride<F>>>,
+    dependencies: BTreeMap<PackageName, ManifestDependency<F>>,
+    /// Replace dependencies for the given environment.
+    #[serde(default)]
+    dep_replacements:
+        BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyReplacement<F>>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -51,7 +57,7 @@ struct PackageMetadata<F: MoveFlavor> {
 #[serde(rename_all = "kebab-case")]
 pub struct ManifestDependency<F: MoveFlavor> {
     #[serde(flatten)]
-    pub dependency_info: ManifestDependencyInfo<F>,
+    dependency_info: ManifestDependencyInfo<F>,
 
     #[serde(rename = "override", default)]
     is_override: bool,
@@ -63,7 +69,7 @@ pub struct ManifestDependency<F: MoveFlavor> {
 #[derive(Debug, Deserialize)]
 #[serde(bound = "")]
 #[serde(rename_all = "kebab-case")]
-struct ManifestDependencyOverride<F: MoveFlavor> {
+pub struct ManifestDependencyReplacement<F: MoveFlavor> {
     #[serde(flatten, default)]
     dependency: Option<ManifestDependency<F>>,
 
@@ -119,7 +125,7 @@ impl<F: MoveFlavor> Manifest<F> {
         Ok(())
     }
 
-    fn write_template(path: impl AsRef<Path>, name: &PackageName) -> anyhow::Result<()> {
+    fn write_template(path: impl AsRef<Path>, name: &PackageName) -> PackageResult<()> {
         std::fs::write(
             path,
             r###"
@@ -127,5 +133,27 @@ impl<F: MoveFlavor> Manifest<F> {
         )?;
 
         Ok(())
+    }
+
+    /// Return the dependency set of this manifest, including replacements.
+    pub fn dependencies(&self) -> DependencySet<ManifestDependencyInfo<F>> {
+        let mut deps = DependencySet::new();
+
+        for (name, dep) in &self.dependencies {
+            deps.insert(None, name.clone(), dep.dependency_info.clone());
+        }
+
+        for (env, replacements) in &self.dep_replacements {
+            for (name, dep) in replacements {
+                if let Some(dep) = &dep.dependency {
+                    deps.insert(Some(env.clone()), name.clone(), dep.dependency_info.clone());
+                }
+            }
+        }
+        deps
+    }
+
+    pub fn environments(&self) -> &BTreeMap<EnvironmentName, F::EnvironmentID> {
+        &self.environments
     }
 }

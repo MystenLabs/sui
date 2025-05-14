@@ -51,6 +51,8 @@ export function useExecutor({ execute }: { execute?: ExecuteCallback } = {}): Ex
     const mutate: Executor = ({ tx, ...options }, then) => {
         signAndExecute(
             {
+                // Fails with Transaction type version mismatch
+                // @ts-ignore
                 transaction: tx,
             },
             {

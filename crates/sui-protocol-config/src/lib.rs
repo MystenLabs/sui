@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 82;
+const MAX_PROTOCOL_VERSION: u64 = 83;
 
 // Record history of protocol version allocations here:
 //
@@ -235,7 +235,9 @@ const MAX_PROTOCOL_VERSION: u64 = 82;
 // Version 81: Enable median based commit timestamp in consensus on mainnet.
 //             Enforce checkpoint timestamps are non-decreasing for testnet and mainnet.
 //             Increase threshold for bad nodes that won't be considered leaders in consensus in mainnet
-// Version 82:
+// Version 82: Relax bounding of size of values created in the adapter.
+// Version 83: Resolve `TypeInput` IDs to defining ID when converting to `TypeTag`s in the adapter.
+//             Enable execution time estimate mode for congestion control on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -679,6 +681,14 @@ struct FeatureFlags {
     // If true, enables better errors and bounds for max ptb values
     #[serde(skip_serializing_if = "is_false")]
     max_ptb_value_size_v2: bool,
+
+    // If true, resolves all type input ids to be defining ID based in the adapter
+    #[serde(skip_serializing_if = "is_false")]
+    resolve_type_input_ids_to_defining_id: bool,
+
+    // Enable native function for party transfer
+    #[serde(skip_serializing_if = "is_false")]
+    enable_party_transfer: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1150,6 +1160,8 @@ pub struct ProtocolConfig {
     // Transfer
     // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
     transfer_transfer_internal_cost_base: Option<u64>,
+    // Cost params for the Move native function `party_transfer_impl<T: key>(obj: T, party_members: vector<address>)`
+    transfer_party_transfer_internal_cost_base: Option<u64>,
     // Cost params for the Move native function `freeze_object<T: key>(obj: T)`
     transfer_freeze_object_cost_base: Option<u64>,
     // Cost params for the Move native function `share_object<T: key>(obj: T)`
@@ -1949,6 +1961,14 @@ impl ProtocolConfig {
     pub fn max_ptb_value_size_v2(&self) -> bool {
         self.feature_flags.max_ptb_value_size_v2
     }
+
+    pub fn resolve_type_input_ids_to_defining_id(&self) -> bool {
+        self.feature_flags.resolve_type_input_ids_to_defining_id
+    }
+
+    pub fn enable_party_transfer(&self) -> bool {
+        self.feature_flags.enable_party_transfer
+    }
 }
 
 #[cfg(not(msim))]
@@ -2233,6 +2253,8 @@ impl ProtocolConfig {
             // `transfer` module
             // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
             transfer_transfer_internal_cost_base: Some(52),
+            // Cost params for the Move native function `party_transfer_impl<T: key>(obj: T, party_members: vector<address>)`
+            transfer_party_transfer_internal_cost_base: None,
             // Cost params for the Move native function `freeze_object<T: key>(obj: T)`
             transfer_freeze_object_cost_base: Some(52),
             // Cost params for the Move native function `share_object<T: key>(obj: T)`
@@ -3483,6 +3505,26 @@ impl ProtocolConfig {
                 }
                 82 => {
                     cfg.feature_flags.max_ptb_value_size_v2 = true;
+                }
+                83 => {
+                    cfg.feature_flags.resolve_type_input_ids_to_defining_id = true;
+                    cfg.transfer_party_transfer_internal_cost_base = Some(52);
+
+                    // Enable execution time estimate mode for congestion control on mainnet.
+                    cfg.feature_flags.record_additional_state_digest_in_prologue = true;
+                    cfg.consensus_commit_rate_estimation_window_size = Some(10);
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                            ExecutionTimeEstimateParams {
+                                target_utilization: 30,
+                                allowed_txn_cost_overage_burst_limit_us: 100_000, // 100 ms
+                                randomness_scalar: 20,
+                                max_estimate_us: 1_500_000, // 1.5s
+                            },
+                        );
+
+                    // Enable the new depth-first block sync logic.
+                    cfg.feature_flags.consensus_batched_block_sync = true;
                 }
                 // Use this template when making changes:
                 //

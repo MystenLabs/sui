@@ -7,10 +7,10 @@
 
 use crate::compiler::{compile_modules_in_file, expect_modules, serialize_module_at_max_version};
 use move_binary_format::{
-    file_format::{
-        empty_module, AddressIdentifierIndex, IdentifierIndex, ModuleHandle, TableIndex,
-    },
     CompiledModule,
+    file_format::{
+        AddressIdentifierIndex, IdentifierIndex, ModuleHandle, TableIndex, empty_module,
+    },
 };
 use move_compiler::Compiler;
 use move_core_types::{
@@ -19,7 +19,7 @@ use move_core_types::{
     ident_str,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
-    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
+    resolver::{LinkageResolver, ModuleResolver},
     runtime_value::MoveValue,
 };
 use move_vm_config::{runtime::VMConfig, verifier::VerifierConfig};
@@ -360,19 +360,6 @@ impl ModuleResolver for RelinkingStore {
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         self.store.get_module(id)
-    }
-}
-
-/// Implement by forwarding to the underlying in memory storage
-impl ResourceResolver for RelinkingStore {
-    type Error = ();
-
-    fn get_resource(
-        &self,
-        address: &AccountAddress,
-        typ: &move_core_types::language_storage::StructTag,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.store.get_resource(address, typ)
     }
 }
 

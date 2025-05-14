@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::format_module_id;
-use colored::{control, Colorize};
+use colored::{Colorize, control};
 use move_binary_format::errors::{ExecutionState, Location, VMError};
 use move_command_line_common::error_bitset::ErrorBitset;
 use move_compiler::{

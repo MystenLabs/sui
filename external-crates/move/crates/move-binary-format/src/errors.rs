@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    file_format::{CodeOffset, FunctionDefinitionIndex, TableIndex},
     IndexKind,
+    file_format::{CodeOffset, FunctionDefinitionIndex, TableIndex},
 };
 use move_core_types::{
     language_storage::ModuleId,

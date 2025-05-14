@@ -12,13 +12,13 @@ use move_binary_format::{
 };
 use move_core_types::annotated_value as A;
 use move_core_types::{
+    VARIANT_COUNT_MAX,
     account_address::AccountAddress,
     effects::Op,
     gas_algebra::AbstractMemorySize,
     runtime_value::{MoveEnumLayout, MoveStructLayout, MoveTypeLayout},
     u256,
-    vm_status::{sub_status::NFE_VECTOR_ERROR_BASE, StatusCode},
-    VARIANT_COUNT_MAX,
+    vm_status::{StatusCode, sub_status::NFE_VECTOR_ERROR_BASE},
 };
 use std::{
     cell::RefCell,
@@ -414,7 +414,7 @@ impl Container {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message("cannot copy a Locals container".to_string()),
-                )
+                );
             }
         })
     }
@@ -512,7 +512,7 @@ impl ValueImpl {
             | (ContainerRef(_), _)
             | (IndexedRef(_), _) => {
                 return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                    .with_message(format!("cannot compare values: {:?}, {:?}", self, other)))
+                    .with_message(format!("cannot compare values: {:?}, {:?}", self, other)));
             }
         };
 
@@ -582,7 +582,7 @@ impl Container {
                         "cannot compare container values: {:?}, {:?}",
                         self, other
                     )),
-                )
+                );
             }
         };
 
@@ -750,7 +750,7 @@ impl IndexedRef {
             | (VecBool(_), _)
             | (VecAddress(_), _) => {
                 return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                    .with_message(format!("cannot compare references {:?}, {:?}", self, other)))
+                    .with_message(format!("cannot compare references {:?}, {:?}", self, other)));
             }
         };
         Ok(res)
@@ -841,7 +841,7 @@ impl ContainerRef {
                                 )
                                 .with_message(
                                     "failed to write_ref: container type mismatch".to_string(),
-                                ))
+                                ));
                             }
                         };
                         *$r1.borrow_mut() = take_unique_ownership(r)?;
@@ -860,7 +860,7 @@ impl ContainerRef {
                             )
                             .with_message(
                                 "failed to write_ref: container type mismatch".to_string(),
-                            ))
+                            ));
                         }
                     },
                     Container::Vec(r) => assign!(r, Vec),
@@ -876,7 +876,7 @@ impl ContainerRef {
                         return Err(PartialVMError::new(
                             StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
                         )
-                        .with_message("cannot overwrite Container::Locals".to_string()))
+                        .with_message("cannot overwrite Container::Locals".to_string()));
                     }
                 }
                 self.mark_dirty();
@@ -888,7 +888,7 @@ impl ContainerRef {
                             "cannot write value {:?} to container ref {:?}",
                             v, self
                         )),
-                )
+                );
             }
         }
         Ok(())
@@ -908,7 +908,7 @@ impl IndexedRef {
                             "cannot write value {:?} to indexed ref {:?}",
                             x, self
                         )),
-                )
+                );
             }
             _ => (),
         }
@@ -943,7 +943,7 @@ impl IndexedRef {
                         "cannot write value {:?} to indexed ref {:?}",
                         x, self
                     )),
-                )
+                );
             }
         }
         self.container_ref.mark_dirty();
@@ -1116,15 +1116,13 @@ impl VariantRef {
                         })),
                         x @ (ValueImpl::ContainerRef(_)
                         | ValueImpl::IndexedRef(_)
-                        | ValueImpl::Invalid) => {
-                            return Err(PartialVMError::new(
-                                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                            )
-                            .with_message(format!(
+                        | ValueImpl::Invalid) => return Err(PartialVMError::new(
+                            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        )
+                        .with_message(format!(
                             "cannot unpack a reference value {:?} held inside a variant ref {:?}",
                             x, self
-                        )))
-                        }
+                        ))),
                     };
                     res.push(Value(ref_));
                 }
@@ -1374,7 +1372,6 @@ impl Value {
         ))))
     }
 
-    // TODO: consider whether we want to replace these with fn vector(v: Vec<Value>).
     pub fn vector_u8(it: impl IntoIterator<Item = u8>) -> Self {
         Self(ValueImpl::Container(Container::VecU8(Rc::new(
             RefCell::new(it.into_iter().collect()),
@@ -1422,13 +1419,6 @@ impl Value {
             RefCell::new(it.into_iter().collect()),
         ))))
     }
-
-    // REVIEW: This API can break
-    pub fn vector_for_testing_only(it: impl IntoIterator<Item = Value>) -> Self {
-        Self(ValueImpl::Container(Container::Vec(Rc::new(RefCell::new(
-            it.into_iter().map(|v| v.0).collect(),
-        )))))
-    }
 }
 
 /***************************************************************************************
@@ -1474,6 +1464,12 @@ macro_rules! impl_vm_value_cast_boxed {
             }
         }
     };
+}
+
+impl VMValueCast<Value> for Value {
+    fn cast(self) -> PartialVMResult<Value> {
+        Ok(self)
+    }
 }
 
 impl_vm_value_cast!(u8, U8);
@@ -1570,6 +1566,26 @@ impl VMValueCast<Vec<u8>> for Value {
     }
 }
 
+impl VMValueCast<Vec<u16>> for Value {
+    fn cast(self) -> PartialVMResult<Vec<u16>> {
+        match self.0 {
+            ValueImpl::Container(Container::VecU16(r)) => take_unique_ownership(r),
+            v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                .with_message(format!("cannot cast {:?} to vector<u16>", v,))),
+        }
+    }
+}
+
+impl VMValueCast<Vec<u32>> for Value {
+    fn cast(self) -> PartialVMResult<Vec<u32>> {
+        match self.0 {
+            ValueImpl::Container(Container::VecU32(r)) => take_unique_ownership(r),
+            v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                .with_message(format!("cannot cast {:?} to vector<u32>", v,))),
+        }
+    }
+}
+
 impl VMValueCast<Vec<u64>> for Value {
     fn cast(self) -> PartialVMResult<Vec<u64>> {
         match self.0 {
@@ -1580,12 +1596,32 @@ impl VMValueCast<Vec<u64>> for Value {
     }
 }
 
+impl VMValueCast<Vec<u128>> for Value {
+    fn cast(self) -> PartialVMResult<Vec<u128>> {
+        match self.0 {
+            ValueImpl::Container(Container::VecU128(r)) => take_unique_ownership(r),
+            v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                .with_message(format!("cannot cast {:?} to vector<u128>", v,))),
+        }
+    }
+}
+
+impl VMValueCast<Vec<u256::U256>> for Value {
+    fn cast(self) -> PartialVMResult<Vec<u256::U256>> {
+        match self.0 {
+            ValueImpl::Container(Container::VecU256(r)) => take_unique_ownership(r),
+            v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                .with_message(format!("cannot cast {:?} to vector<u256>", v,))),
+        }
+    }
+}
+
 impl VMValueCast<Vec<AccountAddress>> for Value {
     fn cast(self) -> PartialVMResult<Vec<AccountAddress>> {
         match self.0 {
             ValueImpl::Container(Container::VecAddress(r)) => take_unique_ownership(r),
             v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                .with_message(format!("cannot cast {:?} to vector<AccountAddress>", v,))),
+                .with_message(format!("cannot cast {:?} to vector<address>", v,))),
         }
     }
 }
@@ -2454,77 +2490,109 @@ impl VectorRef {
     }
 }
 
-impl Vector {
-    pub fn pack(type_param: &Type, elements: Vec<Value>) -> PartialVMResult<Value> {
-        let container = match type_param {
-            Type::U8 => Value::vector_u8(
-                elements
-                    .into_iter()
-                    .map(|v| v.value_as())
-                    .collect::<PartialVMResult<Vec<_>>>()?,
-            ),
-            Type::U16 => Value::vector_u16(
-                elements
-                    .into_iter()
-                    .map(|v| v.value_as())
-                    .collect::<PartialVMResult<Vec<_>>>()?,
-            ),
-            Type::U32 => Value::vector_u32(
-                elements
-                    .into_iter()
-                    .map(|v| v.value_as())
-                    .collect::<PartialVMResult<Vec<_>>>()?,
-            ),
-            Type::U64 => Value::vector_u64(
-                elements
-                    .into_iter()
-                    .map(|v| v.value_as())
-                    .collect::<PartialVMResult<Vec<_>>>()?,
-            ),
-            Type::U128 => Value::vector_u128(
-                elements
-                    .into_iter()
-                    .map(|v| v.value_as())
-                    .collect::<PartialVMResult<Vec<_>>>()?,
-            ),
-            Type::U256 => Value::vector_u256(
-                elements
-                    .into_iter()
-                    .map(|v| v.value_as())
-                    .collect::<PartialVMResult<Vec<_>>>()?,
-            ),
-            Type::Bool => Value::vector_bool(
-                elements
-                    .into_iter()
-                    .map(|v| v.value_as())
-                    .collect::<PartialVMResult<Vec<_>>>()?,
-            ),
-            Type::Address => Value::vector_address(
-                elements
-                    .into_iter()
-                    .map(|v| v.value_as())
-                    .collect::<PartialVMResult<Vec<_>>>()?,
-            ),
+pub enum VectorSpecialization {
+    U8,
+    U16,
+    U32,
+    U64,
+    U128,
+    U256,
+    Bool,
+    Address,
+    Container,
+}
 
-            Type::Signer | Type::Vector(_) | Type::Datatype(_) | Type::DatatypeInstantiation(_) => {
-                Value(ValueImpl::Container(Container::Vec(Rc::new(RefCell::new(
-                    elements.into_iter().map(|v| v.0).collect(),
-                )))))
+impl TryFrom<&Type> for VectorSpecialization {
+    type Error = PartialVMError;
+
+    fn try_from(ty: &Type) -> Result<Self, Self::Error> {
+        Ok(match ty {
+            Type::U8 => VectorSpecialization::U8,
+            Type::U16 => VectorSpecialization::U16,
+            Type::U32 => VectorSpecialization::U32,
+            Type::U64 => VectorSpecialization::U64,
+            Type::U128 => VectorSpecialization::U128,
+            Type::U256 => VectorSpecialization::U256,
+            Type::Bool => VectorSpecialization::Bool,
+            Type::Address => VectorSpecialization::Address,
+            Type::Vector(_) | Type::Signer | Type::Datatype(_) | Type::DatatypeInstantiation(_) => {
+                VectorSpecialization::Container
             }
-
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(format!("invalid type param for vector: {:?}", type_param)),
-                )
+                        .with_message(format!("invalid type param for vector: {:?}", ty)),
+                );
             }
+        })
+    }
+}
+
+impl Vector {
+    pub fn pack(
+        specialization: VectorSpecialization,
+        elements: impl IntoIterator<Item = Value>,
+    ) -> PartialVMResult<Value> {
+        let container = match specialization {
+            VectorSpecialization::U8 => Value::vector_u8(
+                elements
+                    .into_iter()
+                    .map(|v| v.value_as())
+                    .collect::<PartialVMResult<Vec<_>>>()?,
+            ),
+            VectorSpecialization::U16 => Value::vector_u16(
+                elements
+                    .into_iter()
+                    .map(|v| v.value_as())
+                    .collect::<PartialVMResult<Vec<_>>>()?,
+            ),
+            VectorSpecialization::U32 => Value::vector_u32(
+                elements
+                    .into_iter()
+                    .map(|v| v.value_as())
+                    .collect::<PartialVMResult<Vec<_>>>()?,
+            ),
+            VectorSpecialization::U64 => Value::vector_u64(
+                elements
+                    .into_iter()
+                    .map(|v| v.value_as())
+                    .collect::<PartialVMResult<Vec<_>>>()?,
+            ),
+            VectorSpecialization::U128 => Value::vector_u128(
+                elements
+                    .into_iter()
+                    .map(|v| v.value_as())
+                    .collect::<PartialVMResult<Vec<_>>>()?,
+            ),
+            VectorSpecialization::U256 => Value::vector_u256(
+                elements
+                    .into_iter()
+                    .map(|v| v.value_as())
+                    .collect::<PartialVMResult<Vec<_>>>()?,
+            ),
+            VectorSpecialization::Bool => Value::vector_bool(
+                elements
+                    .into_iter()
+                    .map(|v| v.value_as())
+                    .collect::<PartialVMResult<Vec<_>>>()?,
+            ),
+            VectorSpecialization::Address => Value::vector_address(
+                elements
+                    .into_iter()
+                    .map(|v| v.value_as())
+                    .collect::<PartialVMResult<Vec<_>>>()?,
+            ),
+
+            VectorSpecialization::Container => Value(ValueImpl::Container(Container::Vec(
+                Rc::new(RefCell::new(elements.into_iter().map(|v| v.0).collect())),
+            ))),
         };
 
         Ok(container)
     }
 
-    pub fn empty(type_param: &Type) -> PartialVMResult<Value> {
-        Self::pack(type_param, vec![])
+    pub fn empty(specialization: VectorSpecialization) -> PartialVMResult<Value> {
+        Self::pack(specialization, vec![])
     }
 
     pub fn unpack(self, type_param: &Type, expected_num: u64) -> PartialVMResult<Vec<Value>> {
@@ -2816,7 +2884,7 @@ impl GlobalValueImpl {
     fn move_from(&mut self) -> PartialVMResult<ValueImpl> {
         let fields = match self {
             Self::None | Self::Deleted => {
-                return Err(PartialVMError::new(StatusCode::MISSING_DATA))
+                return Err(PartialVMError::new(StatusCode::MISSING_DATA));
             }
             Self::Fresh { .. } => match std::mem::replace(self, Self::None) {
                 Self::Fresh { fields } => fields,
@@ -2842,7 +2910,7 @@ impl GlobalValueImpl {
                 return Err((
                     PartialVMError::new(StatusCode::RESOURCE_ALREADY_EXISTS),
                     val,
-                ))
+                ));
             }
             Self::None => *self = Self::fresh(val)?,
             Self::Deleted => *self = Self::cached(val, GlobalDataStatus::Dirty)?,
@@ -3302,9 +3370,9 @@ pub mod debug {
  *
  **************************************************************************************/
 use serde::{
+    Deserialize,
     de::Error as DeError,
     ser::{Error as SerError, SerializeSeq, SerializeTuple},
-    Deserialize,
 };
 
 impl Value {
@@ -3661,7 +3729,7 @@ impl<'d> serde::de::Visitor<'d> for EnumFieldVisitor<'_> {
                 return Err(A::Error::invalid_type(
                     serde::de::Unexpected::Other(&format!("{val:?}")),
                     &self,
-                ))
+                ));
             }
             None => return Err(A::Error::invalid_length(0, &self)),
         };
@@ -4376,7 +4444,7 @@ impl Container {
                     .map(|v| v.as_annotated_move_value(inner_layout))
                     .collect::<Option<_>>()?,
                 Container::Struct(_) | Container::Variant { .. } | Container::Locals(_) => {
-                    return None
+                    return None;
                 }
             }),
 

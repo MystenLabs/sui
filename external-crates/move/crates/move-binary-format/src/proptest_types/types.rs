@@ -15,7 +15,7 @@ use crate::{
     },
 };
 use proptest::{
-    collection::{vec, SizeRange},
+    collection::{SizeRange, vec},
     option,
     prelude::*,
     sample::Index as PropIndex,

@@ -5,52 +5,47 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E10005]: unable to generate test
-  ┌─ tests/move_2024/unit_test/random_test_not_rand_test_attr.move:2:7
-  │
-2 │     #[test]
-  │       ^^^^ Missing test parameter assignment in test. Expected a parameter to be assigned in this attribute
-3 │     fun foo(a: u64) { 
-  │         --- - Corresponding to this parameter
-  │         │    
-  │         Error found in this test
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_2024/unit_test/random_test_not_rand_test_attr.move:3:5
+  │  
+3 │ ╭     fun foo(a: u64) { 
+4 │ │         _ = a;
+5 │ │     }
+  │ ╰─────^ Invalid test function
+  │  
+  = Test functions with arguments have been deprecated
+  = If you would like to test functions with random inputs, consider using '#[rand_test]' instead
 
-error[E10005]: unable to generate test
-  ┌─ tests/move_2024/unit_test/random_test_not_rand_test_attr.move:7:7
-  │
-7 │     #[test, expected_failure]
-  │       ^^^^ Missing test parameter assignment in test. Expected a parameter to be assigned in this attribute
-8 │     fun go(b: u64) { 
-  │         -- - Corresponding to this parameter
-  │         │   
-  │         Error found in this test
+warning[W10007]: issue with attribute value
+   ┌─ tests/move_2024/unit_test/random_test_not_rand_test_attr.move:8:5
+   │  
+ 8 │ ╭     fun go(b: u64) { 
+ 9 │ │         _ = b;
+10 │ │     }
+   │ ╰─────^ Invalid test function
+   │  
+   = Test functions with arguments have been deprecated
+   = If you would like to test functions with random inputs, consider using '#[rand_test]' instead
 
-error[E10005]: unable to generate test
-   ┌─ tests/move_2024/unit_test/random_test_not_rand_test_attr.move:12:7
-   │
-12 │     #[test]
-   │       ^^^^ Missing test parameter assignment in test. Expected a parameter to be assigned in this attribute
-13 │     fun qux(c: u64, d: bool) { 
-   │         --- - Corresponding to this parameter
-   │         │    
-   │         Error found in this test
+warning[W10007]: issue with attribute value
+   ┌─ tests/move_2024/unit_test/random_test_not_rand_test_attr.move:13:5
+   │  
+13 │ ╭     fun qux(c: u64, d: bool) { 
+14 │ │         _ = c;
+15 │ │         _ = d;
+16 │ │     }
+   │ ╰─────^ Invalid test function
+   │  
+   = Test functions with arguments have been deprecated
+   = If you would like to test functions with random inputs, consider using '#[rand_test]' instead
 
-error[E10005]: unable to generate test
-   ┌─ tests/move_2024/unit_test/random_test_not_rand_test_attr.move:12:7
-   │
-12 │     #[test]
-   │       ^^^^ Missing test parameter assignment in test. Expected a parameter to be assigned in this attribute
-13 │     fun qux(c: u64, d: bool) { 
-   │         ---         - Corresponding to this parameter
-   │         │            
-   │         Error found in this test
-
-error[E10005]: unable to generate test
-   ┌─ tests/move_2024/unit_test/random_test_not_rand_test_attr.move:18:7
-   │
-18 │     #[test]
-   │       ^^^^ Missing test parameter assignment in test. Expected a parameter to be assigned in this attribute
-19 │     fun qux_vec(c: vector<u8>) { 
-   │         ------- - Corresponding to this parameter
-   │         │        
-   │         Error found in this test
+warning[W10007]: issue with attribute value
+   ┌─ tests/move_2024/unit_test/random_test_not_rand_test_attr.move:19:5
+   │  
+19 │ ╭     fun qux_vec(c: vector<u8>) { 
+20 │ │         _ = c;
+21 │ │     }
+   │ ╰─────^ Invalid test function
+   │  
+   = Test functions with arguments have been deprecated
+   = If you would like to test functions with random inputs, consider using '#[rand_test]' instead

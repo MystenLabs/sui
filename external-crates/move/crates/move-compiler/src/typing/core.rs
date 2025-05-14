@@ -5,26 +5,26 @@
 use crate::{
     debug_display, diag,
     diagnostics::{
+        Diagnostic, DiagnosticReporter, Diagnostics,
         codes::{NameResolution, TypeSafety},
         warning_filters::WarningFilters,
-        Diagnostic, DiagnosticReporter, Diagnostics,
     },
     editions::FeatureGate,
     expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Mutability, Visibility},
     ice,
     naming::ast::{
         self as N, BlockLabel, BuiltinTypeName_, Color, DatatypeTypeParameter, EnumDefinition,
-        IndexSyntaxMethods, ResolvedUseFuns, StructDefinition, TParam, TParamID, TVar, Type,
-        TypeName, TypeName_, Type_, UseFun, UseFunKind, Var,
+        IndexSyntaxMethods, ResolvedUseFuns, StructDefinition, TParam, TParamID, TVar, Type, Type_,
+        TypeName, TypeName_, UseFun, UseFunKind, Var,
     },
     parser::ast::{
-        Ability_, ConstantName, DatatypeName, DocComment, Field, FunctionName, VariantName,
-        ENTRY_MODIFIER,
+        Ability_, ConstantName, DatatypeName, DocComment, ENTRY_MODIFIER, Field, FunctionName,
+        VariantName,
     },
     shared::{
         ide::{AutocompleteMethod, IDEAnnotation, IDEInfo},
         known_attributes::TestingAttribute,
-        matching::{new_match_var_name, MatchContext},
+        matching::{MatchContext, new_match_var_name},
         program_info::*,
         string_utils::{debug_print, format_oxford_list},
         unique_map::UniqueMap,
@@ -1392,11 +1392,7 @@ fn error_format_impl_(b_: &Type_, subst: &Subst, nested: bool) -> String {
             error_format_nested(ty, subst)
         ),
     };
-    if nested {
-        res
-    } else {
-        format!("'{}'", res)
-    }
+    if nested { res } else { format!("'{}'", res) }
 }
 
 //**************************************************************************************************
@@ -2326,8 +2322,8 @@ fn solve_builtin_type_constraint(
     op: &'static str,
     ty: Type,
 ) {
-    use TypeName_::*;
     use Type_::*;
+    use TypeName_::*;
     let t = unfold_type(&context.subst, ty);
     let tloc = t.loc;
     let mk_tmsg = || {
@@ -2371,8 +2367,8 @@ fn solve_builtin_type_constraint(
 }
 
 fn solve_base_type_constraint(context: &mut Context, loc: Loc, msg: String, ty: &Type) {
-    use TypeName_::*;
     use Type_::*;
+    use TypeName_::*;
     let sp!(tyloc, unfolded_) = unfold_type(&context.subst, ty.clone());
     match unfolded_ {
         Var(_) => unreachable!(),
@@ -2390,8 +2386,8 @@ fn solve_base_type_constraint(context: &mut Context, loc: Loc, msg: String, ty: 
 }
 
 fn solve_single_type_constraint(context: &mut Context, loc: Loc, msg: String, ty: &Type) {
-    use TypeName_::*;
     use Type_::*;
+    use TypeName_::*;
     let sp!(tyloc, unfolded_) = unfold_type(&context.subst, ty.clone());
     match unfolded_ {
         Var(_) => unreachable!(),
@@ -2878,8 +2874,8 @@ fn join_impl(
     lhs: &Type,
     rhs: &Type,
 ) -> Result<(Subst, Type), TypingError> {
-    use TypeName_::*;
     use Type_::*;
+    use TypeName_::*;
     use TypingCase::*;
     match (lhs, rhs) {
         (sp!(_, Anything), other) | (other, sp!(_, Anything)) => Ok((subst, other.clone())),
@@ -2898,7 +2894,7 @@ fn join_impl(
                     return Err(TypingError::InvariantError(
                         Box::new(lhs.clone()),
                         Box::new(rhs.clone()),
-                    ))
+                    ));
                 }
                 // imm <: imm
                 // mut <: imm
@@ -2910,7 +2906,7 @@ fn join_impl(
                     return Err(TypingError::SubtypeError(
                         Box::new(lhs.clone()),
                         Box::new(rhs.clone()),
-                    ))
+                    ));
                 }
             };
             let (subst, t) = join_impl(counter, subst, case, t1, t2)?;

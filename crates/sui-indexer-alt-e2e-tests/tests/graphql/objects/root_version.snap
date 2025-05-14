@@ -1,0 +1,261 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 24 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-57:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7888800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 59-63:
+//# programmable --sender A --inputs @A
+//> 0: P::M::new();
+//> 1: P::M::new();
+//> 2: P::M::new();
+//> 3: TransferObjects([Result(0), Result(1), Result(2)], Input(0))
+created: object(2,0), object(2,1), object(2,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4795600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 65-66:
+//# programmable --sender A --inputs object(2,0) 42 object(2,1)
+//> 0: P::M::add_df(Input(0), Input(1), Input(2))
+created: object(3,0)
+mutated: object(0,0), object(2,0)
+wrapped: object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 4248400,  storage_rebate: 3491136, non_refundable_storage_fee: 35264
+
+task 4, lines 68-69:
+//# programmable --sender A --inputs object(2,0) 43 object(2,2)
+//> 0: P::M::add_dof(Input(0), Input(1), Input(2))
+created: object(4,0)
+mutated: object(0,0), object(2,0), object(2,2)
+gas summary: computation_cost: 1000000, storage_cost: 5981200,  storage_rebate: 3491136, non_refundable_storage_fee: 35264
+
+task 5, line 71:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 6, lines 73-78:
+//# run-graphql
+Response: {
+  "data": {
+    "exact": {
+      "version": 4
+    },
+    "bounded": {
+      "version": 4
+    }
+  }
+}
+
+task 7, lines 80-85:
+//# run-graphql
+Response: {
+  "data": {
+    "field": {
+      "version": 3
+    },
+    "wrapped": null
+  }
+}
+
+task 8, lines 87-93:
+//# run-graphql
+Response: {
+  "data": {
+    "field": {
+      "version": 4
+    },
+    "wrapped": {
+      "version": 4
+    }
+  }
+}
+
+task 9, lines 95-96:
+//# programmable --sender A --inputs object(2,0) 42
+//> 0: P::M::inc_df(Input(0), Input(1))
+mutated: object(0,0), object(2,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 4248400,  storage_rebate: 4205916, non_refundable_storage_fee: 42484
+
+task 10, lines 98-99:
+//# programmable --sender A --inputs object(2,0) 43
+//> 0: P::M::inc_dof(Input(0), Input(1))
+mutated: object(0,0), object(2,0), object(2,2)
+gas summary: computation_cost: 1000000, storage_cost: 3526400,  storage_rebate: 3491136, non_refundable_storage_fee: 35264
+
+task 11, line 101:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 12, lines 103-118:
+//# run-graphql
+Response: {
+  "data": {
+    "fieldBefore": {
+      "version": 3
+    },
+    "wrappedAt4": null,
+    "fieldAfter": {
+      "version": 5
+    },
+    "wrappedAt5": null,
+    "fieldLater": {
+      "version": 5
+    },
+    "wrappedAt6": null
+  }
+}
+
+task 13, lines 120-137:
+//# run-graphql
+Response: {
+  "data": {
+    "fieldBefore": {
+      "version": 4
+    },
+    "valueBefore": {
+      "version": 4
+    },
+    "fieldUnchanged": {
+      "version": 4
+    },
+    "valueUnchanged": {
+      "version": 4
+    },
+    "fieldStillUnchanged": {
+      "version": 4
+    },
+    "valueAfter": {
+      "version": 6
+    }
+  }
+}
+
+task 14, lines 139-140:
+//# programmable --sender A --inputs object(2,0)
+//> 0: P::M::inc(Input(0))
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2234628, non_refundable_storage_fee: 22572
+
+task 15, line 142:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 16, lines 144-152:
+//# run-graphql
+Response: {
+  "data": {
+    "fieldField": {
+      "version": 5
+    },
+    "fieldValue": null,
+    "objectField": {
+      "version": 4
+    },
+    "objectValue": {
+      "version": 6
+    }
+  }
+}
+
+task 17, lines 154-156:
+//# programmable --sender A --inputs object(2,0) 42 @A
+//> 0: P::M::remove_df(Input(0), Input(1));
+//> 1: TransferObjects([Result(0)], Input(2))
+mutated: object(0,0), object(2,0)
+unwrapped: object(2,1)
+deleted: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 3526400,  storage_rebate: 4205916, non_refundable_storage_fee: 42484
+
+task 18, lines 158-160:
+//# programmable --sender A --inputs object(2,0) 43 @A
+//> 0: P::M::remove_dof(Input(0), Input(1));
+//> 1: TransferObjects([Result(0)], Input(2))
+mutated: object(0,0), object(2,0), object(2,2)
+deleted: object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 3526400,  storage_rebate: 5921388, non_refundable_storage_fee: 59812
+
+task 19, line 162:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 20, lines 164-172:
+//# run-graphql
+Response: {
+  "data": {
+    "field": null,
+    "unwrapped": {
+      "version": 8
+    }
+  }
+}
+
+task 21, lines 174-184:
+//# run-graphql
+Response: {
+  "data": {
+    "fieldBefore": {
+      "version": 4
+    },
+    "valueBefore": {
+      "version": 6
+    },
+    "fieldAfter": null,
+    "valueAfter": {
+      "version": 9
+    }
+  }
+}
+
+task 22, lines 187-190:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "At most one of a version or a root version can be specified when fetching an object",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "object"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 23, lines 192-196:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Operation not supported",
+      "locations": [
+        {
+          "line": 3,
+          "column": 3
+        }
+      ],
+      "path": [
+        "object"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}

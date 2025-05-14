@@ -3,7 +3,7 @@
 
 use clap::Parser;
 use sui_indexer::backfill::backfill_runner::BackfillRunner;
-use sui_indexer::config::{Command, UploadOptions};
+use sui_indexer::config::Command;
 use sui_indexer::database::ConnectionPool;
 use sui_indexer::db::setup_postgres::clear_database;
 use sui_indexer::db::{
@@ -13,7 +13,6 @@ use sui_indexer::indexer::Indexer;
 use sui_indexer::metrics::{
     spawn_connection_pool_metric_collector, start_prometheus_server, IndexerMetrics,
 };
-use sui_indexer::restorer::formal_snapshot::IndexerFormalSnapshotRestorer;
 use sui_indexer::store::PgIndexerStore;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
@@ -100,13 +99,6 @@ async fn main() -> anyhow::Result<()> {
         } => {
             let total_range = start..=end;
             BackfillRunner::run(runner_kind, pool, backfill_config, total_range).await;
-        }
-        Command::Restore(restore_config) => {
-            let store =
-                PgIndexerStore::new(pool, UploadOptions::default(), indexer_metrics.clone());
-            let mut formal_restorer =
-                IndexerFormalSnapshotRestorer::new(store, restore_config).await?;
-            formal_restorer.restore().await?;
         }
     }
 

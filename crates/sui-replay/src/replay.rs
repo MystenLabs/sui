@@ -15,11 +15,7 @@ use crate::{
 use futures::executor::block_on;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::{
-    account_address::AccountAddress,
-    language_storage::{ModuleId, StructTag},
-    resolver::{ModuleResolver, ResourceResolver},
-};
+use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use prometheus::Registry;
 use serde::{Deserialize, Serialize};
 use similar::{ChangeTag, TextDiff};
@@ -53,7 +49,7 @@ use sui_types::{
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
     metrics::LimitsMetrics,
-    object::{Data, Object, Owner},
+    object::{Object, Owner},
     storage::get_module_by_id,
     storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
     transaction::{
@@ -1997,59 +1993,6 @@ impl ParentSync for LocalExec {
                     result: res,
                 },
             );
-        res
-    }
-}
-
-impl ResourceResolver for LocalExec {
-    type Error = SuiError;
-
-    /// In this case we might need to download a Move object on the fly which was not present in the
-    /// modified at versions list because packages are immutable
-    fn get_resource(
-        &self,
-        address: &AccountAddress,
-        typ: &StructTag,
-    ) -> SuiResult<Option<Vec<u8>>> {
-        fn inner(
-            self_: &LocalExec,
-            address: &AccountAddress,
-            typ: &StructTag,
-        ) -> SuiResult<Option<Vec<u8>>> {
-            // If package not present fetch it from the network or some remote location
-            let Some(object) = self_.get_or_download_object(
-                &ObjectID::from(*address),
-                false, /* we expect a Move obj*/
-            )?
-            else {
-                return Ok(None);
-            };
-
-            match &object.data {
-                Data::Move(m) => {
-                    assert!(
-                        m.is_type(typ),
-                        "Invariant violation: ill-typed object in storage \
-                        or bad object request from caller"
-                    );
-                    Ok(Some(m.contents().to_vec()))
-                }
-                other => unimplemented!(
-                    "Bad object lookup: expected Move object, but got {:#?}",
-                    other
-                ),
-            }
-        }
-
-        let res = inner(self, address, typ);
-        self.exec_store_events
-            .lock()
-            .expect("Unable to lock events list")
-            .push(ExecutionStoreEvent::ResourceResolverGetResource {
-                address: *address,
-                typ: typ.clone(),
-                result: res.clone(),
-            });
         res
     }
 }

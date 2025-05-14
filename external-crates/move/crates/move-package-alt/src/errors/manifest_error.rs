@@ -32,6 +32,8 @@ pub enum ManifestErrorKind {
     EmptyPackageName,
     #[error("unsupported edition '{edition}', expected one of '{valid}'")]
     InvalidEdition { edition: String, valid: String },
+    #[error("externally resolved dependencies must have exactly one resolver field")]
+    BadExternalDependency,
 }
 
 impl ManifestError {

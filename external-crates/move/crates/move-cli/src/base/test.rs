@@ -8,13 +8,13 @@ use clap::*;
 use move_binary_format::CompiledModule;
 use move_command_line_common::files::MOVE_COVERAGE_MAP_EXTENSION;
 use move_compiler::{
+    PASS_CFGIR,
     diagnostics::{self, Diagnostics},
     shared::{NumberFormat, NumericalAddress},
-    unit_test::{plan_builder::construct_test_plan, TestPlan},
-    PASS_CFGIR,
+    unit_test::{TestPlan, plan_builder::construct_test_plan},
 };
-use move_coverage::coverage_map::{output_map_to_file, CoverageMap};
-use move_package::{compilation::build_plan::BuildPlan, BuildConfig};
+use move_coverage::coverage_map::{CoverageMap, output_map_to_file};
+use move_package::{BuildConfig, compilation::build_plan::BuildPlan};
 use move_unit_test::UnitTestingConfig;
 use move_vm_test_utils::gas_schedule::CostTable;
 use std::{io::Write, path::Path, process::ExitStatus};
@@ -240,7 +240,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
     // If we need to compute test coverage set the VM tracking environment variable since we will
     // need this trace to construct the coverage information.
     if compute_coverage {
-        std::env::set_var("MOVE_VM_TRACE", &trace_path);
+        unsafe { std::env::set_var("MOVE_VM_TRACE", &trace_path) };
     }
 
     // Run the tests. If any of the tests fail, then we don't produce a coverage report, so cleanup

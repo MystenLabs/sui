@@ -1,0 +1,10 @@
+summary
+> ls -1 package_summaries/
+> cat package_summaries/summary_pkg/a.json
+> cat package_summaries/summary_pkg/b.json
+
+summary --bytecode -o yaml
+> ls -1 package_summaries/
+> cat package_summaries/0x0000000000000000000000000000000000000000000000000000000000c0ffee/a.yaml
+> cat package_summaries/0x0000000000000000000000000000000000000000000000000000000000c0ffee/b.yaml
+

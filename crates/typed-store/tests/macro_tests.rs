@@ -279,3 +279,35 @@ async fn test_sampling_time() {
     tokio::task::yield_now().await;
     assert!(sampling_interval.sample());
 }
+
+#[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+mod tide_hunter_tests {
+    use super::*;
+    use std::collections::BTreeMap;
+    use typed_store::tidehunter_util::ThConfig;
+
+    #[derive(DBMapUtils)]
+    #[tidehunter]
+    struct ThTable {
+        table1: DBMap<String, String>,
+        table2: DBMap<i32, String>,
+    }
+
+    #[tokio::test]
+    async fn test_tidehunter_map() {
+        let primary_path = temp_dir();
+        let configs = vec![
+            ("table1".to_string(), ThConfig::new(11, 1, 1)),
+            ("table2".to_string(), ThConfig::new(11, 1, 1)),
+        ];
+        let db = ThTable::open_tables_read_write(
+            primary_path.clone(),
+            MetricConf::default(),
+            BTreeMap::from_iter(configs),
+        );
+        let (key, value) = ("key".to_string(), "value".to_string());
+        db.table1.insert(&key, &value).unwrap();
+        let result = db.table1.get(&key).unwrap();
+        assert_eq!(result, Some(value));
+    }
+}

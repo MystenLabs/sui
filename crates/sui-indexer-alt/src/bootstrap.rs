@@ -6,6 +6,7 @@ use std::time::Duration;
 use anyhow::{bail, Context, Result};
 use diesel::{OptionalExtension, QueryDsl, SelectableHelper};
 use diesel_async::RunQueryDsl;
+use sui_indexer_alt_framework::postgres::Db;
 use sui_indexer_alt_framework::types::{
     full_checkpoint_content::CheckpointData,
     sui_system_state::{get_sui_system_state, SuiSystemStateTrait},
@@ -29,13 +30,13 @@ use crate::Indexer;
 /// Can be cancelled via the `cancel` token, or through an interrupt signal (which will also cancel
 /// the token).
 pub async fn bootstrap(
-    indexer: &Indexer,
+    indexer: &Indexer<Db>,
     retry_interval: Duration,
     cancel: CancellationToken,
 ) -> Result<StoredGenesis> {
     info!("Bootstrapping indexer with genesis information");
 
-    let Ok(mut conn) = indexer.db().connect().await else {
+    let Ok(mut conn) = indexer.store().connect().await else {
         bail!("Bootstrap failed to get connection for DB");
     };
 

@@ -10,7 +10,6 @@ use std::path::PathBuf;
 use std::str;
 use std::sync::Arc;
 use strum_macros::EnumString;
-use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_pruner::{
@@ -238,7 +237,6 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
         ..Default::default()
     };
     info!("Starting txns and effects pruning");
-    let archive_readers = ArchiveReaderBalancer::default();
     AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
         &perpetual_db,
         &checkpoint_store,
@@ -246,7 +244,6 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
         None,
         pruning_config,
         metrics,
-        archive_readers,
         EPOCH_DURATION_MS_FOR_TESTING,
     )
     .await?;
@@ -273,6 +270,8 @@ pub fn dump_table(
                     page_number,
                 )
             } else {
+                let perpetual_tables = AuthorityPerpetualTables::describe_tables();
+                assert!(perpetual_tables.contains_key(table_name));
                 AuthorityPerpetualTables::open_readonly(&db_path).dump(
                     table_name,
                     page_size,

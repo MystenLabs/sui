@@ -1,11 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::models::SuiProgressStore;
-use crate::schema::governance_actions;
-use crate::schema::sui_progress_store::txn_digest;
-use crate::schema::{sui_error_transactions, token_transfer_data};
-use crate::{schema, schema::token_transfer, ProcessedTxnData};
+use crate::ProcessedTxnData;
 use diesel::query_dsl::methods::FilterDsl;
 use diesel::upsert::excluded;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper};
@@ -15,6 +11,11 @@ use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::AsyncConnection;
 use diesel_async::AsyncPgConnection;
 use diesel_async::RunQueryDsl;
+use sui_bridge_schema::models::SuiProgressStore;
+use sui_bridge_schema::schema::governance_actions;
+use sui_bridge_schema::schema::sui_progress_store::txn_digest;
+use sui_bridge_schema::schema::{sui_error_transactions, token_transfer_data};
+use sui_bridge_schema::{schema, schema::token_transfer};
 use sui_types::digests::TransactionDigest;
 
 pub(crate) type PgPool =
@@ -147,7 +148,7 @@ pub async fn update_sui_progress_store(
 
 pub async fn read_sui_progress_store(pool: &PgPool) -> anyhow::Result<Option<TransactionDigest>> {
     let mut conn = pool.get().await?;
-    let val: Option<SuiProgressStore> = crate::schema::sui_progress_store::dsl::sui_progress_store
+    let val: Option<SuiProgressStore> = schema::sui_progress_store::dsl::sui_progress_store
         .select(SuiProgressStore::as_select())
         .first(&mut conn)
         .await

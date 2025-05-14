@@ -4,10 +4,16 @@
 use std::path::PathBuf;
 
 use crate::symbols::{
-    compute_symbols_parsed_program, compute_symbols_pre_process, mod_ident_to_ide_string,
-    ret_type_to_ide_str, type_args_to_ide_string, type_list_to_ide_string, AutoImportInsertionInfo,
-    AutoImportInsertionKind, CompiledPkgInfo, CursorContext, DefInfo, ModuleDefs, Symbols,
-    SymbolsComputationData,
+    Symbols,
+    compilation::{CompiledPkgInfo, SymbolsComputationData},
+    compute_symbols_parsed_program, compute_symbols_pre_process,
+    cursor::CursorContext,
+    def_info::DefInfo,
+    ide_strings::{
+        mod_ident_to_ide_string, ret_type_to_ide_str, type_args_to_ide_string,
+        type_list_to_ide_string,
+    },
+    mod_defs::{AutoImportInsertionInfo, AutoImportInsertionKind, ModuleDefs},
 };
 use lsp_types::{
     CompletionItem, CompletionItemKind, CompletionItemLabelDetails, InsertTextFormat, Position,
@@ -246,8 +252,12 @@ pub fn call_completion_item(
 ) -> CompletionItem {
     let sig_string = format!(
         "fun {}({}){}",
-        type_args_to_ide_string(type_args, /* separate_lines */ false, /* verbose */ false),
-        type_list_to_ide_string(arg_types, /* separate_lines */ false, /* verbose */ false),
+        type_args_to_ide_string(
+            type_args, /* separate_lines */ false, /* verbose */ false
+        ),
+        type_list_to_ide_string(
+            arg_types, /* separate_lines */ false, /* verbose */ false
+        ),
         ret_type_to_ide_str(ret_type, /* verbose */ false)
     );
     // if it's a method call we omit the first argument which is guaranteed to be there as this is a

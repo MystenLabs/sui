@@ -35,6 +35,7 @@ pub trait KeyValueStoreReader {
         digest: CheckpointDigest,
     ) -> Result<Option<Checkpoint>>;
     async fn get_latest_checkpoint(&mut self) -> Result<CheckpointSequenceNumber>;
+    async fn get_latest_checkpoint_summary(&mut self) -> Result<Option<CheckpointSummary>>;
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>>;
     async fn get_epoch(&mut self, epoch_id: EpochId) -> Result<Option<EpochInfo>>;
 }

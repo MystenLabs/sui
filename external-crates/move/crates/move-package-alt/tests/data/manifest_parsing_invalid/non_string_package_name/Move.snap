@@ -1,8 +1,0 @@
----
-source: crates/move-package-alt/tests/parsing_tests.rs
----
-error: TOML parse error at line 2, column 8
-  |
-2 | name = 1
-  |        ^
-invalid type: integer `1`, expected a string

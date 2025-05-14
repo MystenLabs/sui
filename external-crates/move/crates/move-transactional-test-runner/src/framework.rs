@@ -5,10 +5,10 @@
 #![forbid(unsafe_code)]
 
 use crate::tasks::{
-    taskify, InitCommand, PrintBytecodeCommand, PublishCommand, RunCommand, SyntaxChoice,
-    TaskCommand, TaskInput,
+    InitCommand, PrintBytecodeCommand, PublishCommand, RunCommand, SyntaxChoice, TaskCommand,
+    TaskInput, taskify,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use clap::Parser;
 use move_binary_format::file_format::CompiledModule;
@@ -19,11 +19,11 @@ use move_command_line_common::{
     insta_assert,
 };
 use move_compiler::{
-    compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::{warning_filters::WarningFiltersBuilder, Diagnostics},
-    editions::{Edition, Flavor},
-    shared::{files::MappedFiles, NumericalAddress, PackageConfig},
     FullyCompiledProgram,
+    compiled_unit::AnnotatedCompiledUnit,
+    diagnostics::{Diagnostics, warning_filters::WarningFiltersBuilder},
+    editions::{Edition, Flavor},
+    shared::{NumericalAddress, PackageConfig, files::MappedFiles},
 };
 use move_core_types::parsing::{
     address::ParsedAddress,

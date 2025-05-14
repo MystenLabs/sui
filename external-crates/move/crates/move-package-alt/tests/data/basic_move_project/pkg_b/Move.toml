@@ -1,0 +1,10 @@
+[package]
+name = "pkg-b"
+edition = "2024.beta"
+license = "Apache-2.0"
+authors = ["Move Team"]
+flavor = "vanilla"
+
+[environments]
+mainnet = "35834a8a"
+testnet = "4c78adac"

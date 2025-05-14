@@ -6,7 +6,9 @@ use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{gas_algebra::InternalGas, language_storage::TypeTag, vm_status::StatusCode};
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
+    loaded_data::runtime_types::Type,
+    natives::function::NativeResult,
+    values::{Value, VectorSpecialization},
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
@@ -142,6 +144,7 @@ pub fn get_events_by_type(
 ) -> PartialVMResult<NativeResult> {
     assert_eq!(ty_args.len(), 1);
     let specified_ty = ty_args.pop().unwrap();
+    let specialization: VectorSpecialization = (&specified_ty).try_into()?;
     assert!(args.is_empty());
     let object_runtime_ref: &ObjectRuntime = context.extensions().get()?;
     let matched_events = object_runtime_ref
@@ -158,6 +161,9 @@ pub fn get_events_by_type(
         .collect::<Vec<_>>();
     Ok(NativeResult::ok(
         legacy_test_cost(),
-        smallvec![Value::vector_for_testing_only(matched_events)],
+        smallvec![move_vm_types::values::Vector::pack(
+            specialization,
+            matched_events
+        )?],
     ))
 }

@@ -9,14 +9,14 @@ use crate::sui_mode::{SUI_ADDR_NAME, SUI_ADDR_VALUE};
 use crate::typing::visitor::simple_visitor;
 use crate::{
     diag,
-    diagnostics::codes::{custom, DiagnosticInfo, Severity},
+    diagnostics::codes::{DiagnosticInfo, Severity, custom},
     expansion::ast::Visibility,
     naming::ast as N,
     typing::ast as T,
 };
 
 use super::{
-    LinterDiagnosticCategory, LinterDiagnosticCode, LINT_WARNING_PREFIX,
+    LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode,
     RANDOM_GENERATOR_STRUCT_NAME, RANDOM_MOD_NAME, RANDOM_STRUCT_NAME,
 };
 
@@ -51,8 +51,10 @@ simple_visitor!(
                 let msg =
                     format!("'public' function '{fname}' accepts '{struct_name}' as a parameter");
                 let mut d = diag!(PUBLIC_RANDOM_DIAG, (tloc, msg));
-                let note = format!("Functions that accept '{}::{}::{}' as a parameter might be abused by attackers by inspecting the results of randomness",
-                                   SUI_ADDR_NAME, RANDOM_MOD_NAME, struct_name);
+                let note = format!(
+                    "Functions that accept '{}::{}::{}' as a parameter might be abused by attackers by inspecting the results of randomness",
+                    SUI_ADDR_NAME, RANDOM_MOD_NAME, struct_name
+                );
                 d.add_note(note);
                 d.add_note("Non-public functions are preferred");
                 self.add_diag(d);

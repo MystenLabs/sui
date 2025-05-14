@@ -12,10 +12,16 @@ use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::RunQueryDsl;
 use simulacrum::Simulacrum;
 use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
-use sui_indexer_alt_framework::{ingestion::ClientArgs, schema::watermarks, IndexerArgs};
+use sui_indexer_alt_framework::{ingestion::ClientArgs, postgres::schema::watermarks, IndexerArgs};
+use sui_indexer_alt_graphql::{
+    config::RpcConfig as GraphQlConfig, start_rpc as start_graphql, RpcArgs as GraphQlArgs,
+};
 use sui_indexer_alt_jsonrpc::{
-    config::RpcConfig, data::system_package_task::SystemPackageTaskArgs, start_rpc, NodeArgs,
-    RpcArgs,
+    config::RpcConfig as JsonRpcConfig, start_rpc as start_jsonrpc, NodeArgs as JsonRpcNodeArgs,
+    RpcArgs as JsonRpcArgs,
+};
+use sui_indexer_alt_reader::{
+    bigtable_reader::BigtableArgs, system_package_task::SystemPackageTaskArgs,
 };
 use sui_pg_db::{
     temp::{get_available_port, TempDb},
@@ -51,16 +57,19 @@ pub struct FullCluster {
     temp_dir: TempDir,
 }
 
-/// A collection of the off-chain services (an indexer, a database and a JSON-RPC server that reads
-/// from that database), grouped together to simplify set-up and tear-down for tests. The included
-/// JSON-RPC server currently does not support transaction dry run and execution.
+/// A collection of the off-chain services (an indexer, a database, and JSON-RPC/GraphQL servers
+/// that read from that database), grouped together to simplify set-up and tear-down for tests. The
+/// included RPC servers do not support transaction dry run and execution.
 ///
-/// The database is temporary, and will be cleaned up when the cluster is dropped, and the RPC is
+/// The database is temporary, and will be cleaned up when the cluster is dropped, and the RPCs are
 /// set-up to listen on a random, available port, to avoid conflicts when multiple instances are
 /// running concurrently in the same process.
 pub struct OffchainCluster {
     /// The address the JSON-RPC server is listening on.
-    rpc_listen_address: SocketAddr,
+    jsonrpc_listen_address: SocketAddr,
+
+    /// The address the GraphQL server is listening on.
+    graphql_listen_address: SocketAddr,
 
     /// Read access to the temporary database.
     db: Db,
@@ -75,6 +84,10 @@ pub struct OffchainCluster {
     /// A handle to the JSON-RPC server task -- it will stop when the `cancel` token is triggered
     /// (or earlier of its own accord).
     jsonrpc: JoinHandle<()>,
+
+    /// A handle to the GraphQL server task -- it will stop when the `cancel` token is triggered
+    /// (or earlier of its own accord).
+    graphql: JoinHandle<()>,
 
     /// Hold on to the database so it doesn't get dropped until the cluster is stopped.
     #[allow(unused)]
@@ -91,9 +104,9 @@ impl FullCluster {
         Self::new_with_configs(
             Simulacrum::new(),
             IndexerArgs::default(),
-            SystemPackageTaskArgs::default(),
             IndexerConfig::example(),
-            RpcConfig::default(),
+            JsonRpcConfig::default(),
+            GraphQlConfig::default(),
             &prometheus::Registry::new(),
             CancellationToken::new(),
         )
@@ -101,14 +114,14 @@ impl FullCluster {
     }
 
     /// Creates a new cluster executing transactions using `executor`. The indexer is configured
-    /// using `indexer_args` and `indexer_config, and the JSON-RPC server is configured using
-    /// `system_package_task_args` and `rpc_config`.
+    /// using `indexer_args` and `indexer_config, the JSON-RPC server is configured using
+    /// `jsonrpc_config`, and the GraphQL server is configured using `graphql_config`.
     pub async fn new_with_configs(
         mut executor: Simulacrum,
         indexer_args: IndexerArgs,
-        system_package_task_args: SystemPackageTaskArgs,
         indexer_config: IndexerConfig,
-        rpc_config: RpcConfig,
+        jsonrpc_config: JsonRpcConfig,
+        graphql_config: GraphQlConfig,
         registry: &prometheus::Registry,
         cancel: CancellationToken,
     ) -> anyhow::Result<Self> {
@@ -126,9 +139,9 @@ impl FullCluster {
         let offchain = OffchainCluster::new(
             indexer_args,
             client_args,
-            system_package_task_args,
             indexer_config,
-            rpc_config,
+            jsonrpc_config,
+            graphql_config,
             registry,
             cancel,
         )
@@ -198,8 +211,13 @@ impl FullCluster {
     }
 
     /// The URL to send JSON-RPC requests to.
-    pub fn rpc_url(&self) -> Url {
-        self.offchain.rpc_url()
+    pub fn jsonrpc_url(&self) -> Url {
+        self.offchain.jsonrpc_url()
+    }
+
+    /// The URL to send GraphQL requests to.
+    pub fn graphql_url(&self) -> Url {
+        self.offchain.graphql_url()
     }
 
     /// Returns the latest checkpoint that we have all data for in the database, according to the
@@ -243,26 +261,35 @@ impl OffchainCluster {
     ///
     /// - `indexer_args`, `client_args`, and `indexer_config` control the indexer. In particular
     ///   `client_args` is used to configure the client that the indexer uses to fetch checkpoints.
-    /// - `system_package_task_args`, and `rpc_config` control the JSON-RPC server.
-    /// - `registry` is used to register metrics for the indexer and JSON-RPC server.
+    /// - `jsonrpc_config` controls the JSON-RPC server.
+    /// - `graphql_config` controls the GraphQL server.
+    /// - `registry` is used to register metrics for the indexer, JSON-RPC, and GraphQL servers.
     pub async fn new(
         indexer_args: IndexerArgs,
         client_args: ClientArgs,
-        system_package_task_args: SystemPackageTaskArgs,
         indexer_config: IndexerConfig,
-        rpc_config: RpcConfig,
+        jsonrpc_config: JsonRpcConfig,
+        graphql_config: GraphQlConfig,
         registry: &prometheus::Registry,
         cancel: CancellationToken,
     ) -> anyhow::Result<Self> {
-        let rpc_port = get_available_port();
-        let rpc_listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), rpc_port);
+        let jsonrpc_port = get_available_port();
+        let jsonrpc_listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), jsonrpc_port);
+
+        let graphql_port = get_available_port();
+        let graphql_listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), graphql_port);
 
         let database = TempDb::new().context("Failed to create database")?;
         let database_url = database.database().url();
 
-        let rpc_args = RpcArgs {
-            rpc_listen_address,
+        let jsonrpc_args = JsonRpcArgs {
+            rpc_listen_address: jsonrpc_listen_address,
             ..Default::default()
+        };
+
+        let graphql_args = GraphQlArgs {
+            rpc_listen_address: graphql_listen_address,
+            no_ide: true,
         };
 
         let db = Db::for_read(database_url.clone(), DbArgs::default())
@@ -286,26 +313,44 @@ impl OffchainCluster {
         let pipelines = indexer.pipelines().collect();
         let indexer = indexer.run().await.context("Failed to start indexer")?;
 
-        let jsonrpc = start_rpc(
+        let jsonrpc = start_jsonrpc(
             Some(database_url.clone()),
             None,
             DbArgs::default(),
-            rpc_args,
-            NodeArgs::default(),
-            system_package_task_args,
-            rpc_config,
+            BigtableArgs::default(),
+            jsonrpc_args,
+            JsonRpcNodeArgs::default(),
+            SystemPackageTaskArgs::default(),
+            jsonrpc_config,
             registry,
             cancel.child_token(),
         )
         .await
         .context("Failed to start JSON-RPC server")?;
 
+        let graphql = start_graphql(
+            Some(database_url.clone()),
+            None,
+            DbArgs::default(),
+            BigtableArgs::default(),
+            graphql_args,
+            SystemPackageTaskArgs::default(),
+            "0.0.0",
+            graphql_config,
+            registry,
+            cancel.child_token(),
+        )
+        .await
+        .context("Failed to start GraphQL server")?;
+
         Ok(Self {
-            rpc_listen_address,
+            jsonrpc_listen_address,
+            graphql_listen_address,
             db,
             pipelines,
             indexer,
             jsonrpc,
+            graphql,
             database,
             cancel,
         })
@@ -317,8 +362,14 @@ impl OffchainCluster {
     }
 
     /// The URL to send JSON-RPC requests to.
-    pub fn rpc_url(&self) -> Url {
-        Url::parse(&format!("http://{}/", self.rpc_listen_address))
+    pub fn jsonrpc_url(&self) -> Url {
+        Url::parse(&format!("http://{}/", self.jsonrpc_listen_address))
+            .expect("Failed to parse RPC URL")
+    }
+
+    /// The URL to send GraphQL requests to.
+    pub fn graphql_url(&self) -> Url {
+        Url::parse(&format!("http://{}/graphql", self.graphql_listen_address))
             .expect("Failed to parse RPC URL")
     }
 
@@ -413,6 +464,7 @@ impl OffchainCluster {
         self.cancel.cancel();
         let _ = self.indexer.await;
         let _ = self.jsonrpc.await;
+        let _ = self.graphql.await;
     }
 }
 

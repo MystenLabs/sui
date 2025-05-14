@@ -1,4 +1,0 @@
----
-source: crates/move-package-alt/tests/parsing_tests.rs
----
-Manifest { package: PackageMetadata { name: Located { file: "tests/data/manifest_parsing_valid/basic_external_resolver/Move.toml", value: Spanned { span: 17..26, value: "example" } }, edition: Located { file: "tests/data/manifest_parsing_valid/basic_external_resolver/Move.toml", value: Spanned { span: 37..48, value: "2024.beta" } }, metadata: () }, environments: {"mainnet": "35834a8a"}, dependencies: {"mock": ManifestDependency { dependency_info: External(ExternalDependency { resolver: "mock-resolver", data: Table({"resolved": Table({"local": String(".")})}) }), is_override: false, rename_from: None }}, dep_overrides: {} }

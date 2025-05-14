@@ -389,7 +389,7 @@ mod testing {
                     R::MoveValue::Struct(s) => s,
                     _ => {
                         return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                            .with_message("Expected MoveValue::MoveStruct".to_string()))
+                            .with_message("Expected MoveValue::MoveStruct".to_string()));
                     }
                 };
 
@@ -416,7 +416,7 @@ mod testing {
                     R::MoveValue::Variant(v) => v,
                     _ => {
                         return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                            .with_message("Expected MoveValue::MoveStruct".to_string()))
+                            .with_message("Expected MoveValue::MoveStruct".to_string()));
                     }
                 };
 

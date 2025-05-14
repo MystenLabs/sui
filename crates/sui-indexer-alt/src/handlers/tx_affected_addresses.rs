@@ -9,8 +9,8 @@ use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use itertools::Itertools;
 use sui_indexer_alt_framework::{
-    db::{Connection, Db},
     pipeline::{concurrent::Handler, Processor},
+    postgres::{Connection, Db},
     types::{full_checkpoint_content::CheckpointData, object::Owner},
 };
 use sui_indexer_alt_schema::{
@@ -118,7 +118,7 @@ mod tests {
     #[tokio::test]
     async fn test_tx_affected_addresses_pruning_complains_if_no_mapping() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let mut conn = indexer.store().connect().await.unwrap();
 
         let result = TxAffectedAddresses.prune(0, 2, &mut conn).await;
 
@@ -132,7 +132,7 @@ mod tests {
     #[tokio::test]
     async fn test_tx_affected_addresses_pruning() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let mut conn = indexer.store().connect().await.unwrap();
 
         // 0th checkpoint has 1 transaction
         let mut builder = TestCheckpointDataBuilder::new(0);

@@ -8,7 +8,6 @@ use std::{
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
-    time::Duration,
 };
 
 use jsonrpsee::{
@@ -20,7 +19,7 @@ use pin_project_lite::pin_project;
 use prometheus::{HistogramTimer, IntCounterVec};
 use serde_json::value::RawValue;
 use tower_layer::Layer;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 use super::RpcMetrics;
 
@@ -30,7 +29,6 @@ use super::RpcMetrics;
 pub(crate) struct MetricsLayer {
     metrics: Arc<RpcMetrics>,
     methods: Arc<HashSet<String>>,
-    slow_request_threshold: Duration,
 }
 
 /// The Tower Service responsible for wrapping the JSON-RPC request handler with metrics handling.
@@ -51,8 +49,6 @@ pin_project! {
         method: Cow<'a, str>,
         // RPC request params for logging
         params: Option<Cow<'a, RawValue>>,
-        // Threshold for logging slow requests
-        slow_request_threshold: Duration,
         #[pin]
         inner: F,
     }
@@ -61,15 +57,10 @@ pin_project! {
 impl MetricsLayer {
     /// Create a new metrics layer that only records statistics for the given methods (any other
     /// methods will be replaced with "<UNKNOWN>").
-    pub fn new(
-        metrics: Arc<RpcMetrics>,
-        methods: HashSet<String>,
-        slow_request_threshold: Duration,
-    ) -> Self {
+    pub fn new(metrics: Arc<RpcMetrics>, methods: HashSet<String>) -> Self {
         Self {
             metrics,
             methods: Arc::new(methods),
-            slow_request_threshold,
         }
     }
 }
@@ -119,7 +110,6 @@ where
             }),
             method,
             params: request.params.clone(),
-            slow_request_threshold: self.layer.slow_request_threshold,
             inner: self.inner.call(request),
         }
     }
@@ -145,27 +135,25 @@ where
         let method = this.method.as_ref();
         let elapsed_ms = metrics.timer.stop_and_record() * 1000.0;
 
-        let params = || this.params.as_ref().map(|p| p.get()).unwrap_or("[]");
-        let response = || {
-            let result = resp.as_result();
-            if result.len() > 1000 {
-                format!("{}...", &result[..997])
-            } else {
-                result.to_string()
-            }
-        };
-
         if let Some(INTERNAL_ERROR_CODE) = resp.as_error_code() {
             metrics
                 .failed
                 .with_label_values(&[method, &format!("{INTERNAL_ERROR_CODE}")])
                 .inc();
 
+            let params = this.params.as_ref().map(|p| p.get()).unwrap_or("[]");
+            let result = resp.as_result();
+            let response = if result.len() > 1000 {
+                format!("{}...", &result[..997])
+            } else {
+                result.to_string()
+            };
+
             error!(
                 method,
-                params = params(),
+                params,
                 code = INTERNAL_ERROR_CODE,
-                response = response(),
+                response,
                 elapsed_ms,
                 "Internal error"
             );
@@ -178,20 +166,6 @@ where
         } else {
             metrics.succeeded.with_label_values(&[method]).inc();
             info!(method, elapsed_ms, "Request succeeded");
-        }
-
-        let slow_request_threshold_ms = this.slow_request_threshold.as_millis() as f64;
-        if elapsed_ms > slow_request_threshold_ms {
-            warn!(
-                elapsed_ms,
-                method,
-                params = params(),
-                code = ?resp.as_error_code(),
-                response_length = resp.as_result().len(),
-                response = response(),
-                "Slow request (>{:.02}s)",
-                this.slow_request_threshold.as_secs_f64(),
-            );
         }
 
         Poll::Ready(resp)

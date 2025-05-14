@@ -10,6 +10,7 @@ use std::{
 };
 
 use crate::{
+    FullyCompiledProgram,
     diagnostics::warning_filters::WarningFilters,
     expansion::ast::{Fields, ModuleIdent},
     naming::ast as N,
@@ -23,7 +24,6 @@ use crate::{
         UID_TYPE_NAME,
     },
     typing::{ast as T, visitor::TypingVisitorContext},
-    FullyCompiledProgram,
 };
 use move_ir_types::location::Loc;
 use move_proc_macros::growing_stack;

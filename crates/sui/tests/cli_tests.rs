@@ -356,7 +356,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         .flat_map(|r| r.map(|file| file.file_name().to_str().unwrap().to_owned()))
         .collect::<Vec<_>>();
 
-    assert_eq!(10, files.len());
+    assert_eq!(7, files.len());
     assert!(files.contains(&SUI_CLIENT_CONFIG.to_string()));
     assert!(files.contains(&SUI_NETWORK_CONFIG.to_string()));
     assert!(files.contains(&SUI_FULLNODE_CONFIG.to_string()));
@@ -367,7 +367,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     // Check network config
     let network_conf =
         PersistedConfig::<NetworkConfig>::read(&working_dir.join(SUI_NETWORK_CONFIG))?;
-    assert_eq!(4, network_conf.validator_configs().len());
+    assert_eq!(1, network_conf.validator_configs().len());
 
     // Check wallet config
     let wallet_conf =
@@ -2711,6 +2711,33 @@ async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
             .filter(|k| k.flag() == Secp256k1SuiSignature::SCHEME.flag())
             .count(),
         1
+    );
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_remove_address_command() -> Result<(), anyhow::Error> {
+    let mut cluster = TestClusterBuilder::new().build().await;
+    let context = cluster.wallet_mut();
+
+    let addr = context.config.keystore.addresses().get(1).cloned().unwrap();
+
+    SuiClientCommands::RemoveAddress {
+        alias_or_address: addr.to_string(),
+    }
+    .execute(context)
+    .await?;
+
+    assert_eq!(
+        context
+            .config
+            .keystore
+            .addresses()
+            .iter()
+            .filter(|k| *k == &addr)
+            .count(),
+        0
     );
 
     Ok(())

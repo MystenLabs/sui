@@ -8,20 +8,20 @@
 use crate::{
     diag,
     diagnostics::{
-        codes::{custom, DiagnosticInfo, Severity},
-        warning_filters::WarningFilters,
         Diagnostic, DiagnosticReporter, Diagnostics,
+        codes::{DiagnosticInfo, Severity, custom},
+        warning_filters::WarningFilters,
     },
     expansion::ast as E,
     naming::ast as N,
     parser::ast::{self as P, Ability_},
-    shared::{program_info::TypingProgramInfo, CompilationEnv, Identifier},
+    shared::{CompilationEnv, Identifier, program_info::TypingProgramInfo},
     sui_mode::{
+        SUI_ADDR_VALUE,
         linters::{
-            LinterDiagnosticCategory, LinterDiagnosticCode, FREEZE_FUN, LINT_WARNING_PREFIX,
+            FREEZE_FUN, LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode,
             PUBLIC_FREEZE_FUN, TRANSFER_MOD_NAME,
         },
-        SUI_ADDR_VALUE,
     },
     typing::{
         ast as T,

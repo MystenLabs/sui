@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::{
+    CompiledModule,
     errors::PartialVMResult,
     file_format::{AbilitySet, DatatypeHandleIndex, SignatureToken},
-    safe_unwrap, CompiledModule,
+    safe_unwrap,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use std::{
     cmp::max,
-    collections::{btree_map::Entry, BTreeMap},
+    collections::{BTreeMap, btree_map::Entry},
 };
 
 const TYPE_ARG_COST: u128 = 1;

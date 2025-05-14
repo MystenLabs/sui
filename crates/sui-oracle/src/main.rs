@@ -25,12 +25,8 @@ async fn main() -> anyhow::Result<()> {
 
     let config = OracleNodeConfig::load(&args.oracle_config_path)?;
 
-    let wallet_ctx = WalletContext::new(
-        &args.client_config_path,
-        // TODO make this configurable
-        Some(Duration::from_secs(10)), // request times out after 10 secs
-        None,
-    )?;
+    let wallet_ctx =
+        WalletContext::new(&args.client_config_path)?.with_request_timeout(Duration::from_secs(10)); // request times out after 10 secs
 
     // Init metrics server
     let registry_service = start_prometheus_server(config.metrics_address);

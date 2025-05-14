@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::ops::Range;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, Result};
 use arrow_array::{Array, Int32Array};
@@ -15,7 +15,8 @@ use handlers::transaction_bcs_handler::TransactionBCSHandler;
 use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
 use object_store::path::Path;
-use package_store::LocalDBPackageStore;
+use once_cell::sync::Lazy;
+use package_store::{LazyPackageCache, PackageCache};
 use serde::{Deserialize, Serialize};
 use snowflake_api::{QueryResult, SnowflakeApi};
 use strum_macros::EnumIter;
@@ -71,6 +72,27 @@ const DYNAMIC_FIELD_PREFIX: &str = "dynamic_field";
 
 const WRAPPED_OBJECT_PREFIX: &str = "wrapped_object";
 
+const TRANSACTION_CONCURRENCY_LIMIT_VAR_NAME: &str = "TRANSACTION_CONCURRENCY_LIMIT";
+const DEFAULT_TRANSACTION_CONCURRENCY_LIMIT: usize = 64;
+pub static TRANSACTION_CONCURRENCY_LIMIT: Lazy<usize> = Lazy::new(|| {
+    let async_transactions_opt = std::env::var(TRANSACTION_CONCURRENCY_LIMIT_VAR_NAME)
+        .ok()
+        .and_then(|s| s.parse().ok());
+    if let Some(async_transactions) = async_transactions_opt {
+        info!(
+            "Using custom value for '{}' max checkpoints in progress: {}",
+            TRANSACTION_CONCURRENCY_LIMIT_VAR_NAME, async_transactions
+        );
+        async_transactions
+    } else {
+        info!(
+            "Using default value for '{}' -- max checkpoints in progress: {}",
+            TRANSACTION_CONCURRENCY_LIMIT_VAR_NAME, DEFAULT_TRANSACTION_CONCURRENCY_LIMIT
+        );
+        DEFAULT_TRANSACTION_CONCURRENCY_LIMIT
+    }
+});
+
 fn default_client_metric_host() -> String {
     "127.0.0.1".to_string()
 }
@@ -95,6 +117,10 @@ fn default_remote_store_url() -> String {
     "https://checkpoints.mainnet.sui.io".to_string()
 }
 
+fn default_remote_store_timeout_secs() -> u64 {
+    5
+}
+
 fn default_package_cache_path() -> PathBuf {
     PathBuf::from("/opt/sui/db/package_cache")
 }
@@ -109,6 +135,10 @@ fn default_checkpoint_interval() -> u64 {
 
 fn default_max_file_size_mb() -> u64 {
     100
+}
+
+fn default_max_row_count() -> usize {
+    100000
 }
 
 fn default_time_interval_s() -> u64 {
@@ -133,9 +163,16 @@ pub struct JobConfig {
     /// Maximum number of checkpoints to queue in memory.
     #[serde(default = "default_data_limit")]
     pub data_limit: usize,
-    /// Remote object store path prefix to use while writing
+    /// Remote store URL.
     #[serde(default = "default_remote_store_url")]
     pub remote_store_url: String,
+    /// These are key-value config pairs that are defined in the object_store crate
+    /// <https://docs.rs/object_store/latest/object_store/gcp/enum.GoogleConfigKey.html>
+    #[serde(default)]
+    pub remote_store_options: Vec<(String, String)>,
+    /// Remote store timeout
+    #[serde(default = "default_remote_store_timeout_secs")]
+    pub remote_store_timeout_secs: u64,
     /// Directory to contain the package cache for pipelines
     #[serde(default = "default_package_cache_path")]
     pub package_cache_path: PathBuf,
@@ -162,8 +199,15 @@ impl JobConfig {
     pub async fn create_checkpoint_processors(
         self,
         metrics: AnalyticsMetrics,
-    ) -> Result<Vec<Processor>> {
-        let package_store = LocalDBPackageStore::new(&self.package_cache_path, &self.rest_url);
+    ) -> Result<(Vec<Processor>, Option<Arc<PackageCache>>)> {
+        use crate::package_store::LazyPackageCache;
+        use std::sync::Mutex;
+
+        let lazy_package_cache = Arc::new(Mutex::new(LazyPackageCache::new(
+            self.package_cache_path.clone(),
+            self.rest_url.clone(),
+        )));
+
         let job_config = Arc::new(self);
         let mut processors = Vec::with_capacity(job_config.task_configs.len());
         let mut task_names = HashSet::new();
@@ -184,13 +228,18 @@ impl JobConfig {
                 config: task_config,
                 checkpoint_dir: Arc::new(temp_dir),
                 metrics: metrics.clone(),
-                package_store: package_store.clone(),
+                lazy_package_cache: lazy_package_cache.clone(),
             };
 
             processors.push(task_context.create_analytics_processor().await?);
         }
 
-        Ok(processors)
+        let package_cache = lazy_package_cache
+            .lock()
+            .unwrap()
+            .get_cache_if_initialized();
+
+        Ok((processors, package_cache))
     }
 
     // Convenience method to get task configs for compatibility
@@ -214,6 +263,9 @@ pub struct TaskConfig {
     /// Maximum file size in mb before uploading to the datastore.
     #[serde(default = "default_max_file_size_mb")]
     pub max_file_size_mb: u64,
+    /// Maximum number of rows before uploading to the datastore.
+    #[serde(default = "default_max_row_count")]
+    pub max_row_count: usize,
     /// Checkpoint sequence number to start the download from
     pub starting_checkpoint_seq_num: Option<u64>,
     /// Time to process in seconds before uploding to the datastore.
@@ -247,7 +299,7 @@ pub struct TaskContext {
     pub job_config: Arc<JobConfig>,
     pub checkpoint_dir: Arc<TempDir>,
     pub metrics: AnalyticsMetrics,
-    pub package_store: LocalDBPackageStore,
+    pub lazy_package_cache: Arc<Mutex<LazyPackageCache>>,
 }
 
 impl TaskContext {
@@ -267,10 +319,14 @@ impl TaskContext {
             }
             FileType::Object => {
                 let package_id_filter = self.config.package_id_filter.clone();
-                let package_store = self.package_store.clone();
+                let package_cache = self
+                    .lazy_package_cache
+                    .lock()
+                    .unwrap()
+                    .initialize_or_get_cache();
                 let metrics = self.metrics.clone();
                 self.create_processor_for_handler(Box::new(ObjectHandler::new(
-                    package_store,
+                    package_cache,
                     &package_id_filter,
                     metrics,
                 )))
@@ -285,8 +341,12 @@ impl TaskContext {
                     .await
             }
             FileType::Event => {
-                let package_store = self.package_store.clone();
-                self.create_processor_for_handler(Box::new(EventHandler::new(package_store)))
+                let package_cache = self
+                    .lazy_package_cache
+                    .lock()
+                    .unwrap()
+                    .initialize_or_get_cache();
+                self.create_processor_for_handler(Box::new(EventHandler::new(package_cache)))
                     .await
             }
             FileType::TransactionObjects => {
@@ -302,15 +362,23 @@ impl TaskContext {
                     .await
             }
             FileType::DynamicField => {
-                let package_store = self.package_store.clone();
-                self.create_processor_for_handler(Box::new(DynamicFieldHandler::new(package_store)))
+                let package_cache = self
+                    .lazy_package_cache
+                    .lock()
+                    .unwrap()
+                    .initialize_or_get_cache();
+                self.create_processor_for_handler(Box::new(DynamicFieldHandler::new(package_cache)))
                     .await
             }
             FileType::WrappedObject => {
-                let package_store = self.package_store.clone();
+                let package_cache = self
+                    .lazy_package_cache
+                    .lock()
+                    .unwrap()
+                    .initialize_or_get_cache();
                 let metrics = self.metrics.clone();
                 self.create_processor_for_handler(Box::new(WrappedObjectHandler::new(
-                    package_store,
+                    package_cache,
                     metrics,
                 )))
                 .await
@@ -318,7 +386,9 @@ impl TaskContext {
         }
     }
 
-    async fn create_processor_for_handler<T: Serialize + Clone + ParquetSchema + 'static>(
+    async fn create_processor_for_handler<
+        T: Serialize + Clone + ParquetSchema + Send + Sync + 'static,
+    >(
         self,
         handler: Box<dyn AnalyticsHandler<T>>,
     ) -> Result<Processor> {
@@ -775,6 +845,7 @@ pub struct Processor {
     pub processor: Box<dyn Worker<Result = ()>>,
     pub starting_checkpoint_seq_num: CheckpointSequenceNumber,
     pub task_name: String,
+    pub file_type: FileType,
 }
 
 #[async_trait::async_trait]
@@ -782,13 +853,13 @@ impl Worker for Processor {
     type Result = ();
 
     #[inline]
-    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
-        self.processor.process_checkpoint(checkpoint_data).await
+    async fn process_checkpoint_arc(&self, checkpoint_data: &Arc<CheckpointData>) -> Result<()> {
+        self.processor.process_checkpoint_arc(checkpoint_data).await
     }
 }
 
 impl Processor {
-    pub async fn new<S: Serialize + ParquetSchema + 'static>(
+    pub async fn new<S: Serialize + ParquetSchema + Send + Sync + 'static>(
         handler: Box<dyn AnalyticsHandler<S>>,
         writer: Box<dyn AnalyticsWriter<S>>,
         max_checkpoint_reader: Box<dyn MaxCheckpointReader>,
@@ -796,6 +867,7 @@ impl Processor {
         task: TaskContext,
     ) -> Result<Self> {
         let task_name = task.config.task_name.clone();
+        let file_type = task.config.file_type;
         let processor = Box::new(
             AnalyticsProcessor::new(
                 handler,
@@ -811,6 +883,7 @@ impl Processor {
             processor,
             starting_checkpoint_seq_num,
             task_name,
+            file_type,
         })
     }
 

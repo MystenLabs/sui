@@ -1,0 +1,222 @@
+Command `summary`:
+BUILDING summaries
+
+Summary generation successful. Summaries stored in 'package_summaries'
+External Command `ls -1 package_summaries/`:
+summary_pkg
+External Command `cat package_summaries/summary_pkg/a.json`:
+{
+  "doc": " This is a doc comment on a module",
+  "immediate_dependencies": [],
+  "attributes": [
+    {
+      "Parameterized": [
+        "allow",
+        [
+          {
+            "Name": "unused"
+          }
+        ]
+      ]
+    }
+  ],
+  "functions": {
+    "f": {
+      "source_index": 0,
+      "index": 0,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [
+        {
+          "name": "Typename1",
+          "constraints": []
+        },
+        {
+          "name": "Typename2",
+          "constraints": []
+        }
+      ],
+      "parameters": [
+        {
+          "name": "_param_1",
+          "type_": {
+            "NamedTypeParameter": "Typename1"
+          }
+        },
+        {
+          "name": "_param_2",
+          "type_": {
+            "NamedTypeParameter": "Typename2"
+          }
+        }
+      ],
+      "return_": [
+        {
+          "NamedTypeParameter": "Typename1"
+        }
+      ]
+    }
+  },
+  "structs": {
+    "X": {
+      "index": 0,
+      "doc": " This is a doc comment on a struct",
+      "attributes": [],
+      "abilities": [],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "x": {
+            "index": 0,
+            "doc": " This is a doc comment on a field",
+            "type_": "u64"
+          }
+        }
+      }
+    }
+  },
+  "enums": {}
+}External Command `cat package_summaries/summary_pkg/b.json`:
+{
+  "doc": " This is a doc comment on a module",
+  "immediate_dependencies": [],
+  "attributes": [
+    {
+      "Parameterized": [
+        "allow",
+        [
+          {
+            "Name": "unused"
+          }
+        ]
+      ]
+    }
+  ],
+  "functions": {
+    "f": {
+      "source_index": 0,
+      "index": 0,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [
+        {
+          "name": "Typename1",
+          "constraints": []
+        },
+        {
+          "name": "Typename2",
+          "constraints": []
+        }
+      ],
+      "parameters": [
+        {
+          "name": "_param_1",
+          "type_": {
+            "NamedTypeParameter": "Typename1"
+          }
+        },
+        {
+          "name": "_param_2",
+          "type_": {
+            "NamedTypeParameter": "Typename2"
+          }
+        }
+      ],
+      "return_": [
+        {
+          "NamedTypeParameter": "Typename1"
+        }
+      ]
+    }
+  },
+  "structs": {
+    "X": {
+      "index": 0,
+      "doc": " This is a doc comment on a struct",
+      "attributes": [],
+      "abilities": [],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "x": {
+            "index": 0,
+            "doc": " This is a doc comment on a field",
+            "type_": "u64"
+          }
+        }
+      }
+    }
+  },
+  "enums": {}
+}Command `summary --bytecode -o yaml`:
+
+Summary generation successful. Summaries stored in 'package_summaries'
+External Command `ls -1 package_summaries/`:
+0x0000000000000000000000000000000000000000000000000000000000c0ffee
+summary_pkg
+External Command `cat package_summaries/0x0000000000000000000000000000000000000000000000000000000000c0ffee/a.yaml`:
+---
+immediate_dependencies: []
+functions:
+  f:
+    index: 0
+    visibility: Public
+    entry: false
+    type_parameters:
+      - constraints: []
+      - constraints: []
+    parameters:
+      - type_:
+          TypeParameter: 0
+      - type_:
+          TypeParameter: 1
+    return_:
+      - TypeParameter: 0
+structs:
+  X:
+    index: 0
+    abilities: []
+    type_parameters: []
+    fields:
+      positional_fields: false
+      fields:
+        x:
+          index: 0
+          type_: u64
+enums: {}
+External Command `cat package_summaries/0x0000000000000000000000000000000000000000000000000000000000c0ffee/b.yaml`:
+---
+immediate_dependencies: []
+functions:
+  f:
+    index: 0
+    visibility: Public
+    entry: false
+    type_parameters:
+      - constraints: []
+      - constraints: []
+    parameters:
+      - type_:
+          TypeParameter: 0
+      - type_:
+          TypeParameter: 1
+    return_:
+      - TypeParameter: 0
+structs:
+  X:
+    index: 0
+    abilities: []
+    type_parameters: []
+    fields:
+      positional_fields: false
+      fields:
+        x:
+          index: 0
+          type_: u64
+enums: {}

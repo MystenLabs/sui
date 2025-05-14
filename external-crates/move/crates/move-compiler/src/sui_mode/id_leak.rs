@@ -3,13 +3,13 @@
 
 use crate::{
     cfgir::{
+        CFGContext, MemberName,
         absint::JoinResult,
         cfg::ImmForwardCFG,
         visitor::{
-            cfg_satisfies, LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain,
-            SimpleExecutionContext,
+            LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain,
+            SimpleExecutionContext, cfg_satisfies,
         },
-        CFGContext, MemberName,
     },
     diag,
     diagnostics::{Diagnostic, Diagnostics},
@@ -17,7 +17,7 @@ use crate::{
     expansion::ast::ModuleIdent,
     hlir::ast::{self as H, Exp, Label, ModuleCall, SingleType, Type, Type_, Var},
     parser::ast::{Ability_, TargetKind},
-    shared::{program_info::TypingProgramInfo, Identifier},
+    shared::{Identifier, program_info::TypingProgramInfo},
     sui_mode::{
         AUTHENTICATOR_STATE_CREATE, AUTHENTICATOR_STATE_MODULE_NAME, BRIDGE_ADDR_VALUE,
         BRIDGE_CREATE, BRIDGE_MODULE_NAME, CLOCK_MODULE_NAME, DENY_LIST_CREATE,

@@ -24,6 +24,7 @@ diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 fastcrypto.workspace = true
 futures.workspace = true
+http.workspace = true
 jsonrpsee = { workspace = true, features = ["macros", "server"] }
 pin-project-lite.workspace = true
 prometheus.workspace = true
@@ -40,7 +41,6 @@ tower-layer.workspace = true
 # tower.workspace = true
 tower = { version = "0.4", features = ["util"] }
 tower-http.workspace = true
-http.workspace = true
 tracing.workspace = true
 url.workspace = true
 
@@ -50,15 +50,14 @@ move-core-types.workspace = true
 sui-default-config.workspace = true
 sui-display.workspace = true
 sui-indexer-alt-metrics.workspace = true
+sui-indexer-alt-reader.workspace = true
 sui-indexer-alt-schema.workspace = true
 sui-json.workspace = true
 sui-json-rpc-types.workspace = true
 sui-name-service.workspace = true
-sui-kvstore.workspace = true
 sui-open-rpc.workspace = true
 sui-open-rpc-macros.workspace = true
 sui-package-resolver.workspace = true
-sui-pg-db.workspace = true
 sui-protocol-config.workspace = true
 sui-sql-macro.workspace = true
 sui-types.workspace = true
@@ -66,3 +65,5 @@ sui-types.workspace = true
 [dev-dependencies]
 reqwest.workspace = true
 serde_json.workspace = true
+
+sui-pg-db.workspace = true

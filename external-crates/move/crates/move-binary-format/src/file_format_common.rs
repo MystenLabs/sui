@@ -12,7 +12,7 @@
 //! http://dwarfstd.org/Dwarf3Std.php or https://en.wikipedia.org/wiki/LEB128.
 //! It's used to compress mostly indexes into the main binary tables.
 use crate::file_format::Bytecode;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use move_core_types as MVT;
 use std::{
     io::{Cursor, Read},
