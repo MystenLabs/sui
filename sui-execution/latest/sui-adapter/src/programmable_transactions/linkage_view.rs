@@ -1,32 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    cell::RefCell,
-    collections::{BTreeMap, HashMap, HashSet, hash_map::Entry},
-    str::FromStr,
-};
-
-use crate::execution_value::SuiResolver;
+use crate::programmable_transactions::data_store::PackageStore;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
     language_storage::ModuleId,
     resolver::{LinkageResolver, ModuleResolver},
 };
-use sui_types::storage::{PackageObject, get_module};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, HashMap, HashSet, hash_map::Entry},
+    rc::Rc,
+    str::FromStr,
+};
 use sui_types::{
     base_types::ObjectID,
     error::{ExecutionError, SuiError, SuiResult},
     move_package::{MovePackage, TypeOrigin, UpgradeInfo},
-    storage::BackingPackageStore,
 };
 
 /// Exposes module and linkage resolution to the Move runtime.  The first by delegating to
 /// `resolver` and the second via linkage information that is loaded from a move package.
 pub struct LinkageView<'state> {
-    /// Interface to resolve packages, modules and resources directly from the store.
-    resolver: Box<dyn SuiResolver + 'state>,
+    /// Interface to resolve packages, modules and resources directly from the store, and possibly
+    /// from other sources (e.g., packages just published).
+    resolver: Box<dyn PackageStore + 'state>,
     /// Information used to change module and type identities during linkage.
     linkage_info: Option<LinkageInfo>,
     /// Cache containing the type origin information from every package that has been set as the
@@ -52,7 +51,7 @@ pub struct LinkageInfo {
 pub struct SavedLinkage(LinkageInfo);
 
 impl<'state> LinkageView<'state> {
-    pub fn new(resolver: Box<dyn SuiResolver + 'state>) -> Self {
+    pub fn new(resolver: Box<dyn PackageStore + 'state>) -> Self {
         Self {
             resolver,
             linkage_info: None,
@@ -239,7 +238,7 @@ impl<'state> LinkageView<'state> {
         }
 
         let storage_id = ObjectID::from(*self.relocate(runtime_id)?.address());
-        let Some(package) = self.resolver.get_package_object(&storage_id)? else {
+        let Some(package) = self.resolver.get_package(&storage_id)? else {
             invariant_violation!("Missing dependent package in store: {storage_id}",)
         };
 
@@ -247,7 +246,7 @@ impl<'state> LinkageView<'state> {
             module_name,
             datatype_name: struct_name,
             package,
-        } in package.move_package().type_origin_table()
+        } in package.type_origin_table()
         {
             if module_name == runtime_id.name().as_str() && struct_name == struct_.as_str() {
                 self.add_type_origin(runtime_id.clone(), struct_.to_owned(), *package)?;
@@ -257,7 +256,7 @@ impl<'state> LinkageView<'state> {
 
         invariant_violation!(
             "{runtime_id}::{struct_} not found in type origin table in {storage_id} (v{})",
-            package.move_package().version(),
+            package.version(),
         )
     }
 }
@@ -292,18 +291,23 @@ impl LinkageResolver for LinkageView<'_> {
     }
 }
 
-// Remaining implementations delegated to state_view
-
 impl ModuleResolver for LinkageView<'_> {
     type Error = SuiError;
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        get_module(self, id)
+        Ok(self
+            .get_package(&ObjectID::from(*id.address()))?
+            .and_then(|package| {
+                package
+                    .serialized_module_map()
+                    .get(id.name().as_str())
+                    .cloned()
+            }))
     }
 }
 
-impl BackingPackageStore for LinkageView<'_> {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
-        self.resolver.get_package_object(package_id)
+impl PackageStore for LinkageView<'_> {
+    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Rc<MovePackage>>> {
+        self.resolver.get_package(package_id)
     }
 }
