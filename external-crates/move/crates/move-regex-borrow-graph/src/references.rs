@@ -19,12 +19,15 @@ use std::{
 // Definitions
 //**************************************************************************************************
 
+/// A new type wrapper around Ref_ to not expose the internal variants.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Ref(Ref_);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 enum Ref_ {
+    /// A canonicalized reference--this lets join operate over the same domain
     Canonical(usize),
+    /// A reference specific to this block
     Fresh(usize),
 }
 
@@ -120,7 +123,7 @@ impl<Loc, Lbl: Ord> Edge<Loc, Lbl> {
 }
 
 impl<Loc, Lbl: Ord> Node<Loc, Lbl> {
-    // Returns factored edges
+    // Returns size increase
     pub fn add_regex(&mut self, loc: Loc, regex: Regex<Lbl>, successor: Ref) -> usize {
         let r = LocRegex { loc, regex };
         let size_increase = self
@@ -136,6 +139,7 @@ impl<Loc, Lbl: Ord> Node<Loc, Lbl> {
         self.predecessors.insert(predecessor);
     }
 
+    // Returns the size decrease
     pub fn remove_neighbor(&mut self, neighbor: Ref) -> usize {
         let successor_edge_opt = self.successors.remove(&neighbor);
         self.predecessors.remove(&neighbor);

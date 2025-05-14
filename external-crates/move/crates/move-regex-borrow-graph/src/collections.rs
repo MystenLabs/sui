@@ -15,6 +15,8 @@ use std::collections::{BTreeMap, BTreeSet};
 //**************************************************************************************************
 
 #[derive(Clone, Debug)]
+/// Returned from the public query APIs of `borrowed_by` and `borrows_from`.
+// Note this is not to be used internally and is not
 pub struct Path<Loc, Lbl> {
     pub loc: Loc,
     pub(crate) labels: Vec<Lbl>,
