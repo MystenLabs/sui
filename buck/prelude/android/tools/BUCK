@@ -1,0 +1,114 @@
+native.python_binary(
+    name = "unpack_aar",
+    labels = ["buck2-only"],
+    main = "unpack_aar.py",
+    visibility = ["PUBLIC"],
+    deps = [
+        ":unpack_aar_lib",
+        "prelude//java/tools:utils_lib",
+    ],
+)
+
+native.python_library(
+    name = "unpack_aar_lib",
+    srcs = [
+        "unpack_aar.py",
+    ],
+    labels = ["buck2-only"],
+)
+
+native.python_binary(
+    name = "filter_dex",
+    labels = ["buck2-only"],
+    main = "filter_dex.py",
+    visibility = ["PUBLIC"],
+    deps = [
+        ":filter_dex_lib",
+    ],
+)
+
+native.python_library(
+    name = "filter_dex_lib",
+    srcs = [
+        "filter_dex.py",
+    ],
+    labels = ["buck2-only"],
+)
+
+native.python_binary(
+    name = "combine_native_library_dirs",
+    labels = ["buck2-only"],
+    main = "combine_native_library_dirs.py",
+    visibility = ["PUBLIC"],
+    deps = [
+        ":combine_native_library_dirs_lib",
+    ],
+)
+
+native.python_library(
+    name = "combine_native_library_dirs_lib",
+    srcs = [
+        "combine_native_library_dirs.py",
+    ],
+    labels = ["buck2-only"],
+)
+
+native.python_binary(
+    name = "filter_prebuilt_native_library_dir",
+    labels = ["buck2-only"],
+    main = "filter_prebuilt_native_library_dir.py",
+    visibility = ["PUBLIC"],
+    deps = [
+        ":filter_prebuilt_native_library_dir_lib",
+    ],
+)
+
+native.python_library(
+    name = "filter_prebuilt_native_library_dir_lib",
+    srcs = [
+        "filter_prebuilt_native_library_dir.py",
+    ],
+    labels = ["buck2-only"],
+)
+
+native.python_binary(
+    name = "native_libs_as_assets_metadata",
+    labels = ["buck2-only"],
+    main = "native_libs_as_assets_metadata.py",
+    visibility = ["PUBLIC"],
+    deps = [
+        ":native_libs_as_assets_metadata_lib",
+    ],
+)
+
+native.python_library(
+    name = "native_libs_as_assets_metadata_lib",
+    srcs = [
+        "native_libs_as_assets_metadata.py",
+    ],
+    labels = ["buck2-only"],
+)
+
+native.python_binary(
+    name = "compute_merge_sequence",
+    main = "merge_sequence.py",
+    labels = ["buck2-only"],
+    visibility = ["PUBLIC"],
+)
+
+native.python_binary(
+    name = "filter_extra_resources",
+    main = "filter_extra_resources.py",
+    labels = ["buck2-only"],
+    visibility = ["PUBLIC"],
+    deps = [
+        "prelude//java/tools:utils_lib",
+    ],
+)
+
+native.zip_file(
+    name = "app_without_resources_stub",
+    srcs = ["com/facebook/buck_generated/AppWithoutResourcesStub.java"],
+    out = "app_without_resources_stub.src.zip",
+    visibility = ["PUBLIC"],
+)
