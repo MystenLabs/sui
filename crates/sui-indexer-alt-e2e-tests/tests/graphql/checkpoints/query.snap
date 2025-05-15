@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 9 tasks
+processed 10 tasks
 
 init:
 A: object(0,0)
@@ -92,7 +92,7 @@ Response: {
   }
 }
 
-task 8, lines 50-67:
+task 8, lines 50-62:
 //# run-graphql
 Response: {
   "data": {
@@ -101,11 +101,37 @@ Response: {
         "latest": {
           "version": 2
         },
-        "byVersion": null,
-        "atCheckpoint": {
-          "version": 4
-        }
+        "byVersion": null
       }
     }
   }
+}
+
+task 9, lines 64-74:
+//# run-graphql
+Response: {
+  "data": {
+    "checkpoint": {
+      "query": null
+    }
+  },
+  "errors": [
+    {
+      "message": "Checkpoint 4 in the future",
+      "locations": [
+        {
+          "line": 6,
+          "column": 7
+        }
+      ],
+      "path": [
+        "checkpoint",
+        "query",
+        "atCheckpoint"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
 }
