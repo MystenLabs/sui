@@ -26,10 +26,20 @@ use prost_types::Value;
 /// we'll conservitively cap this to ~80% of that.
 const MAX_DEPTH: usize = 80;
 
-pub struct ProtoVisitor {
-    /// Budget left to spend on visiting.
+pub struct ProtoVisitorBuilder {
+    /// Budget to spend on visiting.
     bound: usize,
+
+    /// Current level of nesting depth while visiting.
     depth: usize,
+}
+
+struct ProtoVisitor<'a> {
+    /// Budget left to spend on visiting.
+    bound: &'a mut usize,
+
+    /// Current level of nesting depth while visiting.
+    depth: &'a mut usize,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -47,9 +57,13 @@ pub enum Error {
     UnexpectedType,
 }
 
-impl ProtoVisitor {
+impl ProtoVisitorBuilder {
     pub fn new(bound: usize) -> Self {
         Self { bound, depth: 0 }
+    }
+
+    fn new_visitor(&mut self) -> Result<ProtoVisitor<'_>, Error> {
+        ProtoVisitor::new(&mut self.bound, &mut self.depth)
     }
 
     /// Deserialize `bytes` as a `MoveValue` with layout `layout`. Can fail if the bytes do not
@@ -60,7 +74,9 @@ impl ProtoVisitor {
         bytes: &[u8],
         layout: &A::MoveTypeLayout,
     ) -> anyhow::Result<Value> {
-        A::MoveValue::visit_deserialize(bytes, layout, &mut self)
+        let mut visitor = self.new_visitor()?;
+
+        A::MoveValue::visit_deserialize(bytes, layout, &mut visitor)
     }
 
     /// Deserialize `bytes` as a `MoveStruct` with layout `layout`. Can fail if the bytes do not
@@ -71,38 +87,54 @@ impl ProtoVisitor {
         bytes: &[u8],
         layout: &A::MoveStructLayout,
     ) -> anyhow::Result<Struct> {
+        let mut visitor = self.new_visitor()?;
+
         let Value {
             kind: Some(Kind::StructValue(struct_)),
-        } = A::MoveStruct::visit_deserialize(bytes, layout, &mut self)?
+        } = A::MoveStruct::visit_deserialize(bytes, layout, &mut visitor)?
         else {
             bail!("Expected to deserialize a struct");
         };
         Ok(struct_)
     }
+}
 
-    fn inc_depth(&mut self) -> Result<(), Error> {
-        if self.depth > MAX_DEPTH {
+impl Drop for ProtoVisitor<'_> {
+    fn drop(&mut self) {
+        self.dec_depth();
+    }
+}
+
+impl<'a> ProtoVisitor<'a> {
+    fn new(bound: &'a mut usize, depth: &'a mut usize) -> Result<Self, Error> {
+        // Increment the depth since we're creating a new Visitor instance
+        Self::inc_depth(depth)?;
+        Ok(Self { bound, depth })
+    }
+
+    fn inc_depth(depth: &mut usize) -> Result<(), Error> {
+        if *depth > MAX_DEPTH {
             Err(Error::TooNested)
         } else {
-            self.depth += 1;
+            *depth += 1;
             Ok(())
         }
     }
 
     fn dec_depth(&mut self) {
-        if self.depth == 0 {
+        if *self.depth == 0 {
             panic!("BUG: logic bug in Visitor implementation");
         } else {
-            self.depth -= 1;
+            *self.depth -= 1;
         }
     }
 
     /// Deduct `size` from the overall budget. Errors if `size` exceeds the current budget.
     fn debit(&mut self, size: usize) -> Result<(), Error> {
-        if self.bound < size {
+        if *self.bound < size {
             Err(Error::OutOfBudget)
         } else {
-            self.bound -= size;
+            *self.bound -= size;
             Ok(())
         }
     }
@@ -121,59 +153,45 @@ impl ProtoVisitor {
     }
 }
 
-impl<'b, 'l> Visitor<'b, 'l> for ProtoVisitor {
+impl<'b, 'l> Visitor<'b, 'l> for ProtoVisitor<'_> {
     type Value = Value;
     type Error = Error;
 
     fn visit_u8(&mut self, _: &ValueDriver<'_, 'b, 'l>, value: u8) -> Result<Value, Error> {
-        self.inc_depth()?;
         self.debit_value()?;
-        self.dec_depth();
         Ok(Value::from(value))
     }
 
     fn visit_u16(&mut self, _: &ValueDriver<'_, 'b, 'l>, value: u16) -> Result<Value, Error> {
-        self.inc_depth()?;
         self.debit_value()?;
-        self.dec_depth();
         Ok(Value::from(value))
     }
 
     fn visit_u32(&mut self, _: &ValueDriver<'_, 'b, 'l>, value: u32) -> Result<Value, Error> {
-        self.inc_depth()?;
         self.debit_value()?;
-        self.dec_depth();
         Ok(Value::from(value))
     }
 
     fn visit_u64(&mut self, _: &ValueDriver<'_, 'b, 'l>, value: u64) -> Result<Value, Error> {
-        self.inc_depth()?;
         let value = value.to_string();
         self.debit_string_value(&value)?;
-        self.dec_depth();
         Ok(Value::from(value))
     }
 
     fn visit_u128(&mut self, _: &ValueDriver<'_, 'b, 'l>, value: u128) -> Result<Value, Error> {
-        self.inc_depth()?;
         let value = value.to_string();
         self.debit_string_value(&value)?;
-        self.dec_depth();
         Ok(Value::from(value))
     }
 
     fn visit_u256(&mut self, _: &ValueDriver<'_, 'b, 'l>, value: U256) -> Result<Value, Error> {
-        self.inc_depth()?;
         let value = value.to_string();
         self.debit_string_value(&value)?;
-        self.dec_depth();
         Ok(Value::from(value))
     }
 
     fn visit_bool(&mut self, _: &ValueDriver<'_, 'b, 'l>, value: bool) -> Result<Value, Error> {
-        self.inc_depth()?;
         self.debit_value()?;
-        self.dec_depth();
         Ok(Value::from(value))
     }
 
@@ -182,10 +200,8 @@ impl<'b, 'l> Visitor<'b, 'l> for ProtoVisitor {
         _: &ValueDriver<'_, 'b, 'l>,
         value: AccountAddress,
     ) -> Result<Value, Error> {
-        self.inc_depth()?;
         let value = value.to_canonical_string(true);
         self.debit_string_value(&value)?;
-        self.dec_depth();
         Ok(Value::from(value))
     }
 
@@ -194,16 +210,12 @@ impl<'b, 'l> Visitor<'b, 'l> for ProtoVisitor {
         _: &ValueDriver<'_, 'b, 'l>,
         value: AccountAddress,
     ) -> Result<Value, Error> {
-        self.inc_depth()?;
         let value = value.to_canonical_string(true);
         self.debit_string_value(&value)?;
-        self.dec_depth();
         Ok(Value::from(value))
     }
 
     fn visit_vector(&mut self, driver: &mut VecDriver<'_, 'b, 'l>) -> Result<Value, Error> {
-        self.inc_depth()?;
-
         let value = if driver.element_layout().is_type(&TypeTag::U8) {
             // Base64 encode arbitrary bytes
             use base64::{engine::general_purpose::STANDARD, Engine};
@@ -221,20 +233,20 @@ impl<'b, 'l> Visitor<'b, 'l> for ProtoVisitor {
         } else {
             let mut elems = vec![];
             self.debit_value()?;
-            while let Some(elem) = driver.next_element(self)? {
+
+            while let Some(elem) =
+                driver.next_element(&mut ProtoVisitor::new(self.bound, self.depth)?)?
+            {
                 elems.push(elem);
             }
 
             Value::from(elems)
         };
 
-        self.dec_depth();
         Ok(value)
     }
 
     fn visit_struct(&mut self, driver: &mut StructDriver<'_, 'b, 'l>) -> Result<Value, Error> {
-        self.inc_depth()?;
-
         let ty = &driver.struct_layout().type_;
         let layout = driver.struct_layout();
 
@@ -298,19 +310,17 @@ impl<'b, 'l> Visitor<'b, 'l> for ProtoVisitor {
                 self.debit_str(field.name.as_str())?;
             }
 
-            while let Some((field, elem)) = driver.next_field(self)? {
+            while let Some((field, elem)) =
+                driver.next_field(&mut ProtoVisitor::new(self.bound, self.depth)?)?
+            {
                 map.fields.insert(field.name.as_str().to_owned(), elem);
             }
             Value::from(Kind::StructValue(map))
         };
-
-        self.dec_depth();
         Ok(value)
     }
 
     fn visit_variant(&mut self, driver: &mut VariantDriver<'_, 'b, 'l>) -> Result<Value, Error> {
-        self.inc_depth()?;
-
         let mut map = Struct::default();
         self.debit_value()?;
 
@@ -324,11 +334,12 @@ impl<'b, 'l> Visitor<'b, 'l> for ProtoVisitor {
             self.debit_str(field.name.as_str())?;
         }
 
-        while let Some((field, elem)) = driver.next_field(self)? {
+        while let Some((field, elem)) =
+            driver.next_field(&mut ProtoVisitor::new(self.bound, self.depth)?)?
+        {
             map.fields.insert(field.name.as_str().to_owned(), elem);
         }
 
-        self.dec_depth();
         Ok(Value::from(Kind::StructValue(map)))
     }
 }
@@ -551,13 +562,13 @@ pub(crate) mod tests {
 
         let bytes = serialize(value.clone());
 
-        let deser = ProtoVisitor::new(bound)
+        let deser = ProtoVisitorBuilder::new(bound)
             .deserialize_value(&bytes, &type_layout)
             .unwrap();
 
         assert_eq!(expected, proto_value_to_json_value(deser));
 
-        ProtoVisitor::new(bound - 1)
+        ProtoVisitorBuilder::new(bound - 1)
             .deserialize_value(&bytes, &type_layout)
             .unwrap_err();
     }
@@ -580,7 +591,7 @@ pub(crate) mod tests {
         let bound = required_budget(&expected);
         let bytes = serialize(value.clone());
 
-        let deser = ProtoVisitor::new(bound)
+        let deser = ProtoVisitorBuilder::new(bound)
             .deserialize_value(&bytes, &layout)
             .unwrap();
 
@@ -592,7 +603,7 @@ pub(crate) mod tests {
 
         let bytes = serialize(value.clone());
 
-        let err = ProtoVisitor::new(bound)
+        let err = ProtoVisitorBuilder::new(bound)
             .deserialize_value(&bytes, &layout)
             .unwrap_err();
 
@@ -643,7 +654,7 @@ pub(crate) mod tests {
 
     fn json<T: serde::Serialize>(layout: A::MoveTypeLayout, data: T) -> serde_json::Value {
         let bcs = bcs::to_bytes(&data).unwrap();
-        let proto_value = ProtoVisitor::new(1024 * 1024)
+        let proto_value = ProtoVisitorBuilder::new(1024 * 1024)
             .deserialize_value(&bcs, &layout)
             .unwrap();
         proto_value_to_json_value(proto_value)
