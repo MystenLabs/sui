@@ -57,9 +57,16 @@ fragment State on Query {
 
       # This version does not exist, so should not return anything
       byVersion: object(address: "@{obj_1_0}", version: 4) { version }
+    }
+  }
+}
 
-      # "atCheckpoint" will override the fact that this field is nested inside
-      # a `Checkpoint.query`.
+//# run-graphql
+{ # "atCheckpoint" will override the fact that this field is nested inside
+  # a `Checkpoint.query`, but it still can't travel to the future relative to
+  # the current latest checkpoint (which is checkpoint 1).
+  checkpoint(sequenceNumber: 1) {
+    query {
       atCheckpoint: object(address: "@{obj_1_0}", atCheckpoint: 4) { version }
     }
   }
