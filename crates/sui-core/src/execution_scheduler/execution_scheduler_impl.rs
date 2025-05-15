@@ -59,6 +59,7 @@ impl ExecutionScheduler {
     }
 
     pub(crate) fn notify_commit(&self, certificate: &VerifiedExecutableTransaction) {
+        tracing::info!(digest = ?certificate.digest(), "Notify commit");
         self.pending_certificates
             .write()
             .remove(certificate.digest());
@@ -199,7 +200,7 @@ impl ExecutionScheduler {
                     self.metrics
                         .transaction_manager_transaction_queue_age_s
                         .observe(enqueue_time.elapsed().as_secs_f64());
-                    tracing::debug!(?digests, "Input objects available");
+                    tracing::info!(?digest, "Input objects available");
                     self.executing_certificates
                         .write()
                         .insert(*digest);
@@ -218,7 +219,7 @@ impl ExecutionScheduler {
                     });
                 }
             _ = self.transaction_cache_read.notify_read_executed_effects_digests(&digests) => {
-                tracing::debug!(?digests, "Transaction already executed");
+                tracing::info!(?digest, "Transaction already executed");
                 // We need to remove the pending certificate information explicitly here,
                 // because the transaction may have been executed before we enqueued it.
                 // So we never get to call notify_commit() from the execution commit path.
