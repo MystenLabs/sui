@@ -61,7 +61,7 @@ mod checked {
         execution_status::CommandArgumentError,
         metrics::LimitsMetrics,
         move_package::MovePackage,
-        object::{Authenticator, Data, MoveObject, Object, ObjectInner, Owner},
+        object::{Authorizer, Data, MoveObject, Object, ObjectInner, Owner},
         storage::DenyListResult,
         transaction::{Argument, CallArg, ObjectArg},
     };
@@ -733,7 +733,7 @@ mod checked {
             let mut loaded_runtime_objects = BTreeMap::new();
             let mut additional_writes = BTreeMap::new();
             let mut by_value_shared_objects = BTreeSet::new();
-            let mut authenticator_objects = BTreeMap::new();
+            let mut authorizer_objects = BTreeMap::new();
             for input in inputs.into_iter().chain(std::iter::once(gas)) {
                 let InputValue {
                     object_metadata:
@@ -760,8 +760,8 @@ mod checked {
                     add_additional_write(&mut additional_writes, owner, object_value)?;
                 } else if owner.is_shared() {
                     by_value_shared_objects.insert(id);
-                } else if owner.authenticator().is_some() {
-                    authenticator_objects.insert(id, owner.clone());
+                } else if owner.authorizer().is_some() {
+                    authorizer_objects.insert(id, owner.clone());
                 }
             }
             // check for unused values
@@ -975,12 +975,14 @@ mod checked {
             }
 
             // Before finishing, enforce restrictions on transfer and deletion for objects configured
-            // with authenticators.
-            for (id, original_owner) in authenticator_objects {
-                let authenticator = original_owner.authenticator().expect("verified before adding to `authenticator_objects` that these have authenticators");
+            // with authorizers.
+            for (id, original_owner) in authorizer_objects {
+                let authorizer = original_owner.authorizer().expect(
+                    "verified before adding to `authorizer_objects` that these have authorizers",
+                );
 
-                match authenticator {
-                    Authenticator::SingleOwner(owner) => {
+                match authorizer {
+                    Authorizer::SingleOwner(owner) => {
                         // Already verified in pre-execution checks that tx sender is the object owner.
                         // SingleOwner is allowed to do anything with the object.
                         if ref_context.borrow().sender() != *owner {
@@ -995,7 +997,7 @@ mod checked {
                                 ),
                             ));
                         }
-                    } // Future authenticators with fewer permissions should be checked here. For
+                    } // Future authorizers with fewer permissions should be checked here. For
                       // example, transfers and wraps can be detected by comparing `original_owner`
                       // with:
                       // let new_owner = written_objects.get(&id).map(|obj| obj.owner);

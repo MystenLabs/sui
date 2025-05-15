@@ -15,7 +15,7 @@ mod checked {
     use sui_types::error::{SuiResult, UserInputError, UserInputResult};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::metrics::BytecodeVerifierMetrics;
-    use sui_types::object::Authenticator;
+    use sui_types::object::Authorizer;
     use sui_types::transaction::{
         CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
         ReceivingObjectReadResult, ReceivingObjects, TransactionData, TransactionDataAPI,
@@ -556,14 +556,14 @@ mod checked {
                     }
                     Owner::ConsensusV2 {
                         start_version: actual_initial_shared_version,
-                        authenticator,
+                        authorizer,
                     } => {
                         fp_ensure!(
                             input_initial_shared_version == *actual_initial_shared_version,
                             UserInputError::SharedObjectStartingVersionMismatch
                         );
-                        match authenticator.as_ref() {
-                            Authenticator::SingleOwner(actual_owner) => {
+                        match authorizer.as_ref() {
+                            Authorizer::SingleOwner(actual_owner) => {
                                 // Check the owner is correct.
                                 fp_ensure!(
                                     owner == actual_owner,

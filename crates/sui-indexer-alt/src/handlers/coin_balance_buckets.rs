@@ -278,9 +278,9 @@ impl TryInto<StoredCoinBalanceBucket> for &ProcessedCoinBalanceBucket {
 pub(crate) fn get_coin_owner(object: &Object) -> Option<(StoredCoinOwnerKind, SuiAddress)> {
     match object.owner() {
         Owner::AddressOwner(owner_id) => Some((StoredCoinOwnerKind::Fastpath, *owner_id)),
-        Owner::ConsensusV2 { authenticator, .. } => Some((
+        Owner::ConsensusV2 { authorizer, .. } => Some((
             StoredCoinOwnerKind::Consensus,
-            *authenticator.as_single_owner(),
+            *authorizer.as_single_owner(),
         )),
         Owner::Immutable | Owner::ObjectOwner(_) | Owner::Shared { .. } => None,
     }
@@ -310,7 +310,7 @@ mod tests {
             base_types::{dbg_addr, MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
             digests::TransactionDigest,
             gas_coin::GAS,
-            object::{Authenticator, MoveObject, Object},
+            object::{Authorizer, MoveObject, Object},
             test_checkpoint_data_builder::TestCheckpointDataBuilder,
         },
         Indexer,
@@ -394,7 +394,7 @@ mod tests {
             id,
             SequenceNumber::new(),
             Owner::ConsensusV2 {
-                authenticator: Box::new(Authenticator::SingleOwner(addr1)),
+                authorizer: Box::new(Authorizer::SingleOwner(addr1)),
                 start_version: SequenceNumber::new(),
             },
         );

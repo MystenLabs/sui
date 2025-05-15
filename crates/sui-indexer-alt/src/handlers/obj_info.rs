@@ -200,7 +200,7 @@ mod tests {
     use sui_indexer_alt_framework::{
         types::{
             base_types::{dbg_addr, SequenceNumber},
-            object::{Authenticator, Owner},
+            object::{Authorizer, Owner},
             test_checkpoint_data_builder::TestCheckpointDataBuilder,
         },
         Indexer,
@@ -555,7 +555,7 @@ mod tests {
                 0,
                 Owner::ConsensusV2 {
                     start_version: SequenceNumber::from_u64(1),
-                    authenticator: Box::new(Authenticator::SingleOwner(dbg_addr(0))),
+                    authorizer: Box::new(Authorizer::SingleOwner(dbg_addr(0))),
                 },
             )
             .finish_transaction();

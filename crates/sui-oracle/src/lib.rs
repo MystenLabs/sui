@@ -704,7 +704,7 @@ async fn get_object_arg(
         }
         | Owner::ConsensusV2 {
             start_version: initial_shared_version,
-            authenticator: _,
+            authorizer: _,
         } => ObjectArg::SharedObject {
             id,
             initial_shared_version,

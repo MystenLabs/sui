@@ -1955,7 +1955,7 @@ impl TransactionData {
                 }
                 | Owner::ConsensusV2 {
                     start_version: initial_shared_version,
-                    authenticator: _,
+                    authorizer: _,
                 } => ObjectArg::SharedObject {
                     id: upgrade_capability.0,
                     initial_shared_version,

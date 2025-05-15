@@ -15,7 +15,7 @@ use super::display::{Display, DisplayEntry};
 use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_object::MoveObject;
 use super::move_package::MovePackage;
-use super::owner::{Authenticator, OwnerImpl};
+use super::owner::{Authorizer, OwnerImpl};
 use super::stake::StakedSui;
 use super::sui_address::addr;
 use super::suins_registration::{DomainFormat, SuinsRegistration};
@@ -181,12 +181,12 @@ pub(crate) struct AddressOwner {
 }
 
 /// A ConsensusV2 object is an object that is automatically versioned by the consensus protocol
-/// and allows different authentication modes based on the chosen authenticator.
-/// (Initially, only single-owner authentication is supported.)
+/// and allows different authorization modes based on the chosen authorizer.
+/// (Initially, only single-owner authorization is supported.)
 #[derive(SimpleObject, Clone)]
 pub(crate) struct ConsensusV2 {
     start_version: UInt53,
-    authenticator: Option<Authenticator>,
+    authorizer: Option<Authorizer>,
 }
 
 /// Filter for a point query of an Object.
@@ -625,11 +625,11 @@ impl ObjectImpl<'_> {
             })),
             O::ConsensusV2 {
                 start_version,
-                authenticator,
+                authorizer,
             } => Some(ObjectOwner::ConsensusV2(ConsensusV2 {
                 start_version: start_version.value().into(),
-                authenticator: Some(Authenticator::SingleOwner(Address {
-                    address: SuiAddress::from(*authenticator.as_single_owner()),
+                authorizer: Some(Authorizer::SingleOwner(Address {
+                    address: SuiAddress::from(*authorizer.as_single_owner()),
                     checkpoint_viewed_at: self.0.checkpoint_viewed_at,
                 })),
             })),

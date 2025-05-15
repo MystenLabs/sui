@@ -476,7 +476,7 @@ pub enum Owner {
     },
     /// Object is immutable, and hence ownership doesn't matter.
     Immutable,
-    /// Object is sequenced via consensus. Ownership is managed by the configured authenticator.
+    /// Object is sequenced via consensus. Ownership is managed by the configured authorizer.
     ///
     /// Note: wondering what happened to `V1`? `Shared` above was the V1 of consensus objects.
     ConsensusV2 {
@@ -484,8 +484,8 @@ pub enum Owner {
         /// This serves the same function as `initial_shared_version`, except it may change
         /// if the object's Owner type changes.
         start_version: SequenceNumber,
-        /// The authentication mode of the object
-        authenticator: Box<Authenticator>,
+        /// The authorization mode of the object.
+        authorizer: Box<Authorizer>,
     },
 }
 
@@ -493,15 +493,15 @@ pub enum Owner {
     Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd,
 )]
 #[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
-pub enum Authenticator {
+pub enum Authorizer {
     /// The contained SuiAddress exclusively has all permissions: read, write, delete, transfer
     SingleOwner(SuiAddress),
 }
 
-impl Authenticator {
+impl Authorizer {
     pub fn as_single_owner(&self) -> &SuiAddress {
         // NOTE: Existing callers are written assuming that only singly-owned
-        // ConsensusV2 objects exist. If additional Authenticator variants are
+        // ConsensusV2 objects exist. If additional Authorizer variants are
         // added, do not simply panic here. Instead, change the return type of
         // this function and update callers accordingly.
         match self {
@@ -545,10 +545,10 @@ impl Owner {
         }
     }
 
-    // Returns the object's Authenticator, if it has one.
-    pub fn authenticator(&self) -> Option<&Authenticator> {
+    // Returns the object's Authorizer, if it has one.
+    pub fn authorizer(&self) -> Option<&Authorizer> {
         match self {
-            Self::ConsensusV2 { authenticator, .. } => Some(authenticator.as_ref()),
+            Self::ConsensusV2 { authorizer, .. } => Some(authorizer.as_ref()),
             Self::Immutable
             | Self::AddressOwner(_)
             | Self::ObjectOwner(_)
@@ -609,20 +609,20 @@ impl Display for Owner {
             }
             Self::ConsensusV2 {
                 start_version,
-                authenticator,
+                authorizer,
             } => {
                 write!(
                     f,
                     "ConsensusV2( {}, {} )",
                     start_version.value(),
-                    authenticator
+                    authorizer
                 )
             }
         }
     }
 }
 
-impl Display for Authenticator {
+impl Display for Authorizer {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::SingleOwner(address) => {
@@ -944,10 +944,10 @@ impl ObjectInner {
             | Owner::ObjectOwner(_)
             | Owner::Shared { .. }
             | Owner::Immutable => DEFAULT_OWNER_SIZE,
-            Owner::ConsensusV2 { authenticator, .. } => {
+            Owner::ConsensusV2 { authorizer, .. } => {
                 DEFAULT_OWNER_SIZE
-                    + match authenticator.as_ref() {
-                        Authenticator::SingleOwner(_) => 8, // marginal cost to store both SuiAddress and SequenceNumber
+                    + match authorizer.as_ref() {
+                        Authorizer::SingleOwner(_) => 8, // marginal cost to store both SuiAddress and SequenceNumber
                     }
             }
         };

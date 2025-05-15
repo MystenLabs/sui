@@ -255,9 +255,9 @@ pub fn owner_to_owner_info(owner: &Owner) -> (OwnerType, Option<SuiAddress>) {
         Owner::Shared { .. } => (OwnerType::Shared, None),
         Owner::Immutable => (OwnerType::Immutable, None),
         // ConsensusV2 objects are treated as singly-owned for now in indexers.
-        // This will need to be updated if additional Authenticators are added.
-        Owner::ConsensusV2 { authenticator, .. } => {
-            (OwnerType::Address, Some(*authenticator.as_single_owner()))
+        // This will need to be updated if additional Authorizers are added.
+        Owner::ConsensusV2 { authorizer, .. } => {
+            (OwnerType::Address, Some(*authorizer.as_single_owner()))
         }
     }
 }

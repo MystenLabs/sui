@@ -483,7 +483,7 @@ impl TransactionBuilder {
             }
             | Owner::ConsensusV2 {
                 start_version: initial_shared_version,
-                authenticator: _,
+                authorizer: _,
             } => ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
@@ -640,7 +640,7 @@ impl TransactionBuilder {
                 }
                 | Owner::ConsensusV2 {
                     start_version: initial_shared_version,
-                    authenticator: _,
+                    authorizer: _,
                 } => ObjectArg::SharedObject {
                     id: upgrade_capability.object_ref().0,
                     initial_shared_version,

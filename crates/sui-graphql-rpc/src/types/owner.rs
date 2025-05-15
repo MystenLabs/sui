@@ -137,9 +137,9 @@ pub(crate) enum IOwner {
     SuinsRegistration(SuinsRegistration),
 }
 
-/// An Authenticator represents the access control rules for a ConsensusV2 object.
+/// An Authorizer represents the access control rules for a ConsensusV2 object.
 #[derive(Clone, Debug, Union)]
-pub(crate) enum Authenticator {
+pub(crate) enum Authorizer {
     /// The object is fully owned by a single address.
     SingleOwner(Address),
 }

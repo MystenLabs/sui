@@ -293,7 +293,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<GenesisObject>(&samples).unwrap();
     tracer.trace_type::<CheckpointCommitment>(&samples).unwrap();
     tracer
-        .trace_type::<sui_types::object::Authenticator>(&samples)
+        .trace_type::<sui_types::object::Authorizer>(&samples)
         .unwrap();
 
     tracer.registry()

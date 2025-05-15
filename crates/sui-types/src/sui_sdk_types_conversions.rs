@@ -137,7 +137,7 @@ impl From<crate::object::Owner> for Owner {
             // TODO: Corresponding types need to be added to sui-sdk-types.
             crate::object::Owner::ConsensusV2 {
                 start_version: _,
-                authenticator: _,
+                authorizer: _,
             } => todo!(),
         }
     }
