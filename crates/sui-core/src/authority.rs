@@ -1607,9 +1607,7 @@ impl AuthorityState {
         tx_guard.commit_tx();
 
         match self.execution_scheduler.as_ref() {
-            ExecutionSchedulerWrapper::ExecutionScheduler(scheduler) => {
-                scheduler.notify_commit(certificate);
-            }
+            ExecutionSchedulerWrapper::ExecutionScheduler(_) => {}
             ExecutionSchedulerWrapper::TransactionManager(manager) => {
                 // Notifies transaction manager about transaction and output objects committed.
                 // This provides necessary information to transaction manager to start executing

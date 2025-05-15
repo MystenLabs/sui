@@ -4,10 +4,9 @@
 use crate::{
     authority::{authority_per_epoch_store::AuthorityPerEpochStore, AuthorityMetrics},
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
-    execution_scheduler::PendingCertificateStats,
+    execution_scheduler::{ExecutingGuard, PendingCertificateStats},
 };
 use mysten_metrics::spawn_monitored_task;
-use parking_lot::RwLock;
 use std::{
     collections::{BTreeSet, HashSet},
     sync::Arc,
@@ -15,8 +14,7 @@ use std::{
 use sui_config::node::AuthorityOverloadConfig;
 use sui_types::{
     base_types::FullObjectID,
-    committee::EpochId,
-    digests::{TransactionDigest, TransactionEffectsDigest},
+    digests::TransactionEffectsDigest,
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
     storage::InputKey,
@@ -32,10 +30,39 @@ use super::{overload_tracker::OverloadTracker, ExecutionSchedulerAPI, PendingCer
 pub(crate) struct ExecutionScheduler {
     object_cache_read: Arc<dyn ObjectCacheRead>,
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
-    pending_certificates: Arc<RwLock<HashSet<TransactionDigest>>>,
     overload_tracker: Arc<OverloadTracker>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
     metrics: Arc<AuthorityMetrics>,
+}
+
+struct PendingGuard<'a> {
+    scheduler: &'a ExecutionScheduler,
+    cert: &'a VerifiedExecutableTransaction,
+}
+
+impl<'a> PendingGuard<'a> {
+    pub fn new(scheduler: &'a ExecutionScheduler, cert: &'a VerifiedExecutableTransaction) -> Self {
+        scheduler
+            .metrics
+            .transaction_manager_num_pending_certificates
+            .inc();
+        scheduler
+            .overload_tracker
+            .add_pending_certificate(cert.data());
+        Self { scheduler, cert }
+    }
+}
+
+impl Drop for PendingGuard<'_> {
+    fn drop(&mut self) {
+        self.scheduler
+            .metrics
+            .transaction_manager_num_pending_certificates
+            .dec();
+        self.scheduler
+            .overload_tracker
+            .remove_pending_certificate(self.cert.data());
+    }
 }
 
 impl ExecutionScheduler {
@@ -49,22 +76,10 @@ impl ExecutionScheduler {
         Self {
             object_cache_read,
             transaction_cache_read,
-            pending_certificates: Arc::new(RwLock::new(HashSet::new())),
             overload_tracker: Arc::new(OverloadTracker::new()),
             tx_ready_certificates,
             metrics,
         }
-    }
-
-    pub(crate) fn notify_commit(&self, certificate: &VerifiedExecutableTransaction) {
-        self.pending_certificates
-            .write()
-            .remove(certificate.digest());
-        self.overload_tracker
-            .remove_pending_certificate(certificate.data());
-        self.metrics
-            .transaction_manager_num_pending_certificates
-            .set(self.pending_certificates.read().len() as i64);
     }
 
     fn enqueue_impl(
@@ -75,6 +90,7 @@ impl ExecutionScheduler {
         )>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
+        // Filter out certificates from wrong epoch.
         let certs = certs.into_iter().filter_map(|cert| {
             if cert.0.epoch() == epoch_store.epoch() {
                 Some(cert)
@@ -89,74 +105,62 @@ impl ExecutionScheduler {
         });
 
         for (cert, expected_effects_digest) in certs {
-            if !self.pending_certificates.write().insert(*cert.digest()) {
-                continue;
-            }
-
-            self.overload_tracker.add_pending_certificate(cert.data());
-            let tx_data = cert.transaction_data();
-            let input_object_kinds = tx_data
-                .input_objects()
-                .expect("input_objects() cannot fail");
-            let input_object_keys: Vec<_> =
-                match epoch_store.get_input_object_keys(&cert.key(), &input_object_kinds) {
-                    Ok(keys) => keys,
-                    Err(_) => {
-                        // This is possible if the transaction is already executed.
-                        // TODO: Eventually we could pass assigned shared object versions
-                        // to the scheduler so that this call cannot return Err.
-                        assert!(self
-                            .transaction_cache_read
-                            .is_tx_already_executed(cert.digest()));
-                        return;
-                    }
-                }
-                .into_iter()
-                .collect();
-            let receiving_object_keys: HashSet<_> = tx_data
-                .receiving_objects()
-                .into_iter()
-                .map(|entry| {
-                    InputKey::VersionedObject {
-                        // TODO: Add support for receiving ConsensusV2 objects. For now this assumes fastpath.
-                        id: FullObjectID::new(entry.0, None),
-                        version: entry.1,
-                    }
-                })
-                .collect();
-            let input_and_receiving_keys = [
-                input_object_keys,
-                receiving_object_keys.iter().cloned().collect(),
-            ]
-            .concat();
-
             let scheduler = self.clone();
-            let epoch = epoch_store.epoch();
             let epoch_store = epoch_store.clone();
             spawn_monitored_task!(
                 epoch_store.within_alive_epoch(scheduler.schedule_transaction(
                     cert,
                     expected_effects_digest,
-                    input_and_receiving_keys,
-                    receiving_object_keys,
-                    epoch,
+                    &epoch_store,
                 ))
             );
         }
-
-        self.metrics
-            .transaction_manager_num_pending_certificates
-            .set(self.pending_certificates.read().len() as i64);
     }
 
     async fn schedule_transaction(
         self,
         cert: VerifiedExecutableTransaction,
         expected_effects_digest: Option<TransactionEffectsDigest>,
-        input_and_receiving_keys: Vec<InputKey>,
-        receiving_object_keys: HashSet<InputKey>,
-        epoch: EpochId,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
+        let _pending_guard = PendingGuard::new(&self, &cert);
+        let tx_data = cert.transaction_data();
+        let input_object_kinds = tx_data
+            .input_objects()
+            .expect("input_objects() cannot fail");
+        let input_object_keys: Vec<_> =
+            match epoch_store.get_input_object_keys(&cert.key(), &input_object_kinds) {
+                Ok(keys) => keys,
+                Err(_) => {
+                    // This is possible if the transaction is already executed.
+                    // TODO: Eventually we could pass assigned shared object versions
+                    // to the scheduler so that this call cannot return Err.
+                    assert!(self
+                        .transaction_cache_read
+                        .is_tx_already_executed(cert.digest()));
+                    return;
+                }
+            }
+            .into_iter()
+            .collect();
+        let receiving_object_keys: HashSet<_> = tx_data
+            .receiving_objects()
+            .into_iter()
+            .map(|entry| {
+                InputKey::VersionedObject {
+                    // TODO: Add support for receiving ConsensusV2 objects. For now this assumes fastpath.
+                    id: FullObjectID::new(entry.0, None),
+                    version: entry.1,
+                }
+            })
+            .collect();
+        let input_and_receiving_keys = [
+            input_object_keys,
+            receiving_object_keys.iter().cloned().collect(),
+        ]
+        .concat();
+
+        let epoch = epoch_store.epoch();
         let digest = cert.digest();
         let digests = [*digest];
         tracing::debug!(?digest, "Schedule_transaction");
@@ -177,21 +181,22 @@ impl ExecutionScheduler {
                     tracing::debug!(?digests, "Input objects available");
                     // TODO: Eventually we could fold execution_driver into the scheduler.
                     let _ = self.tx_ready_certificates.send(PendingCertificate {
-                        certificate: cert,
+                        certificate: cert.clone(),
                         expected_effects_digest,
                         waiting_input_objects: BTreeSet::new(),
                         stats: PendingCertificateStats {
                             enqueue_time,
                             ready_time: Some(Instant::now()),
                         },
+                        executing_guard: Some(ExecutingGuard::new(
+                            self.metrics
+                                .transaction_manager_num_executing_certificates
+                                .clone(),
+                        )),
                     });
                 }
             _ = self.transaction_cache_read.notify_read_executed_effects_digests(&digests) => {
                 tracing::debug!(?digests, "Transaction already executed");
-                // We need to remove the pending certificate information explicitly here,
-                // because the transaction may have been executed before we enqueued it.
-                // So we never get to call notify_commit() from the execution commit path.
-                self.notify_commit(&cert);
             }
         };
     }
@@ -236,18 +241,25 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
         overload_config: &AuthorityOverloadConfig,
         tx_data: &SenderSignedData,
     ) -> SuiResult {
-        let inflight_queue_len = self.pending_certificates.read().len();
+        let inflight_queue_len = self.num_pending_certificates();
         self.overload_tracker
             .check_execution_overload(overload_config, tx_data, inflight_queue_len)
     }
 
     fn num_pending_certificates(&self) -> usize {
-        self.pending_certificates.read().len()
+        (self
+            .metrics
+            .transaction_manager_num_pending_certificates
+            .get()
+            + self
+                .metrics
+                .transaction_manager_num_executing_certificates
+                .get()) as usize
     }
 
     #[cfg(test)]
     fn check_empty_for_testing(&self) {
-        assert!(self.pending_certificates.read().is_empty());
+        assert_eq!(self.num_pending_certificates(), 0);
     }
 }
 
@@ -357,13 +369,11 @@ mod test {
 
         assert_eq!(execution_scheduler.num_pending_certificates(), 1);
 
-        // Notify scheduler about transaction commit
-        execution_scheduler
-            .as_execution_scheduler()
-            .notify_commit(&transaction);
+        // Predent we have just executed the transaction.
+        drop(pending_certificate);
 
         // scheduler should be empty.
-        assert_eq!(execution_scheduler.num_pending_certificates(), 0);
+        execution_scheduler.check_empty_for_testing();
 
         // Enqueue a transaction with a new gas object, empty input.
         let gas_object_new = Object::with_id_owner_version_for_testing(
@@ -413,10 +423,8 @@ mod test {
             .try_recv()
             .is_err_and(|err| err == TryRecvError::Empty));
 
-        // Notify scheduler about transaction commit
-        execution_scheduler
-            .as_execution_scheduler()
-            .notify_commit(&transaction);
+        // Predent we have just executed the transaction.
+        drop(pending_certificate);
 
         // scheduler should be empty at the end.
         execution_scheduler.check_empty_for_testing();
@@ -612,16 +620,10 @@ mod test {
 
         assert_eq!(execution_scheduler.num_pending_certificates(), 4);
 
-        // Notify scheduler about read-only transaction commit
-        execution_scheduler
-            .as_execution_scheduler()
-            .notify_commit(&tx_0);
-        execution_scheduler
-            .as_execution_scheduler()
-            .notify_commit(&tx_1);
-        execution_scheduler
-            .as_execution_scheduler()
-            .notify_commit(&tx_2);
+        // Predent we have just executed the transactions.
+        drop(tx_0);
+        drop(tx_1);
+        drop(tx_2);
 
         assert_eq!(execution_scheduler.num_pending_certificates(), 1);
 
@@ -645,10 +647,8 @@ mod test {
 
         assert_eq!(execution_scheduler.num_pending_certificates(), 1);
 
-        // Notify scheduler about tx_3.
-        execution_scheduler
-            .as_execution_scheduler()
-            .notify_commit(&tx_3);
+        // Predent we have just executed the transaction.
+        drop(tx_3);
 
         execution_scheduler.check_empty_for_testing();
     }
@@ -710,7 +710,8 @@ mod test {
 
         // Now start to unravel the transactions by notifying that each subsequent
         // transaction has been processed.
-        for (i, (object, txn)) in object_arguments.iter().enumerate() {
+        let len = object_arguments.len();
+        for (i, (object, txn)) in object_arguments.into_iter().enumerate() {
             // Mark the object as available.
             // We should now eventually see the transaction as ready.
             state
@@ -727,16 +728,11 @@ mod test {
             assert!(rx_ready_certificates.try_recv().is_err());
 
             // Notify the scheduler that the transaction has been processed.
-            execution_scheduler
-                .as_execution_scheduler()
-                .notify_commit(txn);
+            drop(txn);
 
             // scheduler should now output another transaction to run since it the next version of that object
             // has become available.
-            assert_eq!(
-                execution_scheduler.num_pending_certificates(),
-                object_arguments.len() - i - 1
-            );
+            assert_eq!(execution_scheduler.num_pending_certificates(), len - i - 1);
         }
 
         // After everything scheduler should be empty.
@@ -1123,10 +1119,8 @@ mod test {
 
         assert_eq!(execution_scheduler.num_pending_certificates(), 1);
 
-        // Notify scheduler about read-only transaction commit
-        execution_scheduler
-            .as_execution_scheduler()
-            .notify_commit(&available_txn);
+        // Predent we have just executed the transaction.
+        drop(available_txn);
 
         execution_scheduler.check_empty_for_testing();
     }

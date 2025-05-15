@@ -674,6 +674,7 @@ impl TransactionManager {
                     enqueue_time: pending_cert_enqueue_time,
                     ready_time: None,
                 },
+                executing_guard: None,
             });
         }
 
