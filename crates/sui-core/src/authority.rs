@@ -3293,12 +3293,7 @@ impl AuthorityState {
             )
             .await?;
         assert_eq!(new_epoch_store.epoch(), new_epoch);
-        match self.execution_scheduler.as_ref() {
-            ExecutionSchedulerWrapper::ExecutionScheduler(_) => {}
-            ExecutionSchedulerWrapper::TransactionManager(manager) => {
-                manager.reconfigure(new_epoch);
-            }
-        }
+        self.execution_scheduler.reconfigure(new_epoch);
         *execution_lock = new_epoch;
         // drop execution_lock after epoch store was updated
         // see also assert in AuthorityState::process_certificate
@@ -3332,12 +3327,7 @@ impl AuthorityState {
                 .unwrap_or_default(),
         );
         let new_epoch = new_epoch_store.epoch();
-        match self.execution_scheduler.as_ref() {
-            ExecutionSchedulerWrapper::ExecutionScheduler(_) => {}
-            ExecutionSchedulerWrapper::TransactionManager(manager) => {
-                manager.reconfigure(new_epoch);
-            }
-        }
+        self.execution_scheduler.reconfigure(new_epoch);
         self.epoch_store.store(new_epoch_store);
         epoch_store.epoch_terminated().await;
         *execution_lock = new_epoch;

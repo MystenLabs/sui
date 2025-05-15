@@ -329,15 +329,6 @@ impl TransactionManager {
         }
     }
 
-    // Reconfigures the TransactionManager for a new epoch. Existing transactions will be dropped
-    // because they are no longer relevant and may be incorrect in the new epoch.
-    // This function is only available for TransactionManager.
-    pub(crate) fn reconfigure(&self, new_epoch: EpochId) {
-        let reconfig_lock = self.inner.write();
-        let mut inner = reconfig_lock.write();
-        *inner = Inner::new(new_epoch, self.metrics.clone());
-    }
-
     #[instrument(level = "trace", skip_all)]
     pub(crate) fn notify_commit(
         &self,
@@ -413,6 +404,15 @@ impl ExecutionSchedulerAPI for TransactionManager {
             .map(VerifiedExecutableTransaction::new_from_certificate)
             .collect();
         self.enqueue(executable_txns, epoch_store)
+    }
+
+    // Reconfigures the TransactionManager for a new epoch. Existing transactions will be dropped
+    // because they are no longer relevant and may be incorrect in the new epoch.
+    // This function is only available for TransactionManager.
+    fn reconfigure(&self, new_epoch: EpochId) {
+        let reconfig_lock = self.inner.write();
+        let mut inner = reconfig_lock.write();
+        *inner = Inner::new(new_epoch, self.metrics.clone());
     }
 
     fn check_execution_overload(

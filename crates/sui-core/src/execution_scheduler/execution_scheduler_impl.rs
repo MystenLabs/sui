@@ -89,11 +89,6 @@ impl ExecutionScheduler {
         });
 
         for (cert, expected_effects_digest) in certs {
-            if !self.pending_certificates.write().insert(*cert.digest()) {
-                continue;
-            }
-
-            self.overload_tracker.add_pending_certificate(cert.data());
             let tx_data = cert.transaction_data();
             let input_object_kinds = tx_data
                 .input_objects()
@@ -108,7 +103,7 @@ impl ExecutionScheduler {
                         assert!(self
                             .transaction_cache_read
                             .is_tx_already_executed(cert.digest()));
-                        return;
+                        continue;
                     }
                 }
                 .into_iter()
@@ -129,6 +124,11 @@ impl ExecutionScheduler {
                 receiving_object_keys.iter().cloned().collect(),
             ]
             .concat();
+
+            if !self.pending_certificates.write().insert(*cert.digest()) {
+                continue;
+            }
+            self.overload_tracker.add_pending_certificate(cert.data());
 
             let scheduler = self.clone();
             let epoch = epoch_store.epoch();
@@ -249,6 +249,11 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
             .map(VerifiedExecutableTransaction::new_from_certificate)
             .collect();
         self.enqueue(executable_txns, epoch_store)
+    }
+
+    fn reconfigure(&self, _new_epoch: EpochId) {
+        self.pending_certificates.write().clear();
+        self.overload_tracker.clear();
     }
 
     fn check_execution_overload(

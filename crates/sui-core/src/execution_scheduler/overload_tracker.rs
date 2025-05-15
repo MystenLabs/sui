@@ -64,6 +64,11 @@ impl OverloadTracker {
         }
     }
 
+    pub(crate) fn clear(&self) {
+        let mut object_waiting_queue = self.object_waiting_queue.write();
+        object_waiting_queue.clear();
+    }
+
     fn get_mutable_shared_objects(tx_data: &SenderSignedData) -> Vec<FullObjectID> {
         tx_data
             .transaction_data()

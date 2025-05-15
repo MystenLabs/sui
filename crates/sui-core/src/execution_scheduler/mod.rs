@@ -12,6 +12,7 @@ use std::{collections::BTreeSet, sync::Arc};
 use sui_config::node::AuthorityOverloadConfig;
 use sui_protocol_config::Chain;
 use sui_types::{
+    committee::EpochId,
     digests::TransactionEffectsDigest,
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
@@ -73,6 +74,8 @@ pub(crate) trait ExecutionSchedulerAPI {
         certs: Vec<VerifiedCertificate>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     );
+
+    fn reconfigure(&self, epoch_id: EpochId);
 
     fn check_execution_overload(
         &self,
