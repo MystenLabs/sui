@@ -7,7 +7,9 @@ Manifest {
             file: "tests/data/basic_external_resolver/Move.toml",
             value: Spanned {
                 span: 17..26,
-                value: "example",
+                value: Identifier(
+                    "example",
+                ),
             },
         },
         edition: Located {
@@ -23,7 +25,9 @@ Manifest {
         "mainnet": "35834a8a",
     },
     dependencies: {
-        "mock": ManifestDependency {
+        Identifier(
+            "mock",
+        ): ManifestDependency {
             dependency_info: External(
                 ExternalDependency {
                     resolver: "mock-resolver",

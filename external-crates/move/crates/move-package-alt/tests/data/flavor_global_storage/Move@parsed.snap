@@ -7,7 +7,9 @@ Manifest {
             file: "tests/data/flavor_global_storage/Move.toml",
             value: Spanned {
                 span: 17..23,
-                value: "name",
+                value: Identifier(
+                    "name",
+                ),
             },
         },
         edition: Located {

@@ -7,7 +7,9 @@ Manifest {
             file: "tests/data/basic_no_dep_override_git/Move.toml",
             value: Spanned {
                 span: 17..26,
-                value: "example",
+                value: Identifier(
+                    "example",
+                ),
             },
         },
         edition: Located {
@@ -24,7 +26,9 @@ Manifest {
         "testnet": "4c78adac",
     },
     dependencies: {
-        "foo": ManifestDependency {
+        Identifier(
+            "foo",
+        ): ManifestDependency {
             dependency_info: Git(
                 UnpinnedGitDependency {
                     repo: "https://example.com/foo.git",
@@ -36,13 +40,17 @@ Manifest {
             ),
             is_override: true,
             rename_from: Some(
-                "Foo",
+                Identifier(
+                    "Foo",
+                ),
             ),
         },
     },
     dep_replacements: {
         "mainnet": {
-            "foo": ManifestDependencyReplacement {
+            Identifier(
+                "foo",
+            ): ManifestDependencyReplacement {
                 dependency: None,
                 address_info: Some(
                     (),
