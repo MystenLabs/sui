@@ -144,10 +144,8 @@ impl JsonRpcServerBuilder {
                 self.firewall_config.clone(),
             ))
         });
-        let client_id_source = self
-            .policy_config
-            .clone()
-            .map(|policy| policy.client_id_source);
+        let policy_config = self.policy_config.clone();
+        let client_id_source = policy_config.clone().map(|policy| policy.client_id_source);
 
         let metrics_clone = metrics.clone();
         let middleware = ServiceBuilder::new()
@@ -171,7 +169,9 @@ impl JsonRpcServerBuilder {
         let rpc_middleware = jsonrpsee::server::middleware::rpc::RpcServiceBuilder::new()
             .layer_fn(move |s| TimeoutLayer::new(s, Duration::from_secs(timeout)))
             .layer_fn(move |s| MetricsLayer::new(s, metrics.clone()))
-            .layer_fn(move |s| TrafficControllerService::new(s, traffic_controller.clone()));
+            .layer_fn(move |s| {
+                TrafficControllerService::new(s, traffic_controller.clone(), policy_config.clone())
+            });
         let service_builder = jsonrpsee::server::ServerBuilder::new()
             // Since we're not using jsonrpsee's server to actually handle connections this value
             // is instead limiting the number of concurrent requests and has no impact on the
