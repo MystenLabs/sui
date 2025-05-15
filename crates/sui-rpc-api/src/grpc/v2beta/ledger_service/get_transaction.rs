@@ -190,7 +190,7 @@ fn transaction_to_response(
                                 Some((layout, &event.contents))
                             })
                             .and_then(|(layout, contents)| {
-                                sui_types::proto_value::ProtoVisitor::new(
+                                sui_types::proto_value::ProtoVisitorBuilder::new(
                                     service.config.max_json_move_value_size(),
                                 )
                                 .deserialize_value(contents, &layout)
