@@ -26,7 +26,10 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
 use tracing::warn;
 
-use super::{overload_tracker::OverloadTracker, ExecutionSchedulerAPI, PendingCertificate};
+use super::{
+    overload_tracker::{OverloadTracker, TransactionQueue},
+    ExecutionSchedulerAPI, PendingCertificate,
+};
 
 #[derive(Clone)]
 pub(crate) struct ExecutionScheduler {
@@ -37,6 +40,7 @@ pub(crate) struct ExecutionScheduler {
     overload_tracker: Arc<OverloadTracker>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
     metrics: Arc<AuthorityMetrics>,
+    executing_certificate_queue: Arc<RwLock<TransactionQueue>>,
 }
 
 impl ExecutionScheduler {
@@ -55,6 +59,7 @@ impl ExecutionScheduler {
             overload_tracker: Arc::new(OverloadTracker::new()),
             tx_ready_certificates,
             metrics,
+            executing_certificate_queue: Arc::new(RwLock::new(TransactionQueue::default())),
         }
     }
 
@@ -64,6 +69,9 @@ impl ExecutionScheduler {
             .write()
             .remove(certificate.digest());
         self.executing_certificates
+            .write()
+            .remove(certificate.digest());
+        self.executing_certificate_queue
             .write()
             .remove(certificate.digest());
         self.overload_tracker
@@ -138,6 +146,9 @@ impl ExecutionScheduler {
                 continue;
             }
             self.overload_tracker.add_pending_certificate(cert.data());
+            self.executing_certificate_queue
+                .write()
+                .insert(*cert.digest(), Instant::now());
 
             let scheduler = self.clone();
             let epoch = epoch_store.epoch();
@@ -156,6 +167,17 @@ impl ExecutionScheduler {
         self.metrics
             .transaction_manager_num_pending_certificates
             .set(self.pending_certificates.read().len() as i64);
+
+        let oldest_executing_certificate = self.executing_certificate_queue.read().first();
+        if let Some((time, digest)) = oldest_executing_certificate {
+            if time.elapsed() > std::time::Duration::from_secs(30) {
+                tracing::error!(
+                    "Transaction {:?} has been executing for too long. Time={}s",
+                    digest,
+                    time.elapsed().as_secs()
+                );
+            }
+        }
     }
 
     async fn schedule_transaction(

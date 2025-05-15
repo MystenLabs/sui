@@ -20,7 +20,7 @@ use tokio::time::Instant;
 use tracing::info;
 
 #[derive(Default, Debug)]
-struct TransactionQueue {
+pub(crate) struct TransactionQueue {
     digests: HashMap<TransactionDigest, Instant>,
     ages: BinaryHeap<(Reverse<Instant>, TransactionDigest)>,
 }
@@ -162,7 +162,7 @@ impl TransactionQueue {
 
     /// Insert the digest into the queue with the given time. If the digest is
     /// already in the queue, this is a no-op.
-    fn insert(&mut self, digest: TransactionDigest, time: Instant) {
+    pub(crate) fn insert(&mut self, digest: TransactionDigest, time: Instant) {
         if let Entry::Vacant(entry) = self.digests.entry(digest) {
             entry.insert(time);
             self.ages.push((Reverse(time), digest));
@@ -174,7 +174,7 @@ impl TransactionQueue {
     ///
     /// After removing the digest, first() will return the new oldest entry
     /// in the queue (which may be unchanged).
-    fn remove(&mut self, digest: &TransactionDigest) -> Option<Instant> {
+    pub(crate) fn remove(&mut self, digest: &TransactionDigest) -> Option<Instant> {
         let when = self.digests.remove(digest)?;
 
         // This loop removes all previously inserted entries that no longer
@@ -198,7 +198,7 @@ impl TransactionQueue {
     }
 
     /// Return the oldest entry in the queue.
-    fn first(&self) -> Option<(Instant, TransactionDigest)> {
+    pub(crate) fn first(&self) -> Option<(Instant, TransactionDigest)> {
         self.ages.peek().map(|(time, digest)| (time.0, *digest))
     }
 }

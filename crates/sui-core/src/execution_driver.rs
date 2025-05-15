@@ -129,6 +129,7 @@ pub async fn execution_process(
                 }
                 _ => (),
             }
+            tracing::info!(?digest, "Transaction executed");
             authority
                 .metrics
                 .execution_driver_executed_transactions
