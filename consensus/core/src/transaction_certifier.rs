@@ -158,31 +158,39 @@ impl TransactionCertifier {
     }
 
     /// Retrieves transactions in the block that have received reject votes, and the total stake of the votes.
+    /// TransactionIndex not included in the output has no reject votes.
     /// Returns None if no information is found for the block.
     pub(crate) fn get_reject_votes(
         &self,
         block_ref: &BlockRef,
     ) -> Option<Vec<(TransactionIndex, Stake)>> {
-        let mut reject_votes = vec![];
-        for (transaction_index, stake_agg) in self
+        let accumulated_reject_votes = self
             .certifier_state
             .read()
             .votes
             .get(block_ref)?
             .reject_txn_votes
             .iter()
-        {
-            if stake_agg.stake() > 0 {
-                reject_votes.push((*transaction_index, stake_agg.stake()));
-            }
-        }
-        Some(reject_votes)
+            .map(|(idx, stake_agg)| (*idx, stake_agg.stake()))
+            .collect::<Vec<_>>();
+        Some(accumulated_reject_votes)
     }
 
-    /// Runs garbage collection on the internal state and updates the GC round for the certifier.
+    /// Runs garbage collection on the internal state by removing data for blocks <= gc_round,
+    /// and updates the GC round for the certifier.
+    ///
+    /// IMPORTANT: the gc_round used here can trail the latest gc_round from DagState.
+    /// This is because reject votes received by transactions below gc_round still need to
+    /// be accessed from CommitFinalizer.
     pub(crate) fn run_gc(&self, gc_round: Round) {
-        let mut certifier_state = self.certifier_state.write();
-        certifier_state.update_gc_round(gc_round);
+        let dag_state_gc_round = self.dag_state.read().gc_round();
+        assert!(
+            gc_round <= dag_state_gc_round,
+            "TransactionCertifier cannot GC higher than DagState GC round ({} > {})",
+            gc_round,
+            dag_state_gc_round
+        );
+        self.certifier_state.write().update_gc_round(gc_round);
     }
 }
 

@@ -34,6 +34,11 @@ pub(crate) struct CommitFinalizerHandle {
 }
 
 impl CommitFinalizerHandle {
+    // Sends a CommittedSubDag and whether it is a direct commit to CommitFinalizer,
+    // which will finalize the commit before sending it to execution.
+    //
+    // NOTE: it is always safe to consider a commit as indirect, even if it is a direct commit.
+    // The inverse is not true, because a direct commit will trigger optimizations that are invalid for indirect commits.
     pub(crate) fn send(&self, commit: (CommittedSubDag, bool)) -> ConsensusResult<()> {
         self.sender.send(commit).map_err(|e| {
             tracing::warn!("Failed to send to commit finalizer, probably due to shutdown: {e:?}");
@@ -130,8 +135,8 @@ impl CommitFinalizer {
             }
         }
 
-        // Run TransactionCertifier GC only with finalized commits.
-        // Other blocks can still be used for finalization.
+        // GC TransactionCertifier state with finalized commits, to make sure unfinalized transactions
+        // can still access their reject votes from TransactionCertifier.
         if let Some(last_commit) = finalized_commits.last() {
             let gc_round = last_commit
                 .leader

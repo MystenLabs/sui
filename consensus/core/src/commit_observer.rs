@@ -41,7 +41,7 @@ pub(crate) struct CommitObserver {
     leader_schedule: Arc<LeaderSchedule>,
     /// Component to deterministically collect subdags for committed leaders.
     commit_interpreter: Linearizer,
-    /// An unbounded channel to send commits to commit handler.
+    /// Handle to an unbounded channel to send output commits.
     commit_finalizer_handle: CommitFinalizerHandle,
 }
 
@@ -174,6 +174,7 @@ impl CommitObserver {
             info!("Sending commit {} during recovery", commit.index());
             let committed_sub_dag =
                 load_committed_subdag_from_store(self.store.as_ref(), commit, reputation_scores);
+            // Assume indirect commit during recovery to be safe.
             self.commit_finalizer_handle
                 .send((committed_sub_dag, false))
                 .unwrap();
