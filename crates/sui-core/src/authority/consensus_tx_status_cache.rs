@@ -92,6 +92,11 @@ impl ConsensusTxStatusCache {
             let inner = self.inner.read();
             if let Some(status) = inner.transaction_status.get(&transaction_position) {
                 if Some(status) != old_status.as_ref() {
+                    if let Some(old_status) = old_status {
+                        // The only scenario where the status may change, is when the transaction
+                        // is initially fastpath certified, and then later finalized or rejected.
+                        assert_eq!(old_status, ConsensusTxStatus::FastpathCertified);
+                    }
                     return NotifyReadConsensusTxStatusResult::Status(status.clone());
                 }
             }
