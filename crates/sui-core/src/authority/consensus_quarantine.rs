@@ -455,13 +455,10 @@ impl ConsensusOutputCache {
         );
     }
 
-    pub fn remove_shared_object_assignments<'a>(
-        &self,
-        keys: impl IntoIterator<Item = &'a TransactionKey>,
-    ) {
+    pub fn remove_shared_object_assignments(&self, keys: impl IntoIterator<Item = TransactionKey>) {
         let mut removed_count = 0;
         for tx_key in keys {
-            if self.shared_version_assignments.remove(tx_key).is_some() {
+            if self.shared_version_assignments.remove(&tx_key).is_some() {
                 removed_count += 1;
             }
         }
@@ -717,7 +714,8 @@ impl ConsensusOutputQuarantine {
                     output
                         .pending_checkpoints
                         .iter()
-                        .flat_map(|c| c.roots().iter()),
+                        .flat_map(|c| c.roots().iter())
+                        .copied(),
                 );
                 output.write_to_batch(epoch_store, batch)?;
             } else {

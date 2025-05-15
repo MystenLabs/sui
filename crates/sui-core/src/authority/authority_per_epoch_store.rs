@@ -1433,9 +1433,9 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub(crate) fn remove_shared_version_assignments<'a>(
+    pub(crate) fn remove_shared_version_assignments(
         &self,
-        keys: impl IntoIterator<Item = &'a TransactionKey>,
+        keys: impl IntoIterator<Item = TransactionKey>,
     ) {
         self.consensus_output_cache
             .remove_shared_object_assignments(keys);
