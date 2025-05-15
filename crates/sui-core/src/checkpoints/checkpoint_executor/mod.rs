@@ -25,7 +25,7 @@ use std::{sync::Arc, time::Instant};
 use sui_types::crypto::RandomnessRound;
 use sui_types::inner_temporary_store::PackageStoreWithFallback;
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
-use sui_types::transaction::{TransactionDataAPI, TransactionKind};
+use sui_types::transaction::{TransactionDataAPI, TransactionKey, TransactionKind};
 
 use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
 use sui_macros::fail_point;
@@ -370,14 +370,37 @@ impl CheckpointExecutor {
             .handle_finalized_checkpoint(&ckpt_state.data.checkpoint, &ckpt_state.data.tx_digests)
             .expect("cannot fail");
 
+        let randomness_rounds = self.extract_randomness_rounds(
+            &ckpt_state.data.checkpoint,
+            &ckpt_state.data.checkpoint_contents,
+        );
+
+        if self.state.is_fullnode(&self.epoch_store) {
+            let epoch = ckpt_state.data.checkpoint.epoch;
+            // Remove version assignments on fullnodes after checkpoint execution.
+            // On validators, version assignments are removed when consensus output is committed.
+            // We cannot remove here on validators because checkpoint execution can run ahead of
+            // consensus, which would then re-insert version assignments.
+            self.epoch_store.remove_shared_version_assignments(
+                randomness_rounds
+                    .iter()
+                    .map(|round| TransactionKey::RandomnessRound(epoch, *round)),
+            );
+
+            self.epoch_store.remove_shared_version_assignments(
+                ckpt_state
+                    .data
+                    .tx_digests
+                    .iter()
+                    .copied()
+                    .map(TransactionKey::Digest),
+            );
+        }
+
         // Once the checkpoint is finalized, we know that any randomness contained in this checkpoint has
         // been successfully included in a checkpoint certified by quorum of validators.
         // (RandomnessManager/RandomnessReporter is only present on validators.)
         if let Some(randomness_reporter) = self.epoch_store.randomness_reporter() {
-            let randomness_rounds = self.extract_randomness_rounds(
-                &ckpt_state.data.checkpoint,
-                &ckpt_state.data.checkpoint_contents,
-            );
             for round in randomness_rounds {
                 debug!(?round, "notifying RandomnessReporter that randomness update was executed in checkpoint");
                 randomness_reporter
