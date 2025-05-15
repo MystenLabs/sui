@@ -2,13 +2,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-mod dependency_set;
-// TODO: this shouldn't be pub; need to move resolver error into resolver module
-pub mod external;
-mod git;
-mod local;
-
-pub use dependency_set::DependencySet;
 use std::{
     collections::BTreeMap,
     fmt::{self, Debug},
@@ -16,13 +9,14 @@ use std::{
     path::PathBuf,
     process::{Command, Stdio},
 };
-use tracing::debug;
 
 use derive_where::derive_where;
 use serde::{
     Deserialize, Deserializer, Serialize,
     de::{self, MapAccess, SeqAccess, Visitor},
 };
+
+use tracing::debug;
 
 use crate::{
     errors::{GitError, PackageError, PackageResult, ResolverError},
@@ -33,6 +27,24 @@ use crate::{
 use external::ExternalDependency;
 use git::{GitRepo, PinnedGitDependency, UnpinnedGitDependency};
 use local::LocalDependency;
+
+mod dependency_set;
+// TODO: this shouldn't be pub; need to move resolver error into resolver module
+pub mod external;
+mod git;
+mod local;
+
+pub use dependency_set::DependencySet;
+
+// TODO (potential refactor): consider using objects for manifest dependencies (i.e. `Box<dyn UnpinnedDependency>`).
+//      part of the complexity here would be deserialization - probably need a flavor-specific
+//      function that converts a toml value to a Box<dyn UnpinnedDependency>
+//
+//      resolution would also be interesting because of batch resolution. Would probably need a
+//      trait method to return a resolver object, and then a method on the resolver object to
+//      resolve a bunch of dependencies (resolvers could implement Eq)
+//
+// TODO: maybe rename ManifestDependencyInfo to UnpinnedDependency
 
 /// Phantom type to represent pinned dependencies (see [PinnedDependency])
 #[derive(Debug, PartialEq, Eq)]
@@ -45,6 +57,7 @@ pub struct Unpinned;
 /// [ManifestDependencyInfo]s contain the dependency-type-specific things that users write in their
 /// Move.toml files in the `dependencies` section.
 ///
+/// TODO: this paragraph will change with upcoming design changes:
 /// There are additional general fields in the manifest format (like `override` or `rename-from`)
 /// that are not part of the ManifestDependencyInfo. We separate these partly because these things
 /// are not serialized to the Lock file. See [crate::package::manifest] for the full representation
@@ -80,6 +93,8 @@ pub enum PinnedDependencyInfo<F: MoveFlavor + ?Sized> {
     FlavorSpecific(F::FlavorDependency<Pinned>),
 }
 
+// TODO: these should be moved down.
+
 // UNPINNED
 impl<'de, F> Deserialize<'de> for ManifestDependencyInfo<F>
 where
@@ -107,7 +122,10 @@ where
                 Ok(ManifestDependencyInfo::Local(dep))
             } else {
                 // TODO: maybe this could be prettier. The problem is that we don't know how to
-                // tell if something is a flavor dependency
+                // tell if something is a flavor dependency. One option might be to add a method to
+                // [MoveFlavor] that gives the list of flavor dependency tags. Another approach
+                // worth considering is removing flavor dependencies entirely and just having
+                // on-chain dependencies (with the flavor being used to resolve them).
                 let dep = toml::Value::try_from(data)
                     .map_err(de::Error::custom)?
                     .try_into()
@@ -184,6 +202,7 @@ fn split<F: MoveFlavor>(
     (gits, exts, locs, flav)
 }
 
+// TODO: this will change with upcoming design changes:
 /// Replace all dependencies with their pinned versions. The returned set may have a different set
 /// of keys than the input, for example if new implicit dependencies are added or if external
 /// resolvers resolve default deps to dep-replacements, or if dep-replacements are identical to the
@@ -231,6 +250,7 @@ pub async fn pin<F: MoveFlavor>(
     ]))
 }
 
+// TODO: this will change with the upcoming design changes:
 /// For each environment, if none of the implicit dependencies are present in [deps] (or the
 /// default environment), then they are all added.
 // TODO: what's the notion of identity used here?
@@ -250,3 +270,7 @@ fn fetch<F: MoveFlavor>(
 
     todo!()
 }
+
+// TODO: unit tests
+#[cfg(test)]
+mod tests {}

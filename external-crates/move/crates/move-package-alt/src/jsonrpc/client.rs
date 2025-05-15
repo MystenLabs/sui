@@ -18,6 +18,7 @@ pub struct Endpoint<I: AsyncRead, O: AsyncWrite> {
     sqn: RequestID,
 }
 
+// TODO: think if we keep errors here or move them in their own error module
 #[derive(Error, Debug)]
 pub enum JsonRpcError {
     #[error(transparent)]
