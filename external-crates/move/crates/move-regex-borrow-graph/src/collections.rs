@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    bail, ensure, error,
+    Result, bail, ensure, error,
     references::{Node, Ref},
     regex::{Extension, Regex},
-    Result,
 };
 use core::fmt;
 use std::collections::{BTreeMap, BTreeSet};

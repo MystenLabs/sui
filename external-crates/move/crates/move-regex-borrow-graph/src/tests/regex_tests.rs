@@ -115,7 +115,7 @@ fn regex_remove_prefix(r: &str, ext: &str) -> Vec<String> {
     from_str(r)
         .remove_prefix(&ext)
         .into_iter()
-        .map(|regex| to_string(regex))
+        .map(to_string)
         .collect()
 }
 
@@ -124,7 +124,7 @@ fn extension_remove_prefix(ext: &str, r: &str) -> Vec<String> {
     assert_eq!(rem, "");
     ext.remove_prefix(&from_str(r))
         .into_iter()
-        .map(|regex| to_string(regex))
+        .map(to_string)
         .collect()
 }
 

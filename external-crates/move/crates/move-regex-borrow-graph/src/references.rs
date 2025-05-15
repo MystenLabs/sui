@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    bail,
+    Result, bail,
     collections::{Path, Paths},
     error,
     regex::Regex,
-    Result,
 };
 use itertools::Either;
 use std::{
