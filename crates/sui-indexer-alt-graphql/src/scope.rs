@@ -30,11 +30,12 @@ impl Scope {
         })
     }
 
-    /// Created a nested scope pinned to a different checkpoint.
-    pub(crate) fn with_checkpoint_viewed_at(&self, checkpoint_viewed_at: u64) -> Self {
-        Self {
+    /// Created a nested scope pinned to a past checkpoint. Returns `None` if the checkpoint is in
+    /// the future.
+    pub(crate) fn with_checkpoint_viewed_at(&self, checkpoint_viewed_at: u64) -> Option<Self> {
+        (checkpoint_viewed_at <= self.checkpoint_viewed_at).then_some(Self {
             checkpoint_viewed_at,
-        }
+        })
     }
 
     pub(crate) fn checkpoint_viewed_at(&self) -> u64 {
