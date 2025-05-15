@@ -33,6 +33,7 @@ pub(crate) struct ExecutionScheduler {
     object_cache_read: Arc<dyn ObjectCacheRead>,
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
     pending_certificates: Arc<RwLock<HashSet<TransactionDigest>>>,
+    executing_certificates: Arc<RwLock<HashSet<TransactionDigest>>>,
     overload_tracker: Arc<OverloadTracker>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
     metrics: Arc<AuthorityMetrics>,
@@ -50,6 +51,7 @@ impl ExecutionScheduler {
             object_cache_read,
             transaction_cache_read,
             pending_certificates: Arc::new(RwLock::new(HashSet::new())),
+            executing_certificates: Arc::new(RwLock::new(HashSet::new())),
             overload_tracker: Arc::new(OverloadTracker::new()),
             tx_ready_certificates,
             metrics,
@@ -60,11 +62,17 @@ impl ExecutionScheduler {
         self.pending_certificates
             .write()
             .remove(certificate.digest());
+        self.executing_certificates
+            .write()
+            .remove(certificate.digest());
         self.overload_tracker
             .remove_pending_certificate(certificate.data());
         self.metrics
             .transaction_manager_num_pending_certificates
             .set(self.pending_certificates.read().len() as i64);
+        self.metrics
+            .transaction_manager_num_executing_certificates
+            .set(self.executing_certificates.read().len() as i64);
     }
 
     fn enqueue_impl(
@@ -162,7 +170,7 @@ impl ExecutionScheduler {
         tracing::debug!(?digest, "Schedule_transaction");
         let enqueue_time = Instant::now();
         tracing::trace!(
-            ?digests,
+            ?digest,
             "Waiting for input objects: {:?}",
             input_and_receiving_keys
         );
@@ -192,6 +200,12 @@ impl ExecutionScheduler {
                         .transaction_manager_transaction_queue_age_s
                         .observe(enqueue_time.elapsed().as_secs_f64());
                     tracing::debug!(?digests, "Input objects available");
+                    self.executing_certificates
+                        .write()
+                        .insert(*digest);
+                    self.metrics
+                        .transaction_manager_num_executing_certificates
+                        .set(self.executing_certificates.read().len() as i64);
                     // TODO: Eventually we could fold execution_driver into the scheduler.
                     let _ = self.tx_ready_certificates.send(PendingCertificate {
                         certificate: cert,
