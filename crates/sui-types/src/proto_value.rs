@@ -310,33 +310,26 @@ impl<'b, 'l> Visitor<'b, 'l> for ProtoVisitor {
 
     fn visit_variant(&mut self, driver: &mut VariantDriver<'_, 'b, 'l>) -> Result<Value, Error> {
         self.inc_depth()?;
-        self.inc_depth()?;
 
-        let mut variant = Struct::default();
+        let mut map = Struct::default();
         self.debit_value()?;
-        self.debit_str(driver.variant_name().as_str())?;
 
-        let mut variant_fields = Struct::default();
-        self.debit_value()?;
+        self.debit_str("@variant")?;
+        self.debit_string_value(driver.variant_name().as_str())?;
+
+        map.fields
+            .insert("@variant".to_owned(), driver.variant_name().as_str().into());
 
         for field in driver.variant_layout() {
             self.debit_str(field.name.as_str())?;
         }
 
         while let Some((field, elem)) = driver.next_field(self)? {
-            variant_fields
-                .fields
-                .insert(field.name.as_str().to_owned(), elem);
+            map.fields.insert(field.name.as_str().to_owned(), elem);
         }
 
-        variant.fields.insert(
-            driver.variant_name().as_str().to_owned(),
-            Value::from(Kind::StructValue(variant_fields)),
-        );
-
         self.dec_depth();
-        self.dec_depth();
-        Ok(Value::from(Kind::StructValue(variant)))
+        Ok(Value::from(Kind::StructValue(map)))
     }
 }
 
