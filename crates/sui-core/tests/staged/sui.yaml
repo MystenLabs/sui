@@ -29,12 +29,6 @@ Argument:
         TUPLE:
           - U16
           - U16
-Authenticator:
-  ENUM:
-    0:
-      SingleOwner:
-        NEWTYPE:
-          TYPENAME: SuiAddress
 AuthenticatorStateExpire:
   STRUCT:
     - min_epoch: U64
@@ -59,6 +53,12 @@ AuthorityQuorumSignInfo:
           CONTENT: U8
           SIZE: 48
     - signers_map: BYTES
+Authorizer:
+  ENUM:
+    0:
+      SingleOwner:
+        NEWTYPE:
+          TYPENAME: SuiAddress
 CallArg:
   ENUM:
     0:
@@ -851,8 +851,8 @@ Owner:
         STRUCT:
           - start_version:
               TYPENAME: SequenceNumber
-          - authenticator:
-              TYPENAME: Authenticator
+          - authorizer:
+              TYPENAME: Authorizer
 PackageUpgradeError:
   ENUM:
     0:
