@@ -7,6 +7,10 @@ pub use checked::*;
 mod checked {
     use crate::{
         adapter::new_native_extensions,
+        data_store::{
+            PackageStore, cached_data_store::CachedPackageStore, linkage_view::LinkageView,
+            sui_data_store::SuiDataStore,
+        },
         error::convert_vm_error,
         execution_mode::ExecutionMode,
         execution_value::{
@@ -15,10 +19,6 @@ mod checked {
         },
         gas_charger::GasCharger,
         gas_meter::SuiGasMeter,
-        programmable_transactions::{
-            data_store::{PackageStore, SuiDataStore},
-            linkage_view::LinkageView,
-        },
         type_resolver::TypeTagResolver,
     };
     use move_binary_format::{
@@ -147,7 +147,9 @@ mod checked {
         where
             'a: 'state,
         {
-            let mut linkage_view = LinkageView::new(Box::new(state_view.as_sui_resolver()));
+            let mut linkage_view = LinkageView::new(Box::new(CachedPackageStore::new(Box::new(
+                state_view.as_sui_resolver(),
+            ))));
             let mut input_object_map = BTreeMap::new();
             let inputs = inputs
                 .into_iter()
