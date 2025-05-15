@@ -7,7 +7,9 @@ Manifest {
             file: "tests/data/basic_implicit_deps/Move.toml",
             value: Spanned {
                 span: 17..26,
-                value: "example",
+                value: Identifier(
+                    "example",
+                ),
             },
         },
         edition: Located {
@@ -23,7 +25,9 @@ Manifest {
         "mainnet": "35834a8a",
     },
     dependencies: {
-        "Sui": ManifestDependency {
+        Identifier(
+            "Sui",
+        ): ManifestDependency {
             dependency_info: Local(
                 LocalDependency {
                     local: "../../../../../../../../../crates/sui-framework/packages/sui-framework",

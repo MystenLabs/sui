@@ -5,21 +5,27 @@ Lockfile {
     unpublished: UnpublishedTable {
         dependencies: UnpublishedDependencies {
             pinned: {
-                "bar": Git(
+                Identifier(
+                    "bar",
+                ): Git(
                     PinnedGitDependency {
                         repo: "",
                         rev: "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0",
                         path: "",
                     },
                 ),
-                "foo": Local(
+                Identifier(
+                    "foo",
+                ): Local(
                     LocalDependency {
                         local: "../foo",
                     },
                 ),
             },
             unpinned: {
-                "bar": External(
+                Identifier(
+                    "bar",
+                ): External(
                     ExternalDependency {
                         resolver: "mvr",
                         data: String(
@@ -27,7 +33,9 @@ Lockfile {
                         ),
                     },
                 ),
-                "foo": Local(
+                Identifier(
+                    "foo",
+                ): Local(
                     LocalDependency {
                         local: "../foo",
                     },
@@ -40,7 +48,9 @@ Lockfile {
         "mainnet": Publication {
             metadata: (),
             dependencies: {
-                "std": Git(
+                Identifier(
+                    "std",
+                ): Git(
                     PinnedGitDependency {
                         repo: "",
                         rev: "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0",
@@ -52,14 +62,18 @@ Lockfile {
         "testnet": Publication {
             metadata: (),
             dependencies: {
-                "std": Git(
+                Identifier(
+                    "std",
+                ): Git(
                     PinnedGitDependency {
                         repo: "",
                         rev: "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0",
                         path: "",
                     },
                 ),
-                "sui": Git(
+                Identifier(
+                    "sui",
+                ): Git(
                     PinnedGitDependency {
                         repo: "",
                         rev: "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0",
