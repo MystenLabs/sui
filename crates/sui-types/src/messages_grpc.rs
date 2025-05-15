@@ -441,6 +441,8 @@ pub struct RawWaitForEffectsResponseExecuted {
     pub effects_digest: Bytes,
     #[prost(message, optional, tag = "2")]
     pub details: Option<RawWaitForEffectsResponseDetails>,
+    #[prost(bool, tag = "3")]
+    pub finalized: bool,
 }
 
 #[derive(Clone, prost::Message)]

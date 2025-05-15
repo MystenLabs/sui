@@ -1189,6 +1189,7 @@ impl ValidatorService {
         let response = WaitForEffectsResponse::Executed {
             effects_digest,
             details,
+            finalized: cur_status == ConsensusTxStatus::Finalized,
         };
         Ok(response)
     }

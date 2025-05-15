@@ -11,7 +11,7 @@ use mysten_common::sync::notify_read::NotifyRead;
 
 use crate::wait_for_effects_request::ConsensusTxPosition;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ConsensusTxStatus {
     // Transaction is voted to accept by a quorum of validators on fastpath.
     FastpathCertified,
@@ -70,7 +70,7 @@ impl ConsensusTxStatusCache {
         }
         let old_status = inner
             .transaction_status
-            .insert(transaction_position, status.clone());
+            .insert(transaction_position, status);
         if old_status.is_none() {
             inner
                 .round_lookup_map
@@ -97,7 +97,7 @@ impl ConsensusTxStatusCache {
                         // is initially fastpath certified, and then later finalized or rejected.
                         assert_eq!(old_status, ConsensusTxStatus::FastpathCertified);
                     }
-                    return NotifyReadConsensusTxStatusResult::Status(status.clone());
+                    return NotifyReadConsensusTxStatusResult::Status(status);
                 }
             }
             // Inner read lock dropped here.

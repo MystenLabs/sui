@@ -317,6 +317,65 @@ async fn test_wait_for_effects_quorum_rejected() {
 }
 
 #[tokio::test]
+async fn test_wait_for_effects_fastpath_certified() {
+    telemetry_subscribers::init_for_testing();
+    // This test exercises the path where the transaction is first fastpath certified,
+    // then executed right away.
+    let test_context = TestContext::new().await;
+
+    let transaction = test_context.build_test_transaction();
+    let tx_digest = *transaction.digest();
+    let tx_position = ConsensusTxPosition {
+        block: BlockRef::MIN,
+        index: TransactionIndex::MIN,
+    };
+
+    let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
+        epoch: 0,
+        transaction_digest: tx_digest,
+        transaction_position: tx_position,
+        // Also test the case where details are not requested.
+        include_details: false,
+    })
+    .unwrap();
+
+    let state_clone = test_context.state.clone();
+    let exec_handle = tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let epoch_store = state_clone.epoch_store_for_testing();
+        epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::FastpathCertified);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        state_clone
+            .try_execute_immediately(&transaction, None, &epoch_store)
+            .await
+            .unwrap()
+            .0
+    });
+
+    let response = test_context
+        .client
+        .wait_for_effects(request, None)
+        .await
+        .unwrap()
+        .try_into()
+        .unwrap();
+
+    let exec_effects = exec_handle.await.unwrap();
+    match response {
+        WaitForEffectsResponse::Executed {
+            details,
+            effects_digest,
+            finalized,
+        } => {
+            assert!(details.is_none());
+            assert_eq!(effects_digest, exec_effects.digest());
+            assert!(!finalized);
+        }
+        _ => panic!("Expected Executed response"),
+    }
+}
+
+#[tokio::test]
 async fn test_wait_for_effects_finalized() {
     telemetry_subscribers::init_for_testing();
     // This test exercises the path where the transaction is first fastpath certified,
@@ -367,9 +426,11 @@ async fn test_wait_for_effects_finalized() {
         WaitForEffectsResponse::Executed {
             details,
             effects_digest,
+            finalized,
         } => {
             assert!(details.is_none());
             assert_eq!(effects_digest, exec_effects.digest());
+            assert!(finalized);
         }
         _ => panic!("Expected Executed response"),
     }
