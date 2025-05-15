@@ -29,7 +29,7 @@ enum Action {
 }
 
 #[derive(Debug, Parser)]
-#[arg(
+#[command(
     name = "Sui format generator",
     about = "Trace serde (de)serialization to generate format descriptions for Sui types"
 )]
