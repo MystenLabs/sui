@@ -2,6 +2,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+mod dependency_set;
+// TODO: this shouldn't be pub; need to move resolver error into resolver module
+pub mod external;
+mod git;
+mod local;
+
+pub use dependency_set::DependencySet;
+
 use std::{
     collections::BTreeMap,
     fmt::{self, Debug},
@@ -25,16 +33,8 @@ use crate::{
 };
 
 use external::ExternalDependency;
-use git::{GitRepo, PinnedGitDependency, UnpinnedGitDependency};
+use git::{GitRepo, PinnedGitDependency, UnpinnedGitDependency, fetch_dep};
 use local::LocalDependency;
-
-mod dependency_set;
-// TODO: this shouldn't be pub; need to move resolver error into resolver module
-pub mod external;
-mod git;
-mod local;
-
-pub use dependency_set::DependencySet;
 
 // TODO (potential refactor): consider using objects for manifest dependencies (i.e. `Box<dyn UnpinnedDependency>`).
 //      part of the complexity here would be deserialization - probably need a flavor-specific
@@ -185,17 +185,20 @@ fn split<F: MoveFlavor>(
     DependencySet<LocalDependency>,
     DependencySet<F::FlavorDependency<Unpinned>>,
 ) {
-    let mut gits = DependencySet::new();
-    let mut exts = DependencySet::new();
-    let mut locs = DependencySet::new();
-    let mut flav = DependencySet::new();
+    use DependencySet as DS;
+    use ManifestDependencyInfo as M;
+
+    let mut gits = DS::new();
+    let mut exts = DS::new();
+    let mut locs = DS::new();
+    let mut flav = DS::new();
 
     for (env, package_name, dep) in deps.clone().into_iter() {
         match dep {
-            ManifestDependencyInfo::Git(info) => gits.insert(env, package_name, info),
-            ManifestDependencyInfo::External(info) => exts.insert(env, package_name, info),
-            ManifestDependencyInfo::Local(info) => locs.insert(env, package_name, info),
-            ManifestDependencyInfo::FlavorSpecific(info) => flav.insert(env, package_name, info),
+            M::Git(info) => gits.insert(env, package_name, info),
+            M::External(info) => exts.insert(env, package_name, info),
+            M::Local(info) => locs.insert(env, package_name, info),
+            M::FlavorSpecific(info) => flav.insert(env, package_name, info),
         }
     }
 
@@ -212,6 +215,8 @@ pub async fn pin<F: MoveFlavor>(
     mut deps: DependencySet<ManifestDependencyInfo<F>>,
     envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
 ) -> PackageResult<DependencySet<PinnedDependencyInfo<F>>> {
+    use PinnedDependencyInfo as P;
+
     // resolution
     ExternalDependency::resolve(&mut deps, envs).await?;
     debug!("done resolving");
@@ -220,27 +225,21 @@ pub async fn pin<F: MoveFlavor>(
     let (mut gits, exts, mut locs, mut flav) = split(&deps);
     assert!(exts.is_empty(), "resolve must remove external dependencies");
 
-    let pinned_gits: DependencySet<PinnedDependencyInfo<F>> = UnpinnedGitDependency::pin(gits)
+    let pinned_gits: DependencySet<P<F>> = UnpinnedGitDependency::pin(gits)
         .await?
         .into_iter()
-        .map(|(env, package, dep)| (env, package, PinnedDependencyInfo::Git::<F>(dep)))
+        .map(|(env, package, dep)| (env, package, P::Git::<F>(dep)))
         .collect();
 
     let pinned_locs = locs
         .into_iter()
-        .map(|(env, package, dep)| (env, package, PinnedDependencyInfo::Local::<F>(dep)))
+        .map(|(env, package, dep)| (env, package, P::Local::<F>(dep)))
         .collect();
 
     let pinned_flav = flavor
         .pin(flav)?
         .into_iter()
-        .map(|(env, package, dep)| {
-            (
-                env,
-                package,
-                PinnedDependencyInfo::FlavorSpecific::<F>(dep.clone()),
-            )
-        })
+        .map(|(env, package, dep)| (env, package, P::FlavorSpecific::<F>(dep.clone())))
         .collect();
 
     Ok(DependencySet::merge([
@@ -261,14 +260,41 @@ fn add_implicit_deps<F: MoveFlavor>(
     todo!()
 }
 
-/// Ensure that all dependencies are stored locally and return the paths to their contents. The
-/// returned map is guaranteed to have the same keys as [deps].
-fn fetch<F: MoveFlavor>(
+/// Fetch and ensure that all dependencies are stored locally and return the paths to their
+/// contents. The returned map is guaranteed to have the same keys as [deps].
+async fn fetch<F: MoveFlavor>(
+    flavor: &F,
     deps: DependencySet<PinnedDependencyInfo<F>>,
 ) -> PackageResult<DependencySet<PathBuf>> {
-    // TODO: check if dependency is a Move project.
+    use DependencySet as DS;
+    use PinnedDependencyInfo as P;
 
-    todo!()
+    let mut gits = DS::new();
+    let mut locs = DS::new();
+    let mut flav = DS::new();
+
+    for (env, package_name, dep) in deps.into_iter() {
+        match dep {
+            P::Git(info) => gits.insert(env, package_name, info),
+            P::Local(info) => locs.insert(env, package_name, info),
+            P::FlavorSpecific(info) => flav.insert(env, package_name, info),
+        }
+    }
+
+    let mut git_paths = DS::new();
+    for (env, package, dep) in gits {
+        let path = fetch_dep(dep).await?;
+        git_paths.insert(env, package, path);
+    }
+
+    let mut loc_paths = DS::new();
+    for (env, package, dep) in locs {
+        loc_paths.insert(env, package, dep.path()?);
+    }
+
+    let flav_deps_path = flavor.fetch(flav)?;
+
+    Ok(DS::merge([git_paths, loc_paths, flav_deps_path]))
 }
 
 // TODO: unit tests

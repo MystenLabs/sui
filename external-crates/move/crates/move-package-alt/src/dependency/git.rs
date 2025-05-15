@@ -22,7 +22,7 @@ use std::{
     fmt,
     marker::PhantomData,
     path::{Path, PathBuf},
-    process::{Output, Stdio},
+    process::{ExitStatus, Output, Stdio},
 };
 
 use derive_where::derive_where;
@@ -116,18 +116,19 @@ impl UnpinnedGitDependency {
     /// Replace the commit-ish [self.rev] with a commit (i.e. a SHA). Requires fetching the git
     /// repository
     async fn pin_one(&self) -> PackageResult<PinnedGitDependency> {
-        let git: GitRepo = self.clone().into();
+        let git: GitRepo = self.into();
         let sha = git.find_sha().await?;
 
         Ok(PinnedGitDependency {
-            repo: self.repo.clone(),
+            repo: git.repo_url,
             rev: sha,
-            path: self.path.clone(),
+            path: git.path,
         })
     }
 }
 
 impl GitRepo {
+    /// Create a new GitRepo instance
     pub fn new(repo: String, rev: Option<String>, path: PathBuf) -> Self {
         Self {
             repo_url: repo,
@@ -136,24 +137,23 @@ impl GitRepo {
         }
     }
 
+    /// Get the repository URL
     pub fn repo_url(&self) -> &str {
         &self.repo_url
     }
 
+    /// Get the revision
     pub fn rev(&self) -> Option<&str> {
         self.rev.as_deref()
     }
 
-    // TODO: needs a comment
-    pub fn package_set_path(&self) -> &PathBuf {
-        &self.path
-    }
-
-    /// Ensures that the repo is checked out at the specified sha.
+    /// Try to fetch the repository at the given sha ([`rev`]).
     pub async fn fetch(&self) -> PackageResult<PathBuf> {
         self.fetch_impl(None).await
     }
 
+    /// Internal implementation of fetch. It uses the default folder to fetch the repo to, defined
+    /// by the MOVE_HOME env variable.
     async fn fetch_impl(&self, fetch_to_folder: Option<PathBuf>) -> PackageResult<PathBuf> {
         let sha = self.find_sha().await?;
 
@@ -219,6 +219,7 @@ impl GitRepo {
         Ok(())
     }
 
+    /// Set the sparse checkout directory to the given path
     async fn try_set_sparse_dir(&self, repo_fs_path: &PathBuf, path: &Path) -> PackageResult<()> {
         debug!("Setting sparse checkout path to: {:?}", path);
         let cmd = self
@@ -289,11 +290,18 @@ impl GitRepo {
         cwd: Option<&PathBuf>,
     ) -> PackageResult<Output> {
         // Run the git command
-        debug!("Running git command: with args {:?}", args);
+        debug!(
+            "Running git command with args {:?} in cwd: {}",
+            args,
+            cwd.unwrap_or(&PathBuf::from(".")).display()
+        );
+
         let mut cmd = Command::new("git");
+
         if let Some(cwd) = cwd {
             cmd.current_dir(cwd);
         }
+
         cmd.args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -328,14 +336,12 @@ impl GitRepo {
             if check_is_commit_sha(r) {
                 return Ok(r.to_string());
             }
-        }
 
-        // if there is some revision which is likely a branch, a tag, or a wrong SHA (e.g., capital
-        // letter), then we have a different set of arguments than if there is no revision. In no
-        // revision case, we need to find the default branch of that remote.
+            // if there is some revision which is likely a branch, a tag, or a wrong SHA (e.g., capital
+            // letter), then we have a different set of arguments than if there is no revision. In no
+            // revision case, we need to find the default branch of that remote.
 
-        // we have a branch or tag
-        let sha = if let Some(r) = self.rev.as_ref() {
+            // we have a branch or tag
             // git ls-remote https://github.com/user/repo.git refs/heads/main
             let cmd = self
                 .run_git_cmd_with_args(
@@ -343,18 +349,29 @@ impl GitRepo {
                     None,
                 )
                 .await?;
+
+            if !cmd.status.success() {
+                debug!(
+                    "Could not run git ls-remote command, return non-zero exit code: {:?}",
+                    cmd
+                );
+                return Err(PackageError::Git(GitError::generic(format!(
+                    "git ls-remote failed for {}, with error: {}",
+                    self.repo_url, cmd.status
+                ))));
+            }
+
             let stdout = String::from_utf8(cmd.stdout)?;
-            stdout
+
+            Ok(stdout
                 .split_whitespace()
                 .next()
                 .ok_or(PackageError::Git(GitError::no_sha(&self.repo_url, r)))?
-                .to_string()
+                .to_string())
         } else {
             // nothing specified, so we need to find the default branch
-            self.find_default_branch_and_get_sha().await?
-        };
-
-        Ok(sha)
+            self.find_default_branch_and_get_sha().await
+        }
     }
 
     /// Find the default branch and return the SHA
@@ -362,18 +379,30 @@ impl GitRepo {
         let cmd = self
             .run_git_cmd_with_args(&["ls-remote", "--symref", &self.repo_url, "HEAD"], None)
             .await?;
+
+        if !cmd.status.success() {
+            debug!(
+                "Could not run git ls-remote --symref command, return non-zero exit code: {:?}",
+                cmd
+            );
+            return Err(PackageError::Git(GitError::generic(format!(
+                "git ls-remote failed for {}, with error: {}",
+                self.repo_url, cmd.status
+            ))));
+        }
+
         let stdout = String::from_utf8(cmd.stdout)?;
         let lines: Vec<_> = stdout.lines().collect();
         let default_branch = lines[0].split_whitespace().nth(1).ok_or_else(|| {
             debug!(
-                "Error: could not find default branch.\nlines{:?}\nself{:?}",
+                "Could not find default branch.\nlines{:?}\nself{:?}",
                 lines, self
             );
             PackageError::Git(GitError::no_sha(&self.repo_url, "HEAD"))
         })?;
         let sha = lines[1].split_whitespace().next().ok_or_else(|| {
             debug!(
-                "Error: could not find sha for default branch.\nlines: {:?}\nself: {:?}\n",
+                "Could not find sha for default branch.\nlines: {:?}\nself: {:?}\n",
                 lines, self
             );
             PackageError::Git(GitError::no_sha(&self.repo_url, "HEAD"))
@@ -422,6 +451,12 @@ impl From<PinnedGitDependency> for GitRepo {
     fn from(dep: PinnedGitDependency) -> Self {
         GitRepo::new(dep.repo, Some(dep.rev), dep.path)
     }
+}
+
+/// Fetch the given git dependency and return the path to the checked out repo
+pub async fn fetch_dep(dep: PinnedGitDependency) -> PackageResult<PathBuf> {
+    let git_repo = GitRepo::from(&dep);
+    git_repo.fetch().await
 }
 
 /// Deserialize a SHA string to ensure it is well formed.
