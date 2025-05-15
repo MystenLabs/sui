@@ -723,6 +723,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         index: tx_index as TransactionIndex,
                     };
                     if parsed.rejected {
+                        // TODO(fastpath): Add metrics for rejected transactions.
                         if parsed.transaction.kind.is_user_transaction() {
                             self.epoch_store
                                 .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
@@ -732,10 +733,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         continue;
                     }
                     if parsed.transaction.kind.is_user_transaction() {
-                        self.epoch_store.set_consensus_tx_status(
-                            position,
-                            ConsensusTxStatus::FastpathCertified,
-                        );
+                        self.epoch_store
+                            .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
                     }
                     let kind = classify(&parsed.transaction);
                     self.metrics
@@ -1286,7 +1285,7 @@ impl ConsensusBlockHandler {
                     continue;
                 }
                 self.epoch_store
-                    .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
+                    .set_consensus_tx_status(position, ConsensusTxStatus::FastpathCertified);
 
                 self.metrics
                     .consensus_block_handler_txn_processed
