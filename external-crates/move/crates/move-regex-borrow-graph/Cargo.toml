@@ -10,3 +10,4 @@ license = "Apache-2.0"
 itertools.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
+petgraph.workspace = true
