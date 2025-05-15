@@ -6,6 +6,7 @@
 //!
 //! Git dependencies are cached in `~/.move`, which has the following structure:
 //!
+//! TODO: this doesn't match the implementation below:
 //! ```ignore
 //! .move/
 //!   git/
@@ -34,8 +35,17 @@ use crate::errors::{GitError, GitErrorKind, Located, PackageError, PackageResult
 
 use super::{DependencySet, Pinned, Unpinned};
 
+// TODO: (potential refactor): it might be good to separate out a separate module that is just git
+//       stuff and another that uses that git stuff to implement the dependency operations (like
+//       the jsonrpc / dependency::external split).
+
+// TODO: curious about the benefit of using String instead of wrapping it. The advantage of
+//       wrapping it is that we have invariants (with the type alias, nothing prevents us from
+//       writing `let x : Sha = ""` (whereas `let x = Sha::new("")` can fail)
 type Sha = String;
 
+/// TODO keep same style around all types
+///
 /// A git dependency that is unpinned. The `rev` field can be either empty, a branch, or a sha. To
 /// resolve this into a [`PinnedGitDependency`], call `pin_one` function.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -60,7 +70,6 @@ pub struct PinnedGitDependency {
     repo: String,
 
     /// The exact sha for the revision
-    // rev: Sha,
     #[serde(deserialize_with = "deserialize_sha")]
     rev: Sha,
 
@@ -71,6 +80,7 @@ pub struct PinnedGitDependency {
 
 /// Helper struct that represents a Git repository, with extra information about which folder to
 /// checkout.
+// TODO: how is this different from [UnpinnedGitDependency]?
 #[derive(Clone, Debug)]
 pub struct GitRepo {
     /// Repository URL
@@ -81,7 +91,8 @@ pub struct GitRepo {
     path: PathBuf,
 }
 
-// Custom error type for SHA validation
+/// Custom error type for SHA validation
+// TODO: derive(Error)?
 #[derive(Debug)]
 pub enum ShaError {
     InvalidLength(usize),
@@ -133,6 +144,7 @@ impl GitRepo {
         self.rev.as_deref()
     }
 
+    // TODO: needs a comment
     pub fn package_set_path(&self) -> &PathBuf {
         &self.path
     }
@@ -163,6 +175,7 @@ impl GitRepo {
     }
 
     /// Used for testing to be able to specify which folder to fetch to. Use `fetch` for all other needs.
+    // TODO: should be non-pub
     pub async fn fetch_to_folder(&self, fetch_to_folder: PathBuf) -> PackageResult<PathBuf> {
         self.fetch_impl(Some(fetch_to_folder)).await
     }
@@ -170,6 +183,8 @@ impl GitRepo {
     /// Checkout the repository using a sparse checkout. It will try to clone without checkout, set
     /// sparse checkout directory, and then checkout the folder specified by `self.path` at the
     /// given sha.
+    ///
+    // TODO think more about debug statements and what information to log
     async fn checkout_repo(&self, repo_fs_path: &PathBuf, sha: &str) -> PackageResult<()> {
         // Checkout repo if it does not exist already
         if !repo_fs_path.exists() {
@@ -267,6 +282,7 @@ impl GitRepo {
     }
 
     /// Runs a git command from the provided arguments.
+    // TODO: check for error codes here
     pub async fn run_git_cmd_with_args(
         &self,
         args: &[&str],
@@ -433,6 +449,8 @@ pub fn format_repo_to_fs_path(repo: &str, sha: &str, root_path: Option<PathBuf>)
 
 /// Check if the given string is a valid commit SHA, i.e., 40 character long with only
 /// lowercase letters and digits
+///
+// TODO: rename this function to is_sha
 fn check_is_commit_sha(input: &str) -> bool {
     input.len() == 40
         && input
@@ -448,6 +466,7 @@ fn url_to_file_name(url: &str) -> String {
         .to_string()
 }
 
+// TODO: add more tests
 #[cfg(test)]
 mod tests {
     use super::*;
