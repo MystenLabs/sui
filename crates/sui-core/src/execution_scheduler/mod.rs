@@ -7,6 +7,7 @@ use crate::{
 };
 use enum_dispatch::enum_dispatch;
 use execution_scheduler_impl::ExecutionScheduler;
+use prometheus::IntGauge;
 use rand::Rng;
 use std::{collections::BTreeSet, sync::Arc};
 use sui_config::node::AuthorityOverloadConfig;
@@ -35,7 +36,7 @@ pub struct PendingCertificateStats {
     pub ready_time: Option<Instant>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct PendingCertificate {
     // Certified transaction to be executed.
     pub certificate: VerifiedExecutableTransaction,
@@ -47,6 +48,12 @@ pub struct PendingCertificate {
     pub waiting_input_objects: BTreeSet<InputKey>,
     // Stores stats about this transaction.
     pub stats: PendingCertificateStats,
+    pub executing_guard: Option<ExecutingGuard>,
+}
+
+#[derive(Debug)]
+pub(crate) struct ExecutingGuard {
+    num_executing_certificates: IntGauge,
 }
 
 #[enum_dispatch]
@@ -131,14 +138,19 @@ impl ExecutionSchedulerWrapper {
             ))
         }
     }
+}
 
-    #[cfg(test)]
-    pub fn as_execution_scheduler(&self) -> &ExecutionScheduler {
-        match self {
-            Self::ExecutionScheduler(es) => es,
-            Self::TransactionManager(_) => {
-                panic!("Expected ExecutionScheduler, got TransactionManager");
-            }
+impl ExecutingGuard {
+    pub fn new(num_executing_certificates: IntGauge) -> Self {
+        num_executing_certificates.inc();
+        Self {
+            num_executing_certificates,
         }
+    }
+}
+
+impl Drop for ExecutingGuard {
+    fn drop(&mut self) {
+        self.num_executing_certificates.dec();
     }
 }
