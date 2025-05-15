@@ -415,38 +415,40 @@ pub struct RawWaitForEffectsRequest {
     #[prost(bytes = "bytes", tag = "3")]
     pub transaction_position: Bytes,
 
+    /// Whether to include details of the effects,
+    /// including the effects content, events, input objects, and output objects.
     #[prost(bool, tag = "4")]
     pub include_details: bool,
 }
 
 #[derive(Clone, prost::Message)]
 pub struct RawWaitForEffectsResponse {
-    #[prost(oneof = "RawWaitForEffectsResponseInner", tags = "1, 2, 3")]
-    pub inner: Option<RawWaitForEffectsResponseInner>,
+    #[prost(oneof = "RawValidatorTransactionStatus", tags = "1, 2, 3")]
+    pub inner: Option<RawValidatorTransactionStatus>,
 }
 
 #[derive(Clone, prost::Oneof)]
-pub enum RawWaitForEffectsResponseInner {
+pub enum RawValidatorTransactionStatus {
     #[prost(message, tag = "1")]
-    Executed(RawWaitForEffectsResponseExecuted),
+    Executed(RawExecutedStatus),
     #[prost(message, tag = "2")]
-    Rejected(RawWaitForEffectsResponseRejected),
+    Rejected(RawRejectedStatus),
     #[prost(uint64, tag = "3")]
     Expired(Round),
 }
 
 #[derive(Clone, prost::Message)]
-pub struct RawWaitForEffectsResponseExecuted {
+pub struct RawExecutedStatus {
     #[prost(bytes = "bytes", tag = "1")]
     pub effects_digest: Bytes,
     #[prost(message, optional, tag = "2")]
-    pub details: Option<RawWaitForEffectsResponseDetails>,
+    pub details: Option<RawExecutedData>,
     #[prost(bool, tag = "3")]
     pub finalized: bool,
 }
 
 #[derive(Clone, prost::Message)]
-pub struct RawWaitForEffectsResponseDetails {
+pub struct RawExecutedData {
     #[prost(bytes = "bytes", tag = "1")]
     pub effects: Bytes,
     #[prost(bytes = "bytes", optional, tag = "2")]
@@ -458,7 +460,7 @@ pub struct RawWaitForEffectsResponseDetails {
 }
 
 #[derive(Clone, prost::Message)]
-pub struct RawWaitForEffectsResponseRejected {
+pub struct RawRejectedStatus {
     #[prost(enumeration = "RawRejectReason", tag = "1")]
     pub reason: i32,
     #[prost(string, optional, tag = "2")]

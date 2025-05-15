@@ -70,7 +70,7 @@ use crate::{
     checkpoints::CheckpointStore,
     mysticeti_adapter::LazyMysticetiClient,
     wait_for_effects_request::{
-        EffectsDetails, RejectReason, WaitForEffectsRequest, WaitForEffectsResponse,
+        ExecutedData, RejectReason, WaitForEffectsRequest, WaitForEffectsResponse,
     },
 };
 use crate::{
@@ -1177,7 +1177,7 @@ impl ValidatorService {
                     request.include_details,
                 )
                 .await?;
-            Some(Box::new(EffectsDetails {
+            Some(Box::new(ExecutedData {
                 effects,
                 events,
                 input_objects,

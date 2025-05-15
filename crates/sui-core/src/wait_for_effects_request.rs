@@ -10,14 +10,13 @@ use sui_types::{
     error::SuiError,
     messages_consensus::Round,
     messages_grpc::{
-        RawRejectReason, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
-        RawWaitForEffectsResponseDetails, RawWaitForEffectsResponseExecuted,
-        RawWaitForEffectsResponseInner, RawWaitForEffectsResponseRejected,
+        RawExecutedData, RawExecutedStatus, RawRejectReason, RawRejectedStatus,
+        RawValidatorTransactionStatus, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
     },
     object::Object,
 };
 
-/// The position of a transaction in the consensus.
+/// The position of a transaction in consensus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub(crate) struct ConsensusTxPosition {
     pub block: BlockRef,
@@ -33,7 +32,7 @@ pub(crate) struct WaitForEffectsRequest {
     pub include_details: bool,
 }
 
-pub(crate) struct EffectsDetails {
+pub(crate) struct ExecutedData {
     pub effects: TransactionEffects,
     pub events: Option<TransactionEvents>,
     pub input_objects: Vec<Object>,
@@ -57,7 +56,7 @@ pub(crate) enum RejectReason {
 pub(crate) enum WaitForEffectsResponse {
     Executed {
         effects_digest: TransactionEffectsDigest,
-        details: Option<Box<EffectsDetails>>,
+        details: Option<Box<ExecutedData>>,
         finalized: bool,
     },
     Rejected {
@@ -98,7 +97,7 @@ impl TryFrom<RawWaitForEffectsResponse> for WaitForEffectsResponse {
 
     fn try_from(value: RawWaitForEffectsResponse) -> Result<Self, Self::Error> {
         match value.inner {
-            Some(RawWaitForEffectsResponseInner::Executed(executed)) => {
+            Some(RawValidatorTransactionStatus::Executed(executed)) => {
                 let effects_digest = bcs::from_bytes(&executed.effects_digest).map_err(|err| {
                     SuiError::GrpcMessageDeserializeError {
                         type_info: "RawWaitForEffectsResponse.effects_digest".to_string(),
@@ -140,7 +139,7 @@ impl TryFrom<RawWaitForEffectsResponse> for WaitForEffectsResponse {
                             }
                         })?);
                     }
-                    Some(Box::new(EffectsDetails {
+                    Some(Box::new(ExecutedData {
                         effects,
                         events,
                         input_objects,
@@ -155,7 +154,7 @@ impl TryFrom<RawWaitForEffectsResponse> for WaitForEffectsResponse {
                     finalized: executed.finalized,
                 })
             }
-            Some(RawWaitForEffectsResponseInner::Rejected(rejected)) => {
+            Some(RawValidatorTransactionStatus::Rejected(rejected)) => {
                 let raw_reason = RawRejectReason::try_from(rejected.reason).map_err(|err| {
                     SuiError::GrpcMessageDeserializeError {
                         type_info: "RawWaitForEffectsResponse.rejected.reason".to_string(),
@@ -177,7 +176,7 @@ impl TryFrom<RawWaitForEffectsResponse> for WaitForEffectsResponse {
                 };
                 Ok(Self::Rejected { reason })
             }
-            Some(RawWaitForEffectsResponseInner::Expired(round)) => Ok(Self::Expired(round)),
+            Some(RawValidatorTransactionStatus::Expired(round)) => Ok(Self::Expired(round)),
             None => Err(SuiError::GrpcMessageDeserializeError {
                 type_info: "RawWaitForEffectsResponse.inner".to_string(),
                 error: "RawWaitForEffectsResponse.inner is None".to_string(),
@@ -271,7 +270,7 @@ impl TryFrom<WaitForEffectsResponse> for RawWaitForEffectsResponse {
                                 .into(),
                         );
                     }
-                    Some(RawWaitForEffectsResponseDetails {
+                    Some(RawExecutedData {
                         effects,
                         events,
                         input_objects,
@@ -280,7 +279,7 @@ impl TryFrom<WaitForEffectsResponse> for RawWaitForEffectsResponse {
                 } else {
                     None
                 };
-                RawWaitForEffectsResponseInner::Executed(RawWaitForEffectsResponseExecuted {
+                RawValidatorTransactionStatus::Executed(RawExecutedStatus {
                     effects_digest,
                     details,
                     finalized,
@@ -298,14 +297,12 @@ impl TryFrom<WaitForEffectsResponse> for RawWaitForEffectsResponse {
                     RejectReason::Overload(message) => (RawRejectReason::Overload, Some(message)),
                     RejectReason::CoinDenyList => (RawRejectReason::CoinDenyList, None),
                 };
-                RawWaitForEffectsResponseInner::Rejected(RawWaitForEffectsResponseRejected {
+                RawValidatorTransactionStatus::Rejected(RawRejectedStatus {
                     reason: reason as i32,
                     message,
                 })
             }
-            WaitForEffectsResponse::Expired(round) => {
-                RawWaitForEffectsResponseInner::Expired(round)
-            }
+            WaitForEffectsResponse::Expired(round) => RawValidatorTransactionStatus::Expired(round),
         };
         Ok(RawWaitForEffectsResponse { inner: Some(inner) })
     }

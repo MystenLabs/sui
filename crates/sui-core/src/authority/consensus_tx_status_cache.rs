@@ -97,7 +97,7 @@ impl ConsensusTxStatusCache {
                         // is initially fastpath certified, and then later finalized or rejected.
                         assert_eq!(old_status, ConsensusTxStatus::FastpathCertified);
                     }
-                    return NotifyReadConsensusTxStatusResult::Status(status);
+                    return NotifyReadConsensusTxStatusResult::Status(*status);
                 }
             }
             // Inner read lock dropped here.
