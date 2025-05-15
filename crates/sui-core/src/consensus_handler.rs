@@ -582,7 +582,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             let commit_info = self
                 .additional_consensus_state
                 .observe_commit(self.epoch_store.protocol_config(), &consensus_commit);
-            info!(
+            debug!(
                 "estimated commit rate: {:?}",
                 commit_info.estimated_commit_period()
             );
@@ -637,7 +637,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             timestamp
         };
 
-        info!(
+        debug!(
             %consensus_commit,
             epoch = ?self.epoch_store.epoch(),
             "Received consensus output"

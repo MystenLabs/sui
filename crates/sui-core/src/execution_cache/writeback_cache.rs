@@ -563,18 +563,16 @@ impl WritebackCache {
         entry.insert(version, object.clone());
 
         if let ObjectEntry::Object(object) = &object {
-            if object.is_package() {
-                self.object_notify_read
-                    .notify(&InputKey::Package { id: *object_id }, &());
-            } else if !object.is_child_object() {
-                self.object_notify_read.notify(
-                    &InputKey::VersionedObject {
-                        id: object.full_id(),
-                        version: object.version(),
-                    },
-                    &(),
-                );
-            }
+            let input_key = if object.is_package() {
+                InputKey::Package { id: *object_id }
+            } else {
+                InputKey::VersionedObject {
+                    id: object.full_id(),
+                    version: object.version(),
+                }
+            };
+            info!("Notifying read for input key: {:?}", input_key);
+            self.object_notify_read.notify(&input_key, &());
         }
     }
 
@@ -1874,6 +1872,20 @@ impl ObjectCacheRead for WritebackCache {
                         results[*idx] = Some(());
                     }
                 });
+                let waiting_keys: Vec<_> = keys
+                    .iter()
+                    .zip(results.iter())
+                    .filter_map(
+                        |(key, result)| {
+                            if result.is_none() {
+                                Some(key)
+                            } else {
+                                None
+                            }
+                        },
+                    )
+                    .collect();
+                tracing::info!("Waiting for input objects: {:?}", waiting_keys);
                 results
             })
             .boxed()

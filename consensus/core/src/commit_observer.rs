@@ -173,7 +173,7 @@ impl CommitObserver {
         let utc_now = self.context.clock.timestamp_utc_ms();
 
         for commit in committed {
-            info!(
+            debug!(
                 "Consensus commit {} with leader {} has {} blocks",
                 commit.commit_ref,
                 commit.leader,

@@ -748,7 +748,7 @@ impl Core {
         // Now acknowledge the transactions for their inclusion to block
         ack_transactions(verified_block.reference());
 
-        info!("Created block {verified_block:?} for round {clock_round}");
+        debug!("Created block {verified_block:?} for round {clock_round}");
 
         self.context
             .metrics
@@ -896,7 +896,7 @@ impl Core {
                 break;
             }
 
-            tracing::info!(
+            debug!(
                 "Committing {} leaders: {}",
                 sequenced_leaders.len(),
                 sequenced_leaders
@@ -1374,7 +1374,7 @@ impl CoreSignals {
 }
 
 /// Receivers of signals from Core.
-/// Intentionally un-clonable. Comonents should only subscribe to channels they need.
+/// Intentionally un-clonable. Components should only subscribe to channels they need.
 pub(crate) struct CoreSignalsReceivers {
     rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
     new_round_receiver: watch::Receiver<Round>,
@@ -1993,12 +1993,12 @@ mod test {
                 C -> [-A2],
                 D -> [-A2],
             },
-            Round 4 : { 
+            Round 4 : {
                 B -> [-A3],
                 C -> [-A3],
                 D -> [-A3],
             },
-            Round 5 : { 
+            Round 5 : {
                 A -> [A3, B4, C4, D4]
                 B -> [*],
                 C -> [*],
@@ -2127,7 +2127,7 @@ mod test {
         let dag_str = "DAG {
             Round 0 : { 4 },
             Round 1 : { * },
-            Round 2 : { 
+            Round 2 : {
                 B -> [-D1],
                 C -> [-D1],
                 D -> [-D1],
@@ -2137,44 +2137,44 @@ mod test {
                 C -> [*]
                 D -> [*],
             },
-            Round 4 : { 
+            Round 4 : {
                 A -> [*],
                 B -> [*],
                 C -> [*]
                 D -> [*],
             },
-            Round 5 : { 
+            Round 5 : {
                 A -> [*],
                 B -> [*],
                 C -> [*],
                 D -> [*],
             },
-            Round 6 : { 
+            Round 6 : {
                 B -> [A5, B5, C5, D1],
                 C -> [A5, B5, C5, D1],
                 D -> [A5, B5, C5, D1],
             },
-            Round 7 : { 
+            Round 7 : {
                 B -> [*],
                 C -> [*],
                 D -> [*],
             },
-            Round 8 : { 
+            Round 8 : {
                 B -> [*],
                 C -> [*],
                 D -> [*],
             },
-            Round 9 : { 
+            Round 9 : {
                 B -> [*],
                 C -> [*],
                 D -> [*],
             },
-            Round 10 : { 
+            Round 10 : {
                 B -> [*],
                 C -> [*],
                 D -> [*],
             },
-            Round 11 : { 
+            Round 11 : {
                 B -> [*],
                 C -> [*],
                 D -> [*],
@@ -3166,7 +3166,7 @@ mod test {
         assert!(core.try_propose(true).unwrap().is_none());
 
         // Let Core know there is no propagation delay.
-        // This is done by simulating updating round tracker recieved rounds from probe
+        // This is done by simulating updating round tracker received rounds from probe
         // where low quorum round for own index should get calculated to round 1000.
         round_tracker.write().update_from_probe(
             vec![
@@ -3409,7 +3409,7 @@ mod test {
         assert_eq!(certified_commits.len(), 1);
         assert_eq!(certified_commits.first().unwrap().reference().index, 5);
 
-        println!("Case 3. Provide certified commits where the first certified commit index is not the last_commited_index + 1.");
+        println!("Case 3. Provide certified commits where the first certified commit index is not the last_committed_index + 1.");
 
         // Highest certified commit should be for leader of round 4.
         let certified_commits = sub_dags_and_commits
@@ -3591,7 +3591,7 @@ mod test {
         let dag_str = "DAG {
             Round 0 : { 5 },
             Round 1 : { * },
-            Round 2 : { 
+            Round 2 : {
                 A -> [-E1],
                 B -> [-E1],
                 C -> [-E1],
@@ -3603,13 +3603,13 @@ mod test {
                 C -> [*],
                 D -> [*],
             },
-            Round 4 : { 
+            Round 4 : {
                 A -> [*],
                 B -> [*],
                 C -> [*],
                 D -> [*],
             },
-            Round 5 : { 
+            Round 5 : {
                 A -> [*],
                 B -> [*],
                 C -> [*],

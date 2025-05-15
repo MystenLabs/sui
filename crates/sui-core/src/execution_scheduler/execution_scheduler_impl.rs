@@ -167,6 +167,23 @@ impl ExecutionScheduler {
             input_and_receiving_keys
         );
 
+        let monitor_task = {
+            let input_and_receiving_keys = input_and_receiving_keys.clone();
+            let digest = *digest;
+            let start = Instant::now();
+            tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    tracing::error!(
+                        ?digest,
+                        "Spent {}s waiting for input objects: {:?}",
+                        start.elapsed().as_secs(),
+                        input_and_receiving_keys
+                    );
+                }
+            })
+        };
+
         tokio::select! {
             _ = self.object_cache_read
                 .notify_read_input_objects(&input_and_receiving_keys, &receiving_object_keys, &epoch)
@@ -193,7 +210,10 @@ impl ExecutionScheduler {
                 // So we never get to call notify_commit() from the execution commit path.
                 self.notify_commit(&cert);
             }
-        };
+        }
+
+        // Cancel the monitoring task since select has completed
+        monitor_task.abort();
     }
 }
 
