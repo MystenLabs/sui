@@ -64,6 +64,12 @@ pub struct InMemoryWallet {
 }
 
 impl InMemoryWallet {
+    pub fn new_empty() -> Self {
+        InMemoryWallet {
+            accounts: BTreeMap::new(),
+        }
+    }
+
     pub fn new(gas: &Gas) -> Self {
         let mut wallet = InMemoryWallet {
             accounts: BTreeMap::new(),
@@ -110,6 +116,10 @@ impl InMemoryWallet {
 
     pub fn account(&self, addr: &SuiAddress) -> Option<&SuiAccount> {
         self.accounts.get(addr)
+    }
+
+    pub fn accounts(&self) -> impl Iterator<Item = &SuiAddress> {
+        self.accounts.keys()
     }
 
     pub fn gas(&self, addr: &SuiAddress) -> Option<&ObjectRef> {

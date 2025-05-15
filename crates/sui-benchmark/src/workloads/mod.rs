@@ -5,6 +5,7 @@ pub mod adversarial;
 pub mod batch_payment;
 pub mod delegation;
 pub mod expected_failure;
+pub mod party;
 pub mod payload;
 pub mod randomized_transaction;
 pub mod randomness;
