@@ -49,6 +49,7 @@ serde_with.workspace = true
 serde_yaml.workspace = true
 shared-crypto.workspace = true
 similar.workspace = true
+sui-display.workspace = true
 sui-name-service.workspace = true
 sui-pg-db.workspace = true
 sui-sdk.workspace = true
@@ -70,7 +71,6 @@ downcast = "0.11.0"
 sui-default-config.workspace = true
 sui-graphql-rpc-headers.workspace = true
 sui-graphql-rpc-client.workspace = true
-
 
 # TODO: put these behind feature flag to prevent leakage
 # Used for dummy data

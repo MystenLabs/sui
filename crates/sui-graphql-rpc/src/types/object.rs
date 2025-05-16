@@ -38,7 +38,6 @@ use async_graphql::dataloader::Loader;
 use async_graphql::{connection::Connection, *};
 use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl, SelectableHelper};
 use diesel_async::scoped_futures::ScopedFutureExt;
-use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
 use serde::{Deserialize, Serialize};
 use sui_indexer::models::obj_indices::StoredObjectVersion;
@@ -46,11 +45,9 @@ use sui_indexer::models::objects::{StoredFullHistoryObject, StoredHistoryObject}
 use sui_indexer::schema::{full_objects_history, objects_version};
 use sui_indexer::types::ObjectStatus as NativeObjectStatus;
 use sui_indexer::types::OwnerType;
-use sui_types::object::bounded_visitor::BoundedVisitor;
-use sui_types::object::{
-    MoveObject as NativeMoveObject, Object as NativeObject, Owner as NativeOwner,
-};
+use sui_types::object::{Object as NativeObject, Owner as NativeOwner};
 use sui_types::TypeTag;
+use tokio::join;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Object {
@@ -706,6 +703,8 @@ impl ObjectImpl<'_> {
     /// `display` is part of the `IMoveObject` interface, but is implemented on `ObjectImpl` to
     /// allow for a convenience function on `Object`.
     pub(crate) async fn display(&self, ctx: &Context<'_>) -> Result<Option<Vec<DisplayEntry>>> {
+        let resolver: &PackageResolver = ctx.data_unchecked();
+
         let Some(native) = self.0.native_impl() else {
             return Ok(None);
         };
@@ -716,18 +715,30 @@ impl ObjectImpl<'_> {
             .ok_or_else(|| Error::Internal("Failed to convert object into MoveObject".to_string()))
             .extend()?;
 
-        let (struct_tag, move_struct) = deserialize_move_struct(move_object, ctx.data_unchecked())
-            .await
-            .extend()?;
+        let type_: TypeTag = move_object.type_().clone().into();
+        let (type_layout, display) = join!(
+            resolver.type_layout(type_.clone()),
+            Display::query(ctx.data_unchecked(), type_.clone()),
+        );
 
-        let Some(display) = Display::query(ctx.data_unchecked(), struct_tag.into())
-            .await
-            .extend()?
-        else {
+        let type_layout = type_layout.map_err(|e| {
+            Error::Internal(format!(
+                "Error fetching layout for type {}: {e}",
+                move_object
+                    .type_()
+                    .to_canonical_string(/* with_prefix */ true)
+            ))
+        })?;
+
+        let Some(display) = display.extend()? else {
             return Ok(None);
         };
 
-        Ok(Some(display.render(&move_struct).extend()?))
+        Ok(Some(
+            display
+                .render(move_object.contents(), &type_layout)
+                .extend()?,
+        ))
     }
 }
 
@@ -1553,38 +1564,6 @@ impl From<&Object> for OwnerImpl {
             checkpoint_viewed_at: object.checkpoint_viewed_at,
         }
     }
-}
-
-pub(crate) async fn deserialize_move_struct(
-    move_object: &NativeMoveObject,
-    resolver: &PackageResolver,
-) -> Result<(StructTag, MoveStruct), Error> {
-    let struct_tag = StructTag::from(move_object.type_().clone());
-    let contents = move_object.contents();
-    let move_type_layout = resolver
-        .type_layout(TypeTag::from(struct_tag.clone()))
-        .await
-        .map_err(|e| {
-            Error::Internal(format!(
-                "Error fetching layout for type {}: {e}",
-                struct_tag.to_canonical_string(/* with_prefix */ true)
-            ))
-        })?;
-
-    let MoveTypeLayout::Struct(layout) = move_type_layout else {
-        return Err(Error::Internal("Object is not a move struct".to_string()));
-    };
-
-    // TODO (annotated-visitor): Use custom visitors for extracting a dynamic field, and for
-    // creating a GraphQL MoveValue directly (not via an annotated visitor).
-    let move_struct = BoundedVisitor::deserialize_struct(contents, &layout).map_err(|e| {
-        Error::Internal(format!(
-            "Error deserializing move struct for type {}: {e}",
-            struct_tag.to_canonical_string(/* with_prefix */ true)
-        ))
-    })?;
-
-    Ok((struct_tag, move_struct))
 }
 
 /// Constructs a raw query to fetch objects from the database. Objects are filtered out if they
