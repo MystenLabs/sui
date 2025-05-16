@@ -27,6 +27,8 @@ use itertools::Itertools;
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
 pub use object_store_trait::ObjectStore;
+pub use read_store::BalanceInfo;
+pub use read_store::BalanceIterator;
 pub use read_store::CoinInfo;
 pub use read_store::DynamicFieldIndexInfo;
 pub use read_store::DynamicFieldKey;
