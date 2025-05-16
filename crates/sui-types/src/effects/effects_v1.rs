@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Display, Formatter, Write};
 
+use super::object_change::AccumulatorWriteV1;
 use super::{IDOperation, ObjectChange};
 
 /// The response from processing a transaction or a certified transaction
@@ -303,6 +304,10 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
                 _ => None,
             })
             .collect()
+    }
+
+    fn accumulator_updates(&self) -> Vec<(ObjectID, AccumulatorWriteV1)> {
+        vec![]
     }
 
     fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus {
