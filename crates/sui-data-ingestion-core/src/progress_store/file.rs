@@ -32,7 +32,12 @@ impl ProgressStore for FileProgressStore {
         task_name: String,
         checkpoint_number: CheckpointSequenceNumber,
     ) -> Result<()> {
-        let mut content: Value = serde_json::from_slice(&std::fs::read(self.path.clone())?)?;
+        let raw_content = std::fs::read(self.path.clone())?;
+        let mut content: Value = if raw_content.is_empty() {
+            Value::Object(serde_json::Map::new())
+        } else {
+            serde_json::from_slice(&std::fs::read(self.path.clone())?)?
+        };
         content[task_name] = Value::Number(Number::from(checkpoint_number));
         std::fs::write(self.path.clone(), serde_json::to_string_pretty(&content)?)?;
         Ok(())
