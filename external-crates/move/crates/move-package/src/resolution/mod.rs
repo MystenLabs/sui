@@ -39,6 +39,7 @@ pub fn download_dependency_repos<Progress: Write>(
         progress_output,
         install_dir,
         build_options.implicit_dependencies.clone(),
+        build_options.force_lock_file,
     );
     let (graph, _) = dep_graph_builder.get_graph(
         &DependencyKind::default(),
