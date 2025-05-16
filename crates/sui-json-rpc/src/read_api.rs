@@ -1286,7 +1286,7 @@ async fn get_display_object_by_type(
     }
 }
 
-pub fn get_object_type_and_struct(
+fn get_object_type_and_struct(
     o: &Object,
     layout: &Option<MoveStructLayout>,
 ) -> Result<Option<(StructTag, MoveStruct)>, ObjectDisplayError> {
@@ -1309,7 +1309,7 @@ fn get_move_struct(
         .to_move_struct(layout)?)
 }
 
-pub fn get_rendered_fields(
+fn get_rendered_fields(
     fields: VecMap<String, String>,
     move_struct: &MoveStruct,
 ) -> Result<DisplayFieldsResponse, ObjectDisplayError> {
