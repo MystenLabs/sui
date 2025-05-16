@@ -4,8 +4,8 @@
 
 use std::{
     collections::BTreeMap,
-    fmt,
-    fmt::{Debug, Display, Formatter},
+    fmt::{self, Debug, Display, Formatter},
+    path::Path,
 };
 
 use derive_where::derive_where;
