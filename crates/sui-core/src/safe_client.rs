@@ -18,10 +18,12 @@ use sui_types::effects::{SignedTransactionEffects, TransactionEffectsAPI, Transa
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
+use sui_types::messages_consensus::ConsensusTxPosition;
 use sui_types::messages_grpc::{
-    HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
-    ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest, SubmitTxResponse,
-    SystemStateRequest, TransactionInfoRequest, TransactionStatus, VerifiedObjectInfoResponse,
+    GetEffectsResponse, HandleCertificateRequestV3, HandleCertificateResponseV2,
+    HandleCertificateResponseV3, ObjectInfoRequest, ObjectInfoResponse, RawGetEffectsRequest,
+    RawSubmitTxRequest, SystemStateRequest, TransactionInfoRequest, TransactionStatus,
+    VerifiedObjectInfoResponse,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use sui_types::object::Object;
@@ -317,17 +319,37 @@ where
         &self,
         request: RawSubmitTxRequest,
         client_addr: Option<SocketAddr>,
-    ) -> Result<SubmitTxResponse, SuiError> {
+    ) -> Result<ConsensusTxPosition, SuiError> {
+        let _timer = self.metrics.handle_certificate_latency.start_timer();
+        let response = self
+            .authority_client
+            .submit_transaction(request, client_addr)
+            .await?;
+
+        let consensus_position = bcs::from_bytes(&response.consensus_position).map_err(|e| {
+            SuiError::ConsensusPositionDeserializationError {
+                error: format!("Failed to deserialize consensus position: {}", e),
+            }
+        })?;
+        Ok(consensus_position)
+    }
+
+    /// Get effects for an executed transaction.
+    pub async fn get_effects(
+        &self,
+        request: RawGetEffectsRequest,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<GetEffectsResponse, SuiError> {
         let _timer = self.metrics.handle_certificate_latency.start_timer();
         let include_events = request.include_events;
         let include_input_objects = request.include_input_objects;
         let include_output_objects = request.include_output_objects;
         let response = self
             .authority_client
-            .submit_transaction(request, client_addr)
+            .get_effects(request, client_addr)
             .await?;
 
-        let response = SubmitTxResponse::from_bytes(
+        let response = GetEffectsResponse::from_bytes(
             response.effects,
             include_events,
             response.events,
@@ -341,8 +363,8 @@ where
 
         let verified_resp = check_error!(
             self.address,
-            self.verify_submit_transaction_response(response),
-            "Client error in submit_transaction"
+            self.verify_get_effects_response(response),
+            "Client error in get_effects"
         )?;
         Ok(verified_resp)
     }
@@ -500,16 +522,16 @@ where
         })
     }
 
-    fn verify_submit_transaction_response(
+    fn verify_get_effects_response(
         &self,
-        SubmitTxResponse {
+        GetEffectsResponse {
             effects,
             events,
             input_objects,
             output_objects,
             auxiliary_data,
-        }: SubmitTxResponse,
-    ) -> SuiResult<SubmitTxResponse> {
+        }: GetEffectsResponse,
+    ) -> SuiResult<GetEffectsResponse> {
         // Check Events
         self.verify_events(&events, effects.events_digest())?;
 
@@ -531,7 +553,7 @@ where
                 .map(|(object_ref, _, _)| (object_ref.0, object_ref)),
         )?;
 
-        Ok(SubmitTxResponse {
+        Ok(GetEffectsResponse {
             effects,
             events,
             input_objects,
