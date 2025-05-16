@@ -212,6 +212,7 @@ impl PTB {
                 gas_budget: program_metadata.gas_budget.map(|x| x.value),
                 serialize_unsigned_transaction: program_metadata.serialize_unsigned_set,
                 serialize_signed_transaction: program_metadata.serialize_signed_set,
+                custom_signer: program_metadata.custom_signer.map(|x| x.value),
             },
         };
 

@@ -3227,6 +3227,7 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
             dev_inspect: false,
             serialize_unsigned_transaction: true,
             serialize_signed_transaction: false,
+            custom_signer: None,
         },
     }
     .execute(context)
@@ -3242,6 +3243,7 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
             dev_inspect: false,
             serialize_unsigned_transaction: false,
             serialize_signed_transaction: true,
+            custom_signer: None,
         },
     }
     .execute(context)
@@ -3258,6 +3260,7 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
             dev_inspect: false,
             serialize_unsigned_transaction: false,
             serialize_signed_transaction: true,
+            custom_signer: None,
         },
     }
     .execute(context)
@@ -4105,6 +4108,7 @@ async fn test_gas_estimation() -> Result<(), anyhow::Error> {
             dev_inspect: false,
             serialize_unsigned_transaction: false,
             serialize_signed_transaction: false,
+            custom_signer: None,
         },
     }
     .execute(context)
