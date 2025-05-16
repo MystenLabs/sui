@@ -524,7 +524,7 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                         txn_sender: txn_sender.clone(),
                         status: TokenTransferStatus::Deposited,
                         gas_usage: gas.as_u64() as i64,
-                        data_source: BridgeDataSource::Eth,
+                        data_source: BridgeDataSource::ETH,
                         is_finalized,
                         data: Some(TokenTransferData {
                             sender_address: txn_sender.clone(),
@@ -552,7 +552,7 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                         txn_sender: txn_sender.clone(),
                         status: TokenTransferStatus::Claimed,
                         gas_usage: gas.as_u64() as i64,
-                        data_source: BridgeDataSource::Eth,
+                        data_source: BridgeDataSource::ETH,
                         data: None,
                         is_finalized,
                     }));
@@ -565,7 +565,7 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                     );
                     processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
                         nonce: Some(f.nonce),
-                        data_source: BridgeDataSource::Eth,
+                        data_source: BridgeDataSource::ETH,
                         tx_digest: txn_hash.clone(),
                         sender: txn_sender.clone(),
                         timestamp_ms,
@@ -582,7 +582,7 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
 
                     processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
                         nonce: Some(f.nonce.as_u64()),
-                        data_source: BridgeDataSource::Eth,
+                        data_source: BridgeDataSource::ETH,
                         tx_digest: txn_hash.clone(),
                         sender: txn_sender.clone(),
                         timestamp_ms,
@@ -608,7 +608,7 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
 
                     processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
                         nonce: None,
-                        data_source: BridgeDataSource::Eth,
+                        data_source: BridgeDataSource::ETH,
                         tx_digest: txn_hash.clone(),
                         sender: txn_sender.clone(),
                         timestamp_ms,
@@ -625,7 +625,7 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
 
                     processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
                         nonce: Some(f.nonce),
-                        data_source: BridgeDataSource::Eth,
+                        data_source: BridgeDataSource::ETH,
                         tx_digest: txn_hash.clone(),
                         sender: txn_sender.clone(),
                         timestamp_ms,
@@ -642,7 +642,7 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
 
                     processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
                         nonce: Some(f.nonce.as_u64()),
-                        data_source: BridgeDataSource::Eth,
+                        data_source: BridgeDataSource::ETH,
                         tx_digest: txn_hash.clone(),
                         sender: txn_sender.clone(),
                         timestamp_ms,
@@ -665,7 +665,7 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
 
                     processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
                         nonce: None,
-                        data_source: BridgeDataSource::Eth,
+                        data_source: BridgeDataSource::ETH,
                         tx_digest: txn_hash.clone(),
                         sender: txn_sender.clone(),
                         timestamp_ms,
@@ -682,7 +682,7 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
 
                     processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
                         nonce: Some(f.nonce),
-                        data_source: BridgeDataSource::Eth,
+                        data_source: BridgeDataSource::ETH,
                         tx_digest: txn_hash.clone(),
                         sender: txn_sender.clone(),
                         timestamp_ms,
@@ -699,7 +699,7 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
 
                     processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
                         nonce: Some(f.nonce.as_u64()),
-                        data_source: BridgeDataSource::Eth,
+                        data_source: BridgeDataSource::ETH,
                         tx_digest: txn_hash.clone(),
                         sender: txn_sender.clone(),
                         timestamp_ms,
@@ -725,7 +725,7 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
 
                     processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
                         nonce: None,
-                        data_source: BridgeDataSource::Eth,
+                        data_source: BridgeDataSource::ETH,
                         tx_digest: txn_hash.clone(),
                         sender: txn_sender.clone(),
                         timestamp_ms,
@@ -742,7 +742,7 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
 
                     processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
                         nonce: Some(f.nonce),
-                        data_source: BridgeDataSource::Eth,
+                        data_source: BridgeDataSource::ETH,
                         tx_digest: txn_hash.clone(),
                         sender: txn_sender.clone(),
                         timestamp_ms,
@@ -759,7 +759,7 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
 
                     processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
                         nonce: None,
-                        data_source: BridgeDataSource::Eth,
+                        data_source: BridgeDataSource::ETH,
                         tx_digest: txn_hash.clone(),
                         sender: txn_sender.clone(),
                         timestamp_ms,
@@ -776,7 +776,7 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
 
                     processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
                         nonce: Some(f.nonce),
-                        data_source: BridgeDataSource::Eth,
+                        data_source: BridgeDataSource::ETH,
                         tx_digest: txn_hash.clone(),
                         sender: txn_sender.clone(),
                         timestamp_ms,
@@ -793,7 +793,7 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
 
                     processed_txn_data.push(ProcessedTxnData::GovernanceAction(GovernanceAction {
                         nonce: Some(f.nonce.as_u64()),
-                        data_source: BridgeDataSource::Eth,
+                        data_source: BridgeDataSource::ETH,
                         tx_digest: txn_hash.clone(),
                         sender: txn_sender.clone(),
                         timestamp_ms,
