@@ -1,11 +1,8 @@
 module sui::coin_metadata_registry;
 
 use std::string::String;
-use std::type_name::TypeName;
-use sui::address;
 use sui::balance::Supply;
 use sui::bcs::to_bytes;
-use sui::coin;
 use sui::dynamic_object_field;
 use sui::table::{Self, Table};
 use sui::transfer::Receiving;
@@ -20,6 +17,10 @@ use fun dynamic_object_field::exists_ as UID.exists_dof;
 const EMetadataNotFound: u64 = 0;
 const EAlreadyClaimed: u64 = 1;
 const ENotSystemAddress: u64 = 2;
+const EInvalidCoinType: u64 = 3;
+const EMetadataAlreadyExists: u64 = 4;
+
+const REGULATED_COIN_VARIANT: u8 = 0;
 
 public struct RegistryOverrides has store {
     regulated_hashes: VecSet<address>,
@@ -50,13 +51,23 @@ public struct Metadata<phantom T> has key, store {
     symbol: String,
     description: String,
     icon_url: String,
-    supply: Option<Supply<T>>,
-    is_fixed_supply: bool,
-    is_regulated: bool,
+    supply: Option<SupplyState<T>>,
+    regulated: RegulatedState,
     treasury_cap_id: Option<ID>,
     metadata_cap_id: Option<ID>,
-    deny_cap_id: Option<ID>,
-    extra_fields: VecMap<String, String>,
+    extra_fields: VecMap<String, String>, // new MetadataField type
+}
+
+public enum SupplyState<phantom T> has store {
+    Fixed(Supply<T>),
+    FixedOverride,
+    NotFixed,
+}
+
+public enum RegulatedState has copy, drop, store {
+    Regulated { cap: ID, variant: u8 },
+    RegulatedOverride,
+    NotRegulated,
 }
 
 // hot potato pattern to enforce registration after "create_currency" metadata creation
@@ -132,7 +143,6 @@ public fun migrate_receiving<T>(
 }
 
 /// === Entry Setters ===
-
 public fun set_name<T>(_: &MetadataCap<T>, registry: &mut CoinMetadataRegistry, name: String) {
     registry.metadata_mut<T>().name = name;
 }
@@ -161,12 +171,18 @@ public fun set_icon_url<T>(
 
 public(package) fun register_supply<T>(registry: &mut CoinMetadataRegistry, supply: Supply<T>) {
     assert!(registry.exists<T>(), EMetadataNotFound);
-    registry.metadata_mut<T>().supply.fill(supply);
+    match (registry.metadata_mut<T>().supply.swap(SupplyState::Fixed(supply))) {
+        SupplyState::Fixed(_supply) => {
+            abort
+        },
+        SupplyState::FixedOverride | SupplyState::NotFixed => {},
+    };
 }
 
-public(package) fun register_deny_cap<T>(registry: &mut CoinMetadataRegistry, deny_cap_id: ID) {
+public(package) fun register_regulated<T>(registry: &mut CoinMetadataRegistry, deny_cap_id: ID) {
     assert!(registry.exists<T>(), EMetadataNotFound);
-    registry.metadata_mut<T>().deny_cap_id.fill(deny_cap_id);
+    registry.metadata_mut<T>().regulated =
+        RegulatedState::Regulated { cap: deny_cap_id, variant: REGULATED_COIN_VARIANT };
 }
 
 public(package) fun set_decimals<T>(metadata: &mut Metadata<T>, decimals: u8) {
@@ -174,11 +190,17 @@ public(package) fun set_decimals<T>(metadata: &mut Metadata<T>, decimals: u8) {
 }
 
 public(package) fun set_supply<T>(metadata: &mut Metadata<T>, supply: Supply<T>) {
-    metadata.supply.fill(supply);
+    match (metadata.supply.swap(SupplyState::Fixed(supply))) {
+        SupplyState::Fixed(_supply) => {
+            abort
+        },
+        SupplyState::FixedOverride | SupplyState::NotFixed => {},
+    };
 }
 
-public(package) fun set_deny_cap<T>(metadata: &mut Metadata<T>, deny_cap_id: ID) {
-    metadata.deny_cap_id.fill(deny_cap_id);
+public(package) fun set_regulated<T>(metadata: &mut Metadata<T>, deny_cap_id: ID) {
+    metadata.regulated =
+        RegulatedState::Regulated { cap: deny_cap_id, variant: REGULATED_COIN_VARIANT };
 }
 
 /// === Getters ===
@@ -198,19 +220,22 @@ public fun description<T>(metadata: &Metadata<T>): String { metadata.description
 
 public fun icon_url<T>(metadata: &Metadata<T>): String { metadata.icon_url }
 
-public fun total_fixed_supply<T>(metadata: &Metadata<T>): u64 {
-    assert!(metadata.supply.is_some());
-    metadata.supply.borrow().supply_value()
-}
-
 public fun cap_claimed<T>(metadata: &Metadata<T>): bool { metadata.metadata_cap_id.is_some() }
 
 public fun is_fixed_supply<T>(metadata: &Metadata<T>): bool {
-    metadata.supply.is_some() || metadata.is_fixed_supply
+    match (metadata.supply.borrow()) {
+        SupplyState::Fixed(_supply) => true,
+        SupplyState::FixedOverride => true,
+        SupplyState::NotFixed => false,
+    }
 }
 
 public fun is_regulated<T>(metadata: &Metadata<T>): bool {
-    metadata.deny_cap_id.is_some() || metadata.is_regulated
+    match (metadata.regulated) {
+        RegulatedState::Regulated { cap: _, variant: _ } => true,
+        RegulatedState::RegulatedOverride => true,
+        RegulatedState::NotRegulated => false,
+    }
 }
 
 public fun exists<T>(registry: &CoinMetadataRegistry): bool {
@@ -238,16 +263,11 @@ public(package) fun register_metadata<T>(
     registry: &mut CoinMetadataRegistry,
     mut metadata: Metadata<T>,
 ) {
+    assert!(registry.exists<T>(), EMetadataAlreadyExists);
+
     registry.apply_overrides(&mut metadata);
 
-    // skip registration if metadata is already registered
-    if (registry.exists<T>()) {
-        let Metadata { id, supply, .. } = metadata;
-        supply.destroy_none();
-        id.delete();
-    } else {
-        registry.id.add_dof(CoinMetadataKey<T>(), metadata);
-    }
+    registry.id.add_dof(CoinMetadataKey<T>(), metadata);
 }
 
 public(package) fun create_metadata_init<T>(
@@ -287,9 +307,22 @@ public(package) fun create_metadata<T>(
     supply: Option<Supply<T>>,
     treasury_cap_id: Option<ID>,
     metadata_cap_id: Option<ID>,
-    deny_cap_id: Option<ID>,
+    mut deny_cap_id: Option<ID>,
     ctx: &mut TxContext,
 ): Metadata<T> {
+    let supply_state = if (supply.is_some()) {
+        SupplyState::Fixed(supply.destroy_some())
+    } else {
+        supply.destroy_none();
+        SupplyState::NotFixed
+    };
+
+    let regulated_state = if (deny_cap_id.is_some()) {
+        RegulatedState::Regulated { cap: deny_cap_id.extract(), variant: REGULATED_COIN_VARIANT }
+    } else {
+        RegulatedState::NotRegulated
+    };
+
     Metadata {
         id: object::new(ctx),
         decimals,
@@ -297,13 +330,11 @@ public(package) fun create_metadata<T>(
         symbol,
         description,
         icon_url,
-        supply,
+        supply: option::some(supply_state),
+        regulated: regulated_state,
         treasury_cap_id,
         metadata_cap_id,
-        deny_cap_id,
         extra_fields: vec_map::empty(),
-        is_fixed_supply: false,
-        is_regulated: false,
     }
 }
 
@@ -315,13 +346,11 @@ public(package) fun empty<T>(ctx: &mut TxContext): Metadata<T> {
         symbol: b"".to_string(),
         description: b"".to_string(),
         icon_url: b"".to_string(),
-        supply: option::none(),
+        regulated: RegulatedState::NotRegulated,
+        supply: option::some(SupplyState::NotFixed),
         treasury_cap_id: option::none(),
         metadata_cap_id: option::none(),
-        deny_cap_id: option::none(),
         extra_fields: vec_map::empty(),
-        is_fixed_supply: false,
-        is_regulated: false,
     }
 }
 
@@ -338,8 +367,17 @@ public(package) fun create_cap<T>(metadata: &mut Metadata<T>, ctx: &mut TxContex
 
 fun apply_overrides<T>(registry: &mut CoinMetadataRegistry, metadata: &mut Metadata<T>) {
     let coin_address = std::type_name::get<T>().into_string().to_string();
-    metadata.is_fixed_supply = registry.overrides.fixed_supply_coins.contains(coin_address);
-    metadata.is_regulated = registry.overrides.regulated_coin_types.contains(coin_address);
+    if (registry.overrides.fixed_supply_coins.contains(coin_address)) {
+        match (metadata.supply.swap(SupplyState::FixedOverride)) {
+            SupplyState::Fixed(_supply) => {
+                registry.register_supply(_supply);
+            },
+            SupplyState::FixedOverride | SupplyState::NotFixed => {},
+        };
+    };
+    if (registry.overrides.regulated_coin_types.contains(coin_address)) {
+        metadata.regulated = RegulatedState::RegulatedOverride;
+    };
     registry.overrides.regulated_coin_types.remove(coin_address);
 }
 
@@ -368,6 +406,7 @@ fun apply_overrides<T>(registry: &mut CoinMetadataRegistry, metadata: &mut Metad
 //     transfer::share_object(registry);
 // }
 
+#[test_only]
 public fun create_metadata_registry_for_testing(
     regulated_hashes: VecSet<address>,
     fixed_supply_hashes: VecSet<address>,

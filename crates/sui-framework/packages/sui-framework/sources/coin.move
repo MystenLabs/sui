@@ -19,7 +19,6 @@ use sui::coin_metadata_registry::{
     coin_metadata_registry_id
 };
 use sui::deny_list::DenyList;
-use sui::package::Publisher;
 use sui::url::{Self, Url};
 
 // Allows calling `.split_vec(amounts, ctx)` on `coin`
@@ -248,18 +247,7 @@ public fun migrate_regulated_metadata_to_registry<T>(
     registry: &mut CoinMetadataRegistry,
     regulated_metadata_v1: &RegulatedCoinMetadata<T>,
 ) {
-    registry.register_deny_cap<T>(regulated_metadata_v1.deny_cap_object);
-}
-
-public fun migrate_supply_to_registry<T>(
-    registry: &mut CoinMetadataRegistry,
-    _: &mut Supply<T>,
-    decimals: u8,
-    ctx: &mut TxContext,
-) {
-    let mut metadata = coin_metadata_registry::empty<T>(ctx);
-    metadata.set_decimals<T>(decimals);
-    registry.register_metadata(metadata);
+    registry.register_regulated<T>(regulated_metadata_v1.deny_cap_object);
 }
 
 public fun create_registry_metadata<T>(
@@ -392,17 +380,6 @@ public fun claim_metadata_cap<T>(
     coin_metadata_registry::create_cap(metadata, ctx)
 }
 
-public fun claim_metadata_cap_with_publisher<T>(
-    registry: &mut CoinMetadataRegistry,
-    _supply: &mut Supply<T>,
-    publisher: &Publisher,
-    ctx: &mut TxContext,
-): MetadataCap<T> {
-    assert!(publisher.from_package<T>(), ENotPublisher);
-    let metadata = registry.metadata_mut<T>();
-    coin_metadata_registry::create_cap(metadata, ctx)
-}
-
 /// Create a new `CoinMetadata` object from the old `CoinMetadata` object.
 fun from_metadata_v1<T>(metadata_v1: &CoinMetadata<T>, ctx: &mut TxContext): Metadata<T> {
     let icon_url = metadata_v1
@@ -502,7 +479,7 @@ public fun create_regulated_currency_v2<T: drop>(
     });
 
     let mut metadata_v2 = from_metadata_v1(&metadata, ctx);
-    metadata_v2.set_deny_cap(deny_cap.id.to_inner());
+    metadata_v2.set_regulated(deny_cap.id.to_inner());
 
     transfer::public_transfer(
         metadata_v2,
@@ -694,7 +671,7 @@ public entry fun update_icon_url<T>(
 }
 
 /// Destroy legacy `CoinMetadata` object
-public fun destroy_metadata<T>(metadata: CoinMetadata<T>) {
+fun destroy_metadata<T>(metadata: CoinMetadata<T>) {
     let CoinMetadata { id, .. } = metadata;
     id.delete()
 }
