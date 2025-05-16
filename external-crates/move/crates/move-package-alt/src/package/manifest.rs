@@ -22,6 +22,9 @@ use super::*;
 // TODO: add 2025 edition
 const ALLOWED_EDITIONS: &[&str] = &["2024", "2024.beta", "legacy"];
 
+// TODO: replace this with something more strongly typed
+type Digest = String;
+
 // Note: [Manifest] objects are immutable and should not implement [serde::Serialize]; any tool
 // writing these files should use [toml_edit] to set / preserve the formatting, since these are
 // user-editable files
@@ -158,5 +161,10 @@ impl<F: MoveFlavor> Manifest<F> {
 
     pub fn environments(&self) -> &BTreeMap<EnvironmentName, F::EnvironmentID> {
         &self.environments
+    }
+
+    /// Compute a digest of this file
+    pub fn digest(&self) -> Digest {
+        todo!()
     }
 }

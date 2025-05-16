@@ -4,5 +4,5 @@
 
 pub mod lockfile;
 pub mod manifest;
-mod package;
-pub use package::*;
+mod package_impl;
+pub use package_impl::*;
