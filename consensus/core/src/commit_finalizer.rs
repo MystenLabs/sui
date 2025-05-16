@@ -14,21 +14,23 @@ use mysten_metrics::{
 
 use crate::{
     context::Context,
+    dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     transaction_certifier::TransactionCertifier,
     BlockAPI, BlockRef, CommitIndex, CommittedSubDag, Round, TransactionIndex,
 };
 
-/// Number of rounds between the leader that committed a transaction to the latest leader,
-/// where indirect finalization and rejection are allowed and required.
-const INDIRECT_FINALIZE_DEPTH: Round = 3;
+/// For transaction T committed at leader round R, when a new leader at round >= R + INDIRECT_REJECT_DEPTH
+/// commits and T is still not finalized, T is rejected.
+const INDIRECT_REJECT_DEPTH: Round = 3;
 
-/// Number of rounds above the leader that committed a transaction,
-/// where accept votes are collected.
+/// For transaction T committed at leader round R, accept votes are collected
+/// from blocks with round <= R + VOTE_DEPTH.
 /// NOTE: it should be possible to remove this limit.
 const VOTE_DEPTH: Round = 1;
 
+/// Handle to CommitFinalizer, for sending CommittedSubDag and whether it is a direct commit.
 pub(crate) struct CommitFinalizerHandle {
     sender: UnboundedSender<(CommittedSubDag, bool)>,
 }
@@ -47,6 +49,34 @@ impl CommitFinalizerHandle {
     }
 }
 
+/// CommitFinalizer accepts a continuous stream of CommittedSubDag and outputs
+/// them when they are finalized.
+/// In finalized commits, every transaction is either finalized or rejected.
+/// It runs in a separate thread, to reduce the load on the core thread.
+///
+/// Life of a finalized commit:
+///
+/// For efficiency, finalization happens first on the block level, then undecided transactions are
+/// individually finalized or rejected. When there is no more undecided transactions, the commit
+/// is finalized.
+///
+/// A finalized block means that blocks has a quorum of certificates, where each certificate
+/// has a quorum of votes (links) to the block. A finalized block can contain
+/// finalized, rejected or pending transactions.
+///
+/// When a commit is received, if it is a direct commit, then every block is finalized by the
+/// quorum of leader certificates that result in the direct commit. Transactions in each block
+/// can immediately move to the finalized, rejected or pending state.
+///
+/// If the commit is not a direct commit, then the commit is added to the buffer and initialized
+/// for indirect finalization. The state of the commit starts with all blocks in the pending state.
+///
+/// From the earliest buffered commit, pending blocks are checked to see if they are now finalized.
+/// New finalized blocks are removed from the pending blocks, and its transactions are moved to the
+/// finalized, rejected or pending state. If the commit now has no pending blocks or transactions,
+/// the commit is finalized and popped from the buffer. The next earliest commit is then processed
+/// similarly, until either the buffer becomes empty or a commit with pending blocks or transactions
+/// is encountered.
 pub(crate) struct CommitFinalizer {
     context: Arc<Context>,
     transaction_certifier: TransactionCertifier,
@@ -80,12 +110,14 @@ impl CommitFinalizer {
         commit_sender: UnboundedSender<CommittedSubDag>,
     ) -> CommitFinalizerHandle {
         let processor = Self::new(context, transaction_certifier, commit_sender);
-        let (sender, receiver) = unbounded_channel("commit_finalizer");
-        let _handle = spawn_logged_monitored_task!(processor.run(receiver), "commit_finalizer");
+        let (sender, receiver) = unbounded_channel("consensus_commit_finalizer");
+        let _handle =
+            spawn_logged_monitored_task!(processor.run(receiver), "consensus_commit_finalizer");
         CommitFinalizerHandle { sender }
     }
 
     async fn run(self, mut receiver: UnboundedReceiver<(CommittedSubDag, bool)>) {
+        // TODO(fastpath): call process_commit() when crash recovery of rejected transactions are implemented.
         while let Some((committed_sub_dag, _direct)) = receiver.recv().await {
             if let Err(e) = self.commit_sender.send(committed_sub_dag) {
                 tracing::warn!("Failed to send to commit handler, probably due to shutdown: {e:?}");
@@ -108,56 +140,66 @@ impl CommitFinalizer {
             );
         }
         self.last_processed_commit = Some(committed_sub_dag.commit_ref.index);
+
+        // During processing later, it is assumed that the last commit is the one just added.
         self.commits.push_back(CommitState::new(committed_sub_dag));
 
         let mut finalized_commits = vec![];
 
+        // Optional optimization: if the commit is direct, there are a quorum of leader certificates.
+        // So if a transaction has no reject vote, there must have a quorum of certificates in local DAG.
         if direct {
-            self.try_direct_finalize();
+            self.try_direct_finalize_last_commit();
             finalized_commits.extend(self.pop_finalized_commits());
         }
 
-        // If there are remaining commits, initialize them for indirect finalization
-        // and try to indirectly finalize a prefix of them.
+        // In this case, either the last commit cannot be directly finalized, or there are previous commits
+        // that cannot be finalized yet.
         if !self.commits.is_empty() {
-            self.link_blocks();
-            self.inherit_reject_votes();
+            // If there are remaining commits, initialize the added commit for indirect finalization.
+            // Even if the added commit has been directly finalized, the initialization is still needed
+            // to indirectly finalize previous remaining commits.
+            self.link_blocks_in_last_commit();
+            self.inherit_reject_votes_in_last_commit();
             // Try to indirectly finalize a prefix of the buffered commits.
-            // The last commit cannot be indirectly finalized.
+            // The last commit cannot be indirectly finalized because there is no commit afterwards,
+            // so it is excluded.
             for i in 0..(self.commits.len() - 1) {
                 self.try_indirect_finalize_commit(i);
                 let new_finalized_commits = self.pop_finalized_commits();
                 if new_finalized_commits.is_empty() {
-                    // No future commits can be indirectly finalized.
+                    // No additional commits can be indirectly finalized.
                     break;
                 }
                 finalized_commits.extend(new_finalized_commits);
             }
         }
 
-        // GC TransactionCertifier state with finalized commits, to make sure unfinalized transactions
-        // can still access their reject votes from TransactionCertifier.
+        // GC TransactionCertifier state only with finalized commits, to ensure unfinalized transactions
+        // can access their reject votes from TransactionCertifier.
         if let Some(last_commit) = finalized_commits.last() {
-            let gc_round = last_commit
-                .leader
-                .round
-                .saturating_sub(self.context.protocol_config.consensus_gc_depth());
+            let gc_round = DagState::calculate_gc_round(
+                last_commit.leader.round,
+                self.context.protocol_config.consensus_gc_depth(),
+            );
             self.transaction_certifier.run_gc(gc_round);
         }
 
         finalized_commits
     }
 
-    // Tries to directly finalize blocks and transactions in the last commit.
-    fn try_direct_finalize(&mut self) {
+    // Tries directly finalizing transactions in the last commit.
+    fn try_direct_finalize_last_commit(&mut self) {
         let commit_state = self.commits.back_mut().unwrap();
-        // All blocks in a direct commit are finalized. But the transactions contained in them
-        // may not have been finalized.
+        // Direct commit means every transaction in the commit can be considered to have a quorum of post-commit certificates,
+        // unless the transaction has reject votes that do not reach quorum either.
         let pending_blocks = std::mem::take(&mut commit_state.pending_blocks);
         for block_ref in pending_blocks {
             let reject_votes = self.transaction_certifier.get_reject_votes(&block_ref)
                 .unwrap_or_else(|| panic!("No vote info found for {block_ref}. It is likely gc'ed or failed to be recovered after crash."));
             for (transaction_index, stake) in reject_votes {
+                // If the transaction has > 0 but < 2f+1 reject votes, it is still pending.
+                // Otherwise, it is rejected.
                 let entry = if stake < self.context.committee.quorum_threshold() {
                     commit_state
                         .pending_transactions
@@ -175,16 +217,17 @@ impl CommitFinalizer {
     }
 
     // Creates an entry in the blocks map for each block in the commit,
-    // and links each block to its ancestors.
-    fn link_blocks(&mut self) {
+    // and have its ancestors link to the block.
+    fn link_blocks_in_last_commit(&mut self) {
         let commit_state = self.commits.back_mut().unwrap();
 
-        // Link blocks in ascending order of round.
+        // Link blocks in ascending order of round, to ensure ancestor block states are created
+        // before they are linked from.
         let mut blocks = commit_state.commit.blocks.clone();
         blocks.sort_by_key(|b| b.round());
 
         for block in blocks {
-            // Initialize the block state.
+            // Initialize the block state with the reject votes contained in the block.
             let block_state = self.blocks.entry(block.reference()).or_default();
             for votes in block.transaction_votes() {
                 block_state
@@ -194,10 +237,11 @@ impl CommitFinalizer {
                     .extend(votes.rejects.iter());
             }
 
-            // Link the block to its ancestors.
+            // Link its ancestors to the block.
             let block_ref = block.reference();
             for ancestor in block.ancestors() {
                 // Ancestor may not exist in the blocks map if it has been finalized or gc'ed.
+                // So skip linking if the ancestor does not exist.
                 if let Some(ancestor_block) = self.blocks.get_mut(ancestor) {
                     ancestor_block.children.insert(block_ref);
                 }
@@ -205,38 +249,40 @@ impl CommitFinalizer {
         }
     }
 
-    // When block A's same authority ancestor block B rejects a transaction, A is implicitly assumed
-    // to reject the transaction as well. Both A and B can link to the block containing
-    // the rejected transaction, because not linking to the same ancestor twice is only an optimization,
-    // not a requirement.
+    // To simplify counting accept and reject votes for finalization, make reject votes explicit
+    // in each block state even if the original block does not contain an implicit reject vote.
     //
-    // So to simplify counting accept and reject votes for finalization, make reject votes explicit
-    // in each block state.
-    fn inherit_reject_votes(&mut self) {
+    // This means when block A and B are from the same authority and B is a direct ancestor of A,
+    // all reject votes from B are also added to the block state of A.
+    //
+    // This computation also helps to clarify the edge case: when both A and B link to another block C
+    // and B rejects a transaction in C, A should still be considered to reject the transaction in C
+    // even if A does not contain an explicit reject vote for the transaction.
+    fn inherit_reject_votes_in_last_commit(&mut self) {
         let commit_state = self.commits.back_mut().unwrap();
 
-        // Inherit from lower round blocks to higher round blocks.
+        // Inherit in ascending order of round, to ensure all lower round reject votes are included.
         let mut blocks = commit_state.commit.blocks.clone();
         blocks.sort_by_key(|b| b.round());
 
         for block in blocks {
             // Inherit reject votes from the ancestor of block's own authority.
-            // own_ancestor should usually be the 1st ancestor.
+            // Block verification ensures the 1st ancestor is from the own authority.
+            // If this is not the case, the ancestor block must have been gc'ed.
             // Also, block verification ensures each authority has at most one ancestor.
-            let Some(own_ancestor) = block
-                .ancestors()
-                .iter()
-                .find(|b| b.author == block.author())
-                .copied()
-            else {
+            let Some(own_ancestor) = block.ancestors().first().copied() else {
                 continue;
             };
+            if own_ancestor.author != block.author() {
+                continue;
+            }
             let Some(own_ancestor_rejects) = self
                 .blocks
                 .get(&own_ancestor)
                 .map(|b| b.reject_votes.clone())
             else {
-                // The ancestor block may have been finalized or gc'ed.
+                // The ancestor block has been finalized or gc'ed.
+                // So its reject votes are not longer needed either.
                 continue;
             };
             // No reject votes from the ancestor block to inherit.
@@ -255,16 +301,17 @@ impl CommitFinalizer {
         }
     }
 
+    // Tries indirectly finalizing the buffered commits at the given index.
     fn try_indirect_finalize_commit(&mut self, index: usize) {
         // Optional optimization: re-check pending transactions to see if they are rejected by a quorum now.
         self.check_pending_transactions(index);
 
         // Check if remaining pending blocks can be finalized.
         // If a block is finalized, record its pending and rejected transactions.
-        // The rest of the transactions in the block are indirectly finalized.
+        // The remaining pending transactions in the block will be eventually indirectly finalized or rejected.
         self.try_indirect_finalize_pending_blocks(index);
 
-        // Check if remaining pending transaction can be finalized.
+        // Check if remaining pending transactions can be finalized.
         self.try_indirect_finalize_pending_transactions(index);
 
         // Check if remaining pending transactions can be indirectly rejected.
@@ -272,39 +319,36 @@ impl CommitFinalizer {
     }
 
     fn check_pending_transactions(&mut self, index: usize) {
-        let pending_transactions = self.commits[index]
-            .pending_transactions
-            .keys()
-            .copied()
-            .collect::<Vec<_>>();
-        for block_ref in pending_transactions {
+        let blocks_with_pending_transactions = self.commits[index].pending_transactions.clone();
+        for (block_ref, pending_transactions) in blocks_with_pending_transactions {
             let reject_votes: BTreeMap<TransactionIndex, Stake> = self
                 .transaction_certifier
                 .get_reject_votes(&block_ref)
                 .unwrap_or_else(|| panic!("No vote info found for {block_ref}. It is likely gc'ed or failed to be recovered after crash."))
                 .into_iter()
                 .collect();
-            for (transaction_index, stake) in reject_votes {
-                if stake < self.context.committee.quorum_threshold() {
-                    // pending_transactions do not need to be updated in this case,
-                    // whether the transaction exists in pending_transactions or not.
+            let curr_commit_state = &mut self.commits[index];
+            // Before reprocessing all pending transactions, block_pending_txns must exist and cannot be empty.
+            let block_pending_txns = curr_commit_state
+                .pending_transactions
+                .get_mut(&block_ref)
+                .unwrap();
+            for transaction_index in pending_transactions {
+                let reject_stake = reject_votes.get(&transaction_index).unwrap_or(&0);
+                if *reject_stake < self.context.committee.quorum_threshold() {
                     continue;
                 }
-                // Move the rejected transaction from pending_transactions to rejected_transactions.
-                let curr_commit_state = &mut self.commits[index];
-                let pending_transactions = curr_commit_state
-                    .pending_transactions
-                    .get_mut(&block_ref)
-                    .unwrap();
-                pending_transactions.remove(&transaction_index);
-                if pending_transactions.is_empty() {
-                    curr_commit_state.pending_transactions.remove(&block_ref);
-                }
+                // Otherwise, move the rejected transaction from pending_transactions to rejected_transactions.
+                block_pending_txns.remove(&transaction_index);
                 curr_commit_state
                     .rejected_transactions
                     .entry(block_ref)
                     .or_default()
                     .insert(transaction_index);
+            }
+            // Remove the entry for the block if the block has no pending transactions.
+            if block_pending_txns.is_empty() {
+                curr_commit_state.pending_transactions.remove(&block_ref);
             }
         }
     }
@@ -313,13 +357,18 @@ impl CommitFinalizer {
         let curr_leader_round = self.commits[index].commit.leader.round;
         let pending_blocks = self.commits[index].pending_blocks.clone();
         for block_ref in pending_blocks {
+            // When a block is finalized, all transactions without reject votes are also finalized.
+            // Then only transactions with reject votes need to be indirectly finalized or rejected.
+            // The returned rejected transactions are ignored since no transaction is requested to be finalized anyway.
             let (block_finalized, _) =
                 self.try_indirect_finalize_block(curr_leader_round, block_ref, BTreeMap::new());
             if !block_finalized {
                 continue;
             }
+            // Remove the finalized block from pending_blocks.
             let curr_commit_state = &mut self.commits[index];
             curr_commit_state.pending_blocks.remove(&block_ref);
+            // Determine if each of the remaining transactions with reject votes is pending or rejected.
             let reject_votes: BTreeMap<TransactionIndex, Stake> = self
                 .transaction_certifier
                 .get_reject_votes(&block_ref)
@@ -352,18 +401,20 @@ impl CommitFinalizer {
                     .into_iter()
                     .map(|transaction_index| (transaction_index, StakeAggregator::new()))
                     .collect();
+            // Request finalizing the pending transactions in the block.
             let (_, finalized_transactions) =
                 self.try_indirect_finalize_block(curr_leader_round, block_ref, accept_votes);
             if !finalized_transactions.is_empty() {
                 let curr_commit_state = &mut self.commits[index];
-                let undecided_txns = curr_commit_state
+                // Remove the pending transactions in the block that are indirectly finalized.
+                let block_pending_txns = curr_commit_state
                     .pending_transactions
                     .get_mut(&block_ref)
                     .unwrap();
                 for t in finalized_transactions {
-                    undecided_txns.remove(&t);
+                    block_pending_txns.remove(&t);
                 }
-                if undecided_txns.is_empty() {
+                if block_pending_txns.is_empty() {
                     curr_commit_state.pending_transactions.remove(&block_ref);
                 }
             }
@@ -373,11 +424,12 @@ impl CommitFinalizer {
     fn try_indirect_reject_pending_transactions(&mut self, index: usize) {
         let curr_leader_round = self.commits[index].commit.leader.round;
         let last_commit_leader_round = self.commits.back().unwrap().commit.leader.round;
-        if curr_leader_round + INDIRECT_FINALIZE_DEPTH <= last_commit_leader_round {
+        if curr_leader_round + INDIRECT_REJECT_DEPTH <= last_commit_leader_round {
             let curr_commit_state = &mut self.commits[index];
-            // When the last leader round is no lower than INDIRECT_FINALIZE_DEPTH,
+            // When the last leader round is no lower than INDIRECT_REJECT_DEPTH,
             // all pending blocks should have been finalized.
             assert!(curr_commit_state.pending_blocks.is_empty());
+            // Pending transactions that can be indirectly finalized are already finalized.
             // All remaining pending transactions are indirectly rejected.
             let pending_transactions = std::mem::take(&mut curr_commit_state.pending_transactions);
             for (block_ref, pending_transactions) in pending_transactions {
@@ -392,6 +444,8 @@ impl CommitFinalizer {
 
     // Returns if the block is indirectly finalized, and requested transactions in accept_votes
     // that are indirectly finalized.
+    // This function is used for both finalizing blocks and transactions, so it must traverse as many blocks as possible
+    // that can contribute to the block‘s and requested transactions' finalization.
     fn try_indirect_finalize_block(
         &self,
         curr_leader_round: Round,
