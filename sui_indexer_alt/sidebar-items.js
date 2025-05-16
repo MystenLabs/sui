@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["setup_indexer"],"mod":["args","config"]};
