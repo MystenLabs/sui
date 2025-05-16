@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    Result, bail, ensure, error,
+    bail, ensure, error,
     references::{Edge, Node, Ref},
     regex::{Extension, Regex},
+    Result,
 };
 use core::fmt;
 use petgraph::graphmap::DiGraphMap;
@@ -583,8 +584,7 @@ where
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         struct DisplaySuccessors<'a, Loc, Lbl: Ord>(&'a Graph<Loc, Lbl>, Ref);
 
-        impl<'a, Loc: Copy, Lbl: Ord + Clone + fmt::Display> fmt::Display
-            for DisplaySuccessors<'a, Loc, Lbl>
+        impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> fmt::Display for DisplaySuccessors<'_, Loc, Lbl>
         where
             Lbl: fmt::Display,
         {
