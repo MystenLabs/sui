@@ -5350,7 +5350,15 @@
       "AdditionalConsensusStateDigest": {
         "$ref": "#/components/schemas/Digest"
       },
-      "Authenticator": {
+      "AuthorityPublicKeyBytes": {
+        "description": "Defines the compressed version of the public key that we pass around in Sui",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Base64"
+          }
+        ]
+      },
+      "Authorizer": {
         "oneOf": [
           {
             "description": "The contained SuiAddress exclusively has all permissions: read, write, delete, transfer",
@@ -5364,14 +5372,6 @@
               }
             },
             "additionalProperties": false
-          }
-        ]
-      },
-      "AuthorityPublicKeyBytes": {
-        "description": "Defines the compressed version of the public key that we pass around in Sui",
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Base64"
           }
         ]
       },
@@ -7872,7 +7872,7 @@
             ]
           },
           {
-            "description": "Object is sequenced via consensus. Ownership is managed by the configured authenticator.\n\nNote: wondering what happened to `V1`? `Shared` above was the V1 of consensus objects.",
+            "description": "Object is sequenced via consensus. Ownership is managed by the configured authorizer.\n\nNote: wondering what happened to `V1`? `Shared` above was the V1 of consensus objects.",
             "type": "object",
             "required": [
               "ConsensusV2"
@@ -7881,15 +7881,15 @@
               "ConsensusV2": {
                 "type": "object",
                 "required": [
-                  "authenticator",
+                  "authorizer",
                   "start_version"
                 ],
                 "properties": {
-                  "authenticator": {
-                    "description": "The authentication mode of the object",
+                  "authorizer": {
+                    "description": "The authorization mode of the object.",
                     "allOf": [
                       {
-                        "$ref": "#/components/schemas/Authenticator"
+                        "$ref": "#/components/schemas/Authorizer"
                       }
                     ]
                   },

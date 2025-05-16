@@ -13,7 +13,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::ops::Deref;
 use sui_types::crypto::{PublicKey, SuiSignature, ToFromBytes, ZkLoginPublicIdentifier};
 use sui_types::messages_grpc::HandleSoftBundleCertificatesRequestV3;
-use sui_types::object::Authenticator;
+use sui_types::object::Authorizer;
 use sui_types::utils::get_one_zklogin_inputs;
 use sui_types::{
     authenticator_state::ActiveJwk,
@@ -316,7 +316,7 @@ async fn test_sender_is_not_consensus_v2_owner() {
             start_version.next(),
             Owner::ConsensusV2 {
                 start_version,
-                authenticator: Box::new(Authenticator::SingleOwner(sender1)),
+                authorizer: Box::new(Authorizer::SingleOwner(sender1)),
             },
         ),
         |_| {},

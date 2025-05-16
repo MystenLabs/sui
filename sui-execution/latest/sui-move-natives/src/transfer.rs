@@ -19,7 +19,7 @@ use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber},
-    object::{Authenticator, Owner},
+    object::{Authorizer, Owner},
 };
 
 const E_SHARED_NON_NEW_OBJECT: u64 = 0;
@@ -232,7 +232,7 @@ pub fn party_transfer_internal(
     // transaction are written to storage.
     let owner = Owner::ConsensusV2 {
         start_version: SequenceNumber::new(),
-        authenticator: Box::new(Authenticator::SingleOwner(address.into())),
+        authorizer: Box::new(Authorizer::SingleOwner(address.into())),
     };
     object_runtime_transfer(context, owner, ty, obj)?;
     let cost = context.gas_used();

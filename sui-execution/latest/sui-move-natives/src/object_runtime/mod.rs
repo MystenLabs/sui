@@ -276,14 +276,14 @@ impl<'a> ObjectRuntime<'a> {
                 (Owner::Shared { .. }, Owner::Shared { .. }) => TransferResult::SameOwner,
                 (
                     Owner::ConsensusV2 {
-                        authenticator: new_authenticator,
+                        authorizer: new_authorizer,
                         ..
                     },
                     Owner::ConsensusV2 {
-                        authenticator: old_authenticator,
+                        authorizer: old_authorizer,
                         ..
                     },
-                ) if new_authenticator == old_authenticator => TransferResult::SameOwner,
+                ) if new_authorizer == old_authorizer => TransferResult::SameOwner,
                 (new, old) if new == old => TransferResult::SameOwner,
                 _ => TransferResult::OwnerChanged,
             }

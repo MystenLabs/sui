@@ -96,8 +96,8 @@ impl StoredObjInfo {
                 Owner::AddressOwner(a) => Some(a.to_vec()),
                 Owner::ObjectOwner(o) => Some(o.to_vec()),
                 Owner::Shared { .. } | Owner::Immutable { .. } => None,
-                Owner::ConsensusV2 { authenticator, .. } => {
-                    Some(authenticator.as_single_owner().to_vec())
+                Owner::ConsensusV2 { authorizer, .. } => {
+                    Some(authorizer.as_single_owner().to_vec())
                 }
             },
 

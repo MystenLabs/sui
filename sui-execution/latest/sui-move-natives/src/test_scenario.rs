@@ -231,12 +231,12 @@ pub fn end_transaction(
                     .or_default()
                     .insert(id);
             }
-            Owner::ConsensusV2 { authenticator, .. } => {
+            Owner::ConsensusV2 { authorizer, .. } => {
                 // Treat ConsensusV2 objects the same as address-owned for now. This will have
-                // to be revisited when other Authenticators are added.
+                // to be revisited when other Authorizers are added.
                 inventories
                     .address_inventories
-                    .entry(*authenticator.as_single_owner())
+                    .entry(*authorizer.as_single_owner())
                     .or_default()
                     .entry(ty)
                     .or_default()
@@ -874,10 +874,10 @@ fn transaction_effects(
             Owner::Shared { .. } => shared.push(id),
             Owner::Immutable => frozen.push(id),
             // Treat ConsensusV2 objects the same as address-owned for now. This will have
-            // to be revisited when other Authenticators are added.
-            Owner::ConsensusV2 { authenticator, .. } => transferred_to_account.push((
+            // to be revisited when other Authorizers are added.
+            Owner::ConsensusV2 { authorizer, .. } => transferred_to_account.push((
                 pack_id(id),
-                Value::address((*authenticator.as_single_owner()).into()),
+                Value::address((*authorizer.as_single_owner()).into()),
             )),
         }
     }
