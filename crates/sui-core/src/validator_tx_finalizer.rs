@@ -303,8 +303,9 @@ mod tests {
     use sui_types::messages_grpc::{
         HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
         HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
-        RawSubmitTxResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawGetEffectsRequest,
+        RawGetEffectsResponse, RawSubmitTxRequest, RawSubmitTxResponse, SystemStateRequest,
+        TransactionInfoRequest, TransactionInfoResponse,
     };
     use sui_types::object::Object;
     use sui_types::sui_system_state::SuiSystemState;
@@ -327,6 +328,14 @@ mod tests {
             _request: RawSubmitTxRequest,
             _client_addr: Option<SocketAddr>,
         ) -> Result<RawSubmitTxResponse, SuiError> {
+            unimplemented!();
+        }
+
+        async fn get_effects(
+            &self,
+            _request: RawGetEffectsRequest,
+            _client_addr: Option<SocketAddr>,
+        ) -> Result<RawGetEffectsResponse, SuiError> {
             unimplemented!();
         }
 

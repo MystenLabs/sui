@@ -21,13 +21,15 @@ use rand::seq::SliceRandom as _;
 use sui_types::{
     base_types::ConciseableName,
     committee::EpochId,
+    error::SuiError,
+    messages_grpc::RawGetEffectsRequest,
     quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
 };
 use tokio::{
     task::JoinSet,
     time::{sleep, timeout},
 };
-use tracing::instrument;
+use tracing::{info, instrument, warn};
 
 use crate::{
     authority_aggregator::AuthorityAggregator,
@@ -108,6 +110,7 @@ where
         let auth_agg = self.authority_aggregator.load();
         let committee = auth_agg.committee.clone();
         let epoch = committee.epoch();
+        let transaction = request.transaction.clone();
         let raw_request = request
             .into_raw()
             .map_err(TransactionDriverError::SerializationError)?;
@@ -116,7 +119,9 @@ where
         // Send the transaction to a random validator.
         let clients = auth_agg.authority_clients.iter().collect::<Vec<_>>();
         let (name, client) = clients.choose(&mut rand::thread_rng()).unwrap();
-        let response = timeout(
+
+        // TODO(fastpath): Use consensus position
+        let consensus_position = timeout(
             Duration::from_secs(2),
             client.submit_transaction(raw_request, options.forwarded_client_addr),
         )
@@ -126,7 +131,71 @@ where
             TransactionDriverError::RpcFailure(name.concise().to_string(), e.to_string())
         })?;
 
-        // TODO(fastpath): Aggregate quorum of responses before returning QuorumSubmitTransactionResponse
+        info!("Transaction submitted to consensus with position: {consensus_position:?}",);
+
+        // Retry get_effects up to 5 times with exponential backoff, this can be removed once
+        // wait for effects is in place.
+        let mut retry_count = 0;
+        let max_retries = 5;
+        let mut backoff = Duration::from_millis(100);
+
+        let response = loop {
+            match timeout(
+                Duration::from_secs(2),
+                client.get_effects(
+                    RawGetEffectsRequest {
+                        transaction: bcs::to_bytes(&transaction)
+                            .map_err(|e| {
+                                TransactionDriverError::SerializationError(
+                                    SuiError::TransactionSerializationError {
+                                        error: e.to_string(),
+                                    },
+                                )
+                            })?
+                            .into(),
+                        include_events: true,
+                        include_input_objects: false,
+                        include_output_objects: false,
+                    },
+                    options.forwarded_client_addr,
+                ),
+            )
+            .await
+            {
+                Ok(Ok(response)) => break response,
+                Ok(Err(e)) => {
+                    if retry_count >= max_retries {
+                        return Err(TransactionDriverError::RpcFailure(
+                            name.concise().to_string(),
+                            e.to_string(),
+                        ));
+                    }
+                    warn!(
+                        "Failed to get effects (attempt {}/{}): {}. Retrying in {:?}",
+                        retry_count + 1,
+                        max_retries,
+                        e,
+                        backoff
+                    );
+                }
+                Err(_) => {
+                    if retry_count >= max_retries {
+                        return Err(TransactionDriverError::TimeoutBeforeFinality);
+                    }
+                    warn!(
+                        "Timeout getting effects (attempt {}/{}). Retrying in {:?}",
+                        retry_count + 1,
+                        max_retries,
+                        backoff
+                    );
+                }
+            }
+
+            tokio::time::sleep(backoff).await;
+            backoff *= 2;
+            retry_count += 1;
+        };
+
         Ok(QuorumSubmitTransactionResponse {
             effects: FinalizedEffects {
                 effects: response.effects,
