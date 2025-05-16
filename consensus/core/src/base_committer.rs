@@ -234,10 +234,7 @@ impl BaseCommitter {
         leader_block: &VerifiedBlock,
         all_votes: &mut HashMap<BlockRef, bool>,
     ) -> bool {
-        let (gc_enabled, gc_round) = {
-            let dag_state = self.dag_state.read();
-            (dag_state.gc_enabled(), dag_state.gc_round())
-        };
+        let gc_round = self.dag_state.read().gc_round();
 
         let mut votes_stake_aggregator = StakeAggregator::<QuorumThreshold>::new();
         for reference in potential_certificate.ancestors() {
@@ -246,17 +243,13 @@ impl BaseCommitter {
             } else {
                 let potential_vote = self.dag_state.read().get_block(reference);
 
-                let is_vote = if gc_enabled {
+                let is_vote = {
                     if let Some(potential_vote) = potential_vote {
                         self.is_vote(&potential_vote, leader_block)
                     } else {
                         assert!(reference.round <= gc_round, "Block not found in storage: {:?} , and is not below gc_round: {gc_round}", reference);
                         false
                     }
-                } else {
-                    let potential_vote = potential_vote
-                        .unwrap_or_else(|| panic!("Block not found in storage: {:?}", reference));
-                    self.is_vote(&potential_vote, leader_block)
                 };
 
                 all_votes.insert(*reference, is_vote);

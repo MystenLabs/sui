@@ -50,7 +50,7 @@ mod test {
             let (committee, keypairs) =
                 local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
             let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-            protocol_config.set_consensus_gc_depth_for_testing(3);
+            protocol_config.set_consensus_for_testing(3);
             protocol_config
                 .set_consensus_median_based_commit_timestamp_for_testing(median_based_timestamp);
 
