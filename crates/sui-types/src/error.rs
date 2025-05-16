@@ -497,6 +497,8 @@ pub enum SuiError {
     TransactionsNotFound { digests: Vec<TransactionDigest> },
     #[error("Could not find the referenced transaction events [{digest:?}].")]
     TransactionEventsNotFound { digest: TransactionDigest },
+    #[error("Could not find the referenced transaction effects [{digest:?}].")]
+    TransactionEffectsNotFound { digest: TransactionDigest },
     #[error(
         "Attempt to move to `Executed` state an transaction that has already been executed: {:?}.",
         digest
@@ -560,6 +562,16 @@ pub enum SuiError {
     TransactionOrchestratorLocalExecutionError { error: String },
 
     // Errors returned by authority and client read API's
+    #[error(
+        "Failure serializing consensus position in the requested format: {:?}",
+        error
+    )]
+    ConsensusPositionSerializationError { error: String },
+    #[error(
+        "Failure deserializing consensus position from the provided format: {:?}",
+        error
+    )]
+    ConsensusPositionDeserializationError { error: String },
     #[error("Failure serializing transaction in the requested format: {:?}", error)]
     TransactionSerializationError { error: String },
     #[error(

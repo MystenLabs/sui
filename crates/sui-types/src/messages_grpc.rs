@@ -8,6 +8,7 @@ use crate::effects::{
     VerifiedSignedTransactionEffects,
 };
 use crate::error::SuiError;
+use crate::messages_consensus::ConsensusTxPosition;
 use crate::messages_consensus::Round;
 use crate::object::Object;
 use crate::transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction};
@@ -227,6 +228,48 @@ pub struct HandleCertificateRequestV3 {
 pub struct RawSubmitTxRequest {
     #[prost(bytes = "bytes", tag = "1")]
     pub transaction: Bytes,
+}
+
+#[derive(Clone, prost::Message)]
+pub struct RawSubmitTxResponse {
+    // Serialized Consensus Position
+    #[prost(bytes = "bytes", tag = "1")]
+    pub consensus_position: Bytes,
+}
+
+impl RawSubmitTxResponse {
+    pub fn into_raw(consensus_position: ConsensusTxPosition) -> Result<Self, SuiError> {
+        Ok(Self {
+            consensus_position: bcs::to_bytes(&consensus_position)
+                .map_err(|e| SuiError::ConsensusPositionSerializationError {
+                    error: e.to_string(),
+                })?
+                .into(),
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SubmitTxResponse {
+    pub consensus_position: ConsensusTxPosition,
+}
+
+impl SubmitTxResponse {
+    pub fn from_bytes(consensus_position: Bytes) -> Result<Self, SuiError> {
+        Ok(Self {
+            consensus_position: bcs::from_bytes(&consensus_position).map_err(|e| {
+                SuiError::ConsensusPositionDeserializationError {
+                    error: e.to_string(),
+                }
+            })?,
+        })
+    }
+}
+
+#[derive(Clone, prost::Message)]
+pub struct RawGetEffectsRequest {
+    #[prost(bytes = "bytes", tag = "1")]
+    pub transaction: Bytes,
     #[prost(bool, tag = "2")]
     pub include_events: bool,
     #[prost(bool, tag = "3")]
@@ -235,7 +278,7 @@ pub struct RawSubmitTxRequest {
     pub include_output_objects: bool,
 }
 
-/// Serialized response type for submit transaction validator API.
+/// Serialized response type for get effects validator API.
 ///
 /// The corresponding request type allows for a client to request events as well as
 /// input/output objects from a transaction's execution. Given Validators operate with very
@@ -243,7 +286,7 @@ pub struct RawSubmitTxRequest {
 /// the transaction has been executed locally on the validator and will not be returned for
 /// requests to previously executed transactions.
 #[derive(Clone, prost::Message)]
-pub struct RawSubmitTxResponse {
+pub struct RawGetEffectsResponse {
     // Serialized TransactionEffects
     #[prost(bytes = "bytes", tag = "1")]
     pub effects: Bytes,
@@ -266,7 +309,7 @@ pub struct RawSubmitTxResponse {
     pub output_objects: Vec<Vec<u8>>,
 }
 
-impl RawSubmitTxResponse {
+impl RawGetEffectsResponse {
     pub fn into_raw(
         effects: TransactionEffects,
         include_events: bool,
@@ -320,7 +363,7 @@ impl RawSubmitTxResponse {
 }
 
 #[derive(Clone, Debug)]
-pub struct SubmitTxResponse {
+pub struct GetEffectsResponse {
     pub effects: TransactionEffects,
     pub events: Option<TransactionEvents>,
     pub input_objects: Option<Vec<Object>>,
@@ -328,7 +371,7 @@ pub struct SubmitTxResponse {
     pub auxiliary_data: Option<Vec<u8>>,
 }
 
-impl SubmitTxResponse {
+impl GetEffectsResponse {
     pub fn from_bytes(
         effects: Bytes,
         include_events: bool,

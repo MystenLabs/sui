@@ -11,6 +11,7 @@ use crate::supported_protocol_versions::{
 };
 use crate::transaction::{CertifiedTransaction, Transaction};
 use byteorder::{BigEndian, ReadBytesExt};
+use consensus_core::BlockRef;
 use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
 use fastcrypto_tbls::dkg_v1;
@@ -35,6 +36,14 @@ pub type TransactionIndex = u16;
 
 /// Non-decreasing timestamp produced by consensus in ms.
 pub type TimestampMs = u64;
+
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+pub struct ConsensusTxPosition {
+    // Block containing a transaction.
+    pub block: BlockRef,
+    // Index of the transaction in the block.
+    pub index: TransactionIndex,
+}
 
 /// Only commit_timestamp_ms is passed to the move call currently.
 /// However we include epoch and round to make sure each ConsensusCommitPrologue has a unique tx digest.
