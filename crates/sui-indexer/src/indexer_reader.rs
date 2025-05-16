@@ -16,9 +16,7 @@ use tracing::{debug, error, warn};
 
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
-use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::{StructTag, TypeTag};
-use sui_json_rpc_types::DisplayFieldsResponse;
 use sui_json_rpc_types::{Balance, Coin as SuiCoin, SuiCoinMetadata, SuiMoveValue};
 use sui_json_rpc_types::{
     CheckpointId, EpochInfo, EventFilter, SuiEvent, SuiObjectDataFilter,
@@ -52,14 +50,13 @@ use crate::{
     errors::IndexerError,
     models::{
         checkpoints::StoredCheckpoint,
-        display::StoredDisplay,
         epoch::StoredEpochInfo,
         events::StoredEvent,
         objects::{CoinBalance, StoredObject},
         transactions::{tx_events_to_sui_tx_events, StoredTransaction},
         tx_indices::TxSequenceNumber,
     },
-    schema::{checkpoints, display, epochs, events, objects, transactions},
+    schema::{checkpoints, epochs, events, objects, transactions},
     store::package_resolver::IndexerStorePackageResolver,
     types::{IndexerResult, OwnerType},
 };
@@ -1258,31 +1255,6 @@ impl IndexerReader {
         Ok(name_bcs_value)
     }
 
-    async fn get_display_object_by_type(
-        &self,
-        object_type: &move_core_types::language_storage::StructTag,
-    ) -> Result<Option<sui_types::display::DisplayVersionUpdatedEvent>, IndexerError> {
-        use diesel_async::RunQueryDsl;
-
-        let mut connection = self.pool.get().await?;
-
-        let object_type = object_type.to_canonical_string(/* with_prefix */ true);
-        let stored_display = display::table
-            .filter(display::object_type.eq(object_type))
-            .first::<StoredDisplay>(&mut connection)
-            .await
-            .optional()?;
-
-        let stored_display = match stored_display {
-            Some(display) => display,
-            None => return Ok(None),
-        };
-
-        let display_update = stored_display.to_display_update_event()?;
-
-        Ok(Some(display_update))
-    }
-
     pub async fn get_owned_coins(
         &self,
         owner: SuiAddress,
@@ -1355,33 +1327,6 @@ impl IndexerReader {
             .into_iter()
             .map(|cb| cb.try_into())
             .collect::<IndexerResult<Vec<_>>>()
-    }
-
-    pub(crate) async fn get_display_fields(
-        &self,
-        original_object: &sui_types::object::Object,
-        original_layout: &Option<MoveStructLayout>,
-    ) -> Result<DisplayFieldsResponse, IndexerError> {
-        let (object_type, layout) = if let Some((object_type, layout)) =
-            sui_json_rpc::read_api::get_object_type_and_struct(original_object, original_layout)
-                .map_err(|e| IndexerError::GenericError(e.to_string()))?
-        {
-            (object_type, layout)
-        } else {
-            return Ok(DisplayFieldsResponse {
-                data: None,
-                error: None,
-            });
-        };
-
-        if let Some(display_object) = self.get_display_object_by_type(&object_type).await? {
-            return sui_json_rpc::read_api::get_rendered_fields(display_object.fields, &layout)
-                .map_err(|e| IndexerError::GenericError(e.to_string()));
-        }
-        Ok(DisplayFieldsResponse {
-            data: None,
-            error: None,
-        })
     }
 
     pub async fn get_singleton_object(&self, type_: &StructTag) -> Result<Option<Object>> {
