@@ -67,6 +67,7 @@ async fn main() {
     exit_main!(execute_move_command(
         args.package_path.as_deref(),
         args.build_config,
-        args.cmd
+        args.cmd,
+        None,
     ));
 }

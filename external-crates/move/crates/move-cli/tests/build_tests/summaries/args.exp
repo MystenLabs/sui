@@ -3,6 +3,7 @@ BUILDING summaries
 
 Summary generation successful. Summaries stored in 'package_summaries'
 External Command `ls -1 package_summaries/`:
+address_mapping.json
 summary_pkg
 External Command `cat package_summaries/summary_pkg/a.json`:
 {
@@ -154,11 +155,16 @@ External Command `cat package_summaries/summary_pkg/a.json`:
     }
   },
   "enums": {}
+}External Command `cat package_summaries/address_mapping.json`:
+{
+  "0x0000000000000000000000000000000000000000000000000000000000c0ffee": "summary_pkg"
 }Command `summary --bytecode -o yaml`:
 
 Summary generation successful. Summaries stored in 'package_summaries'
 External Command `ls -1 package_summaries/`:
 0x0000000000000000000000000000000000000000000000000000000000c0ffee
+address_mapping.json
+address_mapping.yaml
 summary_pkg
 External Command `cat package_summaries/0x0000000000000000000000000000000000000000000000000000000000c0ffee/a.yaml`:
 ---
@@ -220,3 +226,6 @@ structs:
           index: 0
           type_: u64
 enums: {}
+External Command `cat package_summaries/address_mapping.yaml`:
+---
+"0x0000000000000000000000000000000000000000000000000000000000c0ffee": "0x0000000000000000000000000000000000000000000000000000000000c0ffee"

@@ -1,0 +1,6 @@
+[package]
+name = "move_package"
+edition = "2024"
+
+[addresses]
+move_package = "0x0"
