@@ -122,6 +122,7 @@ ResolvedGraph {
             lint: false,
         },
         implicit_dependencies: {},
+        force_lock_file: false,
     },
     package_table: {
         "A": Package {

@@ -109,6 +109,7 @@ ResolvedGraph {
                 },
             ),
         },
+        force_lock_file: false,
     },
     package_table: {
         "A": Package {
