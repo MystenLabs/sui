@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    bail, ensure, error,
+    Result, bail, ensure, error,
     references::{Edge, Node, Ref},
     regex::{Extension, Regex},
-    Result,
 };
 use core::fmt;
 use petgraph::graphmap::DiGraphMap;
@@ -129,6 +128,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
     }
 
     fn add_ref(&mut self, loc: Loc, is_mut: bool) -> Result<Ref> {
+        self.check_invariant();
         let id = self.fresh_id;
         self.fresh_id += 1;
         let r = Ref::fresh(id);
@@ -136,7 +136,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         ensure!(!self.graph.contains_node(r), "ref {:?} already exists", r);
         let mut edge = Edge::<Loc, Lbl>::new();
         let size_increase = edge.insert(loc, Regex::epsilon());
-        self.graph.add_node(r);
+        self.graph.add_edge(r, r, edge);
 
         let mut node = Node::new(is_mut);
         node.abstract_size = node.abstract_size.saturating_add(size_increase);
@@ -144,6 +144,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         let prev = self.nodes.insert(r, node);
         ensure!(prev.is_none(), "ref {:?} already exists", r);
         self.abstract_size = self.abstract_size.saturating_add(node_size);
+        self.check_invariant();
         Ok(r)
     }
 
@@ -351,18 +352,22 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
     //**********************************************************************************************
 
     pub fn release(&mut self, r: Ref) -> Result<()> {
-        let Some(node) = self.nodes.remove(&r) else {
+        self.check_invariant();
+        let Some(rnode) = self.nodes.remove(&r) else {
             bail!("missing ref {:?}", r)
         };
-        self.abstract_size = self.abstract_size.saturating_sub(node.abstract_size);
+        self.abstract_size = self.abstract_size.saturating_sub(rnode.abstract_size);
         self.graph.remove_edge(r, r);
         for (&n, node) in self.nodes.iter_mut() {
             self.graph.remove_edge(r, n);
             if let Some(e) = self.graph.remove_edge(n, r) {
-                self.abstract_size = self.abstract_size.saturating_sub(e.abstract_size());
+                debug_assert_ne!(n, r);
                 node.abstract_size = node.abstract_size.saturating_sub(e.abstract_size());
+                self.abstract_size = self.abstract_size.saturating_sub(e.abstract_size());
             }
         }
+        self.graph.remove_node(r);
+        self.check_invariant();
         Ok(())
     }
 
@@ -423,7 +428,10 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
                 self.graph.add_edge(p, s, Edge::new());
             }
             let self_edge_mut = self.graph.edge_weight_mut(p, s).unwrap();
-            size_increase = size_increase.saturating_add(self_edge_mut.join(other_edge));
+            let edge_size_increase = self_edge_mut.join(other_edge);
+            let node_mut = self.node_mut(&p)?;
+            node_mut.abstract_size = node_mut.abstract_size.saturating_add(edge_size_increase);
+            size_increase = size_increase.saturating_add(edge_size_increase);
         }
         self.abstract_size = self.abstract_size.saturating_add(size_increase);
         self.check_invariant();
@@ -531,14 +539,13 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
             let mut calculated_size = 0;
             for (&r, node) in &self.nodes {
                 let mut node_size = 1;
-                calculated_size += node.abstract_size;
                 for (edge, s) in self.successors(r).unwrap() {
                     debug_assert!(self.graph.contains_edge(r, s));
                     edge.check_invariant();
                     node_size += edge.abstract_size();
                 }
                 assert_eq!(node.abstract_size, node_size);
-                calculated_size += node_size;
+                calculated_size += node.abstract_size;
             }
             debug_assert_eq!(calculated_size, self.abstract_size);
         }
