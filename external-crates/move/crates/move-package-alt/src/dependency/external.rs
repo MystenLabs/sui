@@ -60,6 +60,7 @@ struct RField {
 }
 
 /// Requests from the package mananger to the external resolver
+// TODO: fix typo above
 #[derive(Serialize, Debug)]
 struct ResolveRequest<F: MoveFlavor> {
     #[serde(default)]
@@ -135,6 +136,8 @@ impl ExternalDependency {
     }
 }
 
+// TODO: CLEANUP
+// Explain this conversion
 impl TryFrom<RField> for ExternalDependency {
     type Error = PackageError;
 

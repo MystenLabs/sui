@@ -238,6 +238,7 @@ const MAX_PROTOCOL_VERSION: u64 = 83;
 // Version 82: Relax bounding of size of values created in the adapter.
 // Version 83: Resolve `TypeInput` IDs to defining ID when converting to `TypeTag`s in the adapter.
 //             Enable execution time estimate mode for congestion control on mainnet.
+//             Enable nitro attestation upgraded parsing and mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -503,6 +504,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_nitro_attestation: bool,
 
+    // Enable upgraded parsing of nitro attestation that interprets pcrs as a map.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_nitro_attestation_upgraded_parsing: bool,
+
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
     reject_mutable_random_on_entry_functions: bool,
@@ -689,6 +694,10 @@ struct FeatureFlags {
     // Enable native function for party transfer
     #[serde(skip_serializing_if = "is_false")]
     enable_party_transfer: bool,
+
+    // Signifies the cut-over of using type tags instead of `Type`s in the object runtime.
+    #[serde(skip_serializing_if = "is_false")]
+    type_tags_in_object_runtime: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1927,6 +1936,10 @@ impl ProtocolConfig {
         self.feature_flags.enable_nitro_attestation
     }
 
+    pub fn enable_nitro_attestation_upgraded_parsing(&self) -> bool {
+        self.feature_flags.enable_nitro_attestation_upgraded_parsing
+    }
+
     pub fn get_consensus_commit_rate_estimation_window_size(&self) -> u32 {
         self.consensus_commit_rate_estimation_window_size
             .unwrap_or(0)
@@ -1968,6 +1981,10 @@ impl ProtocolConfig {
 
     pub fn enable_party_transfer(&self) -> bool {
         self.feature_flags.enable_party_transfer
+    }
+
+    pub fn type_tags_in_object_runtime(&self) -> bool {
+        self.feature_flags.type_tags_in_object_runtime
     }
 }
 
@@ -3525,6 +3542,12 @@ impl ProtocolConfig {
 
                     // Enable the new depth-first block sync logic.
                     cfg.feature_flags.consensus_batched_block_sync = true;
+
+                    // Enable nitro attestation upgraded parsing logic and enable the
+                    // native function on mainnet.
+                    cfg.feature_flags.enable_nitro_attestation_upgraded_parsing = true;
+                    cfg.feature_flags.enable_nitro_attestation = true;
+                    cfg.feature_flags.type_tags_in_object_runtime = true;
                 }
                 // Use this template when making changes:
                 //

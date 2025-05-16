@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::de::{Error, MapAccess, Visitor};
-use serde::{ser::SerializeSeq, Deserialize, Deserializer, Serialize, Serializer};
-use std::collections::HashMap;
+use serde::{Deserialize, Deserializer};
+use std::collections::BTreeMap;
 use std::fmt;
 use x509_parser::public_key::PublicKey;
 use x509_parser::time::ASN1Time;
@@ -96,11 +96,13 @@ impl From<NitroAttestationVerifyError> for SuiError {
 /// Given an attestation in bytes, parse it into signature, signed message and a parsed payload.
 pub fn parse_nitro_attestation(
     attestation_bytes: &[u8],
+    is_upgraded_parsing: bool,
 ) -> SuiResult<(Vec<u8>, Vec<u8>, AttestationDocument)> {
     let cose_sign1 = CoseSign1::parse_and_validate(attestation_bytes)?;
-    let doc = AttestationDocument::parse_payload(&cose_sign1.payload)?;
-    let signature = cose_sign1.clone().signature;
-    Ok((signature, cose_sign1.to_signed_message()?, doc))
+    let doc = AttestationDocument::parse_payload(&cose_sign1.payload, is_upgraded_parsing)?;
+    let msg = cose_sign1.to_signed_message()?;
+    let signature = cose_sign1.signature;
+    Ok((signature, msg, doc))
 }
 
 /// Given the signature bytes, signed message and parsed payload, verify everything according to
@@ -148,6 +150,7 @@ pub struct CoseSign1 {
     /// protected: empty_or_serialized_map,
     protected: Vec<u8>,
     /// unprotected: HeaderMap
+    #[allow(dead_code)]
     unprotected: HeaderMap,
     /// payload: bstr
     /// The spec allows payload to be nil and transported separately, but it's not useful at the
@@ -160,17 +163,6 @@ pub struct CoseSign1 {
 /// Empty map wrapper for COSE headers.
 #[derive(Clone, Debug, Default)]
 pub struct HeaderMap;
-
-impl Serialize for HeaderMap {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        use serde::ser::SerializeMap;
-        let map = serializer.serialize_map(Some(0))?;
-        map.end()
-    }
-}
 
 impl<'de> Deserialize<'de> for HeaderMap {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -204,20 +196,6 @@ impl<'de> Deserialize<'de> for HeaderMap {
         }
 
         deserializer.deserialize_map(MapVisitor)
-    }
-}
-
-impl Serialize for CoseSign1 {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut seq = serializer.serialize_seq(Some(4))?;
-        seq.serialize_element(&Value::Bytes(self.protected.to_vec()))?;
-        seq.serialize_element(&self.unprotected)?;
-        seq.serialize_element(&Value::Bytes(self.payload.to_vec()))?;
-        seq.serialize_element(&Value::Bytes(self.signature.to_vec()))?;
-        seq.end()
     }
 }
 
@@ -398,7 +376,8 @@ pub struct AttestationDocument {
     pub module_id: String,
     pub timestamp: u64,
     pub digest: String,
-    pub pcrs: Vec<Vec<u8>>,
+    pub pcr_vec: Vec<Vec<u8>>,
+    pub pcr_map: BTreeMap<u8, Vec<u8>>,
     certificate: Vec<u8>,
     cabundle: Vec<Vec<u8>>,
     pub public_key: Option<Vec<u8>>,
@@ -407,16 +386,20 @@ pub struct AttestationDocument {
 }
 
 impl AttestationDocument {
-    /// Parse the payload of the attestation document, validate the cert based on timestamp, and the pcrs match.
+    /// Validate and parse the payload of the attestation document.
     /// Adapted from <https://github.com/EternisAI/remote-attestation-verifier/blob/main/src/lib.rs>
     pub fn parse_payload(
         payload: &[u8],
+        is_upgraded_parsing: bool,
     ) -> Result<AttestationDocument, NitroAttestationVerifyError> {
-        let document_map = Self::to_map(payload)?;
-        Self::validate_document_map(&document_map)
+        let document_map = Self::to_map(payload, is_upgraded_parsing)?;
+        Self::validate_document_map(&document_map, is_upgraded_parsing)
     }
 
-    fn to_map(payload: &[u8]) -> Result<HashMap<String, Value>, NitroAttestationVerifyError> {
+    fn to_map(
+        payload: &[u8],
+        is_upgraded_parsing: bool,
+    ) -> Result<BTreeMap<String, Value>, NitroAttestationVerifyError> {
         let document_data: ciborium::value::Value =
             ciborium::de::from_reader(payload).map_err(|err| {
                 NitroAttestationVerifyError::InvalidAttestationDoc(format!(
@@ -425,19 +408,29 @@ impl AttestationDocument {
                 ))
             })?;
 
-        let document_map: HashMap<String, Value> = match document_data {
-            ciborium::value::Value::Map(map) => map
-                .into_iter()
-                .map(|(k, v)| {
-                    let k =
-                        k.as_text()
-                            .ok_or(NitroAttestationVerifyError::InvalidAttestationDoc(format!(
+        let document_map: BTreeMap<String, Value> = match document_data {
+            ciborium::value::Value::Map(map) => {
+                let map_size = map.len();
+                let result = map
+                    .into_iter()
+                    .map(|(k, v)| {
+                        let k = k.as_text().ok_or(
+                            NitroAttestationVerifyError::InvalidAttestationDoc(format!(
                                 "invalid key type: {:?}",
                                 k
-                            )))?;
-                    Ok((k.to_string(), v))
-                })
-                .collect::<Result<HashMap<String, Value>, NitroAttestationVerifyError>>()?,
+                            )),
+                        )?;
+                        Ok((k.to_string(), v))
+                    })
+                    .collect::<Result<BTreeMap<String, Value>, NitroAttestationVerifyError>>()?;
+
+                if is_upgraded_parsing && result.len() != map_size {
+                    return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
+                        "duplicate keys found in attestation document".to_string(),
+                    ));
+                }
+                result
+            }
             _ => {
                 return Err(NitroAttestationVerifyError::InvalidAttestationDoc(format!(
                     "expected map, got {:?}",
@@ -449,7 +442,8 @@ impl AttestationDocument {
     }
 
     fn validate_document_map(
-        document_map: &HashMap<String, Value>,
+        document_map: &BTreeMap<String, Value>,
+        is_upgraded_parsing: bool,
     ) -> Result<AttestationDocument, NitroAttestationVerifyError> {
         let module_id = document_map
             .get("module_id")
@@ -515,7 +509,13 @@ impl AttestationDocument {
             .map(|bytes| bytes.to_vec());
 
         if let Some(data) = &public_key {
-            if data.is_empty() || data.len() > MAX_PK_LENGTH {
+            if is_upgraded_parsing {
+                if data.len() > MAX_PK_LENGTH {
+                    return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
+                        "invalid public key".to_string(),
+                    ));
+                }
+            } else if data.is_empty() || data.len() > MAX_PK_LENGTH {
                 return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
                     "invalid public key".to_string(),
                 ));
@@ -548,7 +548,7 @@ impl AttestationDocument {
             }
         }
 
-        let pcrs = document_map
+        let (pcr_vec, pcr_map) = document_map
             .get("pcrs")
             .ok_or(NitroAttestationVerifyError::InvalidAttestationDoc(
                 "pcrs not found".to_string(),
@@ -564,6 +564,7 @@ impl AttestationDocument {
                     ));
                 }
                 let mut pcr_vec = Vec::with_capacity(pairs.len());
+                let mut pcr_map = BTreeMap::new();
                 for (k, v) in pairs.iter() {
                     let key = k.as_integer().ok_or(
                         NitroAttestationVerifyError::InvalidAttestationDoc(
@@ -582,8 +583,7 @@ impl AttestationDocument {
                         ));
                     }
 
-                    // Valid PCR indices are 0, 1, 2, 3, 4, 8 for AWS.
-                    // See: <https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html#where>
+                    // legacy parsing that populates a vector.
                     let key_u64 = u64::try_from(key).map_err(|_| {
                         NitroAttestationVerifyError::InvalidAttestationDoc(
                             "invalid PCR index".to_string(),
@@ -594,8 +594,32 @@ impl AttestationDocument {
                             pcr_vec.push(value.to_vec());
                         }
                     }
+
+                    // when upgraded parsing is enabled, use btreemap to avoid dup.
+                    if is_upgraded_parsing {
+                        // valid key is 0..31, can parse with u8.
+                        let key_u8 = u8::try_from(key).map_err(|_| {
+                            NitroAttestationVerifyError::InvalidAttestationDoc(
+                                "invalid PCR index".to_string(),
+                            )
+                        })?;
+
+                        // Valid PCR indices are 0, 1, 2, 3, 4, 8 for AWS. Ignores other keys.
+                        // See: <https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html#where>
+                        if !matches!(key_u8, 0 | 1 | 2 | 3 | 4 | 8) {
+                            continue;
+                        }
+
+                        if pcr_map.contains_key(&key_u8) {
+                            return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
+                                format!("duplicate PCR index {}", key_u8),
+                            ));
+                        }
+
+                        pcr_map.insert(key_u8, value.to_vec());
+                    }
                 }
-                Ok(pcr_vec)
+                Ok((pcr_vec, pcr_map))
             })?;
 
         let cabundle = document_map
@@ -634,7 +658,8 @@ impl AttestationDocument {
             module_id,
             timestamp,
             digest,
-            pcrs,
+            pcr_vec,
+            pcr_map,
             certificate,
             cabundle,
             public_key,

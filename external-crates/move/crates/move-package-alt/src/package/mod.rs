@@ -20,10 +20,13 @@ use crate::{
 };
 use lockfile::{Lockfile, Publication};
 use manifest::Manifest;
+use move_core_types::identifier::Identifier;
 use tracing::debug;
 
+// TODO: we might want to use [move_core_types::Identifier] here, particularly for `PackageName`.
+// This will force us to maintain invariants.
 pub type EnvironmentName = String;
-pub type PackageName = String;
+pub type PackageName = Identifier;
 
 pub struct Package<F: MoveFlavor> {
     // TODO: maybe hold a lock on the lock file? Maybe not if move-analyzer wants to hold on to a

@@ -7,7 +7,9 @@ Manifest {
             file: "tests/data/basic_with_bar/Move.toml",
             value: Spanned {
                 span: 17..26,
-                value: "example",
+                value: Identifier(
+                    "example",
+                ),
             },
         },
         edition: Located {
@@ -24,7 +26,9 @@ Manifest {
         "testnet": "4c78adac",
     },
     dependencies: {
-        "bar": ManifestDependency {
+        Identifier(
+            "bar",
+        ): ManifestDependency {
             dependency_info: Local(
                 LocalDependency {
                     local: "./bar",
@@ -33,7 +37,9 @@ Manifest {
             is_override: false,
             rename_from: None,
         },
-        "foo": ManifestDependency {
+        Identifier(
+            "foo",
+        ): ManifestDependency {
             dependency_info: Git(
                 UnpinnedGitDependency {
                     repo: "https://example.com/foo.git",
@@ -45,10 +51,14 @@ Manifest {
             ),
             is_override: true,
             rename_from: Some(
-                "Foo",
+                Identifier(
+                    "Foo",
+                ),
             ),
         },
-        "qwer": ManifestDependency {
+        Identifier(
+            "qwer",
+        ): ManifestDependency {
             dependency_info: External(
                 ExternalDependency {
                     resolver: "mvr",
@@ -63,7 +73,9 @@ Manifest {
     },
     dep_replacements: {
         "mainnet": {
-            "foo": ManifestDependencyReplacement {
+            Identifier(
+                "foo",
+            ): ManifestDependencyReplacement {
                 dependency: Some(
                     ManifestDependency {
                         dependency_info: Git(

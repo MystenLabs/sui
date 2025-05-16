@@ -1,6 +1,7 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
+snapshot_kind: text
 ---
 version: 83
 feature_flags:
@@ -46,6 +47,7 @@ feature_flags:
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
   enable_nitro_attestation: true
+  enable_nitro_attestation_upgraded_parsing: true
   reject_mutable_random_on_entry_functions: true
   per_object_congestion_control_mode:
     ExecutionTimeEstimate:
@@ -90,6 +92,7 @@ feature_flags:
   enforce_checkpoint_timestamp_monotonicity: true
   max_ptb_value_size_v2: true
   resolve_type_input_ids_to_defining_id: true
+  type_tags_in_object_runtime: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
