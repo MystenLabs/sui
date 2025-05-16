@@ -5,7 +5,6 @@
 extern crate sui_types;
 
 pub mod adapter;
-pub mod data_store;
 pub mod error;
 pub mod execution_engine;
 pub mod execution_mode;
