@@ -111,50 +111,50 @@ static USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_V
 pub const GAS_SAFE_OVERHEAD: u64 = 1000;
 
 #[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case")]
 pub enum SuiClientCommands {
     /// Default address used for commands when none specified
-    #[clap(name = "active-address")]
+    #[command(name = "active-address")]
     ActiveAddress,
     /// Default environment used for commands when none specified
-    #[clap(name = "active-env")]
+    #[command(name = "active-env")]
     ActiveEnv,
     /// Obtain the Addresses managed by the client.
-    #[clap(name = "addresses")]
+    #[command(name = "addresses")]
     Addresses {
         /// Sort by alias instead of address
-        #[clap(long, short = 's')]
+        #[arg(long, short = 's')]
         sort_by_alias: bool,
     },
     /// List the coin balance of an address
-    #[clap(name = "balance")]
+    #[command(name = "balance")]
     Balance {
         /// Address (or its alias)
         #[arg(value_parser)]
         address: Option<KeyIdentity>,
         /// Show balance for the specified coin (e.g., 0x2::sui::SUI).
         /// All coins will be shown if none is passed.
-        #[clap(long, required = false)]
+        #[arg(long, required = false)]
         coin_type: Option<String>,
         /// Show a list with each coin's object ID and balance
-        #[clap(long, required = false)]
+        #[arg(long, required = false)]
         with_coins: bool,
     },
     /// Call Move function
-    #[clap(name = "call")]
+    #[command(name = "call")]
     Call {
         /// Object ID of the package, which contains the module
-        #[clap(long)]
+        #[arg(long)]
         package: ObjectID,
         /// The name of the module in the package
-        #[clap(long)]
+        #[arg(long)]
         module: String,
         /// Function name in module
-        #[clap(long)]
+        #[arg(long)]
         function: String,
         /// Type arguments to the generic function being called.
         /// All must be specified, or the call will fail.
-        #[clap(
+        #[arg(
             long,
             value_parser = parse_sui_type_tag,
             num_args(1..),
@@ -162,31 +162,31 @@ pub enum SuiClientCommands {
         type_args: Vec<TypeTag>,
         /// Simplified ordered args like in the function syntax
         /// ObjectIDs, Addresses must be hex strings
-        #[clap(long, num_args(1..))]
+        #[arg(long, num_args(1..))]
         args: Vec<SuiJsonValue>,
         /// Optional gas price for this call. Currently use only for testing and not in production environments.
-        #[clap(hide = true)]
+        #[arg(hide = true)]
         gas_price: Option<u64>,
 
-        #[clap(flatten)]
+        #[command(flatten)]
         opts: OptsWithGas,
     },
 
     /// Query the chain identifier from the rpc endpoint.
-    #[clap(name = "chain-identifier")]
+    #[command(name = "chain-identifier")]
     ChainIdentifier,
 
     /// Query a dynamic field by its address.
-    #[clap(name = "dynamic-field")]
+    #[command(name = "dynamic-field")]
     DynamicFieldQuery {
         ///The ID of the parent object
-        #[clap(name = "object_id")]
+        #[arg(name = "object_id")]
         id: ObjectID,
         /// Optional paging cursor
-        #[clap(long)]
+        #[arg(long)]
         cursor: Option<ObjectID>,
         /// Maximum item returned per page
-        #[clap(long, default_value = "50")]
+        #[arg(long, default_value = "50")]
         limit: usize,
     },
 
@@ -196,17 +196,17 @@ pub enum SuiClientCommands {
     /// Execute a Signed Transaction. This is useful when the user prefers to sign elsewhere and use this command to execute.
     ExecuteSignedTx {
         /// BCS serialized transaction data bytes without its type tag, as base64 encoded string. This is the output of sui client command using --serialize-unsigned-transaction.
-        #[clap(long)]
+        #[arg(long)]
         tx_bytes: String,
 
         /// A list of Base64 encoded signatures `flag || signature || pubkey`.
-        #[clap(long)]
+        #[arg(long)]
         signatures: Vec<String>,
     },
     /// Execute a combined serialized SenderSignedData string.
     ExecuteCombinedSignedTx {
         /// BCS serialized sender signed data, as base64 encoded string. This is the output of sui client command using --serialize-signed-transaction.
-        #[clap(long)]
+        #[arg(long)]
         signed_tx_bytes: String,
     },
 
@@ -214,20 +214,20 @@ pub enum SuiClientCommands {
     #[clap[name = "faucet"]]
     Faucet {
         /// Address (or its alias)
-        #[clap(long)]
+        #[arg(long)]
         #[arg(value_parser)]
         address: Option<KeyIdentity>,
         /// The url to the faucet
-        #[clap(long)]
+        #[arg(long)]
         url: Option<String>,
     },
 
     /// Obtain all gas objects owned by the address.
     /// An address' alias can be used instead of the address.
-    #[clap(name = "gas")]
+    #[command(name = "gas")]
     Gas {
         /// Address (or its alias) owning the objects
-        #[clap(name = "owner_address")]
+        #[arg(name = "owner_address")]
         #[arg(value_parser)]
         address: Option<KeyIdentity>,
     },
@@ -235,12 +235,12 @@ pub enum SuiClientCommands {
     /// Merge two coin objects into one coin
     MergeCoin {
         /// The address of the coin to merge into.
-        #[clap(long)]
+        #[arg(long)]
         primary_coin: ObjectID,
         /// The address of the coin to be merged.
-        #[clap(long)]
+        #[arg(long)]
         coin_to_merge: ObjectID,
-        #[clap(flatten)]
+        #[command(flatten)]
         opts: OptsWithGas,
     },
 
@@ -248,7 +248,7 @@ pub enum SuiClientCommands {
     /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or
     /// m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1. Word length can be
     /// { word12 | word15 | word18 | word21 | word24} default to word12 if not specified.
-    #[clap(name = "new-address")]
+    #[command(name = "new-address")]
     NewAddress {
         key_scheme: SignatureScheme,
         /// The alias must start with a letter and can contain only letters, digits, hyphens (-), or underscores (_).
@@ -258,55 +258,55 @@ pub enum SuiClientCommands {
     },
 
     /// Add new Sui environment.
-    #[clap(name = "new-env")]
+    #[command(name = "new-env")]
     NewEnv {
-        #[clap(long)]
+        #[arg(long)]
         alias: String,
-        #[clap(long, value_hint = ValueHint::Url)]
+        #[arg(long, value_hint = ValueHint::Url)]
         rpc: String,
-        #[clap(long, value_hint = ValueHint::Url)]
+        #[arg(long, value_hint = ValueHint::Url)]
         ws: Option<String>,
-        #[clap(long, help = "Basic auth in the format of username:password")]
+        #[arg(long, help = "Basic auth in the format of username:password")]
         basic_auth: Option<String>,
     },
 
     /// Get object info
-    #[clap(name = "object")]
+    #[command(name = "object")]
     Object {
         /// Object ID of the object to fetch
-        #[clap(name = "object_id")]
+        #[arg(name = "object_id")]
         id: ObjectID,
 
         /// Return the bcs serialized version of the object
-        #[clap(long)]
+        #[arg(long)]
         bcs: bool,
     },
     /// Obtain all objects owned by the address. It also accepts an address by its alias.
-    #[clap(name = "objects")]
+    #[command(name = "objects")]
     Objects {
         /// Address owning the object. If no address is provided, it will show all
         /// objects owned by `sui client active-address`.
-        #[clap(name = "owner_address")]
+        #[arg(name = "owner_address")]
         address: Option<KeyIdentity>,
     },
     /// Pay coins to recipients following specified amounts, with input coins.
     /// Length of recipients must be the same as that of amounts.
-    #[clap(name = "pay")]
+    #[command(name = "pay")]
     Pay {
         /// The input coins to be used for pay recipients, following the specified amounts.
-        #[clap(long, num_args(1..))]
+        #[arg(long, num_args(1..))]
         input_coins: Vec<ObjectID>,
 
         /// The recipient addresses, must be of same length as amounts.
         /// Aliases of addresses are also accepted as input.
-        #[clap(long, num_args(1..))]
+        #[arg(long, num_args(1..))]
         recipients: Vec<KeyIdentity>,
 
         /// The amounts to be paid, following the order of recipients.
-        #[clap(long, num_args(1..))]
+        #[arg(long, num_args(1..))]
         amounts: Vec<u64>,
 
-        #[clap(flatten)]
+        #[command(flatten)]
         opts: OptsWithGas,
     },
 
@@ -314,14 +314,14 @@ pub enum SuiClientCommands {
     /// The input coins also include the coin for gas payment, so no extra gas coin is required.
     PayAllSui {
         /// The input coins to be used for pay recipients, including the gas coin.
-        #[clap(long, num_args(1..))]
+        #[arg(long, num_args(1..))]
         input_coins: Vec<ObjectID>,
 
         /// The recipient address (or its alias if it's an address in the keystore).
-        #[clap(long)]
+        #[arg(long)]
         recipient: KeyIdentity,
 
-        #[clap(flatten)]
+        #[command(flatten)]
         opts: Opts,
     },
 
@@ -330,215 +330,215 @@ pub enum SuiClientCommands {
     /// The input coins also include the coin for gas payment, so no extra gas coin is required.
     PaySui {
         /// The input coins to be used for pay recipients, including the gas coin.
-        #[clap(long, num_args(1..))]
+        #[arg(long, num_args(1..))]
         input_coins: Vec<ObjectID>,
 
         /// The recipient addresses, must be of same length as amounts.
         /// Aliases of addresses are also accepted as input.
-        #[clap(long, num_args(1..))]
+        #[arg(long, num_args(1..))]
         recipients: Vec<KeyIdentity>,
 
         /// The amounts to be paid, following the order of recipients.
-        #[clap(long, num_args(1..))]
+        #[arg(long, num_args(1..))]
         amounts: Vec<u64>,
 
-        #[clap(flatten)]
+        #[command(flatten)]
         opts: Opts,
     },
 
     /// Run a PTB from the provided args
-    #[clap(name = "ptb")]
+    #[command(name = "ptb")]
     PTB(PTB),
 
     /// Publish Move modules
-    #[clap(name = "publish")]
+    #[command(name = "publish")]
     Publish {
         /// Path to directory containing a Move package
-        #[clap(name = "package_path", global = true, default_value = ".")]
+        #[arg(name = "package_path", global = true, default_value = ".")]
         package_path: PathBuf,
 
         /// Package build options
-        #[clap(flatten)]
+        #[command(flatten)]
         build_config: MoveBuildConfig,
 
-        #[clap(flatten)]
+        #[command(flatten)]
         opts: OptsWithGas,
 
         /// Publish the package without checking whether dependency source code compiles to the
         /// on-chain bytecode
-        #[clap(long)]
+        #[arg(long)]
         skip_dependency_verification: bool,
 
         /// Check that the dependency source code compiles to the on-chain bytecode before
         /// publishing the package (currently the default behavior)
-        #[clap(long, conflicts_with = "skip_dependency_verification")]
+        #[arg(long, conflicts_with = "skip_dependency_verification")]
         verify_deps: bool,
 
         /// Also publish transitive dependencies that have not already been published.
-        #[clap(long)]
+        #[arg(long)]
         with_unpublished_dependencies: bool,
     },
 
     /// Split a coin object into multiple coins.
-    #[clap(group(ArgGroup::new("split").required(true).args(&["amounts", "count"])))]
+    #[command(group(ArgGroup::new("split").required(true).args(&["amounts", "count"])))]
     SplitCoin {
         /// ID of the coin object to split
-        #[clap(long)]
+        #[arg(long)]
         coin_id: ObjectID,
         /// Specific amounts to split out from the coin
-        #[clap(long, num_args(1..))]
+        #[arg(long, num_args(1..))]
         amounts: Option<Vec<u64>>,
         /// Count of equal-size coins to split into
-        #[clap(long)]
+        #[arg(long)]
         count: Option<u64>,
-        #[clap(flatten)]
+        #[command(flatten)]
         opts: OptsWithGas,
     },
 
     /// Switch active address and network(e.g., devnet, local rpc server).
-    #[clap(name = "switch")]
+    #[command(name = "switch")]
     Switch {
         /// An address to be used as the active address for subsequent
         /// commands. It accepts also the alias of the address.
-        #[clap(long)]
+        #[arg(long)]
         address: Option<KeyIdentity>,
         /// The RPC server URL (e.g., local rpc server, devnet rpc server, etc) to be
         /// used for subsequent commands.
-        #[clap(long)]
+        #[arg(long)]
         env: Option<String>,
     },
 
     /// Get the effects of executing the given transaction block
-    #[clap(name = "tx-block")]
+    #[command(name = "tx-block")]
     TransactionBlock {
         /// Digest of the transaction block
-        #[clap(name = "digest")]
+        #[arg(name = "digest")]
         digest: TransactionDigest,
     },
 
     /// Transfer object
-    #[clap(name = "transfer")]
+    #[command(name = "transfer")]
     Transfer {
         /// Recipient address (or its alias if it's an address in the keystore)
-        #[clap(long)]
+        #[arg(long)]
         to: KeyIdentity,
 
         /// ID of the object to transfer
-        #[clap(long)]
+        #[arg(long)]
         object_id: ObjectID,
 
-        #[clap(flatten)]
+        #[command(flatten)]
         opts: OptsWithGas,
     },
 
     /// Transfer SUI, and pay gas with the same SUI coin object.
     /// If amount is specified, only the amount is transferred; otherwise the entire object
     /// is transferred.
-    #[clap(name = "transfer-sui")]
+    #[command(name = "transfer-sui")]
     TransferSui {
         /// Recipient address (or its alias if it's an address in the keystore)
-        #[clap(long)]
+        #[arg(long)]
         to: KeyIdentity,
 
         /// ID of the coin to transfer. This is also the gas object.
-        #[clap(long)]
+        #[arg(long)]
         sui_coin_object_id: ObjectID,
 
         /// The amount to transfer, if not specified, the entire coin object will be transferred.
-        #[clap(long)]
+        #[arg(long)]
         amount: Option<u64>,
 
-        #[clap(flatten)]
+        #[command(flatten)]
         opts: Opts,
     },
 
     /// Upgrade Move modules
-    #[clap(name = "upgrade")]
+    #[command(name = "upgrade")]
     Upgrade {
         /// Path to directory containing a Move package
-        #[clap(name = "package_path", global = true, default_value = ".")]
+        #[arg(name = "package_path", global = true, default_value = ".")]
         package_path: PathBuf,
 
         /// ID of the upgrade capability for the package being upgraded.
-        #[clap(long)]
+        #[arg(long)]
         upgrade_capability: ObjectID,
 
         /// Package build options
-        #[clap(flatten)]
+        #[command(flatten)]
         build_config: MoveBuildConfig,
 
-        #[clap(flatten)]
+        #[command(flatten)]
         opts: OptsWithGas,
 
         /// Verify package compatibility locally before publishing.
-        #[clap(long)]
+        #[arg(long)]
         verify_compatibility: bool,
 
         /// Upgrade the package without checking whether dependency source code compiles to the on-chain
         /// bytecode
-        #[clap(long)]
+        #[arg(long)]
         skip_dependency_verification: bool,
 
         /// Check that the dependency source code compiles to the on-chain bytecode before
         /// upgrading the package (currently the default behavior)
-        #[clap(long, conflicts_with = "skip_dependency_verification")]
+        #[arg(long, conflicts_with = "skip_dependency_verification")]
         verify_deps: bool,
 
         /// Also publish transitive dependencies that have not already been published.
-        #[clap(long)]
+        #[arg(long)]
         with_unpublished_dependencies: bool,
     },
 
     /// Run the bytecode verifier on the package
-    #[clap(name = "verify-bytecode-meter")]
+    #[command(name = "verify-bytecode-meter")]
     VerifyBytecodeMeter {
         /// Path to directory containing a Move package, (defaults to the current directory)
-        #[clap(name = "package", long, global = true)]
+        #[arg(name = "package", long, global = true)]
         package_path: Option<PathBuf>,
 
         /// Protocol version to use for the bytecode verifier (defaults to the latest protocol
         /// version)
-        #[clap(name = "protocol-version", long)]
+        #[arg(name = "protocol-version", long)]
         protocol_version: Option<u64>,
 
         /// Paths to specific pre-compiled module bytecode to verify (instead of an entire package).
         /// Multiple modules can be verified by passing multiple --module flags. They will be
         /// treated as if they were one package (subject to the overall package limit).
-        #[clap(name = "module", long, action = clap::ArgAction::Append, global = true)]
+        #[arg(name = "module", long, action = clap::ArgAction::Append, global = true)]
         module_paths: Vec<PathBuf>,
 
         /// Package build options
-        #[clap(flatten)]
+        #[command(flatten)]
         build_config: MoveBuildConfig,
     },
 
     /// Verify local Move packages against on-chain packages, and optionally their dependencies.
-    #[clap(name = "verify-source")]
+    #[command(name = "verify-source")]
     VerifySource {
         /// Path to directory containing a Move package
-        #[clap(name = "package_path", global = true, default_value = ".")]
+        #[arg(name = "package_path", global = true, default_value = ".")]
         package_path: PathBuf,
 
         /// Package build options
-        #[clap(flatten)]
+        #[command(flatten)]
         build_config: MoveBuildConfig,
 
         /// Verify on-chain dependencies.
-        #[clap(long)]
+        #[arg(long)]
         verify_deps: bool,
 
         /// Don't verify source (only valid if --verify-deps is enabled).
-        #[clap(long)]
+        #[arg(long)]
         skip_source: bool,
 
         /// If specified, override the addresses for the package's own modules with this address.
         /// Only works for unpublished modules (whose addresses are currently 0x0).
-        #[clap(long)]
+        #[arg(long)]
         address_override: Option<ObjectID>,
     },
 
     /// Profile the gas usage of a transaction. Unless an output filepath is not specified, outputs a file `gas_profile_{tx_digest}_{unix_timestamp}.json` which can be opened in a flamegraph tool such as speedscope.
-    #[clap(name = "profile-transaction")]
+    #[command(name = "profile-transaction")]
     ProfileTransaction {
         /// The digest of the transaction to replay
         #[arg(long, short)]
@@ -551,11 +551,11 @@ pub enum SuiClientCommands {
     },
 
     /// Remove an existing address by its alias or hexadecimal string.
-    #[clap(name = "remove-address")]
+    #[command(name = "remove-address")]
     RemoveAddress { alias_or_address: String },
 
     /// Replay a given transaction to view transaction effects. Set environment variable MOVE_VM_STEP=1 to debug.
-    #[clap(name = "replay-transaction")]
+    #[command(name = "replay-transaction")]
     ReplayTransaction {
         /// The digest of the transaction to replay
         #[arg(long, short)]
@@ -579,7 +579,7 @@ pub enum SuiClientCommands {
     },
 
     /// Replay transactions listed in a file.
-    #[clap(name = "replay-batch")]
+    #[command(name = "replay-batch")]
     ReplayBatch {
         /// The path to the file of transaction digests to replay, with one digest per line
         #[arg(long, short)]
@@ -640,9 +640,9 @@ pub struct Opts {
 pub struct OptsWithGas {
     /// ID of the gas object for gas payment.
     /// If not provided, a gas object with at least gas_budget value will be selected
-    #[clap(long)]
+    #[arg(long)]
     pub gas: Option<ObjectID>,
-    #[clap(flatten)]
+    #[command(flatten)]
     pub rest: Opts,
 }
 

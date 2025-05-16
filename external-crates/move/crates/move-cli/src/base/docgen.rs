@@ -12,22 +12,22 @@ use std::{
 
 /// Generate javadoc style documentation for Move packages
 #[derive(Parser)]
-#[clap(name = "docgen")]
+#[command(name = "docgen")]
 pub struct Docgen {
-    #[clap(flatten)]
+    #[command(flatten)]
     pub flags: DocgenFlags,
     /// In which directory to store output
-    #[clap(long = "output-directory", value_name = "PATH")]
+    #[arg(long = "output-directory", value_name = "PATH")]
     pub output_directory: Option<String>,
     /// A template for documentation generation. Can be multiple
-    #[clap(long = "template", short = 't', value_name = "FILE")]
+    #[arg(long = "template", short = 't', value_name = "FILE")]
     pub template: Vec<String>,
     /// An optional file containing reference definitions. The content of this file will
     /// be added to each generated markdown doc
-    #[clap(long = "references-file", value_name = "FILE")]
+    #[arg(long = "references-file", value_name = "FILE")]
     pub references_file: Option<String>,
     /// If this is being compiled relative to a different place where it will be stored (output directory)
-    #[clap(long = "compile-relative-to-output-dir")]
+    #[arg(long = "compile-relative-to-output-dir")]
     pub compile_relative_to_output_dir: bool,
 }
 

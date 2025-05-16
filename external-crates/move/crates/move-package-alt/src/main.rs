@@ -9,9 +9,9 @@ use move_package_alt::{
 };
 
 #[derive(Debug, Parser, Clone)]
-#[command(version, about, long_about = None)]
+#[arg(version, about, long_about = None)]
 pub struct Cli {
-    #[clap(subcommand)]
+    #[command(subcommand)]]
     command: Commands,
 }
 

@@ -34,25 +34,25 @@ mod test_utils;
 #[group(required = true)]
 pub struct ClientArgs {
     /// Remote Store to fetch checkpoints from.
-    #[clap(long, group = "source")]
+    #[arg(long, group = "source")]
     pub remote_store_url: Option<Url>,
 
     /// Path to the local ingestion directory.
     /// If both remote_store_url and local_ingestion_path are provided, remote_store_url will be used.
-    #[clap(long, group = "source")]
+    #[arg(long, group = "source")]
     pub local_ingestion_path: Option<PathBuf>,
 
     /// Sui fullnode gRPC url to fetch checkpoints from.
     /// If all remote_store_url, local_ingestion_path and rpc_api_url are provided, remote_store_url will be used.
-    #[clap(long, env, group = "source")]
+    #[arg(long, env, group = "source")]
     pub rpc_api_url: Option<Url>,
 
     /// Optional username for the gRPC service.
-    #[clap(long, env)]
+    #[arg(long, env)]
     pub rpc_username: Option<String>,
 
     /// Optional password for the gRPC service.
-    #[clap(long, env)]
+    #[arg(long, env)]
     pub rpc_password: Option<String>,
 }
 

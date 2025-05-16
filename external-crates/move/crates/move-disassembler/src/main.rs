@@ -16,33 +16,33 @@ use move_ir_types::location::Spanned;
 use std::{fs, path::Path};
 
 #[derive(Debug, Parser)]
-#[clap(author, version, about)]
+#[arg(author, version, about)]
 struct Args {
     /// Skip printing of private functions.
-    #[clap(long = "skip-private")]
+    #[arg(long = "skip-private")]
     pub skip_private: bool,
 
     /// Do not print the disassembled bytecodes of each function.
-    #[clap(long = "skip-code")]
+    #[arg(long = "skip-code")]
     pub skip_code: bool,
 
     /// Do not print locals of each function.
-    #[clap(long = "skip-locals")]
+    #[arg(long = "skip-locals")]
     pub skip_locals: bool,
 
     /// Do not print the basic blocks of each function.
-    #[clap(long = "skip-basic-blocks")]
+    #[arg(long = "skip-basic-blocks")]
     pub skip_basic_blocks: bool,
 
     /// The path to the bytecode file to disassemble; let's call it file.mv. We assume that two
     /// other files reside under the same directory: a source map file.mvsm (possibly) and the Move
     /// source code file.move.
-    #[clap(short = 'b', long = "bytecode")]
+    #[arg(short = 'b', long = "bytecode")]
     pub bytecode_file_path: String,
 
     /// (Optional) Path to a coverage file for the VM in order to print trace information in the
     /// disassembled output.
-    #[clap(short = 'c', long = "move-coverage-path")]
+    #[arg(short = 'c', long = "move-coverage-path")]
     pub code_coverage_path: Option<String>,
 }
 

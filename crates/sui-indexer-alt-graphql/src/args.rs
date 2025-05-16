@@ -23,7 +23,7 @@ pub enum Command {
     /// Run the RPC service.
     Rpc {
         /// The URL of the database to connect to.
-        #[clap(
+        #[arg(
             long,
             default_value = "postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt"
         )]
@@ -31,7 +31,7 @@ pub enum Command {
 
         /// Bigtable instance ID to make KV store requests to. If this is not provided, KV store
         /// requests will be made to the database.
-        #[clap(long)]
+        #[arg(long)]
         bigtable_instance: Option<String>,
 
         #[command(flatten)]

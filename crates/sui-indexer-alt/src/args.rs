@@ -23,7 +23,7 @@ pub enum Command {
     /// Run the indexer.
     Indexer {
         /// The URL of the database to connect to.
-        #[clap(
+        #[arg(
             long,
             default_value = "postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt"
         )]
@@ -60,7 +60,7 @@ pub enum Command {
     /// Wipe the database of its contents
     ResetDatabase {
         /// The URL of the database to connect to.
-        #[clap(
+        #[arg(
             long,
             default_value = "postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt"
         )]
@@ -71,7 +71,7 @@ pub enum Command {
 
         /// If true, only drop all tables but do not run the migrations.
         /// That is, no tables will exist in the DB after the reset.
-        #[clap(long, default_value_t = false)]
+        #[arg(long, default_value_t = false)]
         skip_migrations: bool,
     },
 
@@ -82,7 +82,7 @@ pub enum Command {
     #[cfg(feature = "benchmark")]
     Benchmark {
         /// The URL of the database to connect to.
-        #[clap(
+        #[arg(
             long,
             default_value = "postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt"
         )]

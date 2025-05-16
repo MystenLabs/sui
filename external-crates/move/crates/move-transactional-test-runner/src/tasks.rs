@@ -43,7 +43,7 @@ pub fn taskify<Command: Debug + Parser>(filename: &Path) -> Result<Vec<TaskInput
     // checks for lines that start with //# commands
     // cutting leading/trailing whitespace
     // capturing the command text
-    let re_command_text = Regex::new(r"^\s*//#\s*(.*)\s*$").unwrap();
+    let re_command_text = Regex::new(r"^\s*//#[command(subcommand)]*(.*)\s*$").unwrap();
 
     let file = File::open(filename).unwrap();
     let lines: Vec<String> = io::BufReader::new(file)
@@ -209,13 +209,13 @@ pub enum SyntaxChoice {
 /// representation of that bytecode.
 #[derive(Debug, Parser)]
 pub struct PrintBytecodeCommand {
-    #[clap(long = "syntax")]
+    #[arg(long = "syntax")]
     pub syntax: Option<SyntaxChoice>,
 }
 
 #[derive(Debug, Parser)]
 pub struct InitCommand {
-    #[clap(
+    #[arg(
         long = "addresses",
         value_parser = move_compiler::shared::parse_named_address,
         num_args(1..),
@@ -225,37 +225,37 @@ pub struct InitCommand {
 
 #[derive(Debug, Parser)]
 pub struct PublishCommand {
-    #[clap(long = "gas-budget")]
+    #[arg(long = "gas-budget")]
     pub gas_budget: Option<u64>,
-    #[clap(long = "syntax")]
+    #[arg(long = "syntax")]
     pub syntax: Option<SyntaxChoice>,
 }
 
 #[derive(Debug, Parser)]
 pub struct RunCommand<ExtraValueArgs: ParsableValue> {
-    #[clap(
+    #[arg(
         long = "signers",
         value_parser = ParsedAddress::parse,
         num_args(1..),
     )]
     pub signers: Vec<ParsedAddress>,
-    #[clap(
+    #[arg(
         long = "args",
         value_parser = ParsedValue::<ExtraValueArgs>::parse,
         num_args(1..),
     )]
     pub args: Vec<ParsedValue<ExtraValueArgs>>,
-    #[clap(
+    #[arg(
         long = "type-args",
         value_parser = ParsedType::parse,
         num_args(1..),
     )]
     pub type_args: Vec<ParsedType>,
-    #[clap(long = "gas-budget")]
+    #[arg(long = "gas-budget")]
     pub gas_budget: Option<u64>,
-    #[clap(long = "syntax")]
+    #[arg(long = "syntax")]
     pub syntax: Option<SyntaxChoice>,
-    #[clap(name = "NAME", value_parser = parse_qualified_module_access)]
+    #[arg(name = "NAME", value_parser = parse_qualified_module_access)]
     pub name: Option<(ParsedAddress, Identifier, Identifier)>,
 }
 

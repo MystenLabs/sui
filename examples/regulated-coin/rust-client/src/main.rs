@@ -18,7 +18,7 @@ use rust_client::tx_run::{AppCommand, AppConfig};
 
 /// Regulated coin command line interface
 #[derive(Parser, Debug)]
-#[command(name = "rust-client")]
+#[arg(name = "rust-client")]
 struct Cli {
     /// The address of the contract the coin is issued.
     /// If none is passed, environment variable `PACKAGE_ID` will be used.
@@ -29,7 +29,7 @@ struct Cli {
     /// Lastly defaults to "regulated_coin".
     #[arg(long = "module", short = 'm')]
     module: Option<String>,
-    #[clap(subcommand)]
+    #[command(subcommand)]]
     command: CliCommand,
 }
 
@@ -43,7 +43,7 @@ enum CliCommand {
         address: String,
     },
     /// Remove an address from deny-list
-    #[clap(name = "deny-list-remove")]
+    #[command(name = "deny-list-remove")]
     DenyListRemove {
         /// The address to remove from deny-list
         #[arg(value_parser)]
