@@ -6,7 +6,7 @@ use crate::authority::AuthorityStore;
 use crate::checkpoints::CheckpointStore;
 use crate::par_index_live_object_set::LiveObjectIndexer;
 use crate::par_index_live_object_set::ParMakeLiveObjectIndexer;
-use move_core_types::language_storage::StructTag;
+use move_core_types::language_storage::{StructTag, TypeTag};
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use serde::Deserialize;
@@ -43,6 +43,7 @@ use sui_types::storage::TransactionInfo;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use tracing::{debug, info};
 use typed_store::rocks::{DBMap, MetricConf};
+use typed_store::rocksdb::MergeOperands;
 use typed_store::traits::Map;
 use typed_store::DBMapUtils;
 use typed_store::TypedStoreError;
@@ -126,11 +127,113 @@ pub struct CoinIndexKey {
     coin_type: StructTag,
 }
 
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub struct BalanceKey {
+    pub owner: SuiAddress,
+    pub coin_type: StructTag,
+}
+
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
 pub struct CoinIndexInfo {
     pub coin_metadata_object_id: Option<ObjectID>,
     pub treasury_object_id: Option<ObjectID>,
     pub regulated_coin_metadata_object_id: Option<ObjectID>,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+pub struct BalanceIndexInfo {
+    pub balance_delta: i128,
+    pub num_coins_delta: i128,
+}
+
+impl BalanceIndexInfo {
+    fn from_coin_value(coin_value: u64) -> Self {
+        Self {
+            balance_delta: coin_value as i128,
+            num_coins_delta: 1,
+        }
+    }
+
+    fn invert(self) -> Self {
+        // Check for potential overflow when negating i128::MIN
+        assert!(
+            self.balance_delta != i128::MIN,
+            "Cannot invert balance_delta: would overflow i128"
+        );
+        assert!(
+            self.num_coins_delta != i128::MIN,
+            "Cannot invert num_coins_delta: would overflow i128"
+        );
+        
+        Self {
+            balance_delta: -self.balance_delta,
+            num_coins_delta: -self.num_coins_delta,
+        }
+    }
+
+    fn merge_delta(&mut self, other: &Self) {
+        self.balance_delta += other.balance_delta;
+        self.num_coins_delta += other.num_coins_delta;
+    }
+}
+
+impl From<BalanceIndexInfo> for sui_types::storage::BalanceInfo {
+    fn from(index_info: BalanceIndexInfo) -> Self {
+        // We store the balance and num_coins as an i128 because balances can be subtracted
+        // (negative delta), but we should never end up with a balance less than 0 or greater
+        // than u64::max after the merge.
+        assert!(
+            index_info.balance_delta >= 0,
+            "Balance is negative: {} - this should never happen.",
+            index_info.balance_delta
+        );
+        assert!(
+            index_info.num_coins_delta >= 0,
+            "Coin count is negative: {} - this should never happen.",
+            index_info.num_coins_delta
+        );
+        assert!(
+            index_info.balance_delta <= u64::MAX as i128,
+            "Balance {} exceeds u64::MAX - this should never happen.",
+            index_info.balance_delta
+        );
+        assert!(
+            index_info.num_coins_delta <= u64::MAX as i128,
+            "Coin count {} exceeds u64::MAX - this should never happen.",
+            index_info.num_coins_delta
+        );
+
+        sui_types::storage::BalanceInfo {
+            balance: index_info.balance_delta as u64,
+            num_coins: index_info.num_coins_delta as u64,
+        }
+    }
+}
+
+fn balance_delta_merge_operator(
+    _key: &[u8],
+    existing_val: Option<&[u8]>,
+    operands: &MergeOperands,
+) -> Option<Vec<u8>> {
+    let mut result = existing_val
+        .map(|v| {
+            bcs::from_bytes::<BalanceIndexInfo>(v)
+                .expect("Failed to deserialize BalanceIndexInfo from RocksDB - data corruption.")
+        })
+        .unwrap_or_default();
+
+    for operand in operands.iter() {
+        let delta = bcs::from_bytes::<BalanceIndexInfo>(operand)
+            .expect("Failed to deserialize BalanceIndexInfo from RocksDB - data corruption.");
+        result.merge_delta(&delta);
+    }
+
+    bcs::to_bytes(&result).ok()
+}
+
+fn balance_table_options() -> typed_store::rocks::DBOptions {
+    typed_store::rocks::default_db_options()
+        .set_merge_operator_associative("balance_merge", balance_delta_merge_operator)
 }
 
 impl CoinIndexInfo {
@@ -198,12 +301,41 @@ struct IndexStoreTables {
     /// Allows looking up information related to published Coins, like the ObjectID of its
     /// coorisponding CoinMetadata.
     coin: DBMap<CoinIndexKey, CoinIndexInfo>,
+
+    /// An index of Balances.
+    ///
+    /// Allows looking up balances by owner address and coin type.
+    #[default_options_override_fn = "balance_table_options"]
+    balance: DBMap<BalanceKey, BalanceIndexInfo>,
     // NOTE: Authors and Reviewers before adding any new tables ensure that they are either:
     // - bounded in size by the live object set
     // - are prune-able and have corresponding logic in the `prune` function
 }
 
 impl IndexStoreTables {
+    fn track_coin_balance_change(
+        object: &Object,
+        owner: &SuiAddress,
+        is_removal: bool,
+        balance_changes: &mut HashMap<BalanceKey, BalanceIndexInfo>,
+    ) {
+        if let Some((TypeTag::Struct(struct_tag), coin)) = object
+            .coin_type_maybe()
+            .and_then(|ct| object.as_coin_maybe().map(|c| (ct, c)))
+        {
+            let key = BalanceKey {
+                owner: *owner,
+                coin_type: (*struct_tag).clone(),
+            };
+
+            let mut delta = BalanceIndexInfo::from_coin_value(coin.value());
+            if is_removal {
+                delta = delta.invert();
+            }
+
+            balance_changes.entry(key).or_default().merge_delta(&delta);
+        }
+    }
     fn open<P: Into<PathBuf>>(path: P) -> Self {
         IndexStoreTables::open_tables_read_write(
             path.into(),
@@ -473,12 +605,20 @@ impl IndexStoreTables {
         batch: &mut typed_store::rocks::DBBatch,
     ) -> Result<(), StorageError> {
         let mut coin_index: HashMap<CoinIndexKey, CoinIndexInfo> = HashMap::new();
+        let mut balance_changes: HashMap<BalanceKey, BalanceIndexInfo> = HashMap::new();
 
         for tx in &checkpoint.transactions {
             // determine changes from removed objects
             for removed_object in tx.removed_objects_pre_version() {
                 match removed_object.owner() {
-                    Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => {
+                    Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => {
+                        Self::track_coin_balance_change(
+                            removed_object,
+                            owner,
+                            true,
+                            &mut balance_changes,
+                        );
+
                         let owner_key = OwnerIndexKey::from_object(removed_object);
                         batch.delete_batch(&self.owner, [owner_key])?;
                     }
@@ -496,7 +636,14 @@ impl IndexStoreTables {
             for (object, old_object) in tx.changed_objects() {
                 if let Some(old_object) = old_object {
                     match old_object.owner() {
-                        Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => {
+                        Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => {
+                            Self::track_coin_balance_change(
+                                old_object,
+                                owner,
+                                true,
+                                &mut balance_changes,
+                            );
+
                             let owner_key = OwnerIndexKey::from_object(old_object);
                             batch.delete_batch(&self.owner, [owner_key])?;
                         }
@@ -515,7 +662,8 @@ impl IndexStoreTables {
                 }
 
                 match object.owner() {
-                    Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => {
+                    Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => {
+                        Self::track_coin_balance_change(object, owner, false, &mut balance_changes);
                         let owner_key = OwnerIndexKey::from_object(object);
                         let owner_info = OwnerIndexInfo::new(object);
                         batch.insert_batch(&self.owner, [(owner_key, owner_info)])?;
@@ -535,26 +683,35 @@ impl IndexStoreTables {
                 }
             }
 
-            // coin indexing
-            //
-            // coin indexing relies on the fact that CoinMetadata and TreasuryCap are created in
-            // the same transaction so we don't need to worry about overriding any older value
-            // that may exist in the database (because there necessarily cannot be).
-            for (key, value) in tx.created_objects().flat_map(try_create_coin_index_info) {
-                use std::collections::hash_map::Entry;
-
-                match coin_index.entry(key) {
-                    Entry::Occupied(mut o) => {
-                        o.get_mut().merge(value);
+            for object in tx.created_objects() {
+                // Track balance changes for newly created coins
+                match object.owner() {
+                    Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => {
+                        Self::track_coin_balance_change(object, owner, false, &mut balance_changes);
                     }
-                    Entry::Vacant(v) => {
-                        v.insert(value);
+                    _ => {}
+                }
+
+                // Coin metadata indexing - CoinMetadata and TreasuryCap are created in
+                // the same transaction so we don't need to worry about overriding any older value
+                // that may exist in the database (because there necessarily cannot be).
+                if let Some((key, value)) = try_create_coin_index_info(object) {
+                    use std::collections::hash_map::Entry;
+
+                    match coin_index.entry(key) {
+                        Entry::Occupied(mut o) => {
+                            o.get_mut().merge(value);
+                        }
+                        Entry::Vacant(v) => {
+                            v.insert(value);
+                        }
                     }
                 }
             }
         }
 
         batch.insert_batch(&self.coin, coin_index)?;
+        batch.partial_merge_batch(&self.balance, balance_changes)?;
 
         Ok(())
     }
@@ -639,6 +796,45 @@ impl IndexStoreTables {
             coin_type: coin_type.to_owned(),
         };
         self.coin.get(&key)
+    }
+
+    fn get_balance(
+        &self,
+        owner: &SuiAddress,
+        coin_type: &StructTag,
+    ) -> Result<Option<BalanceIndexInfo>, TypedStoreError> {
+        let key = BalanceKey {
+            owner: owner.to_owned(),
+            coin_type: coin_type.to_owned(),
+        };
+        self.balance.get(&key)
+    }
+
+    fn balance_iter(
+        &self,
+        owner: SuiAddress,
+        cursor: Option<BalanceKey>,
+    ) -> Result<
+        impl Iterator<Item = Result<(BalanceKey, BalanceIndexInfo), TypedStoreError>> + '_,
+        TypedStoreError,
+    > {
+        let lower_bound = cursor.unwrap_or_else(|| BalanceKey {
+            owner,
+            coin_type: "0x0::a::a".parse::<StructTag>().unwrap(),
+        });
+
+        Ok(self
+            .balance
+            .safe_iter_with_bounds(Some(lower_bound), None)
+            .take_while(move |item| {
+                // If there's an error let if flow through
+                let Ok((key, _)) = item else {
+                    return true;
+                };
+
+                // Only take if owner matches
+                key.owner == owner
+            }))
     }
 }
 
@@ -796,6 +992,25 @@ impl RpcIndexStore {
         coin_type: &StructTag,
     ) -> Result<Option<CoinIndexInfo>, TypedStoreError> {
         self.tables.get_coin_info(coin_type)
+    }
+
+    pub fn get_balance(
+        &self,
+        owner: &SuiAddress,
+        coin_type: &StructTag,
+    ) -> Result<Option<BalanceIndexInfo>, TypedStoreError> {
+        self.tables.get_balance(owner, coin_type)
+    }
+
+    pub fn balance_iter(
+        &self,
+        owner: SuiAddress,
+        cursor: Option<BalanceKey>,
+    ) -> Result<
+        impl Iterator<Item = Result<(BalanceKey, BalanceIndexInfo), TypedStoreError>> + '_,
+        TypedStoreError,
+    > {
+        self.tables.balance_iter(owner, cursor)
     }
 }
 
