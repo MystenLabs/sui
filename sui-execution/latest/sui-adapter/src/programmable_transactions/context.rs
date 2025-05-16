@@ -7,10 +7,6 @@ pub use checked::*;
 mod checked {
     use crate::{
         adapter::new_native_extensions,
-        data_store::{
-            PackageStore, cached_data_store::CachedPackageStore, linkage_view::LinkageView,
-            sui_data_store::SuiDataStore,
-        },
         error::convert_vm_error,
         execution_mode::ExecutionMode,
         execution_value::{
@@ -19,6 +15,7 @@ mod checked {
         },
         gas_charger::GasCharger,
         gas_meter::SuiGasMeter,
+        programmable_transactions::{data_store::SuiDataStore, linkage_view::LinkageView},
         type_resolver::TypeTagResolver,
     };
     use move_binary_format::{
@@ -62,7 +59,7 @@ mod checked {
         metrics::LimitsMetrics,
         move_package::MovePackage,
         object::{Authenticator, Data, MoveObject, Object, ObjectInner, Owner},
-        storage::DenyListResult,
+        storage::{BackingPackageStore, DenyListResult, PackageObject},
         transaction::{Argument, CallArg, ObjectArg},
     };
     use tracing::instrument;
@@ -147,9 +144,7 @@ mod checked {
         where
             'a: 'state,
         {
-            let mut linkage_view = LinkageView::new(Box::new(CachedPackageStore::new(Box::new(
-                state_view.as_sui_resolver(),
-            ))));
+            let mut linkage_view = LinkageView::new(Box::new(state_view.as_sui_resolver()));
             let mut input_object_map = BTreeMap::new();
             let inputs = inputs
                 .into_iter()
@@ -290,10 +285,10 @@ mod checked {
                     .unwrap_or(*package_id));
             }
 
-            let move_package = get_package(&self.linkage_view, package_id)
+            let package = package_for_linkage(&self.linkage_view, package_id)
                 .map_err(|e| self.convert_vm_error(e))?;
 
-            self.linkage_view.set_linkage(&move_package)
+            self.linkage_view.set_linkage(package.move_package())
         }
 
         /// Load a type using the context's current session.
@@ -346,12 +341,7 @@ mod checked {
             }
             let new_events = events
                 .into_iter()
-                .map(|(tag, value)| {
-                    let ty = unwrap_type_tag_load(
-                        self.protocol_config,
-                        self.load_type_from_struct(&tag)
-                            .map_err(|e| self.convert_vm_error(e)),
-                    )?;
+                .map(|(ty, tag, value)| {
                     let layout = self
                         .vm
                         .get_runtime()
@@ -714,7 +704,7 @@ mod checked {
             let Self {
                 protocol_config,
                 vm,
-                mut linkage_view,
+                linkage_view,
                 mut native_extensions,
                 tx_context,
                 gas_charger,
@@ -849,6 +839,12 @@ mod checked {
             loaded_runtime_objects.extend(loaded_child_objects);
 
             let mut written_objects = BTreeMap::new();
+            for package in new_packages {
+                let package_obj = Object::new_from_package(package, tx_digest);
+                let id = package_obj.id();
+                created_object_ids.insert(id);
+                written_objects.insert(id, package_obj);
+            }
             for (id, additional_write) in additional_writes {
                 let AdditionalWrite {
                     recipient,
@@ -876,24 +872,7 @@ mod checked {
                 }
             }
 
-            for (id, (recipient, tag, value)) in writes {
-                let ty = unwrap_type_tag_load(
-                    protocol_config,
-                    load_type_from_struct(
-                        vm,
-                        &mut linkage_view,
-                        &new_packages,
-                        &StructTag::from(tag.clone()),
-                    )
-                    .map_err(|e| {
-                        convert_vm_error(
-                            e,
-                            vm,
-                            &linkage_view,
-                            protocol_config.resolve_abort_locations_to_package_id(),
-                        )
-                    }),
-                )?;
+            for (id, (recipient, ty, value)) in writes {
                 let abilities = vm.get_runtime().get_type_abilities(&ty).map_err(|e| {
                     convert_vm_error(
                         e,
@@ -929,13 +908,6 @@ mod checked {
                 };
                 let object = Object::new_move(move_object, recipient, tx_digest);
                 written_objects.insert(id, object);
-            }
-
-            for package in new_packages {
-                let package_obj = Object::new_from_package(package, tx_digest);
-                let id = package_obj.id();
-                created_object_ids.insert(id);
-                written_objects.insert(id, package_obj);
             }
 
             // Before finishing, ensure that any shared object taken by value by the transaction is either:
@@ -1051,6 +1023,7 @@ mod checked {
 
         /// Special case errors for type arguments to Move functions
         pub fn convert_type_argument_error(&self, idx: usize, error: VMError) -> ExecutionError {
+            use move_core_types::vm_status::StatusCode;
             use sui_types::execution_status::TypeArgumentError;
             match error.major_status() {
                 StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH => {
@@ -1311,17 +1284,22 @@ mod checked {
 
     /// Fetch the package at `package_id` with a view to using it as a link context.  Produces an error
     /// if the object at that ID does not exist, or is not a package.
-    fn get_package(
-        package_store: &dyn PackageStore,
+    fn package_for_linkage(
+        linkage_view: &LinkageView,
         package_id: ObjectID,
-    ) -> VMResult<Rc<MovePackage>> {
-        match package_store.get_package(&package_id) {
+    ) -> VMResult<PackageObject> {
+        use move_binary_format::errors::PartialVMError;
+        use move_core_types::vm_status::StatusCode;
+
+        match linkage_view.get_package_object(&package_id) {
             Ok(Some(package)) => Ok(package),
             Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
                 .with_message(format!("Cannot find link context {package_id} in store"))
                 .finish(Location::Undefined)),
             Err(err) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
-                .with_message(format!("Error loading {package_id} from store: {err}"))
+                .with_message(format!(
+                    "Error loading link context {package_id} from store: {err}"
+                ))
                 .finish(Location::Undefined)),
         }
     }
@@ -1345,27 +1323,22 @@ mod checked {
 
         // Load the package that the struct is defined in, in storage
         let defining_id = ObjectID::from_address(*address);
-
-        let data_store = SuiDataStore::new(linkage_view, new_packages);
-        let move_package = get_package(&data_store, defining_id)?;
-
-        // Save the link context as we need to set it while loading the struct and we don't want to
-        // clobber it.
-        let saved_linkage = linkage_view.steal_linkage();
+        let package = package_for_linkage(linkage_view, defining_id)?;
 
         // Set the defining package as the link context while loading the
         // struct
         let original_address = linkage_view
-            .set_linkage(&move_package)
-            .expect("Linkage context was just stolen. Therefore must be empty");
+            .set_linkage(package.move_package())
+            .map_err(|e| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(e.to_string())
+                    .finish(Location::Undefined)
+            })?;
 
         let runtime_id = ModuleId::new(original_address, module.clone());
         let data_store = SuiDataStore::new(linkage_view, new_packages);
         let res = vm.get_runtime().load_type(&runtime_id, name, &data_store);
         linkage_view.reset_linkage();
-        linkage_view
-            .restore_linkage(saved_linkage)
-            .expect("Linkage context was just reset. Therefore must be empty");
         let (idx, struct_type) = res?;
 
         // Recursively load type parameters, if necessary
@@ -1731,17 +1704,6 @@ mod checked {
                 contents,
                 protocol_config,
             )
-        }
-    }
-
-    fn unwrap_type_tag_load(
-        protocol_config: &ProtocolConfig,
-        ty: Result<Type, ExecutionError>,
-    ) -> Result<Type, ExecutionError> {
-        if ty.is_err() && !protocol_config.type_tags_in_object_runtime() {
-            panic!("Failed to load a type tag from the object runtime -- this shouldn't happen")
-        } else {
-            ty
         }
     }
 
