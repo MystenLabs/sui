@@ -708,6 +708,12 @@ pub enum SuiError {
 
     #[error("Failed to deserialize {type_info:?}, error: {error:?}")]
     GrpcMessageDeserializeError { type_info: String, error: String },
+
+    #[error("Transaction position is too far ahead: {round:?}, last committed round: {last_committed_round:?}")]
+    InvalidTransactionPosition {
+        round: u64,
+        last_committed_round: u64,
+    },
 }
 
 #[repr(u64)]

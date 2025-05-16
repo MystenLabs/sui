@@ -1100,6 +1100,8 @@ impl ValidatorService {
                 actual_epoch: request.epoch,
             });
         }
+        consensus_tx_status_cache.check_position_too_ahead(&request.transaction_position)?;
+
         // Because we need to associate effects with a specific transaction position,
         // we need to first make sure that this specific position is accepted by consensus,
         // either with fastpath certified or post-commit finalized.

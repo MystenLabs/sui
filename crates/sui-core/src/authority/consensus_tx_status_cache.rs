@@ -4,6 +4,7 @@
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::Duration;
+use sui_types::error::SuiError;
 use tokio::time::sleep;
 use tracing::debug;
 
@@ -138,6 +139,21 @@ impl ConsensusTxStatusCache {
             }
         }
         inner.last_committed_round = Some(round);
+    }
+
+    /// Returns true if the position is too far ahead of the last committed round.
+    pub fn check_position_too_ahead(&self, position: &ConsensusTxPosition) -> SuiResult<()> {
+        let inner = self.inner.read();
+        if let Some(last_committed_round) = inner.last_committed_round {
+            // TODO(fastpath): Is using gc_depth appropriate here?
+            if position.block.round as u64 > last_committed_round + self.gc_depth {
+                return Err(SuiError::InvalidTransactionPosition {
+                    round: position.block.round as u64,
+                    last_committed_round,
+                });
+            }
+        }
+        Ok(())
     }
 }
 
