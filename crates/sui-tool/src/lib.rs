@@ -27,9 +27,9 @@ use sui_storage::object_store::http::HttpDownloaderBuilder;
 use sui_storage::object_store::util::Manifest;
 use sui_storage::object_store::util::PerEpochManifest;
 use sui_storage::object_store::util::MANIFEST_FILENAME;
-use sui_types::accumulator::Accumulator;
 use sui_types::committee::QUORUM_THRESHOLD;
 use sui_types::crypto::AuthorityPublicKeyBytes;
+use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::messages_grpc::LayoutGenerationOption;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::{base_types::*, object::Owner};
@@ -893,11 +893,11 @@ pub async fn download_formal_snapshot(
             .unwrap_or_else(|err| panic!("Failed during read: {}", err));
         Ok::<(), anyhow::Error>(())
     });
-    let mut root_accumulator = Accumulator::default();
+    let mut root_global_state_hash = GlobalStateHash::default();
     let mut num_live_objects = 0;
-    while let Some((partial_acc, num_objects)) = receiver.recv().await {
+    while let Some((partial_hash, num_objects)) = receiver.recv().await {
         num_live_objects += num_objects;
-        root_accumulator.union(&partial_acc);
+        root_global_state_hash.union(&partial_hash);
     }
     summaries_handle
         .await
@@ -932,7 +932,7 @@ pub async fn download_formal_snapshot(
             );
         match commitment {
             CheckpointCommitment::ECMHLiveObjectSetDigest(consensus_digest) => {
-                let local_digest: ECMHLiveObjectSetDigest = root_accumulator.digest().into();
+                let local_digest: ECMHLiveObjectSetDigest = root_global_state_hash.digest().into();
                 assert_eq!(
                     *consensus_digest, local_digest,
                     "End of epoch {} root state digest {} does not match \
@@ -970,7 +970,7 @@ pub async fn download_formal_snapshot(
 
     setup_db_state(
         epoch,
-        root_accumulator.clone(),
+        root_global_state_hash.clone(),
         perpetual_db.clone(),
         checkpoint_store,
         committee_store,

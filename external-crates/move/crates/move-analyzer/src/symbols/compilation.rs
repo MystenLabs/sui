@@ -162,12 +162,14 @@ pub fn get_compiled_pkg(
     lint: LintLevel,
     implicit_deps: Dependencies,
 ) -> Result<(Option<CompiledPkgInfo>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
+    let cached_deps_exist = has_precompiled_deps(pkg_path, packages_info.clone());
     let build_config = move_package::BuildConfig {
         test_mode: true,
         install_dir: Some(tempdir().unwrap().path().to_path_buf()),
         default_flavor: Some(Flavor::Sui),
         lint_flag: lint.into(),
-        skip_fetch_latest_git_deps: has_precompiled_deps(pkg_path, packages_info.clone()),
+        force_lock_file: cached_deps_exist,
+        skip_fetch_latest_git_deps: cached_deps_exist,
         implicit_dependencies: implicit_deps,
         ..Default::default()
     };

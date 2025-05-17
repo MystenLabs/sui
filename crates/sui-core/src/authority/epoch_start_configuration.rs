@@ -53,9 +53,9 @@ pub enum EpochFlag {
     _PerEpochFinalizedTransactionsDeprecated = 1,
     _ObjectLockSplitTablesDeprecated = 2,
     _WritebackCacheEnabledDeprecated = 3,
-    _StateAccumulatorV2EnabledDeprecated = 4,
-    _StateAccumulatorV2EnabledTestnetDeprecated = 5,
-    _StateAccumulatorV2EnabledMainnetDeprecated = 6,
+    _GlobalStateHashV2EnabledDeprecated = 4,
+    _GlobalStateHashV2EnabledTestnetDeprecated = 5,
+    _GlobalStateHashV2EnabledMainnetDeprecated = 6,
     _ExecutedInEpochTableDeprecated = 7,
     _UseVersionAssignmentTablesV3 = 8,
 
@@ -112,17 +112,17 @@ impl fmt::Display for EpochFlag {
             EpochFlag::_WritebackCacheEnabledDeprecated => {
                 write!(f, "WritebackCacheEnabled (DEPRECATED)")
             }
-            EpochFlag::_StateAccumulatorV2EnabledDeprecated => {
-                write!(f, "StateAccumulatorV2EnabledDeprecated (DEPRECATED)")
+            EpochFlag::_GlobalStateHashV2EnabledDeprecated => {
+                write!(f, "GlobalStateHashV2EnabledDeprecated (DEPRECATED)")
             }
             EpochFlag::_ExecutedInEpochTableDeprecated => {
                 write!(f, "ExecutedInEpochTable (DEPRECATED)")
             }
-            EpochFlag::_StateAccumulatorV2EnabledTestnetDeprecated => {
-                write!(f, "StateAccumulatorV2EnabledTestnet (DEPRECATED)")
+            EpochFlag::_GlobalStateHashV2EnabledTestnetDeprecated => {
+                write!(f, "GlobalStateHashV2EnabledTestnet (DEPRECATED)")
             }
-            EpochFlag::_StateAccumulatorV2EnabledMainnetDeprecated => {
-                write!(f, "StateAccumulatorV2EnabledMainnet (DEPRECATED)")
+            EpochFlag::_GlobalStateHashV2EnabledMainnetDeprecated => {
+                write!(f, "GlobalStateHashV2EnabledMainnet (DEPRECATED)")
             }
             EpochFlag::_UseVersionAssignmentTablesV3 => {
                 write!(f, "UseVersionAssignmentTablesV3 (DEPRECATED)")

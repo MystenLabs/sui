@@ -36,5 +36,6 @@ CompiledPackageInfo {
             lint: false,
         },
         implicit_dependencies: {},
+        force_lock_file: false,
     },
 }

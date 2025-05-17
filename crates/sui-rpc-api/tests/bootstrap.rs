@@ -50,6 +50,7 @@ fn bootstrap() {
         .bytes(["."])
         .btree_map([".sui.node.v2alpha.GetProtocolConfigResponse"])
         .boxed(".sui.rpc.v2beta.Input.literal")
+        .boxed("json")
         .out_dir(&out_dir)
         .compile_fds(fds.clone())
     {

@@ -37,6 +37,7 @@ async fn get_object() {
         linkage_table,
         previous_transaction,
         storage_rebate,
+        json,
     } = client
         .get_object(GetObjectRequest {
             object_id: Some(id.to_string()),
@@ -63,6 +64,7 @@ async fn get_object() {
     assert!(linkage_table.is_empty());
     assert!(previous_transaction.is_none());
     assert!(storage_rebate.is_none());
+    assert!(json.is_none());
 
     // Request with provided read_mask
     let Object {
@@ -79,6 +81,7 @@ async fn get_object() {
         linkage_table,
         previous_transaction,
         storage_rebate,
+        json,
     } = client
         .get_object(GetObjectRequest {
             object_id: Some(id.to_string()),
@@ -104,6 +107,7 @@ async fn get_object() {
     assert!(linkage_table.is_empty());
     assert!(previous_transaction.is_none());
     assert!(storage_rebate.is_none());
+    assert!(json.is_none());
 
     let response = client
         .get_object(GetObjectRequest {
@@ -114,6 +118,7 @@ async fn get_object() {
                 "version",
                 "digest",
                 "bcs",
+                "json",
             ])),
         })
         .await
@@ -134,6 +139,7 @@ async fn get_object() {
         linkage_table,
         previous_transaction,
         storage_rebate,
+        json,
     } = &response;
 
     assert!(object_id.is_some());
@@ -150,6 +156,7 @@ async fn get_object() {
     assert!(linkage_table.is_empty());
     assert!(previous_transaction.is_none());
     assert!(storage_rebate.is_none());
+    assert!(json.is_some());
 }
 
 #[sim_test]

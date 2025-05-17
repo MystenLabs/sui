@@ -476,6 +476,21 @@ impl RpcStateReader for RestReadStore {
     fn indexes(&self) -> Option<&dyn RpcIndexes> {
         self.index().ok().map(|index| index as _)
     }
+
+    fn get_struct_layout(
+        &self,
+        struct_tag: &move_core_types::language_storage::StructTag,
+    ) -> Result<Option<move_core_types::annotated_value::MoveTypeLayout>> {
+        self.state
+            .load_epoch_store_one_call_per_task()
+            .executor()
+            // TODO(cache) - must read through cache
+            .type_layout_resolver(Box::new(self.state.get_backing_package_store().as_ref()))
+            .get_annotated_layout(struct_tag)
+            .map(|layout| layout.into_layout())
+            .map(Some)
+            .map_err(StorageError::custom)
+    }
 }
 
 impl RpcIndexes for RpcIndexStore {

@@ -11,5 +11,6 @@ pub mod cli;
 pub mod dependency;
 pub mod errors;
 pub mod flavor;
+pub mod graph;
 pub mod jsonrpc;
 pub mod package;

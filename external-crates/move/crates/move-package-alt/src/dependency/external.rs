@@ -60,6 +60,7 @@ struct RField {
 }
 
 /// Requests from the package mananger to the external resolver
+// TODO: fix typo above
 #[derive(Serialize, Debug)]
 struct ResolveRequest<F: MoveFlavor> {
     #[serde(default)]
@@ -80,8 +81,9 @@ impl ExternalDependency {
     /// resolvers.
     ///
     /// Note that the set of entries may be changed because external dependencies may be resolved
-    /// differently for different environments - this may cause the addition of a new dep-override;
-    /// this method may also optimize by removing unnecessary dep-overrides.
+    /// differently for different environments - this may cause the addition of a new
+    /// dep-replacement;
+    /// this method may also optimize by removing unnecessary dep-replacements.
     ///
     /// Expects all environments in [deps] to also be contained in [envs]
     pub async fn resolve<F: MoveFlavor>(
@@ -134,6 +136,8 @@ impl ExternalDependency {
     }
 }
 
+// TODO: CLEANUP
+// Explain this conversion
 impl TryFrom<RField> for ExternalDependency {
     type Error = PackageError;
 

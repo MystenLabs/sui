@@ -12,6 +12,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use futures::{ready, stream, task, Stream, StreamExt};
+use mysten_metrics::spawn_monitored_task;
 use parking_lot::RwLock;
 use rand::seq::SliceRandom as _;
 use sui_macros::fail_point_async;
@@ -315,15 +316,25 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             .add_blocks(vec![verified_block.clone()])
             .await
             .map_err(|_| ConsensusError::Shutdown)?;
+
+        // Schedule fetching missing ancestors from this peer in the background.
         if !missing_ancestors.is_empty() {
-            // schedule the fetching of them from this peer
-            if let Err(err) = self
-                .synchronizer
-                .fetch_blocks(missing_ancestors, peer)
-                .await
-            {
-                warn!("Errored while trying to fetch missing ancestors via synchronizer: {err}");
-            }
+            self.context
+                .metrics
+                .node_metrics
+                .handler_received_block_missing_ancestors
+                .with_label_values(&[peer_hostname])
+                .inc_by(missing_ancestors.len() as u64);
+            let synchronizer = self.synchronizer.clone();
+            spawn_monitored_task!(async move {
+                // This does not wait for the fetch request to complete.
+                // It only waits for synchronizer to queue the request to a peer.
+                // When this fails, it usually means the queue is full.
+                // The fetch will retry from other peers via live and periodic syncs.
+                if let Err(err) = synchronizer.fetch_blocks(missing_ancestors, peer).await {
+                    debug!("Failed to fetch missing ancestors via synchronizer: {err}");
+                }
+            });
         }
 
         // ------------ After processing the block, process the excluded ancestors ------------
@@ -380,6 +391,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             .await
             .map_err(|_| ConsensusError::Shutdown)?;
 
+        // Schedule fetching missing soft links from this peer in the background.
         if !missing_excluded_ancestors.is_empty() {
             self.context
                 .metrics
@@ -389,15 +401,12 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .inc_by(missing_excluded_ancestors.len() as u64);
 
             let synchronizer = self.synchronizer.clone();
-            tokio::spawn(async move {
-                // schedule the fetching of them from this peer in the background
+            spawn_monitored_task!(async move {
                 if let Err(err) = synchronizer
                     .fetch_blocks(missing_excluded_ancestors, peer)
                     .await
                 {
-                    warn!(
-                            "Errored while trying to fetch missing excluded ancestors via synchronizer: {err}"
-                        );
+                    debug!("Failed to fetch excluded ancestors via synchronizer: {err}");
                 }
             });
         }

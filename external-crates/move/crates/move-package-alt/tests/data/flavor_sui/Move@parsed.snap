@@ -7,7 +7,9 @@ Manifest {
             file: "tests/data/flavor_sui/Move.toml",
             value: Spanned {
                 span: 17..23,
-                value: "name",
+                value: Identifier(
+                    "name",
+                ),
             },
         },
         edition: Located {
@@ -23,5 +25,5 @@ Manifest {
         "mainnet": "35834a8a",
     },
     dependencies: {},
-    dep_overrides: {},
+    dep_replacements: {},
 }

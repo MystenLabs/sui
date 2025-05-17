@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 83;
+const MAX_PROTOCOL_VERSION: u64 = 84;
 
 // Record history of protocol version allocations here:
 //
@@ -237,7 +237,9 @@ const MAX_PROTOCOL_VERSION: u64 = 83;
 //             Increase threshold for bad nodes that won't be considered leaders in consensus in mainnet
 // Version 82: Relax bounding of size of values created in the adapter.
 // Version 83: Resolve `TypeInput` IDs to defining ID when converting to `TypeTag`s in the adapter.
-//             Enable multiparty transfer in devnet.
+//             Enable execution time estimate mode for congestion control on mainnet.
+//             Enable nitro attestation upgraded parsing and mainnet.
+// Version 84: Enable party transfer in devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -502,6 +504,10 @@ struct FeatureFlags {
     // Enable nitro attestation.
     #[serde(skip_serializing_if = "is_false")]
     enable_nitro_attestation: bool,
+
+    // Enable upgraded parsing of nitro attestation that interprets pcrs as a map.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_nitro_attestation_upgraded_parsing: bool,
 
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
@@ -1925,6 +1931,10 @@ impl ProtocolConfig {
 
     pub fn enable_nitro_attestation(&self) -> bool {
         self.feature_flags.enable_nitro_attestation
+    }
+
+    pub fn enable_nitro_attestation_upgraded_parsing(&self) -> bool {
+        self.feature_flags.enable_nitro_attestation_upgraded_parsing
     }
 
     pub fn get_consensus_commit_rate_estimation_window_size(&self) -> u32 {
@@ -3510,6 +3520,28 @@ impl ProtocolConfig {
                     cfg.feature_flags.resolve_type_input_ids_to_defining_id = true;
                     cfg.transfer_party_transfer_internal_cost_base = Some(52);
 
+                    // Enable execution time estimate mode for congestion control on mainnet.
+                    cfg.feature_flags.record_additional_state_digest_in_prologue = true;
+                    cfg.consensus_commit_rate_estimation_window_size = Some(10);
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                            ExecutionTimeEstimateParams {
+                                target_utilization: 30,
+                                allowed_txn_cost_overage_burst_limit_us: 100_000, // 100 ms
+                                randomness_scalar: 20,
+                                max_estimate_us: 1_500_000, // 1.5s
+                            },
+                        );
+
+                    // Enable the new depth-first block sync logic.
+                    cfg.feature_flags.consensus_batched_block_sync = true;
+
+                    // Enable nitro attestation upgraded parsing logic and enable the
+                    // native function on mainnet.
+                    cfg.feature_flags.enable_nitro_attestation_upgraded_parsing = true;
+                    cfg.feature_flags.enable_nitro_attestation = true;
+                }
+                84 => {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_party_transfer = true;
                     }

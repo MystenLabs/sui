@@ -6,6 +6,7 @@
 //!
 //! Git dependencies are cached in `~/.move`, which has the following structure:
 //!
+//! TODO: this doesn't match the implementation below:
 //! ```ignore
 //! .move/
 //!   git/
@@ -21,7 +22,7 @@ use std::{
     fmt,
     marker::PhantomData,
     path::{Path, PathBuf},
-    process::{Output, Stdio},
+    process::{ExitStatus, Output, Stdio},
 };
 
 use derive_where::derive_where;
@@ -34,8 +35,17 @@ use crate::errors::{GitError, GitErrorKind, Located, PackageError, PackageResult
 
 use super::{DependencySet, Pinned, Unpinned};
 
+// TODO: (potential refactor): it might be good to separate out a separate module that is just git
+//       stuff and another that uses that git stuff to implement the dependency operations (like
+//       the jsonrpc / dependency::external split).
+
+// TODO: curious about the benefit of using String instead of wrapping it. The advantage of
+//       wrapping it is that we have invariants (with the type alias, nothing prevents us from
+//       writing `let x : Sha = ""` (whereas `let x = Sha::new("")` can fail)
 type Sha = String;
 
+/// TODO keep same style around all types
+///
 /// A git dependency that is unpinned. The `rev` field can be either empty, a branch, or a sha. To
 /// resolve this into a [`PinnedGitDependency`], call `pin_one` function.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -60,7 +70,6 @@ pub struct PinnedGitDependency {
     repo: String,
 
     /// The exact sha for the revision
-    // rev: Sha,
     #[serde(deserialize_with = "deserialize_sha")]
     rev: Sha,
 
@@ -71,6 +80,7 @@ pub struct PinnedGitDependency {
 
 /// Helper struct that represents a Git repository, with extra information about which folder to
 /// checkout.
+// TODO: how is this different from [UnpinnedGitDependency]?
 #[derive(Clone, Debug)]
 pub struct GitRepo {
     /// Repository URL
@@ -81,7 +91,8 @@ pub struct GitRepo {
     path: PathBuf,
 }
 
-// Custom error type for SHA validation
+/// Custom error type for SHA validation
+// TODO: derive(Error)?
 #[derive(Debug)]
 pub enum ShaError {
     InvalidLength(usize),
@@ -105,18 +116,19 @@ impl UnpinnedGitDependency {
     /// Replace the commit-ish [self.rev] with a commit (i.e. a SHA). Requires fetching the git
     /// repository
     async fn pin_one(&self) -> PackageResult<PinnedGitDependency> {
-        let git: GitRepo = self.clone().into();
+        let git: GitRepo = self.into();
         let sha = git.find_sha().await?;
 
         Ok(PinnedGitDependency {
-            repo: self.repo.clone(),
+            repo: git.repo_url,
             rev: sha,
-            path: self.path.clone(),
+            path: git.path,
         })
     }
 }
 
 impl GitRepo {
+    /// Create a new GitRepo instance
     pub fn new(repo: String, rev: Option<String>, path: PathBuf) -> Self {
         Self {
             repo_url: repo,
@@ -125,23 +137,23 @@ impl GitRepo {
         }
     }
 
+    /// Get the repository URL
     pub fn repo_url(&self) -> &str {
         &self.repo_url
     }
 
+    /// Get the revision
     pub fn rev(&self) -> Option<&str> {
         self.rev.as_deref()
     }
 
-    pub fn package_set_path(&self) -> &PathBuf {
-        &self.path
-    }
-
-    /// Ensures that the repo is checked out at the specified sha.
+    /// Try to fetch the repository at the given sha ([`rev`]).
     pub async fn fetch(&self) -> PackageResult<PathBuf> {
         self.fetch_impl(None).await
     }
 
+    /// Internal implementation of fetch. It uses the default folder to fetch the repo to, defined
+    /// by the MOVE_HOME env variable.
     async fn fetch_impl(&self, fetch_to_folder: Option<PathBuf>) -> PackageResult<PathBuf> {
         let sha = self.find_sha().await?;
 
@@ -163,6 +175,7 @@ impl GitRepo {
     }
 
     /// Used for testing to be able to specify which folder to fetch to. Use `fetch` for all other needs.
+    // TODO: should be non-pub
     pub async fn fetch_to_folder(&self, fetch_to_folder: PathBuf) -> PackageResult<PathBuf> {
         self.fetch_impl(Some(fetch_to_folder)).await
     }
@@ -170,6 +183,8 @@ impl GitRepo {
     /// Checkout the repository using a sparse checkout. It will try to clone without checkout, set
     /// sparse checkout directory, and then checkout the folder specified by `self.path` at the
     /// given sha.
+    ///
+    // TODO think more about debug statements and what information to log
     async fn checkout_repo(&self, repo_fs_path: &PathBuf, sha: &str) -> PackageResult<()> {
         // Checkout repo if it does not exist already
         if !repo_fs_path.exists() {
@@ -204,6 +219,7 @@ impl GitRepo {
         Ok(())
     }
 
+    /// Set the sparse checkout directory to the given path
     async fn try_set_sparse_dir(&self, repo_fs_path: &PathBuf, path: &Path) -> PackageResult<()> {
         debug!("Setting sparse checkout path to: {:?}", path);
         let cmd = self
@@ -267,17 +283,25 @@ impl GitRepo {
     }
 
     /// Runs a git command from the provided arguments.
+    // TODO: check for error codes here
     pub async fn run_git_cmd_with_args(
         &self,
         args: &[&str],
         cwd: Option<&PathBuf>,
     ) -> PackageResult<Output> {
         // Run the git command
-        debug!("Running git command: with args {:?}", args);
+        debug!(
+            "Running git command with args {:?} in cwd: {}",
+            args,
+            cwd.unwrap_or(&PathBuf::from(".")).display()
+        );
+
         let mut cmd = Command::new("git");
+
         if let Some(cwd) = cwd {
             cmd.current_dir(cwd);
         }
+
         cmd.args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -312,14 +336,12 @@ impl GitRepo {
             if check_is_commit_sha(r) {
                 return Ok(r.to_string());
             }
-        }
 
-        // if there is some revision which is likely a branch, a tag, or a wrong SHA (e.g., capital
-        // letter), then we have a different set of arguments than if there is no revision. In no
-        // revision case, we need to find the default branch of that remote.
+            // if there is some revision which is likely a branch, a tag, or a wrong SHA (e.g., capital
+            // letter), then we have a different set of arguments than if there is no revision. In no
+            // revision case, we need to find the default branch of that remote.
 
-        // we have a branch or tag
-        let sha = if let Some(r) = self.rev.as_ref() {
+            // we have a branch or tag
             // git ls-remote https://github.com/user/repo.git refs/heads/main
             let cmd = self
                 .run_git_cmd_with_args(
@@ -327,18 +349,29 @@ impl GitRepo {
                     None,
                 )
                 .await?;
+
+            if !cmd.status.success() {
+                debug!(
+                    "Could not run git ls-remote command, return non-zero exit code: {:?}",
+                    cmd
+                );
+                return Err(PackageError::Git(GitError::generic(format!(
+                    "git ls-remote failed for {}, with error: {}",
+                    self.repo_url, cmd.status
+                ))));
+            }
+
             let stdout = String::from_utf8(cmd.stdout)?;
-            stdout
+
+            Ok(stdout
                 .split_whitespace()
                 .next()
                 .ok_or(PackageError::Git(GitError::no_sha(&self.repo_url, r)))?
-                .to_string()
+                .to_string())
         } else {
             // nothing specified, so we need to find the default branch
-            self.find_default_branch_and_get_sha().await?
-        };
-
-        Ok(sha)
+            self.find_default_branch_and_get_sha().await
+        }
     }
 
     /// Find the default branch and return the SHA
@@ -346,18 +379,30 @@ impl GitRepo {
         let cmd = self
             .run_git_cmd_with_args(&["ls-remote", "--symref", &self.repo_url, "HEAD"], None)
             .await?;
+
+        if !cmd.status.success() {
+            debug!(
+                "Could not run git ls-remote --symref command, return non-zero exit code: {:?}",
+                cmd
+            );
+            return Err(PackageError::Git(GitError::generic(format!(
+                "git ls-remote failed for {}, with error: {}",
+                self.repo_url, cmd.status
+            ))));
+        }
+
         let stdout = String::from_utf8(cmd.stdout)?;
         let lines: Vec<_> = stdout.lines().collect();
         let default_branch = lines[0].split_whitespace().nth(1).ok_or_else(|| {
             debug!(
-                "Error: could not find default branch.\nlines{:?}\nself{:?}",
+                "Could not find default branch.\nlines{:?}\nself{:?}",
                 lines, self
             );
             PackageError::Git(GitError::no_sha(&self.repo_url, "HEAD"))
         })?;
         let sha = lines[1].split_whitespace().next().ok_or_else(|| {
             debug!(
-                "Error: could not find sha for default branch.\nlines: {:?}\nself: {:?}\n",
+                "Could not find sha for default branch.\nlines: {:?}\nself: {:?}\n",
                 lines, self
             );
             PackageError::Git(GitError::no_sha(&self.repo_url, "HEAD"))
@@ -408,6 +453,12 @@ impl From<PinnedGitDependency> for GitRepo {
     }
 }
 
+/// Fetch the given git dependency and return the path to the checked out repo
+pub async fn fetch_dep(dep: PinnedGitDependency) -> PackageResult<PathBuf> {
+    let git_repo = GitRepo::from(&dep);
+    git_repo.fetch().await
+}
+
 /// Deserialize a SHA string to ensure it is well formed.
 pub fn deserialize_sha<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
@@ -433,6 +484,8 @@ pub fn format_repo_to_fs_path(repo: &str, sha: &str, root_path: Option<PathBuf>)
 
 /// Check if the given string is a valid commit SHA, i.e., 40 character long with only
 /// lowercase letters and digits
+///
+// TODO: rename this function to is_sha
 fn check_is_commit_sha(input: &str) -> bool {
     input.len() == 40
         && input
@@ -448,6 +501,7 @@ fn url_to_file_name(url: &str) -> String {
         .to_string()
 }
 
+// TODO: add more tests
 #[cfg(test)]
 mod tests {
     use super::*;
