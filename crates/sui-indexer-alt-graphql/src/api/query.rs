@@ -17,7 +17,7 @@ use super::{
         checkpoint::Checkpoint,
         epoch::Epoch,
         move_package::{self, MovePackage, PackageKey},
-        object::{self, CVersion, Object, ObjectKey, VersionFilter},
+        object::{self, Object, ObjectKey, VersionFilter},
         protocol_configs::ProtocolConfigs,
         service_config::ServiceConfig,
         transaction::Transaction,
@@ -211,7 +211,7 @@ impl Query {
         before: Option<object::CVersion>,
         address: SuiAddress,
         filter: Option<VersionFilter>,
-    ) -> Result<Option<Connection<CVersion, Object>>, RpcError<object::Error>> {
+    ) -> Result<Option<Connection<String, Object>>, RpcError<object::Error>> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Query", "objectVersions");
         let page = Page::from_params(limits, first, after, last, before)?;
@@ -270,7 +270,7 @@ impl Query {
         before: Option<object::CVersion>,
         address: SuiAddress,
         filter: Option<VersionFilter>,
-    ) -> Result<Option<Connection<CVersion, MovePackage>>, RpcError<move_package::Error>> {
+    ) -> Result<Option<Connection<String, MovePackage>>, RpcError<move_package::Error>> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Query", "packageVersions");
         let page = Page::from_params(limits, first, after, last, before)?;
