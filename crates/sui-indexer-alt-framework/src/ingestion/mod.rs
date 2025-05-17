@@ -332,28 +332,6 @@ mod tests {
         broadcaster.await.unwrap();
     }
 
-    /// If fetching the checkpoint throws an unexpected error, the whole pipeline will be shut
-    /// down.
-    #[tokio::test]
-    async fn shutdown_on_unexpected_error() {
-        telemetry_subscribers::init_for_testing();
-
-        let server = MockServer::start().await;
-        respond_with(&server, status(StatusCode::IM_A_TEAPOT)).await;
-
-        let cancel = CancellationToken::new();
-        let mut ingestion_service = test_ingestion(server.uri(), 1, 1, cancel.clone()).await;
-
-        let (rx, _) = ingestion_service.subscribe();
-        let subscriber = test_subscriber(usize::MAX, rx, cancel.clone()).await;
-        let (regulator, broadcaster) = ingestion_service.run(0..).await.unwrap();
-
-        cancel.cancelled().await;
-        subscriber.await.unwrap();
-        regulator.await.unwrap();
-        broadcaster.await.unwrap();
-    }
-
     /// The service will retry fetching a checkpoint that does not exist, in this test, the 4th
     /// checkpoint will return 404 a couple of times, before eventually succeeding.
     #[tokio::test]

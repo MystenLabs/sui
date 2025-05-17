@@ -47,7 +47,12 @@ pub(super) fn broadcaster(
                 async move {
                     // Repeatedly retry if the checkpoint is not found, assuming that we are at the
                     // tip of the network and it will become available soon.
-                    let checkpoint = client.wait_for(cp, retry_interval, &cancel).await?;
+                    let checkpoint = tokio::select! {
+                        cp = client.wait_for(cp, retry_interval) => cp?,
+                        _ = cancel.cancelled() => {
+                            return Err(Error::Cancelled);
+                        }
+                    };
 
                     let futures = subscribers.iter().map(|s| s.send(checkpoint.clone()));
                     if try_join_all(futures).await.is_err() {
