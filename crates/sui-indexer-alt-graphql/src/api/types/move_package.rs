@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{dataloader::DataLoader, Context, InputObject, Object};
+use async_graphql::{connection::Connection, dataloader::DataLoader, Context, InputObject, Object};
 use sui_indexer_alt_reader::{
     packages::{
         CheckpointBoundedOriginalPackageKey, PackageOriginalIdKey, VersionedOriginalPackageKey,
@@ -25,7 +25,7 @@ use crate::{
 
 use super::{
     addressable::AddressableImpl,
-    object::{self, Object, ObjectImpl},
+    object::{self, CVersion, Object, ObjectImpl, VersionFilter},
     transaction::Transaction,
 };
 
@@ -86,6 +86,36 @@ impl MovePackage {
         ctx: &Context<'_>,
     ) -> Result<Option<Base64>, RpcError<object::Error>> {
         ObjectImpl::from(&self.super_).object_bcs(ctx).await
+    }
+
+    /// Paginate all versions of this package treated as an object, after this one.
+    pub(crate) async fn object_versions_after(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CVersion>,
+        last: Option<u64>,
+        before: Option<CVersion>,
+        filter: Option<VersionFilter>,
+    ) -> Result<Connection<CVersion, Object>, RpcError<object::Error>> {
+        ObjectImpl::from(&self.super_)
+            .object_versions_after(ctx, first, after, last, before, filter)
+            .await
+    }
+
+    /// Paginate all versions of this package treated as an object, before this one.
+    pub(crate) async fn object_versions_before(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CVersion>,
+        last: Option<u64>,
+        before: Option<CVersion>,
+        filter: Option<VersionFilter>,
+    ) -> Result<Connection<CVersion, Object>, RpcError<object::Error>> {
+        ObjectImpl::from(&self.super_)
+            .object_versions_before(ctx, first, after, last, before, filter)
+            .await
     }
 
     /// The Base64-encoded BCS serialization of this package, as a `MovePackage`.
