@@ -1,13 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use anyhow::Context as _;
-use async_graphql::{Context, Object};
-use sui_types::move_package::MovePackage as NativeMovePackage;
+use async_graphql::{dataloader::DataLoader, Context, InputObject, Object};
+use sui_indexer_alt_reader::{
+    packages::{
+        CheckpointBoundedOriginalPackageKey, PackageOriginalIdKey, VersionedOriginalPackageKey,
+    },
+    pg_reader::PgReader,
+};
+use sui_indexer_alt_schema::packages::StoredPackage;
+use sui_types::{
+    base_types::ObjectID, move_package::MovePackage as NativeMovePackage,
+    object::Object as NativeObject,
+};
 
 use crate::{
     api::scalars::{base64::Base64, sui_address::SuiAddress, uint53::UInt53},
-    error::RpcError,
+    error::{bad_user_input, RpcError},
+    scope::Scope,
 };
 
 use super::{
@@ -24,6 +37,32 @@ pub(crate) struct MovePackage {
     contents: NativeMovePackage,
 }
 
+/// Identifies a specific version of a package.
+///
+/// The `address` field must be specified, as well as at most one of `version`, or `atCheckpoint`. If neither is provided, the package is fetched at the current checkpoint.
+///
+/// See `Query.package` for more details.
+#[derive(InputObject, Debug, Clone, Eq, PartialEq)]
+pub(crate) struct PackageKey {
+    /// The object's ID.
+    pub(crate) address: SuiAddress,
+
+    /// If specified, tries to fetch the package at this exact version.
+    pub(crate) version: Option<UInt53>,
+
+    /// If specified, tries to fetch the latest version as of this checkpoint.
+    pub(crate) at_checkpoint: Option<UInt53>,
+}
+
+#[derive(thiserror::Error, Debug, Clone)]
+pub(crate) enum Error {
+    #[error(
+        "At most one of a version, or a checkpoint bound can be specified when fetching a package"
+    )]
+    OneBound,
+}
+
+/// A MovePackage is a kind of Object that represents code that has been published on-chain. It exposes information about its modules, type definitions, functions, and dependencies.
 #[Object]
 impl MovePackage {
     /// The MovePackage's ID.
@@ -83,6 +122,115 @@ impl MovePackage {
             return Ok(None);
         };
 
+        Ok(Some(Self { super_, contents }))
+    }
+
+    /// Fetch a package by its key. The key can either specify an exact version to fetch, an
+    /// upperbound against a checkpoint, or neither.
+    pub(crate) async fn by_key(
+        ctx: &Context<'_>,
+        scope: Scope,
+        key: PackageKey,
+    ) -> Result<Option<Self>, RpcError<Error>> {
+        let bounds = key.version.is_some() as u8 + key.at_checkpoint.is_some() as u8;
+
+        if bounds > 1 {
+            Err(bad_user_input(Error::OneBound))
+        } else if let Some(v) = key.version {
+            Ok(Self::at_version(ctx, scope, key.address, v).await?)
+        } else if let Some(cp) = key.at_checkpoint {
+            Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp).await?)
+        } else {
+            let cp: UInt53 = scope.checkpoint_viewed_at().into();
+            Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp).await?)
+        }
+    }
+
+    /// Fetch the package whose original ID matches the original ID of the package at `address`,
+    /// but whose version is `version`.
+    pub(crate) async fn at_version(
+        ctx: &Context<'_>,
+        scope: Scope,
+        address: SuiAddress,
+        version: UInt53,
+    ) -> Result<Option<Self>, RpcError<Error>> {
+        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+
+        let Some(stored_original) = pg_loader
+            .load_one(PackageOriginalIdKey(address.into()))
+            .await
+            .context("Failed to fetch package original ID")?
+        else {
+            return Ok(None);
+        };
+
+        let original_id = ObjectID::from_bytes(&stored_original.original_id)
+            .context("Failed to deserialize ObjectID")?;
+
+        let Some(stored_package) = pg_loader
+            .load_one(VersionedOriginalPackageKey(original_id, version.into()))
+            .await
+            .context("Failed to load package")?
+        else {
+            return Ok(None);
+        };
+
+        Self::from_stored(scope, stored_package)
+    }
+
+    /// Fetch the package whose original ID matches the original ID of the package at `address`,
+    /// but whose version is latest among all packages that existed `at_checkpoint`.
+    pub(crate) async fn checkpoint_bounded(
+        ctx: &Context<'_>,
+        scope: Scope,
+        address: SuiAddress,
+        at_checkpoint: UInt53,
+    ) -> Result<Option<Self>, RpcError<Error>> {
+        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+
+        let Some(stored_original) = pg_loader
+            .load_one(PackageOriginalIdKey(address.into()))
+            .await
+            .context("Failed to fetch package original ID")?
+        else {
+            return Ok(None);
+        };
+
+        let original_id = ObjectID::from_bytes(&stored_original.original_id)
+            .context("Failed to deserialize ObjectID")?;
+
+        let Some(stored_package) = pg_loader
+            .load_one(CheckpointBoundedOriginalPackageKey(
+                original_id,
+                at_checkpoint.into(),
+            ))
+            .await
+            .context("Failed to load package")?
+        else {
+            return Ok(None);
+        };
+
+        Self::from_stored(scope, stored_package)
+    }
+
+    /// Construct a GraphQL representation of a `MovePackage` from its representation in the
+    /// database.
+    pub(crate) fn from_stored(
+        scope: Scope,
+        stored: StoredPackage,
+    ) -> Result<Option<Self>, RpcError<Error>> {
+        if stored.cp_sequence_number as u64 > scope.checkpoint_viewed_at() {
+            return Ok(None);
+        }
+
+        let native: NativeObject = bcs::from_bytes(&stored.serialized_object)
+            .context("Failed to deserialize package as object")?;
+
+        let Some(contents) = native.data.try_as_package().cloned() else {
+            return Ok(None);
+        };
+
+        let super_ = Object::from_contents(scope, Arc::new(native));
         Ok(Some(Self { super_, contents }))
     }
 }
