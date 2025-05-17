@@ -783,6 +783,7 @@ pub struct SuiTransactionBlockEffectsV1 {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dependencies: Vec<TransactionDigest>,
     /// The abort error populated if the transaction failed with an abort code.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub abort_error: Option<SuiMoveAbort>,
 }
 

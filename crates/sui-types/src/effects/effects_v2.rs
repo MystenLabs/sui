@@ -83,6 +83,17 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
             .collect()
     }
 
+    fn move_abort(&self) -> Option<(MoveLocation, u64)> {
+        let ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::MoveAbort(move_location, code),
+            ..
+        } = self.status()
+        else {
+            return None;
+        };
+        Some((move_location.clone(), *code))
+    }
+
     fn lamport_version(&self) -> SequenceNumber {
         self.lamport_version
     }
@@ -343,16 +354,6 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                 (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
                 Owner::AddressOwner(SuiAddress::default()),
             )
-        }
-    }
-
-    fn move_abort(&self) -> Option<(MoveLocation, u64)> {
-        match self.status() {
-            ExecutionStatus::Failure {
-                error: ExecutionFailureStatus::MoveAbort(move_location, code),
-                ..
-            } => Some((move_location.clone(), *code)),
-            _ => None,
         }
     }
 
