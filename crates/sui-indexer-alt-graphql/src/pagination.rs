@@ -160,7 +160,7 @@ impl Page<JsonCursor<usize>> {
         &self,
         total: usize,
     ) -> Connection<JsonCursor<usize>, EmptyFields> {
-        let mut lo = self.after().map_or(0, |a| **a + 1);
+        let mut lo = self.after().map_or(0, |a| a.saturating_add(1));
         let mut hi = self.before().map_or(total, |b| **b);
         let mut conn = Connection::new(false, false);
 

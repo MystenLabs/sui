@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 24 tasks
+processed 23 tasks
 
 init:
 A: object(0,0)
@@ -214,39 +214,16 @@ Response: {
   }
 }
 
-task 22, lines 187-190:
+task 22, lines 186-189:
 //# run-graphql
 Response: {
   "data": null,
   "errors": [
     {
-      "message": "At most one of a version or a root version can be specified when fetching an object",
+      "message": "At most one of a version, a root version, or a checkpoint bound can be specified when fetching an object",
       "locations": [
         {
           "line": 2,
-          "column": 3
-        }
-      ],
-      "path": [
-        "object"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
-    }
-  ]
-}
-
-task 23, lines 192-196:
-//# run-graphql
-Response: {
-  "data": null,
-  "errors": [
-    {
-      "message": "Operation not supported",
-      "locations": [
-        {
-          "line": 3,
           "column": 3
         }
       ],

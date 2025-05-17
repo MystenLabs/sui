@@ -14,9 +14,10 @@ use sui_types::digests::TransactionDigest;
 use crate::{
     api::scalars::{base64::Base64, digest::Digest},
     error::RpcError,
+    scope::Scope,
 };
 
-use super::transaction_effects::TransactionEffects;
+use super::transaction_effects::{EffectsContents, TransactionEffects};
 
 #[derive(Clone)]
 pub(crate) struct Transaction {
@@ -25,7 +26,10 @@ pub(crate) struct Transaction {
 }
 
 #[derive(Clone)]
-pub(crate) struct TransactionContents(pub Option<Arc<NativeTransactionContents>>);
+pub(crate) struct TransactionContents {
+    pub(crate) scope: Scope,
+    pub(crate) contents: Option<Arc<NativeTransactionContents>>,
+}
 
 /// Description of a transaction, the unit of activity on Sui.
 #[Object]
@@ -42,11 +46,7 @@ impl Transaction {
 
     #[graphql(flatten)]
     async fn contents(&self, ctx: &Context<'_>) -> Result<TransactionContents, RpcError> {
-        Ok(if self.contents.0.is_some() {
-            self.contents.clone()
-        } else {
-            TransactionContents::fetch(ctx, self.digest).await?
-        })
+        self.contents.fetch(ctx, self.digest).await
     }
 }
 
@@ -54,7 +54,7 @@ impl Transaction {
 impl TransactionContents {
     /// The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
     async fn transaction_bcs(&self) -> Result<Option<Base64>, RpcError> {
-        let Some(content) = &self.0 else {
+        let Some(content) = &self.contents else {
             return Ok(None);
         };
 
@@ -66,23 +66,30 @@ impl Transaction {
     /// Construct a transaction that is represented by just its identifier (its transaction
     /// digest). This does not check whether the transaction exists, so should not be used to
     /// "fetch" a transaction based on a digest provided as user input.
-    pub(crate) fn with_id(digest: TransactionDigest) -> Self {
+    pub(crate) fn with_id(scope: Scope, digest: TransactionDigest) -> Self {
         Self {
             digest,
-            contents: TransactionContents(None),
+            contents: TransactionContents::empty(scope),
         }
     }
 
     /// Load the transaction from the store, and return it fully inflated (with contents already
     /// fetched). Returns `None` if the transaction does not exist (either never existed or was
     /// pruned from the store).
-    pub(crate) async fn fetch(ctx: &Context<'_>, digest: Digest) -> Result<Option<Self>, RpcError> {
-        let contents = TransactionContents::fetch(ctx, digest.into()).await?;
-        let Some(tx) = &contents.0 else {
+    pub(crate) async fn fetch(
+        ctx: &Context<'_>,
+        scope: Scope,
+        digest: Digest,
+    ) -> Result<Option<Self>, RpcError> {
+        let contents = TransactionContents::empty(scope)
+            .fetch(ctx, digest.into())
+            .await?;
+
+        let Some(tx) = &contents.contents else {
             return Ok(None);
         };
 
-        Ok(Some(Transaction {
+        Ok(Some(Self {
             digest: tx.digest()?,
             contents,
         }))
@@ -90,26 +97,53 @@ impl Transaction {
 }
 
 impl TransactionContents {
+    fn empty(scope: Scope) -> Self {
+        Self {
+            scope,
+            contents: None,
+        }
+    }
+
+    /// Attempt to fill the contents. If the contents are already filled, returns a clone,
+    /// otherwise attempts to fetch from the store. The resulting value may still have an empty
+    /// contents field, because it could not be found in the store.
     pub(crate) async fn fetch(
+        &self,
         ctx: &Context<'_>,
         digest: TransactionDigest,
     ) -> Result<Self, RpcError> {
-        let kv_loader: &KvLoader = ctx.data()?;
+        if self.contents.is_some() {
+            return Ok(self.clone());
+        }
 
-        let transaction = kv_loader
+        let kv_loader: &KvLoader = ctx.data()?;
+        let Some(transaction) = kv_loader
             .load_one_transaction(digest)
             .await
-            .context("Failed to fetch transaction contents")?;
+            .context("Failed to fetch transaction contents")?
+        else {
+            return Ok(self.clone());
+        };
 
-        Ok(Self(transaction.map(Arc::new)))
+        // Discard the loaded result if we are viewing it at a checkpoint before it existed.
+        if transaction.cp_sequence_number() > self.scope.checkpoint_viewed_at() {
+            return Ok(self.clone());
+        }
+
+        Ok(Self {
+            scope: self.scope.clone(),
+            contents: Some(Arc::new(transaction)),
+        })
     }
 }
 
 impl From<TransactionEffects> for Transaction {
     fn from(fx: TransactionEffects) -> Self {
+        let EffectsContents { scope, contents } = fx.contents;
+
         Self {
             digest: fx.digest,
-            contents: TransactionContents(fx.contents.0),
+            contents: TransactionContents { scope, contents },
         }
     }
 }
