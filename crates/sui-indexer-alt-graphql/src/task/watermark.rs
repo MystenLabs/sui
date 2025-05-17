@@ -102,13 +102,13 @@ pub(crate) type WatermarksLock = Arc<RwLock<Arc<Watermarks>>>;
 impl WatermarkTask {
     pub(crate) fn new(
         config: WatermarkConfig,
+        pg_pipelines: Vec<String>,
         pg_reader: PgReader,
         bigtable_reader: Option<BigtableReader>,
         cancel: CancellationToken,
     ) -> Self {
         let WatermarkConfig {
             watermark_polling_interval,
-            pg_pipelines,
         } = config;
 
         Self {
