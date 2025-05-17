@@ -1,0 +1,133 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 15 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-42:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 8177600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 44-46:
+//# run ex::m::mint
+created: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 8557600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 47-49:
+//# view-object 2,0
+Owner: Account Address ( _ )
+Version: 3
+Contents: ex::m::PubA {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 4, lines 50-52:
+//# view-object 2,1
+Owner: ConsensusV2( 3, SingleOwner(_) )
+Version: 3
+Contents: ex::m::PubA {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
+
+task 5, lines 53-55:
+//# view-object 2,2
+Owner: Account Address ( fake(2,0) )
+Version: 3
+Contents: ex::m::PubB {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,2),
+        },
+    },
+}
+
+task 6, lines 56-58:
+//# view-object 2,3
+Owner: Account Address ( fake(2,1) )
+Version: 3
+Contents: ex::m::PubB {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,3),
+        },
+    },
+}
+
+task 7, lines 59-61:
+//# view-object 2,4
+Owner: ConsensusV2( 3, SingleOwner(fake(2,1)) )
+Version: 3
+Contents: ex::m::PubB {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,4),
+        },
+    },
+}
+
+task 8, lines 62-65:
+//# view-object 2,5
+Owner: ConsensusV2( 3, SingleOwner(fake(2,0)) )
+Version: 3
+Contents: ex::m::PubB {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,5),
+        },
+    },
+}
+
+task 9, line 66:
+//# run ex::m::receiver --args object(2,0) receiving(2,2)
+mutated: object(0,2), object(2,0), object(2,2)
+gas summary: computation_cost: 1000000, storage_cost: 3450400,  storage_rebate: 3415896, non_refundable_storage_fee: 34504
+
+task 10, lines 68-71:
+//# view-object 2,2
+Owner: Account Address ( _ )
+Version: 4
+Contents: ex::m::PubB {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,2),
+        },
+    },
+}
+
+task 11, line 72:
+//# run ex::m::receiver --args object(2,1) receiving(2,3)
+mutated: object(0,2), object(2,1), object(2,3)
+gas summary: computation_cost: 1000000, storage_cost: 3511200,  storage_rebate: 3476088, non_refundable_storage_fee: 35112
+
+task 12, lines 74-77:
+//# view-object 2,3
+Owner: Account Address ( _ )
+Version: 5
+Contents: ex::m::PubB {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,3),
+        },
+    },
+}
+
+task 13, line 79:
+//# run ex::m::receiver --args object(2,0) receiving(2,5)
+Error: Error checking transaction input objects: NotSharedObjectError
+
+task 14, line 81:
+//# run ex::m::receiver --args object(2,1) receiving(2,4)
+Error: Error checking transaction input objects: NotSharedObjectError

@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 83;
+const MAX_PROTOCOL_VERSION: u64 = 84;
 
 // Record history of protocol version allocations here:
 //
@@ -239,6 +239,7 @@ const MAX_PROTOCOL_VERSION: u64 = 83;
 // Version 83: Resolve `TypeInput` IDs to defining ID when converting to `TypeTag`s in the adapter.
 //             Enable execution time estimate mode for congestion control on mainnet.
 //             Enable nitro attestation upgraded parsing and mainnet.
+// Version 84: Enable party transfer in devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3539,6 +3540,11 @@ impl ProtocolConfig {
                     // native function on mainnet.
                     cfg.feature_flags.enable_nitro_attestation_upgraded_parsing = true;
                     cfg.feature_flags.enable_nitro_attestation = true;
+                }
+                84 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_party_transfer = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
