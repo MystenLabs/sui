@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::{FullObjectID, SequenceNumber, VersionDigest};
-use crate::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
+use crate::effects::TransactionEffectsAPI;
+use crate::effects::{TransactionEffects, TransactionEvents};
 use crate::error::SuiResult;
 use crate::execution::DynamicallyLoadedObjectMetadata;
 use crate::storage::PackageObject;
@@ -15,8 +16,7 @@ use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
-use std::collections::BTreeMap;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 pub type WrittenObjects = BTreeMap<ObjectID, Object>;

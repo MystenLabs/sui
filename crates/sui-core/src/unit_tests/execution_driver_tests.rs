@@ -12,6 +12,7 @@ use crate::checkpoints::CheckpointStore;
 use crate::consensus_adapter::ConsensusAdapter;
 use crate::consensus_adapter::ConsensusAdapterMetrics;
 use crate::consensus_adapter::{ConnectionMonitorStatusForTests, MockConsensusClient};
+use crate::execution_scheduler::ExecutionSchedulerAPI;
 use crate::safe_client::SafeClient;
 use crate::test_authority_clients::LocalAuthorityClient;
 use crate::test_utils::{make_transfer_object_move_transaction, make_transfer_object_transaction};
@@ -592,7 +593,7 @@ async fn test_per_object_overload() {
         )
         .build_and_sign(&key);
     let res = authorities[3]
-        .transaction_manager()
+        .execution_scheduler()
         .check_execution_overload(authorities[3].overload_config(), shared_txn.data());
     let message = format!("{res:?}");
     assert!(
@@ -727,7 +728,7 @@ async fn test_txn_age_overload() {
         )
         .build_and_sign(&key);
     let res = authorities[3]
-        .transaction_manager()
+        .execution_scheduler()
         .check_execution_overload(authorities[3].overload_config(), shared_txn.data());
     let message = format!("{res:?}");
     assert!(

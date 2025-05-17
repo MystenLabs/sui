@@ -419,7 +419,7 @@ pub trait ObjectCacheRead: Send + Sync {
         input_and_receiving_keys: &'a [InputKey],
         receiving_keys: &'a HashSet<InputKey>,
         epoch: &'a EpochId,
-    ) -> BoxFuture<'a, Vec<()>>;
+    ) -> BoxFuture<'a, ()>;
 }
 
 pub trait TransactionCacheRead: Send + Sync {
@@ -579,6 +579,12 @@ pub trait ExecutionCacheWrite: Send + Sync {
         tx_digest: TransactionDigest,
         signed_transaction: Option<VerifiedSignedTransaction>,
     ) -> SuiResult;
+
+    /// Write an object entry directly to the cache for testing.
+    /// This allows us to write an object without constructing the entire
+    /// transaction outputs.
+    #[cfg(test)]
+    fn write_object_entry_for_test(&self, object: Object);
 }
 
 pub trait CheckpointCache: Send + Sync {
