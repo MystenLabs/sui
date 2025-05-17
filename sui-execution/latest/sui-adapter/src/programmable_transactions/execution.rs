@@ -16,7 +16,10 @@ mod checked {
         programmable_transactions::{
             context::*,
             data_store::SuiDataStore,
-            trace_utils::{trace_ptb_summary, trace_split_coins},
+            trace_utils::{
+                trace_move_call_end, trace_move_call_start, trace_ptb_summary, trace_split_coins,
+                trace_transfer,
+            },
         },
         type_resolver::TypeTagResolver,
     };
@@ -36,10 +39,7 @@ mod checked {
         language_storage::{ModuleId, TypeTag},
         u256::U256,
     };
-    use move_trace_format::{
-        format::{MoveTraceBuilder, TraceEvent},
-        value::SerializableMoveValue,
-    };
+    use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::{
         move_vm::MoveVM,
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
@@ -74,8 +74,6 @@ mod checked {
             MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt, UpgradeTicket,
             normalize_deserialized_modules,
         },
-        object::bounded_visitor::BoundedVisitor,
-        ptb_trace::PTBExternalEvent,
         storage::{PackageObject, get_package_objects},
         transaction::{Command, ProgrammableMoveCall, ProgrammableTransaction},
         transfer::RESOLVED_RECEIVING_STRUCT,
@@ -284,28 +282,10 @@ mod checked {
                     .collect::<Result<_, _>>()?;
                 let addr: SuiAddress =
                     context.by_value_arg(CommandKind::TransferObjects, objs.len(), addr_arg)?;
+
+                trace_transfer(context, trace_builder_opt, &objs)?;
+
                 for obj in objs {
-                    let layout = context
-                        .vm
-                        .get_runtime()
-                        .type_to_fully_annotated_layout(&obj.type_)
-                        .map_err(|e| {
-                            ExecutionError::new_with_source(
-                                ExecutionErrorKind::InvariantViolation,
-                                e,
-                            )
-                        })?;
-                    if let ObjectContents::Raw(bytes) = &obj.contents {
-                        let move_value = BoundedVisitor::deserialize_value(bytes, &layout)
-                            .map_err(|e| {
-                                ExecutionError::new_with_source(
-                                    ExecutionErrorKind::InvariantViolation,
-                                    e,
-                                )
-                            })?;
-                        let serialized_move_value = SerializableMoveValue::from(move_value);
-                        eprintln!("Serialized move value: {:?}", serialized_move_value);
-                    }
                     obj.ensure_public_transfer_eligible()?;
                     context.transfer_object(obj, addr)?;
                 }
@@ -338,7 +318,7 @@ mod checked {
                     })
                     .collect::<Result<_, ExecutionError>>()?;
 
-                trace_split_coins(context, trace_builder_opt, &obj.type_, &coin, &split_coins)?;
+                trace_split_coins(context, trace_builder_opt, &obj.type_, coin, &split_coins)?;
 
                 context.restore_arg::<Mode>(&mut argument_updates, coin_arg, Value::Object(obj))?;
                 split_coins
@@ -393,11 +373,8 @@ mod checked {
                     type_arguments,
                     arguments,
                 } = *move_call;
-                if let Some(trace_builder) = trace_builder_opt {
-                    trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
-                        PTBExternalEvent::MoveCallStart
-                    ))));
-                }
+                trace_move_call_start(trace_builder_opt);
+
                 let arguments = context.splat_args(0, arguments)?;
 
                 let module = to_identifier(context, module)?;
@@ -427,11 +404,8 @@ mod checked {
                     /* is_init */ false,
                     trace_builder_opt,
                 );
-                if let Some(trace_builder) = trace_builder_opt {
-                    trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
-                        PTBExternalEvent::MoveCallEnd
-                    ))));
-                }
+
+                trace_move_call_end(trace_builder_opt);
 
                 context.linkage_view.reset_linkage()?;
                 return_values?
