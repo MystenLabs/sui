@@ -149,6 +149,17 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
             .collect()
     }
 
+    fn move_abort(&self) -> Option<(MoveLocation, u64)> {
+        let ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::MoveAbort(move_location, code),
+            ..
+        } = self.status()
+        else {
+            return None;
+        };
+        Some((move_location.clone(), *code))
+    }
+
     fn lamport_version(&self) -> SequenceNumber {
         SequenceNumber::lamport_increment(self.modified_at_versions.iter().map(|(_, v)| *v))
     }
@@ -283,16 +294,6 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
 
     fn dependencies(&self) -> &[TransactionDigest] {
         &self.dependencies
-    }
-
-    fn move_abort(&self) -> Option<(MoveLocation, u64)> {
-        match self.status() {
-            ExecutionStatus::Failure {
-                error: ExecutionFailureStatus::MoveAbort(move_location, code),
-                ..
-            } => Some((move_location.clone(), *code)),
-            _ => None,
-        }
     }
 
     fn transaction_digest(&self) -> &TransactionDigest {

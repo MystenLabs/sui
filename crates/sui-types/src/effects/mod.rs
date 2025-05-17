@@ -316,6 +316,7 @@ pub trait TransactionEffectsAPI {
     fn into_status(self) -> ExecutionStatus;
     fn executed_epoch(&self) -> EpochId;
     fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)>;
+    fn move_abort(&self) -> Option<(MoveLocation, u64)>;
 
     /// The version assigned to all output objects (apart from packages).
     fn lamport_version(&self) -> SequenceNumber;
@@ -350,8 +351,6 @@ pub trait TransactionEffectsAPI {
 
     fn events_digest(&self) -> Option<&TransactionEventsDigest>;
     fn dependencies(&self) -> &[TransactionDigest];
-
-    fn move_abort(&self) -> Option<(MoveLocation, u64)>;
 
     fn transaction_digest(&self) -> &TransactionDigest;
 
