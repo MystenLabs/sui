@@ -1,0 +1,74 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 1, line 6:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 2, line 8:
+//# advance-epoch
+Epoch advanced: 0
+
+task 3, line 10:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 4, line 12:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 5, line 14:
+//# advance-epoch
+Epoch advanced: 1
+
+task 6, line 16:
+//# create-checkpoint
+Checkpoint created: 6
+
+task 7, lines 18-28:
+//# run-graphql
+Response: {
+  "data": {
+    "c0": {
+      "epoch": {
+        "epochId": 0
+      }
+    },
+    "c1": {
+      "epoch": {
+        "epochId": 0
+      }
+    },
+    "c2": {
+      "epoch": {
+        "epochId": 0
+      }
+    },
+    "c3": {
+      "epoch": {
+        "epochId": 1
+      }
+    },
+    "c4": {
+      "epoch": {
+        "epochId": 1
+      }
+    },
+    "c5": {
+      "epoch": {
+        "epochId": 1
+      }
+    },
+    "c6": {
+      "epoch": {
+        "epochId": 2
+      }
+    },
+    "c7": null
+  }
+}
