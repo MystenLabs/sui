@@ -10,7 +10,7 @@ use codespan_reporting::{
     term::{self, Config, termcolor::Buffer},
 };
 use move_package_alt::{
-    dependency::{self, DependencySet, ManifestDependencyInfo},
+    dependency::{self, DependencySet, UnpinnedDependencyInfo},
     flavor::Vanilla,
     package::{lockfile::Lockfile, manifest::Manifest},
 };
@@ -100,6 +100,13 @@ impl Test<'_> {
                     Err(e) => e.to_string(),
                 }
             }
+            "locked_toml" => {
+                let lockfile = Lockfile::<Vanilla>::read_from(self.toml_path.parent().unwrap());
+                match lockfile {
+                    Ok(l) => format!("{}", l.render_as_toml()),
+                    Err(e) => e.to_string(),
+                }
+            }
             "pinned" => run_pinning_wrapper(self.toml_path).unwrap(),
             ext => bail!("Unrecognised snapshot type: '{ext}'"),
         })
@@ -109,7 +116,7 @@ impl Test<'_> {
 async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String> {
     let manifest = Manifest::<Vanilla>::read_from(input_path).unwrap();
 
-    let deps: DependencySet<ManifestDependencyInfo<Vanilla>> = manifest.dependencies();
+    let deps: DependencySet<UnpinnedDependencyInfo<Vanilla>> = manifest.dependencies();
 
     add_bindir();
     let pinned = dependency::pin(&Vanilla, deps, manifest.environments()).await;
@@ -153,6 +160,9 @@ datatest_stable::harness!(
     run_test,
     "tests/data",
     r".*\.locked$",
+    run_test,
+    "tests/data",
+    r".*\.locked_toml$",
     run_test,
     "tests/data",
     r".*\.pinned$",

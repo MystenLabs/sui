@@ -19,7 +19,7 @@ use toml_edit::{
 };
 
 use crate::{
-    dependency::{DependencySet, ManifestDependencyInfo, PinnedDependencyInfo, pin},
+    dependency::{DependencySet, PinnedDependencyInfo, UnpinnedDependencyInfo, pin},
     errors::{Located, LockfileError, PackageError, PackageResult, with_file},
     flavor::MoveFlavor,
 };
@@ -30,8 +30,7 @@ use super::{EnvironmentName, PackageName, manifest::Manifest};
 #[derive_where(Clone, Default)]
 #[serde(bound = "")]
 pub struct Lockfile<F: MoveFlavor + fmt::Debug> {
-    unpublished: UnpublishedTable<F>,
-
+    pinned: BTreeMap<EnvironmentName, DependencyInfo<F>>,
     #[serde(default)]
     published: BTreeMap<EnvironmentName, Publication<F>>,
 }
@@ -46,24 +45,71 @@ pub struct Publication<F: MoveFlavor + fmt::Debug> {
 }
 
 #[derive(fmt::Debug, Serialize, Deserialize)]
-#[derive_where(Default, Clone)]
-#[serde(rename_all = "kebab-case")]
+#[derive_where(Clone)]
 #[serde(bound = "")]
-struct UnpublishedTable<F: MoveFlavor + fmt::Debug> {
-    dependencies: UnpublishedDependencies<F>,
-
-    #[serde(default)]
-    dep_replacements: BTreeMap<EnvironmentName, UnpublishedDependencies<F>>,
+struct DependencyInfo<F: MoveFlavor + fmt::Debug> {
+    #[serde(flatten)]
+    data: BTreeMap<PackageName, DepInfo<F>>,
 }
 
 #[derive(fmt::Debug, Serialize, Deserialize)]
-#[derive_where(Default, Clone)]
+#[derive_where(Clone)]
 #[serde(bound = "")]
-struct UnpublishedDependencies<F: MoveFlavor + fmt::Debug> {
-    #[serde(default)]
-    pinned: BTreeMap<PackageName, PinnedDependencyInfo<F>>,
-    #[serde(default)]
-    unpinned: BTreeMap<PackageName, ManifestDependencyInfo<F>>,
+struct DepInfo<F: MoveFlavor + fmt::Debug> {
+    source: PinnedInfo<F>,
+    manifest_digest: String,
+    deps: BTreeMap<PackageName, PackageName>,
+}
+
+/// Defines the pinned information for a dependency. It is used to distinguish between a local
+/// dependency of a dependency, or a dependency, or define this package as the root of the
+/// dependency graph.
+#[derive(fmt::Debug, Serialize, Deserialize)]
+#[derive_where(Clone)]
+#[serde(bound = "")]
+#[serde(untagged)]
+pub enum PinnedInfo<F: MoveFlavor + fmt::Debug> {
+    /// A local dependency relative to this dependency.
+    Local(LocalPinnedDependency<F>),
+    /// A dependency that is pinned to a specific version.
+    Remote(PinnedDependencyInfo<F>),
+    /// Marks this package as the root of the dependency tree.
+    Root(Root),
+}
+
+/// Defines a package as the root of a dependency tree.
+#[derive(Clone, fmt::Debug, Serialize, Deserialize)]
+pub struct Root {
+    root: bool,
+}
+
+#[derive(fmt::Debug, Serialize, Deserialize)]
+#[derive_where(Clone)]
+#[serde(bound = "")]
+pub struct LocalPinnedDependency<F: MoveFlavor + fmt::Debug> {
+    /// The relative path to the local dependency
+    local: PathBuf,
+    /// This local's dependency parent information
+    parent: PinnedDependencyInfo<F>,
+}
+
+impl<F: MoveFlavor + fmt::Debug> DepInfo<F> {
+    /// The pinned information for this dependency
+    pub fn source(&self) -> &PinnedInfo<F> {
+        &self.source
+    }
+
+    /// The manifest digest for this dependency
+    pub fn manifest_digest(&self) -> &str {
+        &self.manifest_digest
+    }
+
+    /// The dependencies of this dependency as a map from package name to package identifier. A
+    /// package identifier is basically composed from the package name and suffixed with a number
+    /// during dependency graph generation.
+    pub fn dependencies(&self) -> &BTreeMap<PackageName, PackageName> {
+        &self.deps
+    }
 }
 
 impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
@@ -124,7 +170,7 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
             .partition(|(env_name, metadata)| envs.contains_key(env_name));
         output.published = pubs;
 
-        std::fs::write(path.as_ref().join("Move.lock"), output.render())?;
+        std::fs::write(path.as_ref().join("Move.lock"), output.render_as_toml())?;
 
         for (chain, metadata) in locals {
             std::fs::write(
@@ -141,23 +187,12 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
     }
 
     /// Pretty-print [self] as a TOML document
-    fn render(&self) -> String {
+    pub fn render_as_toml(&self) -> String {
         let mut toml = toml_edit::ser::to_document(self).expect("toml serialization succeeds");
 
         expand_toml(&mut toml);
-        // TODO: maybe this could be more concise and not duplicated in [PublishedMetadata.render]
-        // by making the flattener smarter (e.g. it knows to fold anything called pinned, unpinned,
-        // or dependencies, or something like that)
-        flatten_toml(&mut toml["unpublished"]["dependencies"]["pinned"]);
-        flatten_toml(&mut toml["unpublished"]["dependencies"]["unpinned"]);
-        flatten_toml(&mut toml["unpublished"]["dependencies"]["unpinned"]);
-        for (_, chain) in toml["unpublished"]["dep-replacements"]
-            .as_table_like_mut()
-            .unwrap()
-            .iter_mut()
-        {
+        for (_, chain) in toml["pinned"].as_table_like_mut().unwrap().iter_mut() {
             flatten_toml(chain.get_mut("pinned").unwrap());
-            flatten_toml(chain.get_mut("unpinned").unwrap());
         }
 
         for (_, chain) in toml["published"].as_table_like_mut().unwrap().iter_mut() {
@@ -170,84 +205,21 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
         toml.to_string()
     }
 
-    /// Return the pinned dependencies in the lockfile, including the replacements dependencies.
-    // TODO: This needs to be fixed after we finalize the new design
-    fn pinned_deps(&self) -> DependencySet<PinnedDependencyInfo<F>> {
+    /// Return the pinned dependencies in the lockfile
+    fn pinned_deps(&self) -> DependencySet<PinnedInfo<F>> {
         let mut dep_set = DependencySet::new();
 
-        for (pkg_name, dep_info) in self.unpublished.dependencies.pinned.iter() {
-            dep_set.insert(None, pkg_name.clone(), dep_info.clone());
-        }
-
-        for (env, deps) in &self.unpublished.dep_replacements {
-            for (pkg_name, dep_info) in deps.pinned.iter() {
-                dep_set.insert(Some(env.clone()), pkg_name.clone(), dep_info.clone());
-            }
+        for (env_name, dep_info) in self.pinned.iter() {
+            dep_info.data.iter().for_each(|(pkg_name, dep_info)| {
+                dep_set.insert(
+                    Some(env_name.clone()),
+                    pkg_name.clone(),
+                    dep_info.source().clone(),
+                );
+            });
         }
 
         dep_set
-    }
-
-    /// Return the unpinned dependencies in the lockfile, including the replacements dependencies.
-    // TODO: This needs to be fixed after we finalize the new design
-    fn unpinned_deps(&self) -> DependencySet<ManifestDependencyInfo<F>> {
-        let mut dep_set = DependencySet::new();
-
-        for (pkg_name, dep_info) in self.unpublished.dependencies.unpinned.iter() {
-            dep_set.insert(None, pkg_name.clone(), dep_info.clone());
-        }
-
-        for (env, deps) in &self.unpublished.dep_replacements {
-            for (pkg_name, dep_info) in deps.unpinned.iter() {
-                dep_set.insert(Some(env.clone()), pkg_name.clone(), dep_info.clone());
-            }
-        }
-
-        dep_set
-    }
-
-    /// Compares the unpinned dependencies in the lockfile to [`deps`] and re-pins if they changed.
-    // TODO: This needs to be fixed after we finalize the new design
-    pub async fn update_lockfile(
-        &mut self,
-        flavor: &F,
-        manifest: &Manifest<F>,
-    ) -> PackageResult<()> {
-        let lockfile_deps = &self.unpinned_deps();
-        let lockfile_pinned_deps = &self.pinned_deps();
-
-        let mut to_pin: DependencySet<ManifestDependencyInfo<F>> = DependencySet::new();
-        let mut pinned_dep_infos: DependencySet<PinnedDependencyInfo<F>> = DependencySet::new();
-        // find the dependencies that need to be pinned
-        for (env, pkg, manifest_dep) in manifest.dependencies() {
-            let lockfile_dep = lockfile_deps.get(&env, &pkg);
-            if let Some(lockfile_dep) = lockfile_dep {
-                if lockfile_dep != &manifest_dep {
-                    to_pin.insert(env.clone(), pkg.clone(), manifest_dep.clone());
-                } else {
-                    // TODO: handle error with proper span and file path
-                    let Some(pinned_dep_info) = lockfile_pinned_deps.get(&env, &pkg) else {
-                        return Err(PackageError::Generic(format!(
-                            "Broken lockfile. It does not contain pinned dependency for {env:?} {pkg:?}"
-                        )));
-                    };
-                    pinned_dep_infos.insert(env.clone(), pkg.clone(), pinned_dep_info.clone());
-                }
-            } else {
-                to_pin.insert(env.clone(), pkg.clone(), manifest_dep.clone());
-            }
-        }
-
-        // pin the deps that need to be pinned
-        let mut pinned_deps = pin(flavor, to_pin, manifest.environments()).await?;
-        pinned_deps.extend(pinned_dep_infos);
-
-        // convert now from `DependencySet<PinnedDependencyInfo<F>>` to unpublished pinned
-        // dependencies
-        // TODO: probably we want a DependencySet instead of UnpublishedTable in the Lockfile types.
-        self.unpublished = UnpublishedTable::from_deps(pinned_deps, manifest.dependencies());
-
-        Ok(())
     }
 
     /// Return the published metadata for all environments.
@@ -272,58 +244,6 @@ impl<F: MoveFlavor + fmt::Debug> Publication<F> {
             "# Generated by move; do not edit\n# This file should not be checked in\n\n",
         );
         toml.to_string()
-    }
-}
-
-// TODO: probably we want a DependencySet instead of UnpublishedTable in the Lockfile types.
-impl<F: MoveFlavor> UnpublishedTable<F> {
-    pub fn from_deps(
-        pinned_deps: DependencySet<PinnedDependencyInfo<F>>,
-        unpinned_deps: DependencySet<ManifestDependencyInfo<F>>,
-    ) -> Self {
-        let mut dependencies = UnpublishedDependencies::default();
-
-        let mut dep_replacements: BTreeMap<EnvironmentName, UnpublishedDependencies<F>> =
-            BTreeMap::new();
-
-        for (env, pkg, dep) in pinned_deps {
-            match env {
-                // update dep replacements if there's an env
-                Some(env) => {
-                    dep_replacements
-                        .entry(env)
-                        .or_default()
-                        .pinned
-                        .insert(pkg, dep);
-                }
-                // update default pinned deps
-                None => {
-                    dependencies.pinned.insert(pkg, dep);
-                }
-            }
-        }
-
-        for (env, pkg, dep) in unpinned_deps {
-            match env {
-                // update dep replacements if there's an env
-                Some(env) => {
-                    dep_replacements
-                        .entry(env)
-                        .or_default()
-                        .unpinned
-                        .insert(pkg, dep);
-                }
-                // update default unpinned deps
-                None => {
-                    dependencies.unpinned.insert(pkg, dep);
-                }
-            }
-        }
-
-        Self {
-            dependencies,
-            dep_replacements,
-        }
     }
 }
 
