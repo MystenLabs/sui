@@ -16,7 +16,7 @@ mod checked {
         programmable_transactions::{
             context::*,
             data_store::SuiDataStore,
-            trace_utils::{coin_obj_info, push_trace_event_with_type_tags},
+            trace_utils::{trace_ptb_summary, trace_split_coins},
         },
         type_resolver::TypeTagResolver,
     };
@@ -75,7 +75,7 @@ mod checked {
             normalize_deserialized_modules,
         },
         object::bounded_visitor::BoundedVisitor,
-        ptb_trace::{PTBCommandInfo, PTBExternalEvent, SplitCoinsEvent},
+        ptb_trace::PTBExternalEvent,
         storage::{PackageObject, get_package_objects},
         transaction::{Command, ProgrammableMoveCall, ProgrammableTransaction},
         transfer::RESOLVED_RECEIVING_STRUCT,
@@ -137,33 +137,9 @@ mod checked {
             gas_charger,
             inputs,
         )?;
-        if let Some(trace_builder) = trace_builder_opt {
-            trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
-                PTBExternalEvent::Summary(
-                    commands
-                        .iter()
-                        .map(|c| match c {
-                            Command::MoveCall(move_call) => {
-                                let pkg = move_call.package.to_string();
-                                let module = move_call.module.clone();
-                                let function = move_call.function.clone();
-                                PTBCommandInfo::MoveCall {
-                                    pkg,
-                                    module,
-                                    function,
-                                }
-                            }
-                            Command::TransferObjects(..) => PTBCommandInfo::TransferObjects,
-                            Command::SplitCoins(..) => PTBCommandInfo::SplitCoins,
-                            Command::MergeCoins(..) => PTBCommandInfo::MergeCoins,
-                            Command::Publish(..) => PTBCommandInfo::Publish,
-                            Command::MakeMoveVec(..) => PTBCommandInfo::MakeMoveVec,
-                            Command::Upgrade(..) => PTBCommandInfo::Upgrade,
-                        })
-                        .collect(),
-                )
-            ))));
-        }
+
+        trace_ptb_summary(trace_builder_opt, &commands)?;
+
         // execute commands
         let mut mode_results = Mode::empty_results();
         for (idx, command) in commands.into_iter().enumerate() {
@@ -362,44 +338,8 @@ mod checked {
                     })
                     .collect::<Result<_, ExecutionError>>()?;
 
-                let obj_type = obj.type_.clone();
-                push_trace_event_with_type_tags(
-                    context,
-                    &[obj_type],
-                    trace_builder_opt,
-                    |type_tags_with_ref| {
-                        let type_tag = type_tags_with_ref.pop().unwrap();
-                        let split_coin_infos = split_coins
-                            .iter()
-                            .map(|coin_val| {
-                                let Value::Object(ObjectValue {
-                                    contents: ObjectContents::Coin(split_coin),
-                                    ..
-                                }) = coin_val
-                                else {
-                                    invariant_violation!("Expected a coin");
-                                };
-                                coin_obj_info(
-                                    type_tag.clone(),
-                                    split_coin.id.object_id().clone(),
-                                    split_coin.balance.value(),
-                                )
-                            })
-                            .collect::<Result<Vec<_>, _>>()?;
+                trace_split_coins(context, trace_builder_opt, &obj.type_, &coin, &split_coins)?;
 
-                        let input = coin_obj_info(
-                            type_tag.clone(),
-                            coin.id.object_id().clone(),
-                            coin.value(),
-                        )?;
-                        Ok(TraceEvent::External(Box::new(serde_json::json!(
-                            PTBExternalEvent::SplitCoins(SplitCoinsEvent {
-                                input,
-                                result: split_coin_infos,
-                            })
-                        ))))
-                    },
-                )?;
                 context.restore_arg::<Mode>(&mut argument_updates, coin_arg, Value::Object(obj))?;
                 split_coins
             }

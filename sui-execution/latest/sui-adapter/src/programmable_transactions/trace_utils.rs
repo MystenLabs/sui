@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::execution_value::{ObjectContents, ObjectValue, Value};
 use crate::programmable_transactions::context::*;
 use move_core_types::language_storage::StructTag;
 use move_core_types::{identifier::Identifier, language_storage::TypeTag};
@@ -9,13 +10,95 @@ use move_trace_format::{
     value::{SerializableMoveValue, SimplifiedMoveStruct},
 };
 use move_vm_types::loaded_data::runtime_types::Type;
+use sui_types::coin::Coin;
+use sui_types::ptb_trace::{PTBCommandInfo, PTBExternalEvent, SplitCoinsEvent};
+use sui_types::transaction::Command;
 use sui_types::{
     base_types::ObjectID,
     error::{ExecutionError, ExecutionErrorKind},
     ptb_trace::ObjectInfo,
 };
 
-/// Creates `ObjectInfor` for a coin.
+/// Inserts PTB summary event into the trace.
+pub fn trace_ptb_summary(
+    trace_builder_opt: &mut Option<MoveTraceBuilder>,
+    commands: &[Command],
+) -> Result<(), ExecutionError> {
+    if let Some(trace_builder) = trace_builder_opt {
+        trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
+            PTBExternalEvent::Summary(
+                commands
+                    .iter()
+                    .map(|c| match c {
+                        Command::MoveCall(move_call) => {
+                            let pkg = move_call.package.to_string();
+                            let module = move_call.module.clone();
+                            let function = move_call.function.clone();
+                            PTBCommandInfo::MoveCall {
+                                pkg,
+                                module,
+                                function,
+                            }
+                        }
+                        Command::TransferObjects(..) => PTBCommandInfo::TransferObjects,
+                        Command::SplitCoins(..) => PTBCommandInfo::SplitCoins,
+                        Command::MergeCoins(..) => PTBCommandInfo::MergeCoins,
+                        Command::Publish(..) => PTBCommandInfo::Publish,
+                        Command::MakeMoveVec(..) => PTBCommandInfo::MakeMoveVec,
+                        Command::Upgrade(..) => PTBCommandInfo::Upgrade,
+                    })
+                    .collect(),
+            )
+        ))));
+    }
+
+    Ok(())
+}
+
+/// Inserts split coins event into the trace.
+pub fn trace_split_coins(
+    context: &mut ExecutionContext<'_, '_, '_>,
+    trace_builder_opt: &mut Option<MoveTraceBuilder>,
+    coin_type: &Type,
+    input_coin: &Coin,
+    split_coin_values: &[Value],
+) -> Result<(), ExecutionError> {
+    if let Some(trace_builder) = trace_builder_opt {
+        let type_tag_with_refs = trace_type_to_type_tag_with_refs(context, coin_type)?;
+        let split_coin_infos = split_coin_values
+            .iter()
+            .map(|coin_val| {
+                let Value::Object(ObjectValue {
+                    contents: ObjectContents::Coin(split_coin),
+                    ..
+                }) = coin_val
+                else {
+                    invariant_violation!("Expected result of split coins PTB command to be a coin");
+                };
+                coin_obj_info(
+                    type_tag_with_refs.clone(),
+                    split_coin.id.object_id().clone(),
+                    split_coin.balance.value(),
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let input = coin_obj_info(
+            type_tag_with_refs.clone(),
+            input_coin.id.object_id().clone(),
+            input_coin.value(),
+        )?;
+        trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
+            PTBExternalEvent::SplitCoins(SplitCoinsEvent {
+                input,
+                result: split_coin_infos,
+            })
+        ))));
+    }
+    Ok(())
+}
+
+/// Creates `ObjectInfo` for a coin.
 pub fn coin_obj_info(
     type_tag_with_refs: TypeTagWithRefs,
     object_id: ObjectID,
@@ -77,54 +160,12 @@ pub fn coin_obj_info(
     })
 }
 
-/// Pushes event to the trace builder if tracing is enabled.
-/// Event is created via `create_event` function taking a vector of 'TypeTagWithRef's
-/// as an argument that is created from vector of `type_`s inside this function.
-/// This somewhat complicated code structure was introduced to make sure
-/// that the invariant violation that can result from tag creation failure
-/// will only trigger when tracing is enabled.
-pub fn push_trace_event_with_type_tags(
-    context: &mut ExecutionContext<'_, '_, '_>,
-    types: &[Type],
-    trace_builder_opt: &mut Option<MoveTraceBuilder>,
-    create_event: impl FnOnce(&mut Vec<TypeTagWithRefs>) -> Result<TraceEvent, ExecutionError>,
-) -> Result<(), ExecutionError> {
-    if let Some(trace_builder) = trace_builder_opt {
-        let mut type_tags_with_ref = types
-            .iter()
-            .map(|type_| {
-                let (deref_type, ref_type) = match type_ {
-                    Type::Reference(t) => (t.as_ref(), Some(RefType::Imm)),
-                    Type::MutableReference(t) => (t.as_ref(), Some(RefType::Mut)),
-                    t => (t, None),
-                };
-                // this invariant violation will only trigger when tracing
-                context
-                    .vm
-                    .get_runtime()
-                    .get_type_tag(deref_type)
-                    .map(|type_tag_with_ref| TypeTagWithRefs {
-                        type_: type_tag_with_ref,
-                        ref_type,
-                    })
-                    .map_err(|e| {
-                        ExecutionError::new_with_source(ExecutionErrorKind::InvariantViolation, e)
-                    })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        trace_builder.push_event(create_event(&mut type_tags_with_ref)?);
-    }
-    Ok(())
-}
-
 /// Converts a type to type tag format used in tracing.
-/// SHOULD ONLY BE USED WHEN TRACING IS ENABLED as it may
-/// cause invariant violation.
 fn trace_type_to_type_tag_with_refs(
     context: &mut ExecutionContext<'_, '_, '_>,
-    t: &Type,
+    type_: &Type,
 ) -> Result<TypeTagWithRefs, ExecutionError> {
-    let (deref_type, ref_type) = match t {
+    let (deref_type, ref_type) = match type_ {
         Type::Reference(t) => (t.as_ref(), Some(RefType::Imm)),
         Type::MutableReference(t) => (t.as_ref(), Some(RefType::Mut)),
         t => (t, None),
