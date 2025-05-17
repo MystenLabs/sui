@@ -1,18 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeSet, HashMap},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use async_graphql::dataloader::{DataLoader, Loader};
-use diesel::{ExpressionMethods, QueryDsl};
+use diesel::{
+    prelude::QueryableByName,
+    sql_types::{Array, Bytea},
+};
 use move_core_types::account_address::AccountAddress;
-use sui_indexer_alt_schema::{packages::StoredPackage, schema::sum_packages};
+use sui_indexer_alt_schema::schema::kv_packages;
 use sui_package_resolver::{
     error::Error, Package, PackageStore, PackageStoreWithLruCache, Resolver, Result,
 };
+use sui_types::object::Object;
 
 use crate::pg_reader::PgReader;
 
@@ -49,8 +50,6 @@ impl Loader<PackageKey> for PgReader {
     type Error = Error;
 
     async fn load(&self, keys: &[PackageKey]) -> Result<HashMap<PackageKey, Arc<Package>>> {
-        use sum_packages::dsl as p;
-
         let mut id_to_package = HashMap::new();
         if keys.is_empty() {
             return Ok(id_to_package);
@@ -61,18 +60,48 @@ impl Loader<PackageKey> for PgReader {
             error: e.to_string(),
         })?;
 
-        let ids: BTreeSet<_> = keys.iter().map(|PackageKey(id)| id.to_vec()).collect();
-        let stored_packages: Vec<StoredPackage> = conn
-            .results(p::sum_packages.filter(p::package_id.eq_any(ids)))
-            .await
-            .map_err(|e| Error::Store {
+        #[derive(QueryableByName)]
+        #[diesel(table_name = kv_packages)]
+        struct SerializedPackage {
+            serialized_object: Vec<u8>,
+        }
+
+        let ids: Vec<_> = keys.iter().map(|PackageKey(id)| id.to_vec()).collect();
+        let query = diesel::sql_query(
+            r#"
+                SELECT
+                    v.serialized_object
+                FROM (
+                    SELECT UNNEST($1) package_id
+                ) k
+                CROSS JOIN LATERAL (
+                    SELECT
+                        serialized_object
+                    FROM
+                        kv_packages
+                    WHERE
+                        kv_packages.package_id = k.package_id
+                    ORDER BY
+                        package_version DESC
+                    LIMIT 1
+                ) v
+            "#,
+        )
+        .bind::<Array<Bytea>, _>(ids);
+
+        let stored_packages: Vec<SerializedPackage> =
+            conn.results(query).await.map_err(|e| Error::Store {
                 store: STORE,
                 error: e.to_string(),
             })?;
 
-        for stored_package in stored_packages {
-            let move_package = bcs::from_bytes(&stored_package.move_package)?;
-            let package = Package::read_from_package(&move_package)?;
+        for stored in stored_packages {
+            let object: Object = bcs::from_bytes(&stored.serialized_object)?;
+            let Some(move_package) = object.data.try_as_package() else {
+                return Err(Error::NotAPackage(object.id().into()));
+            };
+
+            let package = Package::read_from_package(move_package)?;
             id_to_package.insert(PackageKey(*move_package.id()), Arc::new(package));
         }
 
