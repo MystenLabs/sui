@@ -5,6 +5,7 @@
 use bcs;
 use fastcrypto::traits::KeyPair;
 use futures::{stream::FuturesUnordered, StreamExt};
+use insta::assert_snapshot;
 use move_binary_format::{
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
     CompiledModule,
@@ -1087,19 +1088,13 @@ async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
 
     println!("effects: {:#?}", effects);
     assert_eq!(effects.deleted().len(), 0);
-    assert_eq!(execution_error_source, Some("VMError with status ABORTED with sub status 1 at location Module ModuleId { address: 0000000000000000000000000000000000000000000000000000000000000002, name: Identifier(\"dynamic_field\") } at code offset 0 in function definition 13".to_string()));
+    assert!(execution_error_source.is_some());
+    assert_snapshot!(execution_error_source.unwrap());
 
     match effects {
         SuiTransactionBlockEffects::V1(SuiTransactionBlockEffectsV1 { abort_error, .. }) => {
-            assert_eq!(
-                abort_error,
-                Some(Abort {
-                    module_id: Some("0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field".to_string()),
-                    function: Some("remove_child_object".to_string()),
-                    line: None,
-                    error_code: Some(1),
-                })
-            )
+            assert!(abort_error.is_some());
+            assert_snapshot!(abort_error.unwrap());
         }
     }
 }
@@ -4086,23 +4081,14 @@ async fn test_clever_abort_error() {
         effects.status(),
         SuiExecutionStatus::Failure { .. }
     ));
-    assert_eq!(
-        execution_error_source,
-        Some("VMError with status ABORTED with sub status 13906834204408152063 at location Module ModuleId { address: 0000000000000000000000000000000000000000000000000000000000000000, name: Identifier(\"aborts\") } and message 0x0000000000000000000000000000000000000000000000000000000000000000::aborts::only_abort at offset 1 at code offset 1 in function definition 0".to_string()),
+    assert_snapshot!(
+        "only_abort_execution_error_source",
+        execution_error_source.unwrap()
     );
-
     match effects {
         SuiTransactionBlockEffects::V1(SuiTransactionBlockEffectsV1 { abort_error, .. }) => {
             assert!(abort_error.is_some());
-            assert_eq!(
-                abort_error,
-                Some(Abort {
-                    module_id: Some("0x0000000000000000000000000000000000000000000000000000000000000000::aborts".to_string()),
-                    function: Some("only_abort".to_string()),
-                    line: Some(6),
-                    error_code: None,
-                })
-            )
+            assert_snapshot!("only_abort_abort_error", abort_error.unwrap());
         }
     }
 
@@ -4142,23 +4128,16 @@ async fn test_clever_abort_error() {
         effects.status(),
         SuiExecutionStatus::Failure { .. }
     ));
-    assert_eq!(
-        execution_error_source,
-        Some("VMError with status ABORTED with sub status 5 at location Module ModuleId { address: 0000000000000000000000000000000000000000000000000000000000000000, name: Identifier(\"aborts\") } and message 0x0000000000000000000000000000000000000000000000000000000000000000::aborts::abort_with_code at offset 1 at code offset 1 in function definition 1".to_string()),
+    assert!(execution_error_source.is_some());
+    assert_snapshot!(
+        "abort_with_code_execution_error_source",
+        execution_error_source.unwrap(),
     );
 
     match effects {
         SuiTransactionBlockEffects::V1(SuiTransactionBlockEffectsV1 { abort_error, .. }) => {
             assert!(abort_error.is_some());
-            assert_eq!(
-                abort_error,
-                Some(Abort {
-                    module_id: Some("0x0000000000000000000000000000000000000000000000000000000000000000::aborts".to_string()),
-                    function: Some("abort_with_code".to_string()),
-                    line: None,
-                    error_code: Some(5),
-                })
-            )
+            assert_snapshot!("abort_with_code_abort_error", abort_error.unwrap())
         }
     }
 
@@ -4198,23 +4177,16 @@ async fn test_clever_abort_error() {
         effects.status(),
         SuiExecutionStatus::Failure { .. }
     ));
-    assert_eq!(
-        execution_error_source,
-        Some("VMError with status ABORTED with sub status 13836465524655128579 at location Module ModuleId { address: 0000000000000000000000000000000000000000000000000000000000000000, name: Identifier(\"aborts\") } and message 0x0000000000000000000000000000000000000000000000000000000000000000::aborts::abort_with_const_and_code at offset 1 at code offset 1 in function definition 3".to_string()),
+    assert!(execution_error_source.is_some());
+    assert_snapshot!(
+        "abort_with_const_execution_error_source",
+        execution_error_source.unwrap()
     );
 
     match effects {
         SuiTransactionBlockEffects::V1(SuiTransactionBlockEffectsV1 { abort_error, .. }) => {
             assert!(abort_error.is_some());
-            assert_eq!(
-                abort_error,
-                Some(Abort {
-                    module_id: Some("0x0000000000000000000000000000000000000000000000000000000000000000::aborts".to_string()),
-                    function: Some("abort_with_const".to_string()),
-                    line: Some(16),
-                    error_code: None,
-                })
-            );
+            assert_snapshot!("abort_with_const_abort_error", abort_error.unwrap());
         }
     }
     // abort with const and code
@@ -4249,26 +4221,22 @@ async fn test_clever_abort_error() {
         .unwrap()
         .0;
 
-    // let effects = effects.
-
     assert!(matches!(
         effects.status(),
         SuiExecutionStatus::Failure { .. }
     ));
-    assert_eq!(
-        execution_error_source,
-        Some("VMError with status ABORTED with sub status 13836465524655128579 at location Module ModuleId { address: 0000000000000000000000000000000000000000000000000000000000000000, name: Identifier(\"aborts\") } and message 0x0000000000000000000000000000000000000000000000000000000000000000::aborts::abort_with_const_and_code at offset 1 at code offset 1 in function definition 3".to_string()),
+    assert!(execution_error_source.is_some());
+    assert_snapshot!(
+        "abort_with_const_and_code_execution_error_source",
+        format!("{:?}", execution_error_source),
     );
     match effects {
         SuiTransactionBlockEffects::V1(SuiTransactionBlockEffectsV1 { abort_error, .. }) => {
-            assert_eq!(abort_error,
-                Some(Abort {
-                   module_id: Some("0x0000000000000000000000000000000000000000000000000000000000000000::aborts".to_string()),
-                   function: Some("abort_with_const_and_code".to_string()),
-                   line: Some(22),
-                   error_code: Some(5),
-               }),
-           )
+            assert!(abort_error.is_some());
+            assert_snapshot!(
+                "abort_with_const_and_code_abort_error",
+                abort_error.unwrap(),
+            )
         }
     }
 }
