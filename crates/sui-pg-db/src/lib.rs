@@ -27,6 +27,7 @@ mod model;
 pub use sui_field_count::FieldCount;
 pub use sui_sql_macro::sql;
 
+pub mod query;
 pub mod schema;
 pub mod store;
 pub mod temp;
