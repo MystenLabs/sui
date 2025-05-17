@@ -14763,6 +14763,7 @@ dependencies = [
  "signature 1.6.4",
  "sui-config",
  "sui-core",
+ "sui-display",
  "sui-json",
  "sui-json-rpc-api",
  "sui-json-rpc-types",
