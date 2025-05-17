@@ -54,13 +54,15 @@ impl Loader<PackageOriginalIdKey> for PgReader {
             r#"
                 SELECT
                     k.package_id,
-                    v.original_id
+                    v.original_id,
+                    v.cp_sequence_number
                 FROM (
                     SELECT UNNEST($1) package_id
                 ) k
                 CROSS JOIN LATERAL (
                     SELECT
-                        original_id
+                        original_id,
+                        cp_sequence_number
                     FROM
                         kv_packages
                     WHERE
