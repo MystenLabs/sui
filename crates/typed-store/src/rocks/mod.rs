@@ -257,12 +257,16 @@ impl Database {
 
     pub fn delete_file_in_range<K: AsRef<[u8]>>(
         &self,
-        cf: &impl AsColumnFamilyRef,
+        cf: &ColumnFamily,
         from: K,
         to: K,
     ) -> Result<(), rocksdb::Error> {
         match &self.storage {
-            Storage::Rocks(rocks) => rocks.underlying.delete_file_in_range_cf(cf, from, to),
+            Storage::Rocks(rocks) => {
+                rocks
+                    .underlying
+                    .delete_file_in_range_cf(&cf.rocks_cf(rocks), from, to)
+            }
             _ => unimplemented!("delete_file_in_range is only supported for rocksdb backend"),
         }
     }
@@ -487,7 +491,7 @@ const METRICS_ERROR: i64 = -1;
 pub struct DBMap<K, V> {
     pub db: Arc<Database>,
     _phantom: PhantomData<fn(K) -> V>,
-    column_family: ColumnFamily,
+    pub column_family: ColumnFamily,
     // the column family under which the map is stored
     cf: String,
     pub opts: ReadWriteOptions,
