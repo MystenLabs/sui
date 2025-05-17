@@ -47,7 +47,6 @@ enum_dispatch.workspace = true
 eyre.workspace = true
 indexmap.workspace = true
 move-binary-format.workspace = true
-move-command-line-common.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 move-vm-test-utils.workspace = true

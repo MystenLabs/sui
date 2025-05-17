@@ -4082,13 +4082,13 @@ async fn test_clever_abort_error() {
         SuiExecutionStatus::Failure { .. }
     ));
     assert_snapshot!(
-        "only_abort_execution_error_source",
+        "clever_only_abort_execution_error_source",
         execution_error_source.unwrap()
     );
     match effects {
         SuiTransactionBlockEffects::V1(SuiTransactionBlockEffectsV1 { abort_error, .. }) => {
             assert!(abort_error.is_some());
-            assert_snapshot!("only_abort_abort_error", abort_error.unwrap());
+            assert_snapshot!("clever_only_abort_abort_error", abort_error.unwrap());
         }
     }
 
@@ -4130,14 +4130,14 @@ async fn test_clever_abort_error() {
     ));
     assert!(execution_error_source.is_some());
     assert_snapshot!(
-        "abort_with_code_execution_error_source",
+        "clever_abort_with_code_execution_error_source",
         execution_error_source.unwrap(),
     );
 
     match effects {
         SuiTransactionBlockEffects::V1(SuiTransactionBlockEffectsV1 { abort_error, .. }) => {
             assert!(abort_error.is_some());
-            assert_snapshot!("abort_with_code_abort_error", abort_error.unwrap())
+            assert_snapshot!("clever_abort_with_code_abort_error", abort_error.unwrap())
         }
     }
 
@@ -4179,14 +4179,14 @@ async fn test_clever_abort_error() {
     ));
     assert!(execution_error_source.is_some());
     assert_snapshot!(
-        "abort_with_const_execution_error_source",
+        "clever_abort_with_const_execution_error_source",
         execution_error_source.unwrap()
     );
 
     match effects {
         SuiTransactionBlockEffects::V1(SuiTransactionBlockEffectsV1 { abort_error, .. }) => {
             assert!(abort_error.is_some());
-            assert_snapshot!("abort_with_const_abort_error", abort_error.unwrap());
+            assert_snapshot!("clever_abort_with_const_abort_error", abort_error.unwrap());
         }
     }
     // abort with const and code
@@ -4227,14 +4227,14 @@ async fn test_clever_abort_error() {
     ));
     assert!(execution_error_source.is_some());
     assert_snapshot!(
-        "abort_with_const_and_code_execution_error_source",
-        format!("{:?}", execution_error_source),
+        "clever_abort_with_const_and_code_execution_error_source",
+        execution_error_source.unwrap(),
     );
     match effects {
         SuiTransactionBlockEffects::V1(SuiTransactionBlockEffectsV1 { abort_error, .. }) => {
             assert!(abort_error.is_some());
             assert_snapshot!(
-                "abort_with_const_and_code_abort_error",
+                "clever_abort_with_const_and_code_abort_error",
                 abort_error.unwrap(),
             )
         }

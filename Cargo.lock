@@ -16278,7 +16278,6 @@ dependencies = [
  "lru 0.10.0",
  "move-binary-format",
  "move-bytecode-utils",
- "move-command-line-common",
  "move-core-types",
  "move-vm-profiler",
  "move-vm-test-utils",

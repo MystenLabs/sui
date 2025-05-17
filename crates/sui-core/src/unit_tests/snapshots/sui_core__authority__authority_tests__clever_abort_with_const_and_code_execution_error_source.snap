@@ -1,0 +1,5 @@
+---
+source: crates/sui-core/src/unit_tests/authority_tests.rs
+expression: execution_error_source.unwrap()
+---
+VMError with status ABORTED with sub status 13836465524655128579 at location Module ModuleId { address: 0000000000000000000000000000000000000000000000000000000000000000, name: Identifier("aborts") } and message 0x0000000000000000000000000000000000000000000000000000000000000000::aborts::abort_with_const_and_code at offset 1 at code offset 1 in function definition 3
