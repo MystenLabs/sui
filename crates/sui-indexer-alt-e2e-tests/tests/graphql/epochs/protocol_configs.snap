@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 5 tasks
+processed 6 tasks
 
 init:
 A: object(0,0)
@@ -42,7 +42,17 @@ Response: {
   }
 }
 
-task 4, lines 30-36:
+task 4, lines 30-33:
+//# run-graphql
+Response: {
+  "data": {
+    "protocolConfigs": {
+      "protocolVersion": 70
+    }
+  }
+}
+
+task 5, lines 35-41:
 //# run-graphql
 Response: {
   "data": {
