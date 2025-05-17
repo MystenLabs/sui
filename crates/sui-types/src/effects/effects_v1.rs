@@ -1,19 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{IDOperation, ObjectChange};
 use crate::base_types::{
     random_object_ref, EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
 use crate::digests::{ObjectDigest, TransactionEventsDigest};
 use crate::effects::{InputSharedObject, TransactionEffectsAPI, UnchangedSharedKind};
-use crate::execution_status::ExecutionStatus;
+use crate::execution_status::{ExecutionFailureStatus, ExecutionStatus, MoveLocation};
 use crate::gas::GasCostSummary;
 use crate::object::Owner;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Display, Formatter, Write};
-
-use super::{IDOperation, ObjectChange};
 
 /// The response from processing a transaction or a certified transaction
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -146,6 +145,17 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
             })
             .cloned()
             .collect()
+    }
+
+    fn move_abort(&self) -> Option<(MoveLocation, u64)> {
+        let ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::MoveAbort(move_location, code),
+            ..
+        } = self.status()
+        else {
+            return None;
+        };
+        Some((move_location.clone(), *code))
     }
 
     fn lamport_version(&self) -> SequenceNumber {

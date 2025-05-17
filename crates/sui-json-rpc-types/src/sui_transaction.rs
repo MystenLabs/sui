@@ -56,7 +56,7 @@ use sui_types::SUI_FRAMEWORK_ADDRESS;
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
 use crate::sui_transaction::GenericSignature::Signature;
-use crate::{Filter, Page, SuiEvent, SuiObjectRef};
+use crate::{Filter, Page, SuiEvent, SuiMoveAbort, SuiObjectRef};
 
 // similar to EpochId of sui-types but BigInt
 pub type SuiEpochId = BigInt<u64>;
@@ -782,7 +782,12 @@ pub struct SuiTransactionBlockEffectsV1 {
     /// The set of transaction digests this transaction depends on.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dependencies: Vec<TransactionDigest>,
+    /// The abort error populated if the transaction failed with an abort code.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub abort_error: Option<SuiMoveAbort>,
 }
+
+// TODO move additional error info here
 
 impl SuiTransactionBlockEffectsAPI for SuiTransactionBlockEffectsV1 {
     fn status(&self) -> &SuiExecutionStatus {
@@ -904,6 +909,7 @@ impl SuiTransactionBlockEffects {
             wrapped: vec![],
             events_digest: None,
             dependencies: vec![],
+            abort_error: None,
         })
     }
 }
@@ -950,6 +956,9 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
                 },
                 events_digest: effect.events_digest().copied(),
                 dependencies: effect.dependencies().to_vec(),
+                abort_error: effect
+                    .move_abort()
+                    .map(|(abort, code)| SuiMoveAbort::new(abort, code)),
             },
         ))
     }
