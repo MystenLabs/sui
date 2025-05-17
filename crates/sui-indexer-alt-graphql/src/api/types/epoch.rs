@@ -17,6 +17,8 @@ use crate::{
     scope::Scope,
 };
 
+use super::protocol_configs::ProtocolConfigs;
+
 pub(crate) struct Epoch {
     pub(crate) epoch_id: u64,
     pub(crate) scope: Scope,
@@ -63,6 +65,17 @@ impl Epoch {
 
 #[Object]
 impl EpochStart {
+    /// The epoch's corresponding protocol configuration, including the feature flags and the configuration options.
+    async fn protocol_configs(&self) -> Option<ProtocolConfigs> {
+        let Some(contents) = &self.contents else {
+            return None;
+        };
+
+        Some(ProtocolConfigs::with_protocol_version(
+            contents.protocol_version as u64,
+        ))
+    }
+
     /// The minimum gas price that a quorum of validators are guaranteed to sign a transaction for in this epoch.
     async fn reference_gas_price(&self) -> Option<BigInt> {
         let Some(contents) = &self.contents else {
