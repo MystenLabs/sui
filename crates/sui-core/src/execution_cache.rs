@@ -14,7 +14,7 @@ use sui_types::bridge::Bridge;
 
 use futures::{future::BoxFuture, FutureExt};
 use prometheus::Registry;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 use sui_config::ExecutionCacheConfig;
@@ -419,7 +419,7 @@ pub trait ObjectCacheRead: Send + Sync {
         input_and_receiving_keys: &'a [InputKey],
         receiving_keys: &'a HashSet<InputKey>,
         epoch: &'a EpochId,
-    ) -> BoxFuture<'a, Vec<()>>;
+    ) -> BoxFuture<'a, HashMap<InputKey, ()>>;
 }
 
 pub trait TransactionCacheRead: Send + Sync {

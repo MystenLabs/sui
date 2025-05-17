@@ -55,8 +55,9 @@ use futures::{future::BoxFuture, FutureExt};
 use moka::sync::SegmentedCache as MokaCache;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_read::NotifyRead;
+use mysten_common::sync::notify_read_multi::NotifyReadMulti;
 use parking_lot::Mutex;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::Hash;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
@@ -429,7 +430,7 @@ pub struct WritebackCache {
     object_locks: ObjectLocks,
 
     executed_effects_digests_notify_read: NotifyRead<TransactionDigest, TransactionEffectsDigest>,
-    object_notify_read: NotifyRead<InputKey, ()>,
+    object_notify_read: NotifyReadMulti<InputKey, ()>,
     store: Arc<AuthorityStore>,
     backpressure_threshold: u64,
     backpressure_manager: Arc<BackpressureManager>,
@@ -491,7 +492,7 @@ impl WritebackCache {
             packages,
             object_locks: ObjectLocks::new(),
             executed_effects_digests_notify_read: NotifyRead::new(),
-            object_notify_read: NotifyRead::new(),
+            object_notify_read: NotifyReadMulti::new(),
             store,
             backpressure_manager,
             backpressure_threshold: config.backpressure_threshold(),
@@ -1804,7 +1805,7 @@ impl ObjectCacheRead for WritebackCache {
         input_and_receiving_keys: &'a [InputKey],
         receiving_keys: &'a HashSet<InputKey>,
         epoch: &'a EpochId,
-    ) -> BoxFuture<'a, Vec<()>> {
+    ) -> BoxFuture<'a, HashMap<InputKey, ()>> {
         self.object_notify_read
             .read(input_and_receiving_keys, |keys| {
                 let mut results = vec![None; keys.len()];
