@@ -8,6 +8,7 @@ use move_binary_format::normalized::{
     self, Enum as NormalizedEnum, Field as NormalizedField, Function as NormalizedFunction,
     Module as NormalizedModule, Struct as NormalizedStruct, Type as NormalizedType,
 };
+use move_command_line_common::error_bitset::ErrorBitset;
 use move_core_types::annotated_value::{MoveStruct, MoveValue, MoveVariant};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
@@ -23,6 +24,7 @@ use sui_macros::EnumVariantOrder;
 use tracing::warn;
 
 use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::execution_status::MoveLocation;
 use sui_types::sui_serde::SuiStructTag;
 
 pub type SuiMoveTypeParameterIndex = u16;
@@ -625,6 +627,53 @@ impl Display for SuiMoveStruct {
                     writeln!(writer, "  {}: {value}", name.bold().bright_black())?;
                 }
             }
+        }
+        write!(f, "{}", writer.trim_end_matches('\n'))
+    }
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct SuiMoveAbort {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub module_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub function: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_code: Option<u64>,
+}
+
+impl SuiMoveAbort {
+    pub fn new(move_location: MoveLocation, code: u64) -> Self {
+        let module = move_location.module.to_canonical_string(true);
+        let (error_code, line) = match ErrorBitset::from_u64(code) {
+            Some(c) => (c.error_code().map(|c| c as u64), c.line_number()),
+            None => (Some(code), None),
+        };
+        Self {
+            module_id: Some(module),
+            function: move_location.function_name.clone(),
+            line,
+            error_code,
+        }
+    }
+}
+
+impl Display for SuiMoveAbort {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut writer = String::new();
+        if let Some(module_id) = &self.module_id {
+            writeln!(writer, "Module ID: {module_id}")?;
+        }
+        if let Some(function) = &self.function {
+            writeln!(writer, "Function: {function}")?;
+        }
+        if let Some(line) = &self.line {
+            writeln!(writer, "Line: {line}")?;
+        }
+        if let Some(error_code) = &self.error_code {
+            writeln!(writer, "Error code: {error_code}")?;
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
     }

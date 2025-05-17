@@ -14,10 +14,9 @@ use crate::digests::{
 use crate::error::SuiResult;
 use crate::event::Event;
 use crate::execution::SharedInput;
-use crate::execution_status::ExecutionStatus;
+use crate::execution_status::{ExecutionStatus, MoveLocation};
 use crate::gas::GasCostSummary;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
-use crate::move_package::Abort;
 use crate::object::Owner;
 use crate::storage::WriteKind;
 use effects_v1::TransactionEffectsV1;
@@ -352,7 +351,7 @@ pub trait TransactionEffectsAPI {
     fn events_digest(&self) -> Option<&TransactionEventsDigest>;
     fn dependencies(&self) -> &[TransactionDigest];
 
-    fn move_abort(&self) -> Option<Abort>;
+    fn move_abort(&self) -> Option<(MoveLocation, u64)>;
 
     fn transaction_digest(&self) -> &TransactionDigest;
 

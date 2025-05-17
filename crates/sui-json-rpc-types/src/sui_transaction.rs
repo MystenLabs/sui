@@ -37,7 +37,6 @@ use sui_types::gas::GasCostSummary;
 use sui_types::layout_resolver::{get_layout_from_struct_tag, LayoutResolver};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
-use sui_types::move_package::Abort;
 use sui_types::object::Owner;
 use sui_types::parse_sui_type_tag;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
@@ -57,7 +56,7 @@ use sui_types::SUI_FRAMEWORK_ADDRESS;
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
 use crate::sui_transaction::GenericSignature::Signature;
-use crate::{Filter, Page, SuiEvent, SuiObjectRef};
+use crate::{Filter, Page, SuiEvent, SuiMoveAbort, SuiObjectRef};
 
 // similar to EpochId of sui-types but BigInt
 pub type SuiEpochId = BigInt<u64>;
@@ -783,8 +782,8 @@ pub struct SuiTransactionBlockEffectsV1 {
     /// The set of transaction digests this transaction depends on.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dependencies: Vec<TransactionDigest>,
-    /// th
-    pub abort_error: Option<Abort>,
+    /// The abort error populated if the transaction failed with an abort code.
+    pub abort_error: Option<SuiMoveAbort>,
 }
 
 // TODO move additional error info here
@@ -956,7 +955,9 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
                 },
                 events_digest: effect.events_digest().copied(),
                 dependencies: effect.dependencies().to_vec(),
-                abort_error: effect.move_abort(),
+                abort_error: effect
+                    .move_abort()
+                    .map(|(abort, code)| SuiMoveAbort::new(abort, code)),
             },
         ))
     }
