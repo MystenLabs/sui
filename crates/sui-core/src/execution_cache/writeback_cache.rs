@@ -1804,7 +1804,7 @@ impl ObjectCacheRead for WritebackCache {
         input_and_receiving_keys: &'a [InputKey],
         receiving_keys: &'a HashSet<InputKey>,
         epoch: &'a EpochId,
-    ) -> BoxFuture<'a, Vec<()>> {
+    ) -> BoxFuture<'a, ()> {
         self.object_notify_read
             .read(input_and_receiving_keys, |keys| {
                 let mut results = vec![None; keys.len()];
@@ -1826,45 +1826,41 @@ impl ObjectCacheRead for WritebackCache {
                     .iter()
                     .map(|(_, key)| ObjectKey(key.id().id(), key.version().unwrap()))
                     .collect();
-                ObjectCacheRead::multi_get_objects_by_key(self, &versioned_object_keys)
+                ObjectCacheRead::multi_object_exists_by_key(self, &versioned_object_keys)
                     .into_iter()
                     .zip(keys_with_version.iter())
-                    .for_each(|(o, (idx, input_key))| match o {
-                        Some(_) => results[*idx] = Some(()),
-                        None => {
-                            if receiving_keys.contains(input_key) {
-                                // There could be a more recent version of this object, and the object at the
-                                // specified version could have already been pruned. In such a case `has_key` will
-                                // be false, but since this is a receiving object we should mark it as available if
-                                // we can determine that an object with a version greater than or equal to the
-                                // specified version exists or was deleted. We will then let mark it as available
-                                // to let the transaction through so it can fail at execution.
-                                let is_available =
-                                    ObjectCacheRead::get_object(self, &input_key.id().id())
-                                        .map(|obj| obj.version() >= input_key.version().unwrap())
-                                        .unwrap_or(false)
-                                        || self.fastpath_stream_ended_at_version_or_after(
-                                            input_key.id().id(),
-                                            input_key.version().unwrap(),
-                                            *epoch,
-                                        );
-                                if is_available {
-                                    results[*idx] = Some(());
-                                }
-                            } else if self
-                                .get_consensus_stream_end_tx_digest(
-                                    FullObjectKey::new(
-                                        input_key.id(),
+                    .for_each(|(exists, (idx, input_key))| {
+                        if exists {
+                            results[*idx] = Some(());
+                        } else if receiving_keys.contains(input_key) {
+                            // There could be a more recent version of this object, and the object at the
+                            // specified version could have already been pruned. In such a case `has_key` will
+                            // be false, but since this is a receiving object we should mark it as available if
+                            // we can determine that an object with a version greater than or equal to the
+                            // specified version exists or was deleted. We will then let mark it as available
+                            // to let the transaction through so it can fail at execution.
+                            let is_available =
+                                ObjectCacheRead::get_object(self, &input_key.id().id())
+                                    .map(|obj| obj.version() >= input_key.version().unwrap())
+                                    .unwrap_or(false)
+                                    || self.fastpath_stream_ended_at_version_or_after(
+                                        input_key.id().id(),
                                         input_key.version().unwrap(),
-                                    ),
-                                    *epoch,
-                                )
-                                .is_some()
-                            {
-                                // If the object is an already-removed consensus object, mark it as available if the
-                                // version for that object is in the marker table.
+                                        *epoch,
+                                    );
+                            if is_available {
                                 results[*idx] = Some(());
                             }
+                        } else if self
+                            .get_consensus_stream_end_tx_digest(
+                                FullObjectKey::new(input_key.id(), input_key.version().unwrap()),
+                                *epoch,
+                            )
+                            .is_some()
+                        {
+                            // If the object is an already-removed consensus object, mark it as available if the
+                            // version for that object is in the marker table.
+                            results[*idx] = Some(());
                         }
                     });
                 keys_without_version.iter().for_each(|(idx, key)| {
@@ -1876,6 +1872,7 @@ impl ObjectCacheRead for WritebackCache {
                 });
                 results
             })
+            .map(|_| ())
             .boxed()
     }
 }
