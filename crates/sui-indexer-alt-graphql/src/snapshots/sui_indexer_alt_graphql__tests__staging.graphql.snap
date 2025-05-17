@@ -393,7 +393,7 @@ input ObjectKey {
 	"""
 	rootVersion: UInt53
 	"""
-	If specified, tries to fetch the latest version as of this checkpoint.
+	If specified, tries to fetch the latest version as of this checkpoint. Fails if the checkpoint is later than the RPC's latest checkpoint.
 	"""
 	atCheckpoint: UInt53
 }
@@ -545,7 +545,7 @@ type Query {
 	- The root object of its owner, if it is owned by another object.
 	- The object itself, if it is not object-owned or wrapped.
 	
-	If `atCheckpoint` is specified, the object will be fetched at the latest version as of this checkpoint.
+	If `atCheckpoint` is specified, the object will be fetched at the latest version as of this checkpoint. This will fail if the provided checkpoint is after the RPC's latest checkpoint.
 	
 	If none of the above are specified, the object is fetched at the latest checkpoint.
 	

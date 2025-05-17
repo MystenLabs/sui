@@ -132,7 +132,7 @@ pub(crate) struct ObjectKey {
     /// - The object itself, if it is not object-owned or wrapped.
     pub(crate) root_version: Option<UInt53>,
 
-    /// If specified, tries to fetch the latest version as of this checkpoint.
+    /// If specified, tries to fetch the latest version as of this checkpoint. Fails if the checkpoint is later than the RPC's latest checkpoint.
     pub(crate) at_checkpoint: Option<UInt53>,
 }
 
@@ -150,6 +150,9 @@ pub(crate) struct VersionFilter {
 pub(crate) enum Error {
     #[error("At most one of a version, a root version, or a checkpoint bound can be specified when fetching an object")]
     OneBound,
+
+    #[error("Checkpoint {0} in the future")]
+    Future(u64),
 }
 
 pub(crate) type CVersion = JsonCursor<u64>;
@@ -277,7 +280,10 @@ impl Object {
         } else if let Some(v) = key.root_version {
             Ok(Self::version_bounded(ctx, scope, key.address, v).await?)
         } else if let Some(cp) = key.at_checkpoint {
-            let scope = scope.with_checkpoint_viewed_at(cp.into());
+            let scope = scope
+                .with_checkpoint_viewed_at(cp.into())
+                .ok_or_else(|| bad_user_input(Error::Future(cp.into())))?;
+
             Ok(Self::checkpoint_bounded(ctx, scope, key.address, cp).await?)
         } else {
             let cp: UInt53 = scope.checkpoint_viewed_at().into();

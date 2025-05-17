@@ -46,9 +46,14 @@ impl Checkpoint {
     }
 
     /// Query the RPC as if this checkpoint were the latest checkpoint.
-    async fn query(&self) -> Option<Query> {
-        let scope = Some(self.scope.with_checkpoint_viewed_at(self.sequence_number));
-        Some(Query { scope })
+    async fn query(&self) -> Result<Option<Query>, RpcError> {
+        let scope = Some(
+            self.scope
+                .with_checkpoint_viewed_at(self.sequence_number)
+                .context("Checkpoint in the future")?,
+        );
+
+        Ok(Some(Query { scope }))
     }
 
     #[graphql(flatten)]
