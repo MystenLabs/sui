@@ -55,6 +55,7 @@ use sui_types::messages_consensus::ConsensusTransactionKind;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::VerifiedCertificate;
 use tap::tap::TapFallible;
+use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
 use tokio::sync::{broadcast, mpsc, watch, Mutex};
 use tokio::task::{JoinHandle, JoinSet};
@@ -523,11 +524,13 @@ impl SuiNode {
         let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
         let signature_verifier_metrics = SignatureVerifierMetrics::new(&prometheus_registry);
 
+        let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let cache_traits = build_execution_cache(
             &config.execution_cache,
             &prometheus_registry,
             &store,
             backpressure_manager.clone(),
+            tx_ready_certificates,
         );
 
         let auth_agg = {
@@ -739,6 +742,8 @@ impl SuiNode {
             validator_tx_finalizer,
             chain_identifier,
             pruner_db,
+            tx_ready_certificates,
+            rx_ready_certificates,
         )
         .await;
         // ensure genesis txn was executed

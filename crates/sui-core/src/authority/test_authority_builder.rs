@@ -45,6 +45,7 @@ use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::transaction::VerifiedTransaction;
+use tokio::sync::mpsc::unbounded_channel;
 
 #[derive(Default, Clone)]
 pub struct TestAuthorityBuilder<'a> {
@@ -257,11 +258,13 @@ impl<'a> TestAuthorityBuilder<'a> {
         let backpressure_manager =
             BackpressureManager::new_from_checkpoint_store(&checkpoint_store);
 
+        let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let cache_traits = build_execution_cache(
             &Default::default(),
             &registry,
             &authority_store,
             backpressure_manager.clone(),
+            tx_ready_certificates.clone(),
         );
 
         let chain_id = ChainIdentifier::from(*genesis.checkpoint().digest());
@@ -366,6 +369,8 @@ impl<'a> TestAuthorityBuilder<'a> {
             None,
             chain_identifier,
             pruner_db,
+            tx_ready_certificates,
+            rx_ready_certificates,
         )
         .await;
 

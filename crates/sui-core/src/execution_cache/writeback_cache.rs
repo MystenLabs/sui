@@ -45,6 +45,8 @@ use crate::authority::authority_store_tables::LiveObject;
 use crate::authority::backpressure::BackpressureManager;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::authority::AuthorityStore;
+use crate::execution_scheduler::input_object_notify_read::InputObjectNotifyRead;
+use crate::execution_scheduler::PendingCertificate;
 use crate::fallback_fetch::{do_fallback_lookup, do_fallback_lookup_fallible};
 use crate::global_state_hasher::GlobalStateHashStore;
 use crate::transaction_outputs::TransactionOutputs;
@@ -81,6 +83,7 @@ use sui_types::storage::{
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
 use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
 use tap::TapOptional;
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, info, instrument, trace, warn};
 
 use super::cache_types::Ticket;
@@ -429,7 +432,7 @@ pub struct WritebackCache {
     object_locks: ObjectLocks,
 
     executed_effects_digests_notify_read: NotifyRead<TransactionDigest, TransactionEffectsDigest>,
-    object_notify_read: NotifyRead<InputKey, ()>,
+    object_notify_read: InputObjectNotifyRead,
     store: Arc<AuthorityStore>,
     backpressure_threshold: u64,
     backpressure_manager: Arc<BackpressureManager>,
@@ -479,6 +482,7 @@ impl WritebackCache {
         store: Arc<AuthorityStore>,
         metrics: Arc<ExecutionCacheMetrics>,
         backpressure_manager: Arc<BackpressureManager>,
+        tx_ready_certificates: UnboundedSender<PendingCertificate>,
     ) -> Self {
         let packages = MokaCache::builder(8)
             .max_capacity(randomize_cache_capacity_in_tests(
@@ -491,21 +495,12 @@ impl WritebackCache {
             packages,
             object_locks: ObjectLocks::new(),
             executed_effects_digests_notify_read: NotifyRead::new(),
-            object_notify_read: NotifyRead::new(),
+            object_notify_read: InputObjectNotifyRead::new(tx_ready_certificates),
             store,
             backpressure_manager,
             backpressure_threshold: config.backpressure_threshold(),
             metrics,
         }
-    }
-
-    pub fn new_for_tests(store: Arc<AuthorityStore>) -> Self {
-        Self::new(
-            &Default::default(),
-            store,
-            ExecutionCacheMetrics::new(&prometheus::Registry::new()).into(),
-            BackpressureManager::new_for_tests(),
-        )
     }
 
     #[cfg(test)]
@@ -565,15 +560,12 @@ impl WritebackCache {
         if let ObjectEntry::Object(object) = &object {
             if object.is_package() {
                 self.object_notify_read
-                    .notify(&InputKey::Package { id: *object_id }, &());
+                    .notify(&InputKey::Package { id: *object_id });
             } else if !object.is_child_object() {
-                self.object_notify_read.notify(
-                    &InputKey::VersionedObject {
-                        id: object.full_id(),
-                        version: object.version(),
-                    },
-                    &(),
-                );
+                self.object_notify_read.notify(&InputKey::VersionedObject {
+                    id: object.full_id(),
+                    version: object.version(),
+                });
             }
         }
     }
@@ -597,13 +589,10 @@ impl WritebackCache {
         // at the assigned version, so that any transaction waiting for this
         // object version can start execution.
         if matches!(marker_value, MarkerValue::ConsensusStreamEnded(_)) {
-            self.object_notify_read.notify(
-                &InputKey::VersionedObject {
-                    id: object_key.id(),
-                    version: object_key.version(),
-                },
-                &(),
-            );
+            self.object_notify_read.notify(&InputKey::VersionedObject {
+                id: object_key.id(),
+                version: object_key.version(),
+            });
         }
     }
 
@@ -1804,75 +1793,82 @@ impl ObjectCacheRead for WritebackCache {
         input_and_receiving_keys: &'a [InputKey],
         receiving_keys: &'a HashSet<InputKey>,
         epoch: &'a EpochId,
+        certificate: PendingCertificate,
     ) -> BoxFuture<'a, ()> {
         self.object_notify_read
-            .read(input_and_receiving_keys, |keys| {
-                let mut results = vec![None; keys.len()];
+            .schedule(
+                input_and_receiving_keys,
+                |keys| {
+                    let mut results = vec![false; keys.len()];
 
-                let (keys_with_version, keys_without_version): (Vec<_>, Vec<_>) = keys
-                    .iter()
-                    .enumerate()
-                    .filter(|(idx, key)| {
-                        if key.is_cancelled() {
-                            // Shared objects in canceled transactions are always available.
-                            results[*idx] = Some(());
-                            false
-                        } else {
-                            true
-                        }
-                    })
-                    .partition(|(_, key)| key.version().is_some());
-                let versioned_object_keys: Vec<_> = keys_with_version
-                    .iter()
-                    .map(|(_, key)| ObjectKey(key.id().id(), key.version().unwrap()))
-                    .collect();
-                ObjectCacheRead::multi_object_exists_by_key(self, &versioned_object_keys)
-                    .into_iter()
-                    .zip(keys_with_version.iter())
-                    .for_each(|(exists, (idx, input_key))| {
-                        if exists {
-                            results[*idx] = Some(());
-                        } else if receiving_keys.contains(input_key) {
-                            // There could be a more recent version of this object, and the object at the
-                            // specified version could have already been pruned. In such a case `has_key` will
-                            // be false, but since this is a receiving object we should mark it as available if
-                            // we can determine that an object with a version greater than or equal to the
-                            // specified version exists or was deleted. We will then let mark it as available
-                            // to let the transaction through so it can fail at execution.
-                            let is_available =
-                                ObjectCacheRead::get_object(self, &input_key.id().id())
-                                    .map(|obj| obj.version() >= input_key.version().unwrap())
-                                    .unwrap_or(false)
-                                    || self.fastpath_stream_ended_at_version_or_after(
-                                        input_key.id().id(),
-                                        input_key.version().unwrap(),
-                                        *epoch,
-                                    );
-                            if is_available {
-                                results[*idx] = Some(());
+                    let (keys_with_version, keys_without_version): (Vec<_>, Vec<_>) = keys
+                        .iter()
+                        .enumerate()
+                        .filter(|(idx, key)| {
+                            if key.is_cancelled() {
+                                // Shared objects in canceled transactions are always available.
+                                results[*idx] = true;
+                                false
+                            } else {
+                                true
                             }
-                        } else if self
-                            .get_consensus_stream_end_tx_digest(
-                                FullObjectKey::new(input_key.id(), input_key.version().unwrap()),
-                                *epoch,
-                            )
-                            .is_some()
-                        {
-                            // If the object is an already-removed consensus object, mark it as available if the
-                            // version for that object is in the marker table.
-                            results[*idx] = Some(());
+                        })
+                        .partition(|(_, key)| key.version().is_some());
+                    let versioned_object_keys: Vec<_> = keys_with_version
+                        .iter()
+                        .map(|(_, key)| ObjectKey(key.id().id(), key.version().unwrap()))
+                        .collect();
+                    ObjectCacheRead::multi_object_exists_by_key(self, &versioned_object_keys)
+                        .into_iter()
+                        .zip(keys_with_version.iter())
+                        .for_each(|(exists, (idx, input_key))| {
+                            if exists {
+                                results[*idx] = true;
+                            } else if receiving_keys.contains(input_key) {
+                                // There could be a more recent version of this object, and the object at the
+                                // specified version could have already been pruned. In such a case `has_key` will
+                                // be false, but since this is a receiving object we should mark it as available if
+                                // we can determine that an object with a version greater than or equal to the
+                                // specified version exists or was deleted. We will then let mark it as available
+                                // to let the transaction through so it can fail at execution.
+                                let is_available =
+                                    ObjectCacheRead::get_object(self, &input_key.id().id())
+                                        .map(|obj| obj.version() >= input_key.version().unwrap())
+                                        .unwrap_or(false)
+                                        || self.fastpath_stream_ended_at_version_or_after(
+                                            input_key.id().id(),
+                                            input_key.version().unwrap(),
+                                            *epoch,
+                                        );
+                                if is_available {
+                                    results[*idx] = true;
+                                }
+                            } else if self
+                                .get_consensus_stream_end_tx_digest(
+                                    FullObjectKey::new(
+                                        input_key.id(),
+                                        input_key.version().unwrap(),
+                                    ),
+                                    *epoch,
+                                )
+                                .is_some()
+                            {
+                                // If the object is an already-removed consensus object, mark it as available if the
+                                // version for that object is in the marker table.
+                                results[*idx] = true;
+                            }
+                        });
+                    keys_without_version.iter().for_each(|(idx, key)| {
+                        // unwrap is safe since this only errors when the object is not a package,
+                        // which is impossible if we have a certificate for execution.
+                        if self.get_package_object(&key.id().id()).unwrap().is_some() {
+                            results[*idx] = true;
                         }
                     });
-                keys_without_version.iter().for_each(|(idx, key)| {
-                    // unwrap is safe since this only errors when the object is not a package,
-                    // which is impossible if we have a certificate for execution.
-                    if self.get_package_object(&key.id().id()).unwrap().is_some() {
-                        results[*idx] = Some(());
-                    }
-                });
-                results
-            })
-            .map(|_| ())
+                    results
+                },
+                certificate,
+            )
             .boxed()
     }
 }

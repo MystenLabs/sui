@@ -7,6 +7,7 @@ use crate::authority::backpressure::BackpressureManager;
 use crate::authority::epoch_start_configuration::EpochFlag;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::AuthorityStore;
+use crate::execution_scheduler::PendingCertificate;
 use crate::global_state_hasher::GlobalStateHashStore;
 use crate::transaction_outputs::TransactionOutputs;
 use mysten_common::fatal;
@@ -37,6 +38,7 @@ use sui_types::{
     object::Owner,
     storage::InputKey,
 };
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::instrument;
 use typed_store::rocks::DBBatch;
 
@@ -108,6 +110,7 @@ pub fn build_execution_cache(
     prometheus_registry: &Registry,
     store: &Arc<AuthorityStore>,
     backpressure_manager: Arc<BackpressureManager>,
+    tx_ready_certificates: UnboundedSender<PendingCertificate>,
 ) -> ExecutionCacheTraitPointers {
     let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(prometheus_registry));
 
@@ -117,6 +120,7 @@ pub fn build_execution_cache(
             store.clone(),
             execution_cache_metrics,
             backpressure_manager,
+            tx_ready_certificates,
         )
         .into(),
     )
@@ -127,6 +131,7 @@ pub fn build_execution_cache(
 pub fn build_execution_cache_from_env(
     prometheus_registry: &Registry,
     store: &Arc<AuthorityStore>,
+    tx_ready_certificates: UnboundedSender<PendingCertificate>,
 ) -> ExecutionCacheTraitPointers {
     let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(prometheus_registry));
 
@@ -136,6 +141,7 @@ pub fn build_execution_cache_from_env(
             store.clone(),
             execution_cache_metrics,
             BackpressureManager::new_for_tests(),
+            tx_ready_certificates,
         )
         .into(),
     )
@@ -419,6 +425,7 @@ pub trait ObjectCacheRead: Send + Sync {
         input_and_receiving_keys: &'a [InputKey],
         receiving_keys: &'a HashSet<InputKey>,
         epoch: &'a EpochId,
+        certificate: PendingCertificate,
     ) -> BoxFuture<'a, ()>;
 }
 

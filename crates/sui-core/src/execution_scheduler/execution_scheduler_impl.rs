@@ -4,7 +4,7 @@
 use crate::{
     authority::{authority_per_epoch_store::AuthorityPerEpochStore, AuthorityMetrics},
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
-    execution_scheduler::{ExecutingGuard, PendingCertificateStats},
+    execution_scheduler::PendingCertificateStats,
 };
 use mysten_metrics::spawn_monitored_task;
 use std::{
@@ -170,30 +170,21 @@ impl ExecutionScheduler {
             "Waiting for input objects: {:?}",
             input_and_receiving_keys
         );
+        let pending_certificate = PendingCertificate {
+            certificate: cert.clone(),
+            expected_effects_digest,
+            waiting_input_objects: BTreeSet::new(),
+            stats: PendingCertificateStats {
+                enqueue_time,
+                ready_time: Some(Instant::now()),
+            },
+            executing_guard: None,
+        };
 
         tokio::select! {
             _ = self.object_cache_read
-                .notify_read_input_objects(&input_and_receiving_keys, &receiving_object_keys, &epoch)
+                .notify_read_input_objects(&input_and_receiving_keys, &receiving_object_keys, &epoch, pending_certificate)
                 => {
-                    self.metrics
-                        .transaction_manager_transaction_queue_age_s
-                        .observe(enqueue_time.elapsed().as_secs_f64());
-                    tracing::debug!(?digests, "Input objects available");
-                    // TODO: Eventually we could fold execution_driver into the scheduler.
-                    let _ = self.tx_ready_certificates.send(PendingCertificate {
-                        certificate: cert.clone(),
-                        expected_effects_digest,
-                        waiting_input_objects: BTreeSet::new(),
-                        stats: PendingCertificateStats {
-                            enqueue_time,
-                            ready_time: Some(Instant::now()),
-                        },
-                        executing_guard: Some(ExecutingGuard::new(
-                            self.metrics
-                                .transaction_manager_num_executing_certificates
-                                .clone(),
-                        )),
-                    });
                 }
             _ = self.transaction_cache_read.notify_read_executed_effects_digests(&digests) => {
                 tracing::debug!(?digests, "Transaction already executed");

@@ -8,6 +8,7 @@ use crate::execution_cache::ExecutionCacheTraitPointers;
 use crate::execution_cache::TransactionCacheRead;
 use crate::execution_scheduler::ExecutionSchedulerAPI;
 use crate::execution_scheduler::ExecutionSchedulerWrapper;
+use crate::execution_scheduler::PendingCertificate;
 use crate::jsonrpc_index::CoinIndexKey2;
 use crate::rpc_index::RpcIndexStore;
 use crate::transaction_outputs::TransactionOutputs;
@@ -67,6 +68,8 @@ use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::transaction_executor::SimulateTransactionResult;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
+use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::RwLock;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -2930,11 +2933,12 @@ impl AuthorityState {
         validator_tx_finalizer: Option<Arc<ValidatorTxFinalizer<NetworkAuthorityClient>>>,
         chain_identifier: ChainIdentifier,
         pruner_db: Option<Arc<AuthorityPrunerTables>>,
+        tx_ready_certificates: UnboundedSender<PendingCertificate>,
+        rx_ready_certificates: UnboundedReceiver<PendingCertificate>,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
         let metrics = Arc::new(AuthorityMetrics::new(prometheus_registry));
-        let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let execution_scheduler = Arc::new(ExecutionSchedulerWrapper::new(
             execution_cache_trait_pointers.object_cache_reader.clone(),
             execution_cache_trait_pointers
