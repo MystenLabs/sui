@@ -178,8 +178,7 @@ impl DagState {
             evicted_rounds: vec![0; num_authorities],
         };
 
-        for (i, _round) in last_committed_rounds.into_iter().enumerate() {
-            let authority_index = state.context.committee.to_authority_index(i).unwrap();
+        for (authority_index, _) in context.committee.authorities() {
             let (blocks, eviction_round) = {
                 // Find the latest block for the authority to calculate the eviction round. Then we want to scan and load the blocks from the eviction round and onwards only.
                 // As reminder, the eviction round is taking into account the gc_round.

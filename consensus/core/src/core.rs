@@ -358,7 +358,7 @@ impl Core {
         // have advanced the threshold clock round.
         self.try_signal_new_round();
 
-        return Ok(missing_block_refs);
+        Ok(missing_block_refs)
     }
 
     /// Checks if provided block refs have been accepted. If not, missing block refs are kept for synchronizations.

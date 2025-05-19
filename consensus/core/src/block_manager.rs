@@ -424,8 +424,7 @@ impl BlockManager {
             return TryAcceptResult::Skipped;
         }
 
-        // Keep only the ancestors that are greater than the GC round to check for their existence. Keep in mind that if GC is disabled
-        // then gc_round will be 0 and all ancestors will be considered.
+        // Keep only the ancestors that are greater than the GC round to check for their existence.
         let ancestors = block
             .ancestors()
             .iter()
@@ -1009,7 +1008,7 @@ mod tests {
     }
 
     /// The test generate blocks for a well connected DAG and feed them to block manager in random order. In the end all the
-    /// blocks should be uniquely suspended and no missing blocks should exist. We set a high gc_depth value so in practice gc_round will be 0.
+    /// blocks should be uniquely suspended and no missing blocks should exist. We set a high gc_depth value so in this test gc_round will be 0.
     #[tokio::test]
     async fn accept_blocks_unsuspend_children_blocks() {
         // GIVEN

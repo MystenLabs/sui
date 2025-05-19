@@ -924,6 +924,8 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         let commands_sender = self.commands_sender.clone();
         let dag_state = self.dag_state.clone();
 
+        // If we are commit lagging, then we don't want to enable the scheduler. As the node is sycnhronizing via the commit syncer, the certified commits
+        // will bring all the necessary blocks to run the commits. As the commits are certified, we are guaranteed that all the necessary causal history is present.
         if self.is_commit_lagging() {
             return Ok(());
         }
