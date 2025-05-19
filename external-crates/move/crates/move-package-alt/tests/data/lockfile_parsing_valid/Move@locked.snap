@@ -1,288 +1,114 @@
 ---
 source: crates/move-package-alt/tests/test_runner.rs
 ---
-Lockfile {
-    pinned: {
-        "mainnet": DependencyInfo {
-            data: {
-                Identifier(
-                    "Foo_0",
-                ): DepInfo {
-                    source: Remote(
-                        Git(
-                            PinnedGitDependency {
-                                repo: "...",
-                                rev: "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                path: "...",
-                            },
-                        ),
-                    ),
-                    manifest_digest: "...",
-                    deps: {
-                        Identifier(
-                            "std",
-                        ): Identifier(
-                            "MoveStdlib",
-                        ),
-                        Identifier(
-                            "sui",
-                        ): Identifier(
-                            "Sui",
-                        ),
-                    },
-                },
-                Identifier(
-                    "Foo_1",
-                ): DepInfo {
-                    source: Remote(
-                        Git(
-                            PinnedGitDependency {
-                                repo: "...",
-                                rev: "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                path: "...",
-                            },
-                        ),
-                    ),
-                    manifest_digest: "...",
-                    deps: {
-                        Identifier(
-                            "std",
-                        ): Identifier(
-                            "MoveStdlib",
-                        ),
-                        Identifier(
-                            "sui",
-                        ): Identifier(
-                            "Sui",
-                        ),
-                    },
-                },
-                Identifier(
-                    "MoveStdlib",
-                ): DepInfo {
-                    source: Remote(
-                        Git(
-                            PinnedGitDependency {
-                                repo: "...",
-                                rev: "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                path: "...",
-                            },
-                        ),
-                    ),
-                    manifest_digest: "...",
-                    deps: {},
-                },
-                Identifier(
-                    "Sui",
-                ): DepInfo {
-                    source: Remote(
-                        Git(
-                            PinnedGitDependency {
-                                repo: "...",
-                                rev: "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                path: "...",
-                            },
-                        ),
-                    ),
-                    manifest_digest: "...",
-                    deps: {
-                        Identifier(
-                            "std",
-                        ): Identifier(
-                            "MoveStdlib",
-                        ),
-                    },
-                },
-                Identifier(
-                    "bar",
-                ): DepInfo {
-                    source: Remote(
-                        Git(
-                            PinnedGitDependency {
-                                repo: "...",
-                                rev: "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                path: "...",
-                            },
-                        ),
-                    ),
-                    manifest_digest: "...",
-                    deps: {
-                        Identifier(
-                            "baz",
-                        ): Identifier(
-                            "baz",
-                        ),
-                        Identifier(
-                            "std",
-                        ): Identifier(
-                            "MoveStdlib",
-                        ),
-                        Identifier(
-                            "sui",
-                        ): Identifier(
-                            "Sui",
-                        ),
-                    },
-                },
-                Identifier(
-                    "baz",
-                ): DepInfo {
-                    source: Remote(
-                        Git(
-                            PinnedGitDependency {
-                                repo: "...",
-                                rev: "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                path: "...",
-                            },
-                        ),
-                    ),
-                    manifest_digest: "...",
-                    deps: {
-                        Identifier(
-                            "std",
-                        ): Identifier(
-                            "MoveStdlib",
-                        ),
-                        Identifier(
-                            "sui",
-                        ): Identifier(
-                            "Sui",
-                        ),
-                    },
-                },
-                Identifier(
-                    "example",
-                ): DepInfo {
-                    source: Root(
-                        Root {
-                            root: true,
-                        },
-                    ),
-                    manifest_digest: "...",
-                    deps: {
-                        Identifier(
-                            "bar",
-                        ): Identifier(
-                            "bar",
-                        ),
-                        Identifier(
-                            "foo",
-                        ): Identifier(
-                            "Foo_0",
-                        ),
-                        Identifier(
-                            "non",
-                        ): Identifier(
-                            "Foo_1",
-                        ),
-                        Identifier(
-                            "std",
-                        ): Identifier(
-                            "MoveStdlib",
-                        ),
-                        Identifier(
-                            "sui",
-                        ): Identifier(
-                            "Sui",
-                        ),
-                    },
-                },
-            },
-        },
-        "testnet": DependencyInfo {
-            data: {
-                Identifier(
-                    "MoveStdlib",
-                ): DepInfo {
-                    source: Remote(
-                        Git(
-                            PinnedGitDependency {
-                                repo: "...",
-                                rev: "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                path: "...",
-                            },
-                        ),
-                    ),
-                    manifest_digest: "...",
-                    deps: {},
-                },
-                Identifier(
-                    "example",
-                ): DepInfo {
-                    source: Root(
-                        Root {
-                            root: true,
-                        },
-                    ),
-                    manifest_digest: "...",
-                    deps: {
-                        Identifier(
-                            "bar",
-                        ): Identifier(
-                            "bar",
-                        ),
-                        Identifier(
-                            "foo",
-                        ): Identifier(
-                            "Foo_0",
-                        ),
-                        Identifier(
-                            "non",
-                        ): Identifier(
-                            "Foo_1",
-                        ),
-                        Identifier(
-                            "std",
-                        ): Identifier(
-                            "MoveStdlib",
-                        ),
-                        Identifier(
-                            "sui",
-                        ): Identifier(
-                            "Sui",
-                        ),
-                    },
-                },
-            },
-        },
-    },
-    published: {
-        "mainnet": Publication {
-            metadata: (),
-            dependencies: {
-                Identifier(
-                    "std",
-                ): Git(
-                    PinnedGitDependency {
-                        repo: "",
-                        rev: "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0",
-                        path: "",
-                    },
-                ),
-            },
-        },
-        "testnet": Publication {
-            metadata: (),
-            dependencies: {
-                Identifier(
-                    "std",
-                ): Git(
-                    PinnedGitDependency {
-                        repo: "",
-                        rev: "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0",
-                        path: "",
-                    },
-                ),
-                Identifier(
-                    "sui",
-                ): Git(
-                    PinnedGitDependency {
-                        repo: "",
-                        rev: "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0",
-                        path: "",
-                    },
-                ),
-            },
-        },
-    },
-}
+# Generated by move; do not edit
+# This file should be checked in.
+
+[pinned.mainnet.Foo_0]
+manifest_digest = "..."
+
+[pinned.mainnet.Foo_0.source]
+git = "..."
+rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+path = "..."
+
+[pinned.mainnet.Foo_0.deps]
+std = "MoveStdlib"
+sui = "Sui"
+
+[pinned.mainnet.Foo_1]
+manifest_digest = "..."
+
+[pinned.mainnet.Foo_1.source]
+git = "..."
+rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+path = "..."
+
+[pinned.mainnet.Foo_1.deps]
+std = "MoveStdlib"
+sui = "Sui"
+
+[pinned.mainnet.MoveStdlib]
+manifest_digest = "..."
+
+[pinned.mainnet.MoveStdlib.source]
+git = "..."
+rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+path = "..."
+
+[pinned.mainnet.Sui]
+manifest_digest = "..."
+
+[pinned.mainnet.Sui.source]
+git = "..."
+rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+path = "..."
+
+[pinned.mainnet.Sui.deps]
+std = "MoveStdlib"
+
+[pinned.mainnet.bar]
+manifest_digest = "..."
+
+[pinned.mainnet.bar.source]
+git = "..."
+rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+path = "..."
+
+[pinned.mainnet.bar.deps]
+baz = "baz"
+std = "MoveStdlib"
+sui = "Sui"
+
+[pinned.mainnet.baz]
+manifest_digest = "..."
+
+[pinned.mainnet.baz.source]
+git = "..."
+rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+path = "..."
+
+[pinned.mainnet.baz.deps]
+std = "MoveStdlib"
+sui = "Sui"
+
+[pinned.mainnet.example]
+manifest_digest = "..."
+
+[pinned.mainnet.example.source]
+root = true
+
+[pinned.mainnet.example.deps]
+bar = "bar"
+foo = "Foo_0"
+non = "Foo_1"
+std = "MoveStdlib"
+sui = "Sui"
+
+[pinned.testnet.MoveStdlib]
+manifest_digest = "..."
+
+[pinned.testnet.MoveStdlib.source]
+git = "..."
+rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+path = "..."
+
+[pinned.testnet.example]
+manifest_digest = "..."
+
+[pinned.testnet.example.source]
+root = true
+
+[pinned.testnet.example.deps]
+bar = "bar"
+foo = "Foo_0"
+non = "Foo_1"
+std = "MoveStdlib"
+sui = "Sui"
+
+[published.mainnet.dependencies]
+std = { git = "", rev = "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0", path = "" }
+
+[published.testnet.dependencies]
+std = { git = "", rev = "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0", path = "" }
+sui = { git = "", rev = "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0", path = "" }

@@ -3,10 +3,12 @@ source: crates/move-package-alt/tests/test_runner.rs
 ---
 {
   "mock1": {
-    "local": "for-res-1"
+    "local": "for-res-1",
+    "parent": null
   },
   "mock2": {
-    "local": "for-res-2"
+    "local": "for-res-2",
+    "parent": null
   },
   "replacements": {}
 }

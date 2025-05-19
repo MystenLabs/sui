@@ -53,6 +53,12 @@ pub struct Pinned;
 #[derive(Debug, PartialEq)]
 pub struct Unpinned;
 
+/// Defines a package as the root of a dependency tree.
+#[derive(Clone, fmt::Debug, Serialize, Deserialize, PartialEq)]
+pub struct Root {
+    root: bool,
+}
+
 /// [UnpinnedDependencyInfo]s contain the dependency-type-specific things that users write in their
 /// Move.toml files in the `dependencies` section.
 ///
@@ -69,7 +75,7 @@ pub struct Unpinned;
 pub enum UnpinnedDependencyInfo<F: MoveFlavor + ?Sized> {
     Git(UnpinnedGitDependency),
     External(ExternalDependency),
-    Local(LocalDependency),
+    Local(LocalDependency<F>),
     FlavorSpecific(F::FlavorDependency<Unpinned>),
 }
 
@@ -84,11 +90,13 @@ pub enum UnpinnedDependencyInfo<F: MoveFlavor + ?Sized> {
 /// we want to retain that information for source verification.
 // Note: there is a custom Deserializer for this type; be sure to update it if you modify this
 #[derive(Debug, Serialize)]
-#[derive_where(Clone)]
+#[derive_where(Clone, PartialEq)]
 #[serde(untagged)]
+#[serde(bound = "")]
 pub enum PinnedDependencyInfo<F: MoveFlavor + ?Sized> {
     Git(PinnedGitDependency),
-    Local(LocalDependency),
+    Local(LocalDependency<F>),
+    Root(Root),
     FlavorSpecific(F::FlavorDependency<Pinned>),
 }
 
@@ -160,6 +168,9 @@ where
             } else if tbl.contains_key("local") {
                 let dep = LocalDependency::deserialize(data).map_err(de::Error::custom)?;
                 Ok(PinnedDependencyInfo::Local(dep))
+            } else if tbl.contains_key("root") {
+                let dep = Root::deserialize(data).map_err(de::Error::custom)?;
+                Ok(PinnedDependencyInfo::Root(dep))
             } else {
                 let dep = toml::Value::try_from(data)
                     .map_err(de::Error::custom)?
@@ -181,7 +192,7 @@ fn split<F: MoveFlavor>(
 ) -> (
     DependencySet<UnpinnedGitDependency>,
     DependencySet<ExternalDependency>,
-    DependencySet<LocalDependency>,
+    DependencySet<LocalDependency<F>>,
     DependencySet<F::FlavorDependency<Unpinned>>,
 ) {
     use DependencySet as DS;
@@ -268,12 +279,14 @@ async fn fetch<F: MoveFlavor>(
 
     let mut gits = DS::new();
     let mut locs = DS::new();
+    let mut roots = DS::new();
     let mut flav = DS::new();
 
     for (env, package_name, dep) in deps.into_iter() {
         match dep {
             P::Git(info) => gits.insert(env, package_name, info),
             P::Local(info) => locs.insert(env, package_name, info),
+            P::Root(info) => roots.insert(env, package_name, info),
             P::FlavorSpecific(info) => flav.insert(env, package_name, info),
         }
     }

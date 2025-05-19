@@ -32,6 +32,7 @@ Manifest {
             dependency_info: Local(
                 LocalDependency {
                     local: "./bar",
+                    parent: None,
                 },
             ),
             is_override: false,

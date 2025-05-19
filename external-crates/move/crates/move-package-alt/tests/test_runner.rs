@@ -96,14 +96,7 @@ impl Test<'_> {
             "locked" => {
                 let lockfile = Lockfile::<Vanilla>::read_from(self.toml_path.parent().unwrap());
                 match lockfile {
-                    Ok(l) => format!("{:#?}", l),
-                    Err(e) => e.to_string(),
-                }
-            }
-            "locked_toml" => {
-                let lockfile = Lockfile::<Vanilla>::read_from(self.toml_path.parent().unwrap());
-                match lockfile {
-                    Ok(l) => format!("{}", l.render_as_toml()),
+                    Ok(l) => l.render_as_toml().to_string(),
                     Err(e) => e.to_string(),
                 }
             }
@@ -160,9 +153,6 @@ datatest_stable::harness!(
     run_test,
     "tests/data",
     r".*\.locked$",
-    run_test,
-    "tests/data",
-    r".*\.locked_toml$",
     run_test,
     "tests/data",
     r".*\.pinned$",

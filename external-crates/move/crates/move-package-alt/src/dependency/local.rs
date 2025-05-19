@@ -5,11 +5,12 @@
 //! Types and methods related to local dependencies (of the form `{ local = "<path>" }`)
 
 use std::{
-    fs,
+    fmt, fs,
     path::{Path, PathBuf},
 };
 
-use crate::errors::PackageResult;
+use crate::{errors::PackageResult, flavor::MoveFlavor};
+use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
 use serde_spanned::Spanned;
 
@@ -17,14 +18,18 @@ use super::PinnedDependencyInfo;
 
 // TODO: PinnedLocalDependencies should be different from UnpinnedLocalDependency - the former also
 // needs an absolute filesystem path (which doesn't get serialized to the lockfile)
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct LocalDependency {
+#[derive(Debug, Serialize, Deserialize)]
+#[derive_where(Clone, PartialEq)]
+#[serde(bound = "")]
+pub struct LocalDependency<F: MoveFlavor + ?Sized> {
     /// The path on the filesystem, relative to the location of the containing file (which is
     /// stored in the `Located` wrapper)
     local: PathBuf,
+
+    parent: Option<Box<PinnedDependencyInfo<F>>>,
 }
 
-impl LocalDependency {
+impl<F: MoveFlavor> LocalDependency<F> {
     /// Returns the path to the local dependency
     pub fn path(&self) -> PackageResult<PathBuf> {
         let path = fs::canonicalize(&self.local)?;
@@ -39,7 +44,7 @@ impl LocalDependency {
 }
 
 // TODO: dead code
-impl TryFrom<(&Path, toml_edit::Value)> for LocalDependency {
+impl<F: MoveFlavor> TryFrom<(&Path, toml_edit::Value)> for LocalDependency<F> {
     type Error = anyhow::Error; // TODO
 
     fn try_from(value: (&Path, toml_edit::Value)) -> Result<Self, Self::Error> {
