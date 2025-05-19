@@ -14,9 +14,10 @@ use serde::{Deserialize, Serialize};
 use super::lockfile::{Lockfile, Publication};
 use super::manifest::Manifest;
 use crate::{
-    dependency::{DependencySet, PinnedDependencyInfo},
+    dependency::{DependencySet, PinnedDependencyInfo, Root, fetch},
     errors::{ManifestError, PackageResult},
     flavor::MoveFlavor,
+    git::GitRepo,
 };
 use move_core_types::identifier::Identifier;
 use tracing::debug;
@@ -44,33 +45,48 @@ impl<F: MoveFlavor> Package<F> {
     ///
     /// Fails if [path] does not exist, or if it doesn't contain a manifest
     pub async fn load_root(path: impl AsRef<Path>) -> PackageResult<Self> {
-        todo!()
-        /*
-        let move_toml_path = path.as_ref().join("Move.toml");
-        debug!(
-            "Checking if there's a move toml file in path: {:?}",
-            move_toml_path.display()
-        );
-
-        let manifest = Manifest::<F>::read_from(&move_toml_path)?;
-
-        // check if there's a lockfile, and if it is not, we add one
-        let mut lockfiles = Lockfile::read_from(&path)?;
-
-        lockfiles.update_lockfile(flavor, &manifest).await?;
-
+        let manifest = Manifest::<F>::read_from_file(path.as_ref())?;
+        let lockfiles = Lockfile::<F>::read_from_dir(path.as_ref())?;
+        let path = PackagePath(path.as_ref().to_path_buf());
         Ok(Self {
             manifest,
             lockfiles,
-            path: path.as_ref().to_path_buf(),
+            path,
         })
-        */
     }
 
     /// Fetch [dep] and load a package from the fetched source
     /// Makes a best effort to translate old-style packages into the current format,
     pub async fn load(dep: PinnedDependencyInfo<F>) -> PackageResult<Self> {
-        todo!()
+        use PinnedDependencyInfo as P;
+
+        let package = match dep {
+            P::Git(d) => {
+                let git = GitRepo::from(&d);
+                let path = git.fetch().await?;
+                let manifest = Manifest::<F>::read_from_file(&path)?;
+                let lockfiles = Lockfile::read_from_dir(&path)?;
+                Self {
+                    manifest,
+                    lockfiles,
+                    path: PackagePath(path),
+                }
+            }
+            P::Local(d) => {
+                let local = d.path()?;
+                let manifest = Manifest::<F>::read_from_file(&local)?;
+                let lockfiles = Lockfile::read_from_dir(&local)?;
+                Self {
+                    manifest,
+                    lockfiles,
+                    path: PackagePath(local),
+                }
+            }
+            P::Root(root) => panic!("Root dependencies should have already been loaded"),
+            P::FlavorSpecific(dep) => todo!(),
+        };
+
+        Ok(package)
     }
 
     /// The path to the root directory of this package. This path is guaranteed to exist

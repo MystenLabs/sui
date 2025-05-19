@@ -33,8 +33,8 @@ use crate::{
 };
 
 use external::ExternalDependency;
-use git::{GitRepo, PinnedGitDependency, UnpinnedGitDependency, fetch_dep};
-use local::LocalDependency;
+pub use git::{PinnedGitDependency, UnpinnedGitDependency, fetch_dep};
+use local::{LocalDependency, PinnedLocalDependency, UnpinnedLocalDependency};
 
 // TODO (potential refactor): consider using objects for manifest dependencies (i.e. `Box<dyn UnpinnedDependency>`).
 //      part of the complexity here would be deserialization - probably need a flavor-specific
@@ -57,6 +57,12 @@ pub struct Unpinned;
 #[derive(Clone, fmt::Debug, Serialize, Deserialize, PartialEq)]
 pub struct Root {
     root: bool,
+}
+
+impl Root {
+    pub fn new() -> Self {
+        Self { root: true }
+    }
 }
 
 /// [UnpinnedDependencyInfo]s contain the dependency-type-specific things that users write in their
@@ -125,8 +131,10 @@ where
                 let dep = ExternalDependency::deserialize(data).map_err(de::Error::custom)?;
                 Ok(UnpinnedDependencyInfo::External(dep))
             } else if tbl.contains_key("local") {
-                let dep = LocalDependency::deserialize(data).map_err(de::Error::custom)?;
-                Ok(UnpinnedDependencyInfo::Local(dep))
+                let dep = UnpinnedLocalDependency::deserialize(data).map_err(de::Error::custom)?;
+                Ok(UnpinnedDependencyInfo::Local(LocalDependency::Unpinned(
+                    dep,
+                )))
             } else {
                 // TODO: maybe this could be prettier. The problem is that we don't know how to
                 // tell if something is a flavor dependency. One option might be to add a method to
@@ -166,8 +174,8 @@ where
                 let dep = PinnedGitDependency::deserialize(data).map_err(de::Error::custom)?;
                 Ok(PinnedDependencyInfo::Git(dep))
             } else if tbl.contains_key("local") {
-                let dep = LocalDependency::deserialize(data).map_err(de::Error::custom)?;
-                Ok(PinnedDependencyInfo::Local(dep))
+                let dep = PinnedLocalDependency::deserialize(data).map_err(de::Error::custom)?;
+                Ok(PinnedDependencyInfo::Local(LocalDependency::Pinned(dep)))
             } else if tbl.contains_key("root") {
                 let dep = Root::deserialize(data).map_err(de::Error::custom)?;
                 Ok(PinnedDependencyInfo::Root(dep))
@@ -270,7 +278,7 @@ fn add_implicit_deps<F: MoveFlavor>(
 
 /// Fetch and ensure that all dependencies are stored locally and return the paths to their
 /// contents. The returned map is guaranteed to have the same keys as [deps].
-async fn fetch<F: MoveFlavor>(
+pub async fn fetch<F: MoveFlavor>(
     flavor: &F,
     deps: DependencySet<PinnedDependencyInfo<F>>,
 ) -> PackageResult<DependencySet<PathBuf>> {

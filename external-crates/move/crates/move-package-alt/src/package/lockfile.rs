@@ -74,7 +74,7 @@ struct DepInfo<F: MoveFlavor + fmt::Debug> {
 impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
     /// Read `Move.lock` and all `Move.<env>.lock` files from the directory at `path`.
     /// Returns a new empty [Lockfile] if `path` doesn't contain a `Move.lock`.
-    pub fn read_from(path: impl AsRef<Path>) -> PackageResult<Self> {
+    pub fn read_from_dir(path: impl AsRef<Path>) -> PackageResult<Self> {
         // Parse `Move.lock`
         let lockfile_name = path.as_ref().join("Move.lock");
         if !lockfile_name.exists() {

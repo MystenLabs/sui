@@ -69,7 +69,7 @@ impl Test<'_> {
     fn output(&self) -> anyhow::Result<String> {
         Ok(match self.kind {
             "parsed" => {
-                let manifest = Manifest::<Vanilla>::read_from(self.toml_path);
+                let manifest = Manifest::<Vanilla>::read_from_file(self.toml_path);
                 let contents = match manifest.as_ref() {
                     Ok(m) => format!("{:#?}", m),
                     Err(_) => {
@@ -94,7 +94,7 @@ impl Test<'_> {
                 contents
             }
             "locked" => {
-                let lockfile = Lockfile::<Vanilla>::read_from(self.toml_path.parent().unwrap());
+                let lockfile = Lockfile::<Vanilla>::read_from_dir(self.toml_path.parent().unwrap());
                 match lockfile {
                     Ok(l) => l.render_as_toml().to_string(),
                     Err(e) => e.to_string(),
@@ -107,7 +107,7 @@ impl Test<'_> {
 }
 
 async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String> {
-    let manifest = Manifest::<Vanilla>::read_from(input_path).unwrap();
+    let manifest = Manifest::<Vanilla>::read_from_file(input_path).unwrap();
 
     let deps: DependencySet<UnpinnedDependencyInfo<Vanilla>> = manifest.dependencies();
 

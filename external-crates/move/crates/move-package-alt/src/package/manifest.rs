@@ -85,7 +85,8 @@ pub struct ManifestDependencyReplacement<F: MoveFlavor> {
 }
 
 impl<F: MoveFlavor> Manifest<F> {
-    pub fn read_from(path: impl AsRef<Path>) -> PackageResult<Self> {
+    /// Read the manifest file at the given path, returning a [`Manifest`].
+    pub fn read_from_file(path: impl AsRef<Path>) -> PackageResult<Self> {
         let contents = std::fs::read_to_string(&path)?;
 
         let (manifest, file_id) = with_file(&path, toml_edit::de::from_str::<Self>)?;
