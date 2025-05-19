@@ -12,7 +12,7 @@ use move_compiler::{
 };
 
 #[derive(Debug, Parser)]
-#[arg(
+#[command(
     name = "move-check",
     about = "Check Move source code, without compiling to bytecode",
     author,

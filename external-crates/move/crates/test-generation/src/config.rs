@@ -83,7 +83,7 @@ pub fn module_generation_settings() -> ModuleGeneratorOptions {
 
 /// Command line arguments for the tool
 #[derive(Debug, Parser)]
-#[arg(author, version, about)]
+#[command(author, version, about)]
 pub struct Args {
     /// The optional number of programs that will be generated. If not specified, program
     /// generation will run infinitely.

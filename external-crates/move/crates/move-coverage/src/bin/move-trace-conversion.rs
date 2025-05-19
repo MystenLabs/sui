@@ -9,7 +9,7 @@ use move_coverage::coverage_map::{CoverageMap, TraceMap, output_map_to_file};
 use std::path::Path;
 
 #[derive(Debug, Parser)]
-#[arg(
+#[command(
     name = "move-trace-conversion",
     about = "Creates a coverage map from the raw data collected from the Move VM",
     author,

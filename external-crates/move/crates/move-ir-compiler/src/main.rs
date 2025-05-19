@@ -20,7 +20,7 @@ use std::{
 };
 
 #[derive(Debug, Parser)]
-#[arg(author, version, about)]
+#[command(author, version, about)]
 struct Args {
     /// Do not automatically run the bytecode verifier
     #[arg(long = "no-verify")]

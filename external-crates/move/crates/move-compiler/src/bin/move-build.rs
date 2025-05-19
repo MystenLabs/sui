@@ -12,7 +12,7 @@ use move_compiler::{
 };
 
 #[derive(Debug, Parser)]
-#[arg(
+#[command(
     name = "move-build",
     about = "Compile Move source to Move bytecode",
     author,

@@ -17,7 +17,7 @@ use std::{
 };
 
 #[derive(Debug, Parser)]
-#[arg(
+#[command(
     name = "coverage-summaries",
     about = "Creates a coverage summary from the trace data collected from the Move VM",
     author,

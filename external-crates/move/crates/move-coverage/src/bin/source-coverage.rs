@@ -17,7 +17,7 @@ use std::{
 };
 
 #[derive(Debug, Parser)]
-#[arg(
+#[command(
     name = "source-coverage",
     about = "Annotate Move Source Code with Coverage Information",
     author,

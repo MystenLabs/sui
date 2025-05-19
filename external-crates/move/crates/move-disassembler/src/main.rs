@@ -16,7 +16,7 @@ use move_ir_types::location::Spanned;
 use std::{fs, path::Path};
 
 #[derive(Debug, Parser)]
-#[arg(author, version, about)]
+#[command(author, version, about)]
 struct Args {
     /// Skip printing of private functions.
     #[arg(long = "skip-private")]
