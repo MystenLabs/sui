@@ -108,7 +108,7 @@ impl ConfigBuilder {
     }
 
     pub fn new_with_temp_dir() -> Self {
-        Self::new(mysten_common::tempdir().unwrap().into_path())
+        Self::new(mysten_common::tempdir().unwrap().keep())
     }
 }
 

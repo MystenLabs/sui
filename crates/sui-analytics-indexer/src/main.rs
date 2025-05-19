@@ -103,7 +103,7 @@ async fn main() -> Result<()> {
 
     let (exit_sender, exit_receiver) = oneshot::channel();
     let executor_progress = executor.run(
-        tempfile::tempdir()?.into_path(),
+        tempfile::tempdir()?.keep(),
         Some(remote_store_url),
         remote_store_options,
         reader_options,

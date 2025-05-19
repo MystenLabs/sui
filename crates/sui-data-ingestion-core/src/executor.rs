@@ -169,7 +169,7 @@ pub async fn setup_single_workflow<W: Worker + 'static>(
     executor.register(worker_pool).await?;
     Ok((
         executor.run(
-            tempfile::tempdir()?.into_path(),
+            tempfile::tempdir()?.keep(),
             Some(remote_store_url),
             vec![],
             reader_options.unwrap_or_default(),

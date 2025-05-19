@@ -519,7 +519,7 @@ sysinfo = "0.27.5"
 tabled = { version = "0.12" }
 tap = "1.0.1"
 tar = "0.4.40"
-tempfile = "3.3.0"
+tempfile = "3.20.0"
 test-fuzz = "3.0.4"
 thiserror = "1.0.40"
 tiny-bip39 = "1.0.0"
