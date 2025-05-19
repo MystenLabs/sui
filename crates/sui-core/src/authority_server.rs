@@ -5,6 +5,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
+use futures::TryFutureExt;
 use mysten_metrics::spawn_monitored_task;
 use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::{
@@ -1068,13 +1069,16 @@ impl ValidatorService {
         request: tonic::Request<RawWaitForEffectsRequest>,
     ) -> WrappedServiceResponse<RawWaitForEffectsResponse> {
         let request: WaitForEffectsRequest = request.into_inner().try_into()?;
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let response = timeout(
             // TODO(fastpath): Tune this once we have a good estimate of the typical delay.
-            Duration::from_secs(10),
-            self.wait_for_effects_response(request),
+            Duration::from_secs(20),
+            epoch_store
+                .within_alive_epoch(self.wait_for_effects_response(request, &epoch_store))
+                .map_err(|_| SuiError::EpochEnded(epoch_store.epoch())),
         )
         .await
-        .map_err(|_| tonic::Status::internal("Timeout waiting for effects"))??
+        .map_err(|_| tonic::Status::internal("Timeout waiting for effects"))???
         .try_into()?;
         Ok((
             tonic::Response::new(response),
@@ -1087,8 +1091,8 @@ impl ValidatorService {
     async fn wait_for_effects_response(
         &self,
         request: WaitForEffectsRequest,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<WaitForEffectsResponse> {
-        let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let Some(consensus_tx_status_cache) = epoch_store.consensus_tx_status_cache.as_ref() else {
             return Err(SuiError::UnsupportedFeatureError {
                 error: "Mysticeti fastpath".to_string(),

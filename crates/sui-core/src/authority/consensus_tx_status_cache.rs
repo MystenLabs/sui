@@ -121,6 +121,8 @@ impl ConsensusTxStatusCache {
         transaction_position: ConsensusTxPosition,
         old_status: Option<ConsensusTxStatus>,
     ) -> NotifyReadConsensusTxStatusResult {
+        // TODO(fastpath): We should track the typical distance between the last committed round
+        // and the requested round notified as metrics.
         let registration = self.status_notify_read.register_one(&transaction_position);
         let mut round_rx = self.last_committed_leader_round_rx.clone();
         {
