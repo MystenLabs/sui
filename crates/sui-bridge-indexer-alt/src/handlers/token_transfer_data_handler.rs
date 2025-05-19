@@ -30,44 +30,41 @@ impl Default for TokenTransferDataHandler {
 }
 
 impl Processor for TokenTransferDataHandler {
-    const NAME: &'static str = "TokenTransferData";
+    const NAME: &'static str = "token_transfer_data";
     type Value = TokenTransferData;
 
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>, anyhow::Error> {
         let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms as i64;
         let block_height = checkpoint.checkpoint_summary.sequence_number as i64;
-        checkpoint
-            .transactions
-            .iter()
-            .try_fold(vec![], |results, tx| {
-                if !is_bridge_txn(tx) {
-                    return Ok(results);
+
+        let mut results = vec![];
+
+        for tx in &checkpoint.transactions {
+            if !is_bridge_txn(tx) {
+                continue;
+            }
+            for ev in tx.events.iter().flat_map(|e| &e.data) {
+                if self.deposited_event_type != ev.type_ {
+                    continue;
                 }
-                tx.events.iter().flat_map(|events| &events.data).try_fold(
-                    results,
-                    |mut results, ev| {
-                        if self.deposited_event_type == ev.type_ {
-                            info!("Observed Sui Deposit {:?}", ev);
-                            let event: MoveTokenDepositedEvent = bcs::from_bytes(&ev.contents)?;
-                            // todo: metrics.total_sui_token_deposited.inc();
-                            results.push(TokenTransferData {
-                                chain_id: event.source_chain as i32,
-                                nonce: event.seq_num as i64,
-                                block_height,
-                                timestamp_ms,
-                                destination_chain: event.target_chain as i32,
-                                sender_address: event.sender_address.clone(),
-                                recipient_address: event.target_address.clone(),
-                                token_id: event.token_type as i32,
-                                amount: event.amount_sui_adjusted as i64,
-                                is_finalized: true,
-                                txn_hash: tx.transaction.digest().inner().to_vec(),
-                            });
-                        }
-                        Ok(results)
-                    },
-                )
-            })
+                info!(?ev, "Observed Sui Deposit");
+                let event: MoveTokenDepositedEvent = bcs::from_bytes(&ev.contents)?;
+                results.push(TokenTransferData {
+                    chain_id: event.source_chain as i32,
+                    nonce: event.seq_num as i64,
+                    block_height,
+                    timestamp_ms,
+                    destination_chain: event.target_chain as i32,
+                    sender_address: event.sender_address.clone(),
+                    recipient_address: event.target_address.clone(),
+                    token_id: event.token_type as i32,
+                    amount: event.amount_sui_adjusted as i64,
+                    is_finalized: true,
+                    txn_hash: tx.transaction.digest().inner().to_vec(),
+                });
+            }
+        }
+        Ok(results)
     }
 }
 
