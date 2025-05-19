@@ -236,7 +236,6 @@ mod tests {
             pruner_hi: 100,
         };
 
-        // Chunk size exactly covers the range
         assert_eq!(watermark.next_chunk(100), Some((100, 200)));
         assert_eq!(watermark.pruner_hi, 200);
         assert_eq!(watermark.next_chunk(100), Some((200, 300)));
