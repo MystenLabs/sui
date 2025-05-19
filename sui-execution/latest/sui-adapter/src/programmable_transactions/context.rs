@@ -1343,9 +1343,12 @@ mod checked {
 
         // Load the package that the struct is defined in, in storage
         let defining_id = ObjectID::from_address(*address);
+        let loading_id = linkage_view
+            .linkage_context_for_defining_id(defining_id)
+            .unwrap_or(defining_id);
 
         let data_store = SuiDataStore::new(linkage_view, new_packages);
-        let move_package = get_package(&data_store, defining_id)?;
+        let move_package = get_package(&data_store, loading_id)?;
 
         // Save the link context as we need to set it while loading the struct and we don't want to
         // clobber it.

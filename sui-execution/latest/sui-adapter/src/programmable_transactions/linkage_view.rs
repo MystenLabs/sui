@@ -39,6 +39,11 @@ pub struct LinkageView<'state> {
     /// Cache of past package addresses that have been the link context -- if a package is in this
     /// set, then we will not try to load its type origin table when setting it as a context (again).
     past_contexts: RefCell<HashSet<ObjectID>>,
+    /// A mapping from the defining ID of a type to a valid linkage context that has already been
+    /// set. This is used to avoid double-loading packages for types that are already in the
+    /// cache. Note that there may be multiple "valid" resolutions for a given defining ID, but we
+    /// only care about having one of them so first one wins.
+    context_resolution_cache: RefCell<BTreeMap<ObjectID, ObjectID>>,
 }
 
 #[derive(Debug)]
@@ -57,6 +62,7 @@ impl<'state> LinkageView<'state> {
             linkage_info: None,
             type_origin_cache: RefCell::new(HashMap::new()),
             past_contexts: RefCell::new(HashSet::new()),
+            context_resolution_cache: RefCell::new(BTreeMap::new()),
         }
     }
 
@@ -126,6 +132,16 @@ impl<'state> LinkageView<'state> {
             package: defining_id,
         } in context.type_origin_table()
         {
+            if !self
+                .context_resolution_cache
+                .borrow()
+                .contains_key(defining_id)
+            {
+                self.context_resolution_cache
+                    .borrow_mut()
+                    .insert(*defining_id, storage_id);
+            }
+
             let Ok(module_name) = Identifier::from_str(module_name) else {
                 invariant_violation!("Module name isn't an identifier: {module_name}");
             };
@@ -139,6 +155,13 @@ impl<'state> LinkageView<'state> {
         }
 
         Ok(runtime_id)
+    }
+
+    pub fn linkage_context_for_defining_id(&self, defining_id: ObjectID) -> Option<ObjectID> {
+        self.context_resolution_cache
+            .borrow()
+            .get(&defining_id)
+            .cloned()
     }
 
     pub fn original_package_id(&self) -> Option<AccountAddress> {
