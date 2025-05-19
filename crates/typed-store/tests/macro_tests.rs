@@ -302,7 +302,7 @@ mod tide_hunter_tests {
         ];
         let db = ThTable::open_tables_read_write(
             primary_path.clone(),
-            MetricConf::default(),
+            MetricConf::new("test_th"),
             BTreeMap::from_iter(configs),
         );
         let (key, value) = ("key".to_string(), "value".to_string());
