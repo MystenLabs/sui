@@ -168,7 +168,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
             };
 
             // (2) Wait until this information can be acted upon.
-            if let Some(wait_for) = watermark.wait_for_ms() {
+            if let Some(wait_for) = watermark.wait_for() {
                 debug!(pipeline = H::NAME, ?wait_for, "Waiting to prune");
                 tokio::select! {
                     _ = tokio::time::sleep(wait_for) => {}
