@@ -16,6 +16,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
+use tracing::warn;
 
 use crate::base_types::{FullObjectID, FullObjectRef, MoveObjectType, ObjectIDParseError};
 use crate::coin::{Coin, CoinMetadata, TreasuryCap};
@@ -79,14 +80,22 @@ impl MoveObject {
         version: SequenceNumber,
         contents: Vec<u8>,
         protocol_config: &ProtocolConfig,
+        system_mutation: bool,
     ) -> Result<Self, ExecutionError> {
-        Self::new_from_execution_with_limit(
-            type_,
-            has_public_transfer,
-            version,
-            contents,
-            protocol_config.max_move_object_size(),
-        )
+        let bound = if system_mutation {
+            if contents.len() as u64 > protocol_config.max_move_object_size() {
+                warn!(
+                    "System created object of type {:?} and size {} exceeds normal max size {}",
+                    type_,
+                    contents.len(),
+                    protocol_config.max_move_object_size()
+                );
+            }
+            u64::MAX
+        } else {
+            protocol_config.max_move_object_size()
+        };
+        Self::new_from_execution_with_limit(type_, has_public_transfer, version, contents, bound)
     }
 
     /// # Safety
