@@ -63,6 +63,10 @@ impl ConsensusTxStatusCache {
         transaction_position: ConsensusTxPosition,
         status: ConsensusTxStatus,
     ) {
+        debug!(
+            "Setting transaction status for {:?}: {:?}",
+            transaction_position, status
+        );
         let mut inner = self.inner.write();
         if let Some(last_committed_round) = inner.last_committed_round {
             if transaction_position.block.round as u64 + self.gc_depth < last_committed_round {
@@ -72,7 +76,30 @@ impl ConsensusTxStatusCache {
         let old_status = inner
             .transaction_status
             .insert(transaction_position, status);
-        if old_status.is_none() {
+        // Calls to set_transaction_status are async and can be out of order.
+        // We need to handle cases where new status is in fact older than the old status,
+        // or did not change.
+        if old_status == Some(status) {
+            return;
+        }
+        if let Some(old_status) = old_status {
+            if status == ConsensusTxStatus::FastpathCertified {
+                // If the new status is FastpathCertified, it must be older than the old status.
+                // We need to reset the status back to the old status.
+                inner
+                    .transaction_status
+                    .insert(transaction_position, old_status);
+            } else if old_status != ConsensusTxStatus::FastpathCertified {
+                // If neither old nor new status is FastpathCertified,
+                // we must have a conflict (either from Rejected to Finalized, or from Finalized to Rejected).
+                panic!(
+                    "Conflicting status updates for transaction {:?}: {:?} -> {:?}",
+                    transaction_position, old_status, status
+                );
+            }
+        } else {
+            // This is the first time we are setting the status for this transaction.
+            // We need to add it to the round lookup map to track its expiration.
             inner
                 .round_lookup_map
                 .entry(transaction_position.block.round as u64)
@@ -155,6 +182,15 @@ impl ConsensusTxStatusCache {
         }
         Ok(())
     }
+
+    #[cfg(test)]
+    pub fn get_transaction_status(
+        &self,
+        position: &ConsensusTxPosition,
+    ) -> Option<ConsensusTxStatus> {
+        let inner = self.inner.read();
+        inner.transaction_status.get(position).cloned()
+    }
 }
 
 #[cfg(test)]
@@ -163,6 +199,7 @@ mod tests {
 
     use super::*;
     use consensus_core::BlockRef;
+    use futures::FutureExt;
     use sui_types::messages_consensus::TransactionIndex;
 
     const GC_DEPTH: u64 = 10;
@@ -312,5 +349,30 @@ mod tests {
                 NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Finalized)
             ));
         }
+    }
+
+    #[tokio::test]
+    async fn test_out_of_order_status_updates() {
+        let cache = ConsensusTxStatusCache::new(GC_DEPTH);
+        let tx_pos = create_test_tx_position(1, 0);
+
+        // First update status to Rejected
+        cache.set_transaction_status(tx_pos, ConsensusTxStatus::Rejected);
+        let result = cache.notify_read_transaction_status(tx_pos, None).await;
+        assert!(matches!(
+            result,
+            NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Rejected)
+        ));
+
+        // We should not receive a new status update since the new status is older than the old status.
+        cache.set_transaction_status(tx_pos, ConsensusTxStatus::FastpathCertified);
+        let result = cache
+            .notify_read_transaction_status(tx_pos, Some(ConsensusTxStatus::Rejected))
+            .now_or_never();
+        assert!(result.is_none());
+        assert_eq!(
+            cache.get_transaction_status(&tx_pos),
+            Some(ConsensusTxStatus::Rejected)
+        );
     }
 }
