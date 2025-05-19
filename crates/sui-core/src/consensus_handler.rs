@@ -728,8 +728,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             self.epoch_store
                                 .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
                         }
-                        // Skip executing rejected transactions. Unlocking is the responsibility of the
-                        // consensus transaction handler.
+                        // Skip executing rejected transactions.
+                        // TODO(fastpath): Handle unlocking.
                         continue;
                     }
                     if parsed.transaction.kind.is_user_transaction() {
