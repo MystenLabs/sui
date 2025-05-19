@@ -709,8 +709,10 @@ pub enum SuiError {
     #[error("Failed to deserialize {type_info:?}, error: {error:?}")]
     GrpcMessageDeserializeError { type_info: String, error: String },
 
-    #[error("Transaction position is too far ahead: {round:?}, last committed round: {last_committed_round:?}")]
-    InvalidTransactionPosition {
+    #[error(
+        "Validator consensus rounds are lagging behind. last committed leader round: {last_committed_round:?}, requested round: {round:?}"
+    )]
+    ValidatorConsensusLagging {
         round: u64,
         last_committed_round: u64,
     },

@@ -183,7 +183,7 @@ impl ConsensusTxStatusCache {
             if position.block.round as u64
                 > last_committed_leader_round + CONSENSUS_STATUS_RETENTION_ROUNDS
             {
-                return Err(SuiError::InvalidTransactionPosition {
+                return Err(SuiError::ValidatorConsensusLagging {
                     round: position.block.round as u64,
                     last_committed_round: last_committed_leader_round,
                 });
