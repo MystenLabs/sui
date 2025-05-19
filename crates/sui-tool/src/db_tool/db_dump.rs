@@ -100,7 +100,7 @@ pub fn print_table_metadata(
             if epoch_tables.contains_key(table_name) {
                 let epoch = epoch.ok_or_else(|| anyhow!("--epoch is required"))?;
                 AuthorityEpochTables::open_readonly(epoch, &db_path)
-                    .next_shared_object_versions
+                    .next_shared_object_versions_v2
                     .db
             } else {
                 AuthorityPerpetualTables::open_readonly(&db_path).objects.db

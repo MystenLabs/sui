@@ -50,9 +50,7 @@ use sui_types::digests::{ChainIdentifier, TransactionEffectsDigest};
 use sui_types::dynamic_field::get_dynamic_field_from_store;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::executable_transaction::{
-    TrustedExecutableTransaction, VerifiedExecutableTransaction,
-};
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution::{ExecutionTimeObservationKey, ExecutionTiming};
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::TrustedEnvelope;
@@ -102,7 +100,7 @@ use crate::authority::AuthorityMetrics;
 use crate::authority::ResolverWrapper;
 use crate::checkpoints::{
     BuilderCheckpointSummary, CheckpointHeight, CheckpointServiceNotify, EpochStats,
-    PendingCheckpoint, PendingCheckpointInfo, PendingCheckpointV2, PendingCheckpointV2Contents,
+    PendingCheckpointInfo, PendingCheckpointV2, PendingCheckpointV2Contents,
 };
 use crate::consensus_handler::{
     ConsensusCommitInfo, SequencedConsensusTransaction, SequencedConsensusTransactionKey,
@@ -441,26 +439,8 @@ pub struct AuthorityEpochTables {
     /// Signatures of transaction certificates that are executed locally.
     transaction_cert_signatures: DBMap<TransactionDigest, AuthorityStrongQuorumSignInfo>,
 
-    /// Transactions that were executed in the current epoch.
-    #[allow(dead_code)]
-    #[deprecated]
-    executed_in_epoch: DBMap<TransactionDigest, ()>,
-
-    #[allow(dead_code)]
-    assigned_shared_object_versions_v2: DBMap<TransactionKey, Vec<(ObjectID, SequenceNumber)>>,
-    #[allow(dead_code)]
-    assigned_shared_object_versions_v3:
-        DBMap<TransactionKey, Vec<(ConsensusObjectSequenceKey, SequenceNumber)>>,
-
-    #[allow(dead_code)]
-    #[deprecated]
-    next_shared_object_versions: DBMap<ObjectID, SequenceNumber>,
     /// Next available shared object versions for each shared object.
     next_shared_object_versions_v2: DBMap<ConsensusObjectSequenceKey, SequenceNumber>,
-
-    #[allow(dead_code)]
-    #[deprecated]
-    pending_execution: DBMap<TransactionDigest, TrustedExecutableTransaction>,
 
     /// Track which transactions have been processed in handle_consensus_transaction. We must be
     /// sure to advance next_shared_object_versions exactly once for each transaction we receive from
@@ -476,40 +456,17 @@ pub struct AuthorityEpochTables {
     #[default_options_override_fn = "pending_consensus_transactions_table_default_config"]
     pending_consensus_transactions: DBMap<ConsensusTransactionKey, ConsensusTransaction>,
 
-    /// this table is not used
-    #[allow(dead_code)]
-    consensus_message_order: DBMap<ExecutionIndices, TransactionDigest>,
-
-    /// this table is not used
-    #[allow(dead_code)]
-    last_consensus_index: DBMap<(), ()>,
-
     /// The following table is used to store a single value (the corresponding key is a constant). The value
     /// represents the index of the latest consensus message this authority processed, running hash of
     /// transactions, and accumulated stats of consensus output.
     /// This field is written by a single process (consensus handler).
     last_consensus_stats: DBMap<u64, ExecutionIndicesWithStats>,
 
-    /// this table is not used
-    #[allow(dead_code)]
-    checkpoint_boundary: DBMap<u64, u64>,
-
     /// This table contains current reconfiguration state for validator for current epoch
     reconfig_state: DBMap<u64, ReconfigState>,
 
     /// Validators that have sent EndOfPublish message in this epoch
     end_of_publish: DBMap<AuthorityName, ()>,
-
-    // TODO: Unused. Remove when removal of DBMap tables is supported.
-    #[allow(dead_code)]
-    final_epoch_checkpoint: DBMap<u64, u64>,
-
-    #[allow(dead_code)]
-    pending_checkpoints_v2: DBMap<CheckpointHeight, PendingCheckpointV2>,
-
-    /// Deprecated table for pre-random-beacon checkpoints.
-    #[allow(dead_code)]
-    pending_checkpoints: DBMap<CheckpointHeight, PendingCheckpoint>,
 
     /// Checkpoint builder maintains internal list of transactions it included in checkpoints here
     builder_digest_to_checkpoint: DBMap<TransactionDigest, CheckpointSequenceNumber>,
@@ -523,13 +480,6 @@ pub struct AuthorityEpochTables {
     pub(crate) pending_checkpoint_signatures:
         DBMap<(CheckpointSequenceNumber, u64), CheckpointSignatureMessage>,
 
-    /// Deprecated - pending signatures are now stored in memory.
-    #[allow(dead_code)]
-    user_signatures_for_checkpoints: DBMap<TransactionDigest, Vec<GenericSignature>>,
-
-    /// This table is not used
-    #[allow(dead_code)]
-    builder_checkpoint_summary: DBMap<CheckpointSequenceNumber, CheckpointSummary>,
     /// Maps sequence number to checkpoint summary, used by CheckpointBuilder to build checkpoint within epoch
     builder_checkpoint_summary_v2: DBMap<CheckpointSequenceNumber, BuilderCheckpointSummary>,
 
@@ -557,10 +507,6 @@ pub struct AuthorityEpochTables {
     pub(crate) executed_transactions_to_checkpoint:
         DBMap<TransactionDigest, CheckpointSequenceNumber>,
 
-    /// This table is no longer used (can be removed when DBMap supports removing tables)
-    #[allow(dead_code)]
-    oauth_provider_jwk: DBMap<JwkId, JWK>,
-
     /// JWKs that have been voted for by one or more authorities but are not yet active.
     pending_jwks: DBMap<(AuthorityName, JwkId, JWK), ()>,
 
@@ -573,40 +519,21 @@ pub struct AuthorityEpochTables {
     /// Transactions that are being deferred until some future time
     deferred_transactions: DBMap<DeferralKey, Vec<VerifiedSequencedConsensusTransaction>>,
 
-    /// This table is no longer used (can be removed when DBMap supports removing tables)
-    #[allow(dead_code)]
-    randomness_rounds_written: DBMap<(), ()>,
-
     // Tables for recording state for RandomnessManager.
     /// Records messages processed from other nodes. Updated when receiving a new dkg::Message
     /// via consensus.
     pub(crate) dkg_processed_messages_v2: DBMap<PartyId, VersionedProcessedMessage>,
-    /// This table is no longer used (can be removed when DBMap supports removing tables)
-    #[allow(dead_code)]
-    #[deprecated]
-    pub(crate) dkg_processed_messages: DBMap<PartyId, Vec<u8>>,
 
     /// Records messages used to generate a DKG confirmation. Updated when enough DKG
     /// messages are received to progress to the next phase.
     pub(crate) dkg_used_messages_v2: DBMap<u64, VersionedUsedProcessedMessages>,
-    /// This table is no longer used (can be removed when DBMap supports removing tables)
-    #[allow(dead_code)]
-    #[deprecated]
-    pub(crate) dkg_used_messages: DBMap<u64, Vec<u8>>,
 
     /// Records confirmations received from other nodes. Updated when receiving a new
     /// dkg::Confirmation via consensus.
     pub(crate) dkg_confirmations_v2: DBMap<PartyId, VersionedDkgConfirmation>,
-    /// This table is no longer used (can be removed when DBMap supports removing tables)
-    #[allow(dead_code)]
-    #[deprecated]
-    pub(crate) dkg_confirmations: DBMap<PartyId, Vec<u8>>,
     /// Records the final output of DKG after completion, including the public VSS key and
     /// any local private shares.
     pub(crate) dkg_output: DBMap<u64, dkg_v1::Output<PkG, EncG>>,
-    /// This table is no longer used (can be removed when DBMap supports removing tables)
-    #[allow(dead_code)]
-    randomness_rounds_pending: DBMap<RandomnessRound, ()>,
     /// Holds the value of the next RandomnessRound to be generated.
     pub(crate) randomness_next_round: DBMap<u64, RandomnessRound>,
     /// Holds the value of the highest completed RandomnessRound (as reported to RandomnessReporter).
@@ -4203,34 +4130,10 @@ impl AuthorityPerEpochStore {
         &self,
         last: Option<CheckpointHeight>,
     ) -> SuiResult<Vec<(CheckpointHeight, PendingCheckpointV2)>> {
-        let db_results = if !self
-            .epoch_start_config()
-            .is_data_quarantine_active_from_beginning_of_epoch()
-        {
-            // Reading from the db table is only need when upgrading to data quarantining
-            // for the first time.
-            let tables = self.tables()?;
-            let db_iter = tables
-                .pending_checkpoints_v2
-                .safe_iter_with_bounds(last.map(|height| height + 1), None);
-            db_iter.collect::<Result<Vec<_>, _>>()?
-        } else {
-            vec![]
-        };
-
-        let mut quarantine_results = self
+        Ok(self
             .consensus_quarantine
             .read()
-            .get_pending_checkpoints(last);
-
-        // retain only the checkpoints with heights greater than the highest height in the db
-        if let Some(db_highest_height) = db_results.last().map(|(h, _)| h) {
-            quarantine_results.retain(|(h, _)| h > db_highest_height);
-        }
-
-        let mut db_results = db_results;
-        db_results.extend(quarantine_results);
-        Ok(db_results)
+            .get_pending_checkpoints(last))
     }
 
     pub fn pending_checkpoint_exists(&self, index: &CheckpointHeight) -> SuiResult<bool> {
