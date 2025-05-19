@@ -22,7 +22,7 @@ use bridge::treasury::{Self, BridgeTreasury};
 use sui::address;
 use sui::clock::Clock;
 use sui::coin::{Coin, TreasuryCap, CoinMetadata};
-use sui::event::emit;
+use sui::event;
 use sui::linked_table::{Self, LinkedTable};
 use sui::package::UpgradeCap;
 use sui::vec_map::{Self, VecMap};
@@ -248,7 +248,7 @@ public fun send_token<T>(
         );
 
     // emit event
-    emit(TokenDepositedEvent {
+    event::emit(TokenDepositedEvent {
         seq_num: bridge_seq_num,
         source_chain: inner.chain_id,
         sender_address: address::to_bytes(ctx.sender()),
@@ -292,7 +292,7 @@ public fun approve_token_transfer(
         // If record already has verified signatures, it means the message has been approved
         // Then we exit early.
         if (record.verified_signatures.is_some()) {
-            emit(TokenTransferAlreadyApproved { message_key });
+            event::emit(TokenTransferAlreadyApproved { message_key });
             return
         };
         // Store approval
@@ -302,7 +302,7 @@ public fun approve_token_transfer(
         // it's already approved because we only add a message to token_transfer_records
         // after verifying the signatures
         if (inner.token_transfer_records.contains(message_key)) {
-            emit(TokenTransferAlreadyApproved { message_key });
+            event::emit(TokenTransferAlreadyApproved { message_key });
             return
         };
         // Store message and approval
@@ -318,7 +318,7 @@ public fun approve_token_transfer(
             );
     };
 
-    emit(TokenTransferApproved { message_key });
+    event::emit(TokenTransferApproved { message_key });
 }
 
 // This function can only be called by the token recipient
@@ -501,7 +501,7 @@ fun claim_token_internal<T>(
 
     // If already claimed, exit early
     if (record.claimed) {
-        emit(TokenTransferAlreadyClaimed { message_key: key });
+        event::emit(TokenTransferAlreadyClaimed { message_key: key });
         return (option::none(), owner)
     };
 
@@ -532,7 +532,7 @@ fun claim_token_internal<T>(
                 amount,
             )
     ) {
-        emit(TokenTransferLimitExceed { message_key: key });
+        event::emit(TokenTransferLimitExceed { message_key: key });
         return (option::none(), owner)
     };
 
@@ -541,7 +541,7 @@ fun claim_token_internal<T>(
 
     // Record changes
     record.claimed = true;
-    emit(TokenTransferClaimed { message_key: key });
+    event::emit(TokenTransferClaimed { message_key: key });
 
     (option::some(token), owner)
 }
@@ -551,11 +551,11 @@ fun execute_emergency_op(inner: &mut BridgeInner, payload: EmergencyOp) {
     if (op == message::emergency_op_pause()) {
         assert!(!inner.paused, EBridgeAlreadyPaused);
         inner.paused = true;
-        emit(EmergencyOpEvent { frozen: true });
+        event::emit(EmergencyOpEvent { frozen: true });
     } else if (op == message::emergency_op_unpause()) {
         assert!(inner.paused, EBridgeNotPaused);
         inner.paused = false;
-        emit(EmergencyOpEvent { frozen: false });
+        event::emit(EmergencyOpEvent { frozen: false });
     } else {
         abort EUnexpectedOperation
     };
