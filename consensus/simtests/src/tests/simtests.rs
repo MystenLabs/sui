@@ -7,6 +7,7 @@ mod test {
         Authority, AuthorityIndex, AuthorityKeyPair, Committee, Epoch, NetworkKeyPair,
         ProtocolKeyPair, Stake,
     };
+    use mysten_metrics::RegistryService;
     use mysten_network::Multiaddr;
     use prometheus::Registry;
     use rand::{rngs::StdRng, SeedableRng as _};
@@ -44,7 +45,7 @@ mod test {
         for median_based_timestamp in vec![true, false] {
             tracing::info!("Running with median_based_timestamp = {median_based_timestamp}");
             let db_registry = Registry::new();
-            DBMetrics::init(&db_registry);
+            DBMetrics::init(RegistryService::new(db_registry));
 
             const NUM_OF_AUTHORITIES: usize = 10;
             let (committee, keypairs) =
