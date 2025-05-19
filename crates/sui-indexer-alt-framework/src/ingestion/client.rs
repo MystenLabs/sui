@@ -12,7 +12,6 @@ use sui_rpc_api::client::AuthInterceptor;
 use sui_rpc_api::Client;
 use sui_storage::blob::Blob;
 use tokio_util::bytes::Bytes;
-use tokio_util::sync::CancellationToken;
 use tracing::debug;
 use url::Url;
 
@@ -36,8 +35,6 @@ pub(crate) trait IngestionClientTrait: Send + Sync {
 pub enum FetchError {
     #[error("Checkpoint not found")]
     NotFound,
-    #[error("Failed to fetch checkpoint due to permanent error: {0}")]
-    Permanent(#[from] anyhow::Error),
     #[error("Failed to fetch checkpoint due to {reason}: {error}")]
     Transient {
         reason: &'static str,
@@ -108,16 +105,11 @@ impl IngestionClient {
         &self,
         checkpoint: u64,
         retry_interval: Duration,
-        cancel: &CancellationToken,
     ) -> IngestionResult<Arc<CheckpointData>> {
         let backoff = Constant::new(retry_interval);
         let fetch = || async move {
             use backoff::Error as BE;
-            if cancel.is_cancelled() {
-                return Err(BE::permanent(IngestionError::Cancelled));
-            }
-
-            self.fetch(checkpoint, cancel).await.map_err(|e| match e {
+            self.fetch(checkpoint).await.map_err(|e| match e {
                 IngestionError::NotFound(checkpoint) => {
                     debug!(checkpoint, "Checkpoint not found, retrying...");
                     self.metrics.total_ingested_not_found_retries.inc();
@@ -137,30 +129,14 @@ impl IngestionClient {
     /// implementation that returns a [FetchError::Transient] error variant, or within this
     /// function if we fail to deserialize the result as [CheckpointData].
     ///
-    /// The function will immediately return on:
-    ///
-    /// - Non-transient errors determined by the client implementation, this includes both the
-    ///   [FetchError::NotFound] and [FetchError::Permanent] variants.
-    ///
-    /// - Cancellation of the supplied `cancel` token.
-    pub(crate) async fn fetch(
-        &self,
-        checkpoint: u64,
-        cancel: &CancellationToken,
-    ) -> IngestionResult<Arc<CheckpointData>> {
+    /// The function will immediately return if the checkpoint is not found.
+    pub(crate) async fn fetch(&self, checkpoint: u64) -> IngestionResult<Arc<CheckpointData>> {
         let client = self.client.clone();
         let request = move || {
             let client = client.clone();
             async move {
-                if cancel.is_cancelled() {
-                    return Err(BE::permanent(IngestionError::Cancelled));
-                }
-
                 let fetch_data = client.fetch(checkpoint).await.map_err(|err| match err {
                     FetchError::NotFound => BE::permanent(IngestionError::NotFound(checkpoint)),
-                    FetchError::Permanent(error) => {
-                        BE::permanent(IngestionError::FetchError(checkpoint, error))
-                    }
                     FetchError::Transient { reason, error } => self.metrics.inc_retry(
                         checkpoint,
                         reason,
@@ -168,7 +144,7 @@ impl IngestionClient {
                     ),
                 })?;
 
-                Ok(match fetch_data {
+                Ok::<CheckpointData, backoff::Error<IngestionError>>(match fetch_data {
                     FetchData::Raw(bytes) => {
                         self.metrics.total_ingested_bytes.inc_by(bytes.len() as u64);
                         Blob::from_bytes(&bytes).map_err(|e| {
