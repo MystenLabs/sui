@@ -1,7 +1,6 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
-snapshot_kind: text
 ---
 version: 83
 feature_flags:
@@ -55,6 +54,8 @@ feature_flags:
       allowed_txn_cost_overage_burst_limit_us: 100000
       randomness_scalar: 20
       max_estimate_us: 1500000
+      stored_observations_num_included_checkpoints: 10
+      stored_observations_limit: 18446744073709551615
   consensus_choice: Mysticeti
   consensus_network: Tonic
   zklogin_max_epoch_upper_bound_delta: 30
