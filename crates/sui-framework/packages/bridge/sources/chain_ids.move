@@ -54,11 +54,11 @@ public fun route_destination(route: &BridgeRoute): &u8 {
 public fun assert_valid_chain_id(id: u8) {
     assert!(
         id == SUI_MAINNET ||
-            id == SUI_TESTNET ||
-            id == SUI_CUSTOM ||
-            id == ETH_MAINNET ||
-            id == ETH_SEPOLIA ||
-            id == ETH_CUSTOM,
+        id == SUI_TESTNET ||
+        id == SUI_CUSTOM ||
+        id == ETH_MAINNET ||
+        id == ETH_SEPOLIA ||
+        id == ETH_CUSTOM,
         EInvalidBridgeRoute,
     )
 }
