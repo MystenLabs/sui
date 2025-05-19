@@ -5001,22 +5001,18 @@ impl AuthorityState {
         end_of_epoch_observation_keys: Vec<ExecutionTimeObservationKey>,
         last_checkpoint_before_end_of_epoch: CheckpointSequenceNumber,
     ) -> Option<EndOfEpochTransactionKind> {
-        if !matches!(
-            epoch_store
-                .protocol_config()
-                .per_object_congestion_control_mode(),
-            PerObjectCongestionControlMode::ExecutionTimeEstimate(_)
-        ) {
+        let PerObjectCongestionControlMode::ExecutionTimeEstimate(params) = epoch_store
+            .protocol_config()
+            .per_object_congestion_control_mode()
+        else {
             return None;
-        }
-
-        // TODO: Make this a protocol config.
-        const NUM_INCLUDED_CHECKPOINTS: u64 = 10;
+        };
 
         // Load tx in the last N checkpoints before end-of-epoch, and save only the
         // execution time observations for commands in these checkpoints.
         let start_checkpoint = std::cmp::max(
-            last_checkpoint_before_end_of_epoch.saturating_sub(NUM_INCLUDED_CHECKPOINTS - 1),
+            last_checkpoint_before_end_of_epoch
+                .saturating_sub(params.stored_observations_num_included_checkpoints - 1),
             // If we have <N checkpoints in the epoch, use all of them.
             epoch_store
                 .epoch()
@@ -5101,7 +5097,10 @@ impl AuthorityState {
         let tx = EndOfEpochTransactionKind::new_store_execution_time_observations(
             epoch_store
                 .get_end_of_epoch_execution_time_observations()
-                .filter_and_sort_v1(|(key, _)| included_execution_time_observations.contains(key)),
+                .filter_and_sort_v1(
+                    |(key, _)| included_execution_time_observations.contains(key),
+                    params.stored_observations_limit.try_into().unwrap(),
+                ),
         );
         info!("Creating StoreExecutionTimeObservations tx");
         Some(tx)

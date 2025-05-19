@@ -736,6 +736,13 @@ pub struct ExecutionTimeEstimateParams {
 
     // Absolute maximum allowed transaction duration estimate (in microseconds).
     pub max_estimate_us: u64,
+
+    // Number of the final checkpoints in an epoch whose observations should be
+    // stored for use in the next epoch.
+    pub stored_observations_num_included_checkpoints: u64,
+
+    // Absolute limit on the number of saved observations at end of epoch.
+    pub stored_observations_limit: u64,
 }
 
 // The config for per object congestion control in consensus handler.
@@ -3483,6 +3490,8 @@ impl ProtocolConfig {
                                     allowed_txn_cost_overage_burst_limit_us: 100_000, // 100 ms
                                     randomness_scalar: 20,
                                     max_estimate_us: 1_500_000, // 1.5s
+                                    stored_observations_num_included_checkpoints: 10,
+                                    stored_observations_limit: u64::MAX,
                                 },
                             );
                     }
@@ -3530,6 +3539,8 @@ impl ProtocolConfig {
                                 allowed_txn_cost_overage_burst_limit_us: 100_000, // 100 ms
                                 randomness_scalar: 20,
                                 max_estimate_us: 1_500_000, // 1.5s
+                                stored_observations_num_included_checkpoints: 10,
+                                stored_observations_limit: u64::MAX,
                             },
                         );
 
@@ -3545,6 +3556,19 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_party_transfer = true;
                     }
+
+                    // Limit the number of stored execution time observations at end of epoch.
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                            ExecutionTimeEstimateParams {
+                                target_utilization: 30,
+                                allowed_txn_cost_overage_burst_limit_us: 100_000, // 100 ms
+                                randomness_scalar: 20,
+                                max_estimate_us: 1_500_000, // 1.5s
+                                stored_observations_num_included_checkpoints: 10,
+                                stored_observations_limit: 20,
+                            },
+                        );
                 }
                 // Use this template when making changes:
                 //
