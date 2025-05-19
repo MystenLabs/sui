@@ -11,6 +11,11 @@ use mysten_common::sync::notify_read::NotifyRead;
 
 use crate::wait_for_effects_request::ConsensusTxPosition;
 
+/// The number of consensus rounds to retain transaction status information before garbage collection.
+/// Used to expire positions from old rounds, as well as to check if a transaction is too far ahead of the last committed round.
+/// Assuming a max round rate of 15/sec, this allows status updates to be valid within a window of ~25-30 seconds.
+const CONSENSUS_STATUS_RETENTION_ROUNDS: u64 = 400;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ConsensusTxStatus {
     // Transaction is voted to accept by a quorum of validators on fastpath.
@@ -33,9 +38,6 @@ pub(crate) enum NotifyReadConsensusTxStatusResult {
 pub(crate) struct ConsensusTxStatusCache {
     inner: RwLock<Inner>,
     status_notify_read: NotifyRead<ConsensusTxPosition, ConsensusTxStatus>,
-    /// The depth of the garbage collection.
-    /// We use this to expire positions from old rounds.
-    gc_depth: u64,
     /// Watch channel for last committed leader round updates
     last_committed_leader_round_tx: watch::Sender<Option<u64>>,
     last_committed_leader_round_rx: watch::Receiver<Option<u64>>,
@@ -50,12 +52,11 @@ struct Inner {
 }
 
 impl ConsensusTxStatusCache {
-    pub fn new(gc_depth: u64) -> Self {
+    pub fn new() -> Self {
         let (last_committed_leader_round_tx, last_committed_leader_round_rx) = watch::channel(None);
         Self {
             inner: Default::default(),
             status_notify_read: Default::default(),
-            gc_depth,
             last_committed_leader_round_tx,
             last_committed_leader_round_rx,
         }
@@ -72,7 +73,8 @@ impl ConsensusTxStatusCache {
         );
         let mut inner = self.inner.write();
         if let Some(last_committed_leader_round) = *self.last_committed_leader_round_rx.borrow() {
-            if transaction_position.block.round as u64 + self.gc_depth < last_committed_leader_round
+            if transaction_position.block.round as u64 + CONSENSUS_STATUS_RETENTION_ROUNDS
+                < last_committed_leader_round
             {
                 return;
             }
@@ -139,7 +141,7 @@ impl ConsensusTxStatusCache {
         let expiration_check = async {
             loop {
                 if let Some(last_committed_leader_round) = *round_rx.borrow() {
-                    if transaction_position.block.round as u64 + self.gc_depth
+                    if transaction_position.block.round as u64 + CONSENSUS_STATUS_RETENTION_ROUNDS
                         < last_committed_leader_round
                     {
                         return last_committed_leader_round;
@@ -162,7 +164,7 @@ impl ConsensusTxStatusCache {
         debug!("Updating last committed leader round: {}", round);
         let mut inner = self.inner.write();
         while let Some(&next_round) = inner.round_lookup_map.keys().next() {
-            if next_round + self.gc_depth < round {
+            if next_round + CONSENSUS_STATUS_RETENTION_ROUNDS < round {
                 let transactions = inner.round_lookup_map.remove(&next_round).unwrap();
                 for tx in transactions {
                     inner.transaction_status.remove(&tx);
@@ -178,8 +180,9 @@ impl ConsensusTxStatusCache {
     /// Returns true if the position is too far ahead of the last committed round.
     pub fn check_position_too_ahead(&self, position: &ConsensusTxPosition) -> SuiResult<()> {
         if let Some(last_committed_leader_round) = *self.last_committed_leader_round_rx.borrow() {
-            // TODO(fastpath): Is using gc_depth appropriate here?
-            if position.block.round as u64 > last_committed_leader_round + self.gc_depth {
+            if position.block.round as u64
+                > last_committed_leader_round + CONSENSUS_STATUS_RETENTION_ROUNDS
+            {
                 return Err(SuiError::InvalidTransactionPosition {
                     round: position.block.round as u64,
                     last_committed_round: last_committed_leader_round,
@@ -201,14 +204,12 @@ impl ConsensusTxStatusCache {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{sync::Arc, time::Duration};
 
     use super::*;
     use consensus_core::BlockRef;
     use futures::FutureExt;
     use sui_types::messages_consensus::TransactionIndex;
-
-    const GC_DEPTH: u64 = 10;
 
     fn create_test_tx_position(round: u64, index: u64) -> ConsensusTxPosition {
         ConsensusTxPosition {
@@ -223,7 +224,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_set_and_get_transaction_status() {
-        let cache = ConsensusTxStatusCache::new(GC_DEPTH);
+        let cache = ConsensusTxStatusCache::new();
         let tx_pos = create_test_tx_position(1, 0);
 
         // Set initial status
@@ -239,7 +240,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_status_notification() {
-        let cache = Arc::new(ConsensusTxStatusCache::new(GC_DEPTH));
+        let cache = Arc::new(ConsensusTxStatusCache::new());
         let tx_pos = create_test_tx_position(1, 0);
 
         // Spawn a task that waits for status update
@@ -266,14 +267,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_round_expiration() {
-        let cache = ConsensusTxStatusCache::new(GC_DEPTH);
+        let cache = ConsensusTxStatusCache::new();
         let tx_pos = create_test_tx_position(1, 0);
 
         // Set initial status
         cache.set_transaction_status(tx_pos, ConsensusTxStatus::FastpathCertified);
 
         // Update last committed round to trigger expiration
-        cache.update_last_committed_leader_round(GC_DEPTH + 2).await;
+        cache
+            .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 2)
+            .await;
 
         // Try to read status - should be expired
         let result = cache.notify_read_transaction_status(tx_pos, None).await;
@@ -285,7 +288,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple_status_updates() {
-        let cache = ConsensusTxStatusCache::new(GC_DEPTH);
+        let cache = ConsensusTxStatusCache::new();
         let tx_pos = create_test_tx_position(1, 0);
 
         // Set initial status
@@ -306,7 +309,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cleanup_expired_rounds() {
-        let cache = ConsensusTxStatusCache::new(GC_DEPTH);
+        let cache = ConsensusTxStatusCache::new();
 
         // Add transactions for multiple rounds
         for round in 1..=5 {
@@ -315,7 +318,9 @@ mod tests {
         }
 
         // Update last committed round to expire early rounds
-        cache.update_last_committed_leader_round(GC_DEPTH + 3).await;
+        cache
+            .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 3)
+            .await;
 
         // Verify early rounds are cleaned up
         let inner = cache.inner.read();
@@ -327,7 +332,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_concurrent_operations() {
-        let cache = Arc::new(ConsensusTxStatusCache::new(GC_DEPTH));
+        let cache = Arc::new(ConsensusTxStatusCache::new());
         let tx_pos = create_test_tx_position(1, 0);
 
         // Spawn multiple tasks that wait for status
@@ -359,7 +364,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_out_of_order_status_updates() {
-        let cache = ConsensusTxStatusCache::new(GC_DEPTH);
+        let cache = ConsensusTxStatusCache::new();
         let tx_pos = create_test_tx_position(1, 0);
 
         // First update status to Rejected
