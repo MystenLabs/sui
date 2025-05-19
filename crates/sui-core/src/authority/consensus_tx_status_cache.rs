@@ -3,9 +3,8 @@
 
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::time::Duration;
 use sui_types::error::{SuiError, SuiResult};
-use tokio::time::sleep;
+use tokio::sync::watch;
 use tracing::debug;
 
 use mysten_common::sync::notify_read::NotifyRead;
@@ -31,13 +30,15 @@ pub(crate) enum NotifyReadConsensusTxStatusResult {
     Expired(u64),
 }
 
-#[derive(Default)]
 pub(crate) struct ConsensusTxStatusCache {
     inner: RwLock<Inner>,
     status_notify_read: NotifyRead<ConsensusTxPosition, ConsensusTxStatus>,
     /// The depth of the garbage collection.
     /// We use this to expire positions from old rounds.
     gc_depth: u64,
+    /// Watch channel for last committed leader round updates
+    last_committed_leader_round_tx: watch::Sender<Option<u64>>,
+    last_committed_leader_round_rx: watch::Receiver<Option<u64>>,
 }
 
 #[derive(Default)]
@@ -46,15 +47,17 @@ struct Inner {
     transaction_status: HashMap<ConsensusTxPosition, ConsensusTxStatus>,
     /// A map of consensus round to all transactions that were updated in that round.
     round_lookup_map: BTreeMap<u64, HashSet<ConsensusTxPosition>>,
-    /// The last round that was committed, serving as a watermark for expired transactions.
-    last_committed_round: Option<u64>,
 }
 
 impl ConsensusTxStatusCache {
     pub fn new(gc_depth: u64) -> Self {
+        let (last_committed_leader_round_tx, last_committed_leader_round_rx) = watch::channel(None);
         Self {
+            inner: Default::default(),
+            status_notify_read: Default::default(),
             gc_depth,
-            ..Default::default()
+            last_committed_leader_round_tx,
+            last_committed_leader_round_rx,
         }
     }
 
@@ -68,8 +71,9 @@ impl ConsensusTxStatusCache {
             transaction_position, status
         );
         let mut inner = self.inner.write();
-        if let Some(last_committed_round) = inner.last_committed_round {
-            if transaction_position.block.round as u64 + self.gc_depth < last_committed_round {
+        if let Some(last_committed_leader_round) = *self.last_committed_leader_round_rx.borrow() {
+            if transaction_position.block.round as u64 + self.gc_depth < last_committed_leader_round
+            {
                 return;
             }
         }
@@ -116,6 +120,7 @@ impl ConsensusTxStatusCache {
         old_status: Option<ConsensusTxStatus>,
     ) -> NotifyReadConsensusTxStatusResult {
         let registration = self.status_notify_read.register_one(&transaction_position);
+        let mut round_rx = self.last_committed_leader_round_rx.clone();
         {
             let inner = self.inner.read();
             if let Some(status) = inner.transaction_status.get(&transaction_position) {
@@ -133,27 +138,28 @@ impl ConsensusTxStatusCache {
 
         let expiration_check = async {
             loop {
-                {
-                    let inner = self.inner.read();
-                    if let Some(last_committed_round) = inner.last_committed_round {
-                        if transaction_position.block.round as u64 + self.gc_depth
-                            < last_committed_round
-                        {
-                            return last_committed_round;
-                        }
+                if let Some(last_committed_leader_round) = *round_rx.borrow() {
+                    if transaction_position.block.round as u64 + self.gc_depth
+                        < last_committed_leader_round
+                    {
+                        return last_committed_leader_round;
                     }
                 }
-                sleep(Duration::from_millis(50)).await;
+                // Channel closed - this should never happen in practice, so panic
+                round_rx
+                    .changed()
+                    .await
+                    .expect("last_committed_leader_round watch channel closed unexpectedly");
             }
         };
         tokio::select! {
             status = registration => NotifyReadConsensusTxStatusResult::Status(status),
-            last_committed_round = expiration_check => NotifyReadConsensusTxStatusResult::Expired(last_committed_round),
+            last_committed_leader_round = expiration_check => NotifyReadConsensusTxStatusResult::Expired(last_committed_leader_round),
         }
     }
 
-    pub async fn update_last_committed_round(&self, round: u64) {
-        debug!("Updating last committed round: {}", round);
+    pub async fn update_last_committed_leader_round(&self, round: u64) {
+        debug!("Updating last committed leader round: {}", round);
         let mut inner = self.inner.write();
         while let Some(&next_round) = inner.round_lookup_map.keys().next() {
             if next_round + self.gc_depth < round {
@@ -165,18 +171,18 @@ impl ConsensusTxStatusCache {
                 break;
             }
         }
-        inner.last_committed_round = Some(round);
+        // Send update through watch channel
+        let _ = self.last_committed_leader_round_tx.send(Some(round));
     }
 
     /// Returns true if the position is too far ahead of the last committed round.
     pub fn check_position_too_ahead(&self, position: &ConsensusTxPosition) -> SuiResult<()> {
-        let inner = self.inner.read();
-        if let Some(last_committed_round) = inner.last_committed_round {
+        if let Some(last_committed_leader_round) = *self.last_committed_leader_round_rx.borrow() {
             // TODO(fastpath): Is using gc_depth appropriate here?
-            if position.block.round as u64 > last_committed_round + self.gc_depth {
+            if position.block.round as u64 > last_committed_leader_round + self.gc_depth {
                 return Err(SuiError::InvalidTransactionPosition {
                     round: position.block.round as u64,
-                    last_committed_round,
+                    last_committed_round: last_committed_leader_round,
                 });
             }
         }
@@ -267,7 +273,7 @@ mod tests {
         cache.set_transaction_status(tx_pos, ConsensusTxStatus::FastpathCertified);
 
         // Update last committed round to trigger expiration
-        cache.update_last_committed_round(GC_DEPTH + 2).await;
+        cache.update_last_committed_leader_round(GC_DEPTH + 2).await;
 
         // Try to read status - should be expired
         let result = cache.notify_read_transaction_status(tx_pos, None).await;
@@ -309,7 +315,7 @@ mod tests {
         }
 
         // Update last committed round to expire early rounds
-        cache.update_last_committed_round(GC_DEPTH + 3).await;
+        cache.update_last_committed_leader_round(GC_DEPTH + 3).await;
 
         // Verify early rounds are cleaned up
         let inner = cache.inner.read();

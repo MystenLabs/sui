@@ -406,7 +406,7 @@ async fn test_wait_for_effects_expired() {
             .consensus_tx_status_cache
             .as_ref()
             .unwrap()
-            .update_last_committed_round(epoch_store.protocol_config().gc_depth() as u64 + 1)
+            .update_last_committed_leader_round(epoch_store.protocol_config().gc_depth() as u64 + 1)
             .await;
         tokio::time::sleep(Duration::from_millis(100)).await;
         epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Finalized);
