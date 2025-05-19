@@ -432,8 +432,7 @@ title: Module `bridge::treasury`
     // Make sure upgrade cap is <b>for</b> the Coin package
     // FIXME: add test
     <b>assert</b>!(
-        object::id_to_address(&package::upgrade_package(&uc))
-                == coin_address,
+        object::id_to_address(&package::upgrade_package(&uc)) == coin_address,
         <a href="../bridge/treasury.md#bridge_treasury_EInvalidUpgradeCap">EInvalidUpgradeCap</a>,
     );
     <b>let</b> registration = <a href="../bridge/treasury.md#bridge_treasury_ForeignTokenRegistration">ForeignTokenRegistration</a> {
@@ -506,7 +505,7 @@ title: Module `bridge::treasury`
             <a href="../bridge/treasury.md#bridge_treasury_decimal_multiplier">decimal_multiplier</a>,
             <a href="../bridge/treasury.md#bridge_treasury_notional_value">notional_value</a>,
         })
-    } <b>else</b> {}
+    } // <b>else</b> not implemented in V1
 }
 </code></pre>
 

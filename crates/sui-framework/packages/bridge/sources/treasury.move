@@ -101,8 +101,7 @@ public(package) fun register_foreign_token<T>(
     // Make sure upgrade cap is for the Coin package
     // FIXME: add test
     assert!(
-        object::id_to_address(&package::upgrade_package(&uc))
-                == coin_address,
+        object::id_to_address(&package::upgrade_package(&uc)) == coin_address,
         EInvalidUpgradeCap,
     );
     let registration = ForeignTokenRegistration {
@@ -158,7 +157,7 @@ public(package) fun add_new_token(
             decimal_multiplier,
             notional_value,
         })
-    } else {}
+    } // else not implemented in V1
 }
 
 public(package) fun create(ctx: &mut TxContext): BridgeTreasury {

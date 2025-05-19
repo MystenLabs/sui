@@ -304,8 +304,7 @@ title: Module `bridge::limiter`
     };
     // Now scale down to notional value
     <b>let</b> notional_amount =
-        notional_amount_with_token_multiplier
-            / (<a href="../bridge/treasury.md#bridge_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128);
+        notional_amount_with_token_multiplier / (<a href="../bridge/treasury.md#bridge_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128);
     // Should be safe to downcast to u64 after dividing by the decimals
     <b>let</b> notional_amount = (notional_amount <b>as</b> u64);
     // Record transfer value

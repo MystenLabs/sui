@@ -110,8 +110,7 @@ public(package) fun check_and_record_sending_transfer<T>(
 
     // Now scale down to notional value
     let notional_amount =
-        notional_amount_with_token_multiplier
-            / (treasury.decimal_multiplier<T>() as u128);
+        notional_amount_with_token_multiplier / (treasury.decimal_multiplier<T>() as u128);
     // Should be safe to downcast to u64 after dividing by the decimals
     let notional_amount = (notional_amount as u64);
 
