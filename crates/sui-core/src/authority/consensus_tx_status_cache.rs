@@ -4,7 +4,7 @@
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::Duration;
-use sui_types::error::SuiError;
+use sui_types::error::{SuiError, SuiResult};
 use tokio::time::sleep;
 use tracing::debug;
 

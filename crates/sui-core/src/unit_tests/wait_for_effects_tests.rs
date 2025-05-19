@@ -365,11 +365,9 @@ async fn test_wait_for_effects_fastpath_certified() {
         WaitForEffectsResponse::Executed {
             details,
             effects_digest,
-            finalized,
         } => {
             assert!(details.is_none());
             assert_eq!(effects_digest, exec_effects.digest());
-            assert!(!finalized);
         }
         _ => panic!("Expected Executed response"),
     }
@@ -426,11 +424,9 @@ async fn test_wait_for_effects_finalized() {
         WaitForEffectsResponse::Executed {
             details,
             effects_digest,
-            finalized,
         } => {
             assert!(details.is_none());
             assert_eq!(effects_digest, exec_effects.digest());
-            assert!(finalized);
         }
         _ => panic!("Expected Executed response"),
     }

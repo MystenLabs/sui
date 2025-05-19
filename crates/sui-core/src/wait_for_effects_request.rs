@@ -57,7 +57,6 @@ pub(crate) enum WaitForEffectsResponse {
     Executed {
         effects_digest: TransactionEffectsDigest,
         details: Option<Box<ExecutedData>>,
-        finalized: bool,
     },
     Rejected {
         // The rejection reason known locally.
@@ -151,7 +150,6 @@ impl TryFrom<RawWaitForEffectsResponse> for WaitForEffectsResponse {
                 Ok(Self::Executed {
                     effects_digest,
                     details,
-                    finalized: executed.finalized,
                 })
             }
             Some(RawValidatorTransactionStatus::Rejected(rejected)) => {
@@ -218,7 +216,6 @@ impl TryFrom<WaitForEffectsResponse> for RawWaitForEffectsResponse {
             WaitForEffectsResponse::Executed {
                 effects_digest,
                 details,
-                finalized,
             } => {
                 let effects_digest = bcs::to_bytes(&effects_digest)
                     .map_err(|err| SuiError::GrpcMessageSerializeError {
@@ -282,7 +279,6 @@ impl TryFrom<WaitForEffectsResponse> for RawWaitForEffectsResponse {
                 RawValidatorTransactionStatus::Executed(RawExecutedStatus {
                     effects_digest,
                     details,
-                    finalized,
                 })
             }
             WaitForEffectsResponse::Rejected { reason } => {
