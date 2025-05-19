@@ -423,6 +423,10 @@ pub struct RawWaitForEffectsRequest {
 
 #[derive(Clone, prost::Message)]
 pub struct RawWaitForEffectsResponse {
+    // In order to represent an enum in protobuf, we need to use oneof.
+    // However, oneof also allows the value to be unset, which corresponds to None value.
+    // Hence, we need to use Option type for `inner`.
+    // We expect the value to be set in a valid response.
     #[prost(oneof = "RawValidatorTransactionStatus", tags = "1, 2, 3")]
     pub inner: Option<RawValidatorTransactionStatus>,
 }

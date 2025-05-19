@@ -1165,6 +1165,8 @@ impl ValidatorService {
                         tx_digest = ?request.transaction_digest,
                         "Observed executed effects",
                     );
+                    // unwrap is safe because notify_read_executed_effects is expected
+                    // to return the same amount of effects as the provided transactions.
                     break effects.pop().unwrap();
                 },
             }
