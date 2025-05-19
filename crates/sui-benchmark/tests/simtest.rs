@@ -517,6 +517,8 @@ mod test {
                         allowed_txn_cost_overage_burst_limit_us: rng.gen_range(0..500_000),
                         randomness_scalar: rng.gen_range(10..=50),
                         max_estimate_us: 1_500_000,
+                        stored_observations_num_included_checkpoints: 10,
+                        stored_observations_limit: rng.gen_range(1..=20),
                     },
                 ),
             ]

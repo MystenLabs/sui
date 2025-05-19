@@ -832,6 +832,7 @@ impl AuthorityPerEpochStore {
                         &protocol_config,
                         committee.clone(),
                         &*object_store,
+                        &metrics,
                     )
                     // Load observations stored during the current epoch.
                     .chain(execution_time_observations.into_iter().flat_map(
@@ -1196,6 +1197,7 @@ impl AuthorityPerEpochStore {
         protocol_config: &ProtocolConfig,
         committee: Arc<Committee>,
         object_store: &dyn ObjectStore,
+        metrics: &EpochMetrics,
     ) -> impl Iterator<Item = (AuthorityIndex, u64, ExecutionTimeObservationKey, Duration)> {
         if !matches!(
             protocol_config.per_object_congestion_control_mode(),
@@ -1241,6 +1243,9 @@ impl AuthorityPerEpochStore {
             "loaded stored execution time observations for {} keys",
             stored_observations.len()
         );
+        metrics
+            .epoch_execution_time_observations_loaded
+            .set(stored_observations.len() as i64);
         assert_reachable!("successfully loads stored execution time observations");
 
         // Make a single flattened iterator with every stored observation, for consumption

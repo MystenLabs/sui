@@ -653,6 +653,8 @@ mod tests {
                         allowed_txn_cost_overage_burst_limit_us: 0,
                         randomness_scalar: 100,
                         max_estimate_us: u64::MAX,
+                        stored_observations_num_included_checkpoints: 10,
+                        stored_observations_limit: u64::MAX,
                     },
                 ),
             );
@@ -785,6 +787,8 @@ mod tests {
                         allowed_txn_cost_overage_burst_limit_us: 0,
                         randomness_scalar: 0,
                         max_estimate_us: u64::MAX,
+                        stored_observations_num_included_checkpoints: 10,
+                        stored_observations_limit: u64::MAX,
                     },
                 ),
             );
@@ -879,6 +883,8 @@ mod tests {
                         allowed_txn_cost_overage_burst_limit_us: 0,
                         randomness_scalar: 0,
                         max_estimate_us: u64::MAX,
+                        stored_observations_num_included_checkpoints: 10,
+                        stored_observations_limit: u64::MAX,
                     },
                 ),
             );
@@ -1111,6 +1117,8 @@ mod tests {
                 // Not used in this test.
                 allowed_txn_cost_overage_burst_limit_us: 0,
                 randomness_scalar: 0,
+                stored_observations_num_included_checkpoints: 10,
+                stored_observations_limit: u64::MAX,
             },
             std::iter::empty(),
         );
