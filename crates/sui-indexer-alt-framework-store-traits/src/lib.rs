@@ -123,8 +123,13 @@ pub struct ReaderWatermark {
 #[derive(Default, Debug, Clone, Copy)]
 pub struct PrunerWatermark {
     /// The remaining time in milliseconds that the pruner must wait before it can begin pruning.
-    /// This is calculated as the time remaining until `pruner_timestamp + delay` has passed. This
-    /// number can be negative. If it is less than 0, the pruner can begin pruning immediately.
+    ///
+    /// This is calculated by finding the difference between the time when it becomes safe to prune
+    /// and the current time: `(pruner_timestamp + delay) - current_time`.
+    ///
+    /// The pruner will wait for this duration before beginning to delete data if it is positive.
+    /// When this value is zero or negative, it means the waiting period has already passed and
+    /// pruning can begin immediately.
     pub wait_for_ms: i64,
 
     /// The pruner can delete up to this checkpoint (exclusive).
