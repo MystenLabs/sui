@@ -110,7 +110,7 @@ pub mod wallet_context;
 pub const SUI_COIN_TYPE: &str = "0x2::sui::SUI";
 pub const SUI_LOCAL_NETWORK_URL: &str = "http://127.0.0.1:9000";
 pub const SUI_LOCAL_NETWORK_URL_0: &str = "http://0.0.0.0:9000";
-pub const SUI_LOCAL_NETWORK_GAS_URL: &str = "http://127.0.0.1:5003/gas";
+pub const SUI_LOCAL_NETWORK_GAS_URL: &str = "http://127.0.0.1:5003/v2/gas";
 pub const SUI_DEVNET_URL: &str = "https://fullnode.devnet.sui.io:443";
 pub const SUI_TESTNET_URL: &str = "https://fullnode.testnet.sui.io:443";
 pub const SUI_MAINNET_URL: &str = "https://fullnode.mainnet.sui.io:443";

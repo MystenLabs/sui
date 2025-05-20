@@ -7,21 +7,21 @@ use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
 use sui_rpc_api::proto::rpc::v2alpha::live_data_service_client::LiveDataServiceClient;
 use sui_rpc_api::proto::rpc::v2alpha::ResolveTransactionRequest;
-use sui_rpc_api::types::ResolveTransactionResponse;
-use sui_rpc_api::types::TransactionSimulationResponse;
+use sui_rpc_api::proto::rpc::v2beta::Argument;
+use sui_rpc_api::proto::rpc::v2beta::Command;
+use sui_rpc_api::proto::rpc::v2beta::GasPayment;
+use sui_rpc_api::proto::rpc::v2beta::Input;
+use sui_rpc_api::proto::rpc::v2beta::MoveCall;
+use sui_rpc_api::proto::rpc::v2beta::ProgrammableTransaction;
+use sui_rpc_api::proto::rpc::v2beta::Transaction;
+use sui_rpc_api::proto::rpc::v2beta::TransactionKind;
+use sui_rpc_api::proto::rpc::v2beta::TransferObjects;
 use sui_rpc_api::Client;
-use sui_sdk_transaction_builder::unresolved;
-use sui_sdk_types::Argument;
-use sui_sdk_types::Command;
-use sui_sdk_types::TransactionExpiration;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
 use test_cluster::TestClusterBuilder;
 
-fn build_resolve_request(
-    transaction: &unresolved::Transaction,
-    simulate: bool,
-) -> ResolveTransactionRequest {
+fn build_resolve_request(transaction: Transaction, simulate: bool) -> ResolveTransactionRequest {
     let read_mask = if simulate {
         Some(FieldMask {
             paths: vec!["simulation".to_string()],
@@ -30,35 +30,38 @@ fn build_resolve_request(
         None
     };
     ResolveTransactionRequest {
-        unresolved_transaction: Some(serde_json::to_string(transaction).unwrap()),
+        unresolved_transaction: Some(transaction),
         read_mask,
     }
 }
 
 fn proto_to_response(
     proto: sui_rpc_api::proto::rpc::v2alpha::ResolveTransactionResponse,
-) -> ResolveTransactionResponse {
-    ResolveTransactionResponse {
-        transaction: proto
+) -> (
+    sui_types::transaction::TransactionData,
+    Option<(
+        sui_types::effects::TransactionEffects,
+        Option<sui_types::effects::TransactionEvents>,
+    )>,
+) {
+    let effects_and_events = proto.simulation.map(|simulation| {
+        let txn = simulation.transaction.unwrap();
+        (
+            txn.effects.unwrap().bcs.unwrap().deserialize().unwrap(),
+            txn.events
+                .map(|events| events.bcs.unwrap().deserialize().unwrap()),
+        )
+    });
+    (
+        proto
             .transaction
             .unwrap()
             .bcs
             .unwrap()
             .deserialize()
             .unwrap(),
-        simulation: proto.simulation.map(|simulation| {
-            let txn = simulation.transaction.unwrap();
-            TransactionSimulationResponse {
-                effects: txn.effects.unwrap().bcs.unwrap().deserialize().unwrap(),
-                events: txn
-                    .events
-                    .map(|events| events.bcs.unwrap().deserialize().unwrap()),
-                balance_changes: None,
-                input_objects: None,
-                output_objects: None,
-            }
-        }),
-    }
+        effects_and_events,
+    )
 }
 
 #[sim_test]
@@ -75,38 +78,35 @@ async fn resolve_transaction_simple_transfer() {
     gas.sort_by_key(|object_ref| object_ref.0);
     let obj_to_send = gas.first().unwrap().0;
 
-    let unresolved_transaction = unresolved::Transaction {
-        ptb: unresolved::ProgrammableTransaction {
+    let unresolved_transaction = Transaction {
+        kind: Some(TransactionKind::from(ProgrammableTransaction {
             inputs: vec![
-                unresolved::Input {
-                    object_id: Some(obj_to_send.into()),
+                Input {
+                    object_id: Some(obj_to_send.to_canonical_string(true)),
                     ..Default::default()
                 },
-                unresolved::Input {
-                    value: Some(unresolved::Value::String(recipient.to_string())),
+                Input {
+                    literal: Some(Box::new(recipient.to_string().into())),
                     ..Default::default()
                 },
             ],
-            commands: vec![Command::TransferObjects(sui_sdk_types::TransferObjects {
-                objects: vec![Argument::Input(0)],
-                address: Argument::Input(1),
+            commands: vec![Command::from(TransferObjects {
+                objects: vec![Argument::input(0)],
+                address: Some(Argument::input(1)),
             })],
-        },
-        sender: sender.into(),
-        gas_payment: None,
-        expiration: TransactionExpiration::None,
+        })),
+        sender: Some(sender.to_string()),
+        ..Default::default()
     };
 
     let resolved = alpha_client
-        .resolve_transaction(build_resolve_request(&unresolved_transaction, true))
+        .resolve_transaction(build_resolve_request(unresolved_transaction, true))
         .await
         .unwrap()
         .into_inner();
-    let resolved = proto_to_response(resolved);
+    let (transaction, effects_and_events) = proto_to_response(resolved);
 
-    let signed_transaction = test_cluster
-        .wallet
-        .sign_transaction(&resolved.transaction.try_into().unwrap());
+    let signed_transaction = test_cluster.wallet.sign_transaction(&transaction);
     let effects = client
         .execute_transaction(&signed_transaction)
         .await
@@ -114,10 +114,7 @@ async fn resolve_transaction_simple_transfer() {
         .effects;
 
     assert!(effects.status().is_ok());
-    assert_eq!(
-        resolved.simulation.unwrap().effects,
-        effects.try_into().unwrap()
-    );
+    assert_eq!(effects_and_events.unwrap().0, effects,);
 }
 
 #[sim_test]
@@ -134,58 +131,53 @@ async fn resolve_transaction_transfer_with_sponsor() {
     let obj_to_send = gas.first().unwrap().0;
     let sponsor = test_cluster.wallet.get_addresses()[1];
 
-    let unresolved_transaction = unresolved::Transaction {
-        ptb: unresolved::ProgrammableTransaction {
+    let unresolved_transaction = Transaction {
+        kind: Some(TransactionKind::from(ProgrammableTransaction {
             inputs: vec![
-                unresolved::Input {
-                    object_id: Some(obj_to_send.into()),
+                Input {
+                    object_id: Some(obj_to_send.to_canonical_string(true)),
                     ..Default::default()
                 },
-                unresolved::Input {
-                    value: Some(unresolved::Value::String(recipient.to_string())),
+                Input {
+                    literal: Some(Box::new(recipient.to_string().into())),
                     ..Default::default()
                 },
             ],
-            commands: vec![Command::TransferObjects(sui_sdk_types::TransferObjects {
-                objects: vec![Argument::Input(0)],
-                address: Argument::Input(1),
+            commands: vec![Command::from(TransferObjects {
+                objects: vec![Argument::input(0)],
+                address: Some(Argument::input(1)),
             })],
-        },
-        sender: sender.into(),
-        gas_payment: Some(unresolved::GasPayment {
-            objects: vec![],
-            owner: sponsor.into(),
-            price: None,
-            budget: None,
+        })),
+        sender: Some(sender.to_string()),
+        gas_payment: Some(GasPayment {
+            owner: Some(sponsor.to_string()),
+            ..Default::default()
         }),
-        expiration: TransactionExpiration::None,
+        ..Default::default()
     };
 
     let resolved = alpha_client
-        .resolve_transaction(build_resolve_request(&unresolved_transaction, true))
+        .resolve_transaction(build_resolve_request(unresolved_transaction, true))
         .await
         .unwrap()
         .into_inner();
-    let resolved = proto_to_response(resolved);
+    let (transaction, effects_and_events) = proto_to_response(resolved);
 
-    let transaction_data = resolved.transaction.clone().try_into().unwrap();
     let sender_sig = test_cluster
         .wallet
         .config
         .keystore
-        .sign_secure(&sender, &transaction_data, Intent::sui_transaction())
+        .sign_secure(&sender, &transaction, Intent::sui_transaction())
         .unwrap();
     let sponsor_sig = test_cluster
         .wallet
         .config
         .keystore
-        .sign_secure(&sponsor, &transaction_data, Intent::sui_transaction())
+        .sign_secure(&sponsor, &transaction, Intent::sui_transaction())
         .unwrap();
 
-    let signed_transaction = sui_types::transaction::Transaction::from_data(
-        transaction_data,
-        vec![sender_sig, sponsor_sig],
-    );
+    let signed_transaction =
+        sui_types::transaction::Transaction::from_data(transaction, vec![sender_sig, sponsor_sig]);
     let effects = client
         .execute_transaction(&signed_transaction)
         .await
@@ -193,10 +185,7 @@ async fn resolve_transaction_transfer_with_sponsor() {
         .effects;
 
     assert!(effects.status().is_ok());
-    assert_eq!(
-        resolved.simulation.unwrap().effects,
-        effects.try_into().unwrap()
-    );
+    assert_eq!(effects_and_events.unwrap().0, effects);
 }
 
 #[sim_test]
@@ -210,35 +199,32 @@ async fn resolve_transaction_borrowed_shared_object() {
 
     let sender = test_cluster.wallet.get_addresses()[0];
 
-    let unresolved_transaction = unresolved::Transaction {
-        ptb: unresolved::ProgrammableTransaction {
-            inputs: vec![unresolved::Input {
-                object_id: Some("0x6".parse().unwrap()),
+    let unresolved_transaction = Transaction {
+        kind: Some(TransactionKind::from(ProgrammableTransaction {
+            inputs: vec![Input {
+                object_id: Some("0x6".to_owned()),
                 ..Default::default()
             }],
-            commands: vec![Command::MoveCall(sui_sdk_types::MoveCall {
-                package: "0x2".parse().unwrap(),
-                module: "clock".parse().unwrap(),
-                function: "timestamp_ms".parse().unwrap(),
+            commands: vec![Command::from(MoveCall {
+                package: Some("0x2".to_owned()),
+                module: Some("clock".to_owned()),
+                function: Some("timestamp_ms".to_owned()),
                 type_arguments: vec![],
-                arguments: vec![Argument::Input(0)],
+                arguments: vec![Argument::input(0)],
             })],
-        },
-        sender: sender.into(),
-        gas_payment: None,
-        expiration: TransactionExpiration::None,
+        })),
+        sender: Some(sender.to_string()),
+        ..Default::default()
     };
 
     let resolved = alpha_client
-        .resolve_transaction(build_resolve_request(&unresolved_transaction, true))
+        .resolve_transaction(build_resolve_request(unresolved_transaction, true))
         .await
         .unwrap()
         .into_inner();
-    let resolved = proto_to_response(resolved);
+    let (transaction, _effects_and_events) = proto_to_response(resolved);
 
-    let signed_transaction = test_cluster
-        .wallet
-        .sign_transaction(&resolved.transaction.try_into().unwrap());
+    let signed_transaction = test_cluster.wallet.sign_transaction(&transaction);
     let effects = client
         .execute_transaction(&signed_transaction)
         .await
@@ -263,45 +249,42 @@ async fn resolve_transaction_mutable_shared_object() {
 
     let validator_address = test_cluster.swarm.config().validator_configs()[0].sui_address();
 
-    let unresolved_transaction = unresolved::Transaction {
-        ptb: unresolved::ProgrammableTransaction {
+    let unresolved_transaction = Transaction {
+        kind: Some(TransactionKind::from(ProgrammableTransaction {
             inputs: vec![
-                unresolved::Input {
-                    object_id: Some("0x5".parse().unwrap()),
+                Input {
+                    object_id: Some("0x5".to_owned()),
                     ..Default::default()
                 },
-                unresolved::Input {
-                    object_id: Some(obj_to_stake.into()),
+                Input {
+                    object_id: Some(obj_to_stake.to_canonical_string(true)),
                     ..Default::default()
                 },
-                unresolved::Input {
-                    value: Some(unresolved::Value::String(validator_address.to_string())),
+                Input {
+                    literal: Some(Box::new(validator_address.to_string().into())),
                     ..Default::default()
                 },
             ],
-            commands: vec![Command::MoveCall(sui_sdk_types::MoveCall {
-                package: "0x3".parse().unwrap(),
-                module: "sui_system".parse().unwrap(),
-                function: "request_add_stake".parse().unwrap(),
+            commands: vec![Command::from(MoveCall {
+                package: Some("0x3".to_owned()),
+                module: Some("sui_system".to_owned()),
+                function: Some("request_add_stake".to_owned()),
                 type_arguments: vec![],
-                arguments: vec![Argument::Input(0), Argument::Input(1), Argument::Input(2)],
+                arguments: vec![Argument::input(0), Argument::input(1), Argument::input(2)],
             })],
-        },
-        sender: sender.into(),
-        gas_payment: None,
-        expiration: TransactionExpiration::None,
+        })),
+        sender: Some(sender.to_string()),
+        ..Default::default()
     };
 
     let resolved = alpha_client
-        .resolve_transaction(build_resolve_request(&unresolved_transaction, true))
+        .resolve_transaction(build_resolve_request(unresolved_transaction, true))
         .await
         .unwrap()
         .into_inner();
-    let resolved = proto_to_response(resolved);
+    let (transaction, effects_and_events) = proto_to_response(resolved);
 
-    let signed_transaction = test_cluster
-        .wallet
-        .sign_transaction(&resolved.transaction.try_into().unwrap());
+    let signed_transaction = test_cluster.wallet.sign_transaction(&transaction);
     let effects = client
         .execute_transaction(&signed_transaction)
         .await
@@ -309,10 +292,7 @@ async fn resolve_transaction_mutable_shared_object() {
         .effects;
 
     assert!(effects.status().is_ok());
-    assert_eq!(
-        resolved.simulation.unwrap().effects,
-        effects.try_into().unwrap()
-    );
+    assert_eq!(effects_and_events.unwrap().0, effects);
 }
 
 #[sim_test]
@@ -323,27 +303,27 @@ async fn resolve_transaction_insufficient_gas() {
         .unwrap();
 
     // Test the case where we don't have enough coins/gas for the required budget
-    let unresolved_transaction = unresolved::Transaction {
-        ptb: unresolved::ProgrammableTransaction {
-            inputs: vec![unresolved::Input {
-                object_id: Some("0x6".parse().unwrap()),
+    let unresolved_transaction = Transaction {
+        kind: Some(TransactionKind::from(ProgrammableTransaction {
+            inputs: vec![Input {
+                object_id: Some("0x6".to_owned()),
                 ..Default::default()
             }],
-            commands: vec![Command::MoveCall(sui_sdk_types::MoveCall {
-                package: "0x2".parse().unwrap(),
-                module: "clock".parse().unwrap(),
-                function: "timestamp_ms".parse().unwrap(),
+            commands: vec![Command::from(MoveCall {
+                package: Some("0x2".to_owned()),
+                module: Some("clock".to_owned()),
+                function: Some("timestamp_ms".to_owned()),
                 type_arguments: vec![],
-                arguments: vec![Argument::Input(0)],
+                arguments: vec![Argument::input(0)],
             })],
-        },
-        sender: SuiAddress::random_for_testing_only().into(), // random account with no gas
-        gas_payment: None,
-        expiration: TransactionExpiration::None,
+        })),
+        sender: Some(SuiAddress::random_for_testing_only().to_string()), // random account with no
+        // gas
+        ..Default::default()
     };
 
     let error = alpha_client
-        .resolve_transaction(build_resolve_request(&unresolved_transaction, false))
+        .resolve_transaction(build_resolve_request(unresolved_transaction, false))
         .await
         .unwrap_err();
 

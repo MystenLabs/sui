@@ -10,7 +10,7 @@ use std::{
 };
 
 use codespan_reporting::files::SimpleFiles;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_spanned::Spanned;
 
 use super::{FileHandle, PackageResult};
@@ -59,6 +59,12 @@ impl<T> Located<T> {
 
     pub fn into_inner(self) -> T {
         self.value.into_inner()
+    }
+
+    pub fn destructure(self) -> (T, FileHandle, Range<usize>) {
+        let span = self.value.span();
+        let value = self.value.into_inner();
+        (value, self.file, span)
     }
 
     pub fn get_ref(&self) -> &T {

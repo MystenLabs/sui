@@ -557,7 +557,7 @@ pub(crate) mod tests {
     }
 
     /// BCS encode Move value.
-    fn serialize(value: A::MoveValue) -> Vec<u8> {
+    pub(crate) fn serialize(value: A::MoveValue) -> Vec<u8> {
         value.clone().undecorate().simple_serialize().unwrap()
     }
 }

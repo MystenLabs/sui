@@ -479,6 +479,12 @@ impl MessageMerge<&sui_sdk_types::TransactionEffectsV2> for TransactionEffects {
                 .collect();
         }
 
+        for object in self.changed_objects.iter_mut().chain(&mut self.gas_object) {
+            if object.output_digest.is_some() && object.output_version.is_none() {
+                object.output_version = Some(*lamport_version);
+            }
+        }
+
         if mask.contains(Self::UNCHANGED_SHARED_OBJECTS_FIELD.name) {
             self.unchanged_shared_objects = unchanged_shared_objects
                 .clone()

@@ -47,7 +47,6 @@ fastcrypto = { workspace = true, features = ["copy_key"] }
 mysten-metrics.workspace = true
 simulacrum.workspace = true
 sui-config.workspace = true
-sui-archival.workspace = true
 sui-core.workspace = true
 sui-data-ingestion-core.workspace = true
 sui-json.workspace = true

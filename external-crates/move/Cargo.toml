@@ -141,9 +141,10 @@ z3tracer = "0.8.0"
 inline_colorization = "0.1.6"
 insta = "1.42.0"
 zstd = "0.13.2"
+lcov = "0.8.1"
 
 bytecode-interpreter-crypto = { path = "crates/bytecode-interpreter-crypto" }
-enum-compat-util = { path = "crates/enum-compat-util"}
+enum-compat-util = { path = "crates/enum-compat-util" }
 invalid-mutations = { path = "crates/invalid-mutations" }
 module-generation = { path = "crates/module-generation" }
 move-abstract-interpreter = { path = "crates/move-abstract-interpreter" }

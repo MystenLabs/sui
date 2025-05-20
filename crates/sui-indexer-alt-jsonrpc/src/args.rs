@@ -4,10 +4,13 @@
 use std::path::PathBuf;
 
 use sui_indexer_alt_metrics::MetricsArgs;
-use sui_pg_db::DbArgs;
+use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
+use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use url::Url;
 
-use crate::{data::system_package_task::SystemPackageTaskArgs, NodeArgs, RpcArgs};
+use crate::{NodeArgs, RpcArgs};
+
+pub use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 
 #[derive(clap::Parser, Debug, Clone)]
 pub struct Args {
@@ -34,6 +37,9 @@ pub enum Command {
 
         #[command(flatten)]
         db_args: DbArgs,
+
+        #[command(flatten)]
+        bigtable_args: BigtableArgs,
 
         #[command(flatten)]
         rpc_args: RpcArgs,

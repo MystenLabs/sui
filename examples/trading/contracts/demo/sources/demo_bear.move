@@ -4,7 +4,8 @@
 module demo::demo_bear;
 
 use std::string::{String, utf8};
-use sui::{display, package};
+use sui::display;
+use sui::package;
 
 /// our demo struct.
 public struct DemoBear has key, store {

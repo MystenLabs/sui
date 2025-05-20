@@ -8,8 +8,8 @@ use anyhow::{bail, Result};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::{Connection, Db},
     pipeline::{concurrent::Handler, Processor},
+    postgres::{Connection, Db},
     types::full_checkpoint_content::CheckpointData,
 };
 use sui_indexer_alt_schema::cp_sequence_numbers::StoredCpSequenceNumbers;

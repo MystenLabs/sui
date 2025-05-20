@@ -1488,7 +1488,7 @@ impl VMTracer<'_> {
                 let MoveTypeLayout::Enum(e) = ty.layout else {
                     panic!("Expected enum, got {:#?}", ty.layout);
                 };
-                let variant_layout = e.variants.iter().find(|v| v.0 .1 == tag)?;
+                let variant_layout = e.variants.iter().find(|v| v.0.1 == tag)?;
                 let mut effects = vec![];
                 for f_layout in variant_layout.1.iter() {
                     let a_layout = RootedType {
@@ -1531,7 +1531,7 @@ impl VMTracer<'_> {
                 let MoveTypeLayout::Enum(e) = ty.layout else {
                     panic!("Expected enum, got {:#?}", ty.layout);
                 };
-                let variant_layout = e.variants.iter().find(|v| v.0 .1 == tag)?;
+                let variant_layout = e.variants.iter().find(|v| v.0.1 == tag)?;
                 let location = ty.ref_type.as_ref()?.1.clone();
 
                 let mut effects = vec![];

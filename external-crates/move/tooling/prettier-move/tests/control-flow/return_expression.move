@@ -38,6 +38,8 @@ fun folding() {
         second_return_value,
     );
 
+    return &mut complex[&expression];
+
     return if (some_value) {
         some_value
     } else {

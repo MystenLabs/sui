@@ -1,0 +1,86 @@
+---
+source: crates/move-package-alt/tests/test_runner.rs
+---
+Lockfile {
+    unpublished: UnpublishedTable {
+        dependencies: UnpublishedDependencies {
+            pinned: {
+                Identifier(
+                    "bar",
+                ): Git(
+                    PinnedGitDependency {
+                        repo: "",
+                        rev: "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0",
+                        path: "",
+                    },
+                ),
+                Identifier(
+                    "foo",
+                ): Local(
+                    LocalDependency {
+                        local: "../foo",
+                    },
+                ),
+            },
+            unpinned: {
+                Identifier(
+                    "bar",
+                ): External(
+                    ExternalDependency {
+                        resolver: "mvr",
+                        data: String(
+                            "@protocol/bar",
+                        ),
+                    },
+                ),
+                Identifier(
+                    "foo",
+                ): Local(
+                    LocalDependency {
+                        local: "../foo",
+                    },
+                ),
+            },
+        },
+        dep_replacements: {},
+    },
+    published: {
+        "mainnet": Publication {
+            metadata: (),
+            dependencies: {
+                Identifier(
+                    "std",
+                ): Git(
+                    PinnedGitDependency {
+                        repo: "",
+                        rev: "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0",
+                        path: "",
+                    },
+                ),
+            },
+        },
+        "testnet": Publication {
+            metadata: (),
+            dependencies: {
+                Identifier(
+                    "std",
+                ): Git(
+                    PinnedGitDependency {
+                        repo: "",
+                        rev: "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0",
+                        path: "",
+                    },
+                ),
+                Identifier(
+                    "sui",
+                ): Git(
+                    PinnedGitDependency {
+                        repo: "",
+                        rev: "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0",
+                        path: "",
+                    },
+                ),
+            },
+        },
+    },
+}

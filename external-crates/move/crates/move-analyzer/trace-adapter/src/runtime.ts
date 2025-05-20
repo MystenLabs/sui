@@ -19,7 +19,7 @@ import {
     TraceInstructionKind,
     readTrace,
 } from './trace_utils';
-import { JSON_FILE_EXT, COMPRESSED_FILE_EXT } from './utils';
+import { TRACE_FILE_EXT } from './utils';
 
 /**
  * File extension for Move source files.
@@ -296,17 +296,17 @@ export class Runtime extends EventEmitter {
      */
     public async start(openedFilePath: string, traceInfo: string, stopOnEntry: boolean): Promise<void> {
         const openedFileExt = path.extname(openedFilePath);
-        const openedFileBaseName = path.basename(openedFilePath, JSON_FILE_EXT + COMPRESSED_FILE_EXT);
-        let srcDebugInfo = new Map<string, IDebugInfo>();
-        let bcodeDebugInfo = new Map<string, IDebugInfo>();
+        const openedFileBaseName = path.basename(openedFilePath, TRACE_FILE_EXT);
+        let srcDebugInfosModMap = new Map<string, IDebugInfo>();
+        let bcodeDebugInfosModMap = new Map<string, IDebugInfo>();
         let disassemblyView = false;
         let traceFilePath = ''; // updated in both conditional branches
-        if (openedFileExt === COMPRESSED_FILE_EXT && openedFileBaseName === REPLAY_TRACE_FILE_NAME) {
+        if (openedFilePath.endsWith(TRACE_FILE_EXT) && openedFileBaseName === REPLAY_TRACE_FILE_NAME) {
             // replay tool trace
             const replayRoot = path.dirname(openedFilePath);
             const bytecodeDir = path.join(replayRoot, 'bytecode');
             hashToFileMap(bytecodeDir, this.filesMap, BCODE_FILE_EXT);
-            bcodeDebugInfo = readAllDebugInfos(bytecodeDir, this.filesMap, true);
+            bcodeDebugInfosModMap = readAllDebugInfos(bytecodeDir, this.filesMap, true);
             const sourceDir = path.join(replayRoot, 'source');
             if (fs.existsSync(sourceDir)) {
                 const sourceFilesMap = new Map<string, IFileInfo>();
@@ -321,7 +321,7 @@ export class Runtime extends EventEmitter {
                 // and sourceFilesMap that contain only Move source files - this way,
                 // since disassembled bytecode files are not present in sourceFilesMap,
                 // debug infos for disassembled bytecode will be excluded.
-                srcDebugInfo =
+                srcDebugInfosModMap =
                     readAllDebugInfos(sourceDir, sourceFilesMap, /* mustHaveSourceFile */ false);
                 sourceFilesMap.forEach((fileInfo, fileHash) => {
                     this.filesMap.set(fileHash, fileInfo);
@@ -343,12 +343,10 @@ export class Runtime extends EventEmitter {
                 throw Error(`Cannot find package name in manifest file: ${manifest_path}`);
             }
 
-            if (openedFileExt !== MOVE_FILE_EXT
-                && openedFileExt !== BCODE_FILE_EXT
-                && openedFileExt !== COMPRESSED_FILE_EXT) {
+            if (!openedFilePath.endsWith(MOVE_FILE_EXT) &&
+                !openedFilePath.endsWith(TRACE_FILE_EXT)) {
                 throw new Error(`File extension: ${openedFileExt} is not supported by trace debugger`);
             }
-            disassemblyView = openedFileExt === BCODE_FILE_EXT;
 
             // create file maps for all files in the `sources` directory, including both package source
             // files and source files for dependencies
@@ -361,39 +359,42 @@ export class Runtime extends EventEmitter {
             const srcDbgInfoDir = fs.existsSync(srcSourceMapDir)
                 ? srcSourceMapDir
                 : path.join(pkgRoot, 'build', pkg_name, 'debug_info');
-            srcDebugInfo = readAllDebugInfos(srcDbgInfoDir, this.filesMap, true);
+
+            srcDebugInfosModMap = readAllDebugInfos(srcDbgInfoDir, this.filesMap, true);
 
             // reconstruct trace file path from trace info
-            traceFilePath = path.join(pkgRoot, 'traces', traceInfo.replace(/:/g, '_') + JSON_FILE_EXT + COMPRESSED_FILE_EXT);
+            traceFilePath = path.join(pkgRoot, 'traces', traceInfo.replace(/:/g, '_') + TRACE_FILE_EXT);
 
             const disassemblyDir = path.join(pkgRoot, 'build', pkg_name, 'disassembly');
             if (fs.existsSync(disassemblyDir)) {
                 // create file maps for all bytecode files in the `disassembly` directory
                 hashToFileMap(disassemblyDir, this.filesMap, BCODE_FILE_EXT);
                 // created bytecode maps for disassembled bytecode files
-                bcodeDebugInfo = readAllDebugInfos(disassemblyDir, this.filesMap, true);
+                bcodeDebugInfosModMap = readAllDebugInfos(disassemblyDir, this.filesMap, true);
             }
-
         }
+        Array.from(srcDebugInfosModMap.entries()).forEach((entry) => {
+            const [mod, bcodeMap] = entry;
+        });
 
         // create a mapping from source file hash to its corresponding debug info
         const srcDebugInfosHashMap = new Map<string, IDebugInfo>;
-        for (const [_, info] of srcDebugInfo) {
+        for (const [_, info] of srcDebugInfosModMap) {
             srcDebugInfosHashMap.set(info.fileHash, info);
         }
 
         // if we are missing source debug infos (and thus source files), but have bytecode debug infos
         // (and thus disassembled bytecode files), we will only be able to show disassembly,
         // which becomes the default (source) view
-        Array.from(bcodeDebugInfo.entries()).forEach((entry) => {
+        Array.from(bcodeDebugInfosModMap.entries()).forEach((entry) => {
             const [mod, bcodeMap] = entry;
-            if (!srcDebugInfo.has(mod)) {
-                srcDebugInfo.set(mod, bcodeMap);
-                bcodeDebugInfo.delete(mod);
+            if (!srcDebugInfosModMap.has(mod)) {
+                srcDebugInfosModMap.set(mod, bcodeMap);
+                bcodeDebugInfosModMap.delete(mod);
             }
         });
 
-        this.trace = await readTrace(traceFilePath, srcDebugInfosHashMap, srcDebugInfo, bcodeDebugInfo, this.filesMap);
+        this.trace = await readTrace(traceFilePath, srcDebugInfosHashMap, srcDebugInfosModMap, bcodeDebugInfosModMap, this.filesMap);
 
         // start trace viewing session with the first trace event
         this.eventIndex = 0;
@@ -505,7 +506,7 @@ export class Runtime extends EventEmitter {
                     // and `baz` in the example above).
                     //
                     // The following explains a bit more formally what needs
-                    // to happen both on on `next` and `step` actions when
+                    // to happen both on `next` and `step` actions when
                     // call and non-call instructions are interleaved:
                     //
                     // When `step` is called:
@@ -809,9 +810,15 @@ export class Runtime extends EventEmitter {
         if (fileExt !== MOVE_FILE_EXT && fileExt !== BCODE_FILE_EXT) {
             return [];
         }
-        const tracedLines = fileExt === MOVE_FILE_EXT
-            ? this.trace.tracedSrcLines.get(filePath)
-            : this.trace.tracedBcodeLines.get(filePath);
+        // For a source file, `tracedLines` will be in `tracedSrcLines`,
+        // but if no source file exists (only bytecode) then it may be
+        // in `tracedSourceLines` for the bytecode file as well, so simply
+        // use the path for search. If not found, and it's the bytecode file
+        // then search in `tracedBcodeLines` as well.
+        let tracedLines = this.trace.tracedSrcLines.get(filePath);
+        if (!tracedLines && fileExt === BCODE_FILE_EXT) {
+            tracedLines = this.trace.tracedBcodeLines.get(filePath);
+        }
         // Set all breakpoints to invalid and validate the correct ones in the loop,
         // otherwise let them all be invalid if there are no traced lines.
         // Valid breakpoints are those that are on lines that have at least

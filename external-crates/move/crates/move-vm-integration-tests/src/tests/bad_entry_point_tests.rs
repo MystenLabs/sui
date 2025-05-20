@@ -7,7 +7,7 @@ use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
     language_storage::ModuleId,
-    runtime_value::{serialize_values, MoveValue},
+    runtime_value::{MoveValue, serialize_values},
     vm_status::StatusType,
 };
 use move_vm_runtime::move_vm::MoveVM;

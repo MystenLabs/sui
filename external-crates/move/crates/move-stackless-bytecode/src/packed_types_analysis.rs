@@ -52,16 +52,25 @@ pub fn get_packed_types(
                 // instantiate the tx script open types with XUS, XDX
                 if is_script {
                     let num_type_parameters = func_env.get_type_parameters().len();
-                    assert!(num_type_parameters <= 1, "Assuming that transaction scripts have <= 1 type parameters for simplicity. If there can be >1 type parameter, the code here must account for all permutations of type params");
+                    assert!(
+                        num_type_parameters <= 1,
+                        "Assuming that transaction scripts have <= 1 type parameters for simplicity. If there can be >1 type parameter, the code here must account for all permutations of type params"
+                    );
 
                     if num_type_parameters == 1 {
                         for open_ty in annotation.open_types.iter() {
                             for coin_ty in &coin_types {
-                                match open_ty.instantiate(vec![coin_ty.clone()].as_slice()).into_type_tag(env) {
-                                    Some(TypeTag::Struct(s)) =>     {
+                                match open_ty
+                                    .instantiate(vec![coin_ty.clone()].as_slice())
+                                    .into_type_tag(env)
+                                {
+                                    Some(TypeTag::Struct(s)) => {
                                         packed_types.insert(*s);
                                     }
-                                    _ => panic!("Invariant violation: failed to specialize tx script open type {:?} into struct", open_ty),
+                                    _ => panic!(
+                                        "Invariant violation: failed to specialize tx script open type {:?} into struct",
+                                        open_ty
+                                    ),
                                 }
                             }
                         }
@@ -142,7 +151,10 @@ impl TransferFunctions for PackedTypesAnalysis<'_> {
                             {
                                 state.closed_types.insert(*s);
                             } else {
-                                panic!("Invariant violation: struct type {:?} became non-struct type after substitution", open_ty)
+                                panic!(
+                                    "Invariant violation: struct type {:?} became non-struct type after substitution",
+                                    open_ty
+                                )
                             }
                         }
                     }

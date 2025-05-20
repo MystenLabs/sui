@@ -14,23 +14,25 @@
 
 use crate::{
     completions::utils::{
-        addr_to_ide_string, call_completion_item, completion_item, import_insertion_info, mod_defs,
-        PRIMITIVE_TYPE_COMPLETIONS,
+        PRIMITIVE_TYPE_COMPLETIONS, addr_to_ide_string, call_completion_item, completion_item,
+        import_insertion_info, mod_defs,
     },
     symbols::{
-        expansion_mod_ident_to_map_key, AutoImportInsertionInfo, ChainCompletionKind, ChainInfo,
-        CursorContext, DefInfo, FunType, MemberDef, MemberDefInfo, ModuleDefs, Symbols,
-        VariantInfo,
+        Symbols,
+        cursor::{ChainCompletionKind, ChainInfo, CursorContext},
+        def_info::{DefInfo, FunType, VariantInfo},
+        mod_defs::{AutoImportInsertionInfo, MemberDef, MemberDefInfo, ModuleDefs},
     },
+    utils::expansion_mod_ident_to_map_key,
 };
 use itertools::Itertools;
 use lsp_types::{CompletionItem, CompletionItemKind, CompletionItemLabelDetails, InsertTextFormat};
 use move_compiler::{
     expansion::ast::{Address, ModuleIdent, ModuleIdent_, Visibility},
     parser::ast as P,
-    shared::{ide::AliasAutocompleteInfo, Identifier, Name, NumericalAddress},
+    shared::{Identifier, Name, NumericalAddress, ide::AliasAutocompleteInfo},
 };
-use move_ir_types::location::{sp, Loc};
+use move_ir_types::location::{Loc, sp};
 use move_symbol_pool::Symbol;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -102,8 +104,13 @@ pub fn name_chain_completions(
         .cloned()
         .unwrap_or_else(AliasAutocompleteInfo::new);
 
-    eprintln!("found access chain for auto-completion (adddreses: {}, modules: {}, members: {}, tparams: {}",
-              info.addresses.len(), info.modules.len(), info.members.len(), info.type_params.len());
+    eprintln!(
+        "found access chain for auto-completion (adddreses: {}, modules: {}, members: {}, tparams: {}",
+        info.addresses.len(),
+        info.modules.len(),
+        info.members.len(),
+        info.type_params.len()
+    );
 
     // if we are auto-completing for an access chain, there is no need to include default completions
     completion_finalized = true;
@@ -181,22 +188,23 @@ pub fn name_chain_completions(
                 );
             }
         }
-    } else if let Some(next_kind) =
-        first_in_scope_name_chain_component_kind(symbols, &info, leading_name)
-    {
-        completions_for_name_chain_entry(
-            symbols,
-            cursor,
-            &info,
-            ChainComponentInfo::new(leading_name.loc, next_kind),
-            chain_kind,
-            &path_entries,
-            /* path_index */ 0,
-            colon_colon_triggered,
-            inside_use,
-            &mut completions,
-        );
     } else {
+        let component_kinds =
+            first_in_scope_name_chain_component_kind(symbols, &info, leading_name);
+        for next_kind in component_kinds {
+            completions_for_name_chain_entry(
+                symbols,
+                cursor,
+                &info,
+                ChainComponentInfo::new(leading_name.loc, next_kind),
+                chain_kind,
+                &path_entries,
+                /* path_index */ 0,
+                colon_colon_triggered,
+                inside_use,
+                &mut completions,
+            );
+        }
         imports_for_name_chain_entry(
             symbols,
             cursor,
@@ -1119,20 +1127,23 @@ fn all_packages(symbols: &Symbols, info: &AliasAutocompleteInfo) -> BTreeSet<Str
     addresses
 }
 
-/// Computes the kind of the fist chain component that is already
-/// in scope (was already imported).
+/// Computes a list of all possible kinds of the first chain component that are already
+/// in scope (were already imported).
 fn first_in_scope_name_chain_component_kind(
     symbols: &Symbols,
     info: &AliasAutocompleteInfo,
     leading_name: P::LeadingNameAccess,
-) -> Option<ChainComponentKind> {
+) -> Vec<ChainComponentKind> {
+    let mut component_kinds = vec![];
     match leading_name.value {
         P::LeadingNameAccess_::Name(n) => {
             if is_package_name(symbols, info, n) {
-                Some(ChainComponentKind::Package(leading_name))
-            } else if let Some(mod_ident) = info.modules.get(&n.value) {
-                Some(ChainComponentKind::Module(*mod_ident))
-            } else if let Some((mod_ident, member_name)) =
+                component_kinds.push(ChainComponentKind::Package(leading_name));
+            }
+            if let Some(mod_ident) = info.modules.get(&n.value) {
+                component_kinds.push(ChainComponentKind::Module(*mod_ident))
+            }
+            if let Some((mod_ident, member_name)) =
                 info.members
                     .iter()
                     .find_map(|((mod_ident, member_name), alias_names)| {
@@ -1143,28 +1154,23 @@ fn first_in_scope_name_chain_component_kind(
                         }
                     })
             {
-                Some(ChainComponentKind::Member(mod_ident, *member_name))
-            } else {
-                None
+                component_kinds.push(ChainComponentKind::Member(mod_ident, *member_name))
             }
         }
         P::LeadingNameAccess_::AnonymousAddress(addr) => {
             if is_package_address(symbols, info, addr) {
-                Some(ChainComponentKind::Package(leading_name))
-            } else {
-                None
+                component_kinds.push(ChainComponentKind::Package(leading_name))
             }
         }
         P::LeadingNameAccess_::GlobalAddress(n) => {
             // if leading name is global address then the first component can only be a
             // package
             if is_package_name(symbols, info, n) {
-                Some(ChainComponentKind::Package(leading_name))
-            } else {
-                None
+                component_kinds.push(ChainComponentKind::Package(leading_name))
             }
         }
-    }
+    };
+    component_kinds
 }
 
 /// Computes auto-completions for module uses.

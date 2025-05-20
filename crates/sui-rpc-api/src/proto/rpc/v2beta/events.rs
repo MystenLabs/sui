@@ -13,11 +13,12 @@ use crate::proto::TryFromProtoError;
 //
 
 impl Event {
-    const PACKAGE_ID_FIELD: &'static MessageField = &MessageField::new("package_id");
-    const MODULE_FIELD: &'static MessageField = &MessageField::new("module");
-    const SENDER_FIELD: &'static MessageField = &MessageField::new("sender");
-    const EVENT_TYPE_FIELD: &'static MessageField = &MessageField::new("event_type");
-    const CONTENTS_FIELD: &'static MessageField = &MessageField::new("contents");
+    pub const PACKAGE_ID_FIELD: &'static MessageField = &MessageField::new("package_id");
+    pub const MODULE_FIELD: &'static MessageField = &MessageField::new("module");
+    pub const SENDER_FIELD: &'static MessageField = &MessageField::new("sender");
+    pub const EVENT_TYPE_FIELD: &'static MessageField = &MessageField::new("event_type");
+    pub const CONTENTS_FIELD: &'static MessageField = &MessageField::new("contents");
+    pub const JSON_FIELD: &'static MessageField = &MessageField::new("json");
 }
 
 impl MessageFields for Event {
@@ -27,6 +28,7 @@ impl MessageFields for Event {
         Self::SENDER_FIELD,
         Self::EVENT_TYPE_FIELD,
         Self::CONTENTS_FIELD,
+        Self::JSON_FIELD,
     ];
 }
 
@@ -73,6 +75,7 @@ impl MessageMerge<&Event> for Event {
             sender,
             event_type,
             contents,
+            json,
         } = source;
 
         if mask.contains(Self::PACKAGE_ID_FIELD.name) {
@@ -93,6 +96,10 @@ impl MessageMerge<&Event> for Event {
 
         if mask.contains(Self::CONTENTS_FIELD.name) {
             self.contents = contents.clone();
+        }
+
+        if mask.contains(Self::JSON_FIELD.name) {
+            self.json = json.clone();
         }
     }
 }
@@ -151,10 +158,10 @@ impl TryFrom<&Event> for sui_sdk_types::Event {
 //
 
 impl TransactionEvents {
-    const BCS_FIELD: &'static MessageField =
+    pub const BCS_FIELD: &'static MessageField =
         &MessageField::new("bcs").with_message_fields(super::Bcs::FIELDS);
-    const DIGEST_FIELD: &'static MessageField = &MessageField::new("digest");
-    const EVENTS_FIELD: &'static MessageField =
+    pub const DIGEST_FIELD: &'static MessageField = &MessageField::new("digest");
+    pub const EVENTS_FIELD: &'static MessageField =
         &MessageField::new("events").with_message_fields(Event::FIELDS);
 }
 

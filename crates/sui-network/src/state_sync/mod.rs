@@ -50,7 +50,6 @@
 use anemo::{types::PeerEvent, PeerId, Request, Response, Result};
 use futures::{stream::FuturesOrdered, FutureExt, StreamExt};
 use rand::Rng;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::{
     collections::{HashMap, VecDeque},
     sync::{Arc, RwLock},
@@ -82,7 +81,10 @@ mod metrics;
 mod server;
 #[cfg(test)]
 mod tests;
+mod worker;
 
+use self::{metrics::Metrics, server::CheckpointContentsDownloadLimitLayer};
+use crate::state_sync::worker::StateSyncWorker;
 pub use builder::{Builder, UnstartedStateSync};
 pub use generated::{
     state_sync_client::StateSyncClient,
@@ -90,10 +92,9 @@ pub use generated::{
 };
 pub use server::GetCheckpointAvailabilityResponse;
 pub use server::GetCheckpointSummaryRequest;
-use sui_archival::reader::ArchiveReaderBalancer;
+use sui_config::node::ArchiveReaderConfig;
+use sui_data_ingestion_core::{setup_single_workflow, ReaderOptions};
 use sui_storage::verify_checkpoint;
-
-use self::{metrics::Metrics, server::CheckpointContentsDownloadLimitLayer};
 
 /// A handle to the StateSync subsystem.
 ///
@@ -377,8 +378,8 @@ struct StateSyncEventLoop<S> {
     network: anemo::Network,
     metrics: Metrics,
 
-    archive_readers: ArchiveReaderBalancer,
     sync_checkpoint_from_archive_task: Option<AbortHandle>,
+    archive_config: Option<ArchiveReaderConfig>,
 }
 
 impl<S> StateSyncEventLoop<S>
@@ -439,9 +440,10 @@ where
         // on sync from archive as a fall back.
         let task = sync_checkpoint_contents_from_archive(
             self.network.clone(),
-            self.archive_readers.clone(),
+            self.archive_config.clone(),
             self.store.clone(),
             self.peer_heights.clone(),
+            self.metrics.clone(),
         );
         let task_handle = self.tasks.spawn(task);
         self.sync_checkpoint_from_archive_task = Some(task_handle);
@@ -1116,65 +1118,93 @@ where
 
 async fn sync_checkpoint_contents_from_archive<S>(
     network: anemo::Network,
-    archive_readers: ArchiveReaderBalancer,
+    archive_config: Option<ArchiveReaderConfig>,
     store: S,
     peer_heights: Arc<RwLock<PeerHeights>>,
+    metrics: Metrics,
 ) where
     S: WriteStore + Clone + Send + Sync + 'static,
 {
     loop {
-        let peers: Vec<_> = peer_heights
-            .read()
-            .unwrap()
-            .peers_on_same_chain()
-            // Filter out any peers who we aren't connected with.
-            .filter_map(|(peer_id, info)| network.peer(*peer_id).map(|peer| (peer, *info)))
-            .collect();
-        let lowest_checkpoint_on_peers = peers
-            .iter()
-            .map(|(_p, state_sync_info)| state_sync_info.lowest)
-            .min();
-        let highest_synced = store
-            .get_highest_synced_checkpoint()
-            .expect("store operation should not fail")
-            .sequence_number;
-        let sync_from_archive = if let Some(lowest_checkpoint_on_peers) = lowest_checkpoint_on_peers
-        {
-            highest_synced < lowest_checkpoint_on_peers
-        } else {
-            false
-        };
-        debug!("Syncing checkpoint contents from archive: {sync_from_archive},  highest_synced: {highest_synced},  lowest_checkpoint_on_peers: {}", lowest_checkpoint_on_peers.map_or_else(|| "None".to_string(), |l| l.to_string()));
-        if sync_from_archive {
-            let start = highest_synced
-                .checked_add(1)
-                .expect("Checkpoint seq num overflow");
-            let checkpoint_range = start..lowest_checkpoint_on_peers.unwrap();
-            if let Some(archive_reader) = archive_readers
-                .pick_one_random(checkpoint_range.clone())
-                .await
-            {
-                let txn_counter = Arc::new(AtomicU64::new(0));
-                let checkpoint_counter = Arc::new(AtomicU64::new(0));
-                if let Err(err) = archive_reader
-                    .read(
-                        store.clone(),
-                        checkpoint_range,
-                        txn_counter.clone(),
-                        checkpoint_counter.clone(),
-                        true,
-                    )
-                    .await
-                {
-                    warn!("State sync from archive failed with error: {:?}", err);
-                } else {
-                    info!("State sync from archive is complete. Checkpoints downloaded = {:?}, Txns downloaded = {:?}", checkpoint_counter.load(Ordering::Relaxed), txn_counter.load(Ordering::Relaxed));
-                }
-            } else {
-                warn!("Failed to find an archive reader to complete the state sync request");
-            }
-        }
+        sync_checkpoint_contents_from_archive_iteration(
+            &network,
+            &archive_config,
+            store.clone(),
+            peer_heights.clone(),
+            metrics.clone(),
+        )
+        .await;
         tokio::time::sleep(Duration::from_secs(5)).await;
+    }
+}
+
+async fn sync_checkpoint_contents_from_archive_iteration<S>(
+    network: &anemo::Network,
+    archive_config: &Option<ArchiveReaderConfig>,
+    store: S,
+    peer_heights: Arc<RwLock<PeerHeights>>,
+    metrics: Metrics,
+) where
+    S: WriteStore + Clone + Send + Sync + 'static,
+{
+    let peers: Vec<_> = peer_heights
+        .read()
+        .unwrap()
+        .peers_on_same_chain()
+        // Filter out any peers who we aren't connected with.
+        .filter_map(|(peer_id, info)| network.peer(*peer_id).map(|peer| (peer, *info)))
+        .collect();
+    let lowest_checkpoint_on_peers = peers
+        .iter()
+        .map(|(_p, state_sync_info)| state_sync_info.lowest)
+        .min();
+    let highest_synced = store
+        .get_highest_synced_checkpoint()
+        .expect("store operation should not fail")
+        .sequence_number;
+    let sync_from_archive = if let Some(lowest_checkpoint_on_peers) = lowest_checkpoint_on_peers {
+        highest_synced < lowest_checkpoint_on_peers
+    } else {
+        false
+    };
+    debug!("Syncing checkpoint contents from archive: {sync_from_archive},  highest_synced: {highest_synced},  lowest_checkpoint_on_peers: {}", lowest_checkpoint_on_peers.map_or_else(|| "None".to_string(), |l| l.to_string()));
+    if sync_from_archive {
+        let start = highest_synced
+            .checked_add(1)
+            .expect("Checkpoint seq num overflow");
+        let end = lowest_checkpoint_on_peers.unwrap();
+
+        let Some(ref archive_config) = archive_config else {
+            warn!("Failed to find an archive reader to complete the state sync request");
+            return;
+        };
+        let Some(ref ingestion_url) = archive_config.ingestion_url else {
+            warn!("Archival ingestion url for state sync is not configured");
+            return;
+        };
+        let reader_options = ReaderOptions {
+            batch_size: archive_config.download_concurrency.into(),
+            upper_limit: Some(end),
+            ..Default::default()
+        };
+        let Ok((executor, _exit_sender)) = setup_single_workflow(
+            StateSyncWorker(store, metrics),
+            ingestion_url.clone(),
+            start,
+            1,
+            Some(reader_options),
+        )
+        .await
+        else {
+            return;
+        };
+        match executor.await {
+            Ok(_) => info!(
+                "State sync from archive is complete. Checkpoints downloaded = {:?}",
+                end - start
+            ),
+            Err(err) => warn!("State sync from archive failed with error: {:?}", err),
+        }
     }
 }
 

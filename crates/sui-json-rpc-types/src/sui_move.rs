@@ -18,6 +18,7 @@ use serde_with::serde_as;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::{Display, Formatter, Write};
+use std::hash::Hash;
 use sui_macros::EnumVariantOrder;
 use tracing::warn;
 
@@ -78,6 +79,8 @@ pub struct SuiMoveNormalizedEnum {
     pub abilities: SuiMoveAbilitySet,
     pub type_parameters: Vec<SuiMoveStructTypeParameter>,
     pub variants: BTreeMap<String, Vec<SuiMoveNormalizedField>>,
+    #[serde(default)]
+    pub variant_declaration_order: Option<Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
@@ -192,7 +195,7 @@ impl<S: std::hash::Hash + Eq + ToString> From<&NormalizedModule<S>> for SuiMoveN
     }
 }
 
-impl<S: ToString> From<&NormalizedFunction<S>> for SuiMoveNormalizedFunction {
+impl<S: Hash + Eq + ToString> From<&NormalizedFunction<S>> for SuiMoveNormalizedFunction {
     fn from(function: &NormalizedFunction<S>) -> Self {
         Self {
             visibility: match function.visibility {
@@ -221,7 +224,7 @@ impl<S: ToString> From<&NormalizedFunction<S>> for SuiMoveNormalizedFunction {
     }
 }
 
-impl<S: ToString> From<&NormalizedStruct<S>> for SuiMoveNormalizedStruct {
+impl<S: Hash + Eq + ToString> From<&NormalizedStruct<S>> for SuiMoveNormalizedStruct {
     fn from(struct_: &NormalizedStruct<S>) -> Self {
         Self {
             abilities: struct_.abilities.into(),
@@ -233,15 +236,36 @@ impl<S: ToString> From<&NormalizedStruct<S>> for SuiMoveNormalizedStruct {
                 .collect::<Vec<SuiMoveStructTypeParameter>>(),
             fields: struct_
                 .fields
-                .iter()
+                .0
+                .values()
                 .map(|f| SuiMoveNormalizedField::from(&**f))
                 .collect::<Vec<SuiMoveNormalizedField>>(),
         }
     }
 }
 
-impl<S: ToString> From<&NormalizedEnum<S>> for SuiMoveNormalizedEnum {
+impl<S: Hash + Eq + ToString> From<&NormalizedEnum<S>> for SuiMoveNormalizedEnum {
     fn from(value: &NormalizedEnum<S>) -> Self {
+        let variants = value
+            .variants
+            .values()
+            .map(|variant| {
+                (
+                    variant.name.to_string(),
+                    variant
+                        .fields
+                        .0
+                        .values()
+                        .map(|f| SuiMoveNormalizedField::from(&**f))
+                        .collect::<Vec<SuiMoveNormalizedField>>(),
+                )
+            })
+            .collect::<Vec<(String, Vec<SuiMoveNormalizedField>)>>();
+        let variant_declaration_order = variants
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect::<Vec<String>>();
+        let variants = variants.into_iter().collect();
         Self {
             abilities: value.abilities.into(),
             type_parameters: value
@@ -250,20 +274,8 @@ impl<S: ToString> From<&NormalizedEnum<S>> for SuiMoveNormalizedEnum {
                 .copied()
                 .map(SuiMoveStructTypeParameter::from)
                 .collect::<Vec<SuiMoveStructTypeParameter>>(),
-            variants: value
-                .variants
-                .iter()
-                .map(|variant| {
-                    (
-                        variant.name.to_string(),
-                        variant
-                            .fields
-                            .iter()
-                            .map(SuiMoveNormalizedField::from)
-                            .collect::<Vec<SuiMoveNormalizedField>>(),
-                    )
-                })
-                .collect::<BTreeMap<String, Vec<SuiMoveNormalizedField>>>(),
+            variants,
+            variant_declaration_order: Some(variant_declaration_order),
         }
     }
 }

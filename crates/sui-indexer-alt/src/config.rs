@@ -116,11 +116,9 @@ pub struct PipelineLayer {
     // Consistent pipelines
     pub coin_balance_buckets: Option<CommitterLayer>,
     pub obj_info: Option<CommitterLayer>,
-    pub obj_info_temp: Option<CommitterLayer>,
 
     // Sequential pipelines
     pub sum_displays: Option<SequentialLayer>,
-    pub sum_packages: Option<SequentialLayer>,
 
     // All concurrent pipelines
     pub cp_sequence_numbers: Option<ConcurrentLayer>,
@@ -131,10 +129,10 @@ pub struct PipelineLayer {
     pub kv_epoch_starts: Option<ConcurrentLayer>,
     pub kv_feature_flags: Option<ConcurrentLayer>,
     pub kv_objects: Option<ConcurrentLayer>,
+    pub kv_packages: Option<ConcurrentLayer>,
     pub kv_protocol_configs: Option<ConcurrentLayer>,
     pub kv_transactions: Option<ConcurrentLayer>,
     pub obj_versions: Option<ConcurrentLayer>,
-    pub obj_versions_sentinel_backfill: Option<ConcurrentLayer>,
     pub tx_affected_addresses: Option<ConcurrentLayer>,
     pub tx_affected_objects: Option<ConcurrentLayer>,
     pub tx_balance_changes: Option<ConcurrentLayer>,
@@ -280,9 +278,7 @@ impl PipelineLayer {
         PipelineLayer {
             coin_balance_buckets: Some(Default::default()),
             obj_info: Some(Default::default()),
-            obj_info_temp: None,
             sum_displays: Some(Default::default()),
-            sum_packages: Some(Default::default()),
             cp_sequence_numbers: Some(Default::default()),
             ev_emit_mod: Some(Default::default()),
             ev_struct_inst: Some(Default::default()),
@@ -291,10 +287,10 @@ impl PipelineLayer {
             kv_epoch_starts: Some(Default::default()),
             kv_feature_flags: Some(Default::default()),
             kv_objects: Some(Default::default()),
+            kv_packages: Some(Default::default()),
             kv_protocol_configs: Some(Default::default()),
             kv_transactions: Some(Default::default()),
             obj_versions: Some(Default::default()),
-            obj_versions_sentinel_backfill: None,
             tx_affected_addresses: Some(Default::default()),
             tx_affected_objects: Some(Default::default()),
             tx_balance_changes: Some(Default::default()),
@@ -404,9 +400,7 @@ impl Merge for PipelineLayer {
         PipelineLayer {
             coin_balance_buckets: self.coin_balance_buckets.merge(other.coin_balance_buckets),
             obj_info: self.obj_info.merge(other.obj_info),
-            obj_info_temp: self.obj_info_temp.merge(other.obj_info_temp),
             sum_displays: self.sum_displays.merge(other.sum_displays),
-            sum_packages: self.sum_packages.merge(other.sum_packages),
             cp_sequence_numbers: self.cp_sequence_numbers.merge(other.cp_sequence_numbers),
             ev_emit_mod: self.ev_emit_mod.merge(other.ev_emit_mod),
             ev_struct_inst: self.ev_struct_inst.merge(other.ev_struct_inst),
@@ -415,12 +409,10 @@ impl Merge for PipelineLayer {
             kv_epoch_starts: self.kv_epoch_starts.merge(other.kv_epoch_starts),
             kv_feature_flags: self.kv_feature_flags.merge(other.kv_feature_flags),
             kv_objects: self.kv_objects.merge(other.kv_objects),
+            kv_packages: self.kv_packages.merge(other.kv_packages),
             kv_protocol_configs: self.kv_protocol_configs.merge(other.kv_protocol_configs),
             kv_transactions: self.kv_transactions.merge(other.kv_transactions),
             obj_versions: self.obj_versions.merge(other.obj_versions),
-            obj_versions_sentinel_backfill: self
-                .obj_versions_sentinel_backfill
-                .merge(other.obj_versions_sentinel_backfill),
             tx_affected_addresses: self
                 .tx_affected_addresses
                 .merge(other.tx_affected_addresses),
@@ -539,7 +531,6 @@ mod tests {
                 checkpoint_lag: Some(100),
                 extra: Default::default(),
             }),
-            sum_packages: None,
             ev_emit_mod: Some(ConcurrentLayer {
                 committer: Some(CommitterLayer {
                     write_concurrency: Some(5),
@@ -563,15 +554,6 @@ mod tests {
                 checkpoint_lag: Some(200),
                 extra: Default::default(),
             }),
-            sum_packages: Some(SequentialLayer {
-                committer: Some(CommitterLayer {
-                    write_concurrency: Some(10),
-                    collect_interval_ms: None,
-                    watermark_interval_ms: Some(1000),
-                    extra: Default::default(),
-                }),
-                ..Default::default()
-            }),
             ev_emit_mod: None,
             ..Default::default()
         };
@@ -590,16 +572,6 @@ mod tests {
                         extra: _,
                     }),
                     checkpoint_lag: Some(200),
-                    extra: _,
-                }),
-                sum_packages: Some(SequentialLayer {
-                    committer: Some(CommitterLayer {
-                        write_concurrency: Some(10),
-                        collect_interval_ms: None,
-                        watermark_interval_ms: Some(1000),
-                        extra: _,
-                    }),
-                    checkpoint_lag: None,
                     extra: _,
                 }),
                 ev_emit_mod: Some(ConcurrentLayer {
@@ -627,16 +599,6 @@ mod tests {
                         extra: _,
                     }),
                     checkpoint_lag: Some(100),
-                    extra: _,
-                }),
-                sum_packages: Some(SequentialLayer {
-                    committer: Some(CommitterLayer {
-                        write_concurrency: Some(10),
-                        collect_interval_ms: None,
-                        watermark_interval_ms: Some(1000),
-                        extra: _,
-                    }),
-                    checkpoint_lag: None,
                     extra: _,
                 }),
                 ev_emit_mod: Some(ConcurrentLayer {

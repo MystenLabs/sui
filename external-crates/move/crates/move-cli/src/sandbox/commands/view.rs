@@ -4,7 +4,7 @@
 
 use crate::sandbox::utils::{is_bytecode_file, on_disk_state_view::OnDiskStateView};
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use std::path::Path;
 /// Print a module or resource stored in `file`
 pub fn view(_state: &OnDiskStateView, path: &Path) -> Result<()> {

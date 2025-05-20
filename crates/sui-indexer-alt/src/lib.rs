@@ -1,43 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::Context;
 use bootstrap::bootstrap;
 use config::{IndexerConfig, PipelineLayer};
 use handlers::{
-    coin_balance_buckets::CoinBalanceBuckets,
-    cp_sequence_numbers::CpSequenceNumbers,
-    ev_emit_mod::EvEmitMod,
-    ev_struct_inst::EvStructInst,
-    kv_checkpoints::KvCheckpoints,
-    kv_epoch_ends::KvEpochEnds,
-    kv_epoch_starts::KvEpochStarts,
-    kv_feature_flags::KvFeatureFlags,
-    kv_objects::KvObjects,
-    kv_protocol_configs::KvProtocolConfigs,
-    kv_transactions::KvTransactions,
-    obj_info::ObjInfo,
-    obj_info_temp::ObjInfoTemp,
-    obj_versions::{ObjVersions, ObjVersionsSentinelBackfill},
-    sum_displays::SumDisplays,
-    sum_packages::SumPackages,
-    tx_affected_addresses::TxAffectedAddresses,
-    tx_affected_objects::TxAffectedObjects,
-    tx_balance_changes::TxBalanceChanges,
-    tx_calls::TxCalls,
-    tx_digests::TxDigests,
-    tx_kinds::TxKinds,
+    coin_balance_buckets::CoinBalanceBuckets, cp_sequence_numbers::CpSequenceNumbers,
+    ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
+    kv_epoch_ends::KvEpochEnds, kv_epoch_starts::KvEpochStarts, kv_feature_flags::KvFeatureFlags,
+    kv_objects::KvObjects, kv_packages::KvPackages, kv_protocol_configs::KvProtocolConfigs,
+    kv_transactions::KvTransactions, obj_info::ObjInfo, obj_versions::ObjVersions,
+    sum_displays::SumDisplays, tx_affected_addresses::TxAffectedAddresses,
+    tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
+    tx_calls::TxCalls, tx_digests::TxDigests, tx_kinds::TxKinds,
 };
 use prometheus::Registry;
 use sui_indexer_alt_framework::{
-    db::DbArgs,
     ingestion::{ClientArgs, IngestionConfig},
     pipeline::{
         concurrent::{ConcurrentConfig, PrunerConfig},
         sequential::SequentialConfig,
         CommitterConfig,
     },
+    postgres::{Db, DbArgs},
     Indexer, IndexerArgs,
 };
+use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_indexer_alt_schema::MIGRATIONS;
 use tokio_util::sync::CancellationToken;
 use url::Url;
@@ -63,7 +51,7 @@ pub async fn setup_indexer(
     with_genesis: bool,
     registry: &Registry,
     cancel: CancellationToken,
-) -> anyhow::Result<Indexer> {
+) -> anyhow::Result<Indexer<Db>> {
     let IndexerConfig {
         ingestion,
         consistency,
@@ -75,7 +63,6 @@ pub async fn setup_indexer(
 
     let PipelineLayer {
         sum_displays,
-        sum_packages,
         coin_balance_buckets,
         cp_sequence_numbers,
         ev_emit_mod,
@@ -85,12 +72,11 @@ pub async fn setup_indexer(
         kv_epoch_starts,
         kv_feature_flags,
         kv_objects,
+        kv_packages,
         kv_protocol_configs,
         kv_transactions,
         obj_info,
-        obj_info_temp,
         obj_versions,
-        obj_versions_sentinel_backfill,
         tx_affected_addresses,
         tx_affected_objects,
         tx_balance_changes,
@@ -107,13 +93,27 @@ pub async fn setup_indexer(
 
     let retry_interval = ingestion.retry_interval();
 
+    // Prepare the store for the indexer
+    let store = Db::for_write(database_url, db_args)
+        .await
+        .context("Failed to connect to database")?;
+
+    // we want to merge &MIGRATIONS with the migrations from the store
+    store
+        .run_migrations(Some(&MIGRATIONS))
+        .await
+        .context("Failed to run pending migrations")?;
+
+    registry.register(Box::new(DbConnectionStatsCollector::new(
+        Some("indexer_db"),
+        store.clone(),
+    )))?;
+
     let mut indexer = Indexer::new(
-        database_url,
-        db_args,
+        store,
         indexer_args,
         client_args,
         ingestion,
-        Some(&MIGRATIONS),
         registry,
         cancel.clone(),
     )
@@ -193,12 +193,9 @@ pub async fn setup_indexer(
     // Consistent pipelines
     add_consistent!(CoinBalanceBuckets::default(), coin_balance_buckets);
     add_consistent!(ObjInfo::default(), obj_info);
-    // TODO: Remove this once the backfill is complete.
-    add_consistent!(ObjInfoTemp::default(), obj_info_temp);
 
     // Summary tables (without write-ahead log)
     add_sequential!(SumDisplays, sum_displays);
-    add_sequential!(SumPackages, sum_packages);
 
     // Unpruned concurrent pipelines
     add_concurrent!(CpSequenceNumbers, cp_sequence_numbers);
@@ -208,9 +205,9 @@ pub async fn setup_indexer(
     add_concurrent!(KvEpochEnds, kv_epoch_ends);
     add_concurrent!(KvEpochStarts, kv_epoch_starts);
     add_concurrent!(KvObjects, kv_objects);
+    add_concurrent!(KvPackages, kv_packages);
     add_concurrent!(KvTransactions, kv_transactions);
     add_concurrent!(ObjVersions, obj_versions);
-    add_concurrent!(ObjVersionsSentinelBackfill, obj_versions_sentinel_backfill);
     add_concurrent!(TxAffectedAddresses, tx_affected_addresses);
     add_concurrent!(TxAffectedObjects, tx_affected_objects);
     add_concurrent!(TxBalanceChanges, tx_balance_changes);

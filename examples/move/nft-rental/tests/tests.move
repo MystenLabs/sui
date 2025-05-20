@@ -5,14 +5,12 @@ module nft_rental::tests;
 
 use kiosk::kiosk_lock_rule as lock_rule;
 use nft_rental::rentables_ext::{Self, Promise, ProtectedTP, RentalPolicy, Listed};
-use sui::{
-    clock::{Self, Clock},
-    kiosk::{Kiosk, KioskOwnerCap},
-    kiosk_test_utils,
-    package::{Self, Publisher},
-    test_scenario::{Self as ts, Scenario},
-    transfer_policy::{Self, TransferPolicy, TransferPolicyCap}
-};
+use sui::clock::{Self, Clock};
+use sui::kiosk::{Kiosk, KioskOwnerCap};
+use sui::kiosk_test_utils;
+use sui::package::{Self, Publisher};
+use sui::test_scenario::{Self as ts, Scenario};
+use sui::transfer_policy::{Self, TransferPolicy, TransferPolicyCap};
 
 const CREATOR: address = @0xCCCC;
 const RENTER: address = @0xAAAA;

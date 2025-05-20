@@ -35,6 +35,7 @@ use tracing::{debug, info, warn};
 // TODO: Move this into ExecutionTimeObserverConfig, if we switch to a moving average
 // implmentation without the window size in the type.
 const LOCAL_OBSERVATION_WINDOW_SIZE: usize = 10;
+const OBJECT_UTILIZATION_METRIC_HASH_MODULUS: u8 = 32;
 
 // Collects local execution time estimates to share via consensus.
 pub struct ExecutionTimeObserver {
@@ -247,11 +248,19 @@ impl ExecutionTimeObserver {
                         .epoch_execution_time_observer_overutilized_objects
                         .dec();
                 }
-                if self.config.report_object_utilization_metric() && utilization.was_overutilized {
+                if utilization.was_overutilized {
+                    let key = if self.config.report_object_utilization_metric_with_full_id() {
+                        id.to_string()
+                    } else {
+                        let key_lsb = id.into_bytes()[ObjectID::LENGTH - 1];
+                        let hash = key_lsb % OBJECT_UTILIZATION_METRIC_HASH_MODULUS;
+                        format!("{:x}", hash)
+                    };
+
                     epoch_store
                         .metrics
                         .epoch_execution_time_observer_object_utilization
-                        .with_label_values(&[id.to_string().as_str()])
+                        .with_label_values(&[key.as_str()])
                         .inc_by(total_duration.as_secs_f64());
                 }
 
@@ -644,6 +653,8 @@ mod tests {
                         allowed_txn_cost_overage_burst_limit_us: 0,
                         randomness_scalar: 100,
                         max_estimate_us: u64::MAX,
+                        stored_observations_num_included_checkpoints: 10,
+                        stored_observations_limit: u64::MAX,
                     },
                 ),
             );
@@ -776,6 +787,8 @@ mod tests {
                         allowed_txn_cost_overage_burst_limit_us: 0,
                         randomness_scalar: 0,
                         max_estimate_us: u64::MAX,
+                        stored_observations_num_included_checkpoints: 10,
+                        stored_observations_limit: u64::MAX,
                     },
                 ),
             );
@@ -870,6 +883,8 @@ mod tests {
                         allowed_txn_cost_overage_burst_limit_us: 0,
                         randomness_scalar: 0,
                         max_estimate_us: u64::MAX,
+                        stored_observations_num_included_checkpoints: 10,
+                        stored_observations_limit: u64::MAX,
                     },
                 ),
             );
@@ -1102,6 +1117,8 @@ mod tests {
                 // Not used in this test.
                 allowed_txn_cost_overage_burst_limit_us: 0,
                 randomness_scalar: 0,
+                stored_observations_num_included_checkpoints: 10,
+                stored_observations_limit: u64::MAX,
             },
             std::iter::empty(),
         );

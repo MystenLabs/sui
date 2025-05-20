@@ -13,6 +13,10 @@ Module 'another_dep'
     TARGET     : '(use Import::another_dep)'
     ADDITIONAL EDIT: '
     use Import::another_dep;'
+Module 'Import'
+    TARGET     : '(use Import::Import)'
+    ADDITIONAL EDIT: '
+    use Import::Import;'
 Module 'empty'
     TARGET     : '(use SamePkgAddr::empty)'
     ADDITIONAL EDIT: '
@@ -59,6 +63,10 @@ Struct 'PubStruct'
     TARGET     : '(use Import::dep::PubStruct)'
     ADDITIONAL EDIT: '
     use Import::dep::PubStruct;'
+Struct 'SomeStruct'
+    TARGET     : '(use Import::Import::SomeStruct)'
+    ADDITIONAL EDIT: '
+    use Import::Import::SomeStruct;'
 Enum 'PubEnum'
     TARGET     : '(use Import::dep::PubEnum)'
     ADDITIONAL EDIT: '
@@ -95,6 +103,11 @@ Module 'colon_colon'
     ADDITIONAL EDIT: 'use Import::colon_colon;
 
     '
+Module 'Import'
+    TARGET     : '(use Import::Import)'
+    ADDITIONAL EDIT: 'use Import::Import;
+
+    '
 Module 'empty'
     TARGET     : '(use SamePkgAddr::empty)'
     ADDITIONAL EDIT: 'use SamePkgAddr::empty;
@@ -122,5 +135,23 @@ Method 'pub_fun()'
 Struct 'AnotherDepStruct'
     TARGET     : '(use Import::another_dep::AnotherDepStruct)'
     ADDITIONAL EDIT: 'use Import::another_dep::AnotherDepStruct;
+
+    '
+Struct 'SomeStruct'
+    TARGET     : '(use Import::Import::SomeStruct)'
+    ADDITIONAL EDIT: 'use Import::Import::SomeStruct;
+
+    '
+
+== import.move ========================================================
+-- test 0 -------------------
+use line: 10, use_col: 23
+Module 'Import'
+Module 'another_dep'
+Module 'colon_colon'
+Module 'dep'
+Struct 'SomeStruct'
+    TARGET     : '(use Import::Import::SomeStruct)'
+    ADDITIONAL EDIT: 'use Import::Import::SomeStruct;
 
     '

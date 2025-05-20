@@ -29,7 +29,7 @@ mod checked {
     use sui_verifier::check_for_verifier_timeout;
     use tracing::instrument;
 
-    use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
+    use sui_move_natives::{NativesCostTable, object_runtime::ObjectRuntime};
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
         base_types::*,
@@ -141,9 +141,9 @@ mod checked {
 
     pub fn missing_unwrapped_msg(id: &ObjectID) -> String {
         format!(
-        "Unable to unwrap object {}. Was unable to retrieve last known version in the parent sync",
-        id
-    )
+            "Unable to unwrap object {}. Was unable to retrieve last known version in the parent sync",
+            id
+        )
     }
 
     /// Run the bytecode verifier with a meter limit

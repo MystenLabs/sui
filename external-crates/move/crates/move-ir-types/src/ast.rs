@@ -1319,10 +1319,7 @@ impl fmt::Display for ConstantName {
 impl fmt::Display for FunctionBody {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            FunctionBody::Move {
-                ref locals,
-                ref code,
-            } => {
+            FunctionBody::Move { locals, code } => {
                 for (local, ty) in locals {
                     write!(f, "let {}: {};", local, ty)?;
                 }

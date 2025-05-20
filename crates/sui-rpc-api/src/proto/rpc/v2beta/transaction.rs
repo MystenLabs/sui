@@ -261,6 +261,16 @@ impl TryFrom<&super::TransactionExpiration> for sui_sdk_types::TransactionExpira
 // TransactionKind
 //
 
+impl From<super::ProgrammableTransaction> for super::TransactionKind {
+    fn from(value: super::ProgrammableTransaction) -> Self {
+        Self {
+            kind: Some(super::transaction_kind::Kind::ProgrammableTransaction(
+                value,
+            )),
+        }
+    }
+}
+
 impl From<sui_sdk_types::TransactionKind> for super::TransactionKind {
     fn from(value: sui_sdk_types::TransactionKind) -> Self {
         use super::transaction_kind::Kind;
@@ -1421,6 +1431,40 @@ impl TryFrom<&super::Input> for sui_sdk_types::Input {
 // Argument
 //
 
+impl super::Argument {
+    pub fn gas() -> Self {
+        Self {
+            kind: Some(super::argument::ArgumentKind::Gas.into()),
+            index: None,
+            subresult: None,
+        }
+    }
+
+    pub fn input(input: u16) -> Self {
+        Self {
+            kind: Some(super::argument::ArgumentKind::Input.into()),
+            index: Some(input.into()),
+            subresult: None,
+        }
+    }
+
+    pub fn result(command: u16) -> Self {
+        Self {
+            kind: Some(super::argument::ArgumentKind::Result.into()),
+            index: Some(command.into()),
+            subresult: None,
+        }
+    }
+
+    pub fn nested_result(command: u16, subresult: u16) -> Self {
+        Self {
+            kind: Some(super::argument::ArgumentKind::Result.into()),
+            index: Some(command.into()),
+            subresult: Some(subresult.into()),
+        }
+    }
+}
+
 impl From<sui_sdk_types::Argument> for super::Argument {
     fn from(value: sui_sdk_types::Argument) -> Self {
         use super::argument::ArgumentKind;
@@ -1488,6 +1532,38 @@ impl TryFrom<&super::Argument> for sui_sdk_types::Argument {
 //
 // Command
 //
+
+impl From<super::command::Command> for super::Command {
+    fn from(value: super::command::Command) -> Self {
+        Self {
+            command: Some(value),
+        }
+    }
+}
+
+impl From<super::MoveCall> for super::command::Command {
+    fn from(value: super::MoveCall) -> Self {
+        Self::MoveCall(value)
+    }
+}
+
+impl From<super::MoveCall> for super::Command {
+    fn from(value: super::MoveCall) -> Self {
+        super::command::Command::from(value).into()
+    }
+}
+
+impl From<super::TransferObjects> for super::command::Command {
+    fn from(value: super::TransferObjects) -> Self {
+        Self::TransferObjects(value)
+    }
+}
+
+impl From<super::TransferObjects> for super::Command {
+    fn from(value: super::TransferObjects) -> Self {
+        super::command::Command::from(value).into()
+    }
+}
 
 impl From<sui_sdk_types::Command> for super::Command {
     fn from(value: sui_sdk_types::Command) -> Self {

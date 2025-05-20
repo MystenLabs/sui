@@ -112,7 +112,7 @@ impl PersistedStore {
     where
         R: rand::RngCore + rand::CryptoRng,
     {
-        let path: PathBuf = path.unwrap_or(tempdir().unwrap().into_path());
+        let path: PathBuf = path.unwrap_or(tempdir().unwrap().keep());
 
         let mut builder = ConfigBuilder::new_with_temp_dir()
             .rng(&mut rng)
@@ -642,6 +642,14 @@ impl RpcStateReader for PersistedStoreInnerReadOnlyWrapper {
 
     fn indexes(&self) -> Option<&dyn sui_types::storage::RpcIndexes> {
         None
+    }
+
+    fn get_struct_layout(
+        &self,
+        _: &move_core_types::language_storage::StructTag,
+    ) -> sui_types::storage::error::Result<Option<move_core_types::annotated_value::MoveTypeLayout>>
+    {
+        Ok(None)
     }
 }
 

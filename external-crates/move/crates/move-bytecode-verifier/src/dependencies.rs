@@ -4,14 +4,15 @@
 
 //! This module contains verification of usage of dependencies for modules and scripts.
 use move_binary_format::{
-    errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
+    IndexKind,
+    errors::{Location, PartialVMError, PartialVMResult, VMResult, verification_error},
     file_format::{
         AbilitySet, Bytecode, CodeOffset, CompiledModule, DatatypeHandleIndex, DatatypeTyParameter,
         FunctionDefinitionIndex, FunctionHandleIndex, ModuleHandleIndex, SignatureToken,
         TableIndex, Visibility,
     },
     file_format_common::VERSION_5,
-    safe_unwrap, IndexKind,
+    safe_unwrap,
 };
 use move_core_types::{identifier::Identifier, language_storage::ModuleId, vm_status::StatusCode};
 use std::collections::{BTreeMap, BTreeSet};
@@ -226,7 +227,7 @@ fn verify_imported_structs(context: &Context) -> PartialVMResult<()> {
                     StatusCode::LOOKUP_FAILED,
                     IndexKind::DatatypeHandle,
                     idx as TableIndex,
-                ))
+                ));
             }
         }
     }
@@ -270,7 +271,7 @@ fn verify_imported_functions(context: &Context) -> PartialVMResult<()> {
                             StatusCode::LOOKUP_FAILED,
                             IndexKind::FunctionHandle,
                             idx as TableIndex,
-                        ))
+                        ));
                     }
                 };
 
@@ -291,7 +292,7 @@ fn verify_imported_functions(context: &Context) -> PartialVMResult<()> {
                             StatusCode::LOOKUP_FAILED,
                             IndexKind::FunctionHandle,
                             idx as TableIndex,
-                        ))
+                        ));
                     }
                 };
 

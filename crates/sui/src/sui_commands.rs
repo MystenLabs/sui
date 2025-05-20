@@ -34,7 +34,7 @@ use sui_config::{
 use sui_config::{
     SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME,
 };
-use sui_faucet::{create_wallet_context, start_faucet, AppState, FaucetConfig, SimpleFaucet};
+use sui_faucet::{create_wallet_context, start_faucet, AppState, FaucetConfig, LocalFaucet};
 use sui_indexer::test_utils::{
     start_indexer_jsonrpc_for_testing, start_indexer_writer_for_testing,
 };
@@ -57,7 +57,7 @@ use sui_package_management::system_package_versions::latest_system_packages;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_swarm::memory::Swarm;
-use sui_swarm_config::genesis_config::{GenesisConfig, DEFAULT_NUMBER_OF_AUTHORITIES};
+use sui_swarm_config::genesis_config::GenesisConfig;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
@@ -66,9 +66,8 @@ use sui_types::crypto::{SignatureScheme, SuiKeyPair, ToFromBytes};
 use tracing;
 use tracing::info;
 
-const CONCURRENCY_LIMIT: usize = 30;
 const DEFAULT_EPOCH_DURATION_MS: u64 = 60_000;
-const DEFAULT_FAUCET_NUM_COINS: usize = 5; // 5 coins per request was the default in sui-test-validator
+
 const DEFAULT_FAUCET_MIST_AMOUNT: u64 = 200_000_000_000; // 200 SUI
 const DEFAULT_FAUCET_PORT: u16 = 9123;
 
@@ -139,6 +138,17 @@ impl IndexerArgs {
             pg_password: "postgrespw".to_string(),
         }
     }
+}
+
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
+pub struct SuiEnvConfig {
+    /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
+    #[clap(long = "client.config")]
+    config: Option<PathBuf>,
+    /// The Sui environment to use. This must be present in the current config file.
+    #[clap(long = "client.env")]
+    env: Option<String>,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -281,9 +291,8 @@ pub enum SuiCommand {
     /// Client for interacting with the Sui network.
     #[clap(name = "client")]
     Client {
-        /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
-        #[clap(long = "client.config")]
-        config: Option<PathBuf>,
+        #[clap(flatten)]
+        config: SuiEnvConfig,
         #[clap(subcommand)]
         cmd: Option<SuiClientCommands>,
         /// Return command outputs in json format.
@@ -313,10 +322,8 @@ pub enum SuiCommand {
         /// Path to a package which the command should be run with respect to.
         #[clap(long = "path", short = 'p', global = true)]
         package_path: Option<PathBuf>,
-        /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
-        /// Only used when the `--dump-bytecode-as-base64` is set.
-        #[clap(long = "client.config")]
-        config: Option<PathBuf>,
+        #[clap(flatten)]
+        config: SuiEnvConfig,
         /// Package build options
         #[clap(flatten)]
         build_config: BuildConfig,
@@ -379,7 +386,6 @@ impl SuiCommand {
                 config_dir,
                 force_regenesis,
                 with_faucet,
-
                 indexer_feature_args,
                 fullnode_rpc_port,
                 data_ingestion_dir,
@@ -442,10 +448,15 @@ impl SuiCommand {
                 json,
                 accept_defaults,
             } => {
-                let config_path = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
+                let config_path = config
+                    .config
+                    .unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config_path, accept_defaults).await?;
                 if let Some(cmd) = cmd {
-                    let mut context = WalletContext::new(&config_path, None, None)?;
+                    let mut context = WalletContext::new(&config_path)?;
+                    if let Some(env_override) = config.env {
+                        context = context.with_env_override(env_override);
+                    }
                     if let Ok(client) = context.get_client().await {
                         if let Err(e) = client.check_api_version() {
                             eprintln!("{}", format!("[warning] {e}").yellow().bold());
@@ -468,7 +479,7 @@ impl SuiCommand {
             } => {
                 let config_path = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config_path, accept_defaults).await?;
-                let mut context = WalletContext::new(&config_path, None, None)?;
+                let mut context = WalletContext::new(&config_path)?;
                 if let Some(cmd) = cmd {
                     if let Ok(client) = context.get_client().await {
                         if let Err(e) = client.check_api_version() {
@@ -498,33 +509,52 @@ impl SuiCommand {
                         // (e.g., testnet, mainnet) from the Move.lock under automated address management.
                         // In addition, tree shaking also requires a network as it needs to fetch
                         // on-chain linkage table of package dependencies.
-                        let config =
-                            client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-                        prompt_if_no_config(&config, false).await?;
-                        let context = WalletContext::new(&config, None, None)?;
-
-                        let Ok(client) = context.get_client().await else {
-                            bail!("`sui move build --dump-bytecode-as-base64` requires a connection to the network. Current active network is {} but failed to connect to it.", context.config.active_env.as_ref().unwrap());
-                        };
-                        let read_api = client.read_api();
-
-                        if let Err(e) = client.check_api_version() {
-                            eprintln!("{}", format!("[warning] {e}").yellow().bold());
-                        }
-
-                        let chain_id = if build.ignore_chain {
+                        let (chain_id, client) = if build.ignore_chain {
                             // for tests it's useful to ignore the chain id!
-                            None
+                            (None, None)
                         } else {
-                            read_api.get_chain_identifier().await.ok()
+                            let config = client_config
+                                .config
+                                .unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
+                            prompt_if_no_config(&config, false).await?;
+                            let mut context = WalletContext::new(&config)?;
+
+                            if let Some(env_override) = client_config.env {
+                                context = context.with_env_override(env_override);
+                            }
+
+                            let Ok(client) = context.get_client().await else {
+                                bail!(
+                                    "`sui move build --dump-bytecode-as-base64` requires a connection to the network. \
+                                     Current active network is {} but failed to connect to it.", 
+                                     context.get_active_env()?.alias
+                                );
+                            };
+
+                            if let Err(e) = client.check_api_version() {
+                                eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                            }
+
+                            (
+                                client.read_api().get_chain_identifier().await.ok(),
+                                Some(client),
+                            )
                         };
 
                         let rerooted_path = move_cli::base::reroot_path(package_path.as_deref())?;
                         let mut build_config =
                             resolve_lock_file_path(build_config, Some(&rerooted_path))?;
-                        let protocol_config = read_api.get_protocol_config(None).await?;
-                        build_config.implicit_dependencies =
-                            implicit_deps_for_protocol_version(protocol_config.protocol_version)?;
+                        if let Some(client) = &client {
+                            let protocol_config =
+                                client.read_api().get_protocol_config(None).await?;
+                            build_config.implicit_dependencies =
+                                implicit_deps_for_protocol_version(
+                                    protocol_config.protocol_version,
+                                )?;
+                        } else {
+                            build_config.implicit_dependencies =
+                                implicit_deps(latest_system_packages());
+                        }
 
                         let mut pkg = SuiBuildConfig {
                             config: build_config,
@@ -541,7 +571,10 @@ impl SuiCommand {
                             check_unpublished_dependencies(&pkg.dependency_ids.unpublished)?;
                         }
 
-                        pkg_tree_shake(read_api, with_unpublished_deps, &mut pkg).await?;
+                        if let Some(client) = client {
+                            pkg_tree_shake(client.read_api(), with_unpublished_deps, &mut pkg)
+                                .await?;
+                        }
 
                         println!(
                             "{}",
@@ -583,14 +616,14 @@ impl SuiCommand {
 
                 let config_path =
                     client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-                let mut context = WalletContext::new(&config_path, None, None)?;
+                let mut context = WalletContext::new(&config_path)?;
                 if let Ok(client) = context.get_client().await {
                     if let Err(e) = client.check_api_version() {
                         eprintln!("{}", format!("[warning] {e}").yellow().bold());
                     }
                 }
                 let rgp = context.get_reference_gas_price().await?;
-                let rpc_url = &context.config.get_active_env()?.rpc;
+                let rpc_url = &context.get_active_env()?.rpc;
                 println!("rpc_url: {}", rpc_url);
                 let bridge_metrics = Arc::new(BridgeMetrics::new_for_testing());
                 let sui_bridge_client = SuiBridgeClient::new(rpc_url, bridge_metrics).await?;
@@ -709,15 +742,16 @@ async fn start(
     let config_dir = if force_regenesis {
         let committee_size = match committee_size {
             Some(x) => NonZeroUsize::new(x),
-            None => NonZeroUsize::new(DEFAULT_NUMBER_OF_AUTHORITIES),
+            None => NonZeroUsize::new(1),
         }
         .ok_or_else(|| anyhow!("Committee size must be at least 1."))?;
+        println!("committee_size: {}", committee_size);
         swarm_builder = swarm_builder.committee_size(committee_size);
         let genesis_config = GenesisConfig::custom_genesis(1, 100);
         swarm_builder = swarm_builder.with_genesis_config(genesis_config);
         let epoch_duration_ms = epoch_duration_ms.unwrap_or(DEFAULT_EPOCH_DURATION_MS);
         swarm_builder = swarm_builder.with_epoch_duration_ms(epoch_duration_ms);
-        mysten_common::tempdir()?.into_path()
+        mysten_common::tempdir()?.keep()
     } else {
         // If the config path looks like a YAML file, it is treated as if it is the network.yaml
         // overriding the network.yaml found in the sui config directry. Otherwise it is treated as
@@ -825,7 +859,7 @@ async fn start(
     // note that this overrides the default configuration that is set when running the genesis
     // command, which sets data_ingestion_dir to None.
     if with_indexer.is_some() && data_ingestion_dir.is_none() {
-        data_ingestion_dir = Some(mysten_common::tempdir()?.into_path())
+        data_ingestion_dir = Some(mysten_common::tempdir()?.keep())
     }
 
     if let Some(ref dir) = data_ingestion_dir {
@@ -914,12 +948,10 @@ async fn start(
         let config = FaucetConfig {
             host_ip,
             port: faucet_address.port(),
-            num_coins: DEFAULT_FAUCET_NUM_COINS,
             amount: DEFAULT_FAUCET_MIST_AMOUNT,
             ..Default::default()
         };
 
-        let prometheus_registry = prometheus::Registry::new();
         if force_regenesis {
             let kp = swarm.config_mut().account_keys.swap_remove(0);
             let keystore_path = config_dir.join(SUI_KEYSTORE_FILENAME);
@@ -941,22 +973,19 @@ async fn start(
             .save()
             .unwrap();
         }
-        let faucet_wal = config_dir.join("faucet.wal");
-        let simple_faucet = SimpleFaucet::new(
-            create_wallet_context(config.wallet_client_timeout_secs, config_dir)?,
-            &prometheus_registry,
-            faucet_wal.as_path(),
+
+        let local_faucet = LocalFaucet::new(
+            create_wallet_context(config.wallet_client_timeout_secs, config_dir.clone())?,
             config.clone(),
         )
-        .await
-        .unwrap();
+        .await?;
 
         let app_state = Arc::new(AppState {
-            faucet: simple_faucet,
+            faucet: local_faucet,
             config,
         });
 
-        start_faucet(app_state, CONCURRENCY_LIMIT, &prometheus_registry).await?;
+        start_faucet(app_state).await?;
     }
 
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(3));
@@ -1098,7 +1127,7 @@ async fn genesis(
     }
     let committee_size = match committee_size {
         Some(x) => NonZeroUsize::new(x),
-        None => NonZeroUsize::new(DEFAULT_NUMBER_OF_AUTHORITIES),
+        None => NonZeroUsize::new(1),
     }
     .ok_or_else(|| anyhow!("Committee size must be at least 1."))?;
 

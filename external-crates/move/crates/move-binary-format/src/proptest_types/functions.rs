@@ -19,16 +19,15 @@ use crate::{
     },
     internals::ModuleIndex,
     proptest_types::{
-        prop_index_avoid,
+        TableSize, prop_index_avoid,
         signature::{AbilitySetGen, SignatureGen, SignatureTokenGen},
-        TableSize,
     },
 };
 use move_core_types::u256::U256;
 use proptest::{
-    collection::{vec, SizeRange},
+    collection::{SizeRange, vec},
     prelude::*,
-    sample::{select, Index as PropIndex},
+    sample::{Index as PropIndex, select},
 };
 use std::{
     collections::{BTreeSet, HashMap, HashSet},

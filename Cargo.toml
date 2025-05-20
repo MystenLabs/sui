@@ -3,6 +3,8 @@ resolver = "2"
 
 exclude = [
   "examples/tic-tac-toe/cli",
+  "examples/regulated-coin/rust-client",
+  "examples/custom-indexer/rust",
   "external-crates/move/crates/bytecode-interpreter-crypto",
   "external-crates/move/crates/bytecode-verifier-libfuzzer",
   "external-crates/move/crates/bytecode-verifier-tests",
@@ -36,6 +38,7 @@ exclude = [
   "external-crates/move/crates/move-ir-to-bytecode-syntax",
   "external-crates/move/crates/move-ir-types",
   "external-crates/move/crates/move-model",
+  "external-crates/move/crates/move-model-2",
   "external-crates/move/crates/move-package",
   "external-crates/move/crates/move-package-alt",
   "external-crates/move/crates/move-proc-macros",
@@ -87,13 +90,14 @@ members = [
   "crates/sui-adapter-transactional-tests",
   "crates/sui-analytics-indexer",
   "crates/sui-analytics-indexer-derive",
-  "crates/sui-archival",
   "crates/sui-authority-aggregation",
   "crates/sui-aws-orchestrator",
   "crates/sui-benchmark",
   "crates/sui-bridge",
   "crates/sui-bridge-cli",
   "crates/sui-bridge-indexer",
+  "crates/sui-bridge-indexer-alt",
+  "crates/sui-bridge-schema",
   "crates/sui-cluster-test",
   "crates/sui-config",
   "crates/sui-core",
@@ -122,8 +126,11 @@ members = [
   "crates/sui-indexer-alt",
   "crates/sui-indexer-alt-e2e-tests",
   "crates/sui-indexer-alt-framework",
+  "crates/sui-indexer-alt-framework-store-traits",
+  "crates/sui-indexer-alt-graphql",
   "crates/sui-indexer-alt-jsonrpc",
   "crates/sui-indexer-alt-metrics",
+  "crates/sui-indexer-alt-reader",
   "crates/sui-indexer-alt-restorer",
   "crates/sui-indexer-alt-schema",
   "crates/sui-indexer-builder",
@@ -137,6 +144,7 @@ members = [
   "crates/sui-light-client",
   "crates/sui-macros",
   "crates/sui-metric-checker",
+  "crates/sui-metrics-push-client",
   "crates/sui-move",
   "crates/sui-move-build",
   "crates/sui-move-lsp",
@@ -212,7 +220,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.48.0"
+version = "1.50.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -368,6 +376,7 @@ governor = "0.6.0"
 gcp_auth = "0.12.3"
 hashbrown = "0.12"
 hdrhistogram = "7.5.1"
+headers = "0.4.0"
 hex = "0.4.3"
 hex-literal = "0.3.4"
 http = "1"
@@ -511,7 +520,7 @@ sysinfo = "0.27.5"
 tabled = { version = "0.12" }
 tap = "1.0.1"
 tar = "0.4.40"
-tempfile = "3.3.0"
+tempfile = "3.20.0"
 test-fuzz = "3.0.4"
 thiserror = "1.0.40"
 tiny-bip39 = "1.0.0"
@@ -583,6 +592,8 @@ zeroize = "1.6.0"
 versions = "4.1.0"
 linked-hash-map = "0.5.6"
 shlex = "1.3.0"
+starlark = "0.13.0"
+
 
 # Move dependencies
 move-binary-format = { path = "external-crates/move/crates/move-binary-format" }
@@ -640,7 +651,6 @@ sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = 
   "hash",
   "serde",
 ] }
-sui-sdk-transaction-builder = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "83ff809bc11cbabda21b60130e1f5420170548bf", package = "sui-transaction-builder" }
 sui-graphql-client = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "83ff809bc11cbabda21b60130e1f5420170548bf", package = "sui-graphql-client" }
 
 ### Workspace Members ###
@@ -657,13 +667,13 @@ sui = { path = "crates/sui" }
 sui-adapter-transactional-tests = { path = "crates/sui-adapter-transactional-tests" }
 sui-analytics-indexer = { path = "crates/sui-analytics-indexer" }
 sui-analytics-indexer-derive = { path = "crates/sui-analytics-indexer-derive" }
-sui-archival = { path = "crates/sui-archival" }
 sui-authority-aggregation = { path = "crates/sui-authority-aggregation" }
 sui-benchmark = { path = "crates/sui-benchmark" }
 sui-bridge = { path = "crates/sui-bridge" }
+sui-bridge-schema = { path = "crates/sui-bridge-schema" }
 sui-cluster-test = { path = "crates/sui-cluster-test" }
 sui-config = { path = "crates/sui-config" }
-sui-core = { path = "crates/sui-core" }
+sui-core = { path = "crates/sui-core", features = ["rocksdb"] }
 sui-cost = { path = "crates/sui-cost" }
 sui-data-ingestion = { path = "crates/sui-data-ingestion" }
 sui-data-ingestion-core = { path = "crates/sui-data-ingestion-core" }
@@ -685,8 +695,11 @@ sui-http = { path = "crates/sui-http" }
 sui-indexer = { path = "crates/sui-indexer" }
 sui-indexer-alt = { path = "crates/sui-indexer-alt" }
 sui-indexer-alt-framework = { path = "crates/sui-indexer-alt-framework", default-features = false }
+sui-indexer-alt-framework-store-traits = { path = "crates/sui-indexer-alt-framework-store-traits" }
+sui-indexer-alt-graphql = { path = "crates/sui-indexer-alt-graphql" }
 sui-indexer-alt-jsonrpc = { path = "crates/sui-indexer-alt-jsonrpc" }
 sui-indexer-alt-metrics = { path = "crates/sui-indexer-alt-metrics" }
+sui-indexer-alt-reader = { path = "crates/sui-indexer-alt-reader" }
 sui-indexer-alt-restorer = { path = "crates/sui-indexer-alt-restorer" }
 sui-indexer-alt-schema = { path = "crates/sui-indexer-alt-schema" }
 sui-indexer-builder = { path = "crates/sui-indexer-builder" }
@@ -698,6 +711,7 @@ sui-keys = { path = "crates/sui-keys" }
 sui-kvstore = { path = "crates/sui-kvstore" }
 sui-macros = { path = "crates/sui-macros" }
 sui-metric-checker = { path = "crates/sui-metric-checker" }
+sui-metrics-push-client = { path = "crates/sui-metrics-push-client" }
 sui-move = { path = "crates/sui-move" }
 sui-move-build = { path = "crates/sui-move-build" }
 sui-move-lsp = { path = "crates/sui-move-lsp" }
@@ -764,3 +778,6 @@ sui-execution = { path = "sui-execution" }
 tonic = "0.13"
 
 [patch.crates-io]
+async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18" }
+async-graphql-axum = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18" }
+async-graphql-value = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18" }

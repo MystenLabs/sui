@@ -23,6 +23,6 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@mongodb-js/zstd": "^2.0.1"
+    "fzstd": "^0.1.1"
   }
 }

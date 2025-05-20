@@ -5,8 +5,8 @@
 use crate::{
     binary_config::BinaryConfig,
     file_format::{
-        basic_test_module, basic_test_module_with_enum, Bytecode, CodeUnit, CompiledModule,
-        SignatureIndex, VariantJumpTableIndex,
+        Bytecode, CodeUnit, CompiledModule, SignatureIndex, VariantJumpTableIndex,
+        basic_test_module, basic_test_module_with_enum,
     },
     file_format_common::*,
 };

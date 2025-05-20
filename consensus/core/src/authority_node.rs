@@ -307,7 +307,6 @@ where
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
             leader_schedule.clone(),
         );
 
@@ -518,7 +517,7 @@ mod tests {
 
         let temp_dir = TempDir::new().unwrap();
         let parameters = Parameters {
-            db_path: temp_dir.into_path(),
+            db_path: temp_dir.keep(),
             ..Default::default()
         };
         let txn_verifier = NoopTransactionVerifier {};

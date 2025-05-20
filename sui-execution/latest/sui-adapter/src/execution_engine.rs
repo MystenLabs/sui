@@ -34,7 +34,7 @@ mod checked {
     use move_core_types::ident_str;
     use sui_move_natives::all_natives;
     use sui_protocol_config::{
-        check_limit_by_meter, LimitThresholdCrossed, PerObjectCongestionControlMode, ProtocolConfig,
+        LimitThresholdCrossed, PerObjectCongestionControlMode, ProtocolConfig, check_limit_by_meter,
     };
     use sui_types::authenticator_state::{
         AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME, AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME,
@@ -43,18 +43,18 @@ mod checked {
     use sui_types::base_types::SequenceNumber;
     use sui_types::bridge::BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER;
     use sui_types::bridge::{
-        BridgeChainId, BRIDGE_CREATE_FUNCTION_NAME, BRIDGE_INIT_COMMITTEE_FUNCTION_NAME,
-        BRIDGE_MODULE_NAME,
+        BRIDGE_CREATE_FUNCTION_NAME, BRIDGE_INIT_COMMITTEE_FUNCTION_NAME, BRIDGE_MODULE_NAME,
+        BridgeChainId,
     };
     use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
     use sui_types::committee::EpochId;
     use sui_types::deny_list_v1::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
     use sui_types::digests::{
-        get_mainnet_chain_identifier, get_testnet_chain_identifier, ChainIdentifier,
+        ChainIdentifier, get_mainnet_chain_identifier, get_testnet_chain_identifier,
     };
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
-    use sui_types::execution::{is_certificate_denied, ExecutionTiming, ResultWithTimings};
+    use sui_types::execution::{ExecutionTiming, ResultWithTimings, is_certificate_denied};
     use sui_types::execution_config_utils::to_binary_config;
     use sui_types::execution_status::{CongestedObjects, ExecutionStatus};
     use sui_types::gas::GasCostSummary;
@@ -64,7 +64,7 @@ mod checked {
     use sui_types::storage::BackingStore;
     #[cfg(msim)]
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
-    use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
+    use sui_types::sui_system_state::{ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME, AdvanceEpochParams};
     use sui_types::transaction::{
         Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
         Command, EndOfEpochTransactionKind, GasData, GenesisTransaction, ObjectArg,
@@ -72,11 +72,11 @@ mod checked {
     };
     use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::{
+        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
+        SUI_SYSTEM_PACKAGE_ID,
         base_types::{ObjectID, SuiAddress, TransactionDigest, TxContext},
         object::{Object, ObjectInner},
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
-        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
-        SUI_SYSTEM_PACKAGE_ID,
     };
 
     #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
@@ -499,7 +499,7 @@ mod checked {
                 }
             }
         } // else, we're in the genesis transaction which mints the SUI supply, and hence does not satisfy SUI conservation, or
-          // we're in the non-production dev inspect mode which allows us to violate conservation
+        // we're in the non-production dev inspect mode which allows us to violate conservation
         result
     }
 
@@ -576,7 +576,7 @@ mod checked {
                             max_size: lim as u64,
                         },
                         "Written objects size crossed hard limit",
-                    ))
+                    ));
                 }
             };
         }
@@ -758,7 +758,9 @@ mod checked {
                         }
                     }
                 }
-                unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")
+                unreachable!(
+                    "EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list"
+                )
             }
             TransactionKind::AuthenticatorStateUpdate(auth_state_update) => {
                 setup_authenticator_state_update(

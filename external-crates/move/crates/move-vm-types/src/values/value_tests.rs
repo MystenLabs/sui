@@ -194,8 +194,8 @@ fn legacy_val_abstract_memory_size_consistency() -> PartialVMResult<()> {
         Value::vector_u256([1, 2, 3, 4].iter().map(|q| U256::from(*q as u64))),
         Value::struct_(Struct::pack([])),
         Value::struct_(Struct::pack([Value::u8(0), Value::bool(false)])),
-        Value::vector_for_testing_only([]),
-        Value::vector_for_testing_only([Value::u8(0), Value::u8(1)]),
+        Vector::pack(VectorSpecialization::Container, [])?,
+        Vector::pack(VectorSpecialization::U8, [Value::u8(0), Value::u8(1)])?,
     ];
 
     let mut locals = Locals::new(vals.len());

@@ -13,15 +13,13 @@ The types and function discussed in this section are built into the Sui framewor
 ### Tables
 
 ```move
-module sui::table {
+module sui::table;
 
-struct Table<K: copy + drop + store, V: store> has key, store { /* ... */ }
+public struct Table<K: copy + drop + store, V: store> has key, store { /* ... */ }
 
 public fun new<K: copy + drop + store, V: store>(
     ctx: &mut TxContext,
 ): Table<K, V>;
-
-}
 ```
 
 `Table<K, V>` is a *homogeneous* map, meaning that all its keys have the same type as each other (`K`), and all its values have the same type as each other as well (`V`). It is created with `sui::table::new`, which requires access to a `&mut TxContext` because `Table`s are objects themselves, which can be transferred, shared, wrapped, or unwrapped, just like any other object.
@@ -31,13 +29,11 @@ See `sui::object_table::ObjectTable` for the object-preserving version of `Table
 ### Bags
 
 ```move
-module sui::bag {
+module sui::bag;
 
-struct Bag has key, store { /* ... */ }
+public struct Bag has key, store { /* ... */ }
 
 public fun new(ctx: &mut TxContext): Bag;
-
-}
 ```
 
 `Bag` is a *heterogeneous* map, so it can hold key-value pairs of arbitrary types (they don't need to match each other). Note that the `Bag` type does not have any type parameters for this reason. Like `Table`, `Bag` is also an object, so creating one with `sui::bag::new` requires supplying a `&mut TxContext` to generate an ID.
@@ -53,7 +49,7 @@ The following sections explain the collection APIs. They use `sui::table` as the
 All collection types come with the following functions, defined in their respective modules:
 
 ```move
-module sui::table {
+module sui::table;
 
 public fun add<K: copy + drop + store, V: store>(
     table: &mut Table<K, V>,
@@ -75,8 +71,6 @@ public fun remove<K: copy + drop + store, V: store>(
     table: &mut Table<K, V>,
     k: K,
 ): V;
-
-}
 ```
 
 These functions add, read, write, and remove entries from the collection, respectively, and all accept keys by value. `Table` has type parameters for `K` and `V` so it is not possible to call these functions with different instantiations of `K` and `V` on the same instance of `Table`, however `Bag` does not have these type parameters, and so does permit calls with different instantiations on the same instance.
@@ -94,7 +88,7 @@ The extra flexibility of `Bag`'s heterogeneity means the type system doesn't sta
 It is possible to query all collection types for their length and check whether they are empty using the following family of functions:
 
 ```move
-module sui::table {
+module sui::table;
 
 public fun length<K: copy + drop + store, V: store>(
     table: &Table<K, V>,
@@ -103,8 +97,6 @@ public fun length<K: copy + drop + store, V: store>(
 public fun is_empty<K: copy + drop + store, V: store>(
     table: &Table<K, V>
 ): bool;
-
-}
 ```
 
 `Bag` has these functions, but they are not generic on `K` and `V` because `Bag` does not have these type parameters.
@@ -114,20 +106,18 @@ public fun is_empty<K: copy + drop + store, V: store>(
 Tables can be queried for key containment with:
 
 ```move
-module sui::table {
+module sui::table;
 
 public fun contains<K: copy + drop + store, V: store>(
     table: &Table<K, V>
     k: K
 ): bool;
-
-}
 ```
 
 The equivalent functions for `Bag` are:
 
 ```move
-module sui::bag {
+module sui::bag;
 
 public fun contains<K: copy + drop + store>(bag: &Bag, k: K): bool;
 
@@ -135,8 +125,6 @@ public fun contains_with_type<K: copy + drop + store, V: store>(
     bag: &Bag,
     k: K
 ): bool;
-
-}
 ```
 
 The first function tests whether `bag` contains a key-value pair with key `k: K`, and the second function additionally tests whether its value has type `V`.
@@ -146,25 +134,21 @@ The first function tests whether `bag` contains a key-value pair with key `k: K`
 Collection types protect against accidental deletion when they might not be empty. This protection comes from the fact that they do not have `drop`, so must be explicitly deleted, using this API:
 
 ```move
-module sui::table {
+module sui::table;
 
 public fun destroy_empty<K: copy + drop + store, V: store>(
     table: Table<K, V>,
 );
-
-}
 ```
 
 This function takes the collection by value. If it contains no entries, it is deleted, otherwise the call fails. `sui::table::Table` also has a convenience function:
 
 ```move
-module sui::table {
+module sui::table;
 
 public fun drop<K: copy + drop + store, V: drop + store>(
     table: Table<K, V>,
 );
-
-}
 ```
 
 You can call the convenience function only for tables where the value type also has `drop` ability, which allows it to delete tables whether they are empty or not.
@@ -180,8 +164,10 @@ Note that `drop` is not called implicitly on eligible tables before they go out 
 Equality on collections is based on identity, for example, an instance of a collection type is only considered equal to itself and not to all collections that hold the same entries:
 
 ```move
-let t1 = sui::table::new<u64, u64>(ctx);
-let t2 = sui::table::new<u64, u64>(ctx);
+use sui::table;
+
+let t1 = table::new<u64, u64>(ctx);
+let t2 = table::new<u64, u64>(ctx);
 
 assert!(&t1 == &t1, 0);
 assert!(&t1 != &t2, 1);

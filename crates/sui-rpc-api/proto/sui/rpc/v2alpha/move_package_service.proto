@@ -1,0 +1,70 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2alpha;
+
+import "sui/rpc/v2alpha/move_package.proto";
+
+service MovePackageService {
+  rpc GetPackage(GetPackageRequest) returns (GetPackageResponse);
+  rpc GetModule(GetModuleRequest) returns (GetModuleResponse);
+  rpc GetDatatype(GetDatatypeRequest) returns (GetDatatypeResponse);
+  rpc GetFunction(GetFunctionRequest) returns (GetFunctionResponse);
+}
+
+message GetPackageRequest {
+  // Required. The `storage_id` of the requested package.
+  optional string package_id = 1;
+}
+
+message GetPackageResponse {
+  // The package.
+  optional Package package = 1;
+}
+
+message GetModuleRequest {
+  // Required. The `storage_id` of the requested package.
+  optional string package_id = 1;
+
+  // Required. The name of the requested module.
+  optional string module_name = 2;
+}
+
+message GetModuleResponse {
+  // The module.
+  optional Module module = 1;
+}
+
+message GetDatatypeRequest {
+  // Required. The `storage_id` of the requested package.
+  optional string package_id = 1;
+
+  // Required. The name of the requested module.
+  optional string module_name = 2;
+
+  // Required. The name of the requested datatype.
+  optional string name = 3;
+}
+
+message GetDatatypeResponse {
+  // The datatype.
+  optional DatatypeDescriptor datatype = 1;
+}
+
+message GetFunctionRequest {
+  // Required. The `storage_id` of the requested package.
+  optional string package_id = 1;
+
+  // Required. The name of the requested module.
+  optional string module_name = 2;
+
+  // Required. The name of the requested function.
+  optional string name = 3;
+}
+
+message GetFunctionResponse {
+  // The function.
+  optional FunctionDescriptor function = 1;
+}

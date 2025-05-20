@@ -12,10 +12,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
-    dependency::{Pinned, PinnedDependencyInfo, Unpinned},
+    dependency::{DependencySet, Pinned, PinnedDependencyInfo, Unpinned},
     errors::PackageResult,
     package::PackageName,
 };
@@ -24,27 +24,29 @@ use crate::{
 /// methods for package management that are specific to a particular instantiation of the Move
 /// language.
 pub trait MoveFlavor: Debug {
-    // TODO: this API is incomplete
+    /// Return an identifier for the flavor, used to ensure that the correct compiler is being used
+    /// to parse a manifest.
+    fn name() -> String;
 
     /// Additional flavor-specific dependency types. Currently we only support flavor-specific
     /// dependencies that are already pinned (although in principle you could use an
     /// external resolved to do resolution and pinning for flavor-specific deps)
-    type FlavorDependency<P: ?Sized>: Debug + Serialize + DeserializeOwned + Clone;
+    type FlavorDependency<P: ?Sized>: Debug + Serialize + DeserializeOwned + Clone + PartialEq;
 
     /// Pin a batch of [Self::FlavorDependency]s (see TODO). The keys of the returned map should be
     /// the same as the keys of [dep].
     //
-    // TODO: this interface means we can't batch dep-overrides together
+    // TODO: this interface means we can't batch dep-replacements together
     fn pin(
         &self,
-        deps: BTreeMap<PackageName, Self::FlavorDependency<Unpinned>>,
-    ) -> PackageResult<BTreeMap<PackageName, Self::FlavorDependency<Pinned>>>;
+        deps: DependencySet<Self::FlavorDependency<Unpinned>>,
+    ) -> PackageResult<DependencySet<Self::FlavorDependency<Pinned>>>;
 
     /// Fetch a batch [Self::FlavorDependency] (see TODO)
     fn fetch(
         &self,
-        deps: BTreeMap<PackageName, Self::FlavorDependency<Pinned>>,
-    ) -> PackageResult<BTreeMap<PackageName, PathBuf>>;
+        deps: DependencySet<Self::FlavorDependency<Pinned>>,
+    ) -> PackageResult<DependencySet<PathBuf>>;
 
     /// A [PublishedMetadata] should contain all of the information that is generated
     /// during publication.
@@ -63,8 +65,11 @@ pub trait MoveFlavor: Debug {
     /// example, an environment ID might be a chain identifier
     //
     // TODO: Given an [EnvironmentID] and an [ObjectID], ... should be uniquely determined
-    type EnvironmentID: Debug + Serialize + DeserializeOwned + Clone + Eq;
+    type EnvironmentID: Serialize + DeserializeOwned + Clone + Eq + Ord + Debug + ToString;
 
-    /// Return the implicit dependencies for a given environment
-    fn implicit_deps(&self, environment: Self::EnvironmentID) -> Vec<PinnedDependencyInfo<Self>>;
+    /// Return the implicit dependencies for the environments listed in [environments]
+    fn implicit_deps(
+        &self,
+        environments: impl Iterator<Item = Self::EnvironmentID>,
+    ) -> DependencySet<PinnedDependencyInfo<Self>>;
 }

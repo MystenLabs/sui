@@ -1,0 +1,8 @@
+---
+source: crates/move-package-alt/tests/test_runner.rs
+---
+error: TOML parse error at line 9, column 34
+  |
+9 | A = { local = "a", rename-from = { "A" = 1 } }
+  |                                  ^^^^^^^^^^^
+invalid type: map, expected a string

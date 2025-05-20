@@ -111,12 +111,14 @@ title: Module `sui_system::validator`
 <b>use</b> <a href="../sui/event.md#sui_event">sui::event</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
+<b>use</b> <a href="../sui/party.md#sui_party">sui::party</a>;
 <b>use</b> <a href="../sui/sui.md#sui_sui">sui::sui</a>;
 <b>use</b> <a href="../sui/table.md#sui_table">sui::table</a>;
 <b>use</b> <a href="../sui/transfer.md#sui_transfer">sui::transfer</a>;
 <b>use</b> <a href="../sui/tx_context.md#sui_tx_context">sui::tx_context</a>;
 <b>use</b> <a href="../sui/types.md#sui_types">sui::types</a>;
 <b>use</b> <a href="../sui/url.md#sui_url">sui::url</a>;
+<b>use</b> <a href="../sui/vec_map.md#sui_vec_map">sui::vec_map</a>;
 <b>use</b> <a href="../sui/vec_set.md#sui_vec_set">sui::vec_set</a>;
 <b>use</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool">sui_system::staking_pool</a>;
 <b>use</b> <a href="../sui_system/validator_cap.md#sui_system_validator_cap">sui_system::validator_cap</a>;
@@ -613,7 +615,7 @@ Invalid primary_address field in ValidatorMetadata
 
 <a name="sui_system_validator_EMetadataInvalidWorkerAddr"></a>
 
-Invalidworker_address field in ValidatorMetadata
+Invalid worker_address field in ValidatorMetadata
 
 
 <pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_EMetadataInvalidWorkerAddr">EMetadataInvalidWorkerAddr</a>: u64 = 7;
@@ -854,7 +856,7 @@ Max gas price a validator can set is 100K MIST.
         bag::new(ctx),
     );
     // Checks that the keys & addresses & PoP are valid.
-    <a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_validate_metadata">validate_metadata</a>();
+    <a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.validate();
     <a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_new_from_metadata">new_from_metadata</a>(<a href="../sui_system/validator.md#sui_system_validator_gas_price">gas_price</a>, <a href="../sui_system/validator.md#sui_system_validator_commission_rate">commission_rate</a>, ctx)
 }
 </code></pre>
@@ -2434,7 +2436,7 @@ Update network address of this validator, taking effects from next epoch
     );
     <b>let</b> net_address = net_address.to_ascii_string().to_string();
     self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.next_epoch_net_address = option::some(net_address);
-    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_validate_metadata">validate_metadata</a>();
+    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.validate();
 }
 </code></pre>
 
@@ -2469,7 +2471,7 @@ Update network address of this candidate validator
     );
     <b>let</b> net_address = net_address.to_ascii_string().to_string();
     self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.net_address = net_address;
-    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_validate_metadata">validate_metadata</a>();
+    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.validate();
 }
 </code></pre>
 
@@ -2500,7 +2502,7 @@ Update p2p address of this validator, taking effects from next epoch
     );
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator_p2p_address">p2p_address</a> = <a href="../sui_system/validator.md#sui_system_validator_p2p_address">p2p_address</a>.to_ascii_string().to_string();
     self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_p2p_address">next_epoch_p2p_address</a> = option::some(<a href="../sui_system/validator.md#sui_system_validator_p2p_address">p2p_address</a>);
-    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_validate_metadata">validate_metadata</a>();
+    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.validate();
 }
 </code></pre>
 
@@ -2532,7 +2534,7 @@ Update p2p address of this candidate validator
     );
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator_p2p_address">p2p_address</a> = <a href="../sui_system/validator.md#sui_system_validator_p2p_address">p2p_address</a>.to_ascii_string().to_string();
     self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_p2p_address">p2p_address</a> = <a href="../sui_system/validator.md#sui_system_validator_p2p_address">p2p_address</a>;
-    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_validate_metadata">validate_metadata</a>();
+    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.validate();
 }
 </code></pre>
 
@@ -2566,7 +2568,7 @@ Update primary address of this validator, taking effects from next epoch
     );
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator_primary_address">primary_address</a> = <a href="../sui_system/validator.md#sui_system_validator_primary_address">primary_address</a>.to_ascii_string().to_string();
     self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_primary_address">next_epoch_primary_address</a> = option::some(<a href="../sui_system/validator.md#sui_system_validator_primary_address">primary_address</a>);
-    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_validate_metadata">validate_metadata</a>();
+    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.validate();
 }
 </code></pre>
 
@@ -2601,7 +2603,7 @@ Update primary address of this candidate validator
     );
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator_primary_address">primary_address</a> = <a href="../sui_system/validator.md#sui_system_validator_primary_address">primary_address</a>.to_ascii_string().to_string();
     self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_primary_address">primary_address</a> = <a href="../sui_system/validator.md#sui_system_validator_primary_address">primary_address</a>;
-    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_validate_metadata">validate_metadata</a>();
+    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.validate();
 }
 </code></pre>
 
@@ -2635,7 +2637,7 @@ Update worker address of this validator, taking effects from next epoch
     );
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator_worker_address">worker_address</a> = <a href="../sui_system/validator.md#sui_system_validator_worker_address">worker_address</a>.to_ascii_string().to_string();
     self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_worker_address">next_epoch_worker_address</a> = option::some(<a href="../sui_system/validator.md#sui_system_validator_worker_address">worker_address</a>);
-    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_validate_metadata">validate_metadata</a>();
+    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.validate();
 }
 </code></pre>
 
@@ -2670,7 +2672,7 @@ Update worker address of this candidate validator
     );
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator_worker_address">worker_address</a> = <a href="../sui_system/validator.md#sui_system_validator_worker_address">worker_address</a>.to_ascii_string().to_string();
     self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_worker_address">worker_address</a> = <a href="../sui_system/validator.md#sui_system_validator_worker_address">worker_address</a>;
-    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_validate_metadata">validate_metadata</a>();
+    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.validate();
 }
 </code></pre>
 
@@ -2701,7 +2703,7 @@ Update protocol public key of this validator, taking effects from next epoch
 ) {
     self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_protocol_pubkey_bytes">next_epoch_protocol_pubkey_bytes</a> = option::some(protocol_pubkey);
     self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_proof_of_possession">next_epoch_proof_of_possession</a> = option::some(<a href="../sui_system/validator.md#sui_system_validator_proof_of_possession">proof_of_possession</a>);
-    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_validate_metadata">validate_metadata</a>();
+    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.validate();
 }
 </code></pre>
 
@@ -2733,7 +2735,7 @@ Update protocol public key of this candidate validator
     <b>assert</b>!(self.<a href="../sui_system/validator.md#sui_system_validator_is_preactive">is_preactive</a>(), <a href="../sui_system/validator.md#sui_system_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_protocol_pubkey_bytes">protocol_pubkey_bytes</a> = protocol_pubkey;
     self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_proof_of_possession">proof_of_possession</a> = <a href="../sui_system/validator.md#sui_system_validator_proof_of_possession">proof_of_possession</a>;
-    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_validate_metadata">validate_metadata</a>();
+    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.validate();
 }
 </code></pre>
 
@@ -2762,7 +2764,7 @@ Update network public key of this validator, taking effects from next epoch
     network_pubkey: vector&lt;u8&gt;,
 ) {
     self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_network_pubkey_bytes">next_epoch_network_pubkey_bytes</a> = option::some(network_pubkey);
-    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_validate_metadata">validate_metadata</a>();
+    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.validate();
 }
 </code></pre>
 
@@ -2792,7 +2794,7 @@ Update network public key of this candidate validator
 ) {
     <b>assert</b>!(self.<a href="../sui_system/validator.md#sui_system_validator_is_preactive">is_preactive</a>(), <a href="../sui_system/validator.md#sui_system_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_network_pubkey_bytes">network_pubkey_bytes</a> = network_pubkey;
-    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_validate_metadata">validate_metadata</a>();
+    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.validate();
 }
 </code></pre>
 
@@ -2821,7 +2823,7 @@ Update Narwhal worker public key of this validator, taking effects from next epo
     worker_pubkey: vector&lt;u8&gt;,
 ) {
     self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_worker_pubkey_bytes">next_epoch_worker_pubkey_bytes</a> = option::some(worker_pubkey);
-    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_validate_metadata">validate_metadata</a>();
+    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.validate();
 }
 </code></pre>
 
@@ -2851,7 +2853,7 @@ Update Narwhal worker public key of this candidate validator
 ) {
     <b>assert</b>!(self.<a href="../sui_system/validator.md#sui_system_validator_is_preactive">is_preactive</a>(), <a href="../sui_system/validator.md#sui_system_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_worker_pubkey_bytes">worker_pubkey_bytes</a> = worker_pubkey;
-    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_validate_metadata">validate_metadata</a>();
+    self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.validate();
 }
 </code></pre>
 

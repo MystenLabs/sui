@@ -5,13 +5,13 @@ use std::{collections::BTreeMap, fmt::Debug};
 
 use crate::{
     cfgir::{
+        CFGContext,
         absint::{AbstractDomain, AbstractInterpreter, JoinResult, TransferFunctions},
         ast as G,
         cfg::ImmForwardCFG,
-        CFGContext,
     },
     command_line::compiler::Visitor,
-    diagnostics::{warning_filters::WarningFilters, Diagnostic, Diagnostics},
+    diagnostics::{Diagnostic, Diagnostics, warning_filters::WarningFilters},
     expansion::ast::ModuleIdent,
     hlir::ast::{self as H, Command, Exp, LValue, LValue_, Label, ModuleCall, Type, Type_, Var},
     parser::ast::{ConstantName, DatatypeName, Field, FunctionName},

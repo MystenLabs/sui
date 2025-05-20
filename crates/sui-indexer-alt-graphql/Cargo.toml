@@ -1,0 +1,65 @@
+[package]
+name = "sui-indexer-alt-graphql"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[[bin]]
+name = "sui-indexer-alt-graphql"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-graphql = { workspace = true, features = ["dataloader"] }
+async-graphql-axum.workspace = true
+async-graphql-value.workspace = true
+async-trait.workspace = true
+# axum.workspace = true
+# axum-extra.workspace = true
+axum = { version = "0.7", default-features = false, features = [ "macros", "tokio", "http1", "http2", "json", "matched-path", "original-uri", "form", "query", "ws", ] }
+axum-extra = { version = "0.9", features = ["typed-header"] }
+bcs.workspace = true
+chrono.workspace = true
+clap.workspace = true
+const-str.workspace = true
+diesel.workspace = true
+diesel-async.workspace = true
+fastcrypto.workspace = true
+futures.workspace = true
+headers.workspace = true
+prometheus.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+telemetry-subscribers.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+toml.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+url.workspace = true
+uuid.workspace = true
+
+move-core-types.workspace = true
+
+bin-version.workspace = true
+sui-default-config.workspace = true
+sui-indexer-alt-metrics.workspace = true
+sui-indexer-alt-reader.workspace = true
+sui-indexer-alt-schema.workspace = true
+sui-package-resolver.workspace = true
+sui-pg-db.workspace = true
+sui-protocol-config.workspace = true
+sui-sql-macro.workspace = true
+sui-types.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+
+[features]
+staging = []

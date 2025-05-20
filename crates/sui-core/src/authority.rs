@@ -80,7 +80,6 @@ use crate::jsonrpc_index::IndexStore;
 use crate::jsonrpc_index::{CoinInfo, ObjectIndexChanges};
 use mysten_common::debug_fatal;
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
-use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::genesis::Genesis;
 use sui_config::node::{DBCheckpointConfig, ExpensiveSafetyCheckConfig};
 use sui_framework::{BuiltInFramework, SystemPackage};
@@ -156,12 +155,12 @@ use crate::execution_cache::{
     ObjectCacheRead, StateSyncAPI,
 };
 use crate::execution_driver::execution_process;
+use crate::global_state_hasher::{GlobalStateHashStore, GlobalStateHasher, WrappedObject};
 use crate::metrics::LatencyObserver;
 use crate::metrics::RateTracker;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::overload_monitor::{overload_monitor_accept_tx, AuthorityOverloadInfo};
 use crate::stake_aggregator::StakeAggregator;
-use crate::state_accumulator::{AccumulatorStore, StateAccumulator, WrappedObject};
 use crate::subscription_handler::SubscriptionHandler;
 use crate::transaction_input_loader::TransactionInputLoader;
 use crate::transaction_manager::TransactionManager;
@@ -220,6 +219,7 @@ mod authority_store_migrations;
 pub mod authority_store_pruner;
 pub mod authority_store_tables;
 pub mod authority_store_types;
+pub mod consensus_tx_status_cache;
 pub mod epoch_start_configuration;
 pub mod execution_time_estimator;
 pub mod shared_object_congestion_tracker;
@@ -1264,6 +1264,14 @@ impl AuthorityState {
             .get_transaction_cache_reader()
             .get_executed_effects(tx_digest)
         {
+            if let Some(expected_effects_digest) = expected_effects_digest {
+                assert_eq!(
+                    effects.digest(),
+                    expected_effects_digest,
+                    "Unexpected effects digest for transaction {:?}",
+                    tx_digest
+                );
+            }
             tx_guard.release();
             return Ok((effects, None));
         }
@@ -1296,6 +1304,7 @@ impl AuthorityState {
 
         epoch_store.record_local_execution_time(
             certificate.data().transaction_data(),
+            &effects,
             timings,
             execution_start_time.elapsed(),
         );
@@ -2913,7 +2922,6 @@ impl AuthorityState {
         genesis_objects: &[Object],
         db_checkpoint_config: &DBCheckpointConfig,
         config: NodeConfig,
-        archive_readers: ArchiveReaderBalancer,
         validator_tx_finalizer: Option<Arc<ValidatorTxFinalizer<NetworkAuthorityClient>>>,
         chain_identifier: ChainIdentifier,
         pruner_db: Option<Arc<AuthorityPrunerTables>>,
@@ -2946,7 +2954,6 @@ impl AuthorityState {
             epoch_store.committee().authority_exists(&name),
             epoch_store.epoch_start_state().epoch_duration_ms(),
             prometheus_registry,
-            archive_readers,
             pruner_db,
         );
         let input_loader =
@@ -3025,8 +3032,8 @@ impl AuthorityState {
         &self.execution_cache_trait_pointers.reconfig_api
     }
 
-    pub fn get_accumulator_store(&self) -> &Arc<dyn AccumulatorStore> {
-        &self.execution_cache_trait_pointers.accumulator_store
+    pub fn get_global_state_hash_store(&self) -> &Arc<dyn GlobalStateHashStore> {
+        &self.execution_cache_trait_pointers.global_state_hash_store
     }
 
     pub fn get_checkpoint_cache(&self) -> &Arc<dyn CheckpointCache> {
@@ -3052,8 +3059,6 @@ impl AuthorityState {
         config: NodeConfig,
         metrics: Arc<AuthorityStorePruningMetrics>,
     ) -> anyhow::Result<()> {
-        let archive_readers =
-            ArchiveReaderBalancer::new(config.archive_reader_config(), &Registry::default())?;
         AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
             &self.database_for_testing().perpetual_tables,
             &self.checkpoint_store,
@@ -3061,7 +3066,6 @@ impl AuthorityState {
             None,
             config.authority_store_pruning_config,
             metrics,
-            archive_readers,
             EPOCH_DURATION_MS_FOR_TESTING,
         )
         .await
@@ -3186,7 +3190,7 @@ impl AuthorityState {
         supported_protocol_versions: SupportedProtocolVersions,
         new_committee: Committee,
         epoch_start_configuration: EpochStartConfiguration,
-        accumulator: Arc<StateAccumulator>,
+        state_hasher: Arc<GlobalStateHasher>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
         epoch_last_checkpoint: CheckpointSequenceNumber,
     ) -> SuiResult<Arc<AuthorityPerEpochStore>> {
@@ -3215,14 +3219,18 @@ impl AuthorityState {
             epoch_last_checkpoint >= highest_locally_built_checkpoint_seq,
             "{epoch_last_checkpoint} >= {highest_locally_built_checkpoint_seq}"
         );
-        if highest_locally_built_checkpoint_seq == epoch_last_checkpoint {
+        if highest_locally_built_checkpoint_seq == epoch_last_checkpoint
+            || self.is_fullnode(cur_epoch_store)
+        {
             // if we built the last checkpoint locally (as opposed to receiving it from a peer),
             // then all shared_version_assignments except the one for the ChangeEpoch transaction
             // should have been removed
             let num_shared_version_assignments = cur_epoch_store.num_shared_version_assignments();
-            // Note that while 1 is the typical value, 0 is possible if the node restarts after
-            // committing the last checkpoint but before reconfiguring.
-            if num_shared_version_assignments > 1 {
+            // Due to (otherwise harmless) race conditions between CheckpointExecutor and ConsensusHandler,
+            // we actually can't guarantee that all shared_version_assignments have been removed. However,
+            // typically at most 2 or 3 are left over. We leave this check here in order to catch complete
+            // failure of cleanup which would cause a memory leak.
+            if num_shared_version_assignments > 10 {
                 // If this happens in prod, we have a memory leak, but not a correctness issue.
                 debug_fatal!("all shared_version_assignments should have been removed (num_shared_version_assignments: {num_shared_version_assignments})");
             }
@@ -3237,7 +3245,7 @@ impl AuthorityState {
             .await?;
         self.get_reconfig_api()
             .clear_state_end_of_epoch(&execution_lock);
-        self.check_system_consistency(cur_epoch_store, accumulator, expensive_safety_check_config);
+        self.check_system_consistency(cur_epoch_store, state_hasher, expensive_safety_check_config);
         self.maybe_reaccumulate_state_hash(
             cur_epoch_store,
             epoch_start_configuration
@@ -3337,7 +3345,7 @@ impl AuthorityState {
     fn check_system_consistency(
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
-        accumulator: Arc<StateAccumulator>,
+        state_hasher: Arc<GlobalStateHasher>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
     ) {
         info!(
@@ -3371,7 +3379,7 @@ impl AuthorityState {
                 cur_epoch_store.epoch()
             );
             self.expensive_check_is_consistent_state(
-                accumulator,
+                state_hasher,
                 cur_epoch_store,
                 cfg!(debug_assertions), // panic in debug mode only
             );
@@ -3379,7 +3387,7 @@ impl AuthorityState {
 
         if expensive_safety_check_config.enable_secondary_index_checks() {
             if let Some(indexes) = self.indexes.clone() {
-                verify_indexes(self.get_accumulator_store().as_ref(), indexes)
+                verify_indexes(self.get_global_state_hash_store().as_ref(), indexes)
                     .expect("secondary indexes are inconsistent");
             }
         }
@@ -3387,19 +3395,19 @@ impl AuthorityState {
 
     fn expensive_check_is_consistent_state(
         &self,
-        accumulator: Arc<StateAccumulator>,
+        state_hasher: Arc<GlobalStateHasher>,
         cur_epoch_store: &AuthorityPerEpochStore,
         panic: bool,
     ) {
-        let live_object_set_hash = accumulator.digest_live_object_set(
+        let live_object_set_hash = state_hasher.digest_live_object_set(
             !cur_epoch_store
                 .protocol_config()
                 .simplified_unwrap_then_delete(),
         );
 
         let root_state_hash: ECMHLiveObjectSetDigest = self
-            .get_accumulator_store()
-            .get_root_state_accumulator_for_epoch(cur_epoch_store.epoch())
+            .get_global_state_hash_store()
+            .get_root_state_hash_for_epoch(cur_epoch_store.epoch())
             .expect("Retrieving root state hash cannot fail")
             .expect("Root state hash for epoch must exist")
             .1
@@ -3424,7 +3432,7 @@ impl AuthorityState {
         }
 
         if !panic {
-            accumulator.set_inconsistent_state(is_inconsistent);
+            state_hasher.set_inconsistent_state(is_inconsistent);
         }
     }
 
@@ -4308,23 +4316,7 @@ impl AuthorityState {
             .get_transaction_cache_reader()
             .get_executed_effects(transaction_digest);
         match effects {
-            Some(effects) => Ok(Some(self.sign_effects(effects, epoch_store)?)),
-            None => Ok(None),
-        }
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    pub(crate) fn sign_effects(
-        &self,
-        effects: TransactionEffects,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<VerifiedSignedTransactionEffects> {
-        let tx_digest = *effects.transaction_digest();
-        let signed_effects = match epoch_store.get_effects_signature(&tx_digest)? {
-            Some(sig) if sig.epoch == epoch_store.epoch() => {
-                SignedTransactionEffects::new_from_data_and_sig(effects, sig)
-            }
-            _ => {
+            Some(effects) => {
                 // If the transaction was executed in previous epochs, the validator will
                 // re-sign the effects with new current epoch so that a client is always able to
                 // obtain an effects certificate at the current epoch.
@@ -4344,12 +4336,33 @@ impl AuthorityState {
                 // to return either an effects certificate, -or- a proof of inclusion in a checkpoint. In
                 // the case above, the Quorum Driver would return a proof of inclusion in the final
                 // checkpoint, and this code would no longer be necessary.
-                debug!(
-                    ?tx_digest,
-                    epoch=?epoch_store.epoch(),
-                    "Re-signing the effects with the current epoch"
-                );
+                if effects.executed_epoch() != epoch_store.epoch() {
+                    debug!(
+                        tx_digest=?transaction_digest,
+                        effects_epoch=?effects.executed_epoch(),
+                        epoch=?epoch_store.epoch(),
+                        "Re-signing the effects with the current epoch"
+                    );
+                }
+                Ok(Some(self.sign_effects(effects, epoch_store)?))
+            }
+            None => Ok(None),
+        }
+    }
 
+    #[instrument(level = "trace", skip_all)]
+    pub(crate) fn sign_effects(
+        &self,
+        effects: TransactionEffects,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<VerifiedSignedTransactionEffects> {
+        let tx_digest = *effects.transaction_digest();
+        let signed_effects = match epoch_store.get_effects_signature(&tx_digest)? {
+            Some(sig) => {
+                debug_assert!(sig.epoch == epoch_store.epoch());
+                SignedTransactionEffects::new_from_data_and_sig(effects, sig)
+            }
+            _ => {
                 let sig = AuthoritySignInfo::new(
                     epoch_store.epoch(),
                     &effects,
@@ -4989,22 +5002,18 @@ impl AuthorityState {
         end_of_epoch_observation_keys: Vec<ExecutionTimeObservationKey>,
         last_checkpoint_before_end_of_epoch: CheckpointSequenceNumber,
     ) -> Option<EndOfEpochTransactionKind> {
-        if !matches!(
-            epoch_store
-                .protocol_config()
-                .per_object_congestion_control_mode(),
-            PerObjectCongestionControlMode::ExecutionTimeEstimate(_)
-        ) {
+        let PerObjectCongestionControlMode::ExecutionTimeEstimate(params) = epoch_store
+            .protocol_config()
+            .per_object_congestion_control_mode()
+        else {
             return None;
-        }
-
-        // TODO: Make this a protocol config.
-        const NUM_INCLUDED_CHECKPOINTS: u64 = 10;
+        };
 
         // Load tx in the last N checkpoints before end-of-epoch, and save only the
         // execution time observations for commands in these checkpoints.
         let start_checkpoint = std::cmp::max(
-            last_checkpoint_before_end_of_epoch.saturating_sub(NUM_INCLUDED_CHECKPOINTS - 1),
+            last_checkpoint_before_end_of_epoch
+                .saturating_sub(params.stored_observations_num_included_checkpoints - 1),
             // If we have <N checkpoints in the epoch, use all of them.
             epoch_store
                 .epoch()
@@ -5089,7 +5098,10 @@ impl AuthorityState {
         let tx = EndOfEpochTransactionKind::new_store_execution_time_observations(
             epoch_store
                 .get_end_of_epoch_execution_time_observations()
-                .filter_and_sort_v1(|(key, _)| included_execution_time_observations.contains(key)),
+                .filter_and_sort_v1(
+                    |(key, _)| included_execution_time_observations.contains(key),
+                    params.stored_observations_limit.try_into().unwrap(),
+                ),
         );
         info!("Creating StoreExecutionTimeObservations tx");
         Some(tx)
@@ -5368,7 +5380,7 @@ impl AuthorityState {
             .epoch_store_for_testing()
             .protocol_config()
             .simplified_unwrap_then_delete();
-        self.get_accumulator_store()
+        self.get_global_state_hash_store()
             .iter_cached_live_object_set_for_testing(include_wrapped_object)
     }
 
@@ -5600,6 +5612,13 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         Ok(self
             .get_object_cache_reader()
             .get_object_by_key(&object_id, version))
+    }
+
+    #[instrument(skip_all)]
+    async fn multi_get_objects(&self, object_keys: &[ObjectKey]) -> SuiResult<Vec<Option<Object>>> {
+        Ok(self
+            .get_object_cache_reader()
+            .multi_get_objects_by_key(object_keys))
     }
 
     #[instrument(skip(self))]

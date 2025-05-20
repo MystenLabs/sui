@@ -4,6 +4,27 @@ AccountAddress:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
+AccumulatorOperation:
+  ENUM:
+    0:
+      Merge: UNIT
+    1:
+      Split: UNIT
+AccumulatorValue:
+  ENUM:
+    0:
+      U64:
+        NEWTYPE: U64
+AccumulatorWriteV1:
+  STRUCT:
+    - recipient:
+        TYPENAME: SuiAddress
+    - accumulator_type:
+        TYPENAME: StructTag
+    - operation:
+        TYPENAME: AccumulatorOperation
+    - value:
+        TYPENAME: AccumulatorValue
 ActiveJwk:
   STRUCT:
     - jwk_id:
@@ -559,6 +580,16 @@ ExecutionFailureStatus:
           - coin_type: STR
     36:
       ExecutionCancelledDueToRandomnessUnavailable: UNIT
+    37:
+      MoveVectorElemTooBig:
+        STRUCT:
+          - value_size: U64
+          - max_scaled_size: U64
+    38:
+      MoveRawValueTooBig:
+        STRUCT:
+          - value_size: U64
+          - max_scaled_size: U64
 ExecutionStatus:
   ENUM:
     0:
@@ -819,6 +850,10 @@ ObjectOut:
           TUPLE:
             - TYPENAME: SequenceNumber
             - TYPENAME: ObjectDigest
+    3:
+      AccumulatorWriteV1:
+        NEWTYPE:
+          TYPENAME: AccumulatorWriteV1
 Owner:
   ENUM:
     0:

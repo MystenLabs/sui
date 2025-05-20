@@ -15,12 +15,12 @@ use crate::proto::rpc::v2beta::Transaction;
 use crate::proto::rpc::v2beta::TransactionEffects;
 use crate::proto::rpc::v2beta::TransactionEvents;
 use crate::proto::rpc::v2beta::UserSignature;
-use crate::service::transactions::execution::derive_balance_changes;
 use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
 use prost_types::FieldMask;
 use sui_sdk_types::ObjectId;
+use sui_types::balance_change::derive_balance_changes;
 use sui_types::transaction_executor::TransactionExecutor;
 use tap::Pipe;
 
@@ -109,18 +109,18 @@ pub async fn execute_transaction(
     };
 
     let sui_types::quorum_driver_types::ExecuteTransactionResponseV3 {
-        effects,
+        effects:
+            sui_types::quorum_driver_types::FinalizedEffects {
+                effects,
+                finality_info,
+            },
         events,
         input_objects,
         output_objects,
         auxiliary_data: _,
     } = executor.execute_transaction(request, None).await?;
 
-    let (effects, finality) = {
-        let sui_types::quorum_driver_types::FinalizedEffects {
-            effects,
-            finality_info,
-        } = effects;
+    let finality = {
         let finality = match finality_info {
             sui_types::quorum_driver_types::EffectsFinalityInfo::Certified(sig) => {
                 Finality::Certified(sui_sdk_types::ValidatorAggregatedSignature::from(sig).into())
@@ -133,13 +133,9 @@ pub async fn execute_transaction(
                 Finality::QuorumExecuted(())
             }
         };
-
-        (
-            sui_sdk_types::TransactionEffects::try_from(effects)?,
-            crate::proto::rpc::v2beta::TransactionFinality {
-                finality: Some(finality),
-            },
-        )
+        crate::proto::rpc::v2beta::TransactionFinality {
+            finality: Some(finality),
+        }
     };
 
     let executed_transaction = if let Some(mask) =
@@ -149,24 +145,8 @@ pub async fn execute_transaction(
             .map(sui_sdk_types::TransactionEvents::try_from)
             .transpose()?;
 
-        let input_objects = input_objects
-            .map(|objects| {
-                objects
-                    .into_iter()
-                    .map(TryInto::try_into)
-                    .collect::<Result<Vec<_>, _>>()
-            })
-            .transpose()?
-            .unwrap_or_default();
-        let output_objects = output_objects
-            .map(|objects| {
-                objects
-                    .into_iter()
-                    .map(TryInto::try_into)
-                    .collect::<Result<Vec<_>, _>>()
-            })
-            .transpose()?
-            .unwrap_or_default();
+        let input_objects = input_objects.unwrap_or_default();
+        let output_objects = output_objects.unwrap_or_default();
 
         let balance_changes = mask
             .contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
@@ -178,6 +158,16 @@ pub async fn execute_transaction(
             })
             .unwrap_or_default();
 
+        let input_objects = input_objects
+            .into_iter()
+            .map(sui_sdk_types::Object::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+        let output_objects = output_objects
+            .into_iter()
+            .map(sui_sdk_types::Object::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let effects = sui_sdk_types::TransactionEffects::try_from(effects)?;
         let effects = mask
             .subtree(ExecutedTransaction::EFFECTS_FIELD.name)
             .map(|mask| {

@@ -3,14 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::module_cache::GetModule;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use move_binary_format::{
+    CompiledModule,
     file_format::{
         DatatypeHandleIndex, DatatypeTyParameter, EnumDefinition, SignatureToken, StructDefinition,
         StructFieldInformation,
     },
     normalized::{self, Datatype, RcIdentifier, RcPool},
-    CompiledModule,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -332,7 +332,8 @@ impl<'a, T: GetModule> SerdeLayoutBuilder<'a, T> {
         check_depth!(depth);
         let fields = normalized_struct
             .fields
-            .iter()
+            .0
+            .values()
             .map(|f| {
                 self.build_normalized_type_layout(&f.type_, type_arguments, depth)
                     .map(|value| Named {
@@ -353,12 +354,13 @@ impl<'a, T: GetModule> SerdeLayoutBuilder<'a, T> {
         check_depth!(depth);
         let variants = normalized_enum
             .variants
-            .iter()
+            .values()
             .enumerate()
             .map(|(i, v)| {
                 let fields = v
                     .fields
-                    .iter()
+                    .0
+                    .values()
                     .map(|f| {
                         self.build_normalized_type_layout(&f.type_, type_arguments, depth)
                             .map(|value| Named {

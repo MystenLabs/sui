@@ -1,15 +1,15 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use colored::Colorize;
 use move_symbol_pool::Symbol;
-use petgraph::{algo, prelude::DiGraphMap, visit::Dfs, Direction};
+use petgraph::{Direction, algo, prelude::DiGraphMap, visit::Dfs};
 
 use std::io::BufRead;
 use std::{
-    collections::{btree_map::Entry, BTreeMap, BTreeSet, VecDeque},
-    fmt,
+    collections::{BTreeMap, BTreeSet, VecDeque, btree_map::Entry},
+    fmt::{self, Write as _},
     fs::File,
     io::{BufReader, Read, Write},
     path::{Path, PathBuf},
@@ -18,8 +18,8 @@ use std::{
 
 use crate::source_package::parsed_manifest::Dependencies;
 use crate::{
-    lock_file::{schema, LockFile},
-    package_hooks::{custom_resolve_pkg_id, resolve_version, PackageIdentifier},
+    lock_file::{LockFile, schema},
+    package_hooks::{PackageIdentifier, custom_resolve_pkg_id, resolve_version},
     source_package::{
         layout::SourcePackageLayout,
         manifest_parser::{
@@ -166,11 +166,11 @@ pub struct Dependency {
 impl PartialEq for Dependency {
     // We store the original dependency name in the graph for printing user-friendly error messages,
     // but we don't want to consider it when comparing dependencies for equality.
+    //
+    // Dependency equality also ignores the `dep_override` flag, since two dependencies still refer
+    // to the same package even if one of them is an override.
     fn eq(&self, other: &Self) -> bool {
-        self.mode == other.mode
-            && self.subst == other.subst
-            && self.digest == other.digest
-            && self.dep_override == other.dep_override
+        self.mode == other.mode && self.subst == other.subst && self.digest == other.digest
     }
 }
 
@@ -202,6 +202,9 @@ pub struct DependencyGraphBuilder<Progress: Write> {
     /// Set of implicit dependencies to add to every package
     /// Invariant: all dependencies are Internal deps with dep_override set
     implicit_deps: Dependencies,
+    /// Forces use of lock file without checking if it needs to be updated
+    /// (regenerates it only if it doesn't exist)
+    force_lock_file: bool,
 }
 
 impl<Progress: Write> DependencyGraphBuilder<Progress> {
@@ -210,6 +213,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         progress_output: Progress,
         install_dir: PathBuf,
         implicit_deps: Dependencies,
+        force_lock_file: bool,
     ) -> Self {
         for (name, dep) in implicit_deps.iter() {
             assert!(
@@ -224,6 +228,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             visited_dependencies: VecDeque::new(),
             install_dir,
             implicit_deps,
+            force_lock_file,
         }
     }
 
@@ -258,6 +263,30 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             })
             .unwrap_or(None);
 
+        let root_pkg_id = custom_resolve_pkg_id(&root_manifest).with_context(|| {
+            format!(
+                "Resolving package name for '{}'",
+                root_manifest.package.name
+            )
+        })?;
+
+        let root_pkg_name = root_manifest.package.name;
+        if self.force_lock_file {
+            if let Some((_, _, Some(lock_string))) = digest_and_lock_contents {
+                eprintln!("Force-reading from lock file");
+                return Ok((
+                    DependencyGraph::read_from_lock(
+                        root_path,
+                        root_pkg_id,
+                        root_pkg_name,
+                        &mut lock_string.as_bytes(), // safe since old_deps_digest exists
+                        None,
+                    )?,
+                    false,
+                ));
+            }
+        }
+
         // implicits deps should be skipped if the manifest contains any of them
         // explicitly (or if the manifest is for a system package).
         let explicit_implicits: Vec<&Symbol> = self
@@ -278,21 +307,17 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 disabled for your package because you have explicitly included dependencies on {}. Consider \
                 removing these dependencies from {}.",
                 "note".bold().yellow(),
-                move_compiler::format_oxford_list!("and", "{}", self.implicit_deps.keys().collect::<Vec<_>>()),
+                move_compiler::format_oxford_list!(
+                    "and",
+                    "{}",
+                    self.implicit_deps.keys().collect::<Vec<_>>()
+                ),
                 move_compiler::format_oxford_list!("and", "{}", explicit_implicits),
                 SourcePackageLayout::Manifest.location_str(),
             );
         }
 
         // collect sub-graphs for "regular" and "dev" dependencies
-        let root_pkg_id = custom_resolve_pkg_id(&root_manifest).with_context(|| {
-            format!(
-                "Resolving package name for '{}'",
-                root_manifest.package.name
-            )
-        })?;
-
-        let root_pkg_name = root_manifest.package.name;
         let (mut dep_graphs, resolved_id_deps, mut dep_names, mut overrides) = self
             .collect_graphs(
                 parent,
@@ -1767,17 +1792,18 @@ fn format_deps(
     if !dependencies.is_empty() {
         for (dep, _, pkg) in dependencies {
             let pkg_name = dep.dep_name;
-            s.push_str("\n\t");
-            s.push_str(&format!("{pkg_name} = "));
-            s.push_str("{ ");
-            s.push_str(&format!("{pkg}"));
+            // SAFETY: writes to strings can't fail
+            write!(s, "\n\t{pkg_name} = {{ {pkg}").unwrap();
             if let Some(digest) = dep.digest {
-                s.push_str(&format!(", digest = {digest}"));
+                write!(s, ", digest = {digest}").unwrap();
             }
             if let Some(subst) = &dep.subst {
-                s.push_str(&format!(", addr_subst = {}", SubstTOML(subst)));
+                write!(s, ", addr_subst = {}", SubstTOML(subst)).unwrap();
             }
             s.push_str(" }");
+            if let Some(version) = pkg.version {
+                write!(s, " # version {version}").unwrap();
+            }
         }
     } else {
         s.push_str("\n\tno dependencies");
@@ -1804,7 +1830,7 @@ fn deps_equal<'a>(
     ),
 > {
     // Unwraps in the code below are safe as these edges (and target nodes) must exist either in the
-    // sub-graph or in the pre-populated combined graph (see pkg_table_for_deps_compare's doc
+    // sub-graph or in the pre-populated combined graph (see [pkg_table_for_deps_compare]'s doc
     // comment for a more detailed explanation). If these were to fail, it would indicate a bug in
     // the algorithm so it's OK to panic here.
     let graph1_edges = graph1
