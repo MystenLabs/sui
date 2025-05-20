@@ -201,7 +201,7 @@ pub fn make_consensus_adapter_for_test(
             &self,
             transactions: &[ConsensusTransaction],
             epoch_store: &Arc<AuthorityPerEpochStore>,
-        ) -> SuiResult<BlockStatusReceiver> {
+        ) -> SuiResult<(Vec<ConsensusTxPosition>, BlockStatusReceiver)> {
             let sequenced_transactions: Vec<SequencedConsensusTransaction> = transactions
                 .iter()
                 .map(|txn| SequencedConsensusTransaction::new_test(txn.clone()))
@@ -264,7 +264,10 @@ pub fn make_consensus_adapter_for_test(
                 !self.mock_block_status_receivers.lock().is_empty(),
                 "No mock submit responses left"
             );
-            Ok(self.mock_block_status_receivers.lock().remove(0))
+            Ok((
+                Vec::new(),
+                self.mock_block_status_receivers.lock().remove(0),
+            ))
         }
     }
     let epoch_store = state.epoch_store_for_testing();
@@ -326,6 +329,7 @@ async fn submit_transaction_to_consensus_adapter() {
             transaction.clone(),
             Some(&epoch_store.get_reconfig_state_read_lock_guard()),
             &epoch_store,
+            None,
         )
         .unwrap();
     waiter.await.unwrap();
@@ -371,6 +375,7 @@ async fn submit_multiple_transactions_to_consensus_adapter() {
             &transactions,
             Some(&epoch_store.get_reconfig_state_read_lock_guard()),
             &epoch_store,
+            None,
         )
         .unwrap();
     waiter.await.unwrap();
@@ -456,6 +461,7 @@ async fn submit_checkpoint_signature_to_consensus_adapter() {
                 &transactions,
                 Some(&epoch_store.get_reconfig_state_read_lock_guard()),
                 &epoch_store,
+                None,
             )
             .unwrap();
         waiter.await.unwrap();
