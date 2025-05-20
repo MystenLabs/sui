@@ -1,0 +1,31 @@
+[package]
+name = "sui-bridge-indexer-alt"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+tokio.workspace = true
+tokio-util.workspace = true
+anyhow.workspace = true
+sui-bridge.workspace = true
+sui-bridge-schema.workspace = true
+sui-indexer-alt-framework.workspace = true
+sui-indexer-alt-metrics.workspace = true
+async-trait.workspace = true
+tracing.workspace = true
+bcs.workspace = true
+move-core-types.workspace = true
+diesel.workspace = true
+diesel-async.workspace = true
+clap.workspace = true
+url.workspace = true
+mysten-metrics.workspace = true
+telemetry-subscribers.workspace = true
+prometheus.workspace = true
+
+[[bin]]
+name = "bridge-indexer-alt"
+path = "src/main.rs"

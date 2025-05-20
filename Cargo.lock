@@ -13507,6 +13507,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-bridge-indexer-alt"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bcs",
+ "clap",
+ "diesel",
+ "diesel-async",
+ "move-core-types",
+ "mysten-metrics",
+ "prometheus",
+ "sui-bridge",
+ "sui-bridge-schema",
+ "sui-indexer-alt-framework",
+ "sui-indexer-alt-metrics",
+ "telemetry-subscribers",
+ "tokio",
+ "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "sui-bridge-schema"
 version = "0.1.0"
 dependencies = [
@@ -13514,6 +13538,9 @@ dependencies = [
  "diesel_migrations",
  "serde",
  "serde_json",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
+ "sui-field-count",
  "sui-indexer-builder",
 ]
 

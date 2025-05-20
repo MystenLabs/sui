@@ -96,6 +96,7 @@ members = [
   "crates/sui-bridge",
   "crates/sui-bridge-cli",
   "crates/sui-bridge-indexer",
+  "crates/sui-bridge-indexer-alt",
   "crates/sui-bridge-schema",
   "crates/sui-cluster-test",
   "crates/sui-config",
