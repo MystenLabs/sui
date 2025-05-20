@@ -45,10 +45,16 @@ pub(crate) enum Token {
     Ident,
     /// '{'
     LBrace,
+    /// '['
+    LBracket,
     /// '{{'
     LLBrace,
+    /// '|'
+    Pipe,
     /// '}'
     RBrace,
+    /// ']'
+    RBracket,
     /// '}}'
     RRBrace,
     /// A strand of text.
@@ -56,6 +62,9 @@ pub(crate) enum Token {
 
     /// An unexpected byte in the input string.
     Unexpected,
+
+    /// Whitespace around expressions.
+    Whitespace,
 }
 
 #[derive(Debug)]
@@ -101,21 +110,32 @@ impl<'s> Lexer<'s> {
 
     /// Assuming the lexer is in expression mode, return the next expression token.
     fn next_expr_token(&mut self) -> Option<Lexeme<'s>> {
-        self.skip_whitespace();
+        let bytes = self.src.as_bytes();
 
         use Token as T;
-        Some(match self.src.as_bytes().first()? {
+        Some(match bytes.first()? {
+            b'.' => self.take(T::Dot, 1),
+
+            b'a'..=b'z' | b'A'..=b'Z' => {
+                self.take_until(T::Ident, |c| !is_valid_identifier_char(c))
+            }
+
             b'{' => self.take(T::LBrace, 1),
+
+            b'[' => self.take(T::LBracket, 1),
+
+            b'|' => self.take(T::Pipe, 1),
 
             b'}' => {
                 self.mode = Mode::Text;
                 self.take(T::RBrace, 1)
             }
 
-            b'.' => self.take(T::Dot, 1),
+            b']' => self.take(T::RBracket, 1),
 
-            b'a'..=b'z' | b'A'..=b'Z' => {
-                self.take_until(T::Ident, |c| !is_valid_identifier_char(c))
+            // Explicitly tokenize whitespace.
+            _ if self.src.chars().next().is_some_and(|c| c.is_whitespace()) => {
+                self.take_until(Token::Whitespace, |c| !c.is_whitespace())
             }
 
             // If the next byte cannot be recognized, extract the next (potentially variable
@@ -127,10 +147,6 @@ impl<'s> Lexer<'s> {
                 self.take(T::Unexpected, bytes)
             }
         })
-    }
-
-    fn skip_whitespace(&mut self) {
-        self.take_until(Token::Text, |c: char| !c.is_whitespace());
     }
 
     /// Take a prefix of bytes from `self.src` until a byte satisfying pattern `p` is found, and
@@ -180,14 +196,18 @@ impl fmt::Display for OwnedLexeme {
         use OwnedLexeme as L;
         use Token as T;
         match self {
-            L(T::Text, _, s) => write!(f, "text {s:?}"),
-            L(T::LBrace, _, _) => write!(f, "'{{'"),
-            L(T::LLBrace, _, _) => write!(f, "'{{{{'"),
-            L(T::RBrace, _, _) => write!(f, "'}}'"),
-            L(T::RRBrace, _, _) => write!(f, "'}}}}'"),
-            L(T::Ident, _, s) => write!(f, "identifier {s:?}"),
             L(T::Dot, _, _) => write!(f, "'.'"),
+            L(T::Ident, _, s) => write!(f, "identifier {s:?}"),
+            L(T::LBrace, _, _) => write!(f, "'{{'"),
+            L(T::LBracket, _, _) => write!(f, "'['"),
+            L(T::LLBrace, _, _) => write!(f, "'{{{{'"),
+            L(T::Pipe, _, _) => write!(f, "'|'"),
+            L(T::RBrace, _, _) => write!(f, "'}}'"),
+            L(T::RBracket, _, _) => write!(f, "']'"),
+            L(T::RRBrace, _, _) => write!(f, "'}}}}'"),
+            L(T::Text, _, s) => write!(f, "text {s:?}"),
             L(T::Unexpected, _, s) => write!(f, "unexpected character {s:?}"),
+            L(T::Whitespace, _, _) => write!(f, "whitespace"),
         }?;
 
         write!(f, " at offset {}", self.1)
@@ -198,14 +218,18 @@ impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Token as T;
         match self {
-            T::Text => write!(f, "text"),
-            T::LBrace => write!(f, "'{{'"),
-            T::LLBrace => write!(f, "'{{{{'"),
-            T::RBrace => write!(f, "'}}'"),
-            T::RRBrace => write!(f, "'}}}}'"),
-            T::Ident => write!(f, "an identifier"),
             T::Dot => write!(f, "'.'"),
+            T::Ident => write!(f, "an identifier"),
+            T::LBrace => write!(f, "'{{'"),
+            T::LBracket => write!(f, "'['"),
+            T::LLBrace => write!(f, "'{{{{'"),
+            T::Pipe => write!(f, "'|'"),
+            T::RBrace => write!(f, "'}}'"),
+            T::RBracket => write!(f, "']'"),
+            T::RRBrace => write!(f, "'}}}}'"),
+            T::Text => write!(f, "text"),
             T::Unexpected => write!(f, "an unexpected character"),
+            T::Whitespace => write!(f, "whitespace"),
         }
     }
 }
@@ -293,7 +317,9 @@ mod tests {
             vec![
                 L(T::Text, 0, "foo "),
                 L(T::LBrace, 4, "{"),
+                L(T::Whitespace, 5, "  "),
                 L(T::Ident, 7, "bar"),
+                L(T::Whitespace, 10, "   "),
                 L(T::RBrace, 13, "}"),
             ],
         );
@@ -311,8 +337,11 @@ mod tests {
                 L(T::LBrace, 4, "{"),
                 L(T::Ident, 5, "bar"),
                 L(T::Dot, 8, "."),
+                L(T::Whitespace, 9, " "),
                 L(T::Ident, 10, "baz"),
+                L(T::Whitespace, 13, "  "),
                 L(T::Dot, 15, "."),
+                L(T::Whitespace, 16, " "),
                 L(T::Ident, 17, "qux"),
                 L(T::RBrace, 20, "}"),
             ],
@@ -373,8 +402,11 @@ mod tests {
                 L(T::Text, 0, "anything goes "),
                 L(T::LBrace, 14, "{"),
                 L(T::Unexpected, 15, "@"),
+                L(T::Whitespace, 16, " "),
                 L(T::Unexpected, 17, "#"),
+                L(T::Whitespace, 18, " "),
                 L(T::Unexpected, 19, "!"),
+                L(T::Whitespace, 20, " "),
                 L(T::Unexpected, 21, "🔥"),
                 L(T::RBrace, 25, "}"),
             ],
@@ -406,10 +438,67 @@ mod tests {
                 L(T::RBrace, 22, "}"),
                 L(T::Text, 23, " "),
                 L(T::LBrace, 24, "{"),
+                L(T::Whitespace, 25, " "),
                 L(T::LBrace, 26, "{"),
                 L(T::LBrace, 27, "{"),
+                L(T::Whitespace, 28, " "),
                 L(T::RBrace, 29, "}"),
                 L(T::Text, 30, " qux"),
+            ],
+        );
+    }
+
+    /// Pipes separate top-level expressions, but are only parsed inside expressions, not inside
+    /// text.
+    #[test]
+    fn test_alternates() {
+        let lexer = Lexer::new(r#"foo | {bar | baz.qux} | quy"#);
+        let lexemes: Vec<_> = lexer.collect();
+        assert_eq!(
+            lexemes,
+            vec![
+                L(T::Text, 0, "foo | "),
+                L(T::LBrace, 6, "{"),
+                L(T::Ident, 7, "bar"),
+                L(T::Whitespace, 10, " "),
+                L(T::Pipe, 11, "|"),
+                L(T::Whitespace, 12, " "),
+                L(T::Ident, 13, "baz"),
+                L(T::Dot, 16, "."),
+                L(T::Ident, 17, "qux"),
+                L(T::RBrace, 20, "}"),
+                L(T::Text, 21, " | quy"),
+            ],
+        );
+    }
+
+    // Display supports two kinds of index -- `foo[i]` and `bar[[j]]`. Unlike braces, doubly nested
+    // brackets do not have their own token. The two cases are distinguished by the parser, which
+    // uses significant whitespace to distinguish between two separate `]`'s vs a single `]]`.
+    #[test]
+    fn test_indices() {
+        let lexer = Lexer::new(r#"foo {bar[baz].qux[[quy]][quz]}"#);
+        let lexemes: Vec<_> = lexer.collect();
+        assert_eq!(
+            lexemes,
+            vec![
+                L(T::Text, 0, "foo "),
+                L(T::LBrace, 4, "{"),
+                L(T::Ident, 5, "bar"),
+                L(T::LBracket, 8, "["),
+                L(T::Ident, 9, "baz"),
+                L(T::RBracket, 12, "]"),
+                L(T::Dot, 13, "."),
+                L(T::Ident, 14, "qux"),
+                L(T::LBracket, 17, "["),
+                L(T::LBracket, 18, "["),
+                L(T::Ident, 19, "quy"),
+                L(T::RBracket, 22, "]"),
+                L(T::RBracket, 23, "]"),
+                L(T::LBracket, 24, "["),
+                L(T::Ident, 25, "quz"),
+                L(T::RBracket, 28, "]"),
+                L(T::RBrace, 29, "}"),
             ],
         );
     }
