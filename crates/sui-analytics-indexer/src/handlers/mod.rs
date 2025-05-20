@@ -124,8 +124,8 @@ fn get_owner_type(object: &Object) -> OwnerType {
         Owner::ObjectOwner(_) => OwnerType::ObjectOwner,
         Owner::Shared { .. } => OwnerType::Shared,
         Owner::Immutable => OwnerType::Immutable,
-        // TODO: Implement support for ConsensusV2 objects.
-        Owner::ConsensusV2 { .. } => todo!(),
+        // TODO-DNS is this correct, or do we need a separate owner type?
+        Owner::ConsensusAddressOwner { .. } => OwnerType::AddressOwner,
     }
 }
 
@@ -135,8 +135,7 @@ fn get_owner_address(object: &Object) -> Option<String> {
         Owner::ObjectOwner(address) => Some(address.to_string()),
         Owner::Shared { .. } => None,
         Owner::Immutable => None,
-        // TODO: Implement support for ConsensusV2 objects.
-        Owner::ConsensusV2 { .. } => todo!(),
+        Owner::ConsensusAddressOwner { owner, .. } => Some(owner.to_string()),
     }
 }
 

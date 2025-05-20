@@ -134,10 +134,10 @@ impl From<crate::object::Owner> for Owner {
                 initial_shared_version,
             } => Self::Shared(initial_shared_version.value()),
             crate::object::Owner::Immutable => Self::Immutable,
-            // TODO: Corresponding types need to be added to sui-sdk-types.
-            crate::object::Owner::ConsensusV2 {
+            // TODO(ConsensusV2): Corresponding types need to be added to sui-sdk-types.
+            crate::object::Owner::ConsensusAddressOwner {
                 start_version: _,
-                authenticator: _,
+                owner: _,
             } => todo!(),
         }
     }

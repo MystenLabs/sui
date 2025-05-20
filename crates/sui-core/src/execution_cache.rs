@@ -721,7 +721,7 @@ macro_rules! implement_storage_traits {
                 // transaction replay due to possible reordering of transactions during replay.
                 if recv_object.owner != Owner::AddressOwner((*owner).into())
                     || self.have_received_object_at_version(
-                        // TODO: Add support for receiving ConsensusV2 objects. For now this assumes fastpath.
+                        // TODO: Add support for receiving consensus objects. For now this assumes fastpath.
                         FullObjectKey::new(
                             FullObjectID::new(*receiving_object_id, None),
                             receive_object_at_version,
