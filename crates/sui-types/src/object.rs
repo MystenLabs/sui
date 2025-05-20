@@ -82,7 +82,7 @@ impl MoveObject {
         protocol_config: &ProtocolConfig,
         system_mutation: bool,
     ) -> Result<Self, ExecutionError> {
-        let bound = if system_mutation {
+        let bound = if protocol_config.allow_unbounded_system_objects() && system_mutation {
             if contents.len() as u64 > protocol_config.max_move_object_size() {
                 debug_fatal!(
                     "System created object (ID = {:?}) of type {:?} and size {} exceeds normal max size {}",
@@ -246,14 +246,23 @@ impl MoveObject {
         &mut self,
         new_contents: Vec<u8>,
         protocol_config: &ProtocolConfig,
-    ) {
+    ) -> Result<(), ExecutionError> {
         if new_contents.len() as u64 > protocol_config.max_move_object_size() {
-            debug_fatal!(
-                "Safe mode object update (ID = {}) of size {} exceeds normal max size {}",
-                self.id(),
-                new_contents.len(),
-                protocol_config.max_move_object_size()
-            );
+            if protocol_config.allow_unbounded_system_objects() {
+                debug_fatal!(
+                    "Safe mode object update (ID = {}) of size {} exceeds normal max size {}",
+                    self.id(),
+                    new_contents.len(),
+                    protocol_config.max_move_object_size()
+                )
+            } else {
+                return Err(ExecutionError::from_kind(
+                    ExecutionErrorKind::MoveObjectTooBig {
+                        object_size: new_contents.len() as u64,
+                        max_object_size: protocol_config.max_move_object_size(),
+                    },
+                ));
+            }
         }
 
         #[cfg(debug_assertions)]
@@ -263,6 +272,8 @@ impl MoveObject {
         // Update should not modify ID
         #[cfg(debug_assertions)]
         debug_assert_eq!(self.id(), old_id);
+
+        Ok(())
     }
 
     /// Sets the version of this object to a new value which is assumed to be higher (and checked to
