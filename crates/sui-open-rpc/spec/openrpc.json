@@ -141,8 +141,7 @@
                     "digest": "BhbWpBeESxuRWvmvLMyb2JNUuFa6j4aG1T4WUiPgKAHm"
                   }
                 },
-                "eventsDigest": "6kerMphN4S5QTfd9TAhwMiFq1q9c2YwfpheBfWm85vUq",
-                "abortError": null
+                "eventsDigest": "6kerMphN4S5QTfd9TAhwMiFq1q9c2YwfpheBfWm85vUq"
               },
               "events": []
             }
@@ -285,8 +284,7 @@
                     "digest": "EnRQXe1hDGAJCFyF2ds2GmPHdvf9V6yxf24LisEsDkYt"
                   }
                 },
-                "eventsDigest": "55TNn3v5vpuXjQfjqamw76P9GZD522pumo4NuT7RYeFB",
-                "abortError": null
+                "eventsDigest": "55TNn3v5vpuXjQfjqamw76P9GZD522pumo4NuT7RYeFB"
               },
               "objectChanges": [
                 {
@@ -489,8 +487,7 @@
                     "digest": "AaeJbTYkUuyromsivxzkoxSkHt7pCESTyQG7xz6nbQ2G"
                   }
                 },
-                "eventsDigest": "816hEv4WAW2reK9xkf11PeHiaZJrp7PQT9oGJZhdf9TN",
-                "abortError": null
+                "eventsDigest": "816hEv4WAW2reK9xkf11PeHiaZJrp7PQT9oGJZhdf9TN"
               },
               "objectChanges": [
                 {
@@ -2188,8 +2185,7 @@
                     "digest": "7nDZ5J4VyvYGUbX2f6mQdhkr3RFrb3vZqui1ogoyApD9"
                   }
                 },
-                "eventsDigest": "9BQobwxQvJ1JxSXNn8v8htZPTu8FEzJJGgcD4kgLUuMd",
-                "abortError": null
+                "eventsDigest": "9BQobwxQvJ1JxSXNn8v8htZPTu8FEzJJGgcD4kgLUuMd"
               },
               "objectChanges": [
                 {
@@ -2568,8 +2564,7 @@
                       "digest": "B4g7NgvgmCFYzG2BPH6nT6kM5bPaRMD76LVJ4LWysq5w"
                     }
                   },
-                  "eventsDigest": "2SY11dmdTQv6JLD2wqcsMiJNqXbXUkn87Rzw5NHib8Mf",
-                  "abortError": null
+                  "eventsDigest": "2SY11dmdTQv6JLD2wqcsMiJNqXbXUkn87Rzw5NHib8Mf"
                 },
                 "objectChanges": [
                   {
@@ -2685,8 +2680,7 @@
                       "digest": "DeJhcQ3CmMPwyhVct22PP7hYaVny6zbz8V7gnTw3yoAT"
                     }
                   },
-                  "eventsDigest": "69bh3Q9RhRgMFKwmQn8LYE8vYujFTpYyUSVBht3oYkm6",
-                  "abortError": null
+                  "eventsDigest": "69bh3Q9RhRgMFKwmQn8LYE8vYujFTpYyUSVBht3oYkm6"
                 },
                 "objectChanges": [
                   {
@@ -2802,8 +2796,7 @@
                       "digest": "FYD6KHzkQnbwS52WA8rYS9WbJza1K583ootS5MK9BR2T"
                     }
                   },
-                  "eventsDigest": "DzJWHtFNHttaBdpECZGDMF7tcx5NYZfNfCk5NsaaRgmn",
-                  "abortError": null
+                  "eventsDigest": "DzJWHtFNHttaBdpECZGDMF7tcx5NYZfNfCk5NsaaRgmn"
                 },
                 "objectChanges": [
                   {
@@ -5354,39 +5347,6 @@
   ],
   "components": {
     "schemas": {
-      "Abort": {
-        "type": "object",
-        "properties": {
-          "error_code": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint64",
-            "minimum": 0.0
-          },
-          "function": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "line": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint16",
-            "minimum": 0.0
-          },
-          "module_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
       "AdditionalConsensusStateDigest": {
         "$ref": "#/components/schemas/Digest"
       },
@@ -9053,6 +9013,39 @@
           }
         }
       },
+      "SuiMoveAbort": {
+        "type": "object",
+        "properties": {
+          "error_code": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "function": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "line": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "minimum": 0.0
+          },
+          "module_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "SuiMoveModuleId": {
         "type": "object",
         "required": [
@@ -10500,10 +10493,10 @@
             ],
             "properties": {
               "abortError": {
-                "description": "th",
+                "description": "The abort error populated if the transaction failed with an abort code.",
                 "anyOf": [
                   {
-                    "$ref": "#/components/schemas/Abort"
+                    "$ref": "#/components/schemas/SuiMoveAbort"
                   },
                   {
                     "type": "null"

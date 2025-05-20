@@ -1086,7 +1086,6 @@ async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
         ..
     } = fullnode.dry_exec_transaction(data, digest).await.unwrap().0;
 
-    println!("effects: {:#?}", effects);
     assert_eq!(effects.deleted().len(), 0);
     assert!(execution_error_source.is_some());
     assert_snapshot!(execution_error_source.unwrap());
