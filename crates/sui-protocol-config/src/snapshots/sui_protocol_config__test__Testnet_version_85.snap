@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 84
+version: 85
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -43,10 +43,8 @@ feature_flags:
   include_consensus_digest_in_prologue: true
   hardened_otw_check: true
   allow_receiving_object_id: true
-  enable_poseidon: true
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
-  enable_group_ops_native_function_msm: true
   enable_nitro_attestation: true
   enable_nitro_attestation_upgraded_parsing: true
   reject_mutable_random_on_entry_functions: true
@@ -65,7 +63,6 @@ feature_flags:
   reshare_at_same_initial_version: true
   resolve_abort_locations_to_package_id: true
   mysticeti_use_committed_subdag_digest: true
-  enable_vdf: true
   record_consensus_determined_version_assignments_in_prologue: true
   fresh_vm_on_framework_upgrade: true
   prepend_prologue_tx_in_consensus_commit_in_checkpoints: true
@@ -73,12 +70,10 @@ feature_flags:
   soft_bundle: true
   enable_coin_deny_list_v2: true
   passkey_auth: true
-  authority_capabilities_v2: true
   rethrow_serialization_type_layout_errors: true
   consensus_distributed_vote_scoring_strategy: true
   consensus_round_prober: true
   validate_identifier_inputs: true
-  mysticeti_fastpath: true
   relocate_event_module: true
   uncompressed_g1_group_elements: true
   disallow_new_modules_in_deps_only_packages: true
@@ -289,7 +284,6 @@ hash_blake2b256_data_cost_per_block: 2
 hash_keccak256_cost_base: 10
 hash_keccak256_data_cost_per_byte: 2
 hash_keccak256_data_cost_per_block: 2
-poseidon_bn254_cost_base: 260
 poseidon_bn254_cost_per_block: 388
 group_ops_bls12381_decode_scalar_cost: 7
 group_ops_bls12381_decode_g1_cost: 2848
@@ -331,8 +325,6 @@ hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
 check_zklogin_id_cost_base: 200
 check_zklogin_issuer_cost_base: 200
-vdf_verify_vdf_cost: 1500
-vdf_hash_to_input_cost: 100
 nitro_attestation_parse_base_cost: 2650
 nitro_attestation_parse_cost_per_byte: 50
 nitro_attestation_verify_base_cost: 2481600
