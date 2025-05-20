@@ -1645,16 +1645,21 @@ impl IndexStore {
     /// cache miss, we go to the database (expensive) and update the cache. Notice that db read is
     /// done with `spawn_blocking` as that is expected to block
     #[instrument(skip(self))]
-    pub fn get_balance(&self, owner: SuiAddress, coin_type: TypeTag) -> SuiResult<TotalBalance> {
+    pub async fn get_balance(
+        &self,
+        owner: SuiAddress,
+        coin_type: TypeTag,
+    ) -> SuiResult<TotalBalance> {
         let force_disable_cache = read_size_from_env(ENV_VAR_DISABLE_INDEX_CACHE).unwrap_or(0) > 0;
         let cloned_coin_type = coin_type.clone();
         let metrics_cloned = self.metrics.clone();
         let coin_index_cloned = self.tables.coin_index_2.clone();
         if force_disable_cache {
             Self::get_balance_from_db(metrics_cloned, coin_index_cloned, owner, cloned_coin_type)
+                .await
                 .map_err(|e| {
-                SuiError::ExecutionError(format!("Failed to read balance frm DB: {:?}", e))
-            })?;
+                    SuiError::ExecutionError(format!("Failed to read balance from DB: {:?}", e))
+                })?;
         }
 
         self.metrics.balance_lookup_from_total.inc();
@@ -1676,19 +1681,22 @@ impl IndexStore {
         let cloned_coin_type = coin_type.clone();
         let metrics_cloned = self.metrics.clone();
         let coin_index_cloned = self.tables.coin_index_2.clone();
+
         self.caches
             .per_coin_type_balance
-            .get_with((owner, coin_type), move || {
+            .get_with((owner, coin_type), move || async move {
                 Self::get_balance_from_db(
                     metrics_cloned,
                     coin_index_cloned,
                     owner,
                     cloned_coin_type,
                 )
+                .await
                 .map_err(|e| {
-                    SuiError::ExecutionError(format!("Failed to read balance frm DB: {:?}", e))
+                    SuiError::ExecutionError(format!("Failed to read balance from DB: {:?}", e))
                 })
             })
+            .await
     }
 
     /// This method gets the balance for all coin types from the `all_balance` cache. On a cache miss,
@@ -1697,7 +1705,7 @@ impl IndexStore {
     /// `get_Balance()` queries. Notice that db read is performed with `spawn_blocking` as that is
     /// expected to block
     #[instrument(skip(self))]
-    pub fn get_all_balance(
+    pub async fn get_all_balance(
         &self,
         owner: SuiAddress,
     ) -> SuiResult<Arc<HashMap<TypeTag, TotalBalance>>> {
@@ -1705,26 +1713,35 @@ impl IndexStore {
         let metrics_cloned = self.metrics.clone();
         let coin_index_cloned = self.tables.coin_index_2.clone();
         if force_disable_cache {
-            Self::get_all_balances_from_db(metrics_cloned, coin_index_cloned, owner).map_err(
-                |e| {
+            Self::get_all_balances_from_db(metrics_cloned, coin_index_cloned, owner)
+                .await
+                .map_err(|e| {
                     SuiError::ExecutionError(format!("Failed to read all balance from DB: {:?}", e))
-                },
-            )?;
+                })?;
         }
 
         self.metrics.all_balance_lookup_from_total.inc();
         let metrics_cloned = self.metrics.clone();
         let coin_index_cloned = self.tables.coin_index_2.clone();
-        self.caches.all_balances.get_with(owner, move || {
-            Self::get_all_balances_from_db(metrics_cloned, coin_index_cloned, owner).map_err(|e| {
-                SuiError::ExecutionError(format!("Failed to read all balance from DB: {:?}", e))
+
+        self.caches
+            .all_balances
+            .get_with(owner, move || async move {
+                Self::get_all_balances_from_db(metrics_cloned, coin_index_cloned, owner)
+                    .await
+                    .map_err(|e| {
+                        SuiError::ExecutionError(format!(
+                            "Failed to read all balance from DB: {:?}",
+                            e
+                        ))
+                    })
             })
-        })
+            .await
     }
 
     /// Read balance for a `SuiAddress` and `CoinType` from the backend database
     #[instrument(skip_all)]
-    pub fn get_balance_from_db(
+    pub async fn get_balance_from_db(
         metrics: Arc<IndexStoreMetrics>,
         coin_index: DBMap<CoinIndexKey2, CoinInfo>,
         owner: SuiAddress,
@@ -1732,52 +1749,64 @@ impl IndexStore {
     ) -> SuiResult<TotalBalance> {
         metrics.balance_lookup_from_db.inc();
         let coin_type_str = coin_type.to_string();
-        let coins =
-            Self::get_owned_coins_iterator(&coin_index, owner, Some(coin_type_str.clone()))?;
 
-        let mut balance = 0i128;
-        let mut num_coins = 0;
-        for (_key, coin_info) in coins {
-            balance += coin_info.balance as i128;
-            num_coins += 1;
-        }
-        Ok(TotalBalance { balance, num_coins })
+        tokio::task::spawn_blocking(move || {
+            let coins =
+                Self::get_owned_coins_iterator(&coin_index, owner, Some(coin_type_str.clone()))?;
+
+            let mut balance = 0i128;
+            let mut num_coins = 0;
+            for (_key, coin_info) in coins {
+                balance += coin_info.balance as i128;
+                num_coins += 1;
+            }
+            Ok::<TotalBalance, SuiError>(TotalBalance { balance, num_coins })
+        })
+        .await
+        .map_err(|e| SuiError::ExecutionError(format!("Failed to read balance from DB: {:?}", e)))?
     }
 
     /// Read all balances for a `SuiAddress` from the backend database
     #[instrument(skip_all)]
-    pub fn get_all_balances_from_db(
+    pub async fn get_all_balances_from_db(
         metrics: Arc<IndexStoreMetrics>,
         coin_index: DBMap<CoinIndexKey2, CoinInfo>,
         owner: SuiAddress,
     ) -> SuiResult<Arc<HashMap<TypeTag, TotalBalance>>> {
         metrics.all_balance_lookup_from_db.inc();
-        let mut balances: HashMap<TypeTag, TotalBalance> = HashMap::new();
-        let coins = Self::get_owned_coins_iterator(&coin_index, owner, None)?
-            .chunk_by(|(key, _coin)| key.coin_type.clone());
-        for (coin_type, coins) in &coins {
-            let mut total_balance = 0i128;
-            let mut coin_object_count = 0;
-            for (_, coin_info) in coins {
-                total_balance += coin_info.balance as i128;
-                coin_object_count += 1;
+
+        tokio::task::spawn_blocking(move || {
+            let mut balances: HashMap<TypeTag, TotalBalance> = HashMap::new();
+            let coins = Self::get_owned_coins_iterator(&coin_index, owner, None)?
+                .chunk_by(|(key, _coin)| key.coin_type.clone());
+            for (coin_type, coins) in &coins {
+                let mut total_balance = 0i128;
+                let mut coin_object_count = 0;
+                for (_, coin_info) in coins {
+                    total_balance += coin_info.balance as i128;
+                    coin_object_count += 1;
+                }
+                let coin_type =
+                    TypeTag::Struct(Box::new(parse_sui_struct_tag(&coin_type).map_err(|e| {
+                        SuiError::ExecutionError(format!(
+                            "Failed to parse event sender address: {:?}",
+                            e
+                        ))
+                    })?));
+                balances.insert(
+                    coin_type,
+                    TotalBalance {
+                        num_coins: coin_object_count,
+                        balance: total_balance,
+                    },
+                );
             }
-            let coin_type =
-                TypeTag::Struct(Box::new(parse_sui_struct_tag(&coin_type).map_err(|e| {
-                    SuiError::ExecutionError(format!(
-                        "Failed to parse event sender address: {:?}",
-                        e
-                    ))
-                })?));
-            balances.insert(
-                coin_type,
-                TotalBalance {
-                    num_coins: coin_object_count,
-                    balance: total_balance,
-                },
-            );
-        }
-        Ok(Arc::new(balances))
+            Ok::<Arc<HashMap<TypeTag, TotalBalance>>, SuiError>(Arc::new(balances))
+        })
+        .await
+        .map_err(|e| {
+            SuiError::ExecutionError(format!("Failed to read all balances from DB: {:?}", e))
+        })?
     }
 
     fn invalidate_per_coin_type_cache(
@@ -1938,13 +1967,14 @@ mod tests {
             index_store.tables.coin_index_2.clone(),
             address,
             GAS::type_tag(),
-        )?;
-        let balance = index_store.get_balance(address, GAS::type_tag())?;
+        )
+        .await?;
+        let balance = index_store.get_balance(address, GAS::type_tag()).await?;
         assert_eq!(balance, balance_from_db);
         assert_eq!(balance.balance, 1000);
         assert_eq!(balance.num_coins, 10);
 
-        let all_balance = index_store.get_all_balance(address)?;
+        let all_balance = index_store.get_all_balance(address).await?;
         let balance = all_balance.get(&GAS::type_tag()).unwrap();
         assert_eq!(*balance, balance_from_db);
         assert_eq!(balance.balance, 1000);
@@ -1979,8 +2009,9 @@ mod tests {
             index_store.tables.coin_index_2.clone(),
             address,
             GAS::type_tag(),
-        )?;
-        let balance = index_store.get_balance(address, GAS::type_tag())?;
+        )
+        .await?;
+        let balance = index_store.get_balance(address, GAS::type_tag()).await?;
         assert_eq!(balance, balance_from_db);
         assert_eq!(balance.balance, 700);
         assert_eq!(balance.num_coins, 7);
@@ -1990,10 +2021,10 @@ mod tests {
             .caches
             .per_coin_type_balance
             .invalidate(&(address, GAS::type_tag()));
-        let all_balance = index_store.get_all_balance(address)?;
+        let all_balance = index_store.get_all_balance(address).await?;
         assert_eq!(all_balance.get(&GAS::type_tag()).unwrap().balance, 700);
         assert_eq!(all_balance.get(&GAS::type_tag()).unwrap().num_coins, 7);
-        let balance = index_store.get_balance(address, GAS::type_tag())?;
+        let balance = index_store.get_balance(address, GAS::type_tag()).await?;
         assert_eq!(balance, balance_from_db);
         assert_eq!(balance.balance, 700);
         assert_eq!(balance.num_coins, 7);

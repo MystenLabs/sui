@@ -11,9 +11,11 @@ use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::num::NonZeroUsize;
+use std::sync::Arc;
+use tokio::sync::OnceCell;
 
 pub struct ShardedLruCache<K, V, S = RandomState> {
-    shards: Vec<RwLock<LruCache<K, V>>>,
+    shards: Vec<RwLock<LruCache<K, Arc<OnceCell<V>>>>>,
     hasher: S,
 }
 
@@ -52,18 +54,20 @@ where
         h % self.shards.len()
     }
 
-    fn read_shard(&self, key: &K) -> RwLockReadGuard<'_, LruCache<K, V>> {
+    fn read_shard(&self, key: &K) -> RwLockReadGuard<'_, LruCache<K, Arc<OnceCell<V>>>> {
         let shard_idx = self.shard_id(key);
         self.shards[shard_idx].read()
     }
 
-    fn write_shard(&self, key: &K) -> RwLockWriteGuard<'_, LruCache<K, V>> {
+    fn write_shard(&self, key: &K) -> RwLockWriteGuard<'_, LruCache<K, Arc<OnceCell<V>>>> {
         let shard_idx = self.shard_id(key);
         self.shards[shard_idx].write()
     }
 
     pub fn invalidate(&self, key: &K) -> Option<V> {
-        self.write_shard(key).pop(key)
+        self.write_shard(key)
+            .pop(key)
+            .and_then(|cell| cell.get().cloned())
     }
 
     pub fn batch_invalidate(&self, keys: impl IntoIterator<Item = K>) {
@@ -82,10 +86,13 @@ where
 
     pub fn merge(&self, key: K, value: &V, f: fn(&V, &V) -> V) {
         let mut shard = self.write_shard(&key);
-        let old_value = shard.get(&key);
-        if let Some(old_value) = old_value {
-            let new_value = f(old_value, value);
-            shard.put(key, new_value);
+        if let Some(cell) = shard.get(&key) {
+            if let Some(old_value) = cell.get() {
+                let new_value = f(old_value, value);
+                let new_cell = Arc::new(OnceCell::new());
+                let _ = new_cell.set(new_value.clone());
+                shard.put(key, new_cell);
+            }
         }
     }
 
@@ -101,34 +108,45 @@ where
         for (shard_idx, keys) in grouped.into_iter() {
             let mut shard = self.shards[shard_idx].write();
             for (key, value) in keys.into_iter() {
-                let old_value = shard.get(&key);
-                if let Some(old_value) = old_value {
-                    let new_value = f(old_value, &value);
-                    shard.put(key, new_value);
+                if let Some(cell) = shard.get(&key) {
+                    if let Some(old_value) = cell.get() {
+                        let new_value = f(old_value, &value);
+                        let new_cell = Arc::new(OnceCell::new());
+                        let _ = new_cell.set(new_value.clone());
+                        shard.put(key, new_cell);
+                        continue;
+                    }
                 }
             }
         }
     }
 
     pub fn get(&self, key: &K) -> Option<V> {
-        self.read_shard(key).peek(key).cloned()
+        self.read_shard(key)
+            .peek(key)
+            .and_then(|cell| cell.get().cloned())
     }
 
-    pub fn get_with(&self, key: K, init: impl FnOnce() -> V) -> V {
-        let shard = self.read_shard(&key);
-        let value = shard.peek(&key);
-        if let Some(value) = value {
-            return value.clone();
+    pub async fn get_with<F, Fut>(&self, key: K, init: F) -> V
+    where
+        F: FnOnce() -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = V> + Send,
+    {
+        if let Some(v) = self.get(&key) {
+            return v;
         }
-        drop(shard);
-        let mut shard = self.write_shard(&key);
-        let value = shard.get(&key);
-        if let Some(value) = value {
-            return value.clone();
-        }
-        let value = init();
-        let cloned_value = value.clone();
-        shard.push(key, value);
-        cloned_value
+
+        // Get/create the OnceCell under the lock.
+        let cell = {
+            let mut shard = self.write_shard(&key);
+            shard.get(&key).cloned().unwrap_or_else(|| {
+                let c = Arc::new(OnceCell::new());
+                shard.put(key.clone(), c.clone());
+                c
+            })
+        };
+
+        // First caller runs `init`, others await.
+        cell.get_or_init(init).await.clone()
     }
 }

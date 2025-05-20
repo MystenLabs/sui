@@ -449,14 +449,11 @@ impl StateRead for AuthorityState {
         coin_type: TypeTag,
     ) -> StateReadResult<TotalBalance> {
         let indexes = self.indexes.clone();
-        Ok(tokio::task::spawn_blocking(move || {
-            indexes
-                .as_ref()
-                .ok_or(SuiError::IndexStoreNotAvailable)?
-                .get_balance(owner, coin_type)
-        })
-        .await
-        .map_err(|e: JoinError| SuiError::ExecutionError(e.to_string()))??)
+        Ok(indexes
+            .as_ref()
+            .ok_or(SuiError::IndexStoreNotAvailable)?
+            .get_balance(owner, coin_type)
+            .await?)
     }
 
     async fn get_all_balance(
@@ -464,14 +461,11 @@ impl StateRead for AuthorityState {
         owner: SuiAddress,
     ) -> StateReadResult<Arc<HashMap<TypeTag, TotalBalance>>> {
         let indexes = self.indexes.clone();
-        Ok(tokio::task::spawn_blocking(move || {
-            indexes
-                .as_ref()
-                .ok_or(SuiError::IndexStoreNotAvailable)?
-                .get_all_balance(owner)
-        })
-        .await
-        .map_err(|e: JoinError| SuiError::ExecutionError(e.to_string()))??)
+        Ok(indexes
+            .as_ref()
+            .ok_or(SuiError::IndexStoreNotAvailable)?
+            .get_all_balance(owner)
+            .await?)
     }
 
     fn get_verified_checkpoint_by_sequence_number(
