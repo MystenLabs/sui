@@ -88,10 +88,17 @@ where
         let mut shard = self.write_shard(&key);
         if let Some(cell) = shard.get(&key) {
             if let Some(old_value) = cell.get() {
+                // Cell is initialized, perform the merge
                 let new_value = f(old_value, value);
                 let new_cell = Arc::new(OnceCell::new());
                 let _ = new_cell.set(new_value.clone());
                 shard.put(key, new_cell);
+            } else {
+                // Found an empty cell. It is currently being initialized, but we don't
+                // know if it i's being initialized from the old DB state or new DB state.
+                // Remove it from the cache to ensure the next cache lookup refreshes the cache
+                // from the index.
+                shard.pop(&key);
             }
         }
     }
@@ -110,11 +117,17 @@ where
             for (key, value) in keys.into_iter() {
                 if let Some(cell) = shard.get(&key) {
                     if let Some(old_value) = cell.get() {
+                        // Cell is initialized, perform the merge
                         let new_value = f(old_value, &value);
                         let new_cell = Arc::new(OnceCell::new());
                         let _ = new_cell.set(new_value.clone());
                         shard.put(key, new_cell);
-                        continue;
+                    } else {
+                        // Found an empty cell. It is currently being initialized, but we don't
+                        // know if it i's being initialized from the old DB state or new DB state.
+                        // Remove it from the cache to ensure the next cache lookup refreshes the cache
+                        // from the index.
+                        shard.pop(&key);
                     }
                 }
             }
