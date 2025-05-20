@@ -24,7 +24,6 @@ use crate::crypto::{default_hash, deterministic_random_account_key};
 use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
 use crate::error::{SuiError, SuiResult};
 use crate::gas_coin::GAS;
-use crate::is_system_package;
 use crate::layout_resolver::LayoutResolver;
 use crate::move_package::MovePackage;
 use crate::{
@@ -33,6 +32,7 @@ use crate::{
     },
     gas_coin::GasCoin,
 };
+use crate::{is_system_package, KNOWN_SYSTEM_OBJECTS};
 use sui_protocol_config::ProtocolConfig;
 
 use self::balance_traversal::BalanceTraversal;
@@ -82,7 +82,9 @@ impl MoveObject {
         protocol_config: &ProtocolConfig,
         system_mutation: bool,
     ) -> Result<Self, ExecutionError> {
-        let bound = if system_mutation {
+        let bound = if system_mutation
+            || MoveObject::id_opt(&contents).is_ok_and(|id| KNOWN_SYSTEM_OBJECTS.contains(&id))
+        {
             if contents.len() as u64 > protocol_config.max_move_object_size() {
                 debug_fatal!(
                     "System created object (ID = {:?}) of type {:?} and size {} exceeds normal max size {}",
