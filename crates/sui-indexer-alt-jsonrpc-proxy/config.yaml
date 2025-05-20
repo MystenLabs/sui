@@ -1,0 +1,10 @@
+---
+listen-address: "127.0.0.1:8080"
+metrics-address: "127.0.0.1:9184"
+
+fullnode-address: "https://rpc-fpa.sui-mainnet.mystenlabs.com/json-rpc"
+
+unsupported-methods:
+  - "sui_executeTransaction"
+
+cursor-cache-size: 10000

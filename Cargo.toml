@@ -128,6 +128,7 @@ members = [
   "crates/sui-indexer-alt-framework-store-traits",
   "crates/sui-indexer-alt-graphql",
   "crates/sui-indexer-alt-jsonrpc",
+  "crates/sui-indexer-alt-jsonrpc-proxy",
   "crates/sui-indexer-alt-metrics",
   "crates/sui-indexer-alt-reader",
   "crates/sui-indexer-alt-restorer",
