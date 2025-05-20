@@ -93,7 +93,7 @@ pub fn construct_test_plan(
     package_filter: Option<Symbol>,
     prog: &G::Program,
 ) -> Option<Vec<ModuleTestPlan>> {
-    if !compilation_env.flags().is_testing() {
+    if !compilation_env.test_mode() {
         return None;
     }
 
@@ -161,7 +161,6 @@ fn build_test_info<'func>(
     let test_attribute_opt = get_attrs(AttributeKind_::Test);
     let random_test_attribute_opt = get_attrs(AttributeKind_::RandTest);
     let expected_failure_attribute_opt = get_attrs(AttributeKind_::ExpectedFailure);
-    let test_only_attribute_opt = get_attrs(AttributeKind_::TestOnly);
 
     let (test_attribute, is_random_test) = if let Some(test_attribute) = test_attribute_opt {
         ice_assert!(
@@ -187,17 +186,6 @@ fn build_test_info<'func>(
         }
         return None;
     };
-
-    // A #[test] function cannot also be annotated #[test_only]
-    if test_only_attribute_opt.is_some() {
-        ice_assert!(
-            context.reporter,
-            false,
-            fn_loc,
-            "Found test_only and test or rand_test attributes"
-        );
-        return None;
-    }
 
     let mut arguments = Vec::new();
     if is_random_test {
