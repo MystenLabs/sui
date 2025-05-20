@@ -106,7 +106,7 @@ pub type StoreError = typed_store_error::TypedStoreError;
 /// #[tokio::main]
 /// async fn main() -> Result<(), Error> {
 ///
-/// use typed_store::rocks::MetricConf;let primary_path = tempfile::tempdir().expect("Failed to open temporary directory").into_path();
+/// use typed_store::rocks::MetricConf;let primary_path = tempfile::tempdir().expect("Failed to open temporary directory").keep();
 /// let _ = Tables::open_tables_read_write(primary_path.clone(), typed_store::rocks::MetricConf::default(), None, None);
 ///
 /// // Get the read only handle

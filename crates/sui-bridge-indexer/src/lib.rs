@@ -229,7 +229,7 @@ pub async fn create_sui_indexer(
             .checkpoints_path
             .clone()
             .map(|p| p.into())
-            .unwrap_or(tempfile::tempdir()?.into_path()),
+            .unwrap_or(tempfile::tempdir()?.keep()),
         config.sui_bridge_genesis_checkpoint,
         ingestion_metrics,
         metrics.clone().boxed(),

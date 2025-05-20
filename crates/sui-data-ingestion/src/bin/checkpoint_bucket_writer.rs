@@ -102,7 +102,7 @@ async fn main() -> Result<()> {
     executor.register(worker_pool).await?;
     executor
         .run(
-            tempfile::tempdir()?.into_path(),
+            tempfile::tempdir()?.keep(),
             Some(config.source_url),
             vec![],
             ReaderOptions::default(),

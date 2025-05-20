@@ -267,7 +267,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                     None => {
                         let p: std::path::PathBuf = tempfile::tempdir()
                         .expect("Failed to open temporary directory")
-                        .into_path();
+                        .keep();
                         #intermediate_db_map_struct_name::open_tables_impl(primary_path, Some(p), metric_conf, global_db_options_override, None, false)
                     }
                 };

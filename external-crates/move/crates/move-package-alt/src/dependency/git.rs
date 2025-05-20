@@ -602,7 +602,6 @@ mod tests {
             .fetch_to_folder(temp_folder.into_path())
             .await
             .unwrap();
-
         // Verify only packages/pkg_a was checked out
         assert!(checkout_path.join("packages/pkg_a").exists());
         assert!(!checkout_path.join("packages/pkg_b").exists());

@@ -7,7 +7,7 @@ use rstest::rstest;
 fn temp_dir() -> std::path::PathBuf {
     tempfile::tempdir()
         .expect("Failed to open temporary directory")
-        .into_path()
+        .keep()
 }
 
 fn get_iter<K, V>(db: &DBMap<K, V>) -> impl Iterator<Item = (K, V)> + use<'_, K, V>

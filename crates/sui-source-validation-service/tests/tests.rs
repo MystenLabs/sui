@@ -278,9 +278,7 @@ async fn test_api_route() -> anyhow::Result<()> {
 
     let address = "0x2";
     let module = "address";
-    let source_path = fixtures
-        .into_path()
-        .join("sui/move-stdlib/sources/address.move");
+    let source_path = fixtures.keep().join("sui/move-stdlib/sources/address.move");
 
     let mut source_lookup = SourceLookup::new();
     source_lookup.insert(

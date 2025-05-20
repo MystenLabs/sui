@@ -19,7 +19,7 @@ use typed_store::{be_fix_int_ser, DBMapUtils};
 fn temp_dir() -> std::path::PathBuf {
     tempfile::tempdir()
         .expect("Failed to open temporary directory")
-        .into_path()
+        .keep()
 }
 /// This struct is used to illustrate how the utility works
 #[derive(DBMapUtils)]
