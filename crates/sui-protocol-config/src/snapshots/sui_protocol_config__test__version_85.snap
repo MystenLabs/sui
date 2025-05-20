@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 84
+version: 85
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -98,6 +98,7 @@ feature_flags:
   enforce_checkpoint_timestamp_monotonicity: true
   max_ptb_value_size_v2: true
   resolve_type_input_ids_to_defining_id: true
+  enable_party_transfer: true
   allow_unbounded_system_objects: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
