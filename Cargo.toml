@@ -194,7 +194,7 @@ members = [
   "crates/typed-store-derive",
   "crates/typed-store-error",
   "crates/typed-store-workspace-hack",
-  "crates/x",
+  "crates/x", "crates/event-streams-reader",
   "sui-execution",
   "sui-execution/cut",
   "sui-execution/latest/sui-adapter",
