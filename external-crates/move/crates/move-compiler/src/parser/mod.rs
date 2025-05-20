@@ -8,9 +8,9 @@ pub mod comments;
 pub(crate) mod filter;
 pub mod keywords;
 pub mod lexer;
+pub(crate) mod mode_attribute_filter;
 pub(crate) mod syntax;
 mod token_set;
-pub(crate) mod verification_attribute_filter;
 
 use crate::{
     parser::{self, ast::PackageDefinition, syntax::parse_file_string},
@@ -159,7 +159,7 @@ fn ensure_targets_deps_dont_intersect(
     if intersection.is_empty() {
         return Ok(());
     }
-    if compilation_env.flags().sources_shadow_deps() {
+    if compilation_env.sources_shadow_deps() {
         deps.retain(|p| !intersection.contains(&&p.path.as_str().to_owned()));
         return Ok(());
     }

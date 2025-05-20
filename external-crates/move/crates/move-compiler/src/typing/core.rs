@@ -23,7 +23,7 @@ use crate::{
     },
     shared::{
         ide::{AutocompleteMethod, IDEAnnotation, IDEInfo},
-        known_attributes::TestingAttribute,
+        known_attributes::{ModeAttribute, TestingAttribute},
         matching::{MatchContext, new_match_var_name},
         program_info::*,
         string_utils::{debug_print, format_oxford_list},
@@ -2057,7 +2057,7 @@ pub fn public_testing_visibility(
     callee_entry: Option<Loc>,
 ) -> Option<PublicForTesting> {
     // is_testing && (is_entry || is_sui_init)
-    if !env.flags().is_testing() {
+    if !env.test_mode() {
         return None;
     }
 
@@ -2086,7 +2086,7 @@ fn report_visibility_error_(
         (call_loc, call_msg),
         (vis_loc, vis_msg),
     );
-    if context.env().flags().is_testing() {
+    if context.env().test_mode() {
         if let Some(case) = public_for_testing {
             let (test_loc, test_msg) = match case {
                 PublicForTesting::Entry(entry_loc) => {
@@ -2095,7 +2095,7 @@ fn report_visibility_error_(
                     but only from testing contexts, e.g. '#[{}]' or '#[{}]'",
                         ENTRY_MODIFIER,
                         TestingAttribute::TEST,
-                        TestingAttribute::TEST_ONLY,
+                        ModeAttribute::TEST_ONLY,
                     );
                     (entry_loc, entry_msg)
                 }

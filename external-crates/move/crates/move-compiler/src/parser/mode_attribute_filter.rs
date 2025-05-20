@@ -1,9 +1,5 @@
-// Copyright (c) The Diem Core Contributors
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
-
-use move_ir_types::location::Loc;
-use move_symbol_pool::Symbol;
 
 use crate::{
     diag,
@@ -12,8 +8,13 @@ use crate::{
         ast as P,
         filter::{FilterContext, filter_program},
     },
-    shared::{CompilationEnv, known_attributes},
+    shared::{CompilationEnv, known_attributes::ModeAttribute},
 };
+
+use move_ir_types::location::{Loc, sp};
+use move_symbol_pool::Symbol;
+
+use std::collections::BTreeSet;
 
 struct Context<'env> {
     env: &'env CompilationEnv,
@@ -43,31 +44,43 @@ impl FilterContext for Context<'_> {
         self.is_source_def = is_source_def;
     }
 
-    // An AST element should be removed if:
-    // * It is annotated #[verify_only] and verify mode is not set
+    // An AST element should be removed if no compiler mode is set for it.
     fn should_remove_by_attributes(&mut self, attrs: &[P::Attributes]) -> bool {
-        use known_attributes::VerificationAttribute;
-        let flattened_attrs: Vec<_> = attrs.iter().flat_map(verification_attributes).collect();
-        let is_verify_only_loc = flattened_attrs.iter().map(|attr| attr.0).next();
-        let should_remove = is_verify_only_loc.is_some();
-        // TODO this is a bit of a hack
-        // but we don't have a better way of suppressing this unless the filtering was done after
-        // expansion
-        // Ideally we would just have a warning filter scope here
-        // (but again, need expansion for that)
+        let modes = attrs
+            .iter()
+            .flat_map(|attr| attr.value.modes())
+            .collect::<BTreeSet<_>>();
+
+        if modes.is_empty() {
+            return false;
+        };
+
+        // TODO: This is a bit of a hack but we don't have a better way of suppressing this unless
+        // the filtering was done after expansion. We could also us a filtering warning scope here.
         let silence_warning =
             !self.is_source_def || self.env.package_config(self.current_package).is_dependency;
+
         if !silence_warning {
-            if let Some(loc) = is_verify_only_loc {
+            // Report `verify_only` deprecation -- but only for the first one.
+            if let Some(sp!(loc, _)) =
+                modes.get(&sp(Loc::invalid(), ModeAttribute::VERIFY_ONLY.into()))
+            {
                 let msg = format!(
                     "The '{}' attribute has been deprecated along with specification blocks",
-                    VerificationAttribute::VERIFY_ONLY
+                    ModeAttribute::VERIFY_ONLY
                 );
                 self.reporter
-                    .add_diag(diag!(Uncategorized::DeprecatedWillBeRemoved, (loc, msg)));
+                    .add_diag(diag!(Uncategorized::DeprecatedWillBeRemoved, (*loc, msg)));
             }
         }
-        should_remove
+
+        let modes = modes
+            .into_iter()
+            .map(|mode| mode.value)
+            .collect::<BTreeSet<_>>();
+
+        // If the compiler mode intersects with these modes, we should keep this
+        self.env.modes().intersection(&modes).next().is_none()
     }
 }
 
@@ -81,28 +94,4 @@ impl FilterContext for Context<'_> {
 pub fn program(compilation_env: &CompilationEnv, prog: P::Program) -> P::Program {
     let mut context = Context::new(compilation_env);
     filter_program(&mut context, prog)
-}
-
-fn verification_attributes(attrs: &P::Attributes) -> Vec<(Loc, known_attributes::AttributeKind_)> {
-    attrs
-        .value
-        .iter()
-        .filter_map(|attr| match attr.value {
-            P::Attribute_::VerifyOnly => {
-                Some((attr.loc, known_attributes::AttributeKind_::VerifyOnly))
-            }
-            P::Attribute_::BytecodeInstruction
-            | P::Attribute_::DefinesPrimitive(..)
-            | P::Attribute_::Deprecation { .. }
-            | P::Attribute_::Error { .. }
-            | P::Attribute_::External { .. }
-            | P::Attribute_::Syntax { .. }
-            | P::Attribute_::Allow { .. }
-            | P::Attribute_::LintAllow { .. }
-            | P::Attribute_::Test
-            | P::Attribute_::TestOnly
-            | P::Attribute_::ExpectedFailure { .. }
-            | P::Attribute_::RandomTest => None,
-        })
-        .collect()
 }

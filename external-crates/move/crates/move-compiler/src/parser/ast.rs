@@ -206,10 +206,12 @@ pub enum Attribute_ {
     External {
         attrs: Spanned<Vec<ParsedAttribute>>,
     },
+    Mode {
+        modes: BTreeSet<Name>,
+    },
     Syntax {
         kind: Name,
     },
-    VerifyOnly,
     // -- diagnostic attributes ------------------
     Allow {
         allow_set: BTreeSet<(Option<Name>, Name)>,
@@ -219,7 +221,6 @@ pub enum Attribute_ {
     },
     // -- testing attributes  --------------------
     Test,
-    TestOnly,
     ExpectedFailure {
         failure_kind: Box<ExpectedFailureKind>,
         minor_status: Option<AttributeValue>,
@@ -230,7 +231,10 @@ pub enum Attribute_ {
 
 pub type Attribute = Spanned<Attribute_>;
 
-pub type Attributes = Spanned<Vec<Attribute>>;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Attributes_(pub Vec<Attribute>);
+
+pub type Attributes = Spanned<Attributes_>;
 
 //**************************************************************************************************
 // Modules
@@ -870,15 +874,30 @@ impl Attribute_ {
             Attribute_::Deprecation { .. } => AK::Deprecation.name(),
             Attribute_::Error { .. } => AK::Error.name(),
             Attribute_::External { .. } => AK::External.name(),
+            Attribute_::Mode { .. } => AK::Mode.name(),
             Attribute_::Syntax { .. } => AK::Syntax.name(),
-            Attribute_::VerifyOnly => AK::VerifyOnly.name(),
             Attribute_::Allow { .. } => AK::Allow.name(),
             Attribute_::LintAllow { .. } => AK::LintAllow.name(),
             Attribute_::Test => AK::Test.name(),
-            Attribute_::TestOnly => AK::TestOnly.name(),
             Attribute_::ExpectedFailure { .. } => AK::ExpectedFailure.name(),
             Attribute_::RandomTest => AK::RandTest.name(),
         }
+    }
+
+    pub fn modes(&self) -> BTreeSet<Name> {
+        match self {
+            Attribute_::Mode { modes } => modes.clone(),
+            _ => BTreeSet::new(),
+        }
+    }
+}
+
+impl Attributes_ {
+    pub fn modes(&self) -> BTreeSet<Name> {
+        self.0
+            .iter()
+            .flat_map(|t| t.value.modes())
+            .collect::<BTreeSet<_>>()
     }
 }
 
@@ -1659,13 +1678,17 @@ impl AstDebug for Attribute_ {
                 });
                 w.write(")");
             }
+            A::Mode { modes: mode_set } => {
+                w.write("mode(");
+                w.comma(mode_set, |w, parsed| {
+                    w.write(format!("{}", parsed));
+                });
+                w.write(")");
+            }
             A::Syntax { kind } => {
                 w.write("syntax(");
                 w.write(kind.value.as_str());
                 w.write(")");
-            }
-            A::VerifyOnly => {
-                w.write("verify_only");
             }
             A::Allow { allow_set } => {
                 w.write("allow(");
@@ -1695,9 +1718,6 @@ impl AstDebug for Attribute_ {
             }
             A::Test => {
                 w.write("test");
-            }
-            A::TestOnly => {
-                w.write("test_only");
             }
             A::ExpectedFailure {
                 failure_kind,
@@ -1734,6 +1754,12 @@ impl AstDebug for Vec<Attribute> {
             false
         });
         w.write("]");
+    }
+}
+
+impl AstDebug for Attributes {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        self.value.0.ast_debug(w)
     }
 }
 
