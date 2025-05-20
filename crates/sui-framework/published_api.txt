@@ -97,6 +97,9 @@ stake_activation_epoch
 is_preactive
 	public fun
 	0x3::staking_pool
+activation_epoch
+	public(package) fun
+	0x3::staking_pool
 is_inactive
 	public fun
 	0x3::staking_pool

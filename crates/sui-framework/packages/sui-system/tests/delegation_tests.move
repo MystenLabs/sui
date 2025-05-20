@@ -498,8 +498,7 @@ fun add_preactive_remove_post_active() {
     runner.finish();
 }
 
-#[test, expected_failure]
-// TODO: fix the reason this test is failing as a separate feature
+#[test]
 fun add_remove_stake_preactive_candidate() {
     let mut runner = test_runner::new().validators_initial_stake(100).validators_count(2).build();
     let validator = validator_builder::preset().sui_address(NEW_VALIDATOR_ADDR).build(runner.ctx());
@@ -550,18 +549,19 @@ fun add_remove_stake_preactive_candidate() {
 // 5. Staker unstakes and gets no rewards.
 fun add_preactive_candidate_drop_out() {
     let mut runner = test_runner::new().validators_initial_stake(100).validators_count(2).build();
-    let validator = validator_builder::preset().sui_address(NEW_VALIDATOR_ADDR).build(runner.ctx());
+    let validator = validator_builder::preset().build(runner.ctx());
+    let validator_address = validator.sui_address();
     runner.add_validator_candidate(validator);
 
     // Delegate 100 MIST to the preactive validator
-    runner.set_sender(STAKER_ADDR_1).stake_with(NEW_VALIDATOR_ADDR, 100);
+    runner.set_sender(STAKER_ADDR_1).stake_with(validator_address, 100);
 
     // Advance epoch and give out some rewards. The candidate should get nothing, of course.
     let opts = runner.advance_epoch_opts().computation_charge(800);
     runner.advance_epoch(option::some(opts)).destroy_for_testing();
 
     // Now the candidate leaves.
-    runner.set_sender(NEW_VALIDATOR_ADDR).remove_validator_candidate();
+    runner.set_sender(validator_address).remove_validator_candidate();
 
     // Advance epoch a few times.
     runner.advance_epoch(option::none()).destroy_for_testing();
@@ -576,6 +576,35 @@ fun add_preactive_candidate_drop_out() {
 }
 
 #[test]
+// Scenario:
+// 1. Add a validator candidate
+// 2. Stake 100 SUI to the validator candidate
+// 3. Request removal of the validator candidate without epoch advancement
+// 4. Unstake from the validator candidate
+fun remove_inactive_stake_from_inactive_candidate() {
+    let mut runner = test_runner::new().validators_initial_stake(100).validators_count(2).build();
+    let validator = validator_builder::preset().build(runner.ctx());
+    let validator_address = validator.sui_address();
+
+    runner.add_validator_candidate(validator);
+
+    // Stake 100 SUI to the validator candidate
+    runner.set_sender(validator_address).stake_with(validator_address, 100);
+
+    // Request removal of the validator candidate without epoch advancement
+    // Candidate is immediately marked as inactive.
+    runner.set_sender(validator_address).remove_validator_candidate();
+
+    // Unstake from the validator candidate
+    runner.set_sender(validator_address).unstake(0);
+
+    // Check that the stake is withdrawn fully.
+    assert_eq!(runner.set_sender(validator_address).sui_balance(), 100 * MIST_PER_SUI);
+
+    runner.finish();
+}
+
+#[test]
 /// Scenario:
 /// 1. Stake 100 SUI to the validator.
 /// 2. Advance epoch.
@@ -585,11 +614,11 @@ fun staking_pool_exchange_rate_getter() {
     let mut runner = test_runner::new()
         .validators(vector[
             validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_1),
-            validator_builder::new().initial_stake(100).sui_address(VALIDATOR_ADDR_2),
+            validator_builder::new().initial_stake(100),
         ])
         .build();
 
-    runner.set_sender(STAKER_ADDR_1).stake_with(VALIDATOR_ADDR_1, 100);
+    runner.stake_with(VALIDATOR_ADDR_1, 100);
 
     let pool_id;
 
