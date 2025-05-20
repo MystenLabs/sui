@@ -43,29 +43,29 @@ const MAX_SUBSECTIONS: usize = 6;
 pub struct DocgenFlags {
     /// The level where we start sectioning. Often markdown sections are rendered with
     /// unnecessary large section fonts, setting this value high reduces the size.
-    #[clap(
+    #[arg(
         long = "section-level-start",
         value_name = "HEADER_LEVEL",
         default_value = "1"
     )]
     pub section_level_start: usize,
     /// Whether to include private functions in the generated docs.
-    #[clap(long = "exclude-private-fun")]
+    #[arg(long = "exclude-private-fun")]
     pub exclude_private_fun: bool,
     /// Whether to include Move implementations.
-    #[clap(long = "exclude-impl")]
+    #[arg(long = "exclude-impl")]
     pub exclude_impl: bool,
     /// Max depth to which sections are displayed in table-of-contents.
-    #[clap(long = "toc-depth", value_name = "DEPTH", default_value = "3")]
+    #[arg(long = "toc-depth", value_name = "DEPTH", default_value = "3")]
     pub toc_depth: usize,
     /// Whether to use collapsed sections (<details>) for impl and specs
-    #[clap(long = "no-collapsed-sections")]
+    #[arg(long = "no-collapsed-sections")]
     pub no_collapsed_sections: bool,
     /// Whether to include dependency diagrams in the generated docs.
-    #[clap(long = "include-dep-diagrams")]
+    #[arg(long = "include-dep-diagrams")]
     pub include_dep_diagrams: bool,
     /// Whether to include call diagrams in the generated docs.
-    #[clap(long = "include-call-diagrams")]
+    #[arg(long = "include-call-diagrams")]
     pub include_call_diagrams: bool,
 }
 

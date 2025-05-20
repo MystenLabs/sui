@@ -25,21 +25,21 @@ use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 bin_version::bin_version!();
 
 #[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
-#[clap(name = env!("CARGO_BIN_NAME"))]
-#[clap(version = VERSION)]
-#[clap(group(ArgGroup::new("exclusive").required(false)))]
+#[command(rename_all = "kebab-case")]
+#[command(name = env!("CARGO_BIN_NAME"))]
+#[command(version = VERSION)]
+#[command(group(ArgGroup::new("exclusive").required(false)))]
 struct Args {
-    #[clap(long)]
+    #[arg(long)]
     pub config_path: PathBuf,
 
-    #[clap(long, help = "Specify address to listen on")]
+    #[arg(long, help = "Specify address to listen on")]
     listen_address: Option<Multiaddr>,
 
-    #[clap(long, group = "exclusive")]
+    #[arg(long, group = "exclusive")]
     run_with_range_epoch: Option<EpochId>,
 
-    #[clap(long, group = "exclusive")]
+    #[arg(long, group = "exclusive")]
     run_with_range_checkpoint: Option<CheckpointSequenceNumber>,
 }
 

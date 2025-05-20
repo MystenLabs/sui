@@ -21,18 +21,18 @@ pub mod tui;
 pub mod viewer;
 
 #[derive(Debug, Parser)]
-#[clap(author, version, about)]
+#[command(author, version, about)]
 pub struct BytecodeViewerConfig {
     /// The path to the module binary
-    #[clap(long = "module-path", short = 'b')]
+    #[arg(long = "module-path", short = 'b')]
     pub module_binary_path: PathBuf,
 
     /// The path to the source map for the module binary
-    #[clap(long = "source-map-path")]
+    #[arg(long = "source-map-path")]
     pub module_sourcemap_path: PathBuf,
 
     /// The path to the source file
-    #[clap(long = "source-path", short = 's')]
+    #[arg(long = "source-path", short = 's')]
     pub source_file_path: PathBuf,
 }
 

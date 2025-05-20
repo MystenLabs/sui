@@ -17,28 +17,28 @@ const STRUCT_LAYOUTS_FILENAME: &str = "struct_layouts.yaml";
 pub struct Build {
     /// Include the contents of packages in dependencies that haven't been published (only relevant
     /// when dumping bytecode as base64)
-    #[clap(long, global = true)]
+    #[arg(long, global = true)]
     pub with_unpublished_dependencies: bool,
     /// Whether we are printing in base64.
-    #[clap(long, global = true)]
+    #[arg(long, global = true)]
     pub dump_bytecode_as_base64: bool,
     /// [Mainly for testing, not recommended for production]
     /// Don't specialize the package to the active chain when dumping bytecode as Base64. This
     /// allows building to proceed without a network connection or active environment, but it
     /// will not be able to automatically determine the addresses of its dependencies.
-    #[clap(long, global = true, requires = "dump_bytecode_as_base64")]
+    #[arg(long, global = true, requires = "dump_bytecode_as_base64")]
     pub ignore_chain: bool,
     /// If true, generate struct layout schemas for
     /// all struct types passed into `entry` functions declared by modules in this package
     /// These layout schemas can be consumed by clients (e.g.,
     /// the TypeScript SDK) to enable serialization/deserialization of transaction arguments
     /// and events.
-    #[clap(long, global = true)]
+    #[arg(long, global = true)]
     pub generate_struct_layouts: bool,
     /// The chain ID, if resolved. Required when the dump_bytecode_as_base64 is true,
     /// for automated address management, where package addresses are resolved for the
     /// respective chain in the Move.lock file.
-    #[clap(skip)]
+    #[arg(skip)]
     pub chain_id: Option<String>,
 }
 

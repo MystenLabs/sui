@@ -83,23 +83,23 @@ pub fn module_generation_settings() -> ModuleGeneratorOptions {
 
 /// Command line arguments for the tool
 #[derive(Debug, Parser)]
-#[clap(author, version, about)]
+#[command(author, version, about)]
 pub struct Args {
     /// The optional number of programs that will be generated. If not specified, program
     /// generation will run infinitely.
-    #[clap(short = 'i', long = "iterations")]
+    #[arg(short = 'i', long = "iterations")]
     pub num_iterations: Option<u64>,
 
     /// Path where a serialized module should be saved.
     /// If `None`, then the module will just be printed out.
-    #[clap(short = 'o', long = "output")]
+    #[arg(short = 'o', long = "output")]
     pub output_path: Option<String>,
 
     /// The optional seed used for test generation.
-    #[clap(short = 's', long = "seed")]
+    #[arg(short = 's', long = "seed")]
     pub seed: Option<String>,
 
     /// The optional number of threads to use for test generation.
-    #[clap(short = 't', long = "threads")]
+    #[arg(short = 't', long = "threads")]
     pub num_threads: Option<u64>,
 }

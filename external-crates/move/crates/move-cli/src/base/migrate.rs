@@ -8,7 +8,7 @@ use std::path::Path;
 
 /// Migrate to Move 2024 for the package at `path`. If no path is provided defaults to current directory.
 #[derive(Parser)]
-#[clap(name = "migrate")]
+#[command(name = "migrate")]
 pub struct Migrate;
 
 impl Migrate {

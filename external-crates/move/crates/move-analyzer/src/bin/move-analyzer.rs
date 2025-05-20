@@ -6,7 +6,7 @@ use move_analyzer::analyzer;
 use std::collections::BTreeMap;
 
 #[derive(Parser)]
-#[clap(author, version, about)]
+#[arg(author, version, about)]
 struct Options {}
 
 #[allow(deprecated)]

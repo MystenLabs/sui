@@ -20,21 +20,21 @@ use std::{
 };
 
 #[derive(Debug, Parser)]
-#[clap(author, version, about)]
+#[command(author, version, about)]
 struct Args {
     /// Do not automatically run the bytecode verifier
-    #[clap(long = "no-verify")]
+    #[arg(long = "no-verify")]
     pub no_verify: bool,
     /// Path to the Move IR source to compile
     pub source_path: PathBuf,
     /// Instead of compiling the source, emit a dependency list of the compiled source
-    #[clap(short = 'l', long = "list-dependencies")]
+    #[arg(short = 'l', long = "list-dependencies")]
     pub list_dependencies: bool,
     /// Path to the list of modules that we want to link with
-    #[clap(short = 'd', long = "deps")]
+    #[arg(short = 'd', long = "deps")]
     pub deps_path: Option<String>,
 
-    #[clap(long = "src-map")]
+    #[arg(long = "src-map")]
     pub output_source_maps: bool,
 }
 

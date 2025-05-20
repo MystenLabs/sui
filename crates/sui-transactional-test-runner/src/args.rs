@@ -29,104 +29,104 @@ pub const SUI_ARGS_LONG: &str = "sui-args";
 
 #[derive(Clone, Debug, clap::Parser)]
 pub struct SuiRunArgs {
-    #[clap(long = "sender")]
+    #[arg(long = "sender")]
     pub sender: Option<String>,
-    #[clap(long = "gas-price")]
+    #[arg(long = "gas-price")]
     pub gas_price: Option<u64>,
-    #[clap(long = "summarize")]
+    #[arg(long = "summarize")]
     pub summarize: bool,
 }
 
 #[derive(Debug, clap::Parser, Default)]
 pub struct SuiPublishArgs {
-    #[clap(long = "sender")]
+    #[arg(long = "sender")]
     pub sender: Option<String>,
-    #[clap(long = "upgradeable", action = clap::ArgAction::SetTrue)]
+    #[arg(long = "upgradeable", action = clap::ArgAction::SetTrue)]
     pub upgradeable: bool,
-    #[clap(long = "dependencies", num_args(1..))]
+    #[arg(long = "dependencies", num_args(1..))]
     pub dependencies: Vec<String>,
-    #[clap(long = "gas-price")]
+    #[arg(long = "gas-price")]
     pub gas_price: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]
 pub struct SuiInitArgs {
-    #[clap(long = "accounts", num_args(1..))]
+    #[arg(long = "accounts", num_args(1..))]
     pub accounts: Option<Vec<String>>,
-    #[clap(long = "protocol-version")]
+    #[arg(long = "protocol-version")]
     pub protocol_version: Option<u64>,
-    #[clap(long = "max-gas")]
+    #[arg(long = "max-gas")]
     pub max_gas: Option<u64>,
-    #[clap(long = "shared-object-deletion")]
+    #[arg(long = "shared-object-deletion")]
     pub shared_object_deletion: Option<bool>,
-    #[clap(long = "simulator")]
+    #[arg(long = "simulator")]
     pub simulator: bool,
-    #[clap(long = "custom-validator-account")]
+    #[arg(long = "custom-validator-account")]
     pub custom_validator_account: bool,
-    #[clap(long = "reference-gas-price")]
+    #[arg(long = "reference-gas-price")]
     pub reference_gas_price: Option<u64>,
-    #[clap(long = "default-gas-price")]
+    #[arg(long = "default-gas-price")]
     pub default_gas_price: Option<u64>,
-    #[clap(flatten)]
+    #[command(flatten)]
     pub snapshot_config: SnapshotLagConfig,
-    #[clap(long = "flavor")]
+    #[arg(long = "flavor")]
     pub flavor: Option<Flavor>,
     /// The number of epochs to keep in the database. Epochs outside of this range will be pruned by
     /// the indexer.
-    #[clap(long = "epochs-to-keep")]
+    #[arg(long = "epochs-to-keep")]
     pub epochs_to_keep: Option<u64>,
     /// Dir for simulacrum to write checkpoint files to. To be passed to the offchain indexer and
     /// reader.
-    #[clap(long)]
+    #[arg(long)]
     pub data_ingestion_path: Option<PathBuf>,
     /// URL for the Sui REST API. To be passed to the offchain indexer and reader.
-    #[clap(long)]
+    #[arg(long)]
     pub rest_api_url: Option<String>,
 }
 
 #[derive(Debug, clap::Parser)]
 pub struct ViewObjectCommand {
-    #[clap(value_parser = parse_fake_id)]
+    #[arg(value_parser = parse_fake_id)]
     pub id: FakeID,
 }
 
 #[derive(Debug, clap::Parser)]
 pub struct TransferObjectCommand {
-    #[clap(value_parser = parse_fake_id)]
+    #[arg(value_parser = parse_fake_id)]
     pub id: FakeID,
-    #[clap(long = "recipient")]
+    #[arg(long = "recipient")]
     pub recipient: String,
-    #[clap(long = "sender")]
+    #[arg(long = "sender")]
     pub sender: Option<String>,
-    #[clap(long = "gas-budget")]
+    #[arg(long = "gas-budget")]
     pub gas_budget: Option<u64>,
-    #[clap(long = "gas-price")]
+    #[arg(long = "gas-price")]
     pub gas_price: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]
 pub struct ConsensusCommitPrologueCommand {
-    #[clap(long = "timestamp-ms")]
+    #[arg(long = "timestamp-ms")]
     pub timestamp_ms: u64,
 }
 
 #[derive(Debug, clap::Parser)]
 pub struct ProgrammableTransactionCommand {
-    #[clap(long = "sender")]
+    #[arg(long = "sender")]
     pub sender: Option<String>,
-    #[clap(long = "sponsor")]
+    #[arg(long = "sponsor")]
     pub sponsor: Option<String>,
-    #[clap(long = "gas-budget")]
+    #[arg(long = "gas-budget")]
     pub gas_budget: Option<u64>,
-    #[clap(long = "gas-price")]
+    #[arg(long = "gas-price")]
     pub gas_price: Option<u64>,
-    #[clap(long = "gas-payment", value_parser = parse_fake_id)]
+    #[arg(long = "gas-payment", value_parser = parse_fake_id)]
     pub gas_payment: Option<Vec<FakeID>>,
-    #[clap(long = "dev-inspect")]
+    #[arg(long = "dev-inspect")]
     pub dev_inspect: bool,
-    #[clap(long = "dry-run")]
+    #[arg(long = "dry-run")]
     pub dry_run: bool,
-    #[clap(
+    #[arg(
         long = "inputs",
         value_parser = ParsedValue::<SuiExtraValueArgs>::parse,
         num_args(1..),
@@ -137,66 +137,66 @@ pub struct ProgrammableTransactionCommand {
 
 #[derive(Debug, clap::Parser)]
 pub struct UpgradePackageCommand {
-    #[clap(long = "package")]
+    #[arg(long = "package")]
     pub package: String,
-    #[clap(long = "upgrade-capability", value_parser = parse_fake_id)]
+    #[arg(long = "upgrade-capability", value_parser = parse_fake_id)]
     pub upgrade_capability: FakeID,
-    #[clap(long = "dependencies", num_args(1..))]
+    #[arg(long = "dependencies", num_args(1..))]
     pub dependencies: Vec<String>,
-    #[clap(long = "sender")]
+    #[arg(long = "sender")]
     pub sender: String,
-    #[clap(long = "gas-budget")]
+    #[arg(long = "gas-budget")]
     pub gas_budget: Option<u64>,
-    #[clap(long = "dry-run")]
+    #[arg(long = "dry-run")]
     pub dry_run: bool,
-    #[clap(long = "syntax")]
+    #[arg(long = "syntax")]
     pub syntax: Option<SyntaxChoice>,
-    #[clap(long = "policy", default_value="compatible", value_parser = parse_policy)]
+    #[arg(long = "policy", default_value="compatible", value_parser = parse_policy)]
     pub policy: u8,
-    #[clap(long = "gas-price")]
+    #[arg(long = "gas-price")]
     pub gas_price: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]
 pub struct StagePackageCommand {
-    #[clap(long = "syntax")]
+    #[arg(long = "syntax")]
     pub syntax: Option<SyntaxChoice>,
-    #[clap(long = "dependencies", num_args(1..))]
+    #[arg(long = "dependencies", num_args(1..))]
     pub dependencies: Vec<String>,
 }
 
 #[derive(Debug, clap::Parser)]
 pub struct SetAddressCommand {
     pub address: String,
-    #[clap(value_parser = ParsedValue::<SuiExtraValueArgs>::parse)]
+    #[arg(value_parser = ParsedValue::<SuiExtraValueArgs>::parse)]
     pub input: ParsedValue<SuiExtraValueArgs>,
 }
 
 #[derive(Debug, clap::Parser)]
 pub struct AdvanceClockCommand {
-    #[clap(long = "duration-ns")]
+    #[arg(long = "duration-ns")]
     pub duration_ns: u64,
 }
 
 #[derive(Debug, clap::Parser)]
 pub struct RunGraphqlCommand {
-    #[clap(long = "show-usage")]
+    #[arg(long = "show-usage")]
     pub show_usage: bool,
-    #[clap(long = "show-headers")]
+    #[arg(long = "show-headers")]
     pub show_headers: bool,
-    #[clap(long = "show-service-version")]
+    #[arg(long = "show-service-version")]
     pub show_service_version: bool,
-    #[clap(long, num_args(1..))]
+    #[arg(long, num_args(1..))]
     pub cursors: Vec<String>,
-    #[clap(long)]
+    #[arg(long)]
     pub wait_for_checkpoint_pruned: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]
 pub struct RunJsonRpcCommand {
-    #[clap(long = "show-headers")]
+    #[arg(long = "show-headers")]
     pub show_headers: bool,
-    #[clap(long, num_args(1..))]
+    #[arg(long, num_args(1..))]
     pub cursors: Vec<String>,
 }
 
@@ -208,17 +208,17 @@ pub struct CreateCheckpointCommand {
 #[derive(Debug, clap::Parser)]
 pub struct AdvanceEpochCommand {
     pub count: Option<u64>,
-    #[clap(long = "create-random-state")]
+    #[arg(long = "create-random-state")]
     pub create_random_state: bool,
 }
 
 #[derive(Debug, clap::Parser)]
 pub struct SetRandomStateCommand {
-    #[clap(long = "randomness-round")]
+    #[arg(long = "randomness-round")]
     pub randomness_round: u64,
-    #[clap(long = "random-bytes")]
+    #[arg(long = "random-bytes")]
     pub random_bytes: String,
-    #[clap(long = "randomness-initial-version")]
+    #[arg(long = "randomness-initial-version")]
     pub randomness_initial_version: u64,
 }
 

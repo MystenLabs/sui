@@ -8,7 +8,7 @@ use std::path::Path;
 
 /// Build the package at `path`. If no path is provided defaults to current directory.
 #[derive(Parser)]
-#[clap(name = "build")]
+#[command(name = "build")]
 pub struct Build;
 
 impl Build {

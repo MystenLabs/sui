@@ -12,7 +12,7 @@ use tracing::debug;
 bin_version::bin_version!();
 
 #[derive(Parser)]
-#[clap(
+#[command(
     name = env!("CARGO_BIN_NAME"),
     about = "A Byzantine fault tolerant chain with low-latency finality and high throughput",
     rename_all = "kebab-case",
@@ -21,7 +21,7 @@ bin_version::bin_version!();
     propagate_version = true,
 )]
 struct Args {
-    #[clap(subcommand)]
+    #[command(subcommand)]
     command: SuiCommand,
 }
 
