@@ -523,7 +523,7 @@ pub(crate) async fn deploy_sol_contract(
     // Write the deploy config to a temp file then provide it to the forge late
     let deploy_config_path = tempfile::tempdir()
         .unwrap()
-        .into_path()
+        .keep()
         .join("sol_deploy_config.json");
     let node_len = bridge_authority_keys.len();
     let stake = TOTAL_VOTING_POWER / (node_len as u64);
@@ -777,7 +777,7 @@ pub(crate) async fn start_bridge_cluster(
         .enumerate()
     {
         // prepare node config (server + client)
-        let tmp_dir = tempdir().unwrap().into_path().join(i.to_string());
+        let tmp_dir = tempdir().unwrap().keep().join(i.to_string());
         std::fs::create_dir_all(tmp_dir.clone()).unwrap();
         let db_path = tmp_dir.join("client_db");
         // write authority key to file

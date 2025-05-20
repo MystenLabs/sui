@@ -44,7 +44,7 @@ pub(crate) mod tests {
 
     #[tokio::test]
     async fn local_test_fetch() {
-        let tempdir = tempfile::tempdir().unwrap().into_path();
+        let tempdir = tempfile::tempdir().unwrap().keep();
         let path = tempdir.join("1.chk");
         let test_checkpoint = test_checkpoint_data(1);
         tokio::fs::write(&path, &test_checkpoint).await.unwrap();

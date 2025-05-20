@@ -714,7 +714,7 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_data_ingestion_pipeline() {
-        let path = nondeterministic!(TempDir::new().unwrap()).into_path();
+        let path = nondeterministic!(TempDir::new().unwrap()).keep();
         let test_cluster = Arc::new(
             init_test_cluster_builder(4, 5000)
                 .with_data_ingestion_dir(path.clone())
