@@ -4,6 +4,7 @@ use anyhow::Context;
 use clap::Parser;
 use prometheus::Registry;
 use std::net::SocketAddr;
+use sui_bridge_indexer_alt::handlers::governance_action_handler::GovernanceActionHandler;
 use sui_bridge_indexer_alt::handlers::token_transfer_data_handler::TokenTransferDataHandler;
 use sui_bridge_indexer_alt::handlers::token_transfer_handler::TokenTransferHandler;
 use sui_bridge_schema::MIGRATIONS;
@@ -79,6 +80,10 @@ async fn main() -> Result<(), anyhow::Error> {
 
     indexer
         .concurrent_pipeline(TokenTransferDataHandler::default(), Default::default())
+        .await?;
+
+    indexer
+        .concurrent_pipeline(GovernanceActionHandler::default(), Default::default())
         .await?;
 
     let h_indexer = indexer.run().await?;
