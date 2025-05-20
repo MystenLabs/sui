@@ -1340,6 +1340,8 @@ impl CommitIntervalObserver {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use consensus_core::{
         BlockAPI, CertifiedBlock, CommitDigest, CommitRef, CommittedSubDag, TestBlock, Transaction,
         VerifiedBlock,
@@ -1503,7 +1505,7 @@ mod tests {
         let committed_sub_dag = CommittedSubDag::new(
             leader_block.reference(),
             blocks.clone(),
-            vec![vec![]; blocks.len()],
+            BTreeMap::new(),
             leader_block.timestamp_ms(),
             CommitRef::new(10, CommitDigest::MIN),
             vec![],
