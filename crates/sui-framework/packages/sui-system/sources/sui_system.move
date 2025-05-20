@@ -511,6 +511,7 @@ public fun pool_exchange_rates(
     wrapper.load_system_state_mut().pool_exchange_rates(pool_id)
 }
 
+#[test_only]
 /// Calculate the rewards for a given staked SUI object.
 public fun calculate_rewards(self: &mut SuiSystemState, staked_sui: &StakedSui, epoch: u64): u64 {
     let system_state = self.load_system_state_mut();

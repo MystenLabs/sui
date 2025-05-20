@@ -32,6 +32,7 @@ title: Module `sui_system::staking_pool`
 -  [Function `staked_sui_amount`](#sui_system_staking_pool_staked_sui_amount)
 -  [Function `stake_activation_epoch`](#sui_system_staking_pool_stake_activation_epoch)
 -  [Function `is_preactive`](#sui_system_staking_pool_is_preactive)
+-  [Function `activation_epoch`](#sui_system_staking_pool_activation_epoch)
 -  [Function `is_inactive`](#sui_system_staking_pool_is_inactive)
 -  [Function `fungible_staked_sui_value`](#sui_system_staking_pool_fungible_staked_sui_value)
 -  [Function `split_fungible_staked_sui`](#sui_system_staking_pool_split_fungible_staked_sui)
@@ -109,7 +110,7 @@ A staking pool embedded in each validator struct in the system state object.
 <dd>
 </dd>
 <dt>
-<code>activation_epoch: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;</code>
+<code><a href="../sui_system/staking_pool.md#sui_system_staking_pool_activation_epoch">activation_epoch</a>: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;</code>
 </dt>
 <dd>
  The epoch at which this pool became active.
@@ -146,7 +147,7 @@ A staking pool embedded in each validator struct in the system state object.
 </dt>
 <dd>
  Exchange rate history of previous epochs. Key is the epoch number.
- The entries start from the <code>activation_epoch</code> of this pool and contains exchange rates at the beginning of each epoch,
+ The entries start from the <code><a href="../sui_system/staking_pool.md#sui_system_staking_pool_activation_epoch">activation_epoch</a></code> of this pool and contains exchange rates at the beginning of each epoch,
  i.e., right after the rewards for the previous epoch have been deposited into the pool.
 </dd>
 <dt>
@@ -581,7 +582,7 @@ Create a new, empty staking pool.
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_new">new</a>(ctx: &<b>mut</b> TxContext): <a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakingPool">StakingPool</a> {
     <a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakingPool">StakingPool</a> {
         id: object::new(ctx),
-        activation_epoch: option::none(),
+        <a href="../sui_system/staking_pool.md#sui_system_staking_pool_activation_epoch">activation_epoch</a>: option::none(),
         deactivation_epoch: option::none(),
         <a href="../sui_system/staking_pool.md#sui_system_staking_pool_sui_balance">sui_balance</a>: 0,
         rewards_pool: balance::zero(),
@@ -661,8 +662,10 @@ A proportional amount of pool token withdraw is recorded and processed at epoch 
     staked_sui: <a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakedSui">StakedSui</a>,
     ctx: &TxContext,
 ): Balance&lt;SUI&gt; {
-    // stake is inactive
-    <b>if</b> (staked_sui.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_stake_activation_epoch">stake_activation_epoch</a> &gt; ctx.epoch()) {
+    // stake is inactive and the pool is not preactive - allow direct withdraw
+    // the reason why we exclude preactive pools is to avoid potential underflow
+    // on subtraction, and we need to enforce `pending_stake_withdraw` call.
+    <b>if</b> (staked_sui.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_stake_activation_epoch">stake_activation_epoch</a> &gt; ctx.epoch() && !pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_is_preactive">is_preactive</a>()) {
         <b>let</b> principal = staked_sui.into_balance();
         pool.pending_stake = pool.pending_stake - principal.value();
         <b>return</b> principal
@@ -1093,7 +1096,7 @@ portion because the principal portion was already taken out of the staker's self
 Called by <code><a href="../sui_system/validator.md#sui_system_validator">validator</a></code> module to activate a staking pool.
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_activate_staking_pool">activate_staking_pool</a>(pool: &<b>mut</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakingPool">sui_system::staking_pool::StakingPool</a>, activation_epoch: u64)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_activate_staking_pool">activate_staking_pool</a>(pool: &<b>mut</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakingPool">sui_system::staking_pool::StakingPool</a>, <a href="../sui_system/staking_pool.md#sui_system_staking_pool_activation_epoch">activation_epoch</a>: u64)
 </code></pre>
 
 
@@ -1102,14 +1105,14 @@ Called by <code><a href="../sui_system/validator.md#sui_system_validator">valida
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_activate_staking_pool">activate_staking_pool</a>(pool: &<b>mut</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakingPool">StakingPool</a>, activation_epoch: u64) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_activate_staking_pool">activate_staking_pool</a>(pool: &<b>mut</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakingPool">StakingPool</a>, <a href="../sui_system/staking_pool.md#sui_system_staking_pool_activation_epoch">activation_epoch</a>: u64) {
     // Add the initial exchange rate to the table.
-    pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_exchange_rates">exchange_rates</a>.add(activation_epoch, <a href="../sui_system/staking_pool.md#sui_system_staking_pool_initial_exchange_rate">initial_exchange_rate</a>());
+    pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_exchange_rates">exchange_rates</a>.add(<a href="../sui_system/staking_pool.md#sui_system_staking_pool_activation_epoch">activation_epoch</a>, <a href="../sui_system/staking_pool.md#sui_system_staking_pool_initial_exchange_rate">initial_exchange_rate</a>());
     // Check that the pool is preactive and not inactive.
     <b>assert</b>!(pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_is_preactive">is_preactive</a>(), <a href="../sui_system/staking_pool.md#sui_system_staking_pool_EPoolAlreadyActive">EPoolAlreadyActive</a>);
     <b>assert</b>!(!pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_is_inactive">is_inactive</a>(), <a href="../sui_system/staking_pool.md#sui_system_staking_pool_EActivationOfInactivePool">EActivationOfInactivePool</a>);
     // Fill in the active epoch.
-    pool.activation_epoch.fill(activation_epoch);
+    pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_activation_epoch">activation_epoch</a>.fill(<a href="../sui_system/staking_pool.md#sui_system_staking_pool_activation_epoch">activation_epoch</a>);
 }
 </code></pre>
 
@@ -1218,6 +1221,7 @@ withdraws can be made to the pool.
 
 ## Function `staked_sui_amount`
 
+Returns the principal amount of <code><a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakedSui">StakedSui</a></code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_staked_sui_amount">staked_sui_amount</a>(staked_sui: &<a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakedSui">sui_system::staking_pool::StakedSui</a>): u64
@@ -1240,6 +1244,7 @@ withdraws can be made to the pool.
 
 ## Function `stake_activation_epoch`
 
+Returns the activation epoch of <code><a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakedSui">StakedSui</a></code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_stake_activation_epoch">stake_activation_epoch</a>(staked_sui: &<a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakedSui">sui_system::staking_pool::StakedSui</a>): u64
@@ -1277,7 +1282,34 @@ Returns true if the input staking pool is preactive.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_is_preactive">is_preactive</a>(pool: &<a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakingPool">StakingPool</a>): bool {
-    pool.activation_epoch.is_none()
+    pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_activation_epoch">activation_epoch</a>.is_none()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_staking_pool_activation_epoch"></a>
+
+## Function `activation_epoch`
+
+Returns the activation epoch of the <code><a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakingPool">StakingPool</a></code>. For validator candidates,
+or pending validators, the value returned is <code>None</code>. For active validators,
+the value is the epoch before the validator was activated.
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_activation_epoch">activation_epoch</a>(pool: &<a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakingPool">sui_system::staking_pool::StakingPool</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_activation_epoch">activation_epoch</a>(pool: &<a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakingPool">StakingPool</a>): Option&lt;u64&gt; {
+    pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_activation_epoch">activation_epoch</a>
 }
 </code></pre>
 
@@ -1539,9 +1571,9 @@ Returns true if all the staking parameters of the staked sui except the principa
     };
     <b>let</b> clamped_epoch = pool.deactivation_epoch.get_with_default(epoch);
     <b>let</b> <b>mut</b> epoch = clamped_epoch.min(epoch);
-    <b>let</b> activation_epoch = *pool.activation_epoch.borrow();
+    <b>let</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_activation_epoch">activation_epoch</a> = *pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_activation_epoch">activation_epoch</a>.borrow();
     // Find the latest epoch that's earlier than the given epoch with an <b>entry</b> in the table
-    <b>while</b> (epoch &gt;= activation_epoch) {
+    <b>while</b> (epoch &gt;= <a href="../sui_system/staking_pool.md#sui_system_staking_pool_activation_epoch">activation_epoch</a>) {
         <b>if</b> (pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_exchange_rates">exchange_rates</a>.contains(epoch)) {
             <b>return</b> pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_exchange_rates">exchange_rates</a>[epoch]
         };
@@ -1696,7 +1728,7 @@ Returns true if the provided staking pool is preactive at the provided epoch.
 
 <pre><code><b>fun</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_is_preactive_at_epoch">is_preactive_at_epoch</a>(pool: &<a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakingPool">StakingPool</a>, epoch: u64): bool {
     // Either the pool is currently preactive or the pool's starting epoch is later than the provided epoch.
-    pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_is_preactive">is_preactive</a>() || (*pool.activation_epoch.borrow() &gt; epoch)
+    pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_is_preactive">is_preactive</a>() || (*pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_activation_epoch">activation_epoch</a>.borrow() &gt; epoch)
 }
 </code></pre>
 
