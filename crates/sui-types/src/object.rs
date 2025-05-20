@@ -12,11 +12,11 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::annotated_value::{MoveStruct, MoveStructLayout, MoveTypeLayout, MoveValue};
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
+use mysten_common::debug_fatal;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
-use tracing::warn;
 
 use crate::base_types::{FullObjectID, FullObjectRef, MoveObjectType, ObjectIDParseError};
 use crate::coin::{Coin, CoinMetadata, TreasuryCap};
@@ -84,7 +84,7 @@ impl MoveObject {
     ) -> Result<Self, ExecutionError> {
         let bound = if system_mutation {
             if contents.len() as u64 > protocol_config.max_move_object_size() {
-                warn!(
+                debug_fatal!(
                     "System created object of type {:?} and size {} exceeds normal max size {}",
                     type_,
                     contents.len(),
