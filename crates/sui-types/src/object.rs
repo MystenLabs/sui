@@ -12,6 +12,7 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::annotated_value::{MoveStruct, MoveStructLayout, MoveTypeLayout, MoveValue};
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
+use mysten_common::debug_fatal;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -79,14 +80,23 @@ impl MoveObject {
         version: SequenceNumber,
         contents: Vec<u8>,
         protocol_config: &ProtocolConfig,
+        system_mutation: bool,
     ) -> Result<Self, ExecutionError> {
-        Self::new_from_execution_with_limit(
-            type_,
-            has_public_transfer,
-            version,
-            contents,
-            protocol_config.max_move_object_size(),
-        )
+        let bound = if system_mutation {
+            if contents.len() as u64 > protocol_config.max_move_object_size() {
+                debug_fatal!(
+                    "System created object (ID = {:?}) of type {:?} and size {} exceeds normal max size {}",
+                    MoveObject::id_opt(&contents).ok(),
+                    type_,
+                    contents.len(),
+                    protocol_config.max_move_object_size()
+                );
+            }
+            u64::MAX
+        } else {
+            protocol_config.max_move_object_size()
+        };
+        Self::new_from_execution_with_limit(type_, has_public_transfer, version, contents, bound)
     }
 
     /// # Safety
@@ -231,26 +241,19 @@ impl MoveObject {
     }
 
     /// Update the contents of this object but does not increment its version
-    pub fn update_contents(
+    /// This should only be used for safe mode epoch advancement.
+    pub(crate) fn update_contents_advance_epoch_safe_mode(
         &mut self,
         new_contents: Vec<u8>,
         protocol_config: &ProtocolConfig,
-    ) -> Result<(), ExecutionError> {
-        self.update_contents_with_limit(new_contents, protocol_config.max_move_object_size())
-    }
-
-    fn update_contents_with_limit(
-        &mut self,
-        new_contents: Vec<u8>,
-        max_move_object_size: u64,
-    ) -> Result<(), ExecutionError> {
-        if new_contents.len() as u64 > max_move_object_size {
-            return Err(ExecutionError::from_kind(
-                ExecutionErrorKind::MoveObjectTooBig {
-                    object_size: new_contents.len() as u64,
-                    max_object_size: max_move_object_size,
-                },
-            ));
+    ) {
+        if new_contents.len() as u64 > protocol_config.max_move_object_size() {
+            debug_fatal!(
+                "Safe mode object update (ID = {}) of size {} exceeds normal max size {}",
+                self.id(),
+                new_contents.len(),
+                protocol_config.max_move_object_size()
+            );
         }
 
         #[cfg(debug_assertions)]
@@ -260,8 +263,6 @@ impl MoveObject {
         // Update should not modify ID
         #[cfg(debug_assertions)]
         debug_assert_eq!(self.id(), old_id);
-
-        Ok(())
     }
 
     /// Sets the version of this object to a new value which is assumed to be higher (and checked to
