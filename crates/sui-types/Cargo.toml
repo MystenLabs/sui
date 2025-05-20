@@ -58,6 +58,7 @@ sui-protocol-config.workspace = true
 shared-crypto.workspace = true
 mysten-network.workspace = true
 mysten-metrics.workspace = true
+mysten-common.workspace = true
 parking_lot.workspace = true
 sui-macros.workspace = true
 sui-enum-compat-util.workspace = true
