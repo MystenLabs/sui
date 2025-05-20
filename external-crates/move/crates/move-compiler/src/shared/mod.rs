@@ -215,6 +215,7 @@ pub struct PackagePaths<Path: Into<Symbol> = Symbol, NamedAddress: Into<Symbol> 
 
 pub struct CompilationEnv {
     flags: Flags,
+    modes: BTreeSet<Symbol>,
     top_level_warning_filter_scope: Option<&'static WarningFiltersBuilder>,
     diags: RwLock<Diagnostics>,
     visitors: Visitors,
@@ -294,8 +295,12 @@ impl CompilationEnv {
         if flags.json_errors() {
             diags.set_format(DiagnosticsFormat::JSON);
         }
+
+        let modes = Self::compute_modes(&flags);
+
         Self {
             flags,
+            modes,
             top_level_warning_filter_scope,
             diags: RwLock::new(diags),
             visitors: Visitors::new(visitors),
@@ -309,6 +314,24 @@ impl CompilationEnv {
             ide_information: RwLock::new(IDEInfo::new()),
             files_to_compile,
         }
+    }
+
+    fn compute_modes(flags: &Flags) -> BTreeSet<Symbol> {
+        let mut modes = flags
+            .modes
+            .clone()
+            .into_iter()
+            .collect::<BTreeSet<Symbol>>();
+        if flags.test {
+            modes.insert("test".into());
+        }
+        if flags.ide_mode {
+            modes.insert("ide".into());
+        }
+        if flags.ide_test_mode {
+            modes.insert("ide_test".into());
+        }
+        modes
     }
 
     pub fn add_source_file(
@@ -438,10 +461,6 @@ impl CompilationEnv {
         Ok(())
     }
 
-    pub fn flags(&self) -> &Flags {
-        &self.flags
-    }
-
     pub fn visitors(&self) -> &Visitors {
         &self.visitors
     }
@@ -543,11 +562,40 @@ impl CompilationEnv {
         }
     }
 
-    // -- IDE Information --
+    // -- Flag Information --
+
+    pub fn sources_shadow_deps(&self) -> bool {
+        self.flags.sources_shadow_deps()
+    }
+
+    pub fn bytecode_version(&self) -> Option<u32> {
+        self.flags.bytecode_version()
+    }
+
+    // -- Mode Information --
 
     pub fn ide_mode(&self) -> bool {
-        self.flags.ide_mode()
+        self.flags.ide_mode() || self.modes().contains(&"ide".into())
     }
+
+    pub fn keep_testing_functions(&self) -> bool {
+        self.flags.keep_testing_functions()
+    }
+
+    pub fn test_mode(&self) -> bool {
+        // This is technically redundant, but we are better safe than sorry.
+        self.flags.is_testing() || self.modes().contains(&"test".into())
+    }
+
+    pub fn modes(&self) -> &BTreeSet<Symbol> {
+        &self.modes
+    }
+
+    pub fn publishable(&self) -> bool {
+        self.flags.publishable()
+    }
+
+    // -- IDE Information --
 
     pub fn ide_information(&self) -> std::sync::RwLockReadGuard<'_, IDEInfo> {
         self.ide_information.read().unwrap()
@@ -651,6 +699,16 @@ pub struct Flags {
     /// If set, we are in IDE mode.
     #[clap(skip = false)]
     ide_mode: bool,
+
+    /// Arbitrary mode -- this will be used to enable or filter user-defined `#[mode(<MODE>)]`
+    /// annodations during compiltaion.
+    #[arg(
+        long = "mode",
+        value_name = "MODE",
+        value_parser = parse_symbol,
+        action = ArgAction::Append
+    )]
+    modes: Vec<Symbol>,
 }
 
 impl Flags {
@@ -665,6 +723,7 @@ impl Flags {
             keep_testing_functions: false,
             ide_mode: false,
             ide_test_mode: false,
+            modes: vec![],
         }
     }
 
@@ -679,6 +738,7 @@ impl Flags {
             keep_testing_functions: false,
             ide_mode: false,
             ide_test_mode: false,
+            modes: vec![],
         }
     }
 
@@ -731,6 +791,13 @@ impl Flags {
         }
     }
 
+    pub fn set_modes(self, value: Vec<Symbol>) -> Self {
+        Self {
+            modes: value,
+            ..self
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self == &Self::empty()
     }
@@ -772,8 +839,16 @@ impl Flags {
     }
 
     pub fn publishable(&self) -> bool {
-        !self.is_testing()
+        !self.is_testing() && !self.ide_mode() && !self.ide_test_mode() && self.modes.is_empty()
     }
+
+    pub fn mode(&self, mode: Symbol) -> bool {
+        self.modes.iter().any(|m| *m == mode)
+    }
+}
+
+fn parse_symbol(s: &str) -> Result<Symbol, String> {
+    Ok(Symbol::from(s))
 }
 
 //**************************************************************************************************

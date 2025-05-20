@@ -890,7 +890,7 @@ pub fn move_check_for_errors(
 
         let (compiler, cfgir) = compiler.run::<PASS_CFGIR>()?.into_ast();
         let compilation_env = compiler.compilation_env();
-        if compilation_env.flags().is_testing() {
+        if compilation_env.test_mode() {
             unit_test::plan_builder::construct_test_plan(compilation_env, None, &cfgir);
         }
 
@@ -984,7 +984,7 @@ fn run(
                         pre_compiled_lib.clone(),
                         prog,
                     );
-                    let prog = verification_attribute_filter::program(compilation_env, prog);
+                    let prog = mode_attribute_filter::program(compilation_env, prog);
                     expansion::translate::program(compilation_env, pre_compiled_lib.clone(), prog)
                 };
                 rec(

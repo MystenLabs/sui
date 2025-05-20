@@ -4839,8 +4839,8 @@ pub fn collect_known_attribute_module_members(
         | Deprecation(_)
         | Diagnostic(_)
         | Error(_)
-        | Syntax(_)
-        | Verification(_) => {
+        | Mode(_)
+        | Syntax(_) => {
             // No nested module accesses.
         }
         Testing(test_attr) => {
