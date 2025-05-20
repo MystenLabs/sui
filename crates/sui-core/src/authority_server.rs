@@ -5,6 +5,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
+use futures::TryFutureExt;
 use mysten_metrics::spawn_monitored_task;
 use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::{
@@ -15,26 +16,30 @@ use std::{
     io,
     net::{IpAddr, SocketAddr},
     sync::Arc,
-    time::SystemTime,
+    time::{Duration, SystemTime},
 };
 use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
-use sui_types::messages_grpc::{
-    HandleCertificateRequestV3, HandleCertificateResponseV3, RawSubmitTxResponse,
-};
-use sui_types::messages_grpc::{
-    HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
-    SubmitCertificateResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
-};
-use sui_types::messages_grpc::{
-    HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-};
-use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::traffic_control::{ClientIdSource, PolicyConfig, RemoteFirewallConfig, Weight};
+use sui_types::{
+    effects::TransactionEffects,
+    messages_grpc::{
+        HandleCertificateRequestV3, HandleCertificateResponseV3, RawSubmitTxResponse,
+        RawWaitForEffectsRequest, RawWaitForEffectsResponse,
+    },
+};
 use sui_types::{effects::TransactionEffectsAPI, messages_grpc::SubmitTxResponse};
+use sui_types::{
+    effects::TransactionEvents,
+    messages_grpc::{
+        HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest,
+        ObjectInfoResponse, SubmitCertificateResponse, SystemStateRequest, TransactionInfoRequest,
+        TransactionInfoResponse,
+    },
+};
 use sui_types::{error::*, transaction::*};
 use sui_types::{
     fp_ensure,
@@ -42,24 +47,37 @@ use sui_types::{
         CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
     },
 };
+use sui_types::{message_envelope::Message, multiaddr::Multiaddr};
 use sui_types::{
     messages_consensus::{ConsensusTransaction, ConsensusTransactionKind},
     messages_grpc::RawSubmitTxRequest,
 };
+use sui_types::{
+    messages_grpc::{
+        HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
+    },
+    object::Object,
+};
 use tap::TapFallible;
+use tokio::time::timeout;
 use tonic::metadata::{Ascii, MetadataValue};
-use tracing::{error, error_span, info, Instrument};
+use tracing::{debug, error, error_span, info, Instrument};
 
 use crate::{
-    authority::authority_per_epoch_store::AuthorityPerEpochStore, checkpoints::CheckpointStore,
+    authority::{
+        authority_per_epoch_store::AuthorityPerEpochStore,
+        consensus_tx_status_cache::NotifyReadConsensusTxStatusResult,
+    },
+    checkpoints::CheckpointStore,
     mysticeti_adapter::LazyMysticetiClient,
+    wait_for_effects_request::{
+        ExecutedData, RejectReason, WaitForEffectsRequest, WaitForEffectsResponse,
+    },
 };
 use crate::{
-    authority::AuthorityState,
+    authority::{consensus_tx_status_cache::ConsensusTxStatus, AuthorityState},
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
-    traffic_controller::parse_ip,
-    traffic_controller::policies::TrafficTally,
-    traffic_controller::TrafficController,
+    traffic_controller::{parse_ip, policies::TrafficTally, TrafficController},
 };
 use crate::{
     consensus_adapter::ConnectionMonitorStatusForTests,
@@ -72,6 +90,10 @@ use tonic::transport::server::TcpConnectInfo;
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
 mod server_tests;
+
+#[cfg(test)]
+#[path = "unit_tests/wait_for_effects_tests.rs"]
+mod wait_for_effects_tests;
 
 pub struct AuthorityServerHandle {
     server_handle: mysten_network::server::Server,
@@ -521,7 +543,8 @@ impl ValidatorService {
 
         let request = request.into_inner();
         let transaction = bcs::from_bytes::<Transaction>(&request.transaction).map_err(|e| {
-            SuiError::TransactionDeserializationError {
+            SuiError::GrpcMessageDeserializeError {
+                type_info: "RawSubmitTxRequest.transaction".to_string(),
                 error: e.to_string(),
             }
         })?;
@@ -892,6 +915,37 @@ impl ValidatorService {
 
         Ok((Some(responses), Weight::zero()))
     }
+
+    async fn collect_effects_data(
+        &self,
+        effects: &TransactionEffects,
+        include_events: bool,
+        include_input_objects: bool,
+        include_output_objects: bool,
+    ) -> SuiResult<(Option<TransactionEvents>, Vec<Object>, Vec<Object>)> {
+        let events = if include_events && effects.events_digest().is_some() {
+            Some(
+                self.state
+                    .get_transaction_events(effects.transaction_digest())?,
+            )
+        } else {
+            None
+        };
+
+        let input_objects = if include_input_objects {
+            self.state.get_transaction_input_objects(effects)?
+        } else {
+            vec![]
+        };
+
+        let output_objects = if include_output_objects {
+            self.state.get_transaction_output_objects(effects)?
+        } else {
+            vec![]
+        };
+
+        Ok((events, input_objects, output_objects))
+    }
 }
 
 type WrappedServiceResponse<T> = Result<(tonic::Response<T>, Weight), tonic::Status>;
@@ -1008,6 +1062,143 @@ impl ValidatorService {
                 spam_weight,
             )
         })
+    }
+
+    async fn wait_for_effects_impl(
+        &self,
+        request: tonic::Request<RawWaitForEffectsRequest>,
+    ) -> WrappedServiceResponse<RawWaitForEffectsResponse> {
+        let request: WaitForEffectsRequest = request.into_inner().try_into()?;
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        let response = timeout(
+            // TODO(fastpath): Tune this once we have a good estimate of the typical delay.
+            Duration::from_secs(20),
+            epoch_store
+                .within_alive_epoch(self.wait_for_effects_response(request, &epoch_store))
+                .map_err(|_| SuiError::EpochEnded(epoch_store.epoch())),
+        )
+        .await
+        .map_err(|_| tonic::Status::internal("Timeout waiting for effects"))???
+        .try_into()?;
+        Ok((
+            tonic::Response::new(response),
+            // TODO(fastpath): Implement spam weight
+            Weight::zero(),
+        ))
+    }
+
+    // TODO(fastpath): Add metrics.
+    async fn wait_for_effects_response(
+        &self,
+        request: WaitForEffectsRequest,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<WaitForEffectsResponse> {
+        let Some(consensus_tx_status_cache) = epoch_store.consensus_tx_status_cache.as_ref() else {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "Mysticeti fastpath".to_string(),
+            });
+        };
+        if request.epoch != epoch_store.epoch() {
+            return Err(SuiError::WrongEpoch {
+                expected_epoch: epoch_store.epoch(),
+                actual_epoch: request.epoch,
+            });
+        }
+        consensus_tx_status_cache.check_position_too_ahead(&request.transaction_position)?;
+
+        // Because we need to associate effects with a specific transaction position,
+        // we need to first make sure that this specific position is accepted by consensus,
+        // either with fastpath certified or post-commit finalized.
+        let first_status = consensus_tx_status_cache
+            .notify_read_transaction_status(request.transaction_position, None)
+            .await;
+        debug!(
+            tx_digest = ?request.transaction_digest,
+            "Observed consensus transaction status: {:?}",
+            first_status
+        );
+        let mut cur_status = match first_status {
+            NotifyReadConsensusTxStatusResult::Status(status) => match status {
+                ConsensusTxStatus::Rejected => {
+                    let response = WaitForEffectsResponse::Rejected {
+                        // TODO(fastpath): Add reject reason.
+                        reason: RejectReason::None,
+                    };
+                    return Ok(response);
+                }
+                ConsensusTxStatus::FastpathCertified | ConsensusTxStatus::Finalized => status,
+            },
+            NotifyReadConsensusTxStatusResult::Expired(round) => {
+                return Ok(WaitForEffectsResponse::Expired(round));
+            }
+        };
+        // Now that we know the transaction position is accepted by consensus,
+        // we can wait for the effects to be executed.
+        // In the meantime, however, if the initial status is fastpath certified,
+        // it is still possible that the transaction is rejected post commit.
+        // So we need to keep checking the status until it is finalized.
+        let effects = loop {
+            let transactions = [request.transaction_digest];
+            tokio::select! {
+                second_status = consensus_tx_status_cache.notify_read_transaction_status(request.transaction_position, Some(cur_status)) => {
+                    debug!(
+                        tx_digest = ?request.transaction_digest,
+                        "Observed consensus transaction status: {:?}",
+                        second_status
+                    );
+                    match second_status {
+                        NotifyReadConsensusTxStatusResult::Status(status) => {
+                            if status == ConsensusTxStatus::Rejected {
+                                return Ok(WaitForEffectsResponse::Rejected { reason: RejectReason::None });
+                            }
+                            assert!(matches!(status, ConsensusTxStatus::Finalized));
+                            // Update the current status so that notify_read_transaction_status will no
+                            // longer be triggered again after the transaction is finalized.
+                            cur_status = status;
+                            continue;
+                        }
+                        NotifyReadConsensusTxStatusResult::Expired(round) => {
+                            return Ok(WaitForEffectsResponse::Expired(round));
+                        }
+                    }
+                },
+                mut effects = self.state
+                    .get_transaction_cache_reader()
+                    .notify_read_executed_effects(&transactions) => {
+                    debug!(
+                        tx_digest = ?request.transaction_digest,
+                        "Observed executed effects",
+                    );
+                    // unwrap is safe because notify_read_executed_effects is expected
+                    // to return the same amount of effects as the provided transactions.
+                    break effects.pop().unwrap();
+                },
+            }
+        };
+        let effects_digest = effects.digest();
+        let details = if request.include_details {
+            let (events, input_objects, output_objects) = self
+                .collect_effects_data(
+                    &effects,
+                    request.include_details,
+                    request.include_details,
+                    request.include_details,
+                )
+                .await?;
+            Some(Box::new(ExecutedData {
+                effects,
+                events,
+                input_objects,
+                output_objects,
+            }))
+        } else {
+            None
+        };
+        let response = WaitForEffectsResponse::Executed {
+            effects_digest,
+            details,
+        };
+        Ok(response)
     }
 
     async fn soft_bundle_validity_check(
@@ -1290,7 +1481,7 @@ impl ValidatorService {
                             let Some(client_ip) = header_contents.get(contents_len - num_hops)
                             else {
                                 error!(
-                                    "x-forwarded-for header value of {:?} contains {} values, but {} hops were specificed. \
+                                    "x-forwarded-for header value of {:?} contains {} values, but {} hops were specified. \
                                     Expected at least {} values. Skipping traffic controller request handling.",
                                     header_contents,
                                     contents_len,
@@ -1485,6 +1676,13 @@ impl Validator for ValidatorService {
         request: tonic::Request<HandleCertificateRequestV3>,
     ) -> Result<tonic::Response<HandleCertificateResponseV3>, tonic::Status> {
         handle_with_decoration!(self, handle_certificate_v3_impl, request)
+    }
+
+    async fn wait_for_effects(
+        &self,
+        request: tonic::Request<RawWaitForEffectsRequest>,
+    ) -> Result<tonic::Response<RawWaitForEffectsResponse>, tonic::Status> {
+        handle_with_decoration!(self, wait_for_effects_impl, request)
     }
 
     async fn handle_soft_bundle_certificates_v3(

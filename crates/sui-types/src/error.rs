@@ -702,6 +702,20 @@ pub enum SuiError {
 
     #[error("Nitro attestation verify failed: {0}")]
     NitroAttestationFailedToVerify(String),
+
+    #[error("Failed to serialize {type_info:?}, error: {error:?}")]
+    GrpcMessageSerializeError { type_info: String, error: String },
+
+    #[error("Failed to deserialize {type_info:?}, error: {error:?}")]
+    GrpcMessageDeserializeError { type_info: String, error: String },
+
+    #[error(
+        "Validator consensus rounds are lagging behind. last committed leader round: {last_committed_round:?}, requested round: {round:?}"
+    )]
+    ValidatorConsensusLagging {
+        round: u64,
+        last_committed_round: u64,
+    },
 }
 
 #[repr(u64)]
