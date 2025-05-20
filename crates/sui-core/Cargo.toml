@@ -95,6 +95,7 @@ nonempty.workspace = true
 [features]
 tide_hunter = ["typed-store/tide_hunter"]
 rocksdb = []
+default = ["tide_hunter"]
 
 [dev-dependencies]
 sui-move-build.workspace = true
