@@ -13,15 +13,14 @@ use ethers::providers::{Http, Provider};
 use ethers::types::Address as EthAddress;
 use std::str::FromStr;
 use std::sync::Arc;
-use strum_macros::Display;
 use sui_bridge::eth_client::EthClient;
 use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge::utils::get_eth_contract_addresses;
-use sui_bridge_schema::models::TokenTransferData as DBTokenTransferData;
 use sui_bridge_schema::models::{
     BridgeDataSource, GovernanceAction as DBGovernanceAction, TokenTransferStatus,
 };
+use sui_bridge_schema::models::{GovernanceActionType, TokenTransferData as DBTokenTransferData};
 use sui_bridge_schema::models::{SuiErrorTransactions, TokenTransfer as DBTokenTransfer};
 use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_indexer_builder::indexer_builder::{BackfillStrategy, Datasource, Indexer, IndexerBuilder};
@@ -149,21 +148,10 @@ impl GovernanceAction {
             txn_digest: self.tx_digest.clone(),
             sender_address: self.sender.to_vec(),
             timestamp_ms: self.timestamp_ms as i64,
-            action: self.action.to_string(),
+            action: self.action,
             data: self.data.clone(),
         }
     }
-}
-
-#[derive(Clone, Display)]
-pub(crate) enum GovernanceActionType {
-    UpdateCommitteeBlocklist,
-    EmergencyOperation,
-    UpdateBridgeLimit,
-    UpdateTokenPrices,
-    UpgradeEVMContract,
-    AddSuiTokens,
-    AddEVMTokens,
 }
 
 pub async fn create_sui_indexer(

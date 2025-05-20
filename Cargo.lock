@@ -13519,6 +13519,7 @@ dependencies = [
  "move-core-types",
  "mysten-metrics",
  "prometheus",
+ "serde_json",
  "sui-bridge",
  "sui-bridge-schema",
  "sui-indexer-alt-framework",

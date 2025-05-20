@@ -30,11 +30,12 @@ use sui_bridge::abi::{
 
 use crate::metrics::BridgeIndexerMetrics;
 use crate::{
-    BridgeDataSource, GovernanceAction, GovernanceActionType, ProcessedTxnData, TokenTransfer,
-    TokenTransferData, TokenTransferStatus,
+    BridgeDataSource, GovernanceAction, ProcessedTxnData, TokenTransfer, TokenTransferData,
+    TokenTransferStatus,
 };
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge::types::{EthEvent, RawEthLog};
+use sui_bridge_schema::models::GovernanceActionType;
 use sui_indexer_builder::indexer_builder::{DataMapper, DataSender, Datasource};
 use sui_indexer_builder::metrics::IndexerMetricProvider;
 
