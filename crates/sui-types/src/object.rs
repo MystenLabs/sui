@@ -103,6 +103,13 @@ impl MoveObject {
         // TODO: think this can be generalized to is_coin
         debug_assert!(!type_.is_gas_coin() || has_public_transfer);
         if contents.len() as u64 > max_move_object_size {
+            tracing::error!(
+                "MoveObjectTooBig: object_id: {:?}, object_type: {:?}, object_size: {}, max_object_size: {}",
+                MoveObject::id_opt(&contents).unwrap(),
+                type_,
+                contents.len() as u64,
+                max_move_object_size
+            );
             return Err(ExecutionError::from_kind(
                 ExecutionErrorKind::MoveObjectTooBig {
                     object_size: contents.len() as u64,
