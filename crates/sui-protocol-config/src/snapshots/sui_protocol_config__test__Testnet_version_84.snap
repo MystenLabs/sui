@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 78
+version: 84
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -45,6 +45,8 @@ feature_flags:
   allow_receiving_object_id: true
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
+  enable_nitro_attestation: true
+  enable_nitro_attestation_upgraded_parsing: true
   reject_mutable_random_on_entry_functions: true
   per_object_congestion_control_mode:
     ExecutionTimeEstimate:
@@ -53,7 +55,7 @@ feature_flags:
       randomness_scalar: 20
       max_estimate_us: 1500000
       stored_observations_num_included_checkpoints: 10
-      stored_observations_limit: 18446744073709551615
+      stored_observations_limit: 20
   consensus_choice: Mysticeti
   consensus_network: Tonic
   zklogin_max_epoch_upper_bound_delta: 30
@@ -85,6 +87,12 @@ feature_flags:
   minimize_child_object_mutations: true
   record_additional_state_digest_in_prologue: true
   move_native_context: true
+  consensus_median_based_commit_timestamp: true
+  normalize_ptb_arguments: true
+  consensus_batched_block_sync: true
+  enforce_checkpoint_timestamp_monotonicity: true
+  max_ptb_value_size_v2: true
+  resolve_type_input_ids_to_defining_id: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -163,6 +171,7 @@ obj_access_cost_mutate_per_byte: 40
 obj_access_cost_delete_per_byte: 40
 obj_access_cost_verify_per_byte: 200
 max_type_to_layout_nodes: 512
+max_ptb_value_size: 1048576
 gas_model_version: 10
 obj_data_cost_refundable: 100
 obj_metadata_cost_non_refundable: 50
@@ -204,6 +213,7 @@ object_borrow_uid_cost_base: 52
 object_delete_impl_cost_base: 52
 object_record_new_uid_cost_base: 52
 transfer_transfer_internal_cost_base: 52
+transfer_party_transfer_internal_cost_base: 52
 transfer_freeze_object_cost_base: 52
 transfer_share_object_cost_base: 52
 transfer_receive_object_cost_base: 52
@@ -348,7 +358,7 @@ vector_swap_base_cost: 52
 debug_print_base_cost: 52
 debug_print_stack_trace_base_cost: 52
 execution_version: 3
-consensus_bad_nodes_stake_threshold: 20
+consensus_bad_nodes_stake_threshold: 30
 max_jwk_votes_per_validator_per_epoch: 240
 max_age_of_jwk_in_epochs: 1
 random_beacon_reduction_allowed_delta: 800
