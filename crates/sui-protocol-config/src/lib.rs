@@ -240,6 +240,7 @@ const MAX_PROTOCOL_VERSION: u64 = 84;
 //             Enable execution time estimate mode for congestion control on mainnet.
 //             Enable nitro attestation upgraded parsing and mainnet.
 // Version 84: Limit number of stored execution time observations between epochs.
+//             Remove restrictions on objects created in system transactions.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -695,6 +696,10 @@ struct FeatureFlags {
     // Enable native function for party transfer
     #[serde(skip_serializing_if = "is_false")]
     enable_party_transfer: bool,
+
+    // Allow objects created or mutated in system transactions to exceed the max object size limit.
+    #[serde(skip_serializing_if = "is_false")]
+    allow_unbounded_system_objects: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1985,6 +1990,10 @@ impl ProtocolConfig {
 
     pub fn enable_party_transfer(&self) -> bool {
         self.feature_flags.enable_party_transfer
+    }
+
+    pub fn allow_unbounded_system_objects(&self) -> bool {
+        self.feature_flags.allow_unbounded_system_objects
     }
 }
 
@@ -3565,6 +3574,7 @@ impl ProtocolConfig {
                                 stored_observations_limit: 20,
                             },
                         );
+                    cfg.feature_flags.allow_unbounded_system_objects = true;
                 }
                 // Use this template when making changes:
                 //

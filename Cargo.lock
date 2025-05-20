@@ -16281,6 +16281,7 @@ dependencies = [
  "move-core-types",
  "move-vm-profiler",
  "move-vm-test-utils",
+ "mysten-common",
  "mysten-metrics",
  "mysten-network",
  "nonempty",

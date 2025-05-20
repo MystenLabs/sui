@@ -854,7 +854,7 @@ mod checked {
                 } = additional_write;
                 // safe given the invariant that the runtime correctly propagates has_public_transfer
                 let move_object = unsafe {
-                    create_written_object(
+                    create_written_object::<Mode>(
                         vm,
                         &linkage_view,
                         protocol_config,
@@ -895,7 +895,7 @@ mod checked {
                 };
                 // safe because has_public_transfer has been determined by the abilities
                 let move_object = unsafe {
-                    create_written_object(
+                    create_written_object::<Mode>(
                         vm,
                         &linkage_view,
                         protocol_config,
@@ -1665,7 +1665,7 @@ mod checked {
     ///
     /// This function assumes proper generation of has_public_transfer, either from the abilities of
     /// the StructTag, or from the runtime correctly propagating from the inputs
-    unsafe fn create_written_object(
+    unsafe fn create_written_object<Mode: ExecutionMode>(
         vm: &MoveVM,
         linkage_view: &LinkageView,
         protocol_config: &ProtocolConfig,
@@ -1703,6 +1703,7 @@ mod checked {
                 old_obj_ver.unwrap_or_default(),
                 contents,
                 protocol_config,
+                Mode::packages_are_predefined(),
             )
         }
     }

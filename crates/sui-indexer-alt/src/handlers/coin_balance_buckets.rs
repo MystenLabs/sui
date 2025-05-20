@@ -359,6 +359,7 @@ mod tests {
                     SequenceNumber::new(),
                     bcs::to_bytes(&Object::new_gas_for_testing()).unwrap(),
                     &ProtocolConfig::get_for_max_version_UNSAFE(),
+                    /* system_mutation */ false,
                 )
                 .unwrap(),
                 Owner::AddressOwner(SuiAddress::ZERO),
