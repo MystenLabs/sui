@@ -16,7 +16,9 @@ use sui_types::object::Object;
 use sui_types::transaction::VerifiedTransaction;
 use sui_types::utils::to_sender_signed_transaction;
 
-use crate::authority::consensus_tx_status_cache::ConsensusTxStatus;
+use crate::authority::consensus_tx_status_cache::{
+    ConsensusTxStatus, CONSENSUS_STATUS_RETENTION_ROUNDS,
+};
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::AuthorityState;
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
@@ -406,7 +408,7 @@ async fn test_wait_for_effects_expired() {
             .consensus_tx_status_cache
             .as_ref()
             .unwrap()
-            .update_last_committed_leader_round(epoch_store.protocol_config().gc_depth() as u64 + 1)
+            .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 1)
             .await;
         tokio::time::sleep(Duration::from_millis(100)).await;
         epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Finalized);

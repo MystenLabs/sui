@@ -14,7 +14,7 @@ use crate::wait_for_effects_request::ConsensusTxPosition;
 /// The number of consensus rounds to retain transaction status information before garbage collection.
 /// Used to expire positions from old rounds, as well as to check if a transaction is too far ahead of the last committed round.
 /// Assuming a max round rate of 15/sec, this allows status updates to be valid within a window of ~25-30 seconds.
-const CONSENSUS_STATUS_RETENTION_ROUNDS: u64 = 400;
+pub(crate) const CONSENSUS_STATUS_RETENTION_ROUNDS: u64 = 400;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ConsensusTxStatus {
