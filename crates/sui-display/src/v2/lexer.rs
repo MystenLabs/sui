@@ -1,17 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+#![allow(dead_code)]
 
 use std::fmt;
 
-/// Lexer for Display V1 format strings. Format strings are a mix of text and expressions.
-/// Expressions are enclosed in curly braces and may contain identifiers separated by dots (a path
-/// of field accesses).
+use move_core_types::identifier::is_valid_identifier_char;
+
+/// Lexer for Display V2 format strings. Format strings are a mix of text and expressions.
+/// Expressions are enclosed in braces and may contain multiple alternates, separated by pipes, and
+/// each containing nested field, vector, or dynamic field accesses.
 #[derive(Debug)]
 pub(crate) struct Lexer<'s> {
     /// Remaining input to be tokenized.
     src: &'s str,
 
-    /// The number of bytes tokenized so far.
+    /// The number of bytes (not characters) tokenized so far.
     off: usize,
 
     /// Whether the lexer is currently inside a text strand or an expression strand.
@@ -38,16 +41,21 @@ pub(crate) struct OwnedLexeme(Token, usize, String);
 pub(crate) enum Token {
     /// '.'
     Dot,
-    /// '\X' where X is any byte.
-    Escaped,
-    /// A potential field identifier
+    /// An identifier
     Ident,
     /// '{'
-    LCurl,
+    LBrace,
+    /// '{{'
+    LLBrace,
     /// '}'
-    RCurl,
+    RBrace,
+    /// '}}'
+    RRBrace,
     /// A strand of text.
     Text,
+
+    /// An unexpected byte in the input string.
+    Unexpected,
 }
 
 #[derive(Debug)]
@@ -68,19 +76,26 @@ impl<'s> Lexer<'s> {
 
         use Token as T;
         Some(match bytes.first()? {
-            b'\\' if bytes.len() > 1 => {
-                self.take(T::Escaped, 1); // discard the backslash
-                self.take(T::Escaped, 1)
+            b'{' if bytes.get(1) == Some(&b'{') => {
+                self.take(T::LLBrace, 1); // discard the first brace
+                self.take(T::LLBrace, 1)
             }
-            b'\\' => self.take(T::Text, 1),
+
             b'{' => {
                 self.mode = Mode::Expr;
-                self.take(T::LCurl, 1)
+                self.take(T::LBrace, 1)
             }
+
+            b'}' if bytes.get(1) == Some(&b'}') => {
+                self.take(T::RRBrace, 1); // discard the first brace
+                self.take(T::RRBrace, 1)
+            }
+
             // This is not a valid token within text, but recognise it so that the parser can
             // produce a better error message.
-            b'}' => self.take(T::RCurl, 1),
-            _ => self.take_until(T::Text, |c| ['\\', '{', '}'].contains(&c)),
+            b'}' => self.take(T::RBrace, 1),
+
+            _ => self.take_until(T::Text, |c| ['{', '}'].contains(&c)),
         })
     }
 
@@ -90,19 +105,27 @@ impl<'s> Lexer<'s> {
 
         use Token as T;
         Some(match self.src.as_bytes().first()? {
-            // { is not a valid token within an expression, but recognise it so that the parser can
-            // produce a better error message.
-            b'{' => self.take(T::LCurl, 1),
+            b'{' => self.take(T::LBrace, 1),
+
             b'}' => {
                 self.mode = Mode::Text;
-                self.take(T::RCurl, 1)
+                self.take(T::RBrace, 1)
             }
+
             b'.' => self.take(T::Dot, 1),
-            // The lexer takes a very liberal definition of "identifier", the parser will check
-            // whether the identifier is actually valid.
-            _ => self.take_until(T::Ident, |c| {
-                c.is_whitespace() || c == '.' || c == '{' || c == '}'
-            }),
+
+            b'a'..=b'z' | b'A'..=b'Z' => {
+                self.take_until(T::Ident, |c| !is_valid_identifier_char(c))
+            }
+
+            // If the next byte cannot be recognized, extract the next (potentially variable
+            // length) character, and indicate that it is an unexpected token.
+            _ => {
+                let mut indices = self.src.char_indices();
+                indices.next(); // skip the first character
+                let bytes = indices.next().map(|i| i.0).unwrap_or(self.src.len());
+                self.take(T::Unexpected, bytes)
+            }
         })
     }
 
@@ -158,11 +181,13 @@ impl fmt::Display for OwnedLexeme {
         use Token as T;
         match self {
             L(T::Text, _, s) => write!(f, "text {s:?}"),
-            L(T::Escaped, _, s) => write!(f, "escaped character '\\{s}'"),
-            L(T::LCurl, _, _) => write!(f, "'{{'"),
-            L(T::RCurl, _, _) => write!(f, "'}}'"),
+            L(T::LBrace, _, _) => write!(f, "'{{'"),
+            L(T::LLBrace, _, _) => write!(f, "'{{{{'"),
+            L(T::RBrace, _, _) => write!(f, "'}}'"),
+            L(T::RRBrace, _, _) => write!(f, "'}}}}'"),
             L(T::Ident, _, s) => write!(f, "identifier {s:?}"),
             L(T::Dot, _, _) => write!(f, "'.'"),
+            L(T::Unexpected, _, s) => write!(f, "unexpected character {s:?}"),
         }?;
 
         write!(f, " at offset {}", self.1)
@@ -174,11 +199,13 @@ impl fmt::Display for Token {
         use Token as T;
         match self {
             T::Text => write!(f, "text"),
-            T::Escaped => write!(f, "an escaped character"),
-            T::LCurl => write!(f, "'{{'"),
-            T::RCurl => write!(f, "'}}'"),
+            T::LBrace => write!(f, "'{{'"),
+            T::LLBrace => write!(f, "'{{{{'"),
+            T::RBrace => write!(f, "'}}'"),
+            T::RRBrace => write!(f, "'}}}}'"),
             T::Ident => write!(f, "an identifier"),
             T::Dot => write!(f, "'.'"),
+            T::Unexpected => write!(f, "an unexpected character"),
         }
     }
 }
@@ -216,7 +243,7 @@ mod tests {
     use Lexeme as L;
     use Token as T;
 
-    /// Simple test for a raw literal string.
+    /// Simple test for a  raw literal string.
     #[test]
     fn test_all_text() {
         let lexer = Lexer::new("foo bar");
@@ -227,30 +254,20 @@ mod tests {
     /// Escape sequences are all text, but they will be split into multiple tokens.
     #[test]
     fn test_escapes() {
-        let lexer = Lexer::new(r#"foo \b\{ar\}"#);
+        let lexer = Lexer::new(r#"foo {{ar}}"#);
         let lexemes: Vec<_> = lexer.collect();
         assert_eq!(
             lexemes,
             vec![
                 L(T::Text, 0, "foo "),
-                L(T::Escaped, 5, "b"),
-                L(T::Escaped, 7, "{"),
-                L(T::Text, 8, "ar"),
-                L(T::Escaped, 11, "}"),
+                L(T::LLBrace, 5, "{"),
+                L(T::Text, 6, "ar"),
+                L(T::RRBrace, 9, "}"),
             ]
         );
     }
 
-    /// If the last character is a backslash, then treat it as just a backslash, not the start of
-    /// an escape sequence.
-    #[test]
-    fn test_trailing_escape() {
-        let lexer = Lexer::new(r#"foo bar\"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(lexemes, vec![L(T::Text, 0, "foo bar"), L(T::Text, 7, "\\")],);
-    }
-
-    /// Text inside curly braces is tokenized as if it's an expression.
+    /// Text inside braces is tokenized as if it's an expression.
     #[test]
     fn test_expressions() {
         let lexer = Lexer::new(r#"foo {bar}"#);
@@ -259,9 +276,9 @@ mod tests {
             lexemes,
             vec![
                 L(T::Text, 0, "foo "),
-                L(T::LCurl, 4, "{"),
+                L(T::LBrace, 4, "{"),
                 L(T::Ident, 5, "bar"),
-                L(T::RCurl, 8, "}"),
+                L(T::RBrace, 8, "}"),
             ],
         );
     }
@@ -275,9 +292,9 @@ mod tests {
             lexemes,
             vec![
                 L(T::Text, 0, "foo "),
-                L(T::LCurl, 4, "{"),
+                L(T::LBrace, 4, "{"),
                 L(T::Ident, 7, "bar"),
-                L(T::RCurl, 13, "}"),
+                L(T::RBrace, 13, "}"),
             ],
         );
     }
@@ -291,13 +308,13 @@ mod tests {
             lexemes,
             vec![
                 L(T::Text, 0, "foo "),
-                L(T::LCurl, 4, "{"),
+                L(T::LBrace, 4, "{"),
                 L(T::Ident, 5, "bar"),
                 L(T::Dot, 8, "."),
                 L(T::Ident, 10, "baz"),
                 L(T::Dot, 15, "."),
                 L(T::Ident, 17, "qux"),
-                L(T::RCurl, 20, "}"),
+                L(T::RBrace, 20, "}"),
             ],
         );
     }
@@ -311,77 +328,88 @@ mod tests {
             lexemes,
             vec![
                 L(T::Text, 0, "foo "),
-                L(T::LCurl, 4, "{"),
+                L(T::LBrace, 4, "{"),
                 L(T::Ident, 5, "bar"),
                 L(T::Dot, 8, "."),
                 L(T::Ident, 9, "baz"),
-                L(T::RCurl, 12, "}"),
+                L(T::RBrace, 12, "}"),
                 L(T::Text, 13, " qux "),
-                L(T::LCurl, 18, "{"),
+                L(T::LBrace, 18, "{"),
                 L(T::Ident, 19, "quy"),
                 L(T::Dot, 22, "."),
                 L(T::Ident, 23, "quz"),
-                L(T::RCurl, 26, "}"),
+                L(T::RBrace, 26, "}"),
             ],
         );
     }
 
-    /// Left curlies are not valid inside expressions and right curlies are not valid inside text
-    /// strands, but we still tokenize them so that we can detect them during parsing and return
-    /// ane error message.
+    /// The lexer will still tokenize curlies even if they are not balanced.
     #[test]
-    fn test_misplaced_curlies() {
+    fn test_unbalanced_curlies() {
         let lexer = Lexer::new(r#"foo}{bar{}}"#);
         let lexemes: Vec<_> = lexer.collect();
         assert_eq!(
             lexemes,
             vec![
                 L(T::Text, 0, "foo"),
-                L(T::RCurl, 3, "}"),
-                L(T::LCurl, 4, "{"),
+                L(T::RBrace, 3, "}"),
+                L(T::LBrace, 4, "{"),
                 L(T::Ident, 5, "bar"),
-                L(T::LCurl, 8, "{"),
-                L(T::RCurl, 9, "}"),
-                L(T::RCurl, 10, "}"),
+                L(T::LBrace, 8, "{"),
+                L(T::RBrace, 9, "}"),
+                L(T::RBrace, 10, "}"),
             ],
         );
     }
 
-    /// The lexer is very permissive about what it considers an identifier, this allows it to
-    /// gather more context without failing, while the parser will check that the identifier is
-    /// valid.
+    /// Unexpected characters are tokenized so that the parser can produce an error.
     #[test]
-    fn test_strange_identifiers() {
-        let lexer = Lexer::new(r#"{ not-really . an! . ident#fier? }"#);
+    fn test_unexpected_characters() {
+        let lexer = Lexer::new(r#"anything goes {@ # ! 🔥}"#);
         let lexemes: Vec<_> = lexer.collect();
         assert_eq!(
             lexemes,
             vec![
-                L(T::LCurl, 0, "{"),
-                L(T::Ident, 2, "not-really"),
-                L(T::Dot, 13, "."),
-                L(T::Ident, 15, "an!"),
-                L(T::Dot, 19, "."),
-                L(T::Ident, 21, "ident#fier?"),
-                L(T::RCurl, 33, "}"),
+                L(T::Text, 0, "anything goes "),
+                L(T::LBrace, 14, "{"),
+                L(T::Unexpected, 15, "@"),
+                L(T::Unexpected, 17, "#"),
+                L(T::Unexpected, 19, "!"),
+                L(T::Unexpected, 21, "🔥"),
+                L(T::RBrace, 25, "}"),
             ],
         );
     }
 
-    /// The lexer should correctly identify backslashes that signify escapes vs backslashes that
-    /// are literal.
+    // Escaped curlies shouldn't be tokenized greedily. '{{{' in text mode should be tokenized as
+    // '{{' and '{', while '}}}' in expr mode should be tokenized as '}' and '}}'. This test
+    // exercises these and similar cases.
     #[test]
-    fn test_escape_chain() {
-        let lexer = Lexer::new(r#"\\\\\\\\\"#);
+    fn test_triple_curlies() {
+        let lexer = Lexer::new(r#"foo {{{bar} {baz}}} }}} { {{ } qux"#);
         let lexemes: Vec<_> = lexer.collect();
         assert_eq!(
             lexemes,
             vec![
-                L(T::Escaped, 1, r#"\"#),
-                L(T::Escaped, 3, r#"\"#),
-                L(T::Escaped, 5, r#"\"#),
-                L(T::Escaped, 7, r#"\"#),
-                L(T::Text, 8, r#"\"#),
+                L(T::Text, 0, "foo "),
+                L(T::LLBrace, 5, "{"),
+                L(T::LBrace, 6, "{"),
+                L(T::Ident, 7, "bar"),
+                L(T::RBrace, 10, "}"),
+                L(T::Text, 11, " "),
+                L(T::LBrace, 12, "{"),
+                L(T::Ident, 13, "baz"),
+                L(T::RBrace, 16, "}"),
+                L(T::RRBrace, 18, "}"),
+                L(T::Text, 19, " "),
+                L(T::RRBrace, 21, "}"),
+                L(T::RBrace, 22, "}"),
+                L(T::Text, 23, " "),
+                L(T::LBrace, 24, "{"),
+                L(T::LBrace, 26, "{"),
+                L(T::LBrace, 27, "{"),
+                L(T::RBrace, 29, "}"),
+                L(T::Text, 30, " qux"),
             ],
         );
     }
