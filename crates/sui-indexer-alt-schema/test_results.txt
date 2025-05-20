@@ -1,0 +1,3201 @@
+=== Run 1 ===
+
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.39s
+
+
+=== Run 2 ===
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+
+thread 'handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first' panicked at crates/sui-indexer-alt/src/handlers/obj_info.rs:1080:14:
+called `Result::unwrap()` on an `Err` value: deadlock detected
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: false, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: false, marked_obsolete: false
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 2.19s
+
+
+=== Run 3 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.06s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.18s
+
+
+=== Run 4 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.49s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.18s
+
+
+=== Run 5 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.03s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.14s
+
+
+=== Run 6 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.01s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.18s
+
+
+=== Run 7 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.14s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.50s
+
+
+=== Run 8 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.01s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.13s
+
+
+=== Run 9 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.99s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.16s
+
+
+=== Run 10 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.09s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.13s
+
+
+=== Run 11 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.09s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.16s
+
+
+=== Run 12 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.27s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.15s
+
+
+=== Run 13 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.20s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 2
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.18s
+
+
+=== Run 14 ===
+
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.15s
+
+
+=== Run 15 ===
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.14s
+
+
+=== Run 16 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.05s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 2
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.31s
+
+
+=== Run 17 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.96s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.19s
+
+
+=== Run 18 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.95s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.15s
+
+
+=== Run 19 ===
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.12s
+
+
+=== Run 20 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.01s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.15s
+
+
+=== Run 21 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.36s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.20s
+
+
+=== Run 22 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.01s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.16s
+
+
+=== Run 23 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.00s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.52s
+
+
+=== Run 24 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.21s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+
+thread 'handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first' panicked at crates/sui-indexer-alt/src/handlers/obj_info.rs:1080:14:
+called `Result::unwrap()` on an `Err` value: deadlock detected
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: false, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: false, marked_obsolete: false
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 2.39s
+
+
+=== Run 25 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.51s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+
+thread 'handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first' panicked at crates/sui-indexer-alt/src/handlers/obj_info.rs:1080:14:
+called `Result::unwrap()` on an `Err` value: deadlock detected
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: false, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: false, marked_obsolete: false
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 2.55s
+
+
+=== Run 26 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.14s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.21s
+
+
+=== Run 27 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.04s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.63s
+
+
+=== Run 28 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.23s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.52s
+
+
+=== Run 29 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.38s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.16s
+
+
+=== Run 30 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.03s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.42s
+
+
+=== Run 31 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.19s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.18s
+
+
+=== Run 32 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.17s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+
+thread 'handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first' panicked at crates/sui-indexer-alt/src/handlers/obj_info.rs:1058:14:
+called `Result::unwrap()` on an `Err` value: deadlock detected
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 0, marked_predecessor: false, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 0, marked_predecessor: false, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: false, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: false, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 2.18s
+
+
+=== Run 33 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.13s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.63s
+
+
+=== Run 34 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.38s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.59s
+
+
+=== Run 35 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.15s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+
+thread 'handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first' panicked at crates/sui-indexer-alt/src/handlers/obj_info.rs:1058:14:
+called `Result::unwrap()` on an `Err` value: deadlock detected
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 0, marked_predecessor: false, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 0, marked_predecessor: false, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: false, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: false, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 2.42s
+
+
+=== Run 36 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.73s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.62s
+
+
+=== Run 37 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.32s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.56s
+
+
+=== Run 38 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.57s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.49s
+
+
+=== Run 39 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.19s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.33s
+
+
+=== Run 40 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.58s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.16s
+
+
+=== Run 41 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.30s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.19s
+
+
+=== Run 42 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.58s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+
+thread 'handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first' panicked at crates/sui-indexer-alt/src/handlers/obj_info.rs:1080:14:
+called `Result::unwrap()` on an `Err` value: deadlock detected
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: false, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: false, marked_obsolete: false
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 2.36s
+
+
+=== Run 43 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.25s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.50s
+
+
+=== Run 44 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.56s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.12s
+
+
+=== Run 45 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.18s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.22s
+
+
+=== Run 46 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.05s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.20s
+
+
+=== Run 47 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.45s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.37s
+
+
+=== Run 48 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.30s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.15s
+
+
+=== Run 49 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.42s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.34s
+
+
+=== Run 50 ===
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+
+thread 'handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first' panicked at crates/sui-indexer-alt/src/handlers/obj_info.rs:1058:14:
+called `Result::unwrap()` on an `Err` value: deadlock detected
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 0, marked_predecessor: false, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 0, marked_predecessor: false, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: false, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: false, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 2.13s
+
+
+=== Run 51 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.06s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.56s
+
+
+=== Run 52 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.41s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.18s
+
+
+=== Run 53 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.04s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.25s
+
+
+=== Run 54 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.06s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.17s
+
+
+=== Run 55 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.08s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.12s
+
+
+=== Run 56 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.10s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.15s
+
+
+=== Run 57 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.10s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.18s
+
+
+=== Run 58 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.18s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.22s
+
+
+=== Run 59 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.12s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.23s
+
+
+=== Run 60 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.99s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.15s
+
+
+=== Run 61 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.04s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.15s
+
+
+=== Run 62 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.97s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.28s
+
+
+=== Run 63 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.96s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.19s
+
+
+=== Run 64 ===
+
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.15s
+
+
+=== Run 65 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.22s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.20s
+
+
+=== Run 66 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.19s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.15s
+
+
+=== Run 67 ===
+
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.11s
+
+
+=== Run 68 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.00s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+
+thread 'handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first' panicked at crates/sui-indexer-alt/src/handlers/obj_info.rs:1080:14:
+called `Result::unwrap()` on an `Err` value: deadlock detected
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: false, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: false, marked_obsolete: false
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 2.28s
+
+
+=== Run 69 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.91s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.74s
+
+
+=== Run 70 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.53s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.47s
+
+
+=== Run 71 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.34s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.32s
+
+
+=== Run 72 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.16s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.15s
+
+
+=== Run 73 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.28s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.25s
+
+
+=== Run 74 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.24s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.22s
+
+
+=== Run 75 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.18s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.19s
+
+
+=== Run 76 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.20s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.14s
+
+
+=== Run 77 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.31s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cjt0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.71s
+
+
+=== Run 78 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.45s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.46s
+
+
+=== Run 79 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.63s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.29s
+
+
+=== Run 80 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.09s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.24s
+
+
+=== Run 81 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.19s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.21s
+
+
+=== Run 82 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.14s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.44s
+
+
+=== Run 83 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.40s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.17s
+
+
+=== Run 84 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.05s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.18s
+
+
+=== Run 85 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.06s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.27s
+
+
+=== Run 86 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.03s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.23s
+
+
+=== Run 87 ===
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.86s
+
+
+=== Run 88 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.17s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+
+thread 'handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first' panicked at crates/sui-indexer-alt/src/handlers/obj_info.rs:1080:14:
+called `Result::unwrap()` on an `Err` value: deadlock detected
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: false, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: false, marked_obsolete: false
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 2.32s
+
+
+=== Run 89 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.32s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.27s
+
+
+=== Run 90 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.11s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.24s
+
+
+=== Run 91 ===
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.53s
+
+
+=== Run 92 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.22s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.18s
+
+
+=== Run 93 ===
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.23s
+
+
+=== Run 94 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.01s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.60s
+
+
+=== Run 95 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.17s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.28s
+
+
+=== Run 96 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.06s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.23s
+
+
+=== Run 97 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.09s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.23s
+
+
+=== Run 98 ===
+
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+
+thread 'handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first' panicked at crates/sui-indexer-alt/src/handlers/obj_info.rs:1058:14:
+called `Result::unwrap()` on an `Err` value: deadlock detected
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 0, marked_predecessor: false, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 0, marked_predecessor: false, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: false, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: false, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 2.34s
+
+
+=== Run 99 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.16s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.27s
+
+
+=== Run 100 ===
+warning: function `t0_t1` is never used
+   --> crates/sui-indexer-alt/src/handlers/obj_info.rs:409:14
+    |
+409 |     async fn t0_t1(
+    |              ^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `sui-indexer-alt` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.71s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+cit0 result: pred_deleted: 2, pred_obsolete: 0, marked_predecessor: 2, t1_deleted: 0
+cjt0 result: pred_deleted: 0, pred_obsolete: 2, marked_predecessor: 2
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 1, marked_predecessor: true, marked_obsolete: true
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+object_id: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, marked_predecessor: true, marked_obsolete: false
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 1.37s

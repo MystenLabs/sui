@@ -1,0 +1,150 @@
+=== Run 1 ===
+   Compiling sui-indexer-alt v1.50.0 (/Users/williamyang/Mysten/sui/crates/sui-indexer-alt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.72s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+Case: Both transactions completed successfully
+=== TRANSACTION TIMELINE ===
+Base timestamp: 1749595346650
+
+Timeline (ms from start):
+0ms ────────────────────────────────────────────────────→ time
+┌─0ms: CiT0_START (Transaction CiT0 begins)
+┌─0ms: CjT0_START (Transaction CjT0 begins)
+                                                  └─5003ms: CjT0_END (pred_deleted: 0, pred_obsolete: 40000, marked_predecessor: 40000)
+                                                  ┌─5003ms: CjT1_START (T1 cleanup begins)
+                                                  └─5003ms: CjT1_END (deleted_latest_count: 0, deleted_obsolete_count: 0)
+                                                  └─8679ms: CiT0_END (pred_deleted: 40000, pred_obsolete: 0, marked_predecessor: 40000)
+                                                  ┌─8679ms: CiT1_START (T1 cleanup begins)
+                                                  └─8697ms: CiT1_END (deleted_latest_count: 40000, deleted_obsolete_count: 0)
+
+=== EXECUTION PATTERN ===
+Pattern: CONCURRENT [CiT0_START → CjT0_START → CjT0_END → CjT1_START → CjT1_END → CiT0_END → CiT1_START → CiT1_END]
+Overlap: 5003ms overlap (CiT0: 8679ms, CjT0: 5003ms)
+
+=== EVENT SEQUENCE ===
+1. 0ms: CiT0_START - Transaction CiT0 begins
+2. 0ms: CjT0_START - Transaction CjT0 begins
+3. 5003ms: CjT0_END - pred_deleted: 0, pred_obsolete: 40000, marked_predecessor: 40000
+4. 5003ms: CjT1_START - T1 cleanup begins
+5. 5003ms: CjT1_END - deleted_latest_count: 0, deleted_obsolete_count: 0
+6. 8679ms: CiT0_END - pred_deleted: 40000, pred_obsolete: 0, marked_predecessor: 40000
+7. 8679ms: CiT1_START - T1 cleanup begins
+8. 8697ms: CiT1_END - deleted_latest_count: 40000, deleted_obsolete_count: 0
+
+orphaned: 0, obsoleted: 0, marked_predecessor: 40000
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 33.07s
+
+
+=== Run 2 ===
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.46s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+Case: Both transactions completed successfully
+=== TRANSACTION TIMELINE ===
+Base timestamp: 1749595381775
+
+Timeline (ms from start):
+0ms ────────────────────────────────────────────────────→ time
+┌─0ms: CiT0_START (Transaction CiT0 begins)
+┌─0ms: CjT0_START (Transaction CjT0 begins)
+                                                  └─5051ms: CjT0_END (pred_deleted: 0, pred_obsolete: 40000, marked_predecessor: 40000)
+                                                  ┌─5051ms: CjT1_START (T1 cleanup begins)
+                                                  └─5052ms: CjT1_END (deleted_latest_count: 0, deleted_obsolete_count: 0)
+                                                  └─8817ms: CiT0_END (pred_deleted: 40000, pred_obsolete: 0, marked_predecessor: 40000)
+                                                  ┌─8817ms: CiT1_START (T1 cleanup begins)
+                                                  └─8835ms: CiT1_END (deleted_latest_count: 40000, deleted_obsolete_count: 0)
+
+=== EXECUTION PATTERN ===
+Pattern: CONCURRENT [CiT0_START → CjT0_START → CjT0_END → CjT1_START → CjT1_END → CiT0_END → CiT1_START → CiT1_END]
+Overlap: 5051ms overlap (CiT0: 8817ms, CjT0: 5051ms)
+
+=== EVENT SEQUENCE ===
+1. 0ms: CiT0_START - Transaction CiT0 begins
+2. 0ms: CjT0_START - Transaction CjT0 begins
+3. 5051ms: CjT0_END - pred_deleted: 0, pred_obsolete: 40000, marked_predecessor: 40000
+4. 5051ms: CjT1_START - T1 cleanup begins
+5. 5052ms: CjT1_END - deleted_latest_count: 0, deleted_obsolete_count: 0
+6. 8817ms: CiT0_END - pred_deleted: 40000, pred_obsolete: 0, marked_predecessor: 40000
+7. 8817ms: CiT1_START - T1 cleanup begins
+8. 8835ms: CiT1_END - deleted_latest_count: 40000, deleted_obsolete_count: 0
+
+orphaned: 0, obsoleted: 0, marked_predecessor: 40000
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 33.46s
+
+
+=== Run 3 ===
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.05s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+Case: Both transactions completed successfully
+=== TRANSACTION TIMELINE ===
+Base timestamp: 1749595415946
+
+Timeline (ms from start):
+0ms ────────────────────────────────────────────────────→ time
+┌─0ms: CiT0_START (Transaction CiT0 begins)
+┌─0ms: CjT0_START (Transaction CjT0 begins)
+                                                  └─4977ms: CjT0_END (pred_deleted: 0, pred_obsolete: 40000, marked_predecessor: 40000)
+                                                  ┌─4977ms: CjT1_START (T1 cleanup begins)
+                                                  └─4977ms: CjT1_END (deleted_latest_count: 0, deleted_obsolete_count: 0)
+                                                  └─8645ms: CiT0_END (pred_deleted: 40000, pred_obsolete: 0, marked_predecessor: 40000)
+                                                  ┌─8645ms: CiT1_START (T1 cleanup begins)
+                                                  └─8663ms: CiT1_END (deleted_latest_count: 40000, deleted_obsolete_count: 0)
+
+=== EXECUTION PATTERN ===
+Pattern: CONCURRENT [CiT0_START → CjT0_START → CjT0_END → CjT1_START → CjT1_END → CiT0_END → CiT1_START → CiT1_END]
+Overlap: 4977ms overlap (CiT0: 8645ms, CjT0: 4977ms)
+
+=== EVENT SEQUENCE ===
+1. 0ms: CiT0_START - Transaction CiT0 begins
+2. 0ms: CjT0_START - Transaction CjT0 begins
+3. 4977ms: CjT0_END - pred_deleted: 0, pred_obsolete: 40000, marked_predecessor: 40000
+4. 4977ms: CjT1_START - T1 cleanup begins
+5. 4977ms: CjT1_END - deleted_latest_count: 0, deleted_obsolete_count: 0
+6. 8645ms: CiT0_END - pred_deleted: 40000, pred_obsolete: 0, marked_predecessor: 40000
+7. 8645ms: CiT1_START - T1 cleanup begins
+8. 8663ms: CiT1_END - deleted_latest_count: 40000, deleted_obsolete_count: 0
+
+orphaned: 0, obsoleted: 0, marked_predecessor: 40000
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 32.81s
+
+
+=== Run 4 ===
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.12s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test

@@ -1,0 +1,51 @@
+=== Run 1 ===
+   Compiling sui-indexer-alt v1.50.0 (/Users/williamyang/Mysten/sui/crates/sui-indexer-alt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.65s
+     Running unittests src/lib.rs (/Users/williamyang/Mysten/sui/target/debug/deps/sui_indexer_alt-2490b7991ff9817e)
+
+running 1 test
+test handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first ... ok
+
+successes:
+
+---- handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first stdout ----
+Case: Both transactions completed successfully
+=== TRANSACTION TIMELINE ===
+Base timestamp: 1749577205798
+
+Timeline (ms from start):
+0ms ────────────────────────────────────────────────────→ time
+┌─0ms: CiT0_START (Transaction CiT0 begins)
+┌─0ms: CjT0_START (Transaction CjT0 begins)
+└─3ms: CjT0_END (pred_deleted: 0, pred_obsolete: 1, marked_predecessor: 1)
+┌─3ms: CiT1_START (T1 cleanup begins)
+└─4ms: CiT0_END (pred_deleted: 1, pred_obsolete: 0, marked_predecessor: 1)
+┌─4ms: CiT1_START (T1 cleanup begins)
+└─4ms: CiT1_END (deleted_latest_count: 1, deleted_obsolete_count: 0)
+└─4ms: CiT1_END (deleted_latest_count: 0, deleted_obsolete_count: 0)
+
+=== EXECUTION PATTERN ===
+Pattern: CONCURRENT [CiT0_START → CjT0_START → CjT0_END → CiT1_START → CiT0_END → CiT1_START → CiT1_END → CiT1_END]
+Overlap: 3ms overlap (CiT0: 4ms, CjT0: 3ms)
+
+=== EVENT SEQUENCE ===
+1. 0ms: CiT0_START - Transaction CiT0 begins
+2. 0ms: CjT0_START - Transaction CjT0 begins
+3. 3ms: CjT0_END - pred_deleted: 0, pred_obsolete: 1, marked_predecessor: 1
+4. 3ms: CiT1_START - T1 cleanup begins
+5. 4ms: CiT0_END - pred_deleted: 1, pred_obsolete: 0, marked_predecessor: 1
+6. 4ms: CiT1_START - T1 cleanup begins
+7. 4ms: CiT1_END - deleted_latest_count: 1, deleted_obsolete_count: 0
+8. 4ms: CiT1_END - deleted_latest_count: 0, deleted_obsolete_count: 0
+
+orphaned: 0, obsoleted: 0, marked_predecessor: 1
+object_id: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], cp_sequence_number: 2, obsolete_at: None, marked_predecessor: true
+
+
+successes:
+    handlers::obj_info::tests::test_concurrent_cit0_cjt0_cit0_first
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 59 filtered out; finished in 1.23s
+
+
+=== Run 2 ===
