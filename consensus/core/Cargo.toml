@@ -55,6 +55,9 @@ tracing.workspace = true
 typed-store.workspace = true
 tonic-rustls.workspace = true
 sui-http.workspace = true
+#
+#[features]
+#tide_hunter = ["typed-store/tide_hunter"]
 
 [dev-dependencies]
 rstest.workspace = true

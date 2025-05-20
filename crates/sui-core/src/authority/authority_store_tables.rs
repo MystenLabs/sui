@@ -215,7 +215,7 @@ impl AuthorityPerpetualTables {
     ))]
     pub fn open(parent_path: &Path, _: Option<AuthorityPerpetualTablesOptions>) -> Self {
         use typed_store::tidehunter_util::{
-            default_cells_per_mutex, Bytes, KeySpaceConfig, ThConfig, WalPosition,
+            default_cells_per_mutex, Bytes, KeySpaceConfig, ThConfig, WalPosition, KeyIndexing,
         };
         const MUTEXES: usize = 1024;
         const VALUE_CACHE_SIZE: usize = 20_000;
@@ -260,38 +260,35 @@ impl AuthorityPerpetualTables {
             ),
             (
                 "transactions".to_string(),
-                ThConfig::new_with_rm_prefix(
-                    32,
+                ThConfig::new_with_rm_prefix_indexing(
+                    KeyIndexing::key_reduction(32, 0..16),
                     MUTEXES,
                     default_cells_per_mutex(),
                     KeySpaceConfig::new()
-                        .with_key_reduction(0..16)
                         .with_value_cache_size(VALUE_CACHE_SIZE),
                     digest_prefix.clone(),
                 ),
             ),
             (
                 "effects".to_string(),
-                ThConfig::new_with_rm_prefix(
-                    32,
+                ThConfig::new_with_rm_prefix_indexing(
+                    KeyIndexing::key_reduction(32, 0..16),
                     MUTEXES,
                     default_cells_per_mutex(),
                     bloom_config
                         .clone()
-                        .with_key_reduction(0..16)
                         .with_value_cache_size(VALUE_CACHE_SIZE),
                     digest_prefix.clone(),
                 ),
             ),
             (
                 "executed_effects".to_string(),
-                ThConfig::new_with_rm_prefix(
-                    32,
+                ThConfig::new_with_rm_prefix_indexing(
+                    KeyIndexing::key_reduction(32, 0..16),
                     MUTEXES,
                     default_cells_per_mutex(),
                     bloom_config
                         .clone()
-                        .with_key_reduction(0..16)
                         .with_value_cache_size(VALUE_CACHE_SIZE),
                     digest_prefix.clone(),
                 ),

@@ -13,14 +13,14 @@ use tidehunter::iterators::db_iterator::DbIterator;
 use tidehunter::key_shape::{KeyShape, KeySpace, KeyType};
 use tidehunter::metrics::Metrics;
 pub use tidehunter::{
-    key_shape::{KeyShapeBuilder, KeySpaceConfig},
+    key_shape::{KeyShapeBuilder, KeySpaceConfig, KeyIndexing},
     minibytes::Bytes,
     WalPosition,
 };
 use typed_store_error::TypedStoreError;
 
 pub struct ThConfig {
-    key_size: usize,
+    key_indexing: KeyIndexing,
     mutexes: usize,
     per_mutex: usize,
     config: KeySpaceConfig,
@@ -40,9 +40,9 @@ pub fn open(path: &Path, key_shape: KeyShape, db_name: String) -> Arc<Db> {
 }
 
 pub fn add_key_space(builder: &mut KeyShapeBuilder, name: &str, config: &ThConfig) -> KeySpace {
-    builder.add_key_space_config(
+    builder.add_key_space_config_indexing(
         name,
-        config.key_size,
+        config.key_indexing.clone(),
         config.mutexes,
         KeyType::uniform(config.per_mutex),
         config.config.clone(),
@@ -128,12 +128,28 @@ pub(crate) fn typed_store_error_from_th_error(err: tidehunter::db::DbError) -> T
 impl ThConfig {
     pub fn new(key_size: usize, mutexes: usize, per_mutex: usize) -> Self {
         Self {
-            key_size,
+            key_indexing: KeyIndexing::none(key_size),
             mutexes,
             per_mutex,
             config: KeySpaceConfig::default(),
             prefix: None,
         }
+    }
+
+    pub fn new_with_config_indexing(
+        key_indexing: KeyIndexing,
+        mutexes: usize,
+        per_mutex: usize,
+        config: KeySpaceConfig,
+    ) -> Self {
+        Self {
+            key_indexing,
+            mutexes,
+            per_mutex,
+            config,
+            prefix: None,
+        }
+
     }
 
     pub fn new_with_config(
@@ -142,24 +158,26 @@ impl ThConfig {
         per_mutex: usize,
         config: KeySpaceConfig,
     ) -> Self {
-        Self {
-            key_size,
-            mutexes,
-            per_mutex,
-            config,
-            prefix: None,
-        }
+        Self::new_with_config_indexing(KeyIndexing::none(key_size), mutexes, per_mutex, config)
     }
 
-    pub fn new_with_rm_prefix(
-        key_size: usize,
+    pub fn new_with_rm_prefix(key_size: usize,
+                              mutexes: usize,
+                              per_mutex: usize,
+                              config: KeySpaceConfig,
+                              prefix: Vec<u8>) -> Self {
+        Self::new_with_rm_prefix_indexing(KeyIndexing::none(key_size), mutexes, per_mutex, config, prefix)
+    }
+
+    pub fn new_with_rm_prefix_indexing(
+        key_indexing: KeyIndexing,
         mutexes: usize,
         per_mutex: usize,
         config: KeySpaceConfig,
         prefix: Vec<u8>,
     ) -> Self {
         Self {
-            key_size,
+            key_indexing,
             mutexes,
             per_mutex,
             config,

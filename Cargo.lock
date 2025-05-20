@@ -7575,7 +7575,7 @@ dependencies = [
 [[package]]
 name = "minibytes"
 version = "0.1.0"
-source = "git+https://github.com/mystenlabs/tidehunter.git?rev=662433953ab9a50abb1ca965c902152627926589#662433953ab9a50abb1ca965c902152627926589"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=fc5c27739cd56780f0693d8cc78765e9895d105e#fc5c27739cd56780f0693d8cc78765e9895d105e"
 dependencies = [
  "bytes",
  "memmap2 0.7.1",
@@ -16992,7 +16992,7 @@ dependencies = [
 [[package]]
 name = "tidehunter"
 version = "0.1.0"
-source = "git+https://github.com/mystenlabs/tidehunter.git?rev=662433953ab9a50abb1ca965c902152627926589#662433953ab9a50abb1ca965c902152627926589"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=fc5c27739cd56780f0693d8cc78765e9895d105e#fc5c27739cd56780f0693d8cc78765e9895d105e"
 dependencies = [
  "bincode",
  "bloom",
@@ -17004,6 +17004,7 @@ dependencies = [
  "parking_lot 0.12.3",
  "prometheus",
  "rand 0.8.5",
+ "seahash",
  "serde",
  "smallvec",
 ]

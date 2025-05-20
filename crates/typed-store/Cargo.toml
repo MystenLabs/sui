@@ -35,7 +35,7 @@ itertools.workspace = true
 mysten-common.workspace = true
 mysten-metrics.workspace = true
 [target.'cfg(not(windows))'.dependencies]
-tidehunter = {git = "https://github.com/mystenlabs/tidehunter.git", rev = "662433953ab9a50abb1ca965c902152627926589", version = "0.1.0", optional = true}
+tidehunter = {git = "https://github.com/mystenlabs/tidehunter.git", rev = "fc5c27739cd56780f0693d8cc78765e9895d105e", version = "0.1.0", optional = true}
 
 [dev-dependencies]
 tempfile.workspace = true

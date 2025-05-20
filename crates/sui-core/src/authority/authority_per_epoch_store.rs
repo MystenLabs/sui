@@ -594,9 +594,8 @@ impl AuthorityEpochTables {
         not(feature = "rocksdb")
     ))]
     pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
-        use typed_store::tidehunter_util::{default_cells_per_mutex, KeySpaceConfig, ThConfig};
+        use typed_store::tidehunter_util::{default_cells_per_mutex, KeySpaceConfig, ThConfig, KeyIndexing};
         const MUTEXES: usize = 1024;
-        const LARGE_KEY_LENGTH: usize = 4096 * 2;
         let configs = vec![
             (
                 "signed_transactions".to_string(),
@@ -624,11 +623,11 @@ impl AuthorityEpochTables {
             ),
             (
                 "consensus_message_processed".to_string(),
-                ThConfig::new(LARGE_KEY_LENGTH, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new_with_config_indexing(KeyIndexing::Hash, MUTEXES, default_cells_per_mutex(), KeySpaceConfig::default()),
             ),
             (
                 "pending_consensus_transactions".to_string(),
-                ThConfig::new(LARGE_KEY_LENGTH, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new_with_config_indexing(KeyIndexing::Hash, MUTEXES, default_cells_per_mutex(), KeySpaceConfig::default()),
             ),
             (
                 "last_consensus_stats".to_string(),
@@ -684,11 +683,11 @@ impl AuthorityEpochTables {
             ),
             (
                 "pending_jwks".to_string(),
-                ThConfig::new(LARGE_KEY_LENGTH, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new_with_config_indexing(KeyIndexing::Hash, MUTEXES, default_cells_per_mutex(), KeySpaceConfig::default()),
             ),
             (
                 "active_jwks".to_string(),
-                ThConfig::new(LARGE_KEY_LENGTH, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new_with_config_indexing(KeyIndexing::Hash, MUTEXES, default_cells_per_mutex(), KeySpaceConfig::default()),
             ),
             (
                 "deferred_transactions".to_string(),
