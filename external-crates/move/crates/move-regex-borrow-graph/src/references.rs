@@ -8,8 +8,7 @@ use crate::{
     regex::Regex,
 };
 use std::{
-    cmp,
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     fmt::{self, Debug},
 };
 
@@ -29,16 +28,10 @@ enum Ref_ {
     Fresh(usize),
 }
 
-#[derive(Clone)]
-struct LocRegex<Loc, Lbl> {
-    loc: Loc,
-    regex: Regex<Lbl>,
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Edge<Loc, Lbl: Ord> {
     abstract_size: usize,
-    regexes: BTreeSet<LocRegex<Loc, Lbl>>,
+    regexes: BTreeMap<Regex<Lbl>, Loc>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -61,7 +54,7 @@ impl<Loc, Lbl: Ord> Edge<Loc, Lbl> {
     pub(crate) fn new() -> Self {
         Self {
             abstract_size: 0,
-            regexes: BTreeSet::new(),
+            regexes: BTreeMap::new(),
         }
     }
 
@@ -70,7 +63,7 @@ impl<Loc, Lbl: Ord> Edge<Loc, Lbl> {
     }
 
     pub(crate) fn regexes(&self) -> impl Iterator<Item = &Regex<Lbl>> {
-        self.regexes.iter().map(|r| &r.regex)
+        self.regexes.keys()
     }
 }
 
@@ -93,9 +86,9 @@ impl Node {
 
 impl<Loc, Lbl: Ord> Edge<Loc, Lbl> {
     pub(crate) fn insert(&mut self, loc: Loc, regex: Regex<Lbl>) -> usize {
-        let regex_size = regex.abstract_size();
-        let was_new = self.regexes.insert(LocRegex { loc, regex });
-        if was_new {
+        if !self.regexes.contains_key(&regex) {
+            let regex_size = regex.abstract_size();
+            self.regexes.insert(regex, loc);
             self.abstract_size = self.abstract_size.saturating_add(regex_size);
             regex_size
         } else {
@@ -112,10 +105,10 @@ impl<Loc: Copy, Lbl: Ord + Clone> Edge<Loc, Lbl> {
     pub(crate) fn paths(&self) -> Paths<Loc, Lbl> {
         self.regexes
             .iter()
-            .map(|r| {
-                let (labels, ends_in_dot_star) = r.regex.query_api_path();
+            .map(|(regex, &loc)| {
+                let (labels, ends_in_dot_star) = regex.query_api_path();
                 Path {
-                    loc: r.loc,
+                    loc,
                     labels,
                     ends_in_dot_star,
                 }
@@ -166,7 +159,7 @@ impl<Loc: Copy, Lbl: Ord + Clone> Edge<Loc, Lbl> {
     // adds all edges in other to self, where the successor/predecessor is in mask
     pub(crate) fn join(&mut self, other: &Self) -> usize {
         let mut size_increase = 0usize;
-        for LocRegex { loc, regex } in &other.regexes {
+        for (regex, loc) in &other.regexes {
             size_increase = size_increase.saturating_add(self.insert(*loc, regex.clone()));
         }
 
@@ -193,41 +186,12 @@ impl<Loc, Lbl: Ord> Edge<Loc, Lbl> {
         #[cfg(debug_assertions)]
         {
             let mut calculated_size = 0;
-            for r in &self.regexes {
-                calculated_size += r.regex.abstract_size();
+            for regex in self.regexes.keys() {
+                calculated_size += regex.abstract_size();
             }
             debug_assert_eq!(calculated_size, self.abstract_size);
             debug_assert!(!self.regexes.is_empty());
         }
-    }
-}
-
-//**************************************************************************************************
-// traits
-//**************************************************************************************************
-
-impl<Loc, Lbl: PartialEq> PartialEq for LocRegex<Loc, Lbl> {
-    fn eq(&self, other: &LocRegex<Loc, Lbl>) -> bool {
-        self.regex == other.regex
-    }
-}
-impl<Loc, Lbl: Eq> Eq for LocRegex<Loc, Lbl> {}
-
-impl<Loc, Lbl: PartialOrd> PartialOrd for LocRegex<Loc, Lbl> {
-    fn partial_cmp(&self, other: &LocRegex<Loc, Lbl>) -> Option<cmp::Ordering> {
-        self.regex.partial_cmp(&other.regex)
-    }
-}
-
-impl<Loc, Lbl: Ord> Ord for LocRegex<Loc, Lbl> {
-    fn cmp(&self, other: &LocRegex<Loc, Lbl>) -> cmp::Ordering {
-        self.regex.cmp(&other.regex)
-    }
-}
-
-impl<Loc, Lbl: Debug> Debug for LocRegex<Loc, Lbl> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.regex.fmt(f)
     }
 }
 
