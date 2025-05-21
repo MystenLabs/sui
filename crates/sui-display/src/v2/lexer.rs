@@ -38,6 +38,8 @@ pub(crate) struct OwnedLexeme(Token, usize, String);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Token {
+    /// '@'
+    At,
     /// '::'
     CColon,
     /// ','
@@ -130,6 +132,8 @@ impl<'s> Lexer<'s> {
 
         use Token as T;
         Some(match bytes.first()? {
+            b'@' => self.take(T::At, 1),
+
             b':' if bytes.get(1) == Some(&b':') => self.take(T::CColon, 2),
 
             b',' => self.take(T::Comma, 1),
@@ -236,6 +240,7 @@ impl fmt::Display for OwnedLexeme {
         use OwnedLexeme as L;
         use Token as T;
         match self {
+            L(T::At, _, _) => write!(f, "'@'"),
             L(T::CColon, _, _) => write!(f, "'::'"),
             L(T::Comma, _, _) => write!(f, "','"),
             L(T::Dot, _, _) => write!(f, "'.'"),
@@ -266,6 +271,7 @@ impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Token as T;
         match self {
+            T::At => write!(f, "'@'"),
             T::CColon => write!(f, "'::'"),
             T::Comma => write!(f, "','"),
             T::Dot => write!(f, "'.'"),
@@ -462,14 +468,14 @@ mod tests {
     /// Unexpected characters are tokenized so that the parser can produce an error.
     #[test]
     fn test_unexpected_characters() {
-        let lexer = Lexer::new(r#"anything goes {@ # ! 🔥}"#);
+        let lexer = Lexer::new(r#"anything goes {? # ! 🔥}"#);
         let lexemes: Vec<_> = lexer.collect();
         assert_eq!(
             lexemes,
             vec![
                 L(T::Text, 0, "anything goes "),
                 L(T::LBrace, 14, "{"),
-                L(T::Unexpected, 15, "@"),
+                L(T::Unexpected, 15, "?"),
                 L(T::Whitespace, 16, " "),
                 L(T::Unexpected, 17, "#"),
                 L(T::Whitespace, 18, " "),
@@ -609,6 +615,26 @@ mod tests {
                 L(T::Unexpected, 20, "_"),
                 L(T::NumDec, 21, "123"),
                 L(T::RBrace, 24, "}"),
+            ],
+        );
+    }
+
+    /// Address literals are numbers prefixed with '@' -- typically, they are hexadecimal numbers
+    /// but both kinds are supported.
+    #[test]
+    fn test_address_literals() {
+        let lexer = Lexer::new(r#"{@123 @0x123}"#);
+        let lexemes: Vec<_> = lexer.collect();
+        assert_eq!(
+            lexemes,
+            vec![
+                L(T::LBrace, 0, "{"),
+                L(T::At, 1, "@"),
+                L(T::NumDec, 2, "123"),
+                L(T::Whitespace, 5, " "),
+                L(T::At, 6, "@"),
+                L(T::NumHex, 9, "123"),
+                L(T::RBrace, 12, "}"),
             ],
         );
     }
