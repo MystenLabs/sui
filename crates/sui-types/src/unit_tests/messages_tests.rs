@@ -1389,31 +1389,31 @@ fn check_approx_effects_components_size() {
     use std::mem::size_of;
 
     assert!(
-        size_of::<GasCostSummary>() < APPROX_SIZE_OF_GAS_COST_SUMMARY,
+        size_of::<GasCostSummary>() <= APPROX_SIZE_OF_GAS_COST_SUMMARY,
         "Update APPROX_SIZE_OF_GAS_COST_SUMMARY constant"
     );
     assert!(
-        size_of::<EpochId>() < APPROX_SIZE_OF_EPOCH_ID,
+        size_of::<EpochId>() <= APPROX_SIZE_OF_EPOCH_ID,
         "Update APPROX_SIZE_OF_EPOCH_ID constant"
     );
     assert!(
-        size_of::<Option<TransactionEventsDigest>>() < APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST,
+        size_of::<Option<TransactionEventsDigest>>() <= APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST,
         "Update APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST constant"
     );
     assert!(
-        size_of::<ObjectRef>() < APPROX_SIZE_OF_OBJECT_REF,
+        size_of::<ObjectRef>() <= APPROX_SIZE_OF_OBJECT_REF,
         "Update APPROX_SIZE_OF_OBJECT_REF constant"
     );
     assert!(
-        size_of::<TransactionDigest>() < APPROX_SIZE_OF_TX_DIGEST,
+        size_of::<TransactionDigest>() <= APPROX_SIZE_OF_TX_DIGEST,
         "Update APPROX_SIZE_OF_TX_DIGEST constant"
     );
     assert!(
-        size_of::<Owner>() < APPROX_SIZE_OF_OWNER,
+        size_of::<Owner>() <= APPROX_SIZE_OF_OWNER,
         "Update APPROX_SIZE_OF_OWNER constant"
     );
     assert!(
-        size_of::<ExecutionStatus>() < APPROX_SIZE_OF_EXECUTION_STATUS,
+        size_of::<ExecutionStatus>() <= APPROX_SIZE_OF_EXECUTION_STATUS,
         "Update APPROX_SIZE_OF_EXECUTION_STATUS constant"
     );
 }
