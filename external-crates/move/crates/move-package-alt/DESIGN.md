@@ -139,14 +139,13 @@ version = 4
 # detect local changes), and a set of outgoing edges. The edges are labeled by the name of the dependency.
 #
 # The identities of the nodes are arbitrary, but it seems nice to generate them from the package
-# names that dependencies declare for themselves. Adding numbers to disambiguate if there are 
-# collision should be added.
-
+# names that dependencies declare for themselves (adding numbers to disambiguate if there are 
+# collisions).
 # There is also a node for the current package; the only thing that makes it special is that it has
 # the name of the current package as its identity (it will also always have `{local = "."}` as its
 # source)
 [pinned.mainnet.example]
-source = { local = "." }
+source = { root = true }
 manifest_digest = "..."
 
 deps.std = "MoveStdlib"
@@ -332,10 +331,7 @@ Dependencies are always pinned as a group and are only repinned in two situation
 
 1. The user explicitly asks for it by running `sui move update-deps`. This command will repin all
    dependencies.
-
-2. The user modifies a `Move.toml` file in their dependency tree. We detect this by comparing
-   the `pinned.environment.ID.manifest_digest` field of the lockfile of the project being built to the manifest
-   file of the corresponding dependency.
+2. If the manifest has changed, then all dependencies are repinned.
 
 Note: we had considered only repinning the dependencies that had changed and allowing the user to
 repin only specific deps, but this leads to a lot of confusing corner cases. This is consistent with
@@ -404,7 +400,7 @@ graph:
  - every entry in `pinned` has a different `source`
 
  - For each node `p` in the `pinned` section of `Move.lock`:
-     - `p.manifest_digest` is the digest of `Move.toml`
+     - `p.manifest_digest` is the digest of `Move.toml` for the corresponding package
      - `p.deps` contains the same keys as the dependencies of `Move.toml`
      - `p.source` has been cached locally
 
@@ -509,9 +505,9 @@ For example, we can perform the following checks:
 
     > Warning: your package depends on foo but foo’s devnet chain ID (defined in foo/Move.toml) is
     > different from your chain ID (in Move.toml). You may need to change the chain ID for devnet in
-    > your Move.toml or upgrade foo using
+    > your Move.toml or update foo using
     >
-    >   sui move upgrade-deps foo
+    >   sui move update-deps foo
     >
 
 - If the dep-replacements do specify a published-at / original-id, does it match
@@ -533,9 +529,9 @@ the one in the package?
     > baz = { <info for latest of the conflicting versions>, override = "true" }
     >
 
-- TODO: If two deps have the same published addresses, then we have two source packages claiming to match
-  the same on-chain package. This could happen if one is a bytecode dependency and the other is a
-  source dependency. We need to figure out how to disambiguate
+- If two deps have the same published addresses, then we have two source packages claiming to match
+  the same on-chain package. We will build with two different packages, as specified by the
+  dependencies.
 
 - Are there local dependencies that don’t share a repository with the current package? This is
   almost certainly a bug!
@@ -555,14 +551,14 @@ the one in the package?
     >
 
 In general, any property that would cause a publish to fail should probably be reported either at
-upgrade or at build time.
+update or at build time.
 
 # User operations
 
-## Upgrade dependencies (repinning)
+## Update dependencies (repinning)
 
-If the user runs `sui move upgrade-deps`, we rerun resolution, pinning, fetching, and validation for
-all dependencies. If they run `sui move upgrade-deps d1 d2` we rerun these steps only for the
+If the user runs `sui move update-deps`, we rerun resolution, pinning, fetching, and validation for
+all dependencies. If they run `sui move update-deps d1 d2` we rerun these steps only for the
 specified dependencies.
 
 ## Build / Test
