@@ -23,7 +23,7 @@ use diffy::create_patch;
 use itertools::Itertools;
 use mysten_common::random::get_rng;
 use mysten_common::sync::notify_read::NotifyRead;
-use mysten_common::{assert_reachable, debug_fatal, fatal};
+use mysten_common::{assert_reachable, debug_fatal, fatal, in_test_configuration};
 use mysten_metrics::{monitored_future, monitored_scope, MonitoredFutureExt};
 use nonempty::NonEmpty;
 use parking_lot::Mutex;
@@ -67,7 +67,7 @@ use sui_types::messages_consensus::ConsensusTransactionKey;
 use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 use sui_types::transaction::{
-    TransactionDataAPI, TransactionKey, TransactionKind, VerifiedTransaction,
+    SharedInputObject, TransactionDataAPI, TransactionKey, TransactionKind, VerifiedTransaction,
 };
 use tokio::{sync::Notify, task::JoinSet, time::timeout};
 use tracing::{debug, error, info, instrument, trace, warn};
@@ -1254,6 +1254,8 @@ impl CheckpointBuilder {
 
         let epoch = self.epoch_store.epoch();
         let settlement_txns: Vec<_> = create_accumulator_update_transactions(
+            epoch,
+            last_details.checkpoint_height,
             Some(self.effects_store.as_ref()),
             &sorted_tx_effects_included_in_checkpoint,
         )
@@ -1264,7 +1266,22 @@ impl CheckpointBuilder {
         })
         .collect();
 
+        if in_test_configuration() {
+            assert!(
+                settlement_txns.iter().all(|tx| {
+                    tx.shared_input_objects().collect::<Vec<_>>()
+                        == vec![SharedInputObject::SUI_ACCUMULATOR_ROOT_OBJ]
+                }),
+                "accumulator root objects must have only the accumulator root as a shared input"
+            );
+        }
+
         let settlement_digests: Vec<_> = settlement_txns.iter().map(|tx| *tx.digest()).collect();
+
+        self.epoch_store.assign_next_accumulator_version(
+            self.state.get_object_cache_reader().as_ref(),
+            &settlement_digests,
+        );
 
         self.state
             .enqueue_transactions_for_execution(settlement_txns, &self.epoch_store);
@@ -1273,6 +1290,14 @@ impl CheckpointBuilder {
             .effects_store
             .notify_read_executed_effects(&settlement_digests)
             .await;
+
+        for fx in settlement_effects.iter() {
+            assert!(
+                fx.status().is_ok(),
+                "settlement transaction cannot fail (digest: {:?})",
+                fx.transaction_digest()
+            );
+        }
 
         sorted_tx_effects_included_in_checkpoint.extend(settlement_effects);
 

@@ -35,12 +35,12 @@ event::emit(ItemPurchased { item_id: ..., buyer: .... })
 -  [Constants](#@Constants_0)
 -  [Function `emit`](#sui_event_emit)
 -  [Function `update_head`](#sui_event_update_head)
--  [Function `destroy_stream`](#sui_event_destroy_stream)
 -  [Function `new_event_stream`](#sui_event_new_event_stream)
+-  [Function `destroy_stream`](#sui_event_destroy_stream)
 -  [Function `get_cap`](#sui_event_get_cap)
 -  [Function `default_event_stream_cap`](#sui_event_default_event_stream_cap)
--  [Function `emit_authenticated`](#sui_event_emit_authenticated)
 -  [Function `destroy_cap`](#sui_event_destroy_cap)
+-  [Function `emit_authenticated`](#sui_event_emit_authenticated)
 -  [Function `emit_authenticated_impl`](#sui_event_emit_authenticated_impl)
 
 
@@ -57,6 +57,7 @@ event::emit(ItemPurchased { item_id: ..., buyer: .... })
 <b>use</b> <a href="../sui/hash.md#sui_hash">sui::hash</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
+<b>use</b> <a href="../sui/transfer.md#sui_transfer">sui::transfer</a>;
 <b>use</b> <a href="../sui/tx_context.md#sui_tx_context">sui::tx_context</a>;
 </code></pre>
 
@@ -82,11 +83,13 @@ event::emit(ItemPurchased { item_id: ..., buyer: .... })
 <code>root: vector&lt;u8&gt;</code>
 </dt>
 <dd>
+ Merkle root for all events in the current checkpoint.
 </dd>
 <dt>
 <code>prev: vector&lt;u8&gt;</code>
 </dt>
 <dd>
+ Hash of the previous version of the head object.
 </dd>
 </dl>
 
@@ -199,7 +202,7 @@ phantom parameters, eg <code><a href="../sui/event.md#sui_event_emit">emit</a>(M
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/event.md#sui_event_update_head">update_head</a>(stream_id: <b>address</b>, new_root: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/event.md#sui_event_update_head">update_head</a>(stream_id: <b>address</b>, new_root: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -208,7 +211,7 @@ phantom parameters, eg <code><a href="../sui/event.md#sui_event_emit">emit</a>(M
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/event.md#sui_event_update_head">update_head</a>(stream_id: <b>address</b>, new_root: vector&lt;u8&gt;, ctx: &TxContext) {
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/event.md#sui_event_update_head">update_head</a>(stream_id: <b>address</b>, new_root: vector&lt;u8&gt;, ctx: &TxContext) {
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui/event.md#sui_event_ENotSystemAddress">ENotSystemAddress</a>);
     <b>let</b> name = <a href="../sui/accumulator.md#sui_accumulator_get_accumulator_field_name">accumulator::get_accumulator_field_name</a>&lt;<a href="../sui/event.md#sui_event_EventStreamHead">EventStreamHead</a>&gt;(stream_id);
     <b>let</b> <b>mut</b> accumulator_root = <a href="../sui/object.md#sui_object_sui_accumulator_root_object_id">object::sui_accumulator_root_object_id</a>();
@@ -226,31 +229,6 @@ phantom parameters, eg <code><a href="../sui/event.md#sui_event_emit">emit</a>(M
         <a href="../sui/dynamic_field.md#sui_dynamic_field_add">dynamic_field::add</a>(&<b>mut</b> accumulator_root, name, head);
     };
     <a href="../sui/object.md#sui_object_delete">object::delete</a>(accumulator_root);
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_event_destroy_stream"></a>
-
-## Function `destroy_stream`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/event.md#sui_event_destroy_stream">destroy_stream</a>(stream: <a href="../sui/event.md#sui_event_EventStream">sui::event::EventStream</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/event.md#sui_event_destroy_stream">destroy_stream</a>(stream: <a href="../sui/event.md#sui_event_EventStream">EventStream</a>) {
-    <b>let</b> <a href="../sui/event.md#sui_event_EventStream">EventStream</a> { name } = stream;
-    name.delete();
 }
 </code></pre>
 
@@ -277,6 +255,31 @@ phantom parameters, eg <code><a href="../sui/event.md#sui_event_emit">emit</a>(M
     <a href="../sui/event.md#sui_event_EventStream">EventStream</a> {
         name: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
     }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_event_destroy_stream"></a>
+
+## Function `destroy_stream`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/event.md#sui_event_destroy_stream">destroy_stream</a>(stream: <a href="../sui/event.md#sui_event_EventStream">sui::event::EventStream</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/event.md#sui_event_destroy_stream">destroy_stream</a>(stream: <a href="../sui/event.md#sui_event_EventStream">EventStream</a>) {
+    <b>let</b> <a href="../sui/event.md#sui_event_EventStream">EventStream</a> { name } = stream;
+    name.delete();
 }
 </code></pre>
 
@@ -338,31 +341,6 @@ phantom parameters, eg <code><a href="../sui/event.md#sui_event_emit">emit</a>(M
 
 </details>
 
-<a name="sui_event_emit_authenticated"></a>
-
-## Function `emit_authenticated`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/event.md#sui_event_emit_authenticated">emit_authenticated</a>&lt;T: <b>copy</b>, drop&gt;(cap: &<a href="../sui/event.md#sui_event_EventStreamCap">sui::event::EventStreamCap</a>, <a href="../sui/event.md#sui_event">event</a>: T)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/event.md#sui_event_emit_authenticated">emit_authenticated</a>&lt;T: <b>copy</b> + drop&gt;(cap: &<a href="../sui/event.md#sui_event_EventStreamCap">EventStreamCap</a>, <a href="../sui/event.md#sui_event">event</a>: T) {
-    <b>let</b> accumulator_addr = <a href="../sui/accumulator.md#sui_accumulator_get_accumulator_field_address">accumulator::get_accumulator_field_address</a>&lt;<a href="../sui/event.md#sui_event_EventStreamHead">EventStreamHead</a>&gt;(cap.stream_id);
-    <a href="../sui/event.md#sui_event_emit_authenticated_impl">emit_authenticated_impl</a>&lt;<a href="../sui/event.md#sui_event_EventStreamHead">EventStreamHead</a>, T&gt;(accumulator_addr, cap.stream_id, <a href="../sui/event.md#sui_event">event</a>);
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="sui_event_destroy_cap"></a>
 
 ## Function `destroy_cap`
@@ -381,6 +359,31 @@ phantom parameters, eg <code><a href="../sui/event.md#sui_event_emit">emit</a>(M
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/event.md#sui_event_destroy_cap">destroy_cap</a>(cap: <a href="../sui/event.md#sui_event_EventStreamCap">EventStreamCap</a>) {
     <b>let</b> <a href="../sui/event.md#sui_event_EventStreamCap">EventStreamCap</a> { id, .. } = cap;
     id.delete();
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_event_emit_authenticated"></a>
+
+## Function `emit_authenticated`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/event.md#sui_event_emit_authenticated">emit_authenticated</a>&lt;T: <b>copy</b>, drop&gt;(cap: &<a href="../sui/event.md#sui_event_EventStreamCap">sui::event::EventStreamCap</a>, <a href="../sui/event.md#sui_event">event</a>: T)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/event.md#sui_event_emit_authenticated">emit_authenticated</a>&lt;T: <b>copy</b> + drop&gt;(cap: &<a href="../sui/event.md#sui_event_EventStreamCap">EventStreamCap</a>, <a href="../sui/event.md#sui_event">event</a>: T) {
+    <b>let</b> accumulator_addr = <a href="../sui/accumulator.md#sui_accumulator_get_accumulator_field_address">accumulator::get_accumulator_field_address</a>&lt;<a href="../sui/event.md#sui_event_EventStreamHead">EventStreamHead</a>&gt;(cap.stream_id);
+    <a href="../sui/event.md#sui_event_emit_authenticated_impl">emit_authenticated_impl</a>&lt;<a href="../sui/event.md#sui_event_EventStreamHead">EventStreamHead</a>, T&gt;(accumulator_addr, cap.stream_id, <a href="../sui/event.md#sui_event">event</a>);
 }
 </code></pre>
 

@@ -1264,6 +1264,48 @@ delete_impl
 record_new_uid
 	fun
 	0x2::object
+Receiving
+	public struct
+	0x2::transfer
+transfer
+	public fun
+	0x2::transfer
+public_transfer
+	public fun
+	0x2::transfer
+freeze_object
+	public fun
+	0x2::transfer
+public_freeze_object
+	public fun
+	0x2::transfer
+share_object
+	public fun
+	0x2::transfer
+public_share_object
+	public fun
+	0x2::transfer
+receive
+	public fun
+	0x2::transfer
+public_receive
+	public fun
+	0x2::transfer
+receiving_object_id
+	public fun
+	0x2::transfer
+freeze_object_impl
+	public(package) fun
+	0x2::transfer
+share_object_impl
+	public(package) fun
+	0x2::transfer
+transfer_impl
+	public(package) fun
+	0x2::transfer
+receive_impl
+	fun
+	0x2::transfer
 Field
 	public struct
 	0x2::dynamic_field
@@ -1315,8 +1357,14 @@ has_child_object
 has_child_object_with_ty
 	public(package) fun
 	0x2::dynamic_field
+Accumulator
+	public struct
+	0x2::accumulator
 Key
 	public struct
+	0x2::accumulator
+create
+	fun
 	0x2::accumulator
 get_accumulator_field_name
 	public(package) fun
@@ -1324,48 +1372,6 @@ get_accumulator_field_name
 get_accumulator_field_address
 	public(package) fun
 	0x2::accumulator
-Receiving
-	public struct
-	0x2::transfer
-transfer
-	public fun
-	0x2::transfer
-public_transfer
-	public fun
-	0x2::transfer
-freeze_object
-	public fun
-	0x2::transfer
-public_freeze_object
-	public fun
-	0x2::transfer
-share_object
-	public fun
-	0x2::transfer
-public_share_object
-	public fun
-	0x2::transfer
-receive
-	public fun
-	0x2::transfer
-public_receive
-	public fun
-	0x2::transfer
-receiving_object_id
-	public fun
-	0x2::transfer
-freeze_object_impl
-	public(package) fun
-	0x2::transfer
-share_object_impl
-	public(package) fun
-	0x2::transfer
-transfer_impl
-	public(package) fun
-	0x2::transfer
-receive_impl
-	fun
-	0x2::transfer
 AuthenticatorState
 	public struct
 	0x2::authenticator_state
@@ -1946,12 +1952,12 @@ emit
 	public fun
 	0x2::event
 update_head
+	entry fun
+	0x2::event
+new_event_stream
 	public fun
 	0x2::event
 destroy_stream
-	public fun
-	0x2::event
-new_event_stream
 	public fun
 	0x2::event
 get_cap
@@ -1960,10 +1966,10 @@ get_cap
 default_event_stream_cap
 	public fun
 	0x2::event
-emit_authenticated
+destroy_cap
 	public fun
 	0x2::event
-destroy_cap
+emit_authenticated
 	public fun
 	0x2::event
 emit_authenticated_impl

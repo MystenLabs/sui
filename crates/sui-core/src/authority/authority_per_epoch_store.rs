@@ -76,6 +76,7 @@ use sui_types::transaction::{
     TransactionData, TransactionDataAPI, TransactionKey, TransactionKind, VerifiedCertificate,
     VerifiedSignedTransaction, VerifiedTransaction,
 };
+use sui_types::{SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ACCUMULATOR_ROOT_OBJECT_SHARED_VERSION};
 use tap::TapOptional;
 use tokio::sync::{mpsc, OnceCell};
 use tokio::time::Instant;
@@ -1890,6 +1891,36 @@ impl AuthorityPerEpochStore {
     fn set_assigned_shared_object_versions(&self, versions: AssignedTxAndVersions) {
         self.consensus_output_cache
             .insert_shared_object_assignments(&versions);
+    }
+
+    // Accumulator update transactions always run sequentially, since they are constructed
+    // and execute synchronously by CheckpointBuilder. So we can assign the next version
+    // without separately tracking the version assignment state as with other shared objects.
+    pub(crate) fn assign_next_accumulator_version(
+        &self,
+        cache_reader: &dyn ObjectCacheRead,
+        transactions: &[TransactionDigest],
+    ) {
+        let cur_version = cache_reader
+            .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .expect("accumulator root object should exist")
+            .version();
+        let versions: AssignedTxAndVersions = transactions
+            .iter()
+            .map(|transaction| {
+                (
+                    TransactionKey::Digest(*transaction),
+                    vec![(
+                        (
+                            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                            SUI_ACCUMULATOR_ROOT_OBJECT_SHARED_VERSION,
+                        ),
+                        cur_version,
+                    )],
+                )
+            })
+            .collect();
+        self.set_assigned_shared_object_versions(versions);
     }
 
     /// Given list of certificates, assign versions for all shared objects used in them.
