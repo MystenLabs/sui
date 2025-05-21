@@ -86,14 +86,15 @@ impl Node {
 
 impl<Loc, Lbl: Ord> Edge<Loc, Lbl> {
     pub(crate) fn insert(&mut self, loc: Loc, regex: Regex<Lbl>) -> usize {
-        if !self.regexes.contains_key(&regex) {
-            let regex_size = regex.abstract_size();
-            self.regexes.insert(regex, loc);
-            self.abstract_size = self.abstract_size.saturating_add(regex_size);
-            regex_size
-        } else {
-            0
+        if self.regexes.contains_key(&regex) {
+            // already present, no change in size
+            return 0;
         }
+
+        let regex_size = regex.abstract_size();
+        self.regexes.insert(regex, loc);
+        self.abstract_size = self.abstract_size.saturating_add(regex_size);
+        regex_size
     }
 }
 
