@@ -598,6 +598,7 @@ impl AuthorityEpochTables {
         const MUTEXES: usize = 1024;
         let mut digest_prefix = vec![0; 8];
         digest_prefix[7] = 32;
+        let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
         let configs = vec![
             (
                 "signed_transactions".to_string(),
@@ -605,15 +606,15 @@ impl AuthorityEpochTables {
             ),
             (
                 "owned_object_locked_transactions".to_string(),
-                ThConfig::new(32 + 8 + 32 + 8, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new_with_config(32 + 8 + 32 + 8, MUTEXES, default_cells_per_mutex(), bloom_config.clone()),
             ),
             (
                 "effects_signatures".to_string(),
-                ThConfig::new_with_rm_prefix(32, MUTEXES, default_cells_per_mutex(), KeySpaceConfig::default(), digest_prefix.clone()),
+                ThConfig::new_with_rm_prefix(32, MUTEXES, default_cells_per_mutex(), bloom_config.clone(), digest_prefix.clone()),
             ),
             (
                 "signed_effects_digests".to_string(),
-                ThConfig::new_with_rm_prefix(32, MUTEXES, default_cells_per_mutex(), KeySpaceConfig::default(), digest_prefix.clone()),
+                ThConfig::new_with_rm_prefix(32, MUTEXES, default_cells_per_mutex(), bloom_config.clone(), digest_prefix.clone()),
             ),
             (
                 "transaction_cert_signatures".to_string(),
@@ -625,7 +626,7 @@ impl AuthorityEpochTables {
             ),
             (
                 "consensus_message_processed".to_string(),
-                ThConfig::new_with_config_indexing(KeyIndexing::Hash, MUTEXES, default_cells_per_mutex(), KeySpaceConfig::default()),
+                ThConfig::new_with_config_indexing(KeyIndexing::Hash, MUTEXES, default_cells_per_mutex(), bloom_config.clone()),
             ),
             (
                 "pending_consensus_transactions".to_string(),
@@ -645,7 +646,7 @@ impl AuthorityEpochTables {
             ),
             (
                 "builder_digest_to_checkpoint".to_string(),
-                ThConfig::new_with_rm_prefix(32, MUTEXES, default_cells_per_mutex(), KeySpaceConfig::default(), digest_prefix.clone()),
+                ThConfig::new_with_rm_prefix(32, MUTEXES, default_cells_per_mutex(), bloom_config.clone(), digest_prefix.clone()),
             ),
             (
                 "transaction_key_to_digest".to_string(),
@@ -681,7 +682,7 @@ impl AuthorityEpochTables {
             ),
             (
                 "executed_transactions_to_checkpoint".to_string(),
-                ThConfig::new_with_rm_prefix(32, MUTEXES, default_cells_per_mutex(), KeySpaceConfig::default(), digest_prefix.clone()),
+                ThConfig::new_with_rm_prefix(32, MUTEXES, default_cells_per_mutex(), bloom_config.clone(), digest_prefix.clone()),
             ),
             (
                 "pending_jwks".to_string(),
