@@ -9,8 +9,9 @@ use futures::TryFutureExt;
 use mysten_metrics::spawn_monitored_task;
 use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, Histogram, IntCounter, IntCounterVec, Registry,
+    register_gauge_with_registry, register_histogram_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry, Gauge, Histogram,
+    IntCounter, IntCounterVec, Registry,
 };
 use std::{
     io,
@@ -211,6 +212,7 @@ pub struct ValidatorServiceMetrics {
     forwarded_header_invalid: IntCounter,
     forwarded_header_not_included: IntCounter,
     client_id_source_config_mismatch: IntCounter,
+    x_forwarded_for_num_hops: Gauge,
 }
 
 impl ValidatorServiceMetrics {
@@ -366,6 +368,12 @@ impl ValidatorServiceMetrics {
             client_id_source_config_mismatch: register_int_counter_with_registry!(
                 "validator_service_client_id_source_config_mismatch",
                 "Number of times detected that client id source config doesn't agree with x-forwarded-for header",
+                registry,
+            )
+            .unwrap(),
+            x_forwarded_for_num_hops: register_gauge_with_registry!(
+                "validator_service_x_forwarded_for_num_hops",
+                "Number of hops in x-forwarded-for header",
                 registry,
             )
             .unwrap(),
@@ -1426,6 +1434,17 @@ impl ValidatorService {
         request: &tonic::Request<T>,
         source: &ClientIdSource,
     ) -> Option<IpAddr> {
+        let forwarded_header = request.metadata().get_all("x-forwarded-for").iter().next();
+
+        if let Some(header) = forwarded_header {
+            let num_hops = header
+                .to_str()
+                .map(|h| h.split(',').count().saturating_sub(1))
+                .unwrap_or(0);
+
+            self.metrics.x_forwarded_for_num_hops.set(num_hops as f64);
+        }
+
         match source {
             ClientIdSource::SocketAddr => {
                 let socket_addr: Option<SocketAddr> = request.remote_addr();
