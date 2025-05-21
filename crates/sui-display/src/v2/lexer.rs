@@ -4,7 +4,6 @@
 
 use std::fmt;
 
-use move_core_types::identifier::is_valid_identifier_char;
 
 /// Lexer for Display V2 format strings. Format strings are a mix of text and expressions.
 /// Expressions are enclosed in braces and may contain multiple alternates, separated by pipes, and
@@ -49,6 +48,11 @@ pub(crate) enum Token {
     LBracket,
     /// '{{'
     LLBrace,
+    /// A decimal number, optionally separated by underscores.
+    NumDec,
+    /// A hexadecimal number, prefixed with '0x' (not included in the span), optionally separated
+    /// by underscores.
+    NumHex,
     /// '|'
     Pipe,
     /// '}'
@@ -104,7 +108,7 @@ impl<'s> Lexer<'s> {
             // produce a better error message.
             b'}' => self.take(T::RBrace, 1),
 
-            _ => self.take_until(T::Text, |c| ['{', '}'].contains(&c)),
+            _ => self.take_until(T::Text, |b| b"{}".contains(&b)),
         })
     }
 
@@ -116,8 +120,17 @@ impl<'s> Lexer<'s> {
         Some(match bytes.first()? {
             b'.' => self.take(T::Dot, 1),
 
+            b'0' if bytes.get(1) == Some(&b'x')
+                && bytes.get(2).is_some_and(|b| is_valid_hex_byte(*b)) =>
+            {
+                self.take(T::NumHex, 2); // Drop the prefix
+                self.take_until(T::NumHex, |c| !is_valid_hex_byte(c))
+            }
+
+            b'0'..=b'9' => self.take_until(T::NumDec, |c| !is_valid_decimal_byte(c)),
+
             b'a'..=b'z' | b'A'..=b'Z' => {
-                self.take_until(T::Ident, |c| !is_valid_identifier_char(c))
+                self.take_until(T::Ident, |c| !is_valid_identifier_byte(c))
             }
 
             b'{' => self.take(T::LBrace, 1),
@@ -134,9 +147,12 @@ impl<'s> Lexer<'s> {
             b']' => self.take(T::RBracket, 1),
 
             // Explicitly tokenize whitespace.
-            _ if self.src.chars().next().is_some_and(|c| c.is_whitespace()) => {
-                self.take_until(Token::Whitespace, |c| !c.is_whitespace())
-            }
+            _ if self.src.chars().next().is_some_and(char::is_whitespace) => self.take(
+                Token::Whitespace,
+                self.src
+                    .find(|c: char| !c.is_whitespace())
+                    .unwrap_or(self.src.len()),
+            ),
 
             // If the next byte cannot be recognized, extract the next (potentially variable
             // length) character, and indicate that it is an unexpected token.
@@ -152,8 +168,8 @@ impl<'s> Lexer<'s> {
     /// Take a prefix of bytes from `self.src` until a byte satisfying pattern `p` is found, and
     /// return it as a lexeme of type `t`. If no such byte is found, take the entire remainder of
     /// the source string.
-    fn take_until(&mut self, t: Token, p: impl FnMut(char) -> bool) -> Lexeme<'s> {
-        self.take(t, self.src.find(p).unwrap_or(self.src.len()))
+    fn take_until(&mut self, t: Token, p: impl FnMut(u8) -> bool) -> Lexeme<'s> {
+        self.take(t, self.src.bytes().position(p).unwrap_or(self.src.len()))
     }
 
     /// Take `n` bytes from the beginning of `self.src` and return them as a lexeme of type `t`.
@@ -201,6 +217,8 @@ impl fmt::Display for OwnedLexeme {
             L(T::LBrace, _, _) => write!(f, "'{{'"),
             L(T::LBracket, _, _) => write!(f, "'['"),
             L(T::LLBrace, _, _) => write!(f, "'{{{{'"),
+            L(T::NumDec, _, s) => write!(f, "decimal number {s:?}"),
+            L(T::NumHex, _, s) => write!(f, "hexadecimal number {s:?}"),
             L(T::Pipe, _, _) => write!(f, "'|'"),
             L(T::RBrace, _, _) => write!(f, "'}}'"),
             L(T::RBracket, _, _) => write!(f, "']'"),
@@ -223,6 +241,8 @@ impl fmt::Display for Token {
             T::LBrace => write!(f, "'{{'"),
             T::LBracket => write!(f, "'['"),
             T::LLBrace => write!(f, "'{{{{'"),
+            T::NumDec => write!(f, "a decimal number"),
+            T::NumHex => write!(f, "a hexadecimal number"),
             T::Pipe => write!(f, "'|'"),
             T::RBrace => write!(f, "'}}'"),
             T::RBracket => write!(f, "']'"),
@@ -259,6 +279,18 @@ impl fmt::Display for TokenSet<'_> {
         write!(f, ", or {tail}")?;
         Ok(())
     }
+}
+
+fn is_valid_identifier_byte(b: u8) -> bool {
+    matches!(b, b'_' | b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9')
+}
+
+fn is_valid_hex_byte(b: u8) -> bool {
+    matches!(b, b'_' | b'a'..=b'f' | b'A'..=b'F' | b'0'..=b'9')
+}
+
+fn is_valid_decimal_byte(b: u8) -> bool {
+    matches!(b, b'_' | b'0'..=b'9')
 }
 
 #[cfg(test)]
@@ -499,6 +531,64 @@ mod tests {
                 L(T::Ident, 25, "quz"),
                 L(T::RBracket, 28, "]"),
                 L(T::RBrace, 29, "}"),
+            ],
+        );
+    }
+
+    /// Numbers can be represented in decimal or hexadecimal (prefixed with 0x).
+    #[test]
+    fn test_numeric_literals() {
+        let lexer = Lexer::new(r#"{123 0x123 def 0xdef}"#);
+        let lexemes: Vec<_> = lexer.collect();
+        assert_eq!(
+            lexemes,
+            vec![
+                L(T::LBrace, 0, "{"),
+                L(T::NumDec, 1, "123"),
+                L(T::Whitespace, 4, " "),
+                L(T::NumHex, 7, "123"),
+                L(T::Whitespace, 10, " "),
+                L(T::Ident, 11, "def"),
+                L(T::Whitespace, 14, " "),
+                L(T::NumHex, 17, "def"),
+                L(T::RBrace, 20, "}"),
+            ],
+        );
+    }
+
+    /// Numbers can optionally be grouped using underscores. Underscores cannot be trailing, but
+    /// otherwise can appear in every position
+    #[test]
+    fn test_numeric_literal_underscores() {
+        let lexer = Lexer::new(r#"{123_456 0x12_ab_de _123}"#);
+        let lexemes: Vec<_> = lexer.collect();
+        assert_eq!(
+            lexemes,
+            vec![
+                L(T::LBrace, 0, "{"),
+                L(T::NumDec, 1, "123_456"),
+                L(T::Whitespace, 8, " "),
+                L(T::NumHex, 11, "12_ab_de"),
+                L(T::Whitespace, 19, " "),
+                L(T::Unexpected, 20, "_"),
+                L(T::NumDec, 21, "123"),
+                L(T::RBrace, 24, "}"),
+            ],
+        );
+    }
+
+    /// If the hexadecimal token is incomplete, it is not recognised as a number.
+    #[test]
+    fn test_incomplete_hexadecimal() {
+        let lexer = Lexer::new(r#"{0x}"#);
+        let lexemes: Vec<_> = lexer.collect();
+        assert_eq!(
+            lexemes,
+            vec![
+                L(T::LBrace, 0, "{"),
+                L(T::NumDec, 1, "0"),
+                L(T::Ident, 2, "x"),
+                L(T::RBrace, 3, "}"),
             ],
         );
     }
