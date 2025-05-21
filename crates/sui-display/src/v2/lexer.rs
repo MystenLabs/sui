@@ -67,6 +67,8 @@ pub(crate) enum Token {
     NumHex,
     /// '|'
     Pipe,
+    /// '#'
+    Pound,
     /// '>'
     RAngle,
     /// '}'
@@ -167,6 +169,8 @@ impl<'s> Lexer<'s> {
 
             b'|' => self.take(T::Pipe, 1),
 
+            b'#' => self.take(T::Pound, 1),
+
             b'>' => self.take(T::RAngle, 1),
 
             b'}' => {
@@ -258,6 +262,7 @@ impl fmt::Display for OwnedLexeme {
             L(T::NumDec, _, s) => write!(f, "decimal number {s:?}"),
             L(T::NumHex, _, s) => write!(f, "hexadecimal number {s:?}"),
             L(T::Pipe, _, _) => write!(f, "'|'"),
+            L(T::Pound, _, _) => write!(f, "'#'"),
             L(T::RAngle, _, _) => write!(f, "'>'"),
             L(T::RBrace, _, _) => write!(f, "'}}'"),
             L(T::RBracket, _, _) => write!(f, "']'"),
@@ -290,6 +295,7 @@ impl fmt::Display for Token {
             T::NumDec => write!(f, "a decimal number"),
             T::NumHex => write!(f, "a hexadecimal number"),
             T::Pipe => write!(f, "'|'"),
+            T::Pound => write!(f, "'#'"),
             T::RAngle => write!(f, "'>'"),
             T::RBrace => write!(f, "'}}'"),
             T::RBracket => write!(f, "']'"),
@@ -474,7 +480,7 @@ mod tests {
     /// Unexpected characters are tokenized so that the parser can produce an error.
     #[test]
     fn test_unexpected_characters() {
-        let lexer = Lexer::new(r#"anything goes {? # ! 🔥}"#);
+        let lexer = Lexer::new(r#"anything goes {? % ! 🔥}"#);
         let lexemes: Vec<_> = lexer.collect();
         assert_eq!(
             lexemes,
@@ -483,7 +489,7 @@ mod tests {
                 L(T::LBrace, 14, "{"),
                 L(T::Unexpected, 15, "?"),
                 L(T::Whitespace, 16, " "),
-                L(T::Unexpected, 17, "#"),
+                L(T::Unexpected, 17, "%"),
                 L(T::Whitespace, 18, " "),
                 L(T::Unexpected, 19, "!"),
                 L(T::Whitespace, 20, " "),
@@ -804,6 +810,52 @@ mod tests {
                 L(T::Whitespace, 58, " "),
                 L(T::RBrace, 59, "}"),
                 L(T::RBrace, 60, "}"),
+            ],
+        );
+    }
+
+    /// Enums are like structs but with an additional variant component. The variant must at least
+    /// specify the variant index, and can optionally specify a variant name, which is only
+    /// relevant for documentation purposes (it does not affect the encoding).
+    #[test]
+    fn test_enum_literals() {
+        let lexer =
+            Lexer::new(r#"{0x2::option::Option<u64>::1(42) 0x2::option::Option<u64>::Some#1(43)}"#);
+        let lexemes: Vec<_> = lexer.collect();
+        assert_eq!(
+            lexemes,
+            vec![
+                L(T::LBrace, 0, "{"),
+                L(T::NumHex, 3, "2"),
+                L(T::CColon, 4, "::"),
+                L(T::Ident, 6, "option"),
+                L(T::CColon, 12, "::"),
+                L(T::Ident, 14, "Option"),
+                L(T::LAngle, 20, "<"),
+                L(T::Ident, 21, "u64"),
+                L(T::RAngle, 24, ">"),
+                L(T::CColon, 25, "::"),
+                L(T::NumDec, 27, "1"),
+                L(T::LParen, 28, "("),
+                L(T::NumDec, 29, "42"),
+                L(T::RParen, 31, ")"),
+                L(T::Whitespace, 32, " "),
+                L(T::NumHex, 35, "2"),
+                L(T::CColon, 36, "::"),
+                L(T::Ident, 38, "option"),
+                L(T::CColon, 44, "::"),
+                L(T::Ident, 46, "Option"),
+                L(T::LAngle, 52, "<"),
+                L(T::Ident, 53, "u64"),
+                L(T::RAngle, 56, ">"),
+                L(T::CColon, 57, "::"),
+                L(T::Ident, 59, "Some"),
+                L(T::Pound, 63, "#"),
+                L(T::NumDec, 64, "1"),
+                L(T::LParen, 65, "("),
+                L(T::NumDec, 66, "43"),
+                L(T::RParen, 68, ")"),
+                L(T::RBrace, 69, "}"),
             ],
         );
     }
