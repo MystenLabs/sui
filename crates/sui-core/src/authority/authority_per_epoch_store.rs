@@ -641,7 +641,7 @@ impl AuthorityEpochTables {
             ),
             (
                 "end_of_publish".to_string(),
-                ThConfig::new(96, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(104, MUTEXES, default_cells_per_mutex()),
             ),
             (
                 "builder_digest_to_checkpoint".to_string(),
@@ -669,11 +669,11 @@ impl AuthorityEpochTables {
             ),
             (
                 "authority_capabilities".to_string(),
-                ThConfig::new(96, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(104, MUTEXES, default_cells_per_mutex()),
             ),
             (
                 "authority_capabilities_v2".to_string(),
-                ThConfig::new(96, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(104, MUTEXES, default_cells_per_mutex()),
             ),
             (
                 "override_protocol_upgrade_buffer_stake".to_string(),
