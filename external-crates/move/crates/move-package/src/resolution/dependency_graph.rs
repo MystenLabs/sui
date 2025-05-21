@@ -3,8 +3,10 @@
 
 use anyhow::{Context, Result, bail};
 use colored::Colorize;
+use itertools::Either;
 use move_symbol_pool::Symbol;
 use petgraph::{Direction, algo, prelude::DiGraphMap, visit::Dfs};
+use serde::de;
 
 use std::io::BufRead;
 use std::{
@@ -661,78 +663,6 @@ impl DependencyGraph {
         Ok(())
     }
 
-    /// Finds packages in a sub-graph that should be pruned as a result of applying an override from
-    /// the outer graph. A package should be pruned if it's dominated by an overridden package.
-    fn find_pruned_pkgs(
-        &self,
-        pruned_pkgs: &mut BTreeSet<PM::PackageName>,
-        reachable_pkgs: &mut BTreeSet<PM::PackageName>,
-        root_pkg_name: PM::PackageName,
-        from_pkg_id: PackageIdentifier,
-        from_pkg_name: PM::PackageName,
-        mode: DependencyMode,
-        overrides: &BTreeMap<PM::PackageName, Package>,
-        dev_overrides: &BTreeMap<PM::PackageName, Package>,
-        overridden_path: bool,
-    ) -> Result<()> {
-        if overridden_path {
-            // we are on a path originating at the overridden package
-            if !reachable_pkgs.contains(&from_pkg_id) {
-                // not (yet) reached via regular (non-overridden) path
-                pruned_pkgs.insert(from_pkg_id);
-            }
-        }
-        let mut override_found = overridden_path;
-
-        if !override_found {
-            override_found = self
-                .get_dep_override(
-                    root_pkg_name,
-                    from_pkg_id,
-                    from_pkg_name,
-                    overrides,
-                    dev_overrides,
-                    mode == DependencyMode::DevOnly,
-                )?
-                .is_some();
-
-            if override_found {
-                // we also prune overridden package - we can do this safely as the outgoing edges
-                // from other package graph nodes to the overridden package will be preserved (see
-                // the nested_pruned_override test for additional explanation how nodes are removed
-                // from the package graph)
-                pruned_pkgs.insert(from_pkg_id);
-            } else {
-                // we are on a regular path, not involving an override (overridden_path == false)
-                // and we did not find an override
-                reachable_pkgs.insert(from_pkg_id);
-            }
-        }
-
-        for to_pkg_id in self
-            .package_graph
-            .neighbors_directed(from_pkg_id, Direction::Outgoing)
-        {
-            let dep = self
-                .package_graph
-                .edge_weight(from_pkg_id, to_pkg_id)
-                .unwrap();
-            let to_pkg_name = dep.dep_name;
-            self.find_pruned_pkgs(
-                pruned_pkgs,
-                reachable_pkgs,
-                root_pkg_name,
-                to_pkg_id,
-                to_pkg_name,
-                mode,
-                overrides,
-                dev_overrides,
-                override_found,
-            )?;
-        }
-        Ok(())
-    }
-
     /// Prunes packages in a sub-graph based on the overrides information from the outer graph.
     fn prune_overriden_pkgs(
         &mut self,
@@ -741,30 +671,38 @@ impl DependencyGraph {
         overrides: &BTreeMap<PackageIdentifier, Package>,
         dev_overrides: &BTreeMap<PackageIdentifier, Package>,
     ) -> Result<()> {
-        let from_pkg_id = self.root_package_id;
-        let from_pkg_name = self.root_package_name;
-        let mut pruned_pkgs = BTreeSet::new();
-        let mut reachable_pkgs = BTreeSet::new();
-        self.find_pruned_pkgs(
-            &mut pruned_pkgs,
-            &mut reachable_pkgs,
-            root_pkg_name,
-            from_pkg_id,
-            from_pkg_name,
-            mode,
-            overrides,
-            dev_overrides,
-            false,
-        )?;
-
-        // if there was a package candidate for pruning, it should be removed from the list if it
-        // can be reached via a regular path
-        pruned_pkgs.retain(|p| !reachable_pkgs.contains(p));
-        for pkg in pruned_pkgs {
+        let root_package_id = self.root_package_id;
+        let mut edge_graph = DiGraphMap::<Symbol, ()>::new();
+        for (s, t, dep) in self.package_graph.all_edges() {
+            if dep.mode <= mode {
+                edge_graph.add_edge(s, t, ());
+            }
+        }
+        let overrides = || match mode {
+            DependencyMode::Always => Either::Left(overrides.keys()),
+            DependencyMode::DevOnly => Either::Right(overrides.keys().chain(dev_overrides.keys())),
+        };
+        for &overridden in overrides() {
+            edge_graph.remove_node(overridden);
+        }
+        let reachable = {
+            let mut s = BTreeSet::new();
+            let mut dfs = Dfs::new(&edge_graph, root_package_id);
+            while let Some(node) = dfs.next(&edge_graph) {
+                s.insert(node);
+            }
+            s
+        };
+        debug_assert!(reachable.contains(&root_package_id));
+        let pruned = self
+            .package_graph
+            .nodes()
+            .filter(|n| !reachable.contains(n))
+            .collect::<BTreeSet<_>>();
+        for pkg in pruned {
             self.package_graph.remove_node(pkg);
             self.package_table.remove(&pkg);
         }
-
         Ok(())
     }
 
@@ -1068,7 +1006,7 @@ impl DependencyGraph {
     ) -> Result<Option<&'a Package>> {
         // for "regular" dependencies override can come only from "regular" dependencies section,
         // but for "dev" dependencies override can come from "regular" or "dev" dependencies section
-        if let Some(pkg) = overrides.get(&pkg_id) {
+        Ok(if let Some(pkg) = overrides.get(&pkg_id) {
             // "regular" dependencies section case
             if let Some(dev_pkg) = dev_overrides.get(&pkg_id) {
                 bail!(
@@ -1079,12 +1017,13 @@ impl DependencyGraph {
                     PackageWithResolverTOML(dev_pkg),
                 );
             }
-            return Ok(Some(pkg));
+            Some(pkg)
         } else if let Some(dev_pkg) = dev_overrides.get(&pkg_id) {
             // "dev" dependencies section case
-            return Ok(dev_only.then_some(dev_pkg));
-        }
-        Ok(None)
+            dev_only.then_some(dev_pkg)
+        } else {
+            None
+        })
     }
 
     /// Helper function to remove an override for a package with a given name for "regular"
@@ -1413,7 +1352,7 @@ impl DependencyGraph {
     /// Returns packages in the graph in topological order (a package is ordered before its
     /// dependencies).
     ///
-    /// The ordering is agnostic to dependency mode (dev-mode or not) and contains all packagesd
+    /// The ordering is agnostic to dependency mode (dev-mode or not) and contains all packages
     /// (including packages that are exclusively dev-mode-only).
     ///
     /// Guaranteed to succeed because `DependencyGraph` instances cannot contain cycles.
