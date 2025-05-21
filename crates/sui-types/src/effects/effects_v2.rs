@@ -290,7 +290,10 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                 ) {
                     (
                         ObjectIn::Exist((_, Owner::AddressOwner(_) | Owner::ObjectOwner(_))),
-                        ObjectOut::ObjectWrite((object_digest, Owner::ConsensusAddressOwner { .. })),
+                        ObjectOut::ObjectWrite((
+                            object_digest,
+                            Owner::ConsensusAddressOwner { .. },
+                        )),
                         IDOperation::None,
                     ) => Some((*id, self.lamport_version, *object_digest)),
                     _ => None,

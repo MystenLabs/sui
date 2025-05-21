@@ -608,10 +608,12 @@ impl TemporaryStore<'_> {
                         // it would already have been in authenticated_for_mutation
                         ObjectID::from(*parent)
                     }
-                    owner @ Owner::Shared { .. } | owner @ Owner::ConsensusAddressOwner { .. } => panic!(
-                        "Unauthenticated root at {to_authenticate:?} with owner {owner:?}\n\
+                    owner @ Owner::Shared { .. } | owner @ Owner::ConsensusAddressOwner { .. } => {
+                        panic!(
+                            "Unauthenticated root at {to_authenticate:?} with owner {owner:?}\n\
                         Potentially covering objects in: {authenticated_for_mutation:#?}",
-                    ),
+                        )
+                    }
                     Owner::Immutable => {
                         assert!(
                             is_epoch_change,

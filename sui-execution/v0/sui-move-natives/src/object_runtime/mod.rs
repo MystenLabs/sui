@@ -510,7 +510,9 @@ impl ObjectRuntimeState {
                 Owner::AddressOwner(_) | Owner::Shared { .. } | Owner::Immutable => None,
                 Owner::ObjectOwner(parent) => Some((*id, (*parent).into())),
                 Owner::ConsensusAddressOwner { .. } => {
-                    unimplemented!("ConsensusAddressOwner does not exist for this execution version")
+                    unimplemented!(
+                        "ConsensusAddressOwner does not exist for this execution version"
+                    )
                 }
             })
             .collect();

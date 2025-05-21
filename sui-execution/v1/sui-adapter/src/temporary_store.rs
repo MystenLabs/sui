@@ -657,7 +657,9 @@ impl TemporaryStore<'_> {
                     unreachable!("Input objects must be address owned, shared, or immutable")
                 }
                 Owner::ConsensusAddressOwner { .. } => {
-                    unimplemented!("ConsensusAddressOwner does not exist for this execution version")
+                    unimplemented!(
+                        "ConsensusAddressOwner does not exist for this execution version"
+                    )
                 }
             }
         }
@@ -688,7 +690,9 @@ impl TemporaryStore<'_> {
                     );
                 }
                 Owner::ConsensusAddressOwner { .. } => {
-                    unimplemented!("ConsensusAddressOwner does not exist for this execution version")
+                    unimplemented!(
+                        "ConsensusAddressOwner does not exist for this execution version"
+                    )
                 }
             }
         }
