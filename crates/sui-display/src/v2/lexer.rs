@@ -38,10 +38,16 @@ pub(crate) struct OwnedLexeme(Token, usize, String);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Token {
+    /// '::'
+    CColon,
+    /// ','
+    Comma,
     /// '.'
     Dot,
     /// An identifier
     Ident,
+    /// '<'
+    LAngle,
     /// '{'
     LBrace,
     /// '['
@@ -55,6 +61,8 @@ pub(crate) enum Token {
     NumHex,
     /// '|'
     Pipe,
+    /// '>'
+    RAngle,
     /// '}'
     RBrace,
     /// ']'
@@ -118,6 +126,10 @@ impl<'s> Lexer<'s> {
 
         use Token as T;
         Some(match bytes.first()? {
+            b':' if bytes.get(1) == Some(&b':') => self.take(T::CColon, 2),
+
+            b',' => self.take(T::Comma, 1),
+
             b'.' => self.take(T::Dot, 1),
 
             b'0' if bytes.get(1) == Some(&b'x')
@@ -133,11 +145,15 @@ impl<'s> Lexer<'s> {
                 self.take_until(T::Ident, |c| !is_valid_identifier_byte(c))
             }
 
+            b'<' => self.take(T::LAngle, 1),
+
             b'{' => self.take(T::LBrace, 1),
 
             b'[' => self.take(T::LBracket, 1),
 
             b'|' => self.take(T::Pipe, 1),
+
+            b'>' => self.take(T::RAngle, 1),
 
             b'}' => {
                 self.mode = Mode::Text;
@@ -212,14 +228,18 @@ impl fmt::Display for OwnedLexeme {
         use OwnedLexeme as L;
         use Token as T;
         match self {
+            L(T::CColon, _, _) => write!(f, "'::'"),
+            L(T::Comma, _, _) => write!(f, "','"),
             L(T::Dot, _, _) => write!(f, "'.'"),
             L(T::Ident, _, s) => write!(f, "identifier {s:?}"),
+            L(T::LAngle, _, _) => write!(f, "'<'"),
             L(T::LBrace, _, _) => write!(f, "'{{'"),
             L(T::LBracket, _, _) => write!(f, "'['"),
             L(T::LLBrace, _, _) => write!(f, "'{{{{'"),
             L(T::NumDec, _, s) => write!(f, "decimal number {s:?}"),
             L(T::NumHex, _, s) => write!(f, "hexadecimal number {s:?}"),
             L(T::Pipe, _, _) => write!(f, "'|'"),
+            L(T::RAngle, _, _) => write!(f, "'>'"),
             L(T::RBrace, _, _) => write!(f, "'}}'"),
             L(T::RBracket, _, _) => write!(f, "']'"),
             L(T::RRBrace, _, _) => write!(f, "'}}}}'"),
@@ -236,14 +256,18 @@ impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Token as T;
         match self {
+            T::CColon => write!(f, "'::'"),
+            T::Comma => write!(f, "','"),
             T::Dot => write!(f, "'.'"),
             T::Ident => write!(f, "an identifier"),
+            T::LAngle => write!(f, "'<'"),
             T::LBrace => write!(f, "'{{'"),
             T::LBracket => write!(f, "'['"),
             T::LLBrace => write!(f, "'{{{{'"),
             T::NumDec => write!(f, "a decimal number"),
             T::NumHex => write!(f, "a hexadecimal number"),
             T::Pipe => write!(f, "'|'"),
+            T::RAngle => write!(f, "'>'"),
             T::RBrace => write!(f, "'}}'"),
             T::RBracket => write!(f, "']'"),
             T::RRBrace => write!(f, "'}}}}'"),
@@ -589,6 +613,78 @@ mod tests {
                 L(T::NumDec, 1, "0"),
                 L(T::Ident, 2, "x"),
                 L(T::RBrace, 3, "}"),
+            ],
+        );
+    }
+
+    /// Vector literals are always prefixed by the 'vector' keyword. Empty vectors must specify a
+    /// type parameter (which is optional for non-empty vectors).
+    #[test]
+    fn test_vector_literals() {
+        let lexer = Lexer::new(r#"{vector[1, 2, 3] vector<u32> vector[4u64]}"#);
+        let lexemes: Vec<_> = lexer.collect();
+        assert_eq!(
+            lexemes,
+            vec![
+                L(T::LBrace, 0, "{"),
+                L(T::Ident, 1, "vector"),
+                L(T::LBracket, 7, "["),
+                L(T::NumDec, 8, "1"),
+                L(T::Comma, 9, ","),
+                L(T::Whitespace, 10, " "),
+                L(T::NumDec, 11, "2"),
+                L(T::Comma, 12, ","),
+                L(T::Whitespace, 13, " "),
+                L(T::NumDec, 14, "3"),
+                L(T::RBracket, 15, "]"),
+                L(T::Whitespace, 16, " "),
+                L(T::Ident, 17, "vector"),
+                L(T::LAngle, 23, "<"),
+                L(T::Ident, 24, "u32"),
+                L(T::RAngle, 27, ">"),
+                L(T::Whitespace, 28, " "),
+                L(T::Ident, 29, "vector"),
+                L(T::LBracket, 35, "["),
+                L(T::NumDec, 36, "4"),
+                L(T::Ident, 37, "u64"),
+                L(T::RBracket, 40, "]"),
+                L(T::RBrace, 41, "}"),
+            ],
+        );
+    }
+
+    /// Struct types are fully-qualified, with a numerical (hexadecimal) address.
+    #[test]
+    fn test_types() {
+        let lexer = Lexer::new(r#"{0x2::table::Table<address, 0x2::coin::Coin<0x2::sui::SUI>>}"#);
+        let lexemes: Vec<_> = lexer.collect();
+        assert_eq!(
+            lexemes,
+            vec![
+                L(T::LBrace, 0, "{"),
+                L(T::NumHex, 3, "2"),
+                L(T::CColon, 4, "::"),
+                L(T::Ident, 6, "table"),
+                L(T::CColon, 11, "::"),
+                L(T::Ident, 13, "Table"),
+                L(T::LAngle, 18, "<"),
+                L(T::Ident, 19, "address"),
+                L(T::Comma, 26, ","),
+                L(T::Whitespace, 27, " "),
+                L(T::NumHex, 30, "2"),
+                L(T::CColon, 31, "::"),
+                L(T::Ident, 33, "coin"),
+                L(T::CColon, 37, "::"),
+                L(T::Ident, 39, "Coin"),
+                L(T::LAngle, 43, "<"),
+                L(T::NumHex, 46, "2"),
+                L(T::CColon, 47, "::"),
+                L(T::Ident, 49, "sui"),
+                L(T::CColon, 52, "::"),
+                L(T::Ident, 54, "SUI"),
+                L(T::RAngle, 57, ">"),
+                L(T::RAngle, 58, ">"),
+                L(T::RBrace, 59, "}"),
             ],
         );
     }
