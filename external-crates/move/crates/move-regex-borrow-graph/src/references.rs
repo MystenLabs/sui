@@ -189,7 +189,7 @@ impl Ref {
 }
 
 impl<Loc, Lbl: Ord> Edge<Loc, Lbl> {
-    pub(crate) fn check_invariant(&self) {
+    pub(crate) fn check_invariants(&self) {
         #[cfg(debug_assertions)]
         {
             let mut calculated_size = 0;

@@ -85,7 +85,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
             ensure!(!map.contains_key(&k), "key {:?} already exists", k);
             map.insert(k, r);
         }
-        graph.check_invariant();
+        graph.check_invariants();
         Ok((graph, map))
     }
 
@@ -105,6 +105,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
             .ok_or_else(|| error!("missing ref {:?}", r))
     }
 
+    /// Returns the direct successors of the specified reference
     fn successors(&self, r: Ref) -> Result<impl Iterator<Item = (&Edge<Loc, Lbl>, Ref)> + '_> {
         ensure!(self.graph.contains_node(r), "missing ref {:?} in graph", r);
         Ok(self
@@ -116,6 +117,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
             }))
     }
 
+    /// Returns the direct predecessors of the specified reference
     fn predecessors(&self, r: Ref) -> Result<impl Iterator<Item = (Ref, &Edge<Loc, Lbl>)> + '_> {
         ensure!(self.graph.contains_node(r), "missing ref {:?} in graph", r);
         Ok(self
@@ -128,7 +130,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
     }
 
     fn add_ref(&mut self, loc: Loc, is_mut: bool) -> Result<Ref> {
-        self.check_invariant();
+        self.check_invariants();
         let id = self.fresh_id;
         self.fresh_id += 1;
         let r = Ref::fresh(id);
@@ -144,7 +146,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         let prev = self.nodes.insert(r, node);
         ensure!(prev.is_none(), "ref {:?} already exists", r);
         self.abstract_size = self.abstract_size.saturating_add(node_size);
-        self.check_invariant();
+        self.check_invariants();
         Ok(r)
     }
 
@@ -259,7 +261,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         new_ref: Ref,
         exclude: &BTreeSet<Ref>,
     ) -> Result<Ref> {
-        self.check_invariant();
+        self.check_invariants();
         let mut edges_to_add = vec![];
         for x in sources {
             debug_assert!(!exclude.contains(&x));
@@ -269,7 +271,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
             debug_assert!(p == new_ref || s == new_ref);
             self.add_edge(p, loc, r, s)?;
         }
-        self.check_invariant();
+        self.check_invariants();
         Ok(new_ref)
     }
 
@@ -309,33 +311,26 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         Ok(())
     }
 
-    fn add_edge(
-        &mut self,
-        predecessor: Ref,
-        loc: Loc,
-        regex: Regex<Lbl>,
-        successor: Ref,
-    ) -> Result<()> {
-        if predecessor == successor {
+    fn add_edge(&mut self, source: Ref, loc: Loc, regex: Regex<Lbl>, target: Ref) -> Result<()> {
+        if source == target {
             ensure!(
                 regex.is_epsilon(),
                 "self edge must be epsilon {:?} --{}--> {:?}",
-                predecessor,
+                source,
                 regex,
-                successor
+                target
             );
-            self.check_self_epsilon_invariant(predecessor);
+            self.check_self_epsilon_invariant(source);
             return Ok(());
         }
-        if !self.graph.contains_edge(predecessor, successor) {
-            self.graph.add_edge(predecessor, successor, Edge::new());
+        if !self.graph.contains_edge(source, target) {
+            self.graph.add_edge(source, target, Edge::new());
         }
-        let edge_mut = self.graph.edge_weight_mut(predecessor, successor).unwrap();
+        let edge_mut = self.graph.edge_weight_mut(source, target).unwrap();
         let size_increase = edge_mut.insert(loc, regex);
         self.abstract_size = self.abstract_size.saturating_add(size_increase);
-        let predecessor_node = self.node_mut(&predecessor)?;
-        predecessor_node.abstract_size =
-            predecessor_node.abstract_size.saturating_add(size_increase);
+        let source_node = self.node_mut(&source)?;
+        source_node.abstract_size = source_node.abstract_size.saturating_add(size_increase);
         Ok(())
     }
 
@@ -352,7 +347,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
     //**********************************************************************************************
 
     pub fn release(&mut self, r: Ref) -> Result<()> {
-        self.check_invariant();
+        self.check_invariants();
         let Some(rnode) = self.nodes.remove(&r) else {
             bail!("missing ref {:?}", r)
         };
@@ -367,7 +362,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
             }
         }
         self.graph.remove_node(r);
-        self.check_invariant();
+        self.check_invariants();
         Ok(())
     }
 
@@ -382,7 +377,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
     // Query API
     //**********************************************************************************************
 
-    // returns successors
+    /// Returns the references that extend the specified reference and the path(s) for the extension
     pub fn borrowed_by(&self, r: Ref) -> Result<BTreeMap<Ref, Paths<Loc, Lbl>>> {
         let mut paths = BTreeMap::new();
         for (edge, s) in self.successors(r)? {
@@ -396,7 +391,8 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         Ok(paths)
     }
 
-    // returns predecessors
+    /// Returns the references that are extended by the specified reference and the path(s) for the
+    /// extension
     pub fn borrows_from(&self, r: Ref) -> Result<BTreeMap<Ref, Paths<Loc, Lbl>>> {
         let mut paths = BTreeMap::new();
         for (p, edge) in self.predecessors(r)? {
@@ -434,10 +430,11 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
             size_increase = size_increase.saturating_add(edge_size_increase);
         }
         self.abstract_size = self.abstract_size.saturating_add(size_increase);
-        self.check_invariant();
+        self.check_invariants();
         Ok(size_increase > 0)
     }
 
+    /// Refresh all references (making them no longer canonical)
     pub fn refresh_refs(&mut self) -> Result<()> {
         let nodes = std::mem::take(&mut self.nodes);
         let (ncap, ecap) = self.graph.capacity();
@@ -461,6 +458,8 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         Ok(())
     }
 
+    /// Canonicalize all references according to the remapping. This allows graphs to have the same
+    /// set of references before being joined.
     pub fn canonicalize(&mut self, remapping: &BTreeMap<Ref, usize>) -> Result<()> {
         let nodes = std::mem::take(&mut self.nodes);
         let (ncap, ecap) = self.graph.capacity();
@@ -480,10 +479,12 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         Ok(())
     }
 
+    /// Are all references canonical?
     pub fn is_canonical(&self) -> bool {
         self.nodes.keys().all(|r| r.is_canonical())
     }
 
+    /// Are all references fresh?
     pub fn is_fresh(&self) -> bool {
         self.nodes.keys().all(|r| r.is_fresh())
     }
@@ -499,8 +500,8 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
     fn check_join_invariants(&self, other: &Self) {
         #[cfg(debug_assertions)]
         {
-            self.check_invariant();
-            other.check_invariant();
+            self.check_invariants();
+            other.check_invariants();
             for self_r in self.keys() {
                 debug_assert!(self_r.is_canonical());
                 debug_assert!(other.nodes.contains_key(&self_r));
@@ -521,7 +522,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
     // - all nodes are present in map and graph
     // - all nodes have a self epsilon
     // - the abstract size is correct
-    pub fn check_invariant(&self) {
+    pub fn check_invariants(&self) {
         #[cfg(debug_assertions)]
         {
             let mut is_canonical_opt = None;
@@ -541,7 +542,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
                 let mut node_size = 1;
                 for (edge, s) in self.successors(r).unwrap() {
                     debug_assert!(self.graph.contains_edge(r, s));
-                    edge.check_invariant();
+                    edge.check_invariants();
                     node_size += edge.abstract_size();
                 }
                 assert_eq!(node.abstract_size, node_size);
