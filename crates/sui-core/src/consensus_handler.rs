@@ -1267,25 +1267,26 @@ impl ConsensusBlockHandler {
             .collect::<Vec<_>>();
         let mut pending_consensus_transactions = vec![];
         let mut executable_transactions = vec![];
-        for (block, transactions) in parsed_transactions {
-            for (idx, parsed) in transactions.into_iter().enumerate() {
-                let position = ConsensusTxPosition {
-                    block,
-                    index: idx as TransactionIndex,
-                };
+        for (_block, transactions) in parsed_transactions {
+            for parsed in transactions {
+                // TODO(fastpath): enable set_consensus_tx_status() after post-commit finalization is implemented.
+                // let position = ConsensusTxPosition {
+                //     block,
+                //     index: idx as TransactionIndex,
+                // };
                 if parsed.rejected {
-                    // TODO(fastpath): unlock rejected transactions.
-                    // TODO(fastpath): maybe avoid parsing blocks twice between commit and transaction handling?
-                    self.epoch_store
-                        .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
-                    self.metrics
-                        .consensus_block_handler_txn_processed
-                        .with_label_values(&["rejected"])
-                        .inc();
+                    //     // TODO(fastpath): unlock rejected transactions.
+                    //     // TODO(fastpath): maybe avoid parsing blocks twice between commit and transaction handling?
+                    //     self.epoch_store
+                    //         .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
+                    //     self.metrics
+                    //         .consensus_block_handler_txn_processed
+                    //         .with_label_values(&["rejected"])
+                    //         .inc();
                     continue;
                 }
-                self.epoch_store
-                    .set_consensus_tx_status(position, ConsensusTxStatus::FastpathCertified);
+                // self.epoch_store
+                //     .set_consensus_tx_status(position, ConsensusTxStatus::FastpathCertified);
 
                 self.metrics
                     .consensus_block_handler_txn_processed
