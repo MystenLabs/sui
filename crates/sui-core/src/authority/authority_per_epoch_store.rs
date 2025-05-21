@@ -605,7 +605,7 @@ impl AuthorityEpochTables {
             ),
             (
                 "owned_object_locked_transactions".to_string(),
-                ThConfig::new(32 + 8 + 32, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(32 + 8 + 32 + 8, MUTEXES, default_cells_per_mutex()),
             ),
             (
                 "effects_signatures".to_string(),
