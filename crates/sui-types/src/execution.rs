@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    accumulator_event::AccumulatorEvent,
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     digests::{ObjectDigest, TransactionDigest},
     event::Event,
@@ -79,6 +80,8 @@ pub struct ExecutionResultsV2 {
     pub deleted_object_ids: BTreeSet<ObjectID>,
     /// All Move events emitted in this transaction.
     pub user_events: Vec<Event>,
+    /// All accumulator events emitted in this transaction.
+    pub accumulator_events: Vec<AccumulatorEvent>,
 }
 
 pub type ExecutionResult = (
@@ -93,6 +96,7 @@ impl ExecutionResultsV2 {
         self.created_object_ids.clear();
         self.deleted_object_ids.clear();
         self.user_events.clear();
+        self.accumulator_events.clear();
     }
 
     pub fn merge_results(&mut self, new_results: Self) {
@@ -103,6 +107,8 @@ impl ExecutionResultsV2 {
         self.deleted_object_ids
             .extend(new_results.deleted_object_ids);
         self.user_events.extend(new_results.user_events);
+        self.accumulator_events
+            .extend(new_results.accumulator_events);
     }
 
     pub fn update_version_and_previous_tx(

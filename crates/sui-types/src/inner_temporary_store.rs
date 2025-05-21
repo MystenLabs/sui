@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::accumulator_event::AccumulatorEvent;
 use crate::base_types::{FullObjectID, SequenceNumber, VersionDigest};
 use crate::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use crate::error::SuiResult;
@@ -31,6 +32,7 @@ pub struct InnerTemporaryStore {
     pub written: WrittenObjects,
     pub loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     pub events: TransactionEvents,
+    pub accumulator_events: Vec<AccumulatorEvent>,
     pub binary_config: BinaryConfig,
     pub runtime_packages_loaded_from_db: BTreeMap<ObjectID, PackageObject>,
     pub lamport_version: SequenceNumber,

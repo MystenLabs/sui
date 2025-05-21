@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub use self::effects_v2::TransactionEffectsV2;
+use crate::accumulator_event::AccumulatorEvent;
 use crate::base_types::{ExecutionDigests, ObjectID, ObjectRef, SequenceNumber};
 use crate::committee::{Committee, EpochId};
 use crate::crypto::{
@@ -22,9 +23,9 @@ use crate::storage::WriteKind;
 pub use effects_v1::TransactionEffectsV1;
 pub use effects_v2::UnchangedSharedKind;
 use enum_dispatch::enum_dispatch;
-use object_change::AccumulatorWriteV1;
 pub use object_change::{
-    AccumulatorOperation, AccumulatorValue, EffectsObjectChange, ObjectIn, ObjectOut,
+    AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
+    EffectsObjectChange, ObjectIn, ObjectOut,
 };
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentScope};
@@ -344,6 +345,8 @@ pub trait TransactionEffectsAPI {
     fn consensus_owner_changed(&self) -> Vec<ObjectRef>;
 
     fn object_changes(&self) -> Vec<ObjectChange>;
+
+    fn accumulator_events(&self) -> Vec<AccumulatorEvent>;
 
     // TODO: We should consider having this function to return Option.
     // When the gas object is not available (i.e. system transaction), we currently return
