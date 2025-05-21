@@ -893,6 +893,7 @@ impl ConsensusOutputQuarantine {
         epoch_store: &AuthorityPerEpochStore,
         round: u64,
     ) -> SuiResult<Vec<ActiveJwk>> {
+        return Ok(vec![]);
         let epoch = epoch_store.epoch();
 
         // Check if the requested round is in memory
