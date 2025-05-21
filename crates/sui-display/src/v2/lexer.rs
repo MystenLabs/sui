@@ -54,6 +54,8 @@ pub(crate) enum Token {
     LBracket,
     /// '{{'
     LLBrace,
+    /// '('
+    LParen,
     /// A decimal number, optionally separated by underscores.
     NumDec,
     /// A hexadecimal number, prefixed with '0x' (not included in the span), optionally separated
@@ -67,6 +69,8 @@ pub(crate) enum Token {
     RBrace,
     /// ']'
     RBracket,
+    /// ')'
+    RParen,
     /// '}}'
     RRBrace,
     /// A strand of text.
@@ -151,6 +155,8 @@ impl<'s> Lexer<'s> {
 
             b'[' => self.take(T::LBracket, 1),
 
+            b'(' => self.take(T::LParen, 1),
+
             b'|' => self.take(T::Pipe, 1),
 
             b'>' => self.take(T::RAngle, 1),
@@ -161,6 +167,8 @@ impl<'s> Lexer<'s> {
             }
 
             b']' => self.take(T::RBracket, 1),
+
+            b')' => self.take(T::RParen, 1),
 
             // Explicitly tokenize whitespace.
             _ if self.src.chars().next().is_some_and(char::is_whitespace) => self.take(
@@ -236,12 +244,14 @@ impl fmt::Display for OwnedLexeme {
             L(T::LBrace, _, _) => write!(f, "'{{'"),
             L(T::LBracket, _, _) => write!(f, "'['"),
             L(T::LLBrace, _, _) => write!(f, "'{{{{'"),
+            L(T::LParen, _, _) => write!(f, "'('"),
             L(T::NumDec, _, s) => write!(f, "decimal number {s:?}"),
             L(T::NumHex, _, s) => write!(f, "hexadecimal number {s:?}"),
             L(T::Pipe, _, _) => write!(f, "'|'"),
             L(T::RAngle, _, _) => write!(f, "'>'"),
             L(T::RBrace, _, _) => write!(f, "'}}'"),
             L(T::RBracket, _, _) => write!(f, "']'"),
+            L(T::RParen, _, _) => write!(f, "')'"),
             L(T::RRBrace, _, _) => write!(f, "'}}}}'"),
             L(T::Text, _, s) => write!(f, "text {s:?}"),
             L(T::Unexpected, _, s) => write!(f, "unexpected character {s:?}"),
@@ -264,12 +274,14 @@ impl fmt::Display for Token {
             T::LBrace => write!(f, "'{{'"),
             T::LBracket => write!(f, "'['"),
             T::LLBrace => write!(f, "'{{{{'"),
+            T::LParen => write!(f, "'('"),
             T::NumDec => write!(f, "a decimal number"),
             T::NumHex => write!(f, "a hexadecimal number"),
             T::Pipe => write!(f, "'|'"),
             T::RAngle => write!(f, "'>'"),
             T::RBrace => write!(f, "'}}'"),
             T::RBracket => write!(f, "']'"),
+            T::RParen => write!(f, "')'"),
             T::RRBrace => write!(f, "'}}}}'"),
             T::Text => write!(f, "text"),
             T::Unexpected => write!(f, "an unexpected character"),
@@ -685,6 +697,37 @@ mod tests {
                 L(T::RAngle, 57, ">"),
                 L(T::RAngle, 58, ">"),
                 L(T::RBrace, 59, "}"),
+            ],
+        );
+    }
+
+    /// A positional struct literal is a struct type followed by its (positional) fields, separated
+    /// by commas, surrounded by parentheses.
+    #[test]
+    fn test_positional_struct_literals() {
+        let lexer = Lexer::new(r#"{0x2::balance::Balance<0x2::sui::SUI>(42u64)}"#);
+        let lexemes: Vec<_> = lexer.collect();
+        assert_eq!(
+            lexemes,
+            vec![
+                L(T::LBrace, 0, "{"),
+                L(T::NumHex, 3, "2"),
+                L(T::CColon, 4, "::"),
+                L(T::Ident, 6, "balance"),
+                L(T::CColon, 13, "::"),
+                L(T::Ident, 15, "Balance"),
+                L(T::LAngle, 22, "<"),
+                L(T::NumHex, 25, "2"),
+                L(T::CColon, 26, "::"),
+                L(T::Ident, 28, "sui"),
+                L(T::CColon, 31, "::"),
+                L(T::Ident, 33, "SUI"),
+                L(T::RAngle, 36, ">"),
+                L(T::LParen, 37, "("),
+                L(T::NumDec, 38, "42"),
+                L(T::Ident, 40, "u64"),
+                L(T::RParen, 43, ")"),
+                L(T::RBrace, 44, "}"),
             ],
         );
     }
