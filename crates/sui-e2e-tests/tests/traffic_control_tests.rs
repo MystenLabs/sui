@@ -668,7 +668,7 @@ async fn test_traffic_control_dead_mans_switch() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn test_traffic_control_manual_set_dead_mans_switch() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
-    let drain_path = tempfile::tempdir().unwrap().into_path().join("drain");
+    let drain_path = tempfile::tempdir().unwrap().keep().join("drain");
     assert!(!drain_path.exists(), "Expected drain file to not yet exist",);
     File::create(&drain_path).expect("Failed to touch nodefw drain file");
     assert!(drain_path.exists(), "Expected drain file to exist",);
