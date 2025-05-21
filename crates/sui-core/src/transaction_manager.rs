@@ -507,8 +507,8 @@ impl TransactionManager {
             .object_cache_read
             .multi_input_objects_available(
                 &input_object_cache_misses,
-                receiving_objects,
-                epoch_store.epoch(),
+                &receiving_objects,
+                &epoch_store.epoch(),
             )
             .into_iter()
             .zip(input_object_cache_misses);
