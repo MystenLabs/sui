@@ -57,7 +57,7 @@ impl GitRepo {
     async fn fetch_impl(&self, fetch_to_folder: Option<PathBuf>) -> PackageResult<PathBuf> {
         let sha = self.find_sha().await?;
 
-        if !check_is_commit_sha(&sha) {
+        if !is_sha(&sha) {
             return Err(PackageError::Git(GitError::invalid_sha(
                 &self.repo_url,
                 &sha,
@@ -75,8 +75,7 @@ impl GitRepo {
     }
 
     /// Used for testing to be able to specify which folder to fetch to. Use `fetch` for all other needs.
-    // TODO: should be non-pub
-    pub async fn fetch_to_folder(&self, fetch_to_folder: PathBuf) -> PackageResult<PathBuf> {
+    async fn fetch_to_folder(&self, fetch_to_folder: PathBuf) -> PackageResult<PathBuf> {
         self.fetch_impl(Some(fetch_to_folder)).await
     }
 
@@ -233,7 +232,7 @@ impl GitRepo {
     /// network is required.
     pub(crate) async fn find_sha(&self) -> PackageResult<String> {
         if let Some(r) = self.rev.as_ref() {
-            if check_is_commit_sha(r) {
+            if is_sha(r) {
                 return Ok(r.to_string());
             }
 
@@ -338,9 +337,7 @@ impl From<PinnedGitDependency> for GitRepo {
 
 /// Check if the given string is a valid commit SHA, i.e., 40 character long with only
 /// lowercase letters and digits
-///
-// TODO: rename this function to is_sha
-pub fn check_is_commit_sha(input: &str) -> bool {
+pub fn is_sha(input: &str) -> bool {
     input.len() == 40
         && input
             .chars()

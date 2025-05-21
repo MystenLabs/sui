@@ -34,7 +34,7 @@ use tracing::debug;
 use crate::git::GitRepo;
 use crate::{
     errors::{GitError, GitErrorKind, Located, PackageError, PackageResult},
-    git::check_is_commit_sha,
+    git::is_sha,
 };
 
 use super::{DependencySet, Pinned, Unpinned};
@@ -148,7 +148,7 @@ where
     let sha = String::deserialize(deserializer)?;
     if sha.len() != 40 {
         Err(de::Error::custom(ShaError::InvalidLength(sha.len())))
-    } else if !check_is_commit_sha(&sha) {
+    } else if !is_sha(&sha) {
         Err(de::Error::custom(ShaError::InvalidCharacters))
     } else {
         Ok(sha)

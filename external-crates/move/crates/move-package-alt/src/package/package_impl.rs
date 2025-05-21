@@ -22,8 +22,6 @@ use crate::{
 use move_core_types::identifier::Identifier;
 use tracing::debug;
 
-// TODO: we might want to use [move_core_types::Identifier] here, particularly for `PackageName`.
-// This will force us to maintain invariants.
 pub type EnvironmentName = String;
 pub type PackageName = Identifier;
 
@@ -31,7 +29,6 @@ pub struct Package<F: MoveFlavor> {
     // TODO: maybe hold a lock on the lock file? Maybe not if move-analyzer wants to hold on to a
     // Package long term?
     manifest: Manifest<F>,
-    lockfiles: Lockfile<F>,
     path: PackagePath,
 }
 
@@ -46,13 +43,8 @@ impl<F: MoveFlavor> Package<F> {
     /// Fails if [path] does not exist, or if it doesn't contain a manifest
     pub async fn load_root(path: impl AsRef<Path>) -> PackageResult<Self> {
         let manifest = Manifest::<F>::read_from_file(path.as_ref())?;
-        let lockfiles = Lockfile::<F>::read_from_dir(path.as_ref())?;
         let path = PackagePath(path.as_ref().to_path_buf());
-        Ok(Self {
-            manifest,
-            lockfiles,
-            path,
-        })
+        Ok(Self { manifest, path })
     }
 
     /// Fetch [dep] and load a package from the fetched source
@@ -65,20 +57,16 @@ impl<F: MoveFlavor> Package<F> {
                 let git = GitRepo::from(&d);
                 let path = git.fetch().await?;
                 let manifest = Manifest::<F>::read_from_file(&path)?;
-                let lockfiles = Lockfile::read_from_dir(&path)?;
                 Self {
                     manifest,
-                    lockfiles,
                     path: PackagePath(path),
                 }
             }
             P::Local(d) => {
                 let local = d.path()?;
                 let manifest = Manifest::<F>::read_from_file(&local)?;
-                let lockfiles = Lockfile::read_from_dir(&local)?;
                 Self {
                     manifest,
-                    lockfiles,
                     path: PackagePath(local),
                 }
             }
