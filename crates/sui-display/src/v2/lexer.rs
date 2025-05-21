@@ -40,6 +40,8 @@ pub(crate) struct OwnedLexeme(Token, usize, String);
 pub(crate) enum Token {
     /// '@'
     At,
+    /// ':'
+    Colon,
     /// '::'
     CColon,
     /// ','
@@ -135,6 +137,8 @@ impl<'s> Lexer<'s> {
             b'@' => self.take(T::At, 1),
 
             b':' if bytes.get(1) == Some(&b':') => self.take(T::CColon, 2),
+
+            b':' => self.take(T::Colon, 1),
 
             b',' => self.take(T::Comma, 1),
 
@@ -241,6 +245,7 @@ impl fmt::Display for OwnedLexeme {
         use Token as T;
         match self {
             L(T::At, _, _) => write!(f, "'@'"),
+            L(T::Colon, _, _) => write!(f, "':'"),
             L(T::CColon, _, _) => write!(f, "'::'"),
             L(T::Comma, _, _) => write!(f, "','"),
             L(T::Dot, _, _) => write!(f, "'.'"),
@@ -272,6 +277,7 @@ impl fmt::Display for Token {
         use Token as T;
         match self {
             T::At => write!(f, "'@'"),
+            T::Colon => write!(f, "':'"),
             T::CColon => write!(f, "'::'"),
             T::Comma => write!(f, "','"),
             T::Dot => write!(f, "'.'"),
@@ -754,6 +760,50 @@ mod tests {
                 L(T::Ident, 40, "u64"),
                 L(T::RParen, 43, ")"),
                 L(T::RBrace, 44, "}"),
+            ],
+        );
+    }
+
+    /// Struct literals can also include field names -- these are purely informational, they don't
+    /// affect the encoded output.
+    #[test]
+    fn test_struct_literals() {
+        let lexer = Lexer::new(r#"{0x2::coin::Coin<0x2::sui::SUI> { id: @0x123, value: 42u64 }}"#);
+        let lexemes: Vec<_> = lexer.collect();
+        assert_eq!(
+            lexemes,
+            vec![
+                L(T::LBrace, 0, "{"),
+                L(T::NumHex, 3, "2"),
+                L(T::CColon, 4, "::"),
+                L(T::Ident, 6, "coin"),
+                L(T::CColon, 10, "::"),
+                L(T::Ident, 12, "Coin"),
+                L(T::LAngle, 16, "<"),
+                L(T::NumHex, 19, "2"),
+                L(T::CColon, 20, "::"),
+                L(T::Ident, 22, "sui"),
+                L(T::CColon, 25, "::"),
+                L(T::Ident, 27, "SUI"),
+                L(T::RAngle, 30, ">"),
+                L(T::Whitespace, 31, " "),
+                L(T::LBrace, 32, "{"),
+                L(T::Whitespace, 33, " "),
+                L(T::Ident, 34, "id"),
+                L(T::Colon, 36, ":"),
+                L(T::Whitespace, 37, " "),
+                L(T::At, 38, "@"),
+                L(T::NumHex, 41, "123"),
+                L(T::Comma, 44, ","),
+                L(T::Whitespace, 45, " "),
+                L(T::Ident, 46, "value"),
+                L(T::Colon, 51, ":"),
+                L(T::Whitespace, 52, " "),
+                L(T::NumDec, 53, "42"),
+                L(T::Ident, 55, "u64"),
+                L(T::Whitespace, 58, " "),
+                L(T::RBrace, 59, "}"),
+                L(T::RBrace, 60, "}"),
             ],
         );
     }
