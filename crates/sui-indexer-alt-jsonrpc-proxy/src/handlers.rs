@@ -183,7 +183,7 @@ async fn proxy_request(
         .observe(body_bytes.len() as f64);
 
     let mut target_url = state.fullnode_address.clone();
-    target_url.set_path(parts.uri.path());
+
     if let Some(query) = parts.uri.query() {
         target_url.set_query(Some(query));
     }
