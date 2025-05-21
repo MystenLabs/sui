@@ -1593,11 +1593,14 @@ impl AuthorityState {
     pub async fn reconfigure_traffic_control(
         &self,
         params: TrafficControlReconfigParams,
-    ) -> Result<(), SuiError> {
+    ) -> Result<TrafficControlReconfigParams, SuiError> {
         if let Some(traffic_controller) = self.traffic_controller.as_ref() {
-            traffic_controller.admin_reconfigure(params).await?;
+            traffic_controller.admin_reconfigure(params).await
+        } else {
+            Err(SuiError::InvalidAdminRequest(
+                "Traffic controller is not configured on this node".to_string(),
+            ))
         }
-        Ok(())
     }
 
     #[instrument(level = "trace", skip_all)]

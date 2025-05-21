@@ -510,7 +510,16 @@ async fn traffic_control(
 ) -> (StatusCode, String) {
     let Query(params) = args;
     match state.node.state().reconfigure_traffic_control(params).await {
-        Ok(()) => (StatusCode::OK, "traffic control configured\n".to_string()),
+        Ok(updated_state) => (
+            StatusCode::OK,
+            format!(
+                "Traffic control configured with:\n\
+                 Error threshold: {:?}\n\
+                 Spam threshold: {:?}\n\
+                 Dry run: {:?}\n",
+                updated_state.error_threshold, updated_state.spam_threshold, updated_state.dry_run
+            ),
+        ),
         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
     }
 }

@@ -198,10 +198,33 @@ impl TrafficController {
         self.open_tally_channel(tx).await;
     }
 
+    pub async fn get_current_state(&self) -> TrafficControlReconfigParams {
+        let mut result = TrafficControlReconfigParams {
+            error_threshold: None,
+            spam_threshold: None,
+            dry_run: None,
+        };
+
+        if let Some(error_policy) = self.error_policy.as_ref() {
+            if let TrafficControlPolicy::FreqThreshold(ref policy) = *error_policy.lock().await {
+                result.error_threshold = Some(policy.client_threshold);
+            }
+        }
+
+        if let Some(spam_policy) = self.spam_policy.as_ref() {
+            if let TrafficControlPolicy::FreqThreshold(ref policy) = *spam_policy.lock().await {
+                result.spam_threshold = Some(policy.client_threshold);
+            }
+        }
+
+        result.dry_run = Some(self.policy_config.read().await.dry_run);
+        result
+    }
+
     pub async fn admin_reconfigure(
         &self,
         params: TrafficControlReconfigParams,
-    ) -> Result<(), SuiError> {
+    ) -> Result<TrafficControlReconfigParams, SuiError> {
         let TrafficControlReconfigParams {
             error_threshold,
             spam_threshold,
@@ -226,7 +249,8 @@ impl TrafficController {
         if let Some(dry_run) = dry_run {
             self.policy_config.write().await.dry_run = dry_run;
         }
-        Ok(())
+
+        Ok(self.get_current_state().await)
     }
 
     async fn update_policy_threshold(
