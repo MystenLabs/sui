@@ -24,7 +24,6 @@ impl BalanceChange {
         match self.stored.owner {
             O::AddressOwner(addr)
             | O::ObjectOwner(addr)
-            // TODO-DNS do we want consensus coins included in balance here?
             | O::ConsensusAddressOwner { owner: addr, .. } => Some(Owner {
                 address: SuiAddress::from(addr),
                 checkpoint_viewed_at: self.checkpoint_viewed_at,

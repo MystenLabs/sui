@@ -832,6 +832,7 @@ type CoinMetadata implements IMoveObject & IObject & IOwner {
 Same as AddressOwner, but the object is versioned by consensus.
 """
 type ConsensusAddressOwner {
+	startVersion: UInt53!
 	owner: Owner
 }
 

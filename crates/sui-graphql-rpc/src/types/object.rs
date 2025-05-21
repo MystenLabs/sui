@@ -182,6 +182,7 @@ pub(crate) struct AddressOwner {
 /// Same as AddressOwner, but the object is versioned by consensus.
 #[derive(SimpleObject, Clone)]
 pub(crate) struct ConsensusAddressOwner {
+    start_version: UInt53,
     owner: Option<Owner>,
 }
 
@@ -619,15 +620,17 @@ impl ObjectImpl<'_> {
             } => Some(ObjectOwner::Shared(Shared {
                 initial_shared_version: initial_shared_version.value().into(),
             })),
-            O::ConsensusAddressOwner { owner, .. } => {
-                Some(ObjectOwner::ConsensusAddress(ConsensusAddressOwner {
-                    owner: Some(Owner {
-                        address: SuiAddress::from(*owner),
-                        checkpoint_viewed_at: self.0.checkpoint_viewed_at,
-                        root_version: None,
-                    }),
-                }))
-            }
+            O::ConsensusAddressOwner {
+                start_version,
+                owner,
+            } => Some(ObjectOwner::ConsensusAddress(ConsensusAddressOwner {
+                start_version: start_version.value().into(),
+                owner: Some(Owner {
+                    address: SuiAddress::from(*owner),
+                    checkpoint_viewed_at: self.0.checkpoint_viewed_at,
+                    root_version: None,
+                }),
+            })),
         }
     }
 

@@ -27,8 +27,9 @@ fn coins(objects: &[Object]) -> impl Iterator<Item = (&SuiAddress, TypeTag, u64)
         let address = match object.owner() {
             Owner::AddressOwner(sui_address)
             | Owner::ObjectOwner(sui_address)
-            // TODO-DNS is this right?
-            | Owner::ConsensusAddressOwner { owner: sui_address, .. } => sui_address,
+            | Owner::ConsensusAddressOwner {
+                owner: sui_address, ..
+            } => sui_address,
             Owner::Shared { .. } | Owner::Immutable => return None,
         };
         let (coin_type, balance) = Coin::extract_balance_if_coin(object).ok().flatten()?;

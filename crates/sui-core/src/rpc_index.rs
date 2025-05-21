@@ -470,7 +470,6 @@ impl IndexStoreTables {
             // determine changes from removed objects
             for removed_object in tx.removed_objects_pre_version() {
                 match removed_object.owner() {
-                    // TODO-DNS is this correct?
                     Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => {
                         let owner_key = OwnerIndexKey::from_object(removed_object);
                         batch.delete_batch(&self.owner, [owner_key])?;
@@ -489,7 +488,6 @@ impl IndexStoreTables {
             for (object, old_object) in tx.changed_objects() {
                 if let Some(old_object) = old_object {
                     match old_object.owner() {
-                        // TODO-DNS is this correct?
                         Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => {
                             let owner_key = OwnerIndexKey::from_object(old_object);
                             batch.delete_batch(&self.owner, [owner_key])?;
@@ -509,7 +507,6 @@ impl IndexStoreTables {
                 }
 
                 match object.owner() {
-                    // TODO-DNS is this correct?
                     Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => {
                         let owner_key = OwnerIndexKey::from_object(object);
                         let owner_info = OwnerIndexInfo::new(object);
@@ -930,7 +927,6 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
     fn index_object(&mut self, object: Object) -> Result<(), StorageError> {
         match object.owner {
             // Owner Index
-            // TODO-DNS is this correct?
             Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => {
                 let owner_key = OwnerIndexKey::from_object(&object);
                 let owner_info = OwnerIndexInfo::new(&object);
