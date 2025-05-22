@@ -15,7 +15,6 @@ mod checked {
     use sui_types::error::{SuiResult, UserInputError, UserInputResult};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::metrics::BytecodeVerifierMetrics;
-    use sui_types::object::Authenticator;
     use sui_types::transaction::{
         CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
         ReceivingObjectReadResult, ReceivingObjects, TransactionData, TransactionDataAPI,
@@ -308,7 +307,7 @@ mod checked {
                         }
                         .into())
                     }
-                    Owner::Shared { .. } | Owner::ConsensusV2 { .. } => {
+                    Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } => {
                         fp_bail!(UserInputError::NotSharedObjectError.into())
                     }
                     Owner::Immutable => fp_bail!(UserInputError::MutableParameterExpected {
@@ -482,7 +481,7 @@ mod checked {
                             parent_id: owner.into(),
                         });
                     }
-                    Owner::Shared { .. } | Owner::ConsensusV2 { .. } => {
+                    Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } => {
                         // This object is a mutable consensus object. However the transaction
                         // specifies it as an owned object. This is inconsistent.
                         return Err(UserInputError::NotOwnedObjectError);
@@ -554,25 +553,21 @@ mod checked {
                             UserInputError::SharedObjectStartingVersionMismatch
                         )
                     }
-                    Owner::ConsensusV2 {
+                    Owner::ConsensusAddressOwner {
                         start_version: actual_initial_shared_version,
-                        authenticator,
+                        owner: actual_owner,
                     } => {
                         fp_ensure!(
                             input_initial_shared_version == *actual_initial_shared_version,
                             UserInputError::SharedObjectStartingVersionMismatch
                         );
-                        match authenticator.as_ref() {
-                            Authenticator::SingleOwner(actual_owner) => {
-                                // Check the owner is correct.
-                                fp_ensure!(
-                                    owner == actual_owner,
-                                    UserInputError::IncorrectUserSignature {
-                                        error: format!("Object {object_id:?} is owned by account address {actual_owner:?}, but given owner/signer address is {owner:?}"),
-                                    }
-                                )
+                        // Check the owner is correct.
+                        fp_ensure!(
+                            owner == actual_owner,
+                            UserInputError::IncorrectUserSignature {
+                                error: format!("Object {object_id:?} is owned by account address {actual_owner:?}, but given owner/signer address is {owner:?}"),
                             }
-                        }
+                        )
                     }
                 }
             }

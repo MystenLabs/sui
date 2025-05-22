@@ -79,8 +79,10 @@ impl OwnerIndexKey {
     // Creates a key from the provided object.
     // Panics if the provided object is not an Address owned object
     fn from_object(object: &Object) -> Self {
-        let Owner::AddressOwner(owner) = object.owner() else {
-            panic!("cannot create OwnerIndexKey if owner is not AddressOwned");
+        let owner = match object.owner() {
+            Owner::AddressOwner(owner) => owner,
+            Owner::ConsensusAddressOwner { owner, .. } => owner,
+            _ => panic!("cannot create OwnerIndexKey if object is not address-owned"),
         };
         let object_type = object.struct_tag().expect("packages cannot be owned");
 
@@ -468,7 +470,7 @@ impl IndexStoreTables {
             // determine changes from removed objects
             for removed_object in tx.removed_objects_pre_version() {
                 match removed_object.owner() {
-                    Owner::AddressOwner(_) => {
+                    Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => {
                         let owner_key = OwnerIndexKey::from_object(removed_object);
                         batch.delete_batch(&self.owner, [owner_key])?;
                     }
@@ -479,8 +481,6 @@ impl IndexStoreTables {
                         )?;
                     }
                     Owner::Shared { .. } | Owner::Immutable => {}
-                    // TODO: Implement support for ConsensusV2 objects.
-                    Owner::ConsensusV2 { .. } => todo!(),
                 }
             }
 
@@ -488,7 +488,7 @@ impl IndexStoreTables {
             for (object, old_object) in tx.changed_objects() {
                 if let Some(old_object) = old_object {
                     match old_object.owner() {
-                        Owner::AddressOwner(_) => {
+                        Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => {
                             let owner_key = OwnerIndexKey::from_object(old_object);
                             batch.delete_batch(&self.owner, [owner_key])?;
                         }
@@ -503,13 +503,11 @@ impl IndexStoreTables {
                         }
 
                         Owner::Shared { .. } | Owner::Immutable => {}
-                        // TODO: Implement support for ConsensusV2 objects.
-                        Owner::ConsensusV2 { .. } => todo!(),
                     }
                 }
 
                 match object.owner() {
-                    Owner::AddressOwner(_) => {
+                    Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => {
                         let owner_key = OwnerIndexKey::from_object(object);
                         let owner_info = OwnerIndexInfo::new(object);
                         batch.insert_batch(&self.owner, [(owner_key, owner_info)])?;
@@ -526,8 +524,6 @@ impl IndexStoreTables {
                         }
                     }
                     Owner::Shared { .. } | Owner::Immutable => {}
-                    // TODO: Implement support for ConsensusV2 objects.
-                    Owner::ConsensusV2 { .. } => todo!(),
                 }
             }
 
@@ -931,7 +927,7 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
     fn index_object(&mut self, object: Object) -> Result<(), StorageError> {
         match object.owner {
             // Owner Index
-            Owner::AddressOwner(_) => {
+            Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => {
                 let owner_key = OwnerIndexKey::from_object(&object);
                 let owner_info = OwnerIndexInfo::new(&object);
                 self.batch
@@ -953,8 +949,6 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
             }
 
             Owner::Shared { .. } | Owner::Immutable => {}
-            // TODO: Implement support for ConsensusV2 objects.
-            Owner::ConsensusV2 { .. } => todo!(),
         }
 
         // Look for CoinMetadata<T> and TreasuryCap<T> objects

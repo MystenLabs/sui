@@ -270,7 +270,7 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                     &change.id_operation,
                 ) {
                     (
-                        ObjectIn::Exist((_, Owner::ConsensusV2 { .. })),
+                        ObjectIn::Exist((_, Owner::ConsensusAddressOwner { .. })),
                         ObjectOut::ObjectWrite((
                             object_digest,
                             Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable,
@@ -294,7 +294,10 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                 ) {
                     (
                         ObjectIn::Exist((_, Owner::AddressOwner(_) | Owner::ObjectOwner(_))),
-                        ObjectOut::ObjectWrite((object_digest, Owner::ConsensusV2 { .. })),
+                        ObjectOut::ObjectWrite((
+                            object_digest,
+                            Owner::ConsensusAddressOwner { .. },
+                        )),
                         IDOperation::None,
                     ) => Some((*id, self.lamport_version, *object_digest)),
                     _ => None,

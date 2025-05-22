@@ -196,12 +196,12 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     }
 
     fn transferred_from_consensus(&self) -> Vec<ObjectRef> {
-        // ConsensusV2 objects cannot exist with effects v1
+        // Transferrable consensus objects cannot exist with effects v1
         vec![]
     }
 
     fn transferred_to_consensus(&self) -> Vec<ObjectRef> {
-        // ConsensusV2 objects cannot exist with effects v1
+        // Transferrable consensus objects cannot exist with effects v1
         vec![]
     }
 

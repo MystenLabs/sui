@@ -22,7 +22,7 @@ task 3, lines 44-46:
 //# run ex::m::create_party
 created: object(3,0)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, lines 47-49:
 //# view-object 2,0
@@ -53,11 +53,11 @@ task 6, lines 53-55:
 //> 0: sui::party::single_owner(Input(1));
 //> ex::m::priv_party(Input(0), Result(0))
 mutated: object(0,2), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2280000,  storage_rebate: 2197008, non_refundable_storage_fee: 22192
+gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 2197008, non_refundable_storage_fee: 22192
 
 task 7, lines 57-59:
 //# view-object 2,0
-Owner: ConsensusV2( 5, SingleOwner(A) )
+Owner: ConsensusAddressOwner( 5, A )
 Version: 5
 Contents: ex::m::Priv {
     id: sui::object::UID {
@@ -72,11 +72,11 @@ task 8, lines 60-62:
 //> 0: sui::party::single_owner(Input(1));
 //> ex::m::pub_party(Input(0), Result(0))
 mutated: object(0,2), object(2,1)
-gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 2189484, non_refundable_storage_fee: 22116
+gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 2189484, non_refundable_storage_fee: 22116
 
 task 9, lines 64-66:
 //# view-object 2,1
-Owner: ConsensusV2( 6, SingleOwner(A) )
+Owner: ConsensusAddressOwner( 6, A )
 Version: 6
 Contents: ex::m::Pub {
     id: sui::object::UID {
@@ -98,11 +98,11 @@ task 11, lines 72-74:
 //> 0: sui::party::single_owner(Input(1));
 //> sui::transfer::public_party_transfer<ex::m::Pub>(Input(0), Result(0))
 mutated: object(0,0), object(2,1)
-gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 1271556, non_refundable_storage_fee: 12844
+gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 1211364, non_refundable_storage_fee: 12236
 
 task 12, lines 76-78:
 //# view-object 2,1
-Owner: ConsensusV2( 6, SingleOwner(A) )
+Owner: ConsensusAddressOwner( 6, A )
 Version: 7
 Contents: ex::m::Pub {
     id: sui::object::UID {
@@ -117,11 +117,11 @@ task 13, lines 79-81:
 //> 0: sui::party::single_owner(Input(1));
 //> sui::transfer::public_party_transfer<ex::m::Pub>(Input(0), Result(0))
 mutated: object(0,0), object(2,1)
-gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 2249676, non_refundable_storage_fee: 22724
+gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 2189484, non_refundable_storage_fee: 22116
 
 task 14, lines 83-85:
 //# view-object 2,1
-Owner: ConsensusV2( 6, SingleOwner(B) )
+Owner: ConsensusAddressOwner( 6, B )
 Version: 8
 Contents: ex::m::Pub {
     id: sui::object::UID {
@@ -138,7 +138,7 @@ Error: Error checking transaction input objects: IncorrectUserSignature { error:
 task 16, line 89:
 //# transfer-object 2,1 --sender B --recipient B
 mutated: object(0,1), object(2,1)
-gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 1271556, non_refundable_storage_fee: 12844
+gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 1211364, non_refundable_storage_fee: 12236
 
 task 17, lines 91-93:
 //# view-object 2,1
@@ -162,7 +162,7 @@ task 19, lines 98-99:
 //# programmable --inputs object(2,0) @B --sender A
 //> ex::m::priv_fastpath(Input(0), Input(1));
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 2257200, non_refundable_storage_fee: 22800
+gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 2197008, non_refundable_storage_fee: 22192
 
 task 20, line 101:
 //# view-object 2,0

@@ -542,7 +542,7 @@ impl TemporaryStore<'_> {
                         assert!(sender == a, "Input object must be owned by sender");
                         Some(id)
                     }
-                    Owner::Shared { .. } | Owner::ConsensusV2 { .. } => Some(id),
+                    Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } => Some(id),
                     Owner::Immutable => {
                         // object is authenticated, but it cannot own other objects,
                         // so we should not add it to `authenticated_objs`
@@ -608,10 +608,12 @@ impl TemporaryStore<'_> {
                         // it would already have been in authenticated_for_mutation
                         ObjectID::from(*parent)
                     }
-                    owner @ Owner::Shared { .. } | owner @ Owner::ConsensusV2 { .. } => panic!(
-                        "Unauthenticated root at {to_authenticate:?} with owner {owner:?}\n\
+                    owner @ Owner::Shared { .. } | owner @ Owner::ConsensusAddressOwner { .. } => {
+                        panic!(
+                            "Unauthenticated root at {to_authenticate:?} with owner {owner:?}\n\
                         Potentially covering objects in: {authenticated_for_mutation:#?}",
-                    ),
+                        )
+                    }
                     Owner::Immutable => {
                         assert!(
                             is_epoch_change,

@@ -61,7 +61,7 @@ mod checked {
         execution_status::CommandArgumentError,
         metrics::LimitsMetrics,
         move_package::MovePackage,
-        object::{Authenticator, Data, MoveObject, Object, ObjectInner, Owner},
+        object::{Data, MoveObject, Object, ObjectInner, Owner},
         storage::DenyListResult,
         transaction::{Argument, CallArg, ObjectArg},
     };
@@ -731,7 +731,7 @@ mod checked {
             let mut loaded_runtime_objects = BTreeMap::new();
             let mut additional_writes = BTreeMap::new();
             let mut by_value_shared_objects = BTreeSet::new();
-            let mut authenticator_objects = BTreeMap::new();
+            let mut consensus_owner_objects = BTreeMap::new();
             for input in inputs.into_iter().chain(std::iter::once(gas)) {
                 let InputValue {
                     object_metadata:
@@ -758,8 +758,8 @@ mod checked {
                     add_additional_write(&mut additional_writes, owner, object_value)?;
                 } else if owner.is_shared() {
                     by_value_shared_objects.insert(id);
-                } else if owner.authenticator().is_some() {
-                    authenticator_objects.insert(id, owner.clone());
+                } else if matches!(owner, Owner::ConsensusAddressOwner { .. }) {
+                    consensus_owner_objects.insert(id, owner.clone());
                 }
             }
             // check for unused values
@@ -972,35 +972,34 @@ mod checked {
                 }
             }
 
-            // Before finishing, enforce restrictions on transfer and deletion for objects configured
-            // with authenticators.
-            for (id, original_owner) in authenticator_objects {
-                let authenticator = original_owner.authenticator().expect("verified before adding to `authenticator_objects` that these have authenticators");
-
-                match authenticator {
-                    Authenticator::SingleOwner(owner) => {
-                        // Already verified in pre-execution checks that tx sender is the object owner.
-                        // SingleOwner is allowed to do anything with the object.
-                        if ref_context.borrow().sender() != *owner {
-                            debug_fatal!(
-                                "transaction with a singly owned input object where the tx sender is not the owner should never be executed"
-                            );
-                            return Err(ExecutionError::new(
+            // Before finishing, enforce auth restrictions on consensus objects.
+            for (id, original_owner) in consensus_owner_objects {
+                let Owner::ConsensusAddressOwner { owner, .. } = original_owner else {
+                    panic!(
+                        "verified before adding to `consensus_owner_objects` that these are ConsensusAddressOwner"
+                    );
+                };
+                // Already verified in pre-execution checks that tx sender is the object owner.
+                // Owner is allowed to do anything with the object.
+                if ref_context.borrow().sender() != owner {
+                    debug_fatal!(
+                        "transaction with a singly owned input object where the tx sender is not the owner should never be executed"
+                    );
+                    return Err(ExecutionError::new(
                                 ExecutionErrorKind::SharedObjectOperationNotAllowed,
                                 Some(
                                     format!("Shared object operation on {} not allowed: \
                                              transaction with singly owned input object must be sent by the owner", id).into(),
                                 ),
                             ));
-                        }
-                    } // Future authenticators with fewer permissions should be checked here. For
-                      // example, transfers and wraps can be detected by comparing `original_owner`
-                      // with:
-                      // let new_owner = written_objects.get(&id).map(|obj| obj.owner);
-                      //
-                      // Deletions can be detected with:
-                      // let deleted = deleted_object_ids.contains(&id);
                 }
+                // If an Owner type is implemented with support for more fine-grained authorization,
+                // checks should be performed here. For example, transfers and wraps can be detected
+                // by comparing `original_owner` with:
+                // let new_owner = written_objects.get(&id).map(|obj| obj.owner);
+                //
+                // Deletions can be detected with:
+                // let deleted = deleted_object_ids.contains(&id);
             }
 
             if protocol_config.enable_coin_deny_list_v2() {
@@ -1518,15 +1517,18 @@ mod checked {
             // protected by transaction input checker
             invariant_violation!("Object {} does not exist yet", id);
         };
-        // override_as_immutable ==> Owner::Shared or Owner::ConsensusV2
+        // override_as_immutable ==> Owner::Shared or Owner::ConsensusAddressOwner
         assert_invariant!(
             !override_as_immutable
-                || matches!(obj.owner, Owner::Shared { .. } | Owner::ConsensusV2 { .. }),
+                || matches!(
+                    obj.owner,
+                    Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. }
+                ),
             "override_as_immutable should only be set for consensus objects"
         );
         let is_mutable_input = match obj.owner {
             Owner::AddressOwner(_) => true,
-            Owner::Shared { .. } | Owner::ConsensusV2 { .. } => !override_as_immutable,
+            Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } => !override_as_immutable,
             Owner::Immutable => false,
             Owner::ObjectOwner(_) => {
                 // protected by transaction input checker

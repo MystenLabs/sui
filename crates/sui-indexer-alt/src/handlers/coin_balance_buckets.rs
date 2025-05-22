@@ -274,14 +274,13 @@ impl TryInto<StoredCoinBalanceBucket> for &ProcessedCoinBalanceBucket {
 }
 
 /// Get the owner kind and address of a coin, if it is owned by a single address,
-/// either through fast-path ownership or ConsensusV2 ownership.
+/// either through fast-path ownership or consensus ownership.
 pub(crate) fn get_coin_owner(object: &Object) -> Option<(StoredCoinOwnerKind, SuiAddress)> {
     match object.owner() {
         Owner::AddressOwner(owner_id) => Some((StoredCoinOwnerKind::Fastpath, *owner_id)),
-        Owner::ConsensusV2 { authenticator, .. } => Some((
-            StoredCoinOwnerKind::Consensus,
-            *authenticator.as_single_owner(),
-        )),
+        Owner::ConsensusAddressOwner { owner, .. } => {
+            Some((StoredCoinOwnerKind::Consensus, *owner))
+        }
         Owner::Immutable | Owner::ObjectOwner(_) | Owner::Shared { .. } => None,
     }
 }
@@ -310,7 +309,7 @@ mod tests {
             base_types::{dbg_addr, MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
             digests::TransactionDigest,
             gas_coin::GAS,
-            object::{Authenticator, MoveObject, Object},
+            object::{MoveObject, Object},
             test_checkpoint_data_builder::TestCheckpointDataBuilder,
         },
         Indexer,
@@ -394,9 +393,9 @@ mod tests {
         let consensus_v2 = Object::with_id_owner_version_for_testing(
             id,
             SequenceNumber::new(),
-            Owner::ConsensusV2 {
-                authenticator: Box::new(Authenticator::SingleOwner(addr1)),
+            Owner::ConsensusAddressOwner {
                 start_version: SequenceNumber::new(),
+                owner: addr1,
             },
         );
         assert_eq!(

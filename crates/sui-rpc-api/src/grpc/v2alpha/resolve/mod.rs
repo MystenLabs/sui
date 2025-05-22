@@ -565,7 +565,8 @@ fn resolve_object(
             }
             .pipe(Ok)
         }
-        sui_types::object::Owner::Shared { .. } | sui_types::object::Owner::ConsensusV2 { .. } => {
+        sui_types::object::Owner::Shared { .. }
+        | sui_types::object::Owner::ConsensusAddressOwner { .. } => {
             resolve_shared_input_with_object(called_packages, commands, arg_idx, object)
         }
         sui_types::object::Owner::ObjectOwner(_) => Err(RpcError::new(
@@ -668,7 +669,7 @@ fn resolve_shared_input_with_object(
     let initial_shared_version = if let sui_types::object::Owner::Shared {
         initial_shared_version,
     }
-    | sui_types::object::Owner::ConsensusV2 {
+    | sui_types::object::Owner::ConsensusAddressOwner {
         start_version: initial_shared_version,
         ..
     } = object.owner()

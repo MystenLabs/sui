@@ -1184,8 +1184,8 @@ mod checked {
                 // protected by transaction input checker
                 invariant_violation!("ObjectOwner objects cannot be input")
             }
-            Owner::ConsensusV2 { .. } => {
-                unimplemented!("ConsensusV2 does not exist for this execution version")
+            Owner::ConsensusAddressOwner { .. } => {
+                unimplemented!("ConsensusAddressOwner does not exist for this execution version")
             }
         };
         let owner = obj.owner.clone();

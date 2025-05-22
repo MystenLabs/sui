@@ -60,7 +60,7 @@ impl TransactionOutputs {
         let markers: Vec<_> = {
             let received = received_objects.clone().map(|objref| {
                 (
-                    // TODO: Add support for receiving ConsensusV2 objects. For now this assumes fastpath.
+                    // TODO: Add support for receiving consensus objects. For now this assumes fastpath.
                     FullObjectKey::new(FullObjectID::new(objref.0, None), objref.1),
                     MarkerValue::Received,
                 )

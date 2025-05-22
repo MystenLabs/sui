@@ -459,7 +459,7 @@ impl TransactionManager {
                     cert.data().intent_message().value.receiving_objects();
                 for entry in receiving_object_entries {
                     let key = InputKey::VersionedObject {
-                        // TODO: Add support for receiving ConsensusV2 objects. For now this assumes fastpath.
+                        // TODO: Add support for receiving consensus objects. For now this assumes fastpath.
                         id: FullObjectID::new(entry.0, None),
                         version: entry.1,
                     };
