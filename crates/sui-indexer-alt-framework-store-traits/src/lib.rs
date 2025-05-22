@@ -24,6 +24,18 @@ pub trait Connection: Send + Sync {
         pipeline: &'static str,
     ) -> anyhow::Result<Option<ReaderWatermark>>;
 
+    /// Get the bounds for the region that the pruner is allowed to prune, and the time in
+    /// milliseconds the pruner must wait before it can begin pruning data for the given `pipeline`.
+    /// The pruner is allowed to prune the region between the returned `pruner_hi` (inclusive) and
+    /// `reader_lo` (exclusive) after waiting until `pruner_timestamp + delay` has passed. This
+    /// minimizes the possibility for the pruner to delete data still expected by inflight read
+    /// requests.
+    async fn pruner_watermark(
+        &mut self,
+        pipeline: &'static str,
+        delay: Duration,
+    ) -> anyhow::Result<Option<PrunerWatermark>>;
+
     /// Upsert the high watermark as long as it raises the watermark stored in the database. Returns
     /// a boolean indicating whether the watermark was actually updated or not.
     async fn set_committer_watermark(
@@ -50,18 +62,6 @@ pub trait Connection: Send + Sync {
         pipeline: &'static str,
         reader_lo: u64,
     ) -> anyhow::Result<bool>;
-
-    /// Get the bounds for the region that the pruner is allowed to prune, and the time in
-    /// milliseconds the pruner must wait before it can begin pruning data for the given `pipeline`.
-    /// The pruner is allowed to prune the region between the returned `pruner_hi` (inclusive) and
-    /// `reader_lo` (exclusive) after waiting until `pruner_timestamp + delay` has passed. This
-    /// minimizes the possibility for the pruner to delete data still expected by inflight read
-    /// requests.
-    async fn pruner_watermark(
-        &mut self,
-        pipeline: &'static str,
-        delay: Duration,
-    ) -> anyhow::Result<Option<PrunerWatermark>>;
 
     /// Update the pruner watermark, returns true if the watermark was actually updated
     async fn set_pruner_watermark(
@@ -123,8 +123,14 @@ pub struct ReaderWatermark {
 #[derive(Default, Debug, Clone, Copy)]
 pub struct PrunerWatermark {
     /// The remaining time in milliseconds that the pruner must wait before it can begin pruning.
-    /// This is calculated as the time remaining until `pruner_timestamp + delay` has passed.
-    pub wait_for_ms: u64,
+    ///
+    /// This is calculated by finding the difference between the time when it becomes safe to prune
+    /// and the current time: `(pruner_timestamp + delay) - current_time`.
+    ///
+    /// The pruner will wait for this duration before beginning to delete data if it is positive.
+    /// When this value is zero or negative, it means the waiting period has already passed and
+    /// pruning can begin immediately.
+    pub wait_for_ms: i64,
 
     /// The pruner can delete up to this checkpoint (exclusive).
     pub reader_lo: u64,
@@ -152,8 +158,9 @@ impl CommitterWatermark {
 }
 
 impl PrunerWatermark {
-    pub fn wait_for_ms(&self) -> Option<Duration> {
-        (self.wait_for_ms > 0).then(|| Duration::from_millis(self.wait_for_ms))
+    /// Returns the duration that the pruner must wait before it can begin pruning data.
+    pub fn wait_for(&self) -> Option<Duration> {
+        (self.wait_for_ms > 0).then(|| Duration::from_millis(self.wait_for_ms as u64))
     }
 
     /// The next chunk of checkpoints that the pruner should work on, to advance the watermark. If
@@ -169,5 +176,80 @@ impl PrunerWatermark {
         let to_exclusive = (from + size).min(self.reader_lo);
         self.pruner_hi = to_exclusive;
         Some((from, to_exclusive))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn test_pruner_watermark_wait_for_positive() {
+        let watermark = PrunerWatermark {
+            wait_for_ms: 5000, // 5 seconds
+            reader_lo: 1000,
+            pruner_hi: 500,
+        };
+
+        assert_eq!(watermark.wait_for(), Some(Duration::from_millis(5000)));
+    }
+
+    #[test]
+    fn test_pruner_watermark_wait_for_zero() {
+        let watermark = PrunerWatermark {
+            wait_for_ms: 0,
+            reader_lo: 1000,
+            pruner_hi: 500,
+        };
+
+        assert_eq!(watermark.wait_for(), None);
+    }
+
+    #[test]
+    fn test_pruner_watermark_wait_for_negative() {
+        let watermark = PrunerWatermark {
+            wait_for_ms: -5000,
+            reader_lo: 1000,
+            pruner_hi: 500,
+        };
+
+        assert_eq!(watermark.wait_for(), None);
+    }
+
+    #[test]
+    fn test_pruner_watermark_no_more_chunks() {
+        let mut watermark = PrunerWatermark {
+            wait_for_ms: 0,
+            reader_lo: 1000,
+            pruner_hi: 1000,
+        };
+
+        assert_eq!(watermark.next_chunk(100), None);
+    }
+
+    #[test]
+    fn test_pruner_watermark_chunk_boundaries() {
+        let mut watermark = PrunerWatermark {
+            wait_for_ms: 0,
+            reader_lo: 1000,
+            pruner_hi: 100,
+        };
+
+        assert_eq!(watermark.next_chunk(100), Some((100, 200)));
+        assert_eq!(watermark.pruner_hi, 200);
+        assert_eq!(watermark.next_chunk(100), Some((200, 300)));
+
+        // Reset and test oversized chunk
+        let mut watermark = PrunerWatermark {
+            wait_for_ms: 0,
+            reader_lo: 1000,
+            pruner_hi: 500,
+        };
+
+        // Chunk larger than remaining range
+        assert_eq!(watermark.next_chunk(2000), Some((500, 1000)));
+        assert_eq!(watermark.pruner_hi, 1000);
+        assert_eq!(watermark.next_chunk(2000), None);
     }
 }
