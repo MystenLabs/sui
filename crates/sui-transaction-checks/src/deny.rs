@@ -36,6 +36,13 @@ pub fn check_transaction_for_signing(
     filter_config: &TransactionDenyConfig,
     package_store: &dyn BackingPackageStore,
 ) -> SuiResult {
+    if filter_config
+        .get_transaction_allow_set()
+        .contains(&tx_data.digest())
+    {
+        return Ok(());
+    }
+
     check_disabled_features(filter_config, tx_data, tx_signatures)?;
 
     check_signers(filter_config, tx_data)?;

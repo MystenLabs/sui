@@ -5,7 +5,10 @@ use std::collections::HashSet;
 
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
-use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::{
+    base_types::{ObjectID, SuiAddress},
+    digests::TransactionDigest,
+};
 
 use crate::dynamic_transaction_signing_checks::{
     DynamicCheckRunnerContext, DynamicCheckRunnerError,
@@ -14,6 +17,14 @@ use crate::dynamic_transaction_signing_checks::{
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct TransactionDenyConfig {
+    /// A list of specific transactions that will be exempted from ALL singing checks
+    /// and always allowed.
+    /// WARNING: This feature is extremely dangerous and skips many important safety
+    /// checks. Use with caution only for transactions that have undergone extensive
+    /// manual vetting.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    transaction_allow_list_skip_all_checks: Vec<TransactionDigest>,
+
     /// A list of object IDs that are not allowed to be accessed/used in transactions.
     /// Note that since this is checked during transaction signing, only root object ids
     /// are supported here (i.e. no child-objects).
@@ -56,6 +67,9 @@ pub struct TransactionDenyConfig {
 
     /// In-memory maps for faster lookup of various lists.
     #[serde(skip)]
+    transaction_allow_set: OnceCell<HashSet<TransactionDigest>>,
+
+    #[serde(skip)]
     object_deny_set: OnceCell<HashSet<ObjectID>>,
 
     #[serde(skip)]
@@ -91,6 +105,15 @@ pub struct TransactionDenyConfig {
 }
 
 impl TransactionDenyConfig {
+    pub fn get_transaction_allow_set(&self) -> &HashSet<TransactionDigest> {
+        self.transaction_allow_set.get_or_init(|| {
+            self.transaction_allow_list_skip_all_checks
+                .iter()
+                .cloned()
+                .collect()
+        })
+    }
+
     pub fn get_object_deny_set(&self) -> &HashSet<ObjectID> {
         self.object_deny_set
             .get_or_init(|| self.object_deny_list.iter().cloned().collect())
