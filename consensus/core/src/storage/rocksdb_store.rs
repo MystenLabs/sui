@@ -1,16 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::VecDeque, ops::Bound::Included, time::Duration};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    ops::Bound::Included,
+    time::Duration,
+};
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use sui_macros::fail_point;
 use typed_store::{
     metrics::SamplingInterval,
-    reopen,
-    rocks::{default_db_options, open_cf_opts, DBMap, MetricConf, ReadWriteOptions},
-    Map as _,
+    rocks::{default_db_options, DBMap, DBMapTableConfigMap, MetricConf},
+    DBMapUtils, Map as _,
 };
 
 use super::{CommitInfo, Store, WriteBatch};
@@ -21,10 +24,12 @@ use crate::{
 };
 
 /// Persistent storage with RocksDB.
+#[derive(DBMapUtils)]
 pub(crate) struct RocksDBStore {
     /// Stores SignedBlock by refs.
     blocks: DBMap<(Round, AuthorityIndex, BlockDigest), Bytes>,
     /// A secondary index that orders refs first by authors.
+    #[rename = "digests"]
     digests_by_authorities: DBMap<(AuthorityIndex, Round, BlockDigest), ()>,
     /// Maps commit index to Commit.
     commits: DBMap<(CommitIndex, CommitDigest), Bytes>,
@@ -49,44 +54,29 @@ impl RocksDBStore {
         let db_options = default_db_options().optimize_db_for_write_throughput(2);
         let mut metrics_conf = MetricConf::new("consensus");
         metrics_conf.read_sample_interval = SamplingInterval::new(Duration::from_secs(60), 0);
-        let cf_options = default_db_options().optimize_for_write_throughput().options;
-        let column_family_options = vec![
+        let cf_options = default_db_options().optimize_for_write_throughput();
+        let column_family_options = DBMapTableConfigMap::new(BTreeMap::from([
             (
-                Self::BLOCKS_CF,
+                Self::BLOCKS_CF.to_string(),
                 default_db_options()
                     .optimize_for_write_throughput_no_deletion()
                     // Using larger block is ok since there is not much point reads on the cf.
-                    .set_block_options(512, 128 << 10)
-                    .options,
+                    .set_block_options(512, 128 << 10),
             ),
-            (Self::DIGESTS_BY_AUTHORITIES_CF, cf_options.clone()),
-            (Self::COMMITS_CF, cf_options.clone()),
-            (Self::COMMIT_VOTES_CF, cf_options.clone()),
-            (Self::COMMIT_INFO_CF, cf_options.clone()),
-        ];
-        let rocksdb = open_cf_opts(
-            path,
-            Some(db_options.options),
+            (
+                Self::DIGESTS_BY_AUTHORITIES_CF.to_string(),
+                cf_options.clone(),
+            ),
+            (Self::COMMITS_CF.to_string(), cf_options.clone()),
+            (Self::COMMIT_VOTES_CF.to_string(), cf_options.clone()),
+            (Self::COMMIT_INFO_CF.to_string(), cf_options.clone()),
+        ]));
+        Self::open_tables_read_write(
+            path.into(),
             metrics_conf,
-            &column_family_options,
+            Some(db_options.options),
+            Some(column_family_options),
         )
-        .expect("Cannot open database");
-
-        let (blocks, digests_by_authorities, commits, commit_votes, commit_info) = reopen!(&rocksdb,
-            Self::BLOCKS_CF;<(Round, AuthorityIndex, BlockDigest), bytes::Bytes>,
-            Self::DIGESTS_BY_AUTHORITIES_CF;<(AuthorityIndex, Round, BlockDigest), ()>,
-            Self::COMMITS_CF;<(CommitIndex, CommitDigest), Bytes>,
-            Self::COMMIT_VOTES_CF;<(CommitIndex, CommitDigest, BlockRef), ()>,
-            Self::COMMIT_INFO_CF;<(CommitIndex, CommitDigest), CommitInfo>
-        );
-
-        Self {
-            blocks,
-            digests_by_authorities,
-            commits,
-            commit_votes,
-            commit_info,
-        }
     }
 }
 
