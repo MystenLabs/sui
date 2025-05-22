@@ -7,7 +7,9 @@ title: Module `sui::accumulator`
 -  [Struct `Accumulator`](#sui_accumulator_Accumulator)
 -  [Struct `Key`](#sui_accumulator_Key)
 -  [Constants](#@Constants_0)
+-  [Function `accumulator_id`](#sui_accumulator_accumulator_id)
 -  [Function `create`](#sui_accumulator_create)
+-  [Function `commit_to_checkpoint`](#sui_accumulator_commit_to_checkpoint)
 -  [Function `get_accumulator_field_name`](#sui_accumulator_get_accumulator_field_name)
 -  [Function `get_accumulator_field_address`](#sui_accumulator_get_accumulator_field_address)
 
@@ -100,6 +102,30 @@ title: Module `sui::accumulator`
 
 
 
+<a name="sui_accumulator_accumulator_id"></a>
+
+## Function `accumulator_id`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_id">accumulator_id</a>(acc: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_Accumulator">sui::accumulator::Accumulator</a>): &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_id">accumulator_id</a>(acc: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_Accumulator">Accumulator</a>): &<b>mut</b> UID {
+    &<b>mut</b> acc.id
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="sui_accumulator_create"></a>
 
 ## Function `create`
@@ -120,6 +146,31 @@ title: Module `sui::accumulator`
     <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(<a href="../sui/accumulator.md#sui_accumulator_Accumulator">Accumulator</a> {
         id: <a href="../sui/object.md#sui_object_sui_accumulator_root_object_id">object::sui_accumulator_root_object_id</a>(),
     })
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_accumulator_commit_to_checkpoint"></a>
+
+## Function `commit_to_checkpoint`
+
+No-op called by settlement transactions to ensure that they are unique.
+
+
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_commit_to_checkpoint">commit_to_checkpoint</a>(_epoch: u64, _checkpoint_height: u64, _idx: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_commit_to_checkpoint">commit_to_checkpoint</a>(_epoch: u64, _checkpoint_height: u64, _idx: u64, ctx: &TxContext) {
+    <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui/accumulator.md#sui_accumulator_ENotSystemAddress">ENotSystemAddress</a>);
 }
 </code></pre>
 

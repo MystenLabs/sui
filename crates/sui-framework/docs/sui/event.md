@@ -202,7 +202,7 @@ phantom parameters, eg <code><a href="../sui/event.md#sui_event_emit">emit</a>(M
 
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/event.md#sui_event_update_head">update_head</a>(stream_id: <b>address</b>, new_root: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/event.md#sui_event_update_head">update_head</a>(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_Accumulator">sui::accumulator::Accumulator</a>, stream_id: <b>address</b>, new_root: vector&lt;u8&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -211,12 +211,12 @@ phantom parameters, eg <code><a href="../sui/event.md#sui_event_emit">emit</a>(M
 <summary>Implementation</summary>
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../sui/event.md#sui_event_update_head">update_head</a>(stream_id: <b>address</b>, new_root: vector&lt;u8&gt;, ctx: &TxContext) {
+<pre><code><b>entry</b> <b>fun</b> <a href="../sui/event.md#sui_event_update_head">update_head</a>(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_Accumulator">accumulator::Accumulator</a>, stream_id: <b>address</b>, new_root: vector&lt;u8&gt;, ctx: &TxContext) {
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui/event.md#sui_event_ENotSystemAddress">ENotSystemAddress</a>);
     <b>let</b> name = <a href="../sui/accumulator.md#sui_accumulator_get_accumulator_field_name">accumulator::get_accumulator_field_name</a>&lt;<a href="../sui/event.md#sui_event_EventStreamHead">EventStreamHead</a>&gt;(stream_id);
-    <b>let</b> <b>mut</b> accumulator_root = <a href="../sui/object.md#sui_object_sui_accumulator_root_object_id">object::sui_accumulator_root_object_id</a>();
-    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists_with_type">dynamic_field::exists_with_type</a>&lt;<a href="../sui/accumulator.md#sui_accumulator_Key">accumulator::Key</a>, <a href="../sui/event.md#sui_event_EventStreamHead">EventStreamHead</a>&gt;(&accumulator_root, name)) {
-        <b>let</b> head: &<b>mut</b> <a href="../sui/event.md#sui_event_EventStreamHead">EventStreamHead</a> = <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>(&<b>mut</b> accumulator_root, name);
+    <b>let</b> accumulator_root_id = accumulator_root.id();
+    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists_with_type">dynamic_field::exists_with_type</a>&lt;<a href="../sui/accumulator.md#sui_accumulator_Key">accumulator::Key</a>, <a href="../sui/event.md#sui_event_EventStreamHead">EventStreamHead</a>&gt;(accumulator_root_id, name)) {
+        <b>let</b> head: &<b>mut</b> <a href="../sui/event.md#sui_event_EventStreamHead">EventStreamHead</a> = <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>(accumulator_root_id, name);
         <b>let</b> prev_bytes = <a href="../sui/bcs.md#sui_bcs_to_bytes">bcs::to_bytes</a>(head);
         <b>let</b> prev = <a href="../sui/hash.md#sui_hash_blake2b256">hash::blake2b256</a>(&prev_bytes);
         head.prev = prev;
@@ -226,9 +226,8 @@ phantom parameters, eg <code><a href="../sui/event.md#sui_event_emit">emit</a>(M
             root: new_root,
             prev: <a href="../sui/address.md#sui_address_to_bytes">address::to_bytes</a>(<a href="../sui/address.md#sui_address_from_u256">address::from_u256</a>(0)),
         };
-        <a href="../sui/dynamic_field.md#sui_dynamic_field_add">dynamic_field::add</a>(&<b>mut</b> accumulator_root, name, head);
+        <a href="../sui/dynamic_field.md#sui_dynamic_field_add">dynamic_field::add</a>(accumulator_root_id, name, head);
     };
-    <a href="../sui/object.md#sui_object_delete">object::delete</a>(accumulator_root);
 }
 </code></pre>
 

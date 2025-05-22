@@ -1363,8 +1363,14 @@ Accumulator
 Key
 	public struct
 	0x2::accumulator
+accumulator_id
+	public fun
+	0x2::accumulator
 create
 	fun
+	0x2::accumulator
+commit_to_checkpoint
+	entry fun
 	0x2::accumulator
 get_accumulator_field_name
 	public(package) fun
