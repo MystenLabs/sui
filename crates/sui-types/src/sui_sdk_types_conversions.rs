@@ -495,3 +495,22 @@ impl From<TransactionExpiration> for crate::transaction::TransactionExpiration {
         }
     }
 }
+
+impl From<crate::authenticator_state::ActiveJwk> for ActiveJwk {
+    fn from(value: crate::authenticator_state::ActiveJwk) -> Self {
+        let crate::authenticator_state::ActiveJwk { jwk_id, jwk, epoch } = value;
+        Self {
+            jwk_id: JwkId {
+                iss: jwk_id.iss,
+                kid: jwk_id.kid,
+            },
+            jwk: Jwk {
+                kty: jwk.kty,
+                e: jwk.e,
+                n: jwk.n,
+                alg: jwk.alg,
+            },
+            epoch,
+        }
+    }
+}
