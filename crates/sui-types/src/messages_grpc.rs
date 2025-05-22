@@ -8,6 +8,7 @@ use crate::effects::{
     VerifiedSignedTransactionEffects,
 };
 use crate::error::SuiError;
+use crate::messages_consensus::Round;
 use crate::object::Object;
 use crate::transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction};
 use bytes::Bytes;
@@ -185,7 +186,7 @@ pub struct SystemStateRequest {
     pub _unused: bool,
 }
 
-/// Response type for version 3 of the handle certifacte validator API.
+/// Response type for version 3 of the handle certificate validator API.
 ///
 /// The corresponding version 3 request type allows for a client to request events as well as
 /// input/output objects from a transaction's execution. Given Validators operate with very
@@ -275,7 +276,8 @@ impl RawSubmitTxResponse {
     ) -> Result<Self, SuiError> {
         Ok(Self {
             effects: bcs::to_bytes(&effects)
-                .map_err(|e| SuiError::TransactionEffectsSerializationError {
+                .map_err(|e| SuiError::GrpcMessageSerializeError {
+                    type_info: "RawSubmitTxResponse.effects".to_string(),
                     error: e.to_string(),
                 })?
                 .into(),
@@ -283,7 +285,8 @@ impl RawSubmitTxResponse {
                 events
                     .map(|e| {
                         bcs::to_bytes(&e)
-                            .map_err(|e| SuiError::TransactionEventsSerializationError {
+                            .map_err(|e| SuiError::GrpcMessageSerializeError {
+                                type_info: "RawSubmitTxResponse.events".to_string(),
                                 error: e.to_string(),
                             })
                             .map(Bytes::from)
@@ -296,7 +299,8 @@ impl RawSubmitTxResponse {
                 .unwrap_or_default()
                 .into_iter()
                 .map(|obj| {
-                    bcs::to_bytes(&obj).map_err(|e| SuiError::ObjectSerializationError {
+                    bcs::to_bytes(&obj).map_err(|e| SuiError::GrpcMessageSerializeError {
+                        type_info: "RawSubmitTxResponse.input_objects".to_string(),
                         error: e.to_string(),
                     })
                 })
@@ -305,7 +309,8 @@ impl RawSubmitTxResponse {
                 .unwrap_or_default()
                 .into_iter()
                 .map(|obj| {
-                    bcs::to_bytes(&obj).map_err(|e| SuiError::ObjectSerializationError {
+                    bcs::to_bytes(&obj).map_err(|e| SuiError::GrpcMessageSerializeError {
+                        type_info: "RawSubmitTxResponse.output_objects".to_string(),
                         error: e.to_string(),
                     })
                 })
@@ -337,7 +342,8 @@ impl SubmitTxResponse {
     ) -> Result<Self, SuiError> {
         Ok(Self {
             effects: bcs::from_bytes(&effects).map_err(|e| {
-                SuiError::TransactionEffectsDeserializationError {
+                SuiError::GrpcMessageDeserializeError {
+                    type_info: "SubmitTxResponse.effects".to_string(),
                     error: e.to_string(),
                 }
             })?,
@@ -345,7 +351,8 @@ impl SubmitTxResponse {
                 events
                     .map(|events| {
                         bcs::from_bytes(&events).map_err(|e| {
-                            SuiError::TransactionEventsDeserializationError {
+                            SuiError::GrpcMessageDeserializeError {
+                                type_info: "SubmitTxResponse.events".to_string(),
                                 error: e.to_string(),
                             }
                         })
@@ -360,7 +367,8 @@ impl SubmitTxResponse {
                         .into_iter()
                         .map(|object| {
                             bcs::from_bytes(&object).map_err(|e| {
-                                SuiError::ObjectSerializationError {
+                                SuiError::GrpcMessageDeserializeError {
+                                    type_info: "SubmitTxResponse.input_objects".to_string(),
                                     error: e.to_string(),
                                 }
                             })
@@ -376,7 +384,8 @@ impl SubmitTxResponse {
                         .into_iter()
                         .map(|object| {
                             bcs::from_bytes(&object).map_err(|e| {
-                                SuiError::ObjectSerializationError {
+                                SuiError::GrpcMessageDeserializeError {
+                                    type_info: "SubmitTxResponse.output_objects".to_string(),
                                     error: e.to_string(),
                                 }
                             })
@@ -393,6 +402,86 @@ impl SubmitTxResponse {
             },
         })
     }
+}
+
+#[derive(Clone, prost::Message)]
+pub struct RawWaitForEffectsRequest {
+    #[prost(uint64, tag = "1")]
+    pub epoch: u64,
+
+    #[prost(bytes = "bytes", tag = "2")]
+    pub transaction_digest: Bytes,
+
+    #[prost(bytes = "bytes", tag = "3")]
+    pub transaction_position: Bytes,
+
+    /// Whether to include details of the effects,
+    /// including the effects content, events, input objects, and output objects.
+    #[prost(bool, tag = "4")]
+    pub include_details: bool,
+}
+
+#[derive(Clone, prost::Message)]
+pub struct RawWaitForEffectsResponse {
+    // In order to represent an enum in protobuf, we need to use oneof.
+    // However, oneof also allows the value to be unset, which corresponds to None value.
+    // Hence, we need to use Option type for `inner`.
+    // We expect the value to be set in a valid response.
+    #[prost(oneof = "RawValidatorTransactionStatus", tags = "1, 2, 3")]
+    pub inner: Option<RawValidatorTransactionStatus>,
+}
+
+#[derive(Clone, prost::Oneof)]
+pub enum RawValidatorTransactionStatus {
+    #[prost(message, tag = "1")]
+    Executed(RawExecutedStatus),
+    #[prost(message, tag = "2")]
+    Rejected(RawRejectedStatus),
+    #[prost(uint64, tag = "3")]
+    Expired(Round),
+}
+
+#[derive(Clone, prost::Message)]
+pub struct RawExecutedStatus {
+    #[prost(bytes = "bytes", tag = "1")]
+    pub effects_digest: Bytes,
+    #[prost(message, optional, tag = "2")]
+    pub details: Option<RawExecutedData>,
+}
+
+#[derive(Clone, prost::Message)]
+pub struct RawExecutedData {
+    #[prost(bytes = "bytes", tag = "1")]
+    pub effects: Bytes,
+    #[prost(bytes = "bytes", optional, tag = "2")]
+    pub events: Option<Bytes>,
+    #[prost(bytes = "bytes", repeated, tag = "3")]
+    pub input_objects: Vec<Bytes>,
+    #[prost(bytes = "bytes", repeated, tag = "4")]
+    pub output_objects: Vec<Bytes>,
+}
+
+#[derive(Clone, prost::Message)]
+pub struct RawRejectedStatus {
+    #[prost(enumeration = "RawRejectReason", tag = "1")]
+    pub reason: i32,
+    #[prost(string, optional, tag = "2")]
+    pub message: Option<String>, // Only for string-carrying variants
+}
+
+#[derive(Clone, Debug, prost::Enumeration)]
+#[repr(i32)]
+pub enum RawRejectReason {
+    // Transaction is not voted to be rejected locally.
+    None = 0,
+    // Rejected due to lock conflict.
+    LockConflict = 1,
+    // Rejected due to package verification.
+    PackageVerification = 2,
+    // Rejected due to overload.
+    Overload = 3,
+    // Rejected due to coin deny list.
+    CoinDenyList = 4,
 }
 
 impl From<HandleCertificateResponseV3> for HandleCertificateResponseV2 {

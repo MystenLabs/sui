@@ -149,7 +149,7 @@ impl Indexer {
                     .sources
                     .data_ingestion_path
                     .clone()
-                    .unwrap_or(tempfile::tempdir().unwrap().into_path()),
+                    .unwrap_or(tempfile::tempdir().unwrap().keep()),
                 config
                     .sources
                     .remote_store_url

@@ -620,6 +620,7 @@ impl TryInto<Object> for SuiObjectData {
                     o.version,
                     o.bcs_bytes,
                     &protocol_config,
+                    /* system_mutation */ false,
                 )?
             }),
             Some(SuiRawData::Package(p)) => Data::Package(MovePackage::new(

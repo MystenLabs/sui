@@ -236,7 +236,7 @@ title: Module `bridge::limiter`
     // hardcoded limit <b>for</b> <a href="../bridge/bridge.md#bridge_bridge">bridge</a> genesis
     <a href="../bridge/limiter.md#bridge_limiter_TransferLimiter">TransferLimiter</a> {
         transfer_limits: <a href="../bridge/limiter.md#bridge_limiter_initial_transfer_limits">initial_transfer_limits</a>(),
-        transfer_records: vec_map::empty()
+        transfer_records: vec_map::empty(),
     }
 }
 </code></pre>
@@ -265,16 +265,21 @@ title: Module `bridge::limiter`
     <a href="../bridge/treasury.md#bridge_treasury">treasury</a>: &BridgeTreasury,
     clock: &Clock,
     route: BridgeRoute,
-    amount: u64
+    amount: u64,
 ): bool {
     // Create record <b>for</b> route <b>if</b> not exists
     <b>if</b> (!self.transfer_records.contains(&route)) {
-        self.transfer_records.insert(route, <a href="../bridge/limiter.md#bridge_limiter_TransferRecord">TransferRecord</a> {
-            hour_head: 0,
-            hour_tail: 0,
-            per_hour_amounts: vector[],
-            total_amount: 0
-        })
+        self
+            .transfer_records
+            .insert(
+                route,
+                <a href="../bridge/limiter.md#bridge_limiter_TransferRecord">TransferRecord</a> {
+                    hour_head: 0,
+                    hour_tail: 0,
+                    per_hour_amounts: vector[],
+                    total_amount: 0,
+                },
+            )
     };
     <b>let</b> record = self.transfer_records.get_mut(&route);
     <b>let</b> <a href="../bridge/limiter.md#bridge_limiter_current_hour_since_epoch">current_hour_since_epoch</a> = <a href="../bridge/limiter.md#bridge_limiter_current_hour_since_epoch">current_hour_since_epoch</a>(clock);
@@ -283,23 +288,23 @@ title: Module `bridge::limiter`
     <b>let</b> route_limit = self.transfer_limits.try_get(&route);
     <b>assert</b>!(route_limit.is_some(), <a href="../bridge/limiter.md#bridge_limiter_ELimitNotFoundForRoute">ELimitNotFoundForRoute</a>);
     <b>let</b> route_limit = route_limit.destroy_some();
-    <b>let</b> route_limit_adjusted =
-        (route_limit <b>as</b> u128) * (<a href="../bridge/treasury.md#bridge_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128);
+    <b>let</b> route_limit_adjusted = (route_limit <b>as</b> u128) * (<a href="../bridge/treasury.md#bridge_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128);
     // Compute notional amount
     // Upcast to u128 to prevent overflow, to not miss out on small amounts.
     <b>let</b> value = (<a href="../bridge/treasury.md#bridge_treasury">treasury</a>.notional_value&lt;T&gt;() <b>as</b> u128);
     <b>let</b> notional_amount_with_token_multiplier = value * (amount <b>as</b> u128);
     // Check <b>if</b> transfer amount exceed limit
     // Upscale them to the token's decimal.
-    <b>if</b> ((record.total_amount <b>as</b> u128)
-        * (<a href="../bridge/treasury.md#bridge_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128)
-        + notional_amount_with_token_multiplier &gt; route_limit_adjusted
+    <b>if</b> (
+        (record.total_amount <b>as</b> u128)
+            * (<a href="../bridge/treasury.md#bridge_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128)
+            + notional_amount_with_token_multiplier &gt; route_limit_adjusted
     ) {
         <b>return</b> <b>false</b>
     };
     // Now scale down to notional value
-    <b>let</b> notional_amount = notional_amount_with_token_multiplier
-        / (<a href="../bridge/treasury.md#bridge_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128);
+    <b>let</b> notional_amount =
+        notional_amount_with_token_multiplier / (<a href="../bridge/treasury.md#bridge_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128);
     // Should be safe to downcast to u64 after dividing by the decimals
     <b>let</b> notional_amount = (notional_amount <b>as</b> u64);
     // Record transfer value
@@ -332,7 +337,7 @@ title: Module `bridge::limiter`
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../bridge/limiter.md#bridge_limiter_update_route_limit">update_route_limit</a>(
     self: &<b>mut</b> <a href="../bridge/limiter.md#bridge_limiter_TransferLimiter">TransferLimiter</a>,
     route: &BridgeRoute,
-    new_usd_limit: u64
+    new_usd_limit: u64,
 ) {
     <b>let</b> receiving_chain = *route.destination();
     <b>if</b> (!self.transfer_limits.contains(route)) {
@@ -340,7 +345,7 @@ title: Module `bridge::limiter`
     } <b>else</b> {
         *&<b>mut</b> self.transfer_limits[route] = new_usd_limit;
     };
-    emit(<a href="../bridge/limiter.md#bridge_limiter_UpdateRouteLimitEvent">UpdateRouteLimitEvent</a> {
+    event::emit(<a href="../bridge/limiter.md#bridge_limiter_UpdateRouteLimitEvent">UpdateRouteLimitEvent</a> {
         sending_chain: *route.source(),
         receiving_chain,
         new_limit: new_usd_limit,
@@ -445,24 +450,24 @@ title: Module `bridge::limiter`
     // 5M limit on Sui -&gt; Ethereum mainnet
     transfer_limits.insert(
         <a href="../bridge/chain_ids.md#bridge_chain_ids_get_route">chain_ids::get_route</a>(<a href="../bridge/chain_ids.md#bridge_chain_ids_eth_mainnet">chain_ids::eth_mainnet</a>(), <a href="../bridge/chain_ids.md#bridge_chain_ids_sui_mainnet">chain_ids::sui_mainnet</a>()),
-        5_000_000 * <a href="../bridge/limiter.md#bridge_limiter_USD_VALUE_MULTIPLIER">USD_VALUE_MULTIPLIER</a>
+        5_000_000 * <a href="../bridge/limiter.md#bridge_limiter_USD_VALUE_MULTIPLIER">USD_VALUE_MULTIPLIER</a>,
     );
     // MAX limit <b>for</b> testnet and devnet
     transfer_limits.insert(
         <a href="../bridge/chain_ids.md#bridge_chain_ids_get_route">chain_ids::get_route</a>(<a href="../bridge/chain_ids.md#bridge_chain_ids_eth_sepolia">chain_ids::eth_sepolia</a>(), <a href="../bridge/chain_ids.md#bridge_chain_ids_sui_testnet">chain_ids::sui_testnet</a>()),
-        <a href="../bridge/limiter.md#bridge_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>
+        <a href="../bridge/limiter.md#bridge_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>,
     );
     transfer_limits.insert(
         <a href="../bridge/chain_ids.md#bridge_chain_ids_get_route">chain_ids::get_route</a>(<a href="../bridge/chain_ids.md#bridge_chain_ids_eth_sepolia">chain_ids::eth_sepolia</a>(), <a href="../bridge/chain_ids.md#bridge_chain_ids_sui_custom">chain_ids::sui_custom</a>()),
-        <a href="../bridge/limiter.md#bridge_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>
+        <a href="../bridge/limiter.md#bridge_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>,
     );
     transfer_limits.insert(
         <a href="../bridge/chain_ids.md#bridge_chain_ids_get_route">chain_ids::get_route</a>(<a href="../bridge/chain_ids.md#bridge_chain_ids_eth_custom">chain_ids::eth_custom</a>(), <a href="../bridge/chain_ids.md#bridge_chain_ids_sui_testnet">chain_ids::sui_testnet</a>()),
-        <a href="../bridge/limiter.md#bridge_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>
+        <a href="../bridge/limiter.md#bridge_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>,
     );
     transfer_limits.insert(
         <a href="../bridge/chain_ids.md#bridge_chain_ids_get_route">chain_ids::get_route</a>(<a href="../bridge/chain_ids.md#bridge_chain_ids_eth_custom">chain_ids::eth_custom</a>(), <a href="../bridge/chain_ids.md#bridge_chain_ids_sui_custom">chain_ids::sui_custom</a>()),
-        <a href="../bridge/limiter.md#bridge_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>
+        <a href="../bridge/limiter.md#bridge_limiter_MAX_TRANSFER_LIMIT">MAX_TRANSFER_LIMIT</a>,
     );
     transfer_limits
 }

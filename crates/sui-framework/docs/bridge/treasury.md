@@ -432,8 +432,8 @@ title: Module `bridge::treasury`
     // Make sure upgrade cap is <b>for</b> the Coin package
     // FIXME: add test
     <b>assert</b>!(
-        object::id_to_address(&package::upgrade_package(&uc))
-            == coin_address, <a href="../bridge/treasury.md#bridge_treasury_EInvalidUpgradeCap">EInvalidUpgradeCap</a>
+        object::id_to_address(&package::upgrade_package(&uc)) == coin_address,
+        <a href="../bridge/treasury.md#bridge_treasury_EInvalidUpgradeCap">EInvalidUpgradeCap</a>,
     );
     <b>let</b> registration = <a href="../bridge/treasury.md#bridge_treasury_ForeignTokenRegistration">ForeignTokenRegistration</a> {
         type_name,
@@ -442,10 +442,10 @@ title: Module `bridge::treasury`
     };
     self.waiting_room.add(type_name::into_string(type_name), registration);
     self.treasuries.add(type_name, tc);
-    emit(<a href="../bridge/treasury.md#bridge_treasury_TokenRegistrationEvent">TokenRegistrationEvent</a>{
+    event::emit(<a href="../bridge/treasury.md#bridge_treasury_TokenRegistrationEvent">TokenRegistrationEvent</a> {
         type_name,
         decimal: coin::get_decimals(metadata),
-        native_token: <b>false</b>
+        native_token: <b>false</b>,
     });
 }
 </code></pre>
@@ -476,36 +476,36 @@ title: Module `bridge::treasury`
     native_token: bool,
     <a href="../bridge/treasury.md#bridge_treasury_notional_value">notional_value</a>: u64,
 ) {
-    <b>if</b> (!native_token){
+    <b>if</b> (!native_token) {
         <b>assert</b>!(<a href="../bridge/treasury.md#bridge_treasury_notional_value">notional_value</a> &gt; 0, <a href="../bridge/treasury.md#bridge_treasury_EInvalidNotionalValue">EInvalidNotionalValue</a>);
-        <b>let</b> <a href="../bridge/treasury.md#bridge_treasury_ForeignTokenRegistration">ForeignTokenRegistration</a>{
+        <b>let</b> <a href="../bridge/treasury.md#bridge_treasury_ForeignTokenRegistration">ForeignTokenRegistration</a> {
             type_name,
             uc,
             decimal,
         } = self.waiting_room.remove&lt;String, <a href="../bridge/treasury.md#bridge_treasury_ForeignTokenRegistration">ForeignTokenRegistration</a>&gt;(token_name);
         <b>let</b> <a href="../bridge/treasury.md#bridge_treasury_decimal_multiplier">decimal_multiplier</a> = 10u64.pow(decimal);
-        self.supported_tokens.insert(
-            type_name,
-            <a href="../bridge/treasury.md#bridge_treasury_BridgeTokenMetadata">BridgeTokenMetadata</a>{
-                id: <a href="../bridge/treasury.md#bridge_treasury_token_id">token_id</a>,
-                <a href="../bridge/treasury.md#bridge_treasury_decimal_multiplier">decimal_multiplier</a>,
-                <a href="../bridge/treasury.md#bridge_treasury_notional_value">notional_value</a>,
-                native_token
-            },
-        );
+        self
+            .supported_tokens
+            .insert(
+                type_name,
+                <a href="../bridge/treasury.md#bridge_treasury_BridgeTokenMetadata">BridgeTokenMetadata</a> {
+                    id: <a href="../bridge/treasury.md#bridge_treasury_token_id">token_id</a>,
+                    <a href="../bridge/treasury.md#bridge_treasury_decimal_multiplier">decimal_multiplier</a>,
+                    <a href="../bridge/treasury.md#bridge_treasury_notional_value">notional_value</a>,
+                    native_token,
+                },
+            );
         self.id_token_type_map.insert(<a href="../bridge/treasury.md#bridge_treasury_token_id">token_id</a>, type_name);
         // Freeze upgrade cap to prevent changes to the coin
         transfer::public_freeze_object(uc);
-        emit(<a href="../bridge/treasury.md#bridge_treasury_NewTokenEvent">NewTokenEvent</a>{
+        event::emit(<a href="../bridge/treasury.md#bridge_treasury_NewTokenEvent">NewTokenEvent</a> {
             <a href="../bridge/treasury.md#bridge_treasury_token_id">token_id</a>,
             type_name,
             native_token,
             <a href="../bridge/treasury.md#bridge_treasury_decimal_multiplier">decimal_multiplier</a>,
-            <a href="../bridge/treasury.md#bridge_treasury_notional_value">notional_value</a>
+            <a href="../bridge/treasury.md#bridge_treasury_notional_value">notional_value</a>,
         })
-    } <b>else</b> {
-        // Not implemented <b>for</b> V1
-    }
+    } // <b>else</b> not implemented in V1
 }
 </code></pre>
 
@@ -582,11 +582,7 @@ title: Module `bridge::treasury`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../bridge/treasury.md#bridge_treasury_mint">mint</a>&lt;T&gt;(
-    self: &<b>mut</b> <a href="../bridge/treasury.md#bridge_treasury_BridgeTreasury">BridgeTreasury</a>,
-    amount: u64,
-    ctx: &<b>mut</b> TxContext,
-): Coin&lt;T&gt; {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../bridge/treasury.md#bridge_treasury_mint">mint</a>&lt;T&gt;(self: &<b>mut</b> <a href="../bridge/treasury.md#bridge_treasury_BridgeTreasury">BridgeTreasury</a>, amount: u64, ctx: &<b>mut</b> TxContext): Coin&lt;T&gt; {
     <b>let</b> <a href="../bridge/treasury.md#bridge_treasury">treasury</a> = &<b>mut</b> self.treasuries[type_name::get&lt;T&gt;()];
     coin::mint(<a href="../bridge/treasury.md#bridge_treasury">treasury</a>, amount, ctx)
 }
@@ -622,7 +618,7 @@ title: Module `bridge::treasury`
     <b>let</b> type_name = type_name.destroy_some();
     <b>let</b> metadata = self.supported_tokens.get_mut(&type_name);
     metadata.<a href="../bridge/treasury.md#bridge_treasury_notional_value">notional_value</a> = new_usd_price;
-    emit(<a href="../bridge/treasury.md#bridge_treasury_UpdateTokenPriceEvent">UpdateTokenPriceEvent</a> {
+    event::emit(<a href="../bridge/treasury.md#bridge_treasury_UpdateTokenPriceEvent">UpdateTokenPriceEvent</a> {
         <a href="../bridge/treasury.md#bridge_treasury_token_id">token_id</a>,
         new_price: new_usd_price,
     })

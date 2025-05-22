@@ -25,6 +25,7 @@ jobs:
           - crates/sui-framework/packages/sui-framework # sui framework
           - crates/sui-framework/packages/move-stdlib # move stdlib
           - crates/sui-framework/packages/sui-system # sui system
+          - crates/sui-framework/packages/bridge # bridge
     defaults:
       run:
         working-directory: ${{ matrix.working-directory }}

@@ -299,6 +299,51 @@ fun validator_candidate_update() {
     runner.finish();
 }
 
+#[test]
+// Scenario:
+// 1. Submit a candidate validator
+// 2. Request removal of the candidate
+// 3. Submit the same candidate validator again
+// 4. Get validator into the active set
+// 5. Request removal of the validator
+// 6. Submit the same validator again
+fun duplicate_metadata_resubmission_after_inactive() {
+    let mut runner = test_runner::new()
+        .validators_initial_stake(1_000_000)
+        .validators_count(3)
+        .build();
+
+    let validator = validator_builder::preset().build(runner.ctx());
+    let validator_address = validator.sui_address();
+
+    // Submit a candidate validator, then remove it
+    runner.add_validator_candidate(validator);
+    runner.set_sender(validator_address).remove_validator_candidate();
+
+    // Create a new candidate with the same metadata
+    let validator = validator_builder::preset().build(runner.ctx());
+    runner.add_validator_candidate(validator);
+
+    // Stake with the validator, so they have enough stake
+    runner.stake_with(validator_address, 1_000_000);
+    runner.set_sender(validator_address).add_validator();
+
+    // Advance epoch to effectuate the validator addition
+    runner.advance_epoch(option::none()).destroy_for_testing();
+
+    // Request removal of the validator
+    runner.set_sender(validator_address).remove_validator();
+
+    // Wait another epoch to effectuate the removal
+    runner.advance_epoch(option::none()).destroy_for_testing();
+
+    // Create a new candidate with the same metadata again
+    let validator = validator_builder::preset().build(runner.ctx());
+    runner.add_validator_candidate(validator);
+
+    runner.finish();
+}
+
 #[test, expected_failure(abort_code = validator::EMetadataInvalidWorkerPubkey)]
 fun add_validator_candidate_failure_invalid_metadata() {
     let mut runner = test_runner::new().validators_count(3).build();

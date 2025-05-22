@@ -112,7 +112,7 @@ impl PersistedStore {
     where
         R: rand::RngCore + rand::CryptoRng,
     {
-        let path: PathBuf = path.unwrap_or(tempdir().unwrap().into_path());
+        let path: PathBuf = path.unwrap_or(tempdir().unwrap().keep());
 
         let mut builder = ConfigBuilder::new_with_temp_dir()
             .rng(&mut rng)

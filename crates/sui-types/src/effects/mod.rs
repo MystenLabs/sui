@@ -22,7 +22,10 @@ use crate::storage::WriteKind;
 use effects_v1::TransactionEffectsV1;
 pub use effects_v2::UnchangedSharedKind;
 use enum_dispatch::enum_dispatch;
-pub use object_change::{EffectsObjectChange, ObjectIn, ObjectOut};
+use object_change::AccumulatorWriteV1;
+pub use object_change::{
+    AccumulatorOperation, AccumulatorValue, EffectsObjectChange, ObjectIn, ObjectOut,
+};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentScope};
 use std::collections::{BTreeMap, BTreeSet};
@@ -367,6 +370,9 @@ pub trait TransactionEffectsAPI {
 
     /// Returns all root shared objects (i.e. not child object) that are read-only in the transaction.
     fn unchanged_shared_objects(&self) -> Vec<(ObjectID, UnchangedSharedKind)>;
+
+    /// Returns all accumulator updates in the transaction.
+    fn accumulator_updates(&self) -> Vec<(ObjectID, AccumulatorWriteV1)>;
 
     // All of these should be #[cfg(test)], but they are used by tests in other crates, and
     // dependencies don't get built with cfg(test) set as far as I can tell.

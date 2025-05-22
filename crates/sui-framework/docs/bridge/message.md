@@ -544,7 +544,7 @@ title: Module `bridge::message`
         target_chain,
         target_address,
         <a href="../bridge/message.md#bridge_message_token_type">token_type</a>,
-        amount
+        amount,
     }
 }
 </code></pre>
@@ -614,7 +614,7 @@ Emergency op payload is just a single byte
     <b>assert</b>!(bcs.into_remainder_bytes().is_empty(), <a href="../bridge/message.md#bridge_message_ETrailingBytes">ETrailingBytes</a>);
     <a href="../bridge/message.md#bridge_message_Blocklist">Blocklist</a> {
         <a href="../bridge/message.md#bridge_message_blocklist_type">blocklist_type</a>,
-        validator_eth_addresses
+        validator_eth_addresses,
     }
 }
 </code></pre>
@@ -647,7 +647,7 @@ Emergency op payload is just a single byte
     <a href="../bridge/message.md#bridge_message_UpdateBridgeLimit">UpdateBridgeLimit</a> {
         receiving_chain: <a href="../bridge/message.md#bridge_message">message</a>.<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>,
         sending_chain,
-        limit
+        limit,
     }
 }
 </code></pre>
@@ -678,7 +678,7 @@ Emergency op payload is just a single byte
     <b>assert</b>!(bcs.into_remainder_bytes().is_empty(), <a href="../bridge/message.md#bridge_message_ETrailingBytes">ETrailingBytes</a>);
     <a href="../bridge/message.md#bridge_message_UpdateAssetPrice">UpdateAssetPrice</a> {
         token_id,
-        new_price
+        new_price,
     }
 }
 </code></pre>
@@ -710,7 +710,7 @@ Emergency op payload is just a single byte
     <b>let</b> <a href="../bridge/message.md#bridge_message_token_prices">token_prices</a> = bcs.peel_vec_u64();
     <b>let</b> <b>mut</b> n = 0;
     <b>let</b> <b>mut</b> <a href="../bridge/message.md#bridge_message_token_type_names">token_type_names</a> = vector[];
-    <b>while</b> (n &lt; token_type_names_bytes.length()){
+    <b>while</b> (n &lt; token_type_names_bytes.length()) {
         <a href="../bridge/message.md#bridge_message_token_type_names">token_type_names</a>.push_back(ascii::string(*token_type_names_bytes.borrow(n)));
         n = n + 1;
     };
@@ -719,7 +719,7 @@ Emergency op payload is just a single byte
         native_token,
         <a href="../bridge/message.md#bridge_message_token_ids">token_ids</a>,
         <a href="../bridge/message.md#bridge_message_token_type_names">token_type_names</a>,
-        <a href="../bridge/message.md#bridge_message_token_prices">token_prices</a>
+        <a href="../bridge/message.md#bridge_message_token_prices">token_prices</a>,
     }
 }
 </code></pre>
@@ -749,12 +749,9 @@ Emergency op payload is just a single byte
         <a href="../bridge/message.md#bridge_message_message_version">message_version</a>,
         <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>,
         <a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>,
-        <a href="../bridge/message.md#bridge_message_payload">payload</a>
+        <a href="../bridge/message.md#bridge_message_payload">payload</a>,
     } = <a href="../bridge/message.md#bridge_message">message</a>;
-    <b>let</b> <b>mut</b> <a href="../bridge/message.md#bridge_message">message</a> = vector[
-        <a href="../bridge/message.md#bridge_message_message_type">message_type</a>,
-        <a href="../bridge/message.md#bridge_message_message_version">message_version</a>,
-    ];
+    <b>let</b> <b>mut</b> <a href="../bridge/message.md#bridge_message">message</a> = vector[<a href="../bridge/message.md#bridge_message_message_type">message_type</a>, <a href="../bridge/message.md#bridge_message_message_version">message_version</a>];
     // bcs serializes u64 <b>as</b> 8 bytes
     <a href="../bridge/message.md#bridge_message">message</a>.append(<a href="../bridge/message.md#bridge_message_reverse_bytes">reverse_bytes</a>(bcs::to_bytes(&<a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>)));
     <a href="../bridge/message.md#bridge_message">message</a>.push_back(<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>);
@@ -801,7 +798,7 @@ Token Transfer Message Format:
     target_chain: u8,
     target_address: vector&lt;u8&gt;,
     <a href="../bridge/message.md#bridge_message_token_type">token_type</a>: u8,
-    amount: u64
+    amount: u64,
 ): <a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
     <a href="../bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>);
     <a href="../bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(target_chain);
@@ -852,11 +849,7 @@ Emergency Op Message Format:
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_create_emergency_op_message">create_emergency_op_message</a>(
-    <a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>: u8,
-    <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>: u64,
-    op_type: u8,
-): <a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_create_emergency_op_message">create_emergency_op_message</a>(<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>: u8, <a href="../bridge/message.md#bridge_message_seq_num">seq_num</a>: u64, op_type: u8): <a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
     <a href="../bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(<a href="../bridge/message.md#bridge_message_source_chain">source_chain</a>);
     <a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a> {
         <a href="../bridge/message.md#bridge_message_message_type">message_type</a>: <a href="../bridge/message_types.md#bridge_message_types_emergency_op">message_types::emergency_op</a>(),
@@ -1730,9 +1723,7 @@ Return the required signature threshold for the message, values are voting power
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_to_parsed_token_transfer_message">to_parsed_token_transfer_message</a>(
-    <a href="../bridge/message.md#bridge_message">message</a>: &<a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>,
-): <a href="../bridge/message.md#bridge_message_ParsedTokenTransferMessage">ParsedTokenTransferMessage</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/message.md#bridge_message_to_parsed_token_transfer_message">to_parsed_token_transfer_message</a>(<a href="../bridge/message.md#bridge_message">message</a>: &<a href="../bridge/message.md#bridge_message_BridgeMessage">BridgeMessage</a>): <a href="../bridge/message.md#bridge_message_ParsedTokenTransferMessage">ParsedTokenTransferMessage</a> {
     <b>assert</b>!(<a href="../bridge/message.md#bridge_message">message</a>.<a href="../bridge/message.md#bridge_message_message_type">message_type</a>() == <a href="../bridge/message_types.md#bridge_message_types_token">message_types::token</a>(), <a href="../bridge/message.md#bridge_message_EMustBeTokenMessage">EMustBeTokenMessage</a>);
     <b>let</b> <a href="../bridge/message.md#bridge_message_payload">payload</a> = <a href="../bridge/message.md#bridge_message">message</a>.<a href="../bridge/message.md#bridge_message_extract_token_bridge_payload">extract_token_bridge_payload</a>();
     <a href="../bridge/message.md#bridge_message_ParsedTokenTransferMessage">ParsedTokenTransferMessage</a> {

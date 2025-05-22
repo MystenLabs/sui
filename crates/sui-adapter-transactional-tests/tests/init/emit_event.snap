@@ -1,0 +1,15 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 1, lines 6-15:
+//# publish
+events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: _, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("Event"), type_params: [] }, contents: [1, 0, 0, 0, 0, 0, 0, 0] }
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4689200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 17:
+//# view-object 1,0
+1,0::M1

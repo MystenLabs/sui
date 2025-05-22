@@ -60,7 +60,7 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                     let mut path = PathBuf::from(env!("SIMTEST_STATIC_INIT_MOVE"));
                     let mut build_config = BuildConfig::new_for_testing();
 
-                    build_config.config.install_dir = Some(TempDir::new().unwrap().into_path());
+                    build_config.config.install_dir = Some(TempDir::new().unwrap().keep());
                     let _all_module_bytes = build_config
                         .build(&path)
                         .unwrap()

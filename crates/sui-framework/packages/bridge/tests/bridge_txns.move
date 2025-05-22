@@ -3,6 +3,7 @@
 
 #[test_only]
 module bridge::bridge_txns;
+
 use bridge::bridge_env::{
     already_approved,
     already_claimed,
@@ -50,10 +51,8 @@ fun test_limits() {
         env.claim_and_transfer_token<ETH>(source_chain, transfer_id1) ==
         limit_exceeded(),
     );
-    assert!(
-        env.claim_and_transfer_token<ETH>(source_chain, transfer_id2) ==
-        claimed(),
-    );
+    assert!(env.claim_and_transfer_token<ETH>(source_chain, transfer_id2) ==
+        claimed());
     // double claim is ok and it is a no-op
     assert!(
         env.claim_and_transfer_token<ETH>(source_chain, transfer_id2) ==
@@ -62,10 +61,8 @@ fun test_limits() {
 
     // up limits to allow claim
     env.update_bridge_limit(@0x0, chain_id, source_chain, 4000);
-    assert!(
-        env.claim_and_transfer_token<ETH>(source_chain, transfer_id1) ==
-        claimed(),
-    );
+    assert!(env.claim_and_transfer_token<ETH>(source_chain, transfer_id1) ==
+        claimed());
 
     env.destroy_env();
 }
@@ -88,20 +85,16 @@ fun test_bridge_and_claim() {
         sui_address,
         amount,
     );
-    assert!(
-        env.claim_and_transfer_token<ETH>(source_chain, transfer_id1) ==
-        claimed(),
-    );
+    assert!(env.claim_and_transfer_token<ETH>(source_chain, transfer_id1) ==
+        claimed());
     let transfer_id2 = env.bridge_to_sui<ETH>(
         source_chain,
         eth_address,
         sui_address,
         amount,
     );
-    assert!(
-        env.claim_and_transfer_token<ETH>(source_chain, transfer_id2) ==
-        claimed(),
-    );
+    assert!(env.claim_and_transfer_token<ETH>(source_chain, transfer_id2) ==
+        claimed());
     // double claim is ok and it is a no-op
     assert!(
         env.claim_and_transfer_token<ETH>(source_chain, transfer_id2) ==
@@ -122,14 +115,10 @@ fun test_bridge_and_claim() {
         sui_address,
         amount,
     );
-    assert!(
-        env.claim_and_transfer_token<ETH>(source_chain, transfer_id1) ==
-        claimed(),
-    );
-    assert!(
-        env.claim_and_transfer_token<ETH>(source_chain, transfer_id2) ==
-        claimed(),
-    );
+    assert!(env.claim_and_transfer_token<ETH>(source_chain, transfer_id1) ==
+        claimed());
+    assert!(env.claim_and_transfer_token<ETH>(source_chain, transfer_id2) ==
+        claimed());
 
     //
     // move from eth and send it back
@@ -158,10 +147,8 @@ fun test_bridge_and_claim() {
     let signatures = env.sign_message_with(message, vector[0, 2]);
     let transfer_id = message.seq_num();
     assert!(env.approve_token_transfer(message, signatures) == approved());
-    assert!(
-        env.claim_and_transfer_token<ETH>(source_chain, transfer_id) ==
-        claimed(),
-    );
+    assert!(env.claim_and_transfer_token<ETH>(source_chain, transfer_id) ==
+        claimed());
 
     //
     // multiple approve with subset of signatures
@@ -174,12 +161,8 @@ fun test_bridge_and_claim() {
     let signatures = env.sign_message_with(message, vector[0, 2]);
     let transfer_id = message.seq_num();
     assert!(env.approve_token_transfer(message, signatures) == approved());
-    assert!(
-        env.approve_token_transfer(message, signatures) == already_approved(),
-    );
-    assert!(
-        env.approve_token_transfer(message, signatures) == already_approved(),
-    );
+    assert!(env.approve_token_transfer(message, signatures) == already_approved());
+    assert!(env.approve_token_transfer(message, signatures) == already_approved());
     let token = env.claim_token<ETH>(sui_address, source_chain, transfer_id);
     let send_token_id = env.send_token<ETH>(
         sui_address,
@@ -197,9 +180,7 @@ fun test_bridge_and_claim() {
     let signatures = env.sign_message_with(message, vector[1, 2]);
     assert!(env.approve_token_transfer(message, signatures) == approved());
     let signatures = env.sign_message_with(message, vector[0, 2]);
-    assert!(
-        env.approve_token_transfer(message, signatures) == already_approved(),
-    );
+    assert!(env.approve_token_transfer(message, signatures) == already_approved());
 
     //
     // multiple approve with different subset of signatures
@@ -213,13 +194,9 @@ fun test_bridge_and_claim() {
     let signatures = env.sign_message_with(message, vector[0, 2]);
     assert!(env.approve_token_transfer(message, signatures) == approved());
     let signatures = env.sign_message_with(message, vector[0, 1]);
-    assert!(
-        env.approve_token_transfer(message, signatures) == already_approved(),
-    );
+    assert!(env.approve_token_transfer(message, signatures) == already_approved());
     let signatures = env.sign_message_with(message, vector[1, 2]);
-    assert!(
-        env.approve_token_transfer(message, signatures) == already_approved(),
-    );
+    assert!(env.approve_token_transfer(message, signatures) == already_approved());
     let token = env.claim_token<ETH>(sui_address, source_chain, transfer_id);
     env.send_token<ETH>(
         sui_address,
@@ -231,8 +208,7 @@ fun test_bridge_and_claim() {
     env.destroy_env();
 }
 
-#[test]
-#[expected_failure(abort_code = bridge::committee::ESignatureBelowThreshold)]
+#[test, expected_failure(abort_code = bridge::committee::ESignatureBelowThreshold)]
 fun test_blocklist() {
     let mut env = create_env(chain_ids::sui_custom());
     let validators = vector[
@@ -264,16 +240,12 @@ fun test_blocklist() {
     let signatures = env.sign_message_with(message, vector[0, 2]);
     let transfer_id = message.seq_num();
     assert!(env.approve_token_transfer(message, signatures) == approved());
-    assert!(
-        env.claim_and_transfer_token<ETH>(source_chain, transfer_id) ==
-        claimed(),
-    );
+    assert!(env.claim_and_transfer_token<ETH>(source_chain, transfer_id) ==
+        claimed());
 
     // block bridge node 0
     let chain_id = env.chain_id();
-    let node_key = ecdsa_pub_key_to_eth_address(env
-        .validators()[0]
-        .public_key());
+    let node_key = ecdsa_pub_key_to_eth_address(env.validators()[0].public_key());
     env.execute_blocklist(@0x0, chain_id, 0, vector[node_key]);
 
     // signing with 2 valid bridge nodes works
@@ -285,9 +257,7 @@ fun test_blocklist() {
     );
     let signatures = env.sign_message_with(message, vector[1, 2]);
     assert!(env.approve_token_transfer(message, signatures) == approved());
-    assert!(
-        env.approve_token_transfer(message, signatures) == already_approved(),
-    );
+    assert!(env.approve_token_transfer(message, signatures) == already_approved());
 
     // signing with blocked node fails
     let message = env.bridge_in_message<ETH>(
@@ -320,9 +290,7 @@ fun test_system_messages() {
     );
 
     let chain_id = env.chain_id();
-    let node_key = ecdsa_pub_key_to_eth_address(env
-        .validators()[0]
-        .public_key());
+    let node_key = ecdsa_pub_key_to_eth_address(env.validators()[0].public_key());
     env.execute_blocklist(@0x0, chain_id, 0, vector[node_key]);
 
     env.destroy_env();

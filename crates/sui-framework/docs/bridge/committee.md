@@ -505,7 +505,7 @@ title: Module `bridge::committee`
     system_state: &<b>mut</b> SuiSystemState,
     bridge_pubkey_bytes: vector&lt;u8&gt;,
     http_rest_url: vector&lt;u8&gt;,
-    ctx: &TxContext
+    ctx: &TxContext,
 ) {
     // We disallow registration after <a href="../bridge/committee.md#bridge_committee">committee</a> initiated in v1
     <b>assert</b>!(self.members.is_empty(), <a href="../bridge/committee.md#bridge_committee_ECommitteeAlreadyInitiated">ECommitteeAlreadyInitiated</a>);
@@ -563,7 +563,7 @@ title: Module `bridge::committee`
     self: &<b>mut</b> <a href="../bridge/committee.md#bridge_committee_BridgeCommittee">BridgeCommittee</a>,
     active_validator_voting_power: VecMap&lt;<b>address</b>, u64&gt;,
     min_stake_participation_percentage: u64,
-    ctx: &TxContext
+    ctx: &TxContext,
 ) {
     <b>let</b> <b>mut</b> i = 0;
     <b>let</b> <b>mut</b> new_members = vec_map::empty();
@@ -597,7 +597,7 @@ title: Module `bridge::committee`
         self.last_committee_update_epoch = ctx.epoch();
         emit(<a href="../bridge/committee.md#bridge_committee_CommitteeUpdateEvent">CommitteeUpdateEvent</a> {
             members: new_members,
-            stake_participation_percentage
+            stake_participation_percentage,
         })
     }
 }
@@ -699,15 +699,19 @@ title: Module `bridge::committee`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../bridge/committee.md#bridge_committee_update_node_url">update_node_url</a>(self: &<b>mut</b> <a href="../bridge/committee.md#bridge_committee_BridgeCommittee">BridgeCommittee</a>, new_url: vector&lt;u8&gt;, ctx: &TxContext) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../bridge/committee.md#bridge_committee_update_node_url">update_node_url</a>(
+    self: &<b>mut</b> <a href="../bridge/committee.md#bridge_committee_BridgeCommittee">BridgeCommittee</a>,
+    new_url: vector&lt;u8&gt;,
+    ctx: &TxContext,
+) {
     <b>let</b> <b>mut</b> idx = 0;
     <b>while</b> (idx &lt; self.members.size()) {
         <b>let</b> (_, member) = self.members.get_entry_by_idx_mut(idx);
         <b>if</b> (member.sui_address == ctx.sender()) {
             member.http_rest_url = new_url;
-            emit (<a href="../bridge/committee.md#bridge_committee_CommitteeMemberUrlUpdateEvent">CommitteeMemberUrlUpdateEvent</a> {
+            emit(<a href="../bridge/committee.md#bridge_committee_CommitteeMemberUrlUpdateEvent">CommitteeMemberUrlUpdateEvent</a> {
                 member: member.bridge_pubkey_bytes,
-                new_url
+                new_url,
             });
             <b>return</b>
         };
