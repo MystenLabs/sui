@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::{FullObjectID, SequenceNumber, VersionDigest};
-use crate::effects::TransactionEffectsAPI;
-use crate::effects::{TransactionEffects, TransactionEvents};
+use crate::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use crate::error::SuiResult;
 use crate::execution::DynamicallyLoadedObjectMetadata;
 use crate::storage::PackageObject;
