@@ -15,6 +15,7 @@ derive-where.workspace = true
 move-command-line-common.workspace = true
 move-core-types.workspace = true
 move-package.workspace = true
+petgraph.workspace = true
 itertools.workspace = true
 serde.workspace = true
 serde_spanned.workspace = true
