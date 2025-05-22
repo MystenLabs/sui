@@ -660,11 +660,11 @@ impl AuthorityEpochTables {
             ),
             (
                 "pending_checkpoint_signatures".to_string(),
-                ThConfig::new(8 + 8, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(8 + 8, MUTEXES * 8, default_cells_per_mutex()),
             ),
             (
                 "builder_checkpoint_summary_v2".to_string(),
-                ThConfig::new_with_config(8, MUTEXES, default_cells_per_mutex(), bloom_config.clone()),
+                ThConfig::new_with_config(8, MUTEXES * 2, default_cells_per_mutex(), bloom_config.clone()),
             ),
             (
                 "state_hash_by_checkpoint".to_string(),
