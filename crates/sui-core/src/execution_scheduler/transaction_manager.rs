@@ -20,7 +20,7 @@ use sui_types::{
     fp_ensure,
     message_envelope::Message,
     storage::InputKey,
-    transaction::{TransactionDataAPI, VerifiedCertificate},
+    transaction::TransactionDataAPI,
 };
 use sui_types::{executable_transaction::VerifiedExecutableTransaction, fp_bail};
 use tokio::sync::mpsc::UnboundedSender;
@@ -379,141 +379,13 @@ impl TransactionManager {
 }
 
 impl ExecutionSchedulerAPI for TransactionManager {
-    #[instrument(level = "trace", skip_all)]
-    fn enqueue(
-        &self,
-        certs: Vec<VerifiedExecutableTransaction>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
-        let certs = certs.into_iter().map(|cert| (cert, None)).collect();
-        self.enqueue_impl(certs, epoch_store)
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    fn enqueue_with_expected_effects_digest(
-        &self,
-        certs: Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
-        let certs = certs
-            .into_iter()
-            .map(|(cert, fx)| (cert, Some(fx)))
-            .collect();
-        self.enqueue_impl(certs, epoch_store)
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    fn enqueue_certificates(
-        &self,
-        certs: Vec<VerifiedCertificate>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
-        let executable_txns = certs
-            .into_iter()
-            .map(VerifiedExecutableTransaction::new_from_certificate)
-            .collect();
-        self.enqueue(executable_txns, epoch_store)
-    }
-
-    fn check_execution_overload(
-        &self,
-        overload_config: &AuthorityOverloadConfig,
-        tx_data: &SenderSignedData,
-    ) -> SuiResult {
-        // Too many transactions are pending execution.
-        let inflight_queue_len = self.num_pending_certificates();
-        fp_ensure!(
-            inflight_queue_len < overload_config.max_transaction_manager_queue_length,
-            SuiError::TooManyTransactionsPendingExecution {
-                queue_len: inflight_queue_len,
-                threshold: overload_config.max_transaction_manager_queue_length,
-            }
-        );
-        tx_data.digest();
-
-        for (object_id, queue_len, txn_age) in self.objects_queue_len_and_age(
-            tx_data
-                .transaction_data()
-                .shared_input_objects()
-                .into_iter()
-                .filter_map(|r| {
-                    r.mutable
-                        .then_some(FullObjectID::new(r.id, Some(r.initial_shared_version)))
-                })
-                .collect(),
-        ) {
-            // When this occurs, most likely transactions piled up on a shared object.
-            if queue_len >= overload_config.max_transaction_manager_per_object_queue_length {
-                info!(
-                    "Overload detected on object {:?} with {} pending transactions",
-                    object_id, queue_len
-                );
-                fp_bail!(SuiError::TooManyTransactionsPendingOnObject {
-                    object_id: object_id.id(),
-                    queue_len,
-                    threshold: overload_config.max_transaction_manager_per_object_queue_length,
-                });
-            }
-            if let Some(age) = txn_age {
-                // Check that we don't have a txn that has been waiting for a long time in the queue.
-                if age >= overload_config.max_txn_age_in_queue {
-                    info!(
-                        "Overload detected on object {:?} with oldest transaction pending for {}ms",
-                        object_id,
-                        age.as_millis()
-                    );
-                    fp_bail!(SuiError::TooOldTransactionPendingOnObject {
-                        object_id: object_id.id(),
-                        txn_age_sec: age.as_secs(),
-                        threshold: overload_config.max_txn_age_in_queue.as_secs(),
-                    });
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn num_pending_certificates(&self) -> usize {
-        let reconfig_lock = self.inner.read();
-        let inner = reconfig_lock.read();
-        inner.pending_certificates.len() + inner.executing_certificates.len()
-    }
-
-    #[cfg(test)]
-    fn check_empty_for_testing(&self) {
-        let reconfig_lock = self.inner.read();
-        let inner = reconfig_lock.read();
-        assert!(
-            inner.missing_inputs.is_empty(),
-            "Missing inputs: {:?}",
-            inner.missing_inputs
-        );
-        assert!(
-            inner.input_objects.is_empty(),
-            "Input objects: {:?}",
-            inner.input_objects
-        );
-        assert!(
-            inner.pending_certificates.is_empty(),
-            "Pending certificates: {:?}",
-            inner.pending_certificates
-        );
-        assert!(
-            inner.executing_certificates.is_empty(),
-            "Executing certificates: {:?}",
-            inner.executing_certificates
-        );
-    }
-}
-
-impl TransactionManager {
     fn enqueue_impl(
         &self,
         certs: Vec<(
             VerifiedExecutableTransaction,
             Option<TransactionEffectsDigest>,
         )>,
-        epoch_store: &AuthorityPerEpochStore,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
         let reconfig_lock = self.inner.read();
 
@@ -779,6 +651,98 @@ impl TransactionManager {
         inner.maybe_reserve_capacity();
     }
 
+    fn check_execution_overload(
+        &self,
+        overload_config: &AuthorityOverloadConfig,
+        tx_data: &SenderSignedData,
+    ) -> SuiResult {
+        // Too many transactions are pending execution.
+        let inflight_queue_len = self.num_pending_certificates();
+        fp_ensure!(
+            inflight_queue_len < overload_config.max_transaction_manager_queue_length,
+            SuiError::TooManyTransactionsPendingExecution {
+                queue_len: inflight_queue_len,
+                threshold: overload_config.max_transaction_manager_queue_length,
+            }
+        );
+        tx_data.digest();
+
+        for (object_id, queue_len, txn_age) in self.objects_queue_len_and_age(
+            tx_data
+                .transaction_data()
+                .shared_input_objects()
+                .into_iter()
+                .filter_map(|r| {
+                    r.mutable
+                        .then_some(FullObjectID::new(r.id, Some(r.initial_shared_version)))
+                })
+                .collect(),
+        ) {
+            // When this occurs, most likely transactions piled up on a shared object.
+            if queue_len >= overload_config.max_transaction_manager_per_object_queue_length {
+                info!(
+                    "Overload detected on object {:?} with {} pending transactions",
+                    object_id, queue_len
+                );
+                fp_bail!(SuiError::TooManyTransactionsPendingOnObject {
+                    object_id: object_id.id(),
+                    queue_len,
+                    threshold: overload_config.max_transaction_manager_per_object_queue_length,
+                });
+            }
+            if let Some(age) = txn_age {
+                // Check that we don't have a txn that has been waiting for a long time in the queue.
+                if age >= overload_config.max_txn_age_in_queue {
+                    info!(
+                        "Overload detected on object {:?} with oldest transaction pending for {}ms",
+                        object_id,
+                        age.as_millis()
+                    );
+                    fp_bail!(SuiError::TooOldTransactionPendingOnObject {
+                        object_id: object_id.id(),
+                        txn_age_sec: age.as_secs(),
+                        threshold: overload_config.max_txn_age_in_queue.as_secs(),
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn num_pending_certificates(&self) -> usize {
+        let reconfig_lock = self.inner.read();
+        let inner = reconfig_lock.read();
+        inner.pending_certificates.len() + inner.executing_certificates.len()
+    }
+
+    #[cfg(test)]
+    fn check_empty_for_testing(&self) {
+        let reconfig_lock = self.inner.read();
+        let inner = reconfig_lock.read();
+        assert!(
+            inner.missing_inputs.is_empty(),
+            "Missing inputs: {:?}",
+            inner.missing_inputs
+        );
+        assert!(
+            inner.input_objects.is_empty(),
+            "Input objects: {:?}",
+            inner.input_objects
+        );
+        assert!(
+            inner.pending_certificates.is_empty(),
+            "Pending certificates: {:?}",
+            inner.pending_certificates
+        );
+        assert!(
+            inner.executing_certificates.is_empty(),
+            "Executing certificates: {:?}",
+            inner.executing_certificates
+        );
+    }
+}
+
+impl TransactionManager {
     #[instrument(level = "trace", skip_all)]
     fn objects_available_locked(
         &self,

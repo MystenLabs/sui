@@ -58,17 +58,35 @@ pub(crate) struct ExecutingGuard {
 
 #[enum_dispatch]
 pub(crate) trait ExecutionSchedulerAPI {
+    fn enqueue_impl(
+        &self,
+        certs: Vec<(
+            VerifiedExecutableTransaction,
+            Option<TransactionEffectsDigest>,
+        )>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    );
+
     fn enqueue(
         &self,
         certs: Vec<VerifiedExecutableTransaction>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    );
+    ) {
+        let certs = certs.into_iter().map(|cert| (cert, None)).collect();
+        self.enqueue_impl(certs, epoch_store)
+    }
 
     fn enqueue_with_expected_effects_digest(
         &self,
         certs: Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    );
+    ) {
+        let certs = certs
+            .into_iter()
+            .map(|(cert, fx)| (cert, Some(fx)))
+            .collect();
+        self.enqueue_impl(certs, epoch_store)
+    }
 
     /// Enqueues certificates / verified transactions into TransactionManager. Once all of the input objects are available
     /// locally for a certificate, the certified transaction will be sent to execution driver.
@@ -79,7 +97,13 @@ pub(crate) trait ExecutionSchedulerAPI {
         &self,
         certs: Vec<VerifiedCertificate>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    );
+    ) {
+        let executable_txns = certs
+            .into_iter()
+            .map(VerifiedExecutableTransaction::new_from_certificate)
+            .collect();
+        self.enqueue(executable_txns, epoch_store)
+    }
 
     fn check_execution_overload(
         &self,

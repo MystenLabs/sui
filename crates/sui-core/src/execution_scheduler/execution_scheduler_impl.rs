@@ -18,7 +18,7 @@ use sui_types::{
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
     storage::InputKey,
-    transaction::{SenderSignedData, TransactionDataAPI, VerifiedCertificate},
+    transaction::{SenderSignedData, TransactionDataAPI},
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
@@ -80,64 +80,6 @@ impl ExecutionScheduler {
             tx_ready_certificates,
             metrics,
         }
-    }
-
-    fn enqueue_impl(
-        &self,
-        certs: Vec<(
-            VerifiedExecutableTransaction,
-            Option<TransactionEffectsDigest>,
-        )>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
-        // Filter out certificates from wrong epoch.
-        let certs: Vec<_> = certs
-            .into_iter()
-            .filter_map(|cert| {
-                if cert.0.epoch() == epoch_store.epoch() {
-                    Some(cert)
-                } else {
-                    warn!(
-                        "Ignoring enqueued certificate from wrong epoch. Expected={} Certificate={:?}",
-                        epoch_store.epoch(),
-                        cert.0.epoch(),
-                    );
-                    None
-                }
-            })
-            .collect();
-        let digests: Vec<_> = certs.iter().map(|(cert, _)| *cert.digest()).collect();
-        let executed = self
-            .transaction_cache_read
-            .multi_get_executed_effects_digests(&digests);
-        let mut already_executed_certs_num = 0;
-        let pending_certs = certs.into_iter().zip(executed).filter_map(
-            |((cert, expected_effects_digest), executed)| {
-                if executed.is_none() {
-                    Some((cert, expected_effects_digest))
-                } else {
-                    already_executed_certs_num += 1;
-                    None
-                }
-            },
-        );
-
-        for (cert, expected_effects_digest) in pending_certs {
-            let scheduler = self.clone();
-            let epoch_store = epoch_store.clone();
-            spawn_monitored_task!(
-                epoch_store.within_alive_epoch(scheduler.schedule_transaction(
-                    cert,
-                    expected_effects_digest,
-                    &epoch_store,
-                ))
-            );
-        }
-
-        self.metrics
-            .transaction_manager_num_enqueued_certificates
-            .with_label_values(&["already_executed"])
-            .inc_by(already_executed_certs_num);
     }
 
     async fn schedule_transaction(
@@ -267,37 +209,62 @@ impl ExecutionScheduler {
 }
 
 impl ExecutionSchedulerAPI for ExecutionScheduler {
-    fn enqueue(
+    fn enqueue_impl(
         &self,
-        certs: Vec<VerifiedExecutableTransaction>,
+        certs: Vec<(
+            VerifiedExecutableTransaction,
+            Option<TransactionEffectsDigest>,
+        )>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
-        let certs = certs.into_iter().map(|cert| (cert, None)).collect();
-        self.enqueue_impl(certs, epoch_store)
-    }
-
-    fn enqueue_with_expected_effects_digest(
-        &self,
-        certs: Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
-        let certs = certs
+        // Filter out certificates from wrong epoch.
+        let certs: Vec<_> = certs
             .into_iter()
-            .map(|(cert, fx)| (cert, Some(fx)))
+            .filter_map(|cert| {
+                if cert.0.epoch() == epoch_store.epoch() {
+                    Some(cert)
+                } else {
+                    warn!(
+                        "Ignoring enqueued certificate from wrong epoch. Expected={} Certificate={:?}",
+                        epoch_store.epoch(),
+                        cert.0.epoch(),
+                    );
+                    None
+                }
+            })
             .collect();
-        self.enqueue_impl(certs, epoch_store)
-    }
+        let digests: Vec<_> = certs.iter().map(|(cert, _)| *cert.digest()).collect();
+        let executed = self
+            .transaction_cache_read
+            .multi_get_executed_effects_digests(&digests);
+        let mut already_executed_certs_num = 0;
+        let pending_certs = certs.into_iter().zip(executed).filter_map(
+            |((cert, expected_effects_digest), executed)| {
+                if executed.is_none() {
+                    Some((cert, expected_effects_digest))
+                } else {
+                    already_executed_certs_num += 1;
+                    None
+                }
+            },
+        );
 
-    fn enqueue_certificates(
-        &self,
-        certs: Vec<VerifiedCertificate>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
-        let executable_txns = certs
-            .into_iter()
-            .map(VerifiedExecutableTransaction::new_from_certificate)
-            .collect();
-        self.enqueue(executable_txns, epoch_store)
+        for (cert, expected_effects_digest) in pending_certs {
+            let scheduler = self.clone();
+            let epoch_store = epoch_store.clone();
+            spawn_monitored_task!(
+                epoch_store.within_alive_epoch(scheduler.schedule_transaction(
+                    cert,
+                    expected_effects_digest,
+                    &epoch_store,
+                ))
+            );
+        }
+
+        self.metrics
+            .transaction_manager_num_enqueued_certificates
+            .with_label_values(&["already_executed"])
+            .inc_by(already_executed_certs_num);
     }
 
     fn check_execution_overload(
