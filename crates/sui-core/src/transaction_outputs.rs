@@ -6,7 +6,7 @@ use std::sync::Arc;
 use sui_types::base_types::{FullObjectID, ObjectRef};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::inner_temporary_store::{InnerTemporaryStore, WrittenObjects};
-use sui_types::storage::{FullObjectKey, MarkerValue, ObjectKey};
+use sui_types::storage::{FullObjectKey, InputKey, MarkerValue, ObjectKey};
 use sui_types::transaction::{TransactionDataAPI, VerifiedTransaction};
 
 /// TransactionOutputs
@@ -21,6 +21,10 @@ pub struct TransactionOutputs {
     pub locks_to_delete: Vec<ObjectRef>,
     pub new_locks_to_init: Vec<ObjectRef>,
     pub written: WrittenObjects,
+
+    // Temporarily needed to notify TxManager about the availability of objects.
+    // TODO: Remove this once we ship the new ExecutionScheduler.
+    pub output_keys: Vec<InputKey>,
 }
 
 impl TransactionOutputs {
@@ -30,6 +34,8 @@ impl TransactionOutputs {
         effects: TransactionEffects,
         inner_temporary_store: InnerTemporaryStore,
     ) -> TransactionOutputs {
+        let output_keys = inner_temporary_store.get_output_keys(&effects);
+
         let InnerTemporaryStore {
             input_objects,
             stream_ended_consensus_objects,
@@ -181,6 +187,7 @@ impl TransactionOutputs {
             locks_to_delete,
             new_locks_to_init,
             written,
+            output_keys,
         }
     }
 }
