@@ -351,11 +351,9 @@ mod tests {
 
     use async_trait::async_trait;
     use prometheus::Registry;
-    use sui_indexer_alt_framework_store_traits::{
-        CommitterWatermark, PrunerWatermark, ReaderWatermark, Store,
-    };
     use sui_types::full_checkpoint_content::CheckpointData;
 
+    use crate::store::{CommitterWatermark, PrunerWatermark, ReaderWatermark, Store};
     use crate::{pipeline::Processor, store::Connection, FieldCount};
 
     use super::*;
