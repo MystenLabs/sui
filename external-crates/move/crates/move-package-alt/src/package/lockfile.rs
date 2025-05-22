@@ -176,10 +176,12 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
         self.published.get(env).cloned()
     }
 
+    /// Return the pinned dependencies for the given environment, if it exists in the lockfile.
     pub fn pinned_deps_for_env(&self, env: &EnvironmentName) -> Option<&DependencyInfo<F>> {
         self.pinned.get(env)
     }
 
+    /// Return a map that has an environment as key and the dependencies for that environment.
     pub fn pinned_deps(&self) -> &BTreeMap<EnvironmentName, DependencyInfo<F>> {
         &self.pinned
     }
