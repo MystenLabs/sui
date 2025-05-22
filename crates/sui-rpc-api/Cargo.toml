@@ -21,6 +21,7 @@ tokio.workspace = true
 async-trait.workspace = true
 itertools.workspace = true
 sui-sdk-types.workspace = true
+sui-crypto.workspace = true
 prometheus.workspace = true
 http.workspace = true
 tower.workspace = true
