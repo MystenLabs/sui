@@ -24,7 +24,9 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
 use tracing::{debug, warn};
 
-use super::{overload_tracker::OverloadTracker, ExecutionSchedulerAPI, PendingCertificate};
+use super::{
+    overload_tracker::OverloadTracker, ExecutionSchedulerAPI, PendingCertificate, SchedulingSource,
+};
 
 #[derive(Clone)]
 pub(crate) struct ExecutionScheduler {
@@ -87,6 +89,7 @@ impl ExecutionScheduler {
         cert: VerifiedExecutableTransaction,
         expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        scheduling_source: SchedulingSource,
     ) {
         let enqueue_time = Instant::now();
         let tx_data = cert.transaction_data();
@@ -156,7 +159,12 @@ impl ExecutionScheduler {
                 .with_label_values(&["ready"])
                 .inc();
             debug!(?digest, "Input objects already available");
-            self.send_transaction_for_execution(&cert, expected_effects_digest, enqueue_time);
+            self.send_transaction_for_execution(
+                &cert,
+                expected_effects_digest,
+                enqueue_time,
+                scheduling_source,
+            );
             return;
         }
 
@@ -174,7 +182,7 @@ impl ExecutionScheduler {
                         .observe(enqueue_time.elapsed().as_secs_f64());
                     debug!(?digest, "Input objects available");
                     // TODO: Eventually we could fold execution_driver into the scheduler.
-                    self.send_transaction_for_execution(&cert, expected_effects_digest, enqueue_time);
+                    self.send_transaction_for_execution(&cert, expected_effects_digest, enqueue_time, scheduling_source);
                 }
             _ = self.transaction_cache_read.notify_read_executed_effects_digests(&digests) => {
                 debug!(?digests, "Transaction already executed");
@@ -187,6 +195,7 @@ impl ExecutionScheduler {
         cert: &VerifiedExecutableTransaction,
         expected_effects_digest: Option<TransactionEffectsDigest>,
         enqueue_time: Instant,
+        scheduling_source: SchedulingSource,
     ) {
         let pending_cert = PendingCertificate {
             certificate: cert.clone(),
@@ -201,6 +210,7 @@ impl ExecutionScheduler {
                     .transaction_manager_num_executing_certificates
                     .clone(),
             )),
+            scheduling_source,
         };
         let _ = self.tx_ready_certificates.send(pending_cert);
     }
@@ -214,6 +224,7 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
             Option<TransactionEffectsDigest>,
         )>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        scheduling_source: SchedulingSource,
     ) {
         // Filter out certificates from wrong epoch.
         let certs: Vec<_> = certs
@@ -255,6 +266,7 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
                     cert,
                     expected_effects_digest,
                     &epoch_store,
+                    scheduling_source,
                 ))
             );
         }

@@ -36,6 +36,12 @@ pub struct PendingCertificateStats {
     pub ready_time: Option<Instant>,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum SchedulingSource {
+    MysticetiFastPath,
+    NonFastPath,
+}
+
 #[derive(Debug)]
 pub struct PendingCertificate {
     // Certified transaction to be executed.
@@ -49,10 +55,11 @@ pub struct PendingCertificate {
     // Stores stats about this transaction.
     pub stats: PendingCertificateStats,
     pub executing_guard: Option<ExecutingGuard>,
+    pub scheduling_source: SchedulingSource,
 }
 
 #[derive(Debug)]
-pub(crate) struct ExecutingGuard {
+pub struct ExecutingGuard {
     num_executing_certificates: IntGauge,
 }
 
@@ -65,6 +72,7 @@ pub(crate) trait ExecutionSchedulerAPI {
             Option<TransactionEffectsDigest>,
         )>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        scheduling_source: SchedulingSource,
     );
 
     fn enqueue(
@@ -73,7 +81,16 @@ pub(crate) trait ExecutionSchedulerAPI {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
         let certs = certs.into_iter().map(|cert| (cert, None)).collect();
-        self.enqueue_impl(certs, epoch_store)
+        self.enqueue_impl(certs, epoch_store, SchedulingSource::NonFastPath)
+    }
+
+    fn enqueue_fastpath(
+        &self,
+        certs: Vec<VerifiedExecutableTransaction>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        let certs = certs.into_iter().map(|cert| (cert, None)).collect();
+        self.enqueue_impl(certs, epoch_store, SchedulingSource::MysticetiFastPath)
     }
 
     fn enqueue_with_expected_effects_digest(
@@ -85,7 +102,8 @@ pub(crate) trait ExecutionSchedulerAPI {
             .into_iter()
             .map(|(cert, fx)| (cert, Some(fx)))
             .collect();
-        self.enqueue_impl(certs, epoch_store)
+        // If we already have the effects, this cannot be from fastpath.
+        self.enqueue_impl(certs, epoch_store, SchedulingSource::NonFastPath)
     }
 
     /// Enqueues certificates / verified transactions into TransactionManager. Once all of the input objects are available

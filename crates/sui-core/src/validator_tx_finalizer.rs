@@ -277,6 +277,7 @@ mod tests {
     use crate::authority::AuthorityState;
     use crate::authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder};
     use crate::authority_client::AuthorityAPI;
+    use crate::execution_scheduler::SchedulingSource;
     use crate::validator_tx_finalizer::ValidatorTxFinalizer;
     use arc_swap::ArcSwap;
     use async_trait::async_trait;
@@ -362,6 +363,7 @@ mod tests {
                     ),
                     None,
                     &epoch_store,
+                    SchedulingSource::NonFastPath,
                 )
                 .await?;
             let events = if effects.events_digest().is_some() {

@@ -230,6 +230,14 @@ struct UncommittedData {
     // table as they are flushed to the db.
     pending_transaction_writes: DashMap<TransactionDigest, Arc<TransactionOutputs>>,
 
+    // Transactions outputs from Mysticeti fastpath certified transactions.
+    // These outputs are not written to pending_transaction_writes until we are sure
+    // that they will not get rejected by consensus.
+    // TODO(fastpath): We need to find a way to remove entries that did not get
+    // finalized. We could use rejection status from mystticeti, but it is
+    // not 100% reliable due to data races.
+    fastpath_transaction_outputs: DashMap<TransactionDigest, Arc<TransactionOutputs>>,
+
     total_transaction_inserts: AtomicU64,
     total_transaction_commits: AtomicU64,
 }
@@ -242,6 +250,7 @@ impl UncommittedData {
             transaction_effects: DashMap::with_shard_amount(2048),
             executed_effects_digests: DashMap::with_shard_amount(2048),
             pending_transaction_writes: DashMap::with_shard_amount(2048),
+            fastpath_transaction_outputs: DashMap::with_shard_amount(2048),
             transaction_events: DashMap::with_shard_amount(2048),
             total_transaction_inserts: AtomicU64::new(0),
             total_transaction_commits: AtomicU64::new(0),
@@ -254,6 +263,7 @@ impl UncommittedData {
         self.transaction_effects.clear();
         self.executed_effects_digests.clear();
         self.pending_transaction_writes.clear();
+        self.fastpath_transaction_outputs.clear();
         self.transaction_events.clear();
         self.total_transaction_inserts
             .store(0, std::sync::atomic::Ordering::Relaxed);
@@ -430,6 +440,9 @@ pub struct WritebackCache {
 
     executed_effects_digests_notify_read: NotifyRead<TransactionDigest, TransactionEffectsDigest>,
     object_notify_read: NotifyRead<InputKey, ()>,
+    fastpath_transaction_outputs_notify_read:
+        NotifyRead<TransactionDigest, Arc<TransactionOutputs>>,
+
     store: Arc<AuthorityStore>,
     backpressure_threshold: u64,
     backpressure_manager: Arc<BackpressureManager>,
@@ -492,6 +505,7 @@ impl WritebackCache {
             object_locks: ObjectLocks::new(),
             executed_effects_digests_notify_read: NotifyRead::new(),
             object_notify_read: NotifyRead::new(),
+            fastpath_transaction_outputs_notify_read: NotifyRead::new(),
             store,
             backpressure_manager,
             backpressure_threshold: config.backpressure_threshold(),
@@ -2109,6 +2123,31 @@ impl TransactionCacheRead for WritebackCache {
             },
         )
     }
+
+    fn is_tx_fastpath_executed(&self, tx_digest: &TransactionDigest) -> bool {
+        self.dirty
+            .fastpath_transaction_outputs
+            .contains_key(tx_digest)
+    }
+
+    fn notify_read_fastpath_transaction_outputs<'a>(
+        &'a self,
+        tx_digests: &'a [TransactionDigest],
+    ) -> BoxFuture<'a, Vec<Arc<TransactionOutputs>>> {
+        self.fastpath_transaction_outputs_notify_read
+            .read(tx_digests, |tx_digests| {
+                tx_digests
+                    .iter()
+                    .map(|tx_digest| {
+                        self.dirty
+                            .fastpath_transaction_outputs
+                            .get(tx_digest)
+                            .map(|o| o.clone())
+                    })
+                    .collect()
+            })
+            .boxed()
+    }
 }
 
 impl ExecutionCacheWrite for WritebackCache {
@@ -2130,6 +2169,30 @@ impl ExecutionCacheWrite for WritebackCache {
 
     fn write_transaction_outputs(&self, epoch_id: EpochId, tx_outputs: Arc<TransactionOutputs>) {
         WritebackCache::write_transaction_outputs(self, epoch_id, tx_outputs);
+    }
+
+    fn write_fastpath_transaction_outputs(&self, tx_outputs: Arc<TransactionOutputs>) {
+        let tx_digest = *tx_outputs.transaction.digest();
+        debug!(
+            ?tx_digest,
+            "writing mysticeti fastpath certified transaction outputs"
+        );
+        self.dirty
+            .fastpath_transaction_outputs
+            .insert(tx_digest, tx_outputs.clone());
+        self.fastpath_transaction_outputs_notify_read
+            .notify(&tx_digest, &tx_outputs);
+    }
+
+    fn flush_fastpath_transaction_outputs(&self, tx_digest: TransactionDigest, epoch_id: EpochId) {
+        let outputs = self.dirty.fastpath_transaction_outputs.remove(&tx_digest);
+        if let Some((_, outputs)) = outputs {
+            debug!(
+                ?tx_digest,
+                "Flushing mysticeti fastpath certified transaction outputs"
+            );
+            self.write_transaction_outputs(epoch_id, outputs);
+        }
     }
 
     #[cfg(test)]

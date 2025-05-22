@@ -36,6 +36,7 @@ use sui_core::consensus_adapter::ConsensusClient;
 use sui_core::consensus_manager::UpdatableConsensusClient;
 use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::build_execution_cache;
+use sui_core::execution_scheduler::SchedulingSource;
 use sui_core::global_state_hasher::GlobalStateHashMetrics;
 use sui_core::storage::RestReadStore;
 use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
@@ -753,7 +754,12 @@ impl SuiNode {
                     ),
                 );
             state
-                .try_execute_immediately(&transaction, None, &epoch_store)
+                .try_execute_immediately(
+                    &transaction,
+                    None,
+                    &epoch_store,
+                    SchedulingSource::NonFastPath,
+                )
                 .instrument(span)
                 .await
                 .unwrap();
