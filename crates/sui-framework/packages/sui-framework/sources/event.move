@@ -57,14 +57,14 @@ public struct EventStreamHead has store {
     prev: vector<u8>,
 }
 
-entry fun update_head(stream_id: address, new_root: vector<u8>, ctx: &TxContext) {
+entry fun update_head(accumulator_root: &mut accumulator::Accumulator, stream_id: address, new_root: vector<u8>, ctx: &TxContext) {
     assert!(ctx.sender() == @0x0, ENotSystemAddress);
 
     let name = accumulator::get_accumulator_field_name<EventStreamHead>(stream_id);
-    let mut accumulator_root = object::sui_accumulator_root_object_id();
+    let accumulator_root_id = accumulator_root.id();
 
-    if (dynamic_field::exists_with_type<accumulator::Key, EventStreamHead>(&accumulator_root, name)) {
-        let head: &mut EventStreamHead = dynamic_field::borrow_mut(&mut accumulator_root, name);
+    if (dynamic_field::exists_with_type<accumulator::Key, EventStreamHead>(accumulator_root_id, name)) {
+        let head: &mut EventStreamHead = dynamic_field::borrow_mut(accumulator_root_id, name);
         let prev_bytes = bcs::to_bytes(head);
         let prev = hash::blake2b256(&prev_bytes);
         head.prev = prev;
@@ -74,10 +74,8 @@ entry fun update_head(stream_id: address, new_root: vector<u8>, ctx: &TxContext)
             root: new_root,
             prev: address::to_bytes(address::from_u256(0)),
         };
-        dynamic_field::add(&mut accumulator_root, name, head);
+        dynamic_field::add(accumulator_root_id, name, head);
     };
-
-    object::delete(accumulator_root);
 }
 
 

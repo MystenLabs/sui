@@ -6,6 +6,7 @@ use futures::join;
 use rand::distributions::Distribution;
 use std::net::SocketAddr;
 use std::ops::Deref;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use sui_config::node::AuthorityOverloadConfig;
 use sui_core::consensus_adapter::position_submit_certificate;
@@ -45,6 +46,75 @@ async fn shared_object_transaction() {
     test_cluster
         .sign_and_execute_transaction(&transaction)
         .await;
+}
+
+/// Delete a shared object as the object owner
+#[sim_test]
+async fn test_authenticated_events() {
+    let test_cluster = Arc::new(
+        TestClusterBuilder::new()
+            .with_num_validators(1)
+            .build()
+            .await,
+    );
+
+    let package = publish_basics_package(&test_cluster.wallet).await;
+    let package_id = package.0;
+
+    macro_rules! emit_event {
+        ($test_cluster:expr) => {{
+            // Make a transaction to delete the counter.
+            let transaction = $test_cluster
+                .test_transaction_builder()
+                .await
+                .move_call(
+                    package_id,
+                    "object_basics",
+                    "test_authenticated_events",
+                    vec![],
+                )
+                .build();
+
+            $test_cluster
+                .sign_and_execute_transaction(&transaction)
+                .await
+                .effects
+                .unwrap()
+        }};
+    }
+
+    let effects = emit_event!(test_cluster);
+
+    assert_eq!(effects.deleted().len(), 0);
+    assert_eq!(effects.shared_objects().len(), 0);
+
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
+    let t1 = tokio::spawn({
+        let test_cluster = test_cluster.clone();
+        async move {
+            for _ in 0..10 {
+                let effects = emit_event!(test_cluster);
+
+                assert_eq!(effects.deleted().len(), 0);
+                assert_eq!(effects.shared_objects().len(), 0);
+            }
+        }
+    });
+
+    let t2 = tokio::spawn({
+        let test_cluster = test_cluster.clone();
+        async move {
+            for _ in 0..10 {
+                let effects = emit_event!(test_cluster);
+
+                assert_eq!(effects.deleted().len(), 0);
+                assert_eq!(effects.shared_objects().len(), 0);
+            }
+        }
+    });
+
+    join!(t1, t2);
 }
 
 /// Delete a shared object as the object owner

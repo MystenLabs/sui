@@ -7,10 +7,16 @@ use std::type_name;
 use sui::dynamic_field;
 use sui::object::sui_accumulator_root_address;
 
+public use fun accumulator_id as Accumulator.id;
+
 const ENotSystemAddress: u64 = 0;
 
 public struct Accumulator has key {
     id: UID,
+}
+
+public fun accumulator_id(acc: &mut Accumulator): &mut UID {
+    &mut acc.id
 }
 
 #[allow(unused_function)]

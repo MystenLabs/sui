@@ -61,3 +61,9 @@ public fun unwrap(w: Wrapper, ctx: &TxContext) {
     id.delete();
     transfer::public_transfer(o, ctx.sender());
 }
+
+public fun test_authenticated_events(ctx: &mut TxContext) {
+    let def_cap = event::default_event_stream_cap<NewValueEvent>(ctx);
+    def_cap.emit(NewValueEvent { new_value: 100 });
+    def_cap.destroy();
+}
