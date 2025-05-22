@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use super::lockfile::{Lockfile, Publication};
 use super::manifest::Manifest;
 use crate::{
-    dependency::{DependencySet, PinnedDependencyInfo, Root, fetch},
+    dependency::{DependencySet, PinnedDependencyInfo, fetch},
     errors::{ManifestError, PackageResult},
     flavor::MoveFlavor,
     git::GitRepo,
@@ -84,7 +84,6 @@ impl<F: MoveFlavor> Package<F> {
                     path: PackagePath(local),
                 }
             }
-            P::Root(root) => panic!("Root dependencies should have already been loaded"),
             P::FlavorSpecific(dep) => todo!(),
         };
 

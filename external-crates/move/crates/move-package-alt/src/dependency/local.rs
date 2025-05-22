@@ -56,7 +56,6 @@ impl UnpinnedLocalDependency {
     /// The path on the filesystem, relative to the location of the containing file
     pub fn path(&self) -> PackageResult<PathBuf> {
         let path = fs::canonicalize(&self.local)?;
-        println!("UnpinnedLocalDependency local: {:?}", path);
         Ok(path)
     }
 
@@ -70,8 +69,6 @@ impl UnpinnedLocalDependency {
 impl PinnedLocalDependency {
     pub fn path(&self) -> PackageResult<PathBuf> {
         let path = fs::canonicalize(&self.local)?;
-        println!("PinnedLocalDependency local: {:?}", self.local);
-        println!("PinnedLocalDependency path: {:?}", path);
 
         Ok(path)
     }

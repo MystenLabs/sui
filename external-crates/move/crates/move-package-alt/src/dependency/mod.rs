@@ -53,18 +53,6 @@ pub struct Pinned;
 #[derive(Debug, PartialEq)]
 pub struct Unpinned;
 
-/// Defines a package as the root of a dependency tree.
-#[derive(Clone, fmt::Debug, Serialize, Deserialize, PartialEq)]
-pub struct Root {
-    root: bool,
-}
-
-impl Root {
-    pub fn new() -> Self {
-        Self { root: true }
-    }
-}
-
 /// [UnpinnedDependencyInfo]s contain the dependency-type-specific things that users write in their
 /// Move.toml files in the `dependencies` section.
 ///
@@ -102,7 +90,6 @@ pub enum UnpinnedDependencyInfo<F: MoveFlavor + ?Sized> {
 pub enum PinnedDependencyInfo<F: MoveFlavor + ?Sized> {
     Git(PinnedGitDependency),
     Local(LocalDependency),
-    Root(Root),
     FlavorSpecific(F::FlavorDependency<Pinned>),
 }
 
@@ -174,9 +161,6 @@ where
             } else if tbl.contains_key("local") {
                 let dep = PinnedLocalDependency::deserialize(data).map_err(de::Error::custom)?;
                 Ok(PinnedDependencyInfo::Local(LocalDependency::Pinned(dep)))
-            } else if tbl.contains_key("root") {
-                let dep = Root::deserialize(data).map_err(de::Error::custom)?;
-                Ok(PinnedDependencyInfo::Root(dep))
             } else {
                 let dep = toml::Value::try_from(data)
                     .map_err(de::Error::custom)?
@@ -285,14 +269,12 @@ pub async fn fetch<F: MoveFlavor>(
 
     let mut gits = DS::new();
     let mut locs = DS::new();
-    let mut roots = DS::new();
     let mut flav = DS::new();
 
     for (env, package_name, dep) in deps.into_iter() {
         match dep {
             P::Git(info) => gits.insert(env, package_name, info),
             P::Local(info) => locs.insert(env, package_name, info),
-            P::Root(info) => roots.insert(env, package_name, info),
             P::FlavorSpecific(info) => flav.insert(env, package_name, info),
         }
     }
