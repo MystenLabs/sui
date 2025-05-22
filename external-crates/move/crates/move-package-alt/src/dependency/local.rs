@@ -5,27 +5,55 @@
 //! Types and methods related to local dependencies (of the form `{ local = "<path>" }`)
 
 use std::{
-    fs,
+    fmt, fs,
     path::{Path, PathBuf},
 };
 
-use crate::errors::PackageResult;
+use crate::{errors::PackageResult, flavor::MoveFlavor};
+use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
 use serde_spanned::Spanned;
 
 use super::PinnedDependencyInfo;
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum LocalDependency {
+    /// A local dependency that is not pinned
+    Unpinned(UnpinnedLocalDependency),
+    /// A local dependency that is pinned, containing additional metadata about the dependency's
+    /// parent.
+    Pinned(PinnedLocalDependency),
+}
+
 // TODO: PinnedLocalDependencies should be different from UnpinnedLocalDependency - the former also
 // needs an absolute filesystem path (which doesn't get serialized to the lockfile)
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct LocalDependency {
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UnpinnedLocalDependency {
+    /// The path on the filesystem, relative to the location of the containing file (which is
+    /// stored in the `Located` wrapper)
+    local: PathBuf,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct PinnedLocalDependency {
     /// The path on the filesystem, relative to the location of the containing file (which is
     /// stored in the `Located` wrapper)
     local: PathBuf,
 }
 
 impl LocalDependency {
-    /// Returns the path to the local dependency
+    /// The path on the filesystem, relative to the location of the containing file
+    pub fn path(&self) -> PackageResult<PathBuf> {
+        match self {
+            LocalDependency::Unpinned(dep) => dep.path(),
+            LocalDependency::Pinned(dep) => dep.path(),
+        }
+    }
+}
+
+impl UnpinnedLocalDependency {
+    /// The path on the filesystem, relative to the location of the containing file
     pub fn path(&self) -> PackageResult<PathBuf> {
         let path = fs::canonicalize(&self.local)?;
         Ok(path)
@@ -38,8 +66,16 @@ impl LocalDependency {
     // }
 }
 
+impl PinnedLocalDependency {
+    pub fn path(&self) -> PackageResult<PathBuf> {
+        let path = fs::canonicalize(&self.local)?;
+
+        Ok(path)
+    }
+}
+
 // TODO: dead code
-impl TryFrom<(&Path, toml_edit::Value)> for LocalDependency {
+impl TryFrom<(&Path, toml_edit::Value)> for UnpinnedLocalDependency {
     type Error = anyhow::Error; // TODO
 
     fn try_from(value: (&Path, toml_edit::Value)) -> Result<Self, Self::Error> {

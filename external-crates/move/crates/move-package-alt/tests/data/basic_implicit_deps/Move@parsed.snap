@@ -29,9 +29,11 @@ Manifest {
             "Sui",
         ): ManifestDependency {
             dependency_info: Local(
-                LocalDependency {
-                    local: "../../../../../../../../../crates/sui-framework/packages/sui-framework",
-                },
+                Unpinned(
+                    UnpinnedLocalDependency {
+                        local: "../../../../../../../../../crates/sui-framework/packages/sui-framework",
+                    },
+                ),
             ),
             is_override: false,
             rename_from: None,

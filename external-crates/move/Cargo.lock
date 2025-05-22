@@ -2479,6 +2479,7 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-package",
+ "petgraph",
  "regex",
  "serde",
  "serde_json",

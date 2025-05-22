@@ -8185,6 +8185,7 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-package",
+ "petgraph 0.5.1",
  "regex",
  "serde",
  "serde_json",

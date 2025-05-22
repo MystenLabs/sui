@@ -33,8 +33,8 @@ use crate::{
 };
 
 use external::ExternalDependency;
-use git::{GitRepo, PinnedGitDependency, UnpinnedGitDependency, fetch_dep};
-use local::LocalDependency;
+pub use git::{PinnedGitDependency, UnpinnedGitDependency, fetch_dep};
+use local::{LocalDependency, PinnedLocalDependency, UnpinnedLocalDependency};
 
 // TODO (potential refactor): consider using objects for manifest dependencies (i.e. `Box<dyn UnpinnedDependency>`).
 //      part of the complexity here would be deserialization - probably need a flavor-specific
@@ -44,22 +44,21 @@ use local::LocalDependency;
 //      trait method to return a resolver object, and then a method on the resolver object to
 //      resolve a bunch of dependencies (resolvers could implement Eq)
 //
-// TODO: maybe rename ManifestDependencyInfo to UnpinnedDependency
 
 /// Phantom type to represent pinned dependencies (see [PinnedDependency])
 #[derive(Debug, PartialEq, Eq)]
 pub struct Pinned;
 
-/// Phantom type to represent unpinned dependencies (see [ManifestDependencyInfo])
+/// Phantom type to represent unpinned dependencies (see [UnpinnedDependencyInfo])
 #[derive(Debug, PartialEq)]
 pub struct Unpinned;
 
-/// [ManifestDependencyInfo]s contain the dependency-type-specific things that users write in their
+/// [UnpinnedDependencyInfo]s contain the dependency-type-specific things that users write in their
 /// Move.toml files in the `dependencies` section.
 ///
 /// TODO: this paragraph will change with upcoming design changes:
 /// There are additional general fields in the manifest format (like `override` or `rename-from`)
-/// that are not part of the ManifestDependencyInfo. We separate these partly because these things
+/// that are not part of the UnpinnedDependencyInfo. We separate these partly because these things
 /// are not serialized to the Lock file. See [crate::package::manifest] for the full representation
 /// of an entry in the `dependencies` table.
 ///
@@ -67,7 +66,7 @@ pub struct Unpinned;
 #[derive(Debug, Serialize)]
 #[derive_where(Clone, PartialEq)]
 #[serde(untagged)]
-pub enum ManifestDependencyInfo<F: MoveFlavor + ?Sized> {
+pub enum UnpinnedDependencyInfo<F: MoveFlavor + ?Sized> {
     Git(UnpinnedGitDependency),
     External(ExternalDependency),
     Local(LocalDependency),
@@ -85,18 +84,17 @@ pub enum ManifestDependencyInfo<F: MoveFlavor + ?Sized> {
 /// we want to retain that information for source verification.
 // Note: there is a custom Deserializer for this type; be sure to update it if you modify this
 #[derive(Debug, Serialize)]
-#[derive_where(Clone)]
+#[derive_where(Clone, PartialEq)]
 #[serde(untagged)]
+#[serde(bound = "")]
 pub enum PinnedDependencyInfo<F: MoveFlavor + ?Sized> {
     Git(PinnedGitDependency),
     Local(LocalDependency),
     FlavorSpecific(F::FlavorDependency<Pinned>),
 }
 
-// TODO: these should be moved down.
-
 // UNPINNED
-impl<'de, F> Deserialize<'de> for ManifestDependencyInfo<F>
+impl<'de, F> Deserialize<'de> for UnpinnedDependencyInfo<F>
 where
     F: MoveFlavor + ?Sized,
     F::FlavorDependency<Unpinned>: Deserialize<'de>,
@@ -113,13 +111,15 @@ where
             }
             if tbl.contains_key("git") {
                 let dep = UnpinnedGitDependency::deserialize(data).map_err(de::Error::custom)?;
-                Ok(ManifestDependencyInfo::Git(dep))
+                Ok(UnpinnedDependencyInfo::Git(dep))
             } else if tbl.contains_key("r") {
                 let dep = ExternalDependency::deserialize(data).map_err(de::Error::custom)?;
-                Ok(ManifestDependencyInfo::External(dep))
+                Ok(UnpinnedDependencyInfo::External(dep))
             } else if tbl.contains_key("local") {
-                let dep = LocalDependency::deserialize(data).map_err(de::Error::custom)?;
-                Ok(ManifestDependencyInfo::Local(dep))
+                let dep = UnpinnedLocalDependency::deserialize(data).map_err(de::Error::custom)?;
+                Ok(UnpinnedDependencyInfo::Local(LocalDependency::Unpinned(
+                    dep,
+                )))
             } else {
                 // TODO: maybe this could be prettier. The problem is that we don't know how to
                 // tell if something is a flavor dependency. One option might be to add a method to
@@ -130,7 +130,7 @@ where
                     .map_err(de::Error::custom)?
                     .try_into()
                     .map_err(|_| de::Error::custom("invalid dependency format"))?;
-                Ok(ManifestDependencyInfo::FlavorSpecific(dep))
+                Ok(UnpinnedDependencyInfo::FlavorSpecific(dep))
             }
         } else {
             Err(de::Error::custom("Manifest dependency must be a table"))
@@ -159,8 +159,8 @@ where
                 let dep = PinnedGitDependency::deserialize(data).map_err(de::Error::custom)?;
                 Ok(PinnedDependencyInfo::Git(dep))
             } else if tbl.contains_key("local") {
-                let dep = LocalDependency::deserialize(data).map_err(de::Error::custom)?;
-                Ok(PinnedDependencyInfo::Local(dep))
+                let dep = PinnedLocalDependency::deserialize(data).map_err(de::Error::custom)?;
+                Ok(PinnedDependencyInfo::Local(LocalDependency::Pinned(dep)))
             } else {
                 let dep = toml::Value::try_from(data)
                     .map_err(de::Error::custom)?
@@ -178,7 +178,7 @@ where
 /// Split up deps into kinds. The union of the output sets is the same as [deps]
 #[allow(clippy::type_complexity)]
 fn split<F: MoveFlavor>(
-    deps: &DependencySet<ManifestDependencyInfo<F>>,
+    deps: &DependencySet<UnpinnedDependencyInfo<F>>,
 ) -> (
     DependencySet<UnpinnedGitDependency>,
     DependencySet<ExternalDependency>,
@@ -186,7 +186,7 @@ fn split<F: MoveFlavor>(
     DependencySet<F::FlavorDependency<Unpinned>>,
 ) {
     use DependencySet as DS;
-    use ManifestDependencyInfo as M;
+    use UnpinnedDependencyInfo as U;
 
     let mut gits = DS::new();
     let mut exts = DS::new();
@@ -195,24 +195,23 @@ fn split<F: MoveFlavor>(
 
     for (env, package_name, dep) in deps.clone().into_iter() {
         match dep {
-            M::Git(info) => gits.insert(env, package_name, info),
-            M::External(info) => exts.insert(env, package_name, info),
-            M::Local(info) => locs.insert(env, package_name, info),
-            M::FlavorSpecific(info) => flav.insert(env, package_name, info),
+            U::Git(info) => gits.insert(env, package_name, info),
+            U::External(info) => exts.insert(env, package_name, info),
+            U::Local(info) => locs.insert(env, package_name, info),
+            U::FlavorSpecific(info) => flav.insert(env, package_name, info),
         }
     }
 
     (gits, exts, locs, flav)
 }
 
-// TODO: this will change with upcoming design changes:
 /// Replace all dependencies with their pinned versions. The returned set may have a different set
 /// of keys than the input, for example if new implicit dependencies are added or if external
 /// resolvers resolve default deps to dep-replacements, or if dep-replacements are identical to the
 /// default deps.
 pub async fn pin<F: MoveFlavor>(
     flavor: &F,
-    mut deps: DependencySet<ManifestDependencyInfo<F>>,
+    mut deps: DependencySet<UnpinnedDependencyInfo<F>>,
     envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
 ) -> PackageResult<DependencySet<PinnedDependencyInfo<F>>> {
     use PinnedDependencyInfo as P;
@@ -249,7 +248,6 @@ pub async fn pin<F: MoveFlavor>(
     ]))
 }
 
-// TODO: this will change with the upcoming design changes:
 /// For each environment, if none of the implicit dependencies are present in [deps] (or the
 /// default environment), then they are all added.
 // TODO: what's the notion of identity used here?
@@ -262,7 +260,7 @@ fn add_implicit_deps<F: MoveFlavor>(
 
 /// Fetch and ensure that all dependencies are stored locally and return the paths to their
 /// contents. The returned map is guaranteed to have the same keys as [deps].
-async fn fetch<F: MoveFlavor>(
+pub async fn fetch<F: MoveFlavor>(
     flavor: &F,
     deps: DependencySet<PinnedDependencyInfo<F>>,
 ) -> PackageResult<DependencySet<PathBuf>> {

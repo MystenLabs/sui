@@ -12,7 +12,7 @@ use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    dependency::{DependencySet, ManifestDependencyInfo},
+    dependency::{DependencySet, UnpinnedDependencyInfo},
     errors::{FileHandle, Located, ManifestError, ManifestErrorKind, PackageResult, with_file},
     flavor::{MoveFlavor, Vanilla},
 };
@@ -61,7 +61,7 @@ struct PackageMetadata<F: MoveFlavor> {
 #[serde(rename_all = "kebab-case")]
 pub struct ManifestDependency<F: MoveFlavor> {
     #[serde(flatten)]
-    dependency_info: ManifestDependencyInfo<F>,
+    dependency_info: UnpinnedDependencyInfo<F>,
 
     #[serde(rename = "override", default)]
     is_override: bool,
@@ -85,7 +85,9 @@ pub struct ManifestDependencyReplacement<F: MoveFlavor> {
 }
 
 impl<F: MoveFlavor> Manifest<F> {
-    pub fn read_from(path: impl AsRef<Path>) -> PackageResult<Self> {
+    /// Read the manifest file at the given path, returning a [`Manifest`].
+    pub fn read_from_file(path: impl AsRef<Path>) -> PackageResult<Self> {
+        println!("Reading manifest from {:?}", path.as_ref());
         let contents = std::fs::read_to_string(&path)?;
 
         let (manifest, file_id) = with_file(&path, toml_edit::de::from_str::<Self>)?;
@@ -142,7 +144,7 @@ impl<F: MoveFlavor> Manifest<F> {
     }
 
     /// Return the dependency set of this manifest, including replacements.
-    pub fn dependencies(&self) -> DependencySet<ManifestDependencyInfo<F>> {
+    pub fn dependencies(&self) -> DependencySet<UnpinnedDependencyInfo<F>> {
         let mut deps = DependencySet::new();
 
         for (name, dep) in &self.dependencies {
