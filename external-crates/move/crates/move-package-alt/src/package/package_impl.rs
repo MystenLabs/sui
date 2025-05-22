@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    fmt::Debug,
+    fmt::{self, Debug},
     marker::PhantomData,
     path::{Path, PathBuf},
     process::Command,
@@ -25,7 +25,8 @@ use tracing::debug;
 pub type EnvironmentName = String;
 pub type PackageName = Identifier;
 
-pub struct Package<F: MoveFlavor> {
+#[derive(Debug)]
+pub struct Package<F: MoveFlavor + fmt::Debug> {
     // TODO: maybe hold a lock on the lock file? Maybe not if move-analyzer wants to hold on to a
     // Package long term?
     manifest: Manifest<F>,
@@ -34,7 +35,20 @@ pub struct Package<F: MoveFlavor> {
 
 /// An absolute path to a directory containing a loaded Move package (in particular, the directory
 /// must have a Move.toml)
+#[derive(Debug)]
 pub struct PackagePath(PathBuf);
+
+impl PackagePath {
+    /// Create a new package path from a string
+    pub fn new(path: impl AsRef<Path>) -> Self {
+        Self(path.as_ref().to_path_buf())
+    }
+
+    /// Get the underlying path
+    pub fn as_path(&self) -> &Path {
+        self.0.as_path()
+    }
+}
 
 impl<F: MoveFlavor> Package<F> {
     /// Load a package from the manifest and lock files in directory [path].
@@ -64,7 +78,7 @@ impl<F: MoveFlavor> Package<F> {
             }
             P::Local(d) => {
                 let local = d.path()?;
-                let manifest = Manifest::<F>::read_from_file(&local)?;
+                let manifest = Manifest::<F>::read_from_file(&local.join("Move.toml"))?;
                 Self {
                     manifest,
                     path: PackagePath(local),

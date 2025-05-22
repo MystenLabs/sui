@@ -81,7 +81,7 @@ impl Root {
 pub enum UnpinnedDependencyInfo<F: MoveFlavor + ?Sized> {
     Git(UnpinnedGitDependency),
     External(ExternalDependency),
-    Local(LocalDependency<F>),
+    Local(LocalDependency),
     FlavorSpecific(F::FlavorDependency<Unpinned>),
 }
 
@@ -101,7 +101,7 @@ pub enum UnpinnedDependencyInfo<F: MoveFlavor + ?Sized> {
 #[serde(bound = "")]
 pub enum PinnedDependencyInfo<F: MoveFlavor + ?Sized> {
     Git(PinnedGitDependency),
-    Local(LocalDependency<F>),
+    Local(LocalDependency),
     Root(Root),
     FlavorSpecific(F::FlavorDependency<Pinned>),
 }
@@ -198,7 +198,7 @@ fn split<F: MoveFlavor>(
 ) -> (
     DependencySet<UnpinnedGitDependency>,
     DependencySet<ExternalDependency>,
-    DependencySet<LocalDependency<F>>,
+    DependencySet<LocalDependency>,
     DependencySet<F::FlavorDependency<Unpinned>>,
 ) {
     use DependencySet as DS;

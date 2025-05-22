@@ -16,16 +16,14 @@ use serde_spanned::Spanned;
 
 use super::PinnedDependencyInfo;
 
-#[derive(Debug, Serialize, Deserialize)]
-#[derive_where(Clone, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
-#[serde(bound = "")]
-pub enum LocalDependency<F: MoveFlavor + ?Sized> {
+pub enum LocalDependency {
     /// A local dependency that is not pinned
     Unpinned(UnpinnedLocalDependency),
     /// A local dependency that is pinned, containing additional metadata about the dependency's
     /// parent.
-    Pinned(PinnedLocalDependency<F>),
+    Pinned(PinnedLocalDependency),
 }
 
 // TODO: PinnedLocalDependencies should be different from UnpinnedLocalDependency - the former also
@@ -37,18 +35,14 @@ pub struct UnpinnedLocalDependency {
     local: PathBuf,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[derive_where(Clone, PartialEq)]
-#[serde(bound = "")]
-pub struct PinnedLocalDependency<F: MoveFlavor + ?Sized> {
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct PinnedLocalDependency {
     /// The path on the filesystem, relative to the location of the containing file (which is
     /// stored in the `Located` wrapper)
     local: PathBuf,
-    /// The dependency info for the package that contains this local dependency
-    parent: Box<PinnedDependencyInfo<F>>,
 }
 
-impl<F: MoveFlavor> LocalDependency<F> {
+impl LocalDependency {
     /// The path on the filesystem, relative to the location of the containing file
     pub fn path(&self) -> PackageResult<PathBuf> {
         match self {
@@ -62,6 +56,7 @@ impl UnpinnedLocalDependency {
     /// The path on the filesystem, relative to the location of the containing file
     pub fn path(&self) -> PackageResult<PathBuf> {
         let path = fs::canonicalize(&self.local)?;
+        println!("UnpinnedLocalDependency local: {:?}", path);
         Ok(path)
     }
 
@@ -72,9 +67,12 @@ impl UnpinnedLocalDependency {
     // }
 }
 
-impl<F: MoveFlavor> PinnedLocalDependency<F> {
+impl PinnedLocalDependency {
     pub fn path(&self) -> PackageResult<PathBuf> {
         let path = fs::canonicalize(&self.local)?;
+        println!("PinnedLocalDependency local: {:?}", self.local);
+        println!("PinnedLocalDependency path: {:?}", path);
+
         Ok(path)
     }
 }
