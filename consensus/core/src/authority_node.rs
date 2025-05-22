@@ -493,6 +493,7 @@ mod tests {
 
     use consensus_config::{local_committee_and_keys, Parameters};
     use mysten_metrics::monitored_mpsc::UnboundedReceiver;
+    use mysten_metrics::RegistryService;
     use prometheus::Registry;
     use rstest::rstest;
     use sui_protocol_config::ProtocolConfig;
@@ -561,7 +562,7 @@ mod tests {
     ) {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
-        DBMetrics::init(&db_registry);
+        DBMetrics::init(RegistryService::new(db_registry));
 
         const NUM_OF_AUTHORITIES: usize = 4;
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
@@ -672,7 +673,7 @@ mod tests {
     ) {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
-        DBMetrics::init(&db_registry);
+        DBMetrics::init(RegistryService::new(db_registry));
 
         let (committee, keypairs) = local_committee_and_keys(0, vec![1; num_authorities]);
         let protocol_config: ProtocolConfig = ProtocolConfig::get_for_max_version_UNSAFE();
@@ -769,7 +770,7 @@ mod tests {
     async fn test_amnesia_recovery_success(#[values(0, 5, 10)] gc_depth: u32) {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
-        DBMetrics::init(&db_registry);
+        DBMetrics::init(RegistryService::new(db_registry));
 
         const NUM_OF_AUTHORITIES: usize = 4;
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());

@@ -373,7 +373,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                         )*
                     );
                     let key_shape = builder.build();
-                    let inner_db = typed_store::tidehunter_util::open(path.as_path(), key_shape);
+                    let inner_db = typed_store::tidehunter_util::open(path.as_path(), key_shape, metric_conf.db_name.clone());
                     let db = std::sync::Arc::new(typed_store::rocks::Database::new(
                         typed_store::rocks::Storage::TideHunter(inner_db),
                         metric_conf));

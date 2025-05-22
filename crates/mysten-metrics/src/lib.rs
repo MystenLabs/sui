@@ -461,7 +461,7 @@ pub type RegistryID = Uuid;
 /// A service to manage the prometheus registries. This service allow us to create
 /// a new Registry on demand and keep it accessible for processing/polling.
 /// The service can be freely cloned/shared across threads.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RegistryService {
     // Holds a Registry that is supposed to be used
     default_registry: Registry,
