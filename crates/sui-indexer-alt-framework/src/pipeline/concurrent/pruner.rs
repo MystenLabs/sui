@@ -684,15 +684,9 @@ mod tests {
 
         {
             let data = store.data.lock().unwrap();
-            assert!(
-                !data.contains_key(&1),
-                "Checkpoint 1 should be pruned after delay"
-            );
+            assert!(!data.contains_key(&1), "Checkpoint 1 should be pruned");
 
-            assert!(
-                !data.contains_key(&2),
-                "Checkpoint 2 should be pruned after delay"
-            );
+            assert!(!data.contains_key(&2), "Checkpoint 2 should be pruned");
 
             // Checkpoint 3 should never be pruned (it's the reader_lo)
             assert!(data.contains_key(&3), "Checkpoint 3 should be preserved");
