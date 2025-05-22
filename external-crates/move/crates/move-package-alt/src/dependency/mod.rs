@@ -106,8 +106,6 @@ pub enum PinnedDependencyInfo<F: MoveFlavor + ?Sized> {
     FlavorSpecific(F::FlavorDependency<Pinned>),
 }
 
-// TODO: these should be moved down.
-
 // UNPINNED
 impl<'de, F> Deserialize<'de> for UnpinnedDependencyInfo<F>
 where

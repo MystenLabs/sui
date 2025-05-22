@@ -151,7 +151,9 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
 
         expand_toml(&mut toml);
         for (_, chain) in toml["pinned"].as_table_like_mut().unwrap().iter_mut() {
-            flatten_toml(chain.get_mut("pinned").unwrap());
+            for (_, item) in chain.as_table_like_mut().unwrap().iter_mut() {
+                flatten_toml(item);
+            }
         }
 
         for (_, chain) in toml["published"].as_table_like_mut().unwrap().iter_mut() {
