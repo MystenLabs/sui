@@ -649,7 +649,7 @@ impl AuthorityEpochTables {
             ),
             (
                 "builder_digest_to_checkpoint".to_string(),
-                ThConfig::new_with_rm_prefix(32, MUTEXES * 128, default_cells_per_mutex(), bloom_config.clone(), digest_prefix.clone()),
+                ThConfig::new_with_rm_prefix(32, MUTEXES * 4, default_cells_per_mutex(), bloom_config.clone(), digest_prefix.clone()),
             ),
             (
                 "transaction_key_to_digest".to_string(),
@@ -685,7 +685,7 @@ impl AuthorityEpochTables {
             ),
             (
                 "executed_transactions_to_checkpoint".to_string(),
-                ThConfig::new_with_rm_prefix(32, MUTEXES * 128, default_cells_per_mutex(), bloom_config.clone(), digest_prefix.clone()),
+                ThConfig::new_with_rm_prefix(32, MUTEXES * 4, default_cells_per_mutex(), bloom_config.clone(), digest_prefix.clone()),
             ),
             (
                 "pending_jwks".to_string(),
