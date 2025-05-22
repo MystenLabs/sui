@@ -602,7 +602,7 @@ impl AuthorityEpochTables {
         let configs = vec![
             (
                 "signed_transactions".to_string(),
-                ThConfig::new_with_rm_prefix(32, MUTEXES, default_cells_per_mutex(), KeySpaceConfig::default(), digest_prefix.clone()),
+                ThConfig::new_with_rm_prefix(32, MUTEXES, default_cells_per_mutex(), bloom_config.clone(), digest_prefix.clone()),
             ),
             (
                 "owned_object_locked_transactions".to_string(),
