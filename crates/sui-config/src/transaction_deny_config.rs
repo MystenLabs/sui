@@ -17,11 +17,10 @@ use crate::dynamic_transaction_signing_checks::{
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct TransactionDenyConfig {
-    /// A list of specific transactions that will be exempted from ALL signing checks
+    /// A list of specific transactions that will be exempted from ALL deny checks
     /// and always allowed.
-    /// WARNING: This feature is extremely dangerous and skips many important safety
-    /// checks. Use with caution only for transactions that have undergone extensive
-    /// manual vetting.
+    /// WARNING: This feature is extremely dangerous and skips important safety checks.
+    /// Use with caution only for transactions that have undergone extensive manual vetting.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     transaction_allow_list_skip_all_checks: Vec<TransactionDigest>,
 
