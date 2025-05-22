@@ -9,7 +9,7 @@ use moka::sync::Cache;
 use phf::phf_map;
 use serde::Deserialize;
 use serde_json::Value;
-use tracing::error;
+use tracing::{debug, error};
 
 /// static map of method names to the index of their cursor parameter
 static METHOD_CURSOR_POSITIONS: phf::Map<&'static str, usize> = phf_map! {
@@ -179,14 +179,17 @@ pub fn update_pagination_cursor_state(
                 }
             };
             if result.has_next_page {
-                pagination_state.update(method_key, result.next_cursor);
+                pagination_state.update(method_key, result.next_cursor.clone());
             } else {
                 pagination_state.update(method_key, None);
             }
+            debug!(
+                "Updated pagination state for method: {method} with params: {params:?} to {next_cursor:?}",
+                next_cursor = result.next_cursor
+            );
         } else {
             error!("Failed to parse response: {:?}", parse_result.err());
         }
-        println!("pagination_state: {pagination_state:?}");
     }
     Ok(())
 }

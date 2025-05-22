@@ -28,8 +28,6 @@ struct Args {
 async fn main() {
     let args = Args::parse();
 
-    println!("args: {:?}", args);
-
     let (config, client): (ProxyConfig, Client) =
         load(&args.config).await.expect("Failed to load config");
 

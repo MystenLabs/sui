@@ -93,17 +93,18 @@ pub async fn proxy_handler(
                 .unwrap_or_default();
             match method {
                 Some(method) if state.unsupported_methods.contains(&method) => {
-                    info!("Dropping {method} request");
+                    info!("Dropping {method} request with params: {params:?}");
                     Ok(Response::builder()
                         .status(StatusCode::OK)
                         .body(Body::from(format!("Dropped {method} request")))
                         .unwrap())
                 }
                 Some(method) => {
+                    debug!("Transforming {method} request with params: {params:?}");
                     match transform_json_body(&mut json_body, &method, &params, &state.cursor_state)
                     {
                         Ok(true) => {
-                            debug!("transformed json_body: {json_body:?}");
+                            debug!("Transformed json_body: {json_body:?}");
                             body_bytes = match serde_json::to_vec(&json_body) {
                                 Ok(bytes) => Bytes::from(bytes),
                                 Err(_) => {
@@ -125,6 +126,7 @@ pub async fn proxy_handler(
                             // Do nothing, no cursor transformation done so no need to update body bytes or content length header.
                         }
                         Err(_) => {
+                            debug!("Failed to transform json_body: {json_body:?}");
                             return Ok(Response::builder()
                                 .status(StatusCode::INTERNAL_SERVER_ERROR)
                                 .body(Body::from("Failed to transform body json"))
