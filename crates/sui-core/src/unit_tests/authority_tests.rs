@@ -113,7 +113,7 @@ impl TestCallArg {
             Owner::Shared {
                 initial_shared_version,
             }
-            | Owner::ConsensusV2 {
+            | Owner::ConsensusAddressOwner {
                 start_version: initial_shared_version,
                 ..
             } => ObjectArg::SharedObject {

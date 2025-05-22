@@ -175,11 +175,6 @@ enum AddressTransactionBlockRelationship {
 }
 
 """
-An Authenticator represents the access control rules for a ConsensusV2 object.
-"""
-union Authenticator = Address
-
-"""
 System transaction for creating the on-chain state used by zkLogin.
 """
 type AuthenticatorStateCreateTransaction {
@@ -834,6 +829,14 @@ type CoinMetadata implements IMoveObject & IObject & IOwner {
 }
 
 """
+Same as AddressOwner, but the object is versioned by consensus.
+"""
+type ConsensusAddressOwner {
+	startVersion: UInt53!
+	owner: Owner
+}
+
+"""
 System transaction that runs at the beginning of a checkpoint, and is responsible for setting
 the current value of the clock, based on the timestamp from consensus.
 """
@@ -855,16 +858,6 @@ type ConsensusCommitPrologueTransaction {
 	transaction).
 	"""
 	consensusCommitDigest: String
-}
-
-"""
-A ConsensusV2 object is an object that is automatically versioned by the consensus protocol
-and allows different authentication modes based on the chosen authenticator.
-(Initially, only single-owner authentication is supported.)
-"""
-type ConsensusV2 {
-	startVersion: UInt53!
-	authenticator: Authenticator
 }
 
 """
@@ -2918,9 +2911,9 @@ enum ObjectKind {
 }
 
 """
-The object's owner type: Immutable, Shared, Parent, or Address.
+The object's owner type: Immutable, Shared, Parent, Address, or ConsensusAddress.
 """
-union ObjectOwner = Immutable | Shared | Parent | AddressOwner | ConsensusV2
+union ObjectOwner = Immutable | Shared | Parent | AddressOwner | ConsensusAddressOwner
 
 input ObjectRef {
 	"""

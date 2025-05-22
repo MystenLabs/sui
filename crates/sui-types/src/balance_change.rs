@@ -25,9 +25,12 @@ pub struct BalanceChange {
 fn coins(objects: &[Object]) -> impl Iterator<Item = (&SuiAddress, TypeTag, u64)> + '_ {
     objects.iter().filter_map(|object| {
         let address = match object.owner() {
-            Owner::AddressOwner(sui_address) | Owner::ObjectOwner(sui_address) => sui_address,
+            Owner::AddressOwner(sui_address)
+            | Owner::ObjectOwner(sui_address)
+            | Owner::ConsensusAddressOwner {
+                owner: sui_address, ..
+            } => sui_address,
             Owner::Shared { .. } | Owner::Immutable => return None,
-            Owner::ConsensusV2 { .. } => todo!(),
         };
         let (coin_type, balance) = Coin::extract_balance_if_coin(object).ok().flatten()?;
         Some((address, coin_type, balance))

@@ -149,7 +149,7 @@ macro_rules! fetch_child_object_unbounded {
                 Owner::AddressOwner(_)
                 | Owner::Immutable
                 | Owner::Shared { .. }
-                | Owner::ConsensusV2 { .. } => {
+                | Owner::ConsensusAddressOwner { .. } => {
                     return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
                         format!(
                             "Bad owner for {}. \

@@ -17,11 +17,11 @@ task 2, lines 35-36:
 //> ex::m::create_party()
 created: object(2,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, lines 38-40:
 //# view-object 2,0
-Owner: ConsensusV2( 2, SingleOwner(A) )
+Owner: ConsensusAddressOwner( 2, A )
 Version: 2
 Contents: ex::m::A {
     id: sui::object::UID {
@@ -37,7 +37,7 @@ task 4, lines 41-42:
 created: object(4,0)
 mutated: object(0,0)
 wrapped: object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2553600,  storage_rebate: 2234628, non_refundable_storage_fee: 22572
+gas summary: computation_cost: 1000000, storage_cost: 2492800,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
 
 task 5, line 44:
 //# view-object 2,0
@@ -45,7 +45,7 @@ No object at id 2,0
 
 task 6, lines 46-48:
 //# view-object 4,0
-Owner: ConsensusV2( 3, SingleOwner(A) )
+Owner: ConsensusAddressOwner( 3, A )
 Version: 3
 Contents: ex::m::AWrapper {
     id: sui::object::UID {
@@ -76,18 +76,18 @@ task 8, lines 54-57:
 mutated: object(0,0)
 unwrapped: object(2,0)
 deleted: object(4,0)
-gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2528064, non_refundable_storage_fee: 25536
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2467872, non_refundable_storage_fee: 24928
 
 task 9, lines 58-60:
 //# programmable --inputs object(2,0) @B --sender A
 //> 0: sui::party::single_owner(Input(1));
 //> sui::transfer::public_party_transfer<ex::m::A>(Input(0), Result(0))
 mutated: object(0,0), object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2234628, non_refundable_storage_fee: 22572
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
 
 task 10, line 62:
 //# view-object 2,0
-Owner: ConsensusV2( 4, SingleOwner(B) )
+Owner: ConsensusAddressOwner( 4, B )
 Version: 5
 Contents: ex::m::A {
     id: sui::object::UID {

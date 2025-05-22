@@ -656,8 +656,10 @@ impl TemporaryStore<'_> {
                 Owner::ObjectOwner(_parent) => {
                     unreachable!("Input objects must be address owned, shared, or immutable")
                 }
-                Owner::ConsensusV2 { .. } => {
-                    unimplemented!("ConsensusV2 does not exist for this execution version")
+                Owner::ConsensusAddressOwner { .. } => {
+                    unimplemented!(
+                        "ConsensusAddressOwner does not exist for this execution version"
+                    )
                 }
             }
         }
@@ -687,8 +689,10 @@ impl TemporaryStore<'_> {
                         "Only system packages can be upgraded"
                     );
                 }
-                Owner::ConsensusV2 { .. } => {
-                    unimplemented!("ConsensusV2 does not exist for this execution version")
+                Owner::ConsensusAddressOwner { .. } => {
+                    unimplemented!(
+                        "ConsensusAddressOwner does not exist for this execution version"
+                    )
                 }
             }
         }

@@ -124,8 +124,7 @@ fn get_owner_type(object: &Object) -> OwnerType {
         Owner::ObjectOwner(_) => OwnerType::ObjectOwner,
         Owner::Shared { .. } => OwnerType::Shared,
         Owner::Immutable => OwnerType::Immutable,
-        // TODO: Implement support for ConsensusV2 objects.
-        Owner::ConsensusV2 { .. } => todo!(),
+        Owner::ConsensusAddressOwner { .. } => OwnerType::AddressOwner,
     }
 }
 
@@ -135,8 +134,17 @@ fn get_owner_address(object: &Object) -> Option<String> {
         Owner::ObjectOwner(address) => Some(address.to_string()),
         Owner::Shared { .. } => None,
         Owner::Immutable => None,
-        // TODO: Implement support for ConsensusV2 objects.
-        Owner::ConsensusV2 { .. } => todo!(),
+        Owner::ConsensusAddressOwner { owner, .. } => Some(owner.to_string()),
+    }
+}
+
+fn get_is_consensus(object: &Object) -> bool {
+    match object.owner {
+        Owner::AddressOwner(_) => false,
+        Owner::ObjectOwner(_) => false,
+        Owner::Shared { .. } => true,
+        Owner::Immutable => false,
+        Owner::ConsensusAddressOwner { .. } => true,
     }
 }
 

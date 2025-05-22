@@ -15,7 +15,7 @@ use super::display::{Display, DisplayEntry};
 use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_object::MoveObject;
 use super::move_package::MovePackage;
-use super::owner::{Authenticator, OwnerImpl};
+use super::owner::OwnerImpl;
 use super::stake::StakedSui;
 use super::sui_address::addr;
 use super::suins_registration::{DomainFormat, SuinsRegistration};
@@ -30,7 +30,6 @@ use crate::data::package_resolver::PackageResolver;
 use crate::data::{DataLoader, Db, DbConnection, QueryExecutor};
 use crate::error::Error;
 use crate::raw_query::RawQuery;
-use crate::types::address::Address;
 use crate::types::base64::Base64;
 use crate::types::intersect;
 use crate::{filter, or_filter};
@@ -137,14 +136,14 @@ pub(crate) struct ObjectKey {
     pub version: UInt53,
 }
 
-/// The object's owner type: Immutable, Shared, Parent, or Address.
+/// The object's owner type: Immutable, Shared, Parent, Address, or ConsensusAddress.
 #[derive(Union, Clone)]
 pub(crate) enum ObjectOwner {
     Immutable(Immutable),
     Shared(Shared),
     Parent(Parent),
     Address(AddressOwner),
-    ConsensusV2(ConsensusV2),
+    ConsensusAddress(ConsensusAddressOwner),
 }
 
 /// An immutable object is an object that can't be mutated, transferred, or deleted.
@@ -180,13 +179,11 @@ pub(crate) struct AddressOwner {
     owner: Option<Owner>,
 }
 
-/// A ConsensusV2 object is an object that is automatically versioned by the consensus protocol
-/// and allows different authentication modes based on the chosen authenticator.
-/// (Initially, only single-owner authentication is supported.)
+/// Same as AddressOwner, but the object is versioned by consensus.
 #[derive(SimpleObject, Clone)]
-pub(crate) struct ConsensusV2 {
+pub(crate) struct ConsensusAddressOwner {
     start_version: UInt53,
-    authenticator: Option<Authenticator>,
+    owner: Option<Owner>,
 }
 
 /// Filter for a point query of an Object.
@@ -623,15 +620,16 @@ impl ObjectImpl<'_> {
             } => Some(ObjectOwner::Shared(Shared {
                 initial_shared_version: initial_shared_version.value().into(),
             })),
-            O::ConsensusV2 {
+            O::ConsensusAddressOwner {
                 start_version,
-                authenticator,
-            } => Some(ObjectOwner::ConsensusV2(ConsensusV2 {
+                owner,
+            } => Some(ObjectOwner::ConsensusAddress(ConsensusAddressOwner {
                 start_version: start_version.value().into(),
-                authenticator: Some(Authenticator::SingleOwner(Address {
-                    address: SuiAddress::from(*authenticator.as_single_owner()),
+                owner: Some(Owner {
+                    address: SuiAddress::from(*owner),
                     checkpoint_viewed_at: self.0.checkpoint_viewed_at,
-                })),
+                    root_version: None,
+                }),
             })),
         }
     }

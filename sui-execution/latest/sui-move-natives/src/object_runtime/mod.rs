@@ -272,18 +272,16 @@ impl<'a> ObjectRuntime<'a> {
             TransferResult::New
         } else if let Some(prev_owner) = self.state.input_objects.get(&id) {
             match (&owner, prev_owner) {
-                // don't use == for dummy values in Shared or ConsensusV2 owner
+                // don't use == for dummy values in Shared or ConsensusAddressOwner
                 (Owner::Shared { .. }, Owner::Shared { .. }) => TransferResult::SameOwner,
                 (
-                    Owner::ConsensusV2 {
-                        authenticator: new_authenticator,
-                        ..
+                    Owner::ConsensusAddressOwner {
+                        owner: new_owner, ..
                     },
-                    Owner::ConsensusV2 {
-                        authenticator: old_authenticator,
-                        ..
+                    Owner::ConsensusAddressOwner {
+                        owner: old_owner, ..
                     },
-                ) if new_authenticator == old_authenticator => TransferResult::SameOwner,
+                ) if new_owner == old_owner => TransferResult::SameOwner,
                 (new, old) if new == old => TransferResult::SameOwner,
                 _ => TransferResult::OwnerChanged,
             }
@@ -785,7 +783,7 @@ fn check_circular_ownership(
             Owner::AddressOwner(_)
             | Owner::Shared { .. }
             | Owner::Immutable
-            | Owner::ConsensusV2 { .. } => (),
+            | Owner::ConsensusAddressOwner { .. } => (),
             Owner::ObjectOwner(new_owner) => {
                 let new_owner: ObjectID = new_owner.into();
                 let mut cur = new_owner;
