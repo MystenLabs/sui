@@ -62,7 +62,7 @@ impl Connection for PgConnection<'_> {
         &mut self,
         pipeline: &'static str,
         delay: Duration,
-    ) -> anyhow::Result<Option<store::PrunerWatermark>> {
+    ) -> anyhow::Result<Option<PrunerWatermark>> {
         //     |---------- + delay ---------------------|
         //                             |--- wait_for ---|
         //     |-----------------------|----------------|
@@ -81,7 +81,7 @@ impl Connection for PgConnection<'_> {
             .optional()?;
 
         if let Some(watermark) = watermark {
-            Ok(Some(store::PrunerWatermark {
+            Ok(Some(PrunerWatermark {
                 wait_for_ms: watermark.0,
                 pruner_hi: watermark.1 as u64,
                 reader_lo: watermark.2 as u64,
@@ -146,7 +146,6 @@ impl Connection for PgConnection<'_> {
             .await
             .map_err(anyhow::Error::from)?
             > 0)
-    }
     }
 
     async fn set_pruner_watermark(
