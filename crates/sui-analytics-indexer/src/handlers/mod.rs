@@ -124,7 +124,6 @@ fn get_owner_type(object: &Object) -> OwnerType {
         Owner::ObjectOwner(_) => OwnerType::ObjectOwner,
         Owner::Shared { .. } => OwnerType::Shared,
         Owner::Immutable => OwnerType::Immutable,
-        // TODO-DNS is this correct, or do we need a separate owner type?
         Owner::ConsensusAddressOwner { .. } => OwnerType::AddressOwner,
     }
 }
