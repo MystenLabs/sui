@@ -58,6 +58,39 @@ impl Connection for PgConnection<'_> {
         }
     }
 
+    async fn pruner_watermark(
+        &mut self,
+        pipeline: &'static str,
+        delay: Duration,
+    ) -> anyhow::Result<Option<PrunerWatermark>> {
+        //     |---------- + delay ---------------------|
+        //                             |--- wait_for ---|
+        //     |-----------------------|----------------|
+        //     ^                       ^
+        //     pruner_timestamp        NOW()
+        let wait_for = sql!(as BigInt,
+            "CAST({BigInt} + 1000 * EXTRACT(EPOCH FROM pruner_timestamp - NOW()) AS BIGINT)",
+            delay.as_millis() as i64,
+        );
+
+        let watermark: Option<(i64, i64, i64)> = watermarks::table
+            .select((wait_for, watermarks::pruner_hi, watermarks::reader_lo))
+            .filter(watermarks::pipeline.eq(pipeline))
+            .first(self)
+            .await
+            .optional()?;
+
+        if let Some(watermark) = watermark {
+            Ok(Some(PrunerWatermark {
+                wait_for_ms: watermark.0,
+                pruner_hi: watermark.1 as u64,
+                reader_lo: watermark.2 as u64,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
     async fn set_committer_watermark(
         &mut self,
         pipeline: &'static str,
@@ -113,40 +146,6 @@ impl Connection for PgConnection<'_> {
             .await
             .map_err(anyhow::Error::from)?
             > 0)
-    }
-
-    async fn pruner_watermark(
-        &mut self,
-        pipeline: &'static str,
-        delay: Duration,
-    ) -> anyhow::Result<Option<PrunerWatermark>> {
-        //     |---------- + delay ---------------------|
-        //                             |--- wait_for ---|
-        //     |-----------------------|----------------|
-        //     ^                       ^
-        //     pruner_timestamp        NOW()
-        let wait_for = sql!(as BigInt,
-            "CAST({BigInt} + 1000 * EXTRACT(EPOCH FROM pruner_timestamp - NOW()) AS BIGINT)",
-            delay.as_millis() as i64,
-        );
-
-        let watermark: Option<(i64, i64, i64)> = watermarks::table
-            .select((wait_for, watermarks::pruner_hi, watermarks::reader_lo))
-            .filter(watermarks::pipeline.eq(pipeline))
-            .first(self)
-            .await
-            .optional()
-            .map_err(anyhow::Error::from)?;
-
-        if let Some(watermark) = watermark {
-            Ok(Some(PrunerWatermark {
-                wait_for_ms: watermark.0 as u64,
-                pruner_hi: watermark.1 as u64,
-                reader_lo: watermark.2 as u64,
-            }))
-        } else {
-            Ok(None)
-        }
     }
 
     async fn set_pruner_watermark(
