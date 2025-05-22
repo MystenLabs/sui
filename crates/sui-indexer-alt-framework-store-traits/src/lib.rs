@@ -24,6 +24,18 @@ pub trait Connection: Send + Sync {
         pipeline: &'static str,
     ) -> anyhow::Result<Option<ReaderWatermark>>;
 
+    /// Get the bounds for the region that the pruner is allowed to prune, and the time in
+    /// milliseconds the pruner must wait before it can begin pruning data for the given `pipeline`.
+    /// The pruner is allowed to prune the region between the returned `pruner_hi` (inclusive) and
+    /// `reader_lo` (exclusive) after waiting until `pruner_timestamp + delay` has passed. This
+    /// minimizes the possibility for the pruner to delete data still expected by inflight read
+    /// requests.
+    async fn pruner_watermark(
+        &mut self,
+        pipeline: &'static str,
+        delay: Duration,
+    ) -> anyhow::Result<Option<PrunerWatermark>>;
+
     /// Upsert the high watermark as long as it raises the watermark stored in the database. Returns
     /// a boolean indicating whether the watermark was actually updated or not.
     async fn set_committer_watermark(
@@ -50,18 +62,6 @@ pub trait Connection: Send + Sync {
         pipeline: &'static str,
         reader_lo: u64,
     ) -> anyhow::Result<bool>;
-
-    /// Get the bounds for the region that the pruner is allowed to prune, and the time in
-    /// milliseconds the pruner must wait before it can begin pruning data for the given `pipeline`.
-    /// The pruner is allowed to prune the region between the returned `pruner_hi` (inclusive) and
-    /// `reader_lo` (exclusive) after waiting until `pruner_timestamp + delay` has passed. This
-    /// minimizes the possibility for the pruner to delete data still expected by inflight read
-    /// requests.
-    async fn pruner_watermark(
-        &mut self,
-        pipeline: &'static str,
-        delay: Duration,
-    ) -> anyhow::Result<Option<PrunerWatermark>>;
 
     /// Update the pruner watermark, returns true if the watermark was actually updated
     async fn set_pruner_watermark(
