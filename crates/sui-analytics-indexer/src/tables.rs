@@ -181,7 +181,7 @@ pub(crate) struct ObjectEntry {
     pub(crate) initial_shared_version: Option<u64>,
     pub(crate) previous_transaction: String,
     pub(crate) has_public_transfer: bool,
-    // TODO(ConsensusV2): Add `is_consensus` bool in this index.
+    pub(crate) is_consensus: bool,
     pub(crate) storage_rebate: Option<u64>,
     // Left in place for backwards compatibility with SZNS BigQuery Infra.
     pub(crate) bcs: String,

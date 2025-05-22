@@ -138,6 +138,16 @@ fn get_owner_address(object: &Object) -> Option<String> {
     }
 }
 
+fn get_is_consensus(object: &Object) -> bool {
+    match object.owner {
+        Owner::AddressOwner(_) => false,
+        Owner::ObjectOwner(_) => false,
+        Owner::Shared { .. } => true,
+        Owner::Immutable => false,
+        Owner::ConsensusAddressOwner { .. } => true,
+    }
+}
+
 // Helper class to track input object kind.
 // Build sets of object ids for input, shared input and gas coin objects as defined
 // in the transaction data.
