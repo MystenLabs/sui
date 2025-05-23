@@ -30,11 +30,9 @@ Manifest {
             "bar",
         ): ManifestDependency {
             dependency_info: Local(
-                Unpinned(
-                    UnpinnedLocalDependency {
-                        local: "./bar",
-                    },
-                ),
+                LocalDependency {
+                    local: "./bar",
+                },
             ),
             is_override: false,
             rename_from: None,

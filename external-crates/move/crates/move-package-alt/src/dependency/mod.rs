@@ -34,7 +34,7 @@ use crate::{
 
 use external::ExternalDependency;
 pub use git::{PinnedGitDependency, UnpinnedGitDependency, fetch_dep};
-use local::{LocalDependency, PinnedLocalDependency, UnpinnedLocalDependency};
+use local::LocalDependency;
 
 // TODO (potential refactor): consider using objects for manifest dependencies (i.e. `Box<dyn UnpinnedDependency>`).
 //      part of the complexity here would be deserialization - probably need a flavor-specific
@@ -135,10 +135,8 @@ where
                 let dep = ExternalDependency::deserialize(data).map_err(de::Error::custom)?;
                 Ok(UnpinnedDependencyInfo::External(dep))
             } else if tbl.contains_key("local") {
-                let dep = UnpinnedLocalDependency::deserialize(data).map_err(de::Error::custom)?;
-                Ok(UnpinnedDependencyInfo::Local(LocalDependency::Unpinned(
-                    dep,
-                )))
+                let dep = LocalDependency::deserialize(data).map_err(de::Error::custom)?;
+                Ok(UnpinnedDependencyInfo::Local(dep))
             } else {
                 // TODO: maybe this could be prettier. The problem is that we don't know how to
                 // tell if something is a flavor dependency. One option might be to add a method to
@@ -178,8 +176,8 @@ where
                 let dep = PinnedGitDependency::deserialize(data).map_err(de::Error::custom)?;
                 Ok(PinnedDependencyInfo::Git(dep))
             } else if tbl.contains_key("local") {
-                let dep = PinnedLocalDependency::deserialize(data).map_err(de::Error::custom)?;
-                Ok(PinnedDependencyInfo::Local(LocalDependency::Pinned(dep)))
+                let dep = LocalDependency::deserialize(data).map_err(de::Error::custom)?;
+                Ok(PinnedDependencyInfo::Local(dep))
             } else {
                 let dep = toml::Value::try_from(data)
                     .map_err(de::Error::custom)?
