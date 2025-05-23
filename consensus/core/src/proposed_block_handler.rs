@@ -54,8 +54,6 @@ impl ProposedBlockHandler {
             return;
         }
         let _scope = monitored_scope("handle_proposed_block");
-        // Run GC first to remove blocks that do not need be voted on.
-        self.transaction_certifier.run_gc();
         self.transaction_certifier
             .add_proposed_block(extended_block.block.clone());
     }
