@@ -8,6 +8,7 @@ use std::{
 };
 
 use clap::*;
+use fastcrypto::encoding::{Base58, Encoding, Hex};
 use move_vm_config::verifier::VerifierConfig;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -18,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 82;
+const MAX_PROTOCOL_VERSION: u64 = 83;
 
 // Record history of protocol version allocations here:
 //
@@ -1471,6 +1472,23 @@ pub struct ProtocolConfig {
 
     /// The number of commits to consider when computing a deterministic commit rate.
     consensus_commit_rate_estimation_window_size: Option<u32>,
+
+    /// A list of effective AliasedAddress.
+    /// For each pair, `aliased` is allowed to act as `original` for any of the transaction digests
+    /// listed in `tx_digests`
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    aliased_addresses: Vec<AliasedAddress>,
+}
+
+/// An aliased address.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct AliasedAddress {
+    /// The original address.
+    pub original: [u8; 32],
+    /// An aliased address which is allowed to act as the original address.
+    pub aliased: [u8; 32],
+    /// A list of transaction digests for which the aliasing is allowed to be in effect.
+    pub allowed_tx_digests: Vec<[u8; 32]>,
 }
 
 // feature flags
@@ -1948,6 +1966,23 @@ impl ProtocolConfig {
 
     pub fn max_ptb_value_size_v2(&self) -> bool {
         self.feature_flags.max_ptb_value_size_v2
+    }
+
+    pub fn get_aliased_addresses(&self) -> &Vec<AliasedAddress> {
+        &self.aliased_addresses
+    }
+
+    pub fn is_tx_allowed_via_aliasing(
+        &self,
+        sender: [u8; 32],
+        signer: [u8; 32],
+        tx_digest: &[u8; 32],
+    ) -> bool {
+        self.aliased_addresses.iter().any(|addr| {
+            addr.original == sender
+                && addr.aliased == signer
+                && addr.allowed_tx_digests.contains(tx_digest)
+        })
     }
 }
 
@@ -2503,6 +2538,8 @@ impl ProtocolConfig {
             use_object_per_epoch_marker_table_v2: None,
 
             consensus_commit_rate_estimation_window_size: None,
+
+            aliased_addresses: vec![],
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -3484,6 +3521,34 @@ impl ProtocolConfig {
                 82 => {
                     cfg.feature_flags.max_ptb_value_size_v2 = true;
                 }
+                83 => {
+                    if chain == Chain::Mainnet {
+                        // The address that will sign the recovery transaction.
+                        let aliased: [u8; 32] = Hex::decode(
+                            "0x0b2da327ba6a4cacbe75dddd50e6e8bbf81d6496e92d66af9154c61c77f7332f",
+                        )
+                        .unwrap()
+                        .try_into()
+                        .unwrap();
+
+                        // Allow aliasing for the two addresses that contain stolen funds.
+                        cfg.aliased_addresses.push(AliasedAddress {
+                            original: Hex::decode("0xcd8962dad278d8b50fa0f9eb0186bfa4cbdecc6d59377214c88d0286a0ac9562").unwrap().try_into().unwrap(),
+                            aliased,
+                            allowed_tx_digests: vec![
+                                Base58::decode("B2eGLFoMHgj93Ni8dAJBfqGzo8EWSTLBesZzhEpTPA4").unwrap().try_into().unwrap(),
+                            ],
+                        });
+
+                        cfg.aliased_addresses.push(AliasedAddress {
+                            original: Hex::decode("0xe28b50cef1d633ea43d3296a3f6b67ff0312a5f1a99f0af753c85b8b5de8ff06").unwrap().try_into().unwrap(),
+                            aliased,
+                            allowed_tx_digests: vec![
+                                Base58::decode("J4QqSAgp7VrQtQpMy5wDX4QGsCSEZu3U5KuDAkbESAge").unwrap().try_into().unwrap(),
+                            ],
+                        });
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -3674,6 +3739,19 @@ impl ProtocolConfig {
 
     pub fn set_consensus_batched_block_sync_for_testing(&mut self, val: bool) {
         self.feature_flags.consensus_batched_block_sync = val;
+    }
+
+    pub fn push_aliased_addresses_for_testing(
+        &mut self,
+        original: [u8; 32],
+        aliased: [u8; 32],
+        allowed_tx_digests: Vec<[u8; 32]>,
+    ) {
+        self.aliased_addresses.push(AliasedAddress {
+            original,
+            aliased,
+            allowed_tx_digests,
+        });
     }
 }
 
