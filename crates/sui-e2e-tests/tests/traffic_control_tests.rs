@@ -629,13 +629,11 @@ async fn test_traffic_control_dead_mans_switch() -> Result<(), anyhow::Error> {
         delegate_error_blocking: false,
         destination_port: 9000,
         drain_path: drain_path.clone(),
-        drain_timeout_secs: 10,
+        drain_timeout_secs: 6,
     };
 
-    // NOTE: we need to hold onto this tc handle to ensure we don't inadvertently close
-    // the receive channel (this would cause traffic controller to exit the loop and thus
-    // we will never engage the dead mans switch)
-    let _tc = TrafficController::init_for_test(policy_config, Some(firewall_config));
+    let tc = TrafficController::init_for_test(policy_config.clone(), Some(firewall_config.clone()))
+        .await;
     assert!(
         !drain_path.exists(),
         "Expected drain file to not exist after startup unless previously set",
@@ -643,7 +641,7 @@ async fn test_traffic_control_dead_mans_switch() -> Result<(), anyhow::Error> {
 
     // after n seconds with no traffic, the dead mans switch should be engaged
     let mut drain_enabled = false;
-    for _ in 0..10 {
+    for _ in 0..4 {
         if drain_path.exists() {
             drain_enabled = true;
             break;
@@ -653,6 +651,8 @@ async fn test_traffic_control_dead_mans_switch() -> Result<(), anyhow::Error> {
     assert!(drain_enabled, "Expected drain file to be enabled");
 
     // if we drop traffic controller and re-instantiate, drain file should remain set
+    drop(tc);
+    let _tc = TrafficController::init_for_test(policy_config, Some(firewall_config)).await;
     for _ in 0..3 {
         assert!(
             drain_path.exists(),
