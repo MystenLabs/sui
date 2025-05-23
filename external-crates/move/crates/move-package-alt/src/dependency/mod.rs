@@ -100,6 +100,7 @@ impl<F: MoveFlavor> PinnedDependencyInfo<F> {
     }
 
     pub async fn fetch(&self) -> PackagePath {
+        // TODO: take this from [Package]
         todo!()
     }
 

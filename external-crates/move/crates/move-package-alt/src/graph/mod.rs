@@ -2,8 +2,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt;
-
 use crate::{
     dependency::PinnedDependencyInfo,
     errors::{PackageError, PackageResult},
@@ -12,16 +10,11 @@ use crate::{
 };
 use petgraph::graph::{DiGraph, NodeIndex};
 use std::{
-    collections::{BTreeMap, BTreeSet, btree_map::Entry},
-    convert::identity,
-    path::{Path, PathBuf},
+    collections::{BTreeMap, btree_map::Entry},
+    path::PathBuf,
     sync::{Arc, Mutex},
-    time::Duration,
 };
 use tokio::sync::OnceCell;
-
-#[derive(Clone)]
-struct FetchFailure;
 
 #[derive(Debug)]
 pub struct PackageGraph<F: MoveFlavor> {
@@ -48,7 +41,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     /// Check to see whether the resolution graph in the lockfile inside `path` is up-to-date (i.e.
     /// whether any of the manifests digests are out of date). If the resolution graph is
     /// up-to-date, it is returned. Otherwise a new resolution graph is constructed by traversing
-    /// the manifest files (see [load_from_manifests] for details).
+    /// (only) the manifest files.
     pub async fn load(path: &PackagePath, env: &EnvironmentName) -> PackageResult<Self> {
         /*
         let builder = PackageGraphBuilder::new();
@@ -123,13 +116,15 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         Ok(graph)
     }
 
-    /// Construct a [PackageGraph] by pinning and fetching all transitive dependencies for `env`
-    /// from the manifests rooted at `path` (no lockfiles are read).
+    /// Construct a new package graph for `env` by recursively fetching and reading manifest files
+    /// starting from the package at `path`.
+    /// Lockfiles are ignored. See [PackageGraph::load]
     async fn load_from_manifests(
         &self,
         path: &PackagePath,
         env: &EnvironmentName,
     ) -> PackageResult<PackageGraph<F>> {
+        // TODO: this is wrong - it is ignoring `path`
         let graph = Arc::new(Mutex::new(DiGraph::new()));
         let visited = Arc::new(Mutex::new(BTreeMap::new()));
         let root = PinnedDependencyInfo::<F>::root_dependency();
@@ -154,6 +149,8 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
     ///
     /// `cache` is used to short-circuit refetching - if a node is in `cache` then neither it nor its
     /// dependencies will be readded.
+    ///
+    /// TODO: keys for `cache` and `visited` should be `UnfetchedPackagePath`
     ///
     /// Deadlock prevention: `cache` is never acquired while `graph` is held, so there cannot be a
     /// deadlock

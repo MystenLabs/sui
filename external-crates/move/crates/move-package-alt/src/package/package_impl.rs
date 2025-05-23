@@ -65,6 +65,7 @@ impl<F: MoveFlavor> Package<F> {
     /// Fetch [dep] and load a package from the fetched source
     /// Makes a best effort to translate old-style packages into the current format,
     pub async fn load(dep: PinnedDependencyInfo<F>) -> PackageResult<Self> {
+        // TODO: most of this should live in [dependency]
         use PinnedDependencyInfo as P;
 
         let package = match dep {
