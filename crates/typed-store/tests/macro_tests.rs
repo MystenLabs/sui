@@ -280,8 +280,8 @@ async fn test_sampling_time() {
     assert!(sampling_interval.sample());
 }
 
-#[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-mod tide_hunter_tests {
+#[cfg(tidehunter)]
+mod tidehunter_tests {
     use super::*;
     use std::collections::BTreeMap;
     use typed_store::tidehunter_util::ThConfig;

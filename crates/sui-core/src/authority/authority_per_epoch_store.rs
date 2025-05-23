@@ -416,7 +416,7 @@ pub struct AuthorityPerEpochStore {
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
 #[derive(DBMapUtils)]
-// #[tidehunter]
+#[cfg_attr(tidehunter, tidehunter)]
 pub struct AuthorityEpochTables {
     /// This is map between the transaction digest and transactions found in the `transaction_lock`.
     #[default_options_override_fn = "signed_transactions_table_default_config"]
@@ -578,7 +578,7 @@ fn pending_consensus_transactions_table_default_config() -> DBOptions {
 }
 
 impl AuthorityEpochTables {
-    #[cfg(any(not(feature = "tide_hunter"), feature = "rocksdb"))]
+    #[cfg(not(tidehunter))]
     pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
         Self::open_tables_read_write(
             Self::path(epoch, parent_path),
@@ -588,12 +588,9 @@ impl AuthorityEpochTables {
         )
     }
 
-    #[cfg(all(
-        not(target_os = "windows"),
-        feature = "tide_hunter",
-        not(feature = "rocksdb")
-    ))]
+    #[cfg(tidehunter)]
     pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
+        tracing::warn!("AuthorityEpochTables using tidehunter");
         use typed_store::tidehunter_util::{default_cells_per_mutex, KeySpaceConfig, ThConfig};
         const MUTEXES: usize = 1024;
         const LARGE_KEY_LENGTH: usize = 4096 * 2;
