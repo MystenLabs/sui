@@ -1272,6 +1272,55 @@ async fn zklogin_txn_fail_if_missing_jwk() {
 }
 
 #[tokio::test]
+async fn test_aliased_address() {
+    telemetry_subscribers::init_for_testing();
+
+    let recipient = dbg_addr(2);
+
+    let (original, original_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), original);
+    let input_object = Object::with_id_owner_for_testing(ObjectID::random(), original);
+
+    let input_object_ref = input_object.compute_full_object_reference();
+
+    let (aliased, aliased_key): (_, AccountKeyPair) = get_key_pair();
+
+    let input_object_id = input_object.id();
+    let gas_object_id = gas_object.id();
+
+    let authority_state = {
+        let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        protocol_config.push_aliased_addresses_for_testing(original.to_inner(), aliased.to_inner());
+
+        let state = TestAuthorityBuilder::new().build().await;
+        for (address, object_id) in vec![(original, input_object_id), (original, gas_object_id)] {
+            let obj = Object::with_id_owner_for_testing(object_id, address);
+            state.insert_genesis_object(obj).await;
+        }
+        state
+    };
+
+    authority_state.insert_genesis_object(input_object).await;
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+
+    let gas_object = authority_state.get_object(&gas_object_id).await.unwrap();
+    dbg!(&gas_object);
+
+    let data = TransactionData::new_transfer_full(
+        recipient,
+        input_object_ref,
+        aliased,
+        gas_object.compute_object_reference(),
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
+    );
+
+    let tx = to_sender_signed_transaction(data, &aliased_key);
+
+    execute_transaction_assert_err(authority_state, tx, vec![input_object_id]).await;
+}
+
+#[tokio::test]
 async fn zk_multisig_test() {
     telemetry_subscribers::init_for_testing();
 
