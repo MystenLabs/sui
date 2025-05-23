@@ -51,7 +51,7 @@ impl AuthorityPerpetualTablesOptions {
 
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
 #[derive(DBMapUtils)]
-// #[tidehunter]
+#[cfg_attr(tidehunter, tidehunter)]
 pub struct AuthorityPerpetualTables {
     /// This is a map between the object (ID, version) and the latest state of the object, namely the
     /// state that is needed to process new transactions.
@@ -168,7 +168,7 @@ impl AuthorityPerpetualTables {
         parent_path.join("perpetual")
     }
 
-    #[cfg(any(not(feature = "tide_hunter"), feature = "rocksdb"))]
+    #[cfg(not(tidehunter))]
     pub fn open(
         parent_path: &Path,
         db_options_override: Option<AuthorityPerpetualTablesOptions>,
@@ -208,12 +208,9 @@ impl AuthorityPerpetualTables {
         )
     }
 
-    #[cfg(all(
-        not(target_os = "windows"),
-        feature = "tide_hunter",
-        not(feature = "rocksdb")
-    ))]
+    #[cfg(tidehunter)]
     pub fn open(parent_path: &Path, _: Option<AuthorityPerpetualTablesOptions>) -> Self {
+        tracing::warn!("AuthorityPerpetualTables using tidehunter");
         use typed_store::tidehunter_util::{
             default_cells_per_mutex, Bytes, KeySpaceConfig, ThConfig, WalPosition,
         };

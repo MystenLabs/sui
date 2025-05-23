@@ -92,10 +92,6 @@ sui-tls.workspace = true
 sui-types.workspace = true
 nonempty.workspace = true
 
-[features]
-tide_hunter = ["typed-store/tide_hunter"]
-rocksdb = []
-
 [dev-dependencies]
 sui-move-build.workspace = true
 clap.workspace = true
