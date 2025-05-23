@@ -24,7 +24,7 @@ use sui_network::{
     tonic,
 };
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::traffic_control::{ClientIdSource, PolicyConfig, RemoteFirewallConfig, Weight};
+use sui_types::traffic_control::{ClientIdSource, Weight};
 use sui_types::{
     effects::TransactionEffects,
     messages_grpc::{
@@ -64,6 +64,7 @@ use tokio::time::timeout;
 use tonic::metadata::{Ascii, MetadataValue};
 use tracing::{debug, error, error_span, info, Instrument};
 
+use crate::consensus_adapter::ConnectionMonitorStatusForTests;
 use crate::{
     authority::{
         authority_per_epoch_store::AuthorityPerEpochStore,
@@ -79,10 +80,6 @@ use crate::{
     authority::{consensus_tx_status_cache::ConsensusTxStatus, AuthorityState},
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
     traffic_controller::{parse_ip, policies::TrafficTally, TrafficController},
-};
-use crate::{
-    consensus_adapter::ConnectionMonitorStatusForTests,
-    traffic_controller::metrics::TrafficControllerMetrics,
 };
 use nonempty::{nonempty, NonEmpty};
 use sui_config::local_ip_utils::new_local_tcp_address_for_testing;
@@ -400,22 +397,15 @@ impl ValidatorService {
         state: Arc<AuthorityState>,
         consensus_adapter: Arc<ConsensusAdapter>,
         validator_metrics: Arc<ValidatorServiceMetrics>,
-        traffic_controller_metrics: TrafficControllerMetrics,
-        policy_config: Option<PolicyConfig>,
-        firewall_config: Option<RemoteFirewallConfig>,
+        client_id_source: Option<ClientIdSource>,
     ) -> Self {
+        let traffic_controller = state.traffic_controller.clone();
         Self {
             state,
             consensus_adapter,
             metrics: validator_metrics,
-            traffic_controller: policy_config.clone().map(|policy| {
-                Arc::new(TrafficController::init(
-                    policy,
-                    traffic_controller_metrics,
-                    firewall_config,
-                ))
-            }),
-            client_id_source: policy_config.map(|policy| policy.client_id_source),
+            traffic_controller,
+            client_id_source,
         }
     }
 
@@ -1550,7 +1540,7 @@ impl ValidatorService {
         }
     }
 
-    fn handle_traffic_resp<T>(
+    async fn handle_traffic_resp<T>(
         &self,
         client: Option<IpAddr>,
         wrapped_response: WrappedServiceResponse<T>,
@@ -1565,17 +1555,19 @@ impl ValidatorService {
         };
 
         if let Some(traffic_controller) = self.traffic_controller.clone() {
-            traffic_controller.tally(TrafficTally {
-                direct: client,
-                through_fullnode: None,
-                error_info: error.map(|e| {
-                    let error_type = String::from(e.clone().as_ref());
-                    let error_weight = normalize(e);
-                    (error_weight, error_type)
-                }),
-                spam_weight,
-                timestamp: SystemTime::now(),
-            })
+            traffic_controller
+                .tally(TrafficTally {
+                    direct: client,
+                    through_fullnode: None,
+                    error_info: error.map(|e| {
+                        let error_type = String::from(e.clone().as_ref());
+                        let error_weight = normalize(e);
+                        (error_weight, error_type)
+                    }),
+                    spam_weight,
+                    timestamp: SystemTime::now(),
+                })
+                .await;
         }
         unwrapped_response
     }
@@ -1626,7 +1618,7 @@ macro_rules! handle_with_decoration {
 
         // handle traffic tallying
         let wrapped_response = $self.$func_name($request).await;
-        $self.handle_traffic_resp(client, wrapped_response)
+        $self.handle_traffic_resp(client, wrapped_response).await
     }};
 }
 
