@@ -1501,6 +1501,10 @@ pub struct ProtocolConfig {
 
     /// The number of commits to consider when computing a deterministic commit rate.
     consensus_commit_rate_estimation_window_size: Option<u32>,
+
+    /// A pair of (original, aliased) addresses.
+    /// For each pair, `aliased` is allowed to act as `original`.
+    aliased_addresses: Vec<([u8; 32], [u8; 32])>,
 }
 
 // feature flags
@@ -2551,6 +2555,8 @@ impl ProtocolConfig {
             use_object_per_epoch_marker_table_v2: None,
 
             consensus_commit_rate_estimation_window_size: None,
+
+            aliased_addresses: vec![],
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -3771,6 +3777,10 @@ impl ProtocolConfig {
 
     pub fn set_consensus_batched_block_sync_for_testing(&mut self, val: bool) {
         self.feature_flags.consensus_batched_block_sync = val;
+    }
+
+    pub fn push_aliased_addresses_for_testing(&mut self, original: [u8; 32], aliased: [u8; 32]) {
+        self.aliased_addresses.push((original, aliased));
     }
 }
 
