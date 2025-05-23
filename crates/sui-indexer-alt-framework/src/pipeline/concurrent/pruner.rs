@@ -688,7 +688,7 @@ mod tests {
 
             assert!(!data.contains_key(&2), "Checkpoint 2 should be pruned");
 
-            // Checkpoint 3 should never be pruned (it's the reader_lo)
+            // Checkpoint 3 should not be pruned (it's the reader_lo)
             assert!(data.contains_key(&3), "Checkpoint 3 should be preserved");
 
             // Check that the pruner_hi was updated past 1
