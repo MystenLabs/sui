@@ -258,7 +258,7 @@ fn constants(
 ) -> UniqueMap<ConstantName, G::Constant> {
     // Traverse the constants and compute the dependency graph between constants: if one mentions
     // another, an edge is added between them.
-    let mut graph = DiGraphMap::new();
+    let mut graph = DiGraphMap::<ConstantName, ()>::new();
     for (name, constant) in consts.key_cloned_iter() {
         let deps = dependent_constants(constant);
         if deps.is_empty() {
