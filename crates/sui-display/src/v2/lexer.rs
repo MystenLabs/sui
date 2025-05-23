@@ -4,7 +4,6 @@
 
 use std::fmt;
 
-
 /// Lexer for Display V2 format strings. Format strings are a mix of text and expressions.
 /// Expressions are enclosed in braces and may contain multiple alternates, separated by pipes, and
 /// each containing nested field, vector, or dynamic field accesses.
@@ -79,6 +78,9 @@ pub(crate) enum Token {
     RParen,
     /// '}}'
     RRBrace,
+    /// Strings are surrounded by single quotes. Quotes and backslashes inside strings are escaped
+    /// with backslashes.
+    String,
     /// A strand of text.
     Text,
 
@@ -108,7 +110,7 @@ impl<'s> Lexer<'s> {
         use Token as T;
         Some(match bytes.first()? {
             b'{' if bytes.get(1) == Some(&b'{') => {
-                self.take(T::LLBrace, 1); // discard the first brace
+                self.advance(1);
                 self.take(T::LLBrace, 1)
             }
 
@@ -118,7 +120,7 @@ impl<'s> Lexer<'s> {
             }
 
             b'}' if bytes.get(1) == Some(&b'}') => {
-                self.take(T::RRBrace, 1); // discard the first brace
+                self.advance(1);
                 self.take(T::RRBrace, 1)
             }
 
@@ -149,7 +151,7 @@ impl<'s> Lexer<'s> {
             b'0' if bytes.get(1) == Some(&b'x')
                 && bytes.get(2).is_some_and(|b| is_valid_hex_byte(*b)) =>
             {
-                self.take(T::NumHex, 2); // Drop the prefix
+                self.advance(2);
                 self.take_until(T::NumHex, |c| !is_valid_hex_byte(c))
             }
 
@@ -181,6 +183,28 @@ impl<'s> Lexer<'s> {
             b']' => self.take(T::RBracket, 1),
 
             b')' => self.take(T::RParen, 1),
+
+            b'\'' => {
+                // Set the escaped indicator to true initially so we don't interpret the starting
+                // quote as an ending quote.
+                let mut escaped = true;
+                for (i, b) in self.src.bytes().enumerate() {
+                    if escaped {
+                        escaped = false;
+                    } else if b == b'\\' {
+                        escaped = true;
+                    } else if b == b'\'' {
+                        self.advance(1);
+                        let content = self.take(T::String, i - 1);
+                        self.advance(1);
+                        return Some(content);
+                    }
+                }
+
+                // Reached the end of the byte stream and didn't find a closing quote -- treat the
+                // partial string as an unexpected token.
+                self.take(T::Unexpected, self.src.len())
+            }
 
             // Explicitly tokenize whitespace.
             _ if self.src.chars().next().is_some_and(char::is_whitespace) => self.take(
@@ -217,10 +241,20 @@ impl<'s> Lexer<'s> {
     fn take(&mut self, t: Token, n: usize) -> Lexeme<'s> {
         let start = self.off;
         let slice = &self.src[..n];
-        self.src = &self.src[n..];
-        self.off += n;
+        self.advance(n);
 
         Lexeme(t, start, slice)
+    }
+
+    /// Move the cursor forward by `n` bytes.
+    ///
+    /// ## Safety
+    ///
+    /// This function assumes that `n` is less than or equal to the length of `self.src`, and will
+    /// panic if that is not the case.
+    fn advance(&mut self, n: usize) {
+        self.src = &self.src[n..];
+        self.off += n;
     }
 }
 
@@ -268,8 +302,9 @@ impl fmt::Display for OwnedLexeme {
             L(T::RBracket, _, _) => write!(f, "']'"),
             L(T::RParen, _, _) => write!(f, "')'"),
             L(T::RRBrace, _, _) => write!(f, "'}}}}'"),
+            L(T::String, _, s) => write!(f, "string {s:?}"),
             L(T::Text, _, s) => write!(f, "text {s:?}"),
-            L(T::Unexpected, _, s) => write!(f, "unexpected character {s:?}"),
+            L(T::Unexpected, _, s) => write!(f, "unexpected {s:?}"),
             L(T::Whitespace, _, _) => write!(f, "whitespace"),
         }?;
 
@@ -301,6 +336,7 @@ impl fmt::Display for Token {
             T::RBracket => write!(f, "']'"),
             T::RParen => write!(f, "')'"),
             T::RRBrace => write!(f, "'}}}}'"),
+            T::String => write!(f, "a string"),
             T::Text => write!(f, "text"),
             T::Unexpected => write!(f, "an unexpected character"),
             T::Whitespace => write!(f, "whitespace"),
@@ -857,6 +893,55 @@ mod tests {
                 L(T::RParen, 68, ")"),
                 L(T::RBrace, 69, "}"),
             ],
+        );
+    }
+
+    /// Tokenizing three kinds of string literals hex, binary, and regular.
+    #[test]
+    fn string_literals() {
+        let lexer = Lexer::new(r#"{x'0f00' b'bar' 'baz'}"#);
+        let lexemes: Vec<_> = lexer.collect();
+        assert_eq!(
+            lexemes,
+            vec![
+                L(T::LBrace, 0, "{"),
+                L(T::Ident, 1, "x"),
+                L(T::String, 3, "0f00"),
+                L(T::Whitespace, 8, " "),
+                L(T::Ident, 9, "b"),
+                L(T::String, 11, "bar"),
+                L(T::Whitespace, 15, " "),
+                L(T::String, 17, "baz"),
+                L(T::RBrace, 21, "}"),
+            ],
+        );
+    }
+
+    /// Make sure the string does not stop early on an escaped quote, it's fine to escape random
+    /// characters, and an escaped backslash does not eat the closing quote.
+    #[test]
+    fn test_string_literal_escapes() {
+        let lexer = Lexer::new(r#"{'\' \x \\'}"#);
+        let lexemes: Vec<_> = lexer.collect();
+        assert_eq!(
+            lexemes,
+            vec![
+                L(T::LBrace, 0, "{"),
+                L(T::String, 2, r#"\' \x \\"#),
+                L(T::RBrace, 11, "}"),
+            ],
+        );
+    }
+
+    /// If the string literal is not closed, the whole sequence is treated as an "unexpected"
+    /// token.
+    #[test]
+    fn test_string_literal_trailing() {
+        let lexer = Lexer::new(r#"{'foo bar}"#);
+        let lexemes: Vec<_> = lexer.collect();
+        assert_eq!(
+            lexemes,
+            vec![L(T::LBrace, 0, "{"), L(T::Unexpected, 1, "'foo bar}"),]
         );
     }
 }
