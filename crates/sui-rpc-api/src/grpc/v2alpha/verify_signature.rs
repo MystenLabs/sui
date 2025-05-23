@@ -63,6 +63,29 @@ pub fn verify_signature(
         }
     };
 
+    if let Some(address) = request
+        .address
+        .map(|address| address.parse::<sui_sdk_types::Address>())
+        .transpose()
+        .map_err(|e| {
+            FieldViolation::new("address")
+                .with_description(format!("invalid address: {e}"))
+                .with_reason(ErrorReason::FieldInvalid)
+        })?
+    {
+        //TODO add function in sui_sdk_types crate to do this
+        let derived_addresses = match &signature {
+            sui_sdk_types::UserSignature::Simple(simple_signature) => match simple_signature {
+                sui_sdk_types::SimpleSignature::Ed25519 { public_key, .. } => todo!(),
+                sui_sdk_types::SimpleSignature::Secp256k1 { public_key, .. } => todo!(),
+                sui_sdk_types::SimpleSignature::Secp256r1 { public_key, .. } => todo!(),
+            },
+            sui_sdk_types::UserSignature::Multisig(multisig_aggregated_signature) => todo!(),
+            sui_sdk_types::UserSignature::ZkLogin(zk_login_authenticator) => todo!(),
+            sui_sdk_types::UserSignature::Passkey(passkey_authenticator) => todo!(),
+        };
+    }
+
     // If jwks from the request is empty we load the current set of active jwks that are onchain
     let jwks = {
         let mut jwks = request

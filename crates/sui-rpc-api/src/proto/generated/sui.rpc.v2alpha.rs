@@ -1896,9 +1896,16 @@ pub struct VerifySignatureRequest {
     /// The siganture to verify.
     #[prost(message, optional, tag = "2")]
     pub signature: ::core::option::Option<super::v2beta::UserSignature>,
+    /// Optional. Address to validate against the provided signature.
+    ///
+    /// If provided, this address will be compared against the the address derived
+    /// from the provide signature and a successful response will only be returned
+    /// if they match.
+    #[prost(string, optional, tag = "3")]
+    pub address: ::core::option::Option<::prost::alloc::string::String>,
     /// The set of JWKs to use when verifying Zklogin signatures.
     /// If this is empty the current set of valid JWKs stored onchain will be used
-    #[prost(message, repeated, tag = "3")]
+    #[prost(message, repeated, tag = "4")]
     pub jwks: ::prost::alloc::vec::Vec<super::v2beta::ActiveJwk>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
