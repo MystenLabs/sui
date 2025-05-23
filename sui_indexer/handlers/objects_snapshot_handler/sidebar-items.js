@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["start_objects_snapshot_handler"],"struct":["CheckpointObjectChanges","ObjectsSnapshotHandler"]};

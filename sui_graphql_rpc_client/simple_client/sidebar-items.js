@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["is_valid_variable_name","resolve_variables"],"struct":["GraphqlQueryVariable","SimpleClient"]};

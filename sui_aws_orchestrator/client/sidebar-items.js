@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["aws"],"struct":["Instance"],"trait":["ServerProviderClient"]};
