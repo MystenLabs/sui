@@ -19,7 +19,7 @@ use tracing::debug;
 use crate::{
     errors::PackageResult,
     flavor::MoveFlavor,
-    package::{EnvironmentName, PackagePath},
+    package::{EnvironmentName, paths::PackagePath},
 };
 
 use external::ExternalDependency;
@@ -85,8 +85,8 @@ pub enum PinnedDependencyInfo<F: MoveFlavor + ?Sized> {
 
 impl<F: MoveFlavor> PinnedDependencyInfo<F> {
     /// Return a dependency representing the root package
-    pub fn root_dependency() -> Self {
-        Self::Local(LocalDependency::root_dependency())
+    pub fn root_dependency(path: &PackagePath) -> Self {
+        Self::Local(LocalDependency::root_dependency(path))
     }
 
     pub async fn fetch(&self) -> PackagePath {
@@ -294,7 +294,7 @@ pub async fn fetch<F: MoveFlavor>(
 
     let mut loc_paths = DS::new();
     for (env, package, dep) in locs {
-        loc_paths.insert(env, package, dep.path()?);
+        loc_paths.insert(env, package, dep.unfetch_path().clone());
     }
 
     let flav_deps_path = flavor.fetch(flav)?;

@@ -32,6 +32,7 @@ Manifest {
             dependency_info: Local(
                 LocalDependency {
                     local: "./bar",
+                    relative_to_parent_dir: "tests/data/basic_with_bar",
                 },
             ),
             is_override: false,

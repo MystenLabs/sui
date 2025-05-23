@@ -122,18 +122,19 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         env: &EnvironmentName,
         check_digests: bool,
     ) -> PackageResult<Option<PackageGraph<F>>> {
-        let lockfile = Lockfile::<F>::read_from_dir(path.as_path())?;
+        let lockfile = Lockfile::<F>::read_from_dir(path.path())?;
         let mut graph = PackageGraph {
             inner: DiGraph::new(),
         };
 
         let deps = lockfile.pinned_deps_for_env(env);
 
+        println!("Loading package graph from lockfile: {:?}", deps);
         let mut package_indices = BTreeMap::new();
         if let Some(deps) = deps {
             // First pass: create nodes for all packages
             for (pkg_id, dep_info) in deps.data.iter() {
-                let package = self.cache.fetch(&dep_info.source).await?;
+                let package = self.cache.fetch(path, &dep_info.source).await?;
                 if check_digests && package.manifest().digest() != dep_info.manifest_digest {
                     return Ok(None);
                 }
@@ -170,9 +171,9 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         // TODO: this is wrong - it is ignoring `path`
         let graph = Arc::new(Mutex::new(DiGraph::new()));
         let visited = Arc::new(Mutex::new(BTreeMap::new()));
-        let root = PinnedDependencyInfo::<F>::root_dependency();
+        let root = PinnedDependencyInfo::<F>::root_dependency(path);
 
-        self.add_transitive_manifest_deps(&root, env, graph.clone(), visited)
+        self.add_transitive_manifest_deps(path, &root, env, graph.clone(), visited)
             .await?;
 
         let graph = graph.lock().expect("unpoisoned").map(
@@ -199,6 +200,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
     /// deadlock
     async fn add_transitive_manifest_deps(
         &self,
+        root_pkg_path: &PackagePath,
         dep: &PinnedDependencyInfo<F>,
         env: &EnvironmentName,
         graph: Arc<Mutex<DiGraph<Option<Arc<PackageNode<F>>>, PackageName>>>,
@@ -215,14 +217,19 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         };
 
         // fetch package and add it to the graph
-        let package = self.cache.fetch(dep).await?;
+        let package = self.cache.fetch(root_pkg_path, dep).await?;
 
         // add outgoing edges for dependencies
         // Note: this loop could be parallel if we want parallel fetching:
         for (name, dep) in package.package.direct_deps(env).iter() {
             // TODO: to handle use-environment we need to traverse with a different env here
-            let future =
-                self.add_transitive_manifest_deps(dep, env, graph.clone(), visited.clone());
+            let future = self.add_transitive_manifest_deps(
+                root_pkg_path,
+                dep,
+                env,
+                graph.clone(),
+                visited.clone(),
+            );
             let dep_index = Box::pin(future).await?;
 
             graph
