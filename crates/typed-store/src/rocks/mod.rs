@@ -12,7 +12,7 @@ pub use crate::rocks::options::{
     default_db_options, read_size_from_env, DBMapTableConfigMap, DBOptions, ReadWriteOptions,
 };
 use crate::rocks::safe_iter::{SafeIter, SafeRevIter};
-#[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+#[cfg(tidehunter)]
 use crate::tidehunter_util::{
     apply_range_bounds, transform_th_iterator, transform_th_key, typed_store_error_from_th_error,
 };
@@ -44,7 +44,7 @@ use std::{
 };
 use std::{collections::HashSet, ffi::CStr};
 use sui_macros::{fail_point, nondeterministic};
-#[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+#[cfg(tidehunter)]
 use tidehunter::{db::Db as TideHunterDb, key_shape::KeySpace};
 use tokio::sync::oneshot;
 use tracing::{debug, error, instrument, warn};
@@ -84,7 +84,7 @@ impl Drop for RocksDB {
 pub enum ColumnFamily {
     Rocks(String),
     InMemory(String),
-    #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+    #[cfg(tidehunter)]
     TideHunter((KeySpace, Option<Vec<u8>>)),
 }
 
@@ -93,7 +93,7 @@ impl std::fmt::Debug for ColumnFamily {
         match self {
             ColumnFamily::Rocks(name) => write!(f, "RocksDB cf: {}", name),
             ColumnFamily::InMemory(name) => write!(f, "InMemory cf: {}", name),
-            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+            #[cfg(tidehunter)]
             ColumnFamily::TideHunter(_) => write!(f, "TideHunter column family"),
         }
     }
@@ -114,7 +114,7 @@ impl ColumnFamily {
 pub enum Storage {
     Rocks(RocksDB),
     InMemory(InMemoryDB),
-    #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+    #[cfg(tidehunter)]
     TideHunter(Arc<TideHunterDb>),
 }
 
@@ -123,7 +123,7 @@ impl std::fmt::Debug for Storage {
         match self {
             Storage::Rocks(db) => write!(f, "RocksDB Storage {:?}", db),
             Storage::InMemory(db) => write!(f, "InMemoryDB Storage {:?}", db),
-            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+            #[cfg(tidehunter)]
             Storage::TideHunter(_) => write!(f, "TideHunterDB Storage"),
         }
     }
@@ -144,7 +144,7 @@ impl Drop for Database {
 enum GetResult<'a> {
     Rocks(DBPinnableSlice<'a>),
     InMemory(Vec<u8>),
-    #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+    #[cfg(tidehunter)]
     TideHunter(tidehunter::minibytes::Bytes),
 }
 
@@ -154,7 +154,7 @@ impl Deref for GetResult<'_> {
         match self {
             GetResult::Rocks(d) => d.deref(),
             GetResult::InMemory(d) => d.deref(),
-            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+            #[cfg(tidehunter)]
             GetResult::TideHunter(d) => d.deref(),
         }
     }
@@ -184,7 +184,7 @@ impl Database {
             (Storage::InMemory(db), ColumnFamily::InMemory(cf_name)) => {
                 Ok(db.get(cf_name, key).map(GetResult::InMemory))
             }
-            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+            #[cfg(tidehunter)]
             (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => Ok(db
                 .get(*ks, &transform_th_key(key.as_ref(), prefix))
                 .map_err(typed_store_error_from_th_error)?
@@ -227,7 +227,7 @@ impl Database {
                 .into_iter()
                 .map(|r| Ok(r.map(GetResult::InMemory)))
                 .collect(),
-            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+            #[cfg(tidehunter)]
             (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => {
                 let res = keys.into_iter().map(|k| {
                     db.get(*ks, &transform_th_key(k.as_ref(), prefix))
@@ -248,7 +248,7 @@ impl Database {
                 db.drop_cf(name);
                 Ok(())
             }
-            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+            #[cfg(tidehunter)]
             Storage::TideHunter(_) => {
                 unimplemented!("TideHunter: deletion of column family on a fly not implemented")
             }
@@ -278,7 +278,7 @@ impl Database {
                 db.delete(cf_name, key.as_ref());
                 Ok(())
             }
-            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+            #[cfg(tidehunter)]
             (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => db
                 .remove(*ks, transform_th_key(key.as_ref(), prefix))
                 .map_err(typed_store_error_from_th_error),
@@ -314,7 +314,7 @@ impl Database {
                 db.put(cf_name, key, value);
                 Ok(())
             }
-            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+            #[cfg(tidehunter)]
             (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => db
                 .insert(*ks, transform_th_key(&key, prefix), value)
                 .map_err(typed_store_error_from_th_error),
@@ -356,7 +356,7 @@ impl Database {
                 db.write(batch);
                 Ok(())
             }
-            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+            #[cfg(tidehunter)]
             (Storage::TideHunter(db), StorageWriteBatch::TideHunter(batch)) => db
                 .write_batch(batch)
                 .map_err(typed_store_error_from_th_error),
@@ -574,7 +574,7 @@ impl<K, V> DBMap<K, V> {
         ))
     }
 
-    #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+    #[cfg(tidehunter)]
     pub fn reopen_th(
         db: Arc<Database>,
         cf_name: &str,
@@ -598,7 +598,7 @@ impl<K, V> DBMap<K, V> {
         let batch = match &self.db.storage {
             Storage::Rocks(_) => StorageWriteBatch::Rocks(WriteBatch::default()),
             Storage::InMemory(_) => StorageWriteBatch::InMemory(InMemoryBatch::default()),
-            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+            #[cfg(tidehunter)]
             Storage::TideHunter(_) => {
                 StorageWriteBatch::TideHunter(tidehunter::batch::WriteBatch::new())
             }
@@ -1033,7 +1033,7 @@ impl<K, V> DBMap<K, V> {
             Storage::InMemory(db) => {
                 Ok(db.iterator(&self.cf, it_lower_bound, it_upper_bound, true))
             }
-            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+            #[cfg(tidehunter)]
             Storage::TideHunter(db) => match &self.column_family {
                 ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
@@ -1050,7 +1050,7 @@ impl<K, V> DBMap<K, V> {
 pub enum StorageWriteBatch {
     Rocks(rocksdb::WriteBatch),
     InMemory(InMemoryBatch),
-    #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+    #[cfg(tidehunter)]
     TideHunter(tidehunter::batch::WriteBatch),
 }
 
@@ -1181,7 +1181,7 @@ impl DBBatch {
             StorageWriteBatch::Rocks(ref b) => b.size_in_bytes(),
             StorageWriteBatch::InMemory(_) => 0,
             // TODO: implement size_in_bytes method
-            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+            #[cfg(tidehunter)]
             StorageWriteBatch::TideHunter(_) => 0,
         }
     }
@@ -1206,7 +1206,7 @@ impl DBBatch {
                     (StorageWriteBatch::InMemory(b), ColumnFamily::InMemory(name)) => {
                         b.delete_cf(name, k_buf)
                     }
-                    #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+                    #[cfg(tidehunter)]
                     (StorageWriteBatch::TideHunter(b), ColumnFamily::TideHunter((ks, prefix))) => {
                         b.delete(*ks, transform_th_key(&k_buf, prefix))
                     }
@@ -1284,7 +1284,7 @@ impl DBBatch {
                     (StorageWriteBatch::InMemory(b), ColumnFamily::InMemory(name)) => {
                         b.put_cf(name, k_buf, v_buf)
                     }
-                    #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+                    #[cfg(tidehunter)]
                     (StorageWriteBatch::TideHunter(b), ColumnFamily::TideHunter((ks, prefix))) => {
                         b.write(*ks, transform_th_key(&k_buf, prefix), v_buf.to_vec())
                     }
@@ -1522,7 +1522,7 @@ where
                 ))
             }
             Storage::InMemory(db) => db.iterator(&self.cf, None, None, false),
-            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+            #[cfg(tidehunter)]
             Storage::TideHunter(db) => match &self.column_family {
                 ColumnFamily::TideHunter((ks, prefix)) => {
                     Box::new(transform_th_iterator(db.iterator(*ks), prefix))
@@ -1557,7 +1557,7 @@ where
                 ))
             }
             Storage::InMemory(db) => db.iterator(&self.cf, lower_bound, upper_bound, false),
-            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+            #[cfg(tidehunter)]
             Storage::TideHunter(db) => match &self.column_family {
                 ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
@@ -1590,7 +1590,7 @@ where
                 ))
             }
             Storage::InMemory(db) => db.iterator(&self.cf, lower_bound, upper_bound, false),
-            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+            #[cfg(tidehunter)]
             Storage::TideHunter(db) => match &self.column_family {
                 ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);

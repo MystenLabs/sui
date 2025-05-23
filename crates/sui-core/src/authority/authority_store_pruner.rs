@@ -662,7 +662,7 @@ impl AuthorityStorePruner {
             "Starting object pruning service with num_epochs_to_retain={}",
             config.num_epochs_to_retain
         );
-        #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+        #[cfg(tidehunter)]
         let config = Self::th_pruning_config();
 
         let tick_duration =
