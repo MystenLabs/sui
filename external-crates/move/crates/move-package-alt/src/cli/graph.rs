@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use crate::{
     errors::PackageResult,
     flavor::Vanilla,
-    graph::PackageGraph,
+    graph::{PackageGraph, PackageGraphBuilder},
     package::{EnvironmentName, Package, PackagePath},
 };
 use clap::{Command, Parser, Subcommand};
@@ -27,9 +27,9 @@ impl Graph {
         let path = path.canonicalize().unwrap();
         let package_path = PackagePath::new(path.clone());
 
-        let package =
-            PackageGraph::<Vanilla>::load_from_lockfile(package_path, &"mainnet".to_string())
-                .await?;
+        let package = PackageGraphBuilder::<Vanilla>::new()
+            .load_from_lockfile(&package_path, &"mainnet".to_string())
+            .await?;
 
         println!("Package graph loaded successfully\n: {:#?}", package);
 

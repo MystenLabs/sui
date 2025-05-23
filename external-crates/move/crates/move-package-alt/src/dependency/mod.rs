@@ -14,7 +14,7 @@ use std::{
     collections::BTreeMap,
     fmt::{self, Debug},
     marker::PhantomData,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
 };
 
@@ -29,7 +29,7 @@ use tracing::debug;
 use crate::{
     errors::{GitError, PackageError, PackageResult, ResolverError},
     flavor::MoveFlavor,
-    package::{EnvironmentName, PackageName},
+    package::{EnvironmentName, PackageName, PackagePath},
 };
 
 use external::ExternalDependency;
@@ -93,6 +93,25 @@ pub enum PinnedDependencyInfo<F: MoveFlavor + ?Sized> {
     FlavorSpecific(F::FlavorDependency<Pinned>),
 }
 
+impl<F: MoveFlavor> PinnedDependencyInfo<F> {
+    /// Return a dependency representing the root package
+    pub fn root_dependency() -> Self {
+        Self::Local(LocalDependency::root_dependency())
+    }
+
+    pub async fn fetch(&self) -> PackagePath {
+        // TODO: take this from [Package]
+        todo!()
+    }
+
+    /// Return the absolute path to the directory that this package would be fetched into, without
+    /// actually fetching it
+    pub fn unfetched_path(&self) -> PathBuf {
+        todo!()
+    }
+}
+
+// TODO: these should be moved down.
 // UNPINNED
 impl<'de, F> Deserialize<'de> for UnpinnedDependencyInfo<F>
 where

@@ -50,10 +50,17 @@ impl LocalDependency {
             LocalDependency::Pinned(dep) => dep.path(),
         }
     }
+
+    /// The path on the filesystem, relative to the location of the containing file
+    pub fn root_dependency() -> Self {
+        Self::Pinned(PinnedLocalDependency {
+            local: PathBuf::from("."),
+        })
+    }
 }
 
 impl UnpinnedLocalDependency {
-    /// The path on the filesystem, relative to the location of the containing file
+    /// Returns the path to the local dependency
     pub fn path(&self) -> PackageResult<PathBuf> {
         let path = fs::canonicalize(&self.local)?;
         Ok(path)
