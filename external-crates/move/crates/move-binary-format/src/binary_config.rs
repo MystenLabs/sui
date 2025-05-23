@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::file_format_common::{VERSION_1, VERSION_MAX};
+use crate::file_format_common::{BinaryConstants, VERSION_1, VERSION_MAX};
 
 /// Configuration for the binary format related to table size.
 /// Maps to all tables in the binary format.
@@ -64,6 +64,7 @@ pub struct BinaryConfig {
     pub min_binary_format_version: u32,
     pub check_no_extraneous_bytes: bool,
     pub table_config: TableConfig,
+    allow_unpublishable: bool,
 }
 
 impl BinaryConfig {
@@ -78,41 +79,47 @@ impl BinaryConfig {
             min_binary_format_version,
             check_no_extraneous_bytes,
             table_config,
+            allow_unpublishable: false,
         }
     }
 
-    // We want to make this disappear from the public API in favor of a "true" config
+    /// Creates a legacy configuration using the legacy table config.
     pub fn legacy(
         max_binary_format_version: u32,
         min_binary_format_version: u32,
         check_no_extraneous_bytes: bool,
     ) -> Self {
-        Self {
+        Self::new(
             max_binary_format_version,
             min_binary_format_version,
             check_no_extraneous_bytes,
-            table_config: TableConfig::legacy(),
-        }
+            TableConfig::legacy(),
+        )
     }
 
-    /// Run always with the max version but with controllable "extraneous bytes check"
+    /// Creates a configuration with max version, legacy table config,
+    /// and controllable extraneous bytes check.
     pub fn with_extraneous_bytes_check(check_no_extraneous_bytes: bool) -> Self {
+        Self::legacy(VERSION_MAX, VERSION_1, check_no_extraneous_bytes)
+    }
+
+    /// Standard configuration: VERSION_MAX and check_no_extraneous_bytes = true
+    pub fn standard() -> Self {
+        Self::with_extraneous_bytes_check(true)
+    }
+
+    pub fn new_unpublishable() -> Self {
         Self {
             max_binary_format_version: VERSION_MAX,
             min_binary_format_version: VERSION_1,
-            check_no_extraneous_bytes,
+            check_no_extraneous_bytes: false,
             table_config: TableConfig::legacy(),
+            allow_unpublishable: true,
         }
     }
 
-    /// VERSION_MAX and check_no_extraneous_bytes = true
-    /// common "standard/default" in code base now
-    pub fn standard() -> Self {
-        Self {
-            max_binary_format_version: VERSION_MAX,
-            min_binary_format_version: VERSION_1,
-            check_no_extraneous_bytes: true,
-            table_config: TableConfig::legacy(),
-        }
+    pub fn valid_magic(&self, magic: &[u8]) -> bool {
+        magic == BinaryConstants::MOVE_MAGIC
+            || self.allow_unpublishable && magic == BinaryConstants::UNPUBLISHABLE_MAGIC
     }
 }

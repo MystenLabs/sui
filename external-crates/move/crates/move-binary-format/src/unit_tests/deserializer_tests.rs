@@ -342,7 +342,7 @@ fn deserialize_below_min_version() {
     let bytes = {
         let mut v = vec![];
         module
-            .serialize_with_version(module.version, &mut v)
+            .serialize_with_version(module.version, &mut v, /* publishable */ true)
             .unwrap();
         v
     };
@@ -416,7 +416,9 @@ fn deserialize_empty_enum_fails() {
 fn serialize_deserialize_v6_no_flavor() {
     let module = basic_test_module();
     let mut bin = vec![];
-    module.serialize_with_version(VERSION_6, &mut bin).unwrap();
+    module
+        .serialize_with_version(VERSION_6, &mut bin, /* publishable */ true)
+        .unwrap();
     let v6_bytes = VERSION_6.to_le_bytes();
     let v6_flavor_bytes = BinaryFlavor::encode_version(VERSION_6).to_le_bytes();
     // assert that no flavoring is added to v6
@@ -433,7 +435,9 @@ fn serialize_deserialize_v6_no_flavor() {
 fn serialize_deserialize_v7_with_no_flavor() {
     let module = basic_test_module();
     let mut bin = vec![];
-    module.serialize_with_version(VERSION_7, &mut bin).unwrap();
+    module
+        .serialize_with_version(VERSION_7, &mut bin, /* publishable */ true)
+        .unwrap();
     let v7_bytes = VERSION_7.to_le_bytes();
     // Override the version bytes to not have the flavor
     for (i, b) in v7_bytes.iter().enumerate() {
@@ -449,7 +453,9 @@ fn serialize_deserialize_v7_with_no_flavor() {
 fn serialize_deserialize_v7_with_flavor() {
     let module = basic_test_module_with_enum();
     let mut bin = vec![];
-    module.serialize_with_version(VERSION_7, &mut bin).unwrap();
+    module
+        .serialize_with_version(VERSION_7, &mut bin, /* publishable */ true)
+        .unwrap();
     let x = CompiledModule::deserialize_with_defaults(&bin).unwrap();
     assert_eq!(x, module);
 }

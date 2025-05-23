@@ -519,7 +519,7 @@ fn make_module(
 
     let mut mod_bytes = vec![];
     module
-        .serialize_with_version(module.version, &mut mod_bytes)
+        .serialize_with_version(module.version, &mut mod_bytes, /* publishable */ true)
         .expect("Module must serialize");
     session
         .publish_module(mod_bytes, addr, &mut GasStatus::new_unmetered())

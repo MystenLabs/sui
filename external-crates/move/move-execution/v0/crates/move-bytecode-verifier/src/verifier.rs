@@ -44,7 +44,7 @@ pub fn verify_module_with_config_for_test(
     const MAX_MODULE_SIZE: usize = 65355;
     let mut bytes = vec![];
     module
-        .serialize_with_version(VERSION_6, &mut bytes)
+        .serialize_with_version(VERSION_6, &mut bytes, /* publishable */ false)
         .unwrap();
     let now = Instant::now();
     let result = verify_module_with_config_metered(config, module, meter);

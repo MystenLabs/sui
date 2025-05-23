@@ -4,6 +4,7 @@
 
 use anyhow::Result;
 use move_binary_format::{
+    binary_config::BinaryConfig,
     errors::{Location, VMError},
     file_format::CompiledModule,
 };
@@ -18,8 +19,13 @@ fn compile_module_string_impl(
     let compiled_module = compile_module(module, &deps)?.0;
 
     let mut serialized_module = Vec::<u8>::new();
-    compiled_module.serialize_with_version(compiled_module.version, &mut serialized_module)?;
-    let deserialized_module = CompiledModule::deserialize_with_defaults(&serialized_module)
+    compiled_module.serialize_with_version(
+        compiled_module.version,
+        &mut serialized_module,
+        /* publishable */ false,
+    )?;
+    let config = BinaryConfig::new_unpublishable();
+    let deserialized_module = CompiledModule::deserialize_with_config(&serialized_module, &config)
         .map_err(|e| e.finish(Location::Undefined))?;
     assert_eq!(compiled_module, deserialized_module);
 

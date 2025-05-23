@@ -374,4 +374,10 @@ impl BuildConfig {
         lock.commit(lock_file)?;
         Ok(())
     }
+
+    /// Indicates if the package was built with configurations that mean it may be published, i.e.,
+    /// it was not built in test mode or similar.
+    pub fn publishable(&self) -> bool {
+        self.compiler_flags().publishable()
+    }
 }

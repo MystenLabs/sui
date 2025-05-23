@@ -2111,7 +2111,7 @@ impl<'a, 'b> VersionedBinary<'a, 'b> {
         // check magic
         let mut magic = [0u8; BinaryConstants::MOVE_MAGIC_SIZE];
         if let Ok(count) = cursor.read(&mut magic) {
-            if count != BinaryConstants::MOVE_MAGIC_SIZE || magic != BinaryConstants::MOVE_MAGIC {
+            if count != BinaryConstants::MOVE_MAGIC_SIZE || !binary_config.valid_magic(&magic) {
                 return Err(PartialVMError::new(StatusCode::BAD_MAGIC));
             }
         } else {

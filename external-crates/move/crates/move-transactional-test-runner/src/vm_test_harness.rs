@@ -109,7 +109,11 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
                     for module in &*MOVE_STDLIB_COMPILED {
                         let mut module_bytes = vec![];
                         module
-                            .serialize_with_version(module.version, &mut module_bytes)
+                            .serialize_with_version(
+                                module.version,
+                                &mut module_bytes,
+                                /* publishable */ true,
+                            )
                             .unwrap();
 
                         let id = module.self_id();
@@ -150,8 +154,11 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
             .iter()
             .map(|m| {
                 let mut module_bytes = vec![];
-                m.module
-                    .serialize_with_version(m.module.version, &mut module_bytes)?;
+                m.module.serialize_with_version(
+                    m.module.version,
+                    &mut module_bytes,
+                    /* publishable */ true,
+                )?;
                 Ok(module_bytes)
             })
             .collect::<Result<_>>()?;
