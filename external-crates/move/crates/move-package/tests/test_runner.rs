@@ -53,7 +53,6 @@ impl Test<'_> {
         toml_path: &'a Path,
         kind: &'a str,
     ) -> datatest_stable::Result<Test<'a>> {
-        dbg!(&toml_path);
         Ok(Test {
             toml_path,
             kind,

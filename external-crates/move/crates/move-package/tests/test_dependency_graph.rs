@@ -258,7 +258,7 @@ fn merge_simple() {
     assert!(
         outer
             .merge(
-                &dep_graphs,
+                dep_graphs,
                 &DependencyKind::default(),
                 dependencies,
                 &BTreeMap::new(),
@@ -315,7 +315,7 @@ fn merge_into_root() {
     assert!(
         outer
             .merge(
-                &dep_graphs,
+                dep_graphs,
                 &DependencyKind::default(),
                 dependencies,
                 &BTreeMap::new(),
@@ -362,7 +362,7 @@ fn merge_detached() {
     )]);
     let orig_names: BTreeMap<Symbol, Symbol> = dep_graphs.keys().map(|k| (*k, *k)).collect();
     let Err(err) = outer.merge(
-        &dep_graphs,
+        dep_graphs,
         &DependencyKind::default(),
         &BTreeMap::new(),
         &BTreeMap::new(),
@@ -402,7 +402,7 @@ fn merge_after_calculating_always_deps() {
     )]);
     let orig_names: BTreeMap<Symbol, Symbol> = dep_graphs.keys().map(|k| (*k, *k)).collect();
     let Err(err) = outer.merge(
-        &dep_graphs,
+        dep_graphs,
         &DependencyKind::default(),
         &BTreeMap::new(),
         &BTreeMap::new(),
@@ -484,7 +484,7 @@ fn merge_overlapping() {
     assert!(
         outer
             .merge(
-                &dep_graphs,
+                dep_graphs,
                 &DependencyKind::default(),
                 dependencies,
                 &BTreeMap::new(),
@@ -562,7 +562,7 @@ fn merge_overlapping_different_deps() {
     ]);
     let orig_names: BTreeMap<Symbol, Symbol> = dependencies.keys().map(|k| (*k, *k)).collect();
     let Err(err) = outer.merge(
-        &dep_graphs,
+        dep_graphs,
         &DependencyKind::default(),
         dependencies,
         &BTreeMap::new(),
