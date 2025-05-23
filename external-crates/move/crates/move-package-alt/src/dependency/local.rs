@@ -36,10 +36,10 @@ impl LocalDependency {
         })
     }
 
-   /// The path on the filesystem, relative to the location of the containing file
+    /// The path on the filesystem, relative to the location of the containing file
     pub fn root_dependency() -> Self {
-        Self::Pinned(PinnedLocalDependency {
+        Self {
             local: PathBuf::from("."),
-        })
+        }
     }
 }
