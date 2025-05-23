@@ -165,6 +165,7 @@ impl Scenario {
             locks_to_delete: Default::default(),
             new_locks_to_init: Default::default(),
             written: Default::default(),
+            output_keys: Default::default(),
         }
     }
 
