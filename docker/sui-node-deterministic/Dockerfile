@@ -9,6 +9,7 @@ FROM stagex/core-clang@sha256:abf6d2868bc441b5910ef28f38123c6053391521948b33eaf6
 FROM stagex/core-llvm@sha256:bc1c6d67aa73a96dd92f5def7e2701de78b0639d0c815d69110fbb9b3b3e85fe AS llvm
 FROM stagex/core-lld@sha256:a5cb61edc071d404cd33cb0b5c7113a334cb90ca203cb40fe6cafd3559b6daa5 AS lld
 FROM stagex/core-libffi@sha256:9acd18e59ca11fa727670725e69a976d96f85a00704dea6ad07870bff2bd4e8b AS libffi
+FROM stagex/core-make@sha256:a47d8f67f8fd74905f724fdc5f0d18e29df96391751754947bdeaba9bef8f7d8 AS make
 
 FROM pallet-rust AS build
 ARG PROFILE
@@ -20,6 +21,7 @@ COPY --from=clang . /
 COPY --from=llvm . /
 COPY --from=lld . /
 COPY --from=libffi . /
+COPY --from=make . /
 
 ENV RUST_BACKTRACE=1
 ENV RUSTFLAGS="-C codegen-units=1"
