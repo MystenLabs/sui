@@ -1999,6 +1999,10 @@ impl ProtocolConfig {
     pub fn allow_unbounded_system_objects(&self) -> bool {
         self.feature_flags.allow_unbounded_system_objects
     }
+
+    pub fn get_aliased_addresses(&self) -> &Vec<([u8; 32], [u8; 32])> {
+        &self.aliased_addresses
+    }
 }
 
 #[cfg(not(msim))]

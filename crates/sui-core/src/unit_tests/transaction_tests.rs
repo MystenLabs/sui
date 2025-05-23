@@ -1277,7 +1277,7 @@ async fn test_aliased_address() {
 
     let recipient = dbg_addr(2);
 
-    let (original, original_key): (_, AccountKeyPair) = get_key_pair();
+    let (original, _original_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), original);
     let input_object = Object::with_id_owner_for_testing(ObjectID::random(), original);
 
@@ -1292,8 +1292,11 @@ async fn test_aliased_address() {
         let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
         protocol_config.push_aliased_addresses_for_testing(original.to_inner(), aliased.to_inner());
 
-        let state = TestAuthorityBuilder::new().build().await;
-        for (address, object_id) in vec![(original, input_object_id), (original, gas_object_id)] {
+        let state = TestAuthorityBuilder::new()
+            .with_protocol_config(protocol_config)
+            .build()
+            .await;
+        for (address, object_id) in [(original, input_object_id), (original, gas_object_id)] {
             let obj = Object::with_id_owner_for_testing(object_id, address);
             state.insert_genesis_object(obj).await;
         }
@@ -1309,7 +1312,7 @@ async fn test_aliased_address() {
     let data = TransactionData::new_transfer_full(
         recipient,
         input_object_ref,
-        aliased,
+        original,
         gas_object.compute_object_reference(),
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         rgp,
@@ -1317,7 +1320,29 @@ async fn test_aliased_address() {
 
     let tx = to_sender_signed_transaction(data, &aliased_key);
 
-    execute_transaction_assert_err(authority_state, tx, vec![input_object_id]).await;
+    let server = AuthorityServer::new_for_test(authority_state.clone());
+
+    let server_handle = server.spawn_for_test().await.unwrap();
+
+    let client = NetworkAuthorityClient::connect(
+        server_handle.address(),
+        Some(
+            authority_state
+                .config
+                .network_key_pair()
+                .public()
+                .to_owned(),
+        ),
+    )
+    .await
+    .unwrap();
+
+    // handle_transaction should succeed, but only because of the aliased address.
+    // if you remove the aliased address list from the protocol config, it will fail.
+    client
+        .handle_transaction(tx.clone(), Some(make_socket_addr()))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
