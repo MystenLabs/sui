@@ -9,7 +9,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{errors::PackageResult, flavor::MoveFlavor};
+use crate::{
+    errors::{PackageResult, current_file},
+    flavor::MoveFlavor,
+    package::paths::PackagePath,
+};
 use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
 use serde_spanned::Spanned;
@@ -21,25 +25,34 @@ pub struct LocalDependency {
     /// The path on the filesystem, relative to the location of the containing file (which is
     /// stored in the `Located` wrapper)
     local: PathBuf,
+    #[serde(skip_serializing, default = "parsing_dir")]
+    /// This is the directory to which this local dependency is relative to. As this is local
+    /// dependency, the directory should be the parent directory that contains this dependency.
+    relative_to_parent_dir: PathBuf,
 }
 
 impl LocalDependency {
     /// The path on the filesystem, relative to the location of the containing file
-    pub fn path(&self) -> PackageResult<PathBuf> {
-        // TODO incorrect, we need a base path
-        self.local.canonicalize().map_err(|e| {
-            crate::errors::PackageError::Generic(format!(
-                "Failed to canonicalize path {}: {}",
-                self.local.display(),
-                e
-            ))
-        })
+    pub fn path(&self) -> &PathBuf {
+        &self.local
     }
 
     /// The path on the filesystem, relative to the location of the containing file
-    pub fn root_dependency() -> Self {
+    pub fn root_dependency(path: &PackagePath) -> Self {
         Self {
             local: PathBuf::from("."),
+            relative_to_parent_dir: path.path().to_path_buf(),
         }
     }
+
+    pub fn unfetch_path(&self) -> PathBuf {
+        self.relative_to_parent_dir.join(&self.local)
+    }
+}
+
+fn parsing_dir() -> PathBuf {
+    current_file()
+        .parent()
+        .unwrap_or(Path::new("."))
+        .to_path_buf()
 }

@@ -12,8 +12,11 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use super::lockfile::{Lockfile, Publication};
 use super::manifest::Manifest;
+use super::{
+    lockfile::{Lockfile, Publication},
+    paths::PackagePath,
+};
 use crate::{
     dependency::{DependencySet, PinnedDependencyInfo, fetch},
     errors::{ManifestError, PackageResult},
@@ -34,23 +37,6 @@ pub struct Package<F: MoveFlavor + fmt::Debug> {
     path: PackagePath,
 }
 
-/// An absolute path to a directory containing a loaded Move package (in particular, the directory
-/// must have a Move.toml)
-#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
-pub struct PackagePath(PathBuf);
-
-impl PackagePath {
-    /// Create a new package path from a string
-    pub fn new(path: impl AsRef<Path>) -> Self {
-        Self(path.as_ref().to_path_buf())
-    }
-
-    /// Get the underlying path
-    pub fn as_path(&self) -> &Path {
-        self.0.as_path()
-    }
-}
-
 impl<F: MoveFlavor> Package<F> {
     /// Load a package from the manifest and lock files in directory [path].
     /// Makes a best effort to translate old-style packages into the current format,
@@ -58,13 +44,13 @@ impl<F: MoveFlavor> Package<F> {
     /// Fails if [path] does not exist, or if it doesn't contain a manifest
     pub async fn load_root(path: impl AsRef<Path>) -> PackageResult<Self> {
         let manifest = Manifest::<F>::read_from_file(path.as_ref())?;
-        let path = PackagePath(path.as_ref().to_path_buf());
+        let path = PackagePath::new_with_base(path.as_ref(), &PathBuf::from("."))?;
         Ok(Self { manifest, path })
     }
 
     /// Fetch [dep] and load a package from the fetched source
     /// Makes a best effort to translate old-style packages into the current format,
-    pub async fn load(dep: PinnedDependencyInfo<F>) -> PackageResult<Self> {
+    pub async fn load(dep: PinnedDependencyInfo<F>, base_path: &Path) -> PackageResult<Self> {
         // TODO: most of this should live in [dependency]
         use PinnedDependencyInfo as P;
 
@@ -75,15 +61,17 @@ impl<F: MoveFlavor> Package<F> {
                 let manifest = Manifest::<F>::read_from_file(&path)?;
                 Self {
                     manifest,
-                    path: PackagePath(path),
+                    path: PackagePath::new_with_base(&path, &git.path)?,
                 }
             }
             P::Local(d) => {
-                let local = d.path()?;
-                let manifest = Manifest::<F>::read_from_file(&local.join("Move.toml"))?;
+                let local = PackagePath::new_with_base(base_path, d.path())?;
+                println!("Loading local package from {:?}", local);
+
+                let manifest = Manifest::<F>::read_from_file(&local.path().join("Move.toml"))?;
                 Self {
                     manifest,
-                    path: PackagePath(local),
+                    path: local,
                 }
             }
             P::FlavorSpecific(dep) => todo!(),

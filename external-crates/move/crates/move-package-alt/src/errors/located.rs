@@ -97,6 +97,15 @@ impl Drop for Guard {
     }
 }
 
+pub fn current_file() -> PathBuf {
+    let file = PARSING_FILE.with_borrow(|f| {
+        *f.as_ref()
+            .expect("Located<T> should only be deserialized in with_file")
+    });
+
+    file.path().to_path_buf()
+}
+
 /// Allows deserialization of [Located] values; sets their [file]s to [file]
 // TODO: better error return types?
 pub fn with_file<R, F: FnOnce(&str) -> R>(
