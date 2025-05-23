@@ -607,6 +607,7 @@ impl AuthorityEpochTables {
             .with_value_cache_size(VALUE_CACHE_SIZE);
         let pending_checkpoint_signatures_config = KeySpaceConfig::new()
             .disable_unload();
+        let builder_checkpoint_summary_v2_config = pending_checkpoint_signatures_config.clone();
         let tx_digest_indexing = KeyIndexing::key_reduction(32, 0..16);
         let configs = vec![
             (
@@ -667,7 +668,7 @@ impl AuthorityEpochTables {
             ),
             (
                 "builder_checkpoint_summary_v2".to_string(),
-                ThConfig::new_with_config(8, MUTEXES * 2, default_cells_per_mutex(), bloom_config.clone()),
+                ThConfig::new_with_config(8, MUTEXES, default_cells_per_mutex(), builder_checkpoint_summary_v2_config),
             ),
             (
                 "state_hash_by_checkpoint".to_string(),
