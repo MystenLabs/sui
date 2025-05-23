@@ -53,19 +53,19 @@ Response: {
           {
             "display": [
               {
-                "key": "vectors",
-                "value": null,
-                "error": "Vector of name vec is not supported as a Display value"
-              },
-              {
                 "key": "idd",
                 "value": null,
-                "error": "Field 'idd' not found"
+                "error": "'idd' not found in object"
               },
               {
                 "key": "namee",
                 "value": null,
-                "error": "Field 'namee' not found"
+                "error": "'namee' not found in object"
+              },
+              {
+                "key": "vectors",
+                "value": null,
+                "error": "'vec' is a vector, and is not supported in Display"
               }
             ]
           }
@@ -100,24 +100,24 @@ Response: {
           {
             "display": [
               {
-                "key": "vectors",
-                "value": null,
-                "error": "Vector of name vec is not supported as a Display value"
-              },
-              {
                 "key": "idd",
                 "value": null,
-                "error": "Field 'idd' not found"
+                "error": "'idd' not found in object"
               },
               {
                 "key": "namee",
                 "value": null,
-                "error": "Field 'namee' not found"
+                "error": "'namee' not found in object"
               },
               {
                 "key": "nums",
                 "value": "420",
                 "error": null
+              },
+              {
+                "key": "vectors",
+                "value": null,
+                "error": "'vec' is a vector, and is not supported in Display"
               }
             ]
           }
@@ -152,23 +152,13 @@ Response: {
           {
             "display": [
               {
-                "key": "vectors",
-                "value": null,
-                "error": "Vector of name vec is not supported as a Display value"
+                "key": "age",
+                "value": "10",
+                "error": null
               },
               {
-                "key": "idd",
-                "value": null,
-                "error": "Field 'idd' not found"
-              },
-              {
-                "key": "namee",
-                "value": null,
-                "error": "Field 'namee' not found"
-              },
-              {
-                "key": "nums",
-                "value": "420",
+                "key": "base_url",
+                "value": "https://get-a-boar.com/first.png",
                 "error": null
               },
               {
@@ -182,13 +172,43 @@ Response: {
                 "error": null
               },
               {
+                "key": "creator",
+                "value": "Will",
+                "error": null
+              },
+              {
+                "key": "escape_syntax",
+                "value": "{name}",
+                "error": null
+              },
+              {
+                "key": "full_url",
+                "value": "https://get-a-boar.fullurl.com/",
+                "error": null
+              },
+              {
+                "key": "idd",
+                "value": null,
+                "error": "'idd' not found in object"
+              },
+              {
                 "key": "name",
                 "value": "First Boar",
                 "error": null
               },
               {
-                "key": "creator",
-                "value": "Will",
+                "key": "namee",
+                "value": null,
+                "error": "'namee' not found in object"
+              },
+              {
+                "key": "no_template",
+                "value": "https://get-a-boar.com/",
+                "error": null
+              },
+              {
+                "key": "nums",
+                "value": "420",
                 "error": null
               },
               {
@@ -202,29 +222,9 @@ Response: {
                 "error": null
               },
               {
-                "key": "base_url",
-                "value": "https://get-a-boar.com/first.png",
-                "error": null
-              },
-              {
-                "key": "no_template",
-                "value": "https://get-a-boar.com/",
-                "error": null
-              },
-              {
-                "key": "age",
-                "value": "10",
-                "error": null
-              },
-              {
-                "key": "full_url",
-                "value": "https://get-a-boar.fullurl.com/",
-                "error": null
-              },
-              {
-                "key": "escape_syntax",
-                "value": "{name}",
-                "error": null
+                "key": "vectors",
+                "value": null,
+                "error": "'vec' is a vector, and is not supported in Display"
               }
             ]
           }
