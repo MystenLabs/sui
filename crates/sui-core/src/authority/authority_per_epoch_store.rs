@@ -605,6 +605,8 @@ impl AuthorityEpochTables {
             .with_value_cache_size(10_000);
         let lru_only_config = KeySpaceConfig::new()
             .with_value_cache_size(10_000);
+        let pending_checkpoint_signatures_config = KeySpaceConfig::new()
+            .disable_unload();
         let configs = vec![
             (
                 "signed_transactions".to_string(),
@@ -660,7 +662,7 @@ impl AuthorityEpochTables {
             ),
             (
                 "pending_checkpoint_signatures".to_string(),
-                ThConfig::new(8 + 8, MUTEXES * 8, default_cells_per_mutex()),
+                ThConfig::new_with_config(8 + 8, MUTEXES, default_cells_per_mutex(), pending_checkpoint_signatures_config),
             ),
             (
                 "builder_checkpoint_summary_v2".to_string(),
