@@ -54,6 +54,7 @@ macro_rules! get_or_fetch_object {
         object_runtime.get_or_fetch_child_object(
             $parent,
             $child_id,
+            &child_ty,
             &layout,
             &annotated_layout,
             MoveObjectType::from(tag),
@@ -228,7 +229,13 @@ pub fn add_child_object(
     );
 
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
-    object_runtime.add_child_object(parent, child_id, MoveObjectType::from(tag), child)?;
+    object_runtime.add_child_object(
+        parent,
+        child_id,
+        &child_ty,
+        MoveObjectType::from(tag),
+        child,
+    )?;
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }
 

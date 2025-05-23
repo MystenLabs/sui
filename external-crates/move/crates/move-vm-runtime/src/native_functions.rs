@@ -20,8 +20,7 @@ use move_core_types::{
 };
 use move_vm_config::runtime::VMRuntimeLimitsConfig;
 use move_vm_types::{
-    data_store::DataStore, loaded_data::runtime_types::Type, natives::function::NativeResult,
-    values::Value,
+    loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
 };
 use std::{
     cell::RefCell,
@@ -157,36 +156,6 @@ impl<'b> NativeContext<'_, 'b> {
             Err(e) if e.major_status().status_type() == StatusType::InvariantViolation => Err(e),
             Err(_) => Ok(None),
         }
-    }
-
-    // TODO: This is a bit hacky right now since we need to pass the store, however this is only
-    // used in test scenarios so we have some special knowledge that makes this work. In the new VM
-    // however this is _MUCH_ nicer as we don't need to pass the datastore as the VM's linkage
-    // tables must have the type present.
-    pub fn type_tag_to_fully_annotated_layout_for_test_scenario_only(
-        &self,
-        tag: &TypeTag,
-        store: &impl DataStore,
-    ) -> PartialVMResult<A::MoveTypeLayout> {
-        self.resolver
-            .loader()
-            .get_fully_annotated_type_layout(tag, store)
-            .map_err(|e| e.to_partial())
-    }
-
-    // TODO: This is a bit hacky right now since we need to pass the store, however this is only
-    // used in test scenarios so we have some special knowledge that makes this work. In the new VM
-    // however this is _MUCH_ nicer as we don't need to pass the datastore as the VM's linkage
-    // tables must have the type present.
-    pub fn type_tag_to_layout_for_test_scenario_only(
-        &self,
-        tag: &TypeTag,
-        store: &impl DataStore,
-    ) -> PartialVMResult<R::MoveTypeLayout> {
-        self.resolver
-            .loader()
-            .get_type_layout(tag, store)
-            .map_err(|e| e.to_partial())
     }
 
     pub fn type_to_abilities(&self, ty: &Type) -> PartialVMResult<AbilitySet> {
