@@ -28,6 +28,7 @@ use sui_types::{
 use super::{
     balance_change::BalanceChange,
     base64::Base64,
+    big_int::BigInt,
     checkpoint::{Checkpoint, CheckpointId},
     cursor::{JsonCursor, Page},
     date_time::DateTime,
@@ -148,6 +149,7 @@ impl TransactionBlockEffects {
                         module_id,
                         source_line_number,
                         error_info,
+                        error_code,
                     }) = resolver
                         .resolve_clever_error(loc.module.clone(), *code)
                         .await
@@ -159,27 +161,36 @@ impl TransactionBlockEffects {
                         );
                     };
 
-                    match error_info {
+                    let error_code_str = match error_code {
+                        Some(code) => format!("(code = {code})"),
+                        _ => "".to_string(),
+                    };
+
+                    match &error_info {
                         ErrorConstants::Rendered {
                             identifier,
                             constant,
                         } => {
                             format!(
-                                "from '{}{fname_string} (line {source_line_number}), abort '{identifier}': {constant}",
+                                "from '{}{fname_string} (line {source_line_number}), abort{error_code_str} '{identifier}': {constant}",
                                 module_id.to_canonical_display(true)
                             )
                         }
                         ErrorConstants::Raw { identifier, bytes } => {
                             let const_str = FBase64::encode(bytes);
                             format!(
-                                "from '{}{fname_string} (line {source_line_number}), abort '{identifier}': {const_str}",
+                                "from '{}{fname_string} (line {source_line_number}), abort{error_code_str} '{identifier}': {const_str}",
                                 module_id.to_canonical_display(true)
                             )
                         }
                         ErrorConstants::None => {
                             format!(
-                                "from '{}{fname_string} (line {source_line_number})",
-                                module_id.to_canonical_display(true)
+                                "from '{}{fname_string} (line {source_line_number}){}",
+                                module_id.to_canonical_display(true),
+                                match error_code {
+                                    Some(code) => format!(" abort(code = {code})"),
+                                    _ => "".to_string(),
+                                }
                             )
                         }
                     }
@@ -194,6 +205,30 @@ impl TransactionBlockEffects {
                 };
                 Ok(Some(format!("Error in {command}{suffix} command, {error}")))
             }
+        }
+    }
+
+    /// The error code of the Move abort, populated if this transaction failed with a Move abort.
+    async fn abort_code(&self, ctx: &Context<'_>) -> Result<Option<BigInt>> {
+        let resolver: &PackageResolver = ctx.data_unchecked();
+        let status = self.resolve_native_status_impl(resolver).await?;
+        match status {
+            NativeExecutionStatus::Success => Ok(None),
+            NativeExecutionStatus::Failure { error, .. } => match error {
+                ExecutionFailureStatus::MoveAbort(loc, code) => Ok(Some(BigInt::from(
+                    match resolver
+                        .resolve_clever_error(loc.module.clone(), code)
+                        .await
+                    {
+                        Some(CleverError {
+                            error_code: Some(clever_error_code),
+                            ..
+                        }) => clever_error_code as u64,
+                        _ => code,
+                    },
+                ))),
+                _ => Ok(None),
+            },
         }
     }
 
