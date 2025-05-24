@@ -222,15 +222,10 @@ fn validate_version(version: u32) -> Result<()> {
 impl CompiledModule {
     /// Serializes a `CompiledModule` into a binary at `version`. The mutable `Vec<u8>` will
     /// contain the binary blob on return.
-    pub fn serialize_with_version(
-        &self,
-        version: u32,
-        binary: &mut Vec<u8>,
-        publishable: bool,
-    ) -> Result<()> {
+    pub fn serialize_with_version(&self, version: u32, binary: &mut Vec<u8>) -> Result<()> {
         validate_version(version)?;
         let mut binary_data = BinaryData::from(binary.clone());
-        let mut ser = if publishable {
+        let mut ser = if self.publishable {
             ModuleSerializer::new(version)
         } else {
             ModuleSerializer::new_unpublishable(version)
@@ -259,7 +254,7 @@ impl CompiledModule {
     /// contain the binary blob on return. To be used for testing only.
     #[cfg(any(test, feature = "fuzzing"))]
     pub fn serialize(&self, binary: &mut Vec<u8>) -> Result<()> {
-        self.serialize_with_version(VERSION_MAX, binary, true)
+        self.serialize_with_version(VERSION_MAX, binary)
     }
 }
 

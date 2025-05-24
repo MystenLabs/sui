@@ -128,10 +128,10 @@ impl NamedCompiledModule {
         &self.source_map
     }
 
-    pub fn serialize(&self, publishable: bool) -> Vec<u8> {
+    pub fn serialize(&self) -> Vec<u8> {
         let mut serialized = Vec::<u8>::new();
         self.module
-            .serialize_with_version(self.module.version, &mut serialized, publishable)
+            .serialize_with_version(self.module.version, &mut serialized)
             .unwrap();
         serialized
     }

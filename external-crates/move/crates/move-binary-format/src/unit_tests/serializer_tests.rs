@@ -18,11 +18,7 @@ fn enum_serialize_version_invalid() {
     // With enums and an invalid version bytecode version
     let module = basic_test_module_with_enum();
     let mut v = vec![];
-    assert!(
-        module
-            .serialize_with_version(VERSION_6, &mut v, /* publishable */ true)
-            .is_err()
-    );
+    assert!(module.serialize_with_version(VERSION_6, &mut v).is_err());
 
     for instruction in [
         Bytecode::PackVariant(VariantHandleIndex(0)),
@@ -41,20 +37,12 @@ fn enum_serialize_version_invalid() {
             jump_tables: vec![],
         });
         let mut v = vec![];
-        assert!(
-            module
-                .serialize_with_version(VERSION_6, &mut v, /* publishable */ true)
-                .is_err()
-        );
+        assert!(module.serialize_with_version(VERSION_6, &mut v).is_err());
         // Serialization version does not take into account the bytecode version that it is
         // specified in the module, only the version that is supplied to the
         // `serialize_with_version` function.
         module.version = VERSION_6;
-        assert!(
-            module
-                .serialize_with_version(VERSION_MAX, &mut v, /* publishable */ true)
-                .is_ok()
-        );
+        assert!(module.serialize_with_version(VERSION_MAX, &mut v).is_ok());
     }
 
     let mut module = basic_test_module();
@@ -67,20 +55,12 @@ fn enum_serialize_version_invalid() {
         }],
     });
     let mut v = vec![];
-    assert!(
-        module
-            .serialize_with_version(VERSION_6, &mut v, /* publishable */ true)
-            .is_err()
-    );
+    assert!(module.serialize_with_version(VERSION_6, &mut v).is_err());
 
     // Module without enums can still be serialized at version 6
     let module = basic_test_module();
     let mut v = vec![];
-    assert!(
-        module
-            .serialize_with_version(VERSION_6, &mut v, /* publishable */ true)
-            .is_ok()
-    );
+    assert!(module.serialize_with_version(VERSION_6, &mut v).is_ok());
 
     // Can be deserialized at version 6 and at max version as well.
     CompiledModule::deserialize_with_config(&v, &BinaryConfig::with_extraneous_bytes_check(true))
@@ -103,11 +83,7 @@ fn enum_serialize_variant_handle_wrong_version() {
         enum_def: EnumDefinitionIndex(0),
         variant: 0,
     });
-    assert!(
-        module
-            .serialize_with_version(VERSION_6, &mut v, /* publishable */ true)
-            .is_err()
-    );
+    assert!(module.serialize_with_version(VERSION_6, &mut v).is_err());
 }
 
 #[test]
@@ -122,11 +98,7 @@ fn enum_serialize_variant_handle_instantiation_wrong_version() {
             enum_def: EnumDefInstantiationIndex(0),
             variant: 0,
         });
-    assert!(
-        module
-            .serialize_with_version(VERSION_6, &mut v, /* publishable */ true)
-            .is_err()
-    );
+    assert!(module.serialize_with_version(VERSION_6, &mut v).is_err());
 }
 
 #[test]
@@ -139,11 +111,7 @@ fn enum_serialize_enum_def_instantiation_wrong_version() {
         def: EnumDefinitionIndex(0),
         type_parameters: SignatureIndex(0),
     });
-    assert!(
-        module
-            .serialize_with_version(VERSION_6, &mut v, /* publishable */ true)
-            .is_err()
-    );
+    assert!(module.serialize_with_version(VERSION_6, &mut v).is_err());
 }
 
 #[test]
@@ -152,11 +120,7 @@ fn versions_serialization_round_trip() {
         let mut module = basic_test_module();
         module.version = version;
         let mut v = vec![];
-        assert!(
-            module
-                .serialize_with_version(VERSION_6, &mut v, /* publishable */ true)
-                .is_ok()
-        );
+        assert!(module.serialize_with_version(VERSION_6, &mut v).is_ok());
 
         // Can deserialize at version 6
         let module6 = CompiledModule::deserialize_with_config(
@@ -174,31 +138,15 @@ fn versions_serialization_round_trip() {
 
         // module6 can be serialized at versions 6 & 7
         let mut v = vec![];
-        assert!(
-            module6
-                .serialize_with_version(VERSION_6, &mut v, /* publishable */ true)
-                .is_ok()
-        );
+        assert!(module6.serialize_with_version(VERSION_6, &mut v).is_ok());
         let mut v = vec![];
-        assert!(
-            module6
-                .serialize_with_version(VERSION_MAX, &mut v, /* publishable */ true)
-                .is_ok()
-        );
+        assert!(module6.serialize_with_version(VERSION_MAX, &mut v).is_ok());
         // module7 can be serialized at version 7 and version 6 because it doesn't have
         // enum/enum-related instructions.
         let mut v = vec![];
-        assert!(
-            module7
-                .serialize_with_version(VERSION_6, &mut v, /* publishable */ true)
-                .is_ok()
-        );
+        assert!(module7.serialize_with_version(VERSION_6, &mut v).is_ok());
         let mut v = vec![];
-        assert!(
-            module7
-                .serialize_with_version(VERSION_MAX, &mut v, /* publishable */ true)
-                .is_ok()
-        );
+        assert!(module7.serialize_with_version(VERSION_MAX, &mut v).is_ok());
     }
 }
 
@@ -211,7 +159,7 @@ fn serialization_upgrades_version() {
     module.version = VERSION_6;
     assert!(
         module
-            .serialize_with_version(VERSION_MAX, &mut m_bytes, /* publishable */ true)
+            .serialize_with_version(VERSION_MAX, &mut m_bytes)
             .is_ok()
     );
     let v_max_bytes = BinaryFlavor::encode_version(VERSION_MAX).to_le_bytes();
@@ -234,7 +182,7 @@ fn serialization_upgrades_version_no_override() {
     let mut m_bytes = vec![];
     assert!(
         module
-            .serialize_with_version(module.version, &mut m_bytes, /* publishable */ true)
+            .serialize_with_version(module.version, &mut m_bytes)
             .is_ok()
     );
     let v_max_bytes = BinaryFlavor::encode_version(VERSION_MAX).to_le_bytes();
@@ -249,9 +197,7 @@ fn serialization_upgrades_version_no_override() {
 fn serialize_v6_has_no_flavor() {
     let module = basic_test_module();
     let mut bin = vec![];
-    module
-        .serialize_with_version(VERSION_6, &mut bin, /* publishable */ true)
-        .unwrap();
+    module.serialize_with_version(VERSION_6, &mut bin).unwrap();
     let v6_bytes = VERSION_6.to_le_bytes();
     let v6_flavor_bytes = BinaryFlavor::encode_version(VERSION_6).to_le_bytes();
     // assert that no flavoring is added to v6
@@ -266,9 +212,7 @@ fn serialize_v6_has_no_flavor() {
 fn serialize_v7_has_flavor() {
     let module = basic_test_module();
     let mut bin = vec![];
-    module
-        .serialize_with_version(VERSION_7, &mut bin, /* publishable */ true)
-        .unwrap();
+    module.serialize_with_version(VERSION_7, &mut bin).unwrap();
     let v7_flavored_bytes = BinaryFlavor::encode_version(VERSION_7).to_le_bytes();
     let v7_unflavored_bytes = VERSION_7.to_le_bytes();
     assert_eq!(

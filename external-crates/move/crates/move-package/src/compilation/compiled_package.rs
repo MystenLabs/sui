@@ -330,13 +330,11 @@ impl OnDiskCompiledPackage {
         }
         .join(compiled_unit.unit.name.as_str());
 
-        let publishable = self.package.compiled_package_info.build_flags.publishable();
-
         self.save_under(
             category_dir
                 .join(&file_path)
                 .with_extension(MOVE_COMPILED_EXTENSION),
-            compiled_unit.unit.serialize(publishable).as_slice(),
+            compiled_unit.unit.serialize().as_slice(),
         )?;
         self.save_under(
             CompiledPackageLayout::DebugInfo

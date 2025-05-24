@@ -63,5 +63,5 @@ pub fn serialize_module_at_max_version(
     module: &CompiledModule,
     binary: &mut Vec<u8>,
 ) -> Result<()> {
-    module.serialize_with_version(VERSION_MAX, binary, /* publishable */ true)
+    module.serialize_with_version(VERSION_MAX, binary)
 }

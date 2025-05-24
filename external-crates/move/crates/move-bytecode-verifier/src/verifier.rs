@@ -54,9 +54,7 @@ pub fn verify_module_with_config_for_test(
     } else {
         VERSION_6
     };
-    module
-        .serialize_with_version(version, &mut bytes, /* publishable */ false)
-        .unwrap();
+    module.serialize_with_version(version, &mut bytes).unwrap();
     let now = Instant::now();
     let result = verify_module_with_config_metered(config, module, meter);
     eprintln!(

@@ -384,6 +384,7 @@ fn make_module(
 
     let module = CompiledModule {
         version: 6,
+        publishable: true,
         // Module definition
         self_module_handle_idx: ModuleHandleIndex(0),
         module_handles: vec![ModuleHandle {
@@ -519,7 +520,7 @@ fn make_module(
 
     let mut mod_bytes = vec![];
     module
-        .serialize_with_version(module.version, &mut mod_bytes, /* publishable */ true)
+        .serialize_with_version(module.version, &mut mod_bytes)
         .expect("Module must serialize");
     session
         .publish_module(mod_bytes, addr, &mut GasStatus::new_unmetered())

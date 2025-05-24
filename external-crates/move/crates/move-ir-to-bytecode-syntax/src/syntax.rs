@@ -1925,10 +1925,12 @@ fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, 
     tokens.advance()?; // consume the RBrace
     let end_loc = tokens.previous_end_loc();
     let loc = make_loc(tokens.file_hash(), start_loc, end_loc);
+    let publishable = true;
 
     Ok(ModuleDefinition::new(
         None,
         loc,
+        publishable,
         identifier,
         friends,
         imports,

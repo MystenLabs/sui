@@ -91,7 +91,7 @@ pub fn publish(
             let mut sender_opt = None;
             let mut module_bytes_vec = vec![];
             for unit in &modules_to_publish {
-                let module_bytes = unit.unit.serialize(/* publishable */ true);
+                let module_bytes = unit.unit.serialize();
                 module_bytes_vec.push(module_bytes);
 
                 let module_address = *unit.unit.module.self_id().address();
@@ -133,7 +133,7 @@ pub fn publish(
         } else {
             // publish modules sequentially, one module at a time
             for unit in &modules_to_publish {
-                let module_bytes = unit.unit.serialize(/* publishable */ true);
+                let module_bytes = unit.unit.serialize();
                 let id = unit.unit.module.self_id();
                 let sender = *id.address();
 
@@ -166,7 +166,7 @@ pub fn publish(
         let mut serialized_modules = vec![];
         for unit in modules_to_publish {
             let id = unit.unit.module.self_id();
-            let module_bytes = unit.unit.serialize(/* publishable */ true);
+            let module_bytes = unit.unit.serialize();
             serialized_modules.push((id, module_bytes));
         }
         state.save_modules(&serialized_modules)?;

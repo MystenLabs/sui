@@ -127,11 +127,7 @@ fn main() {
 
     let mut module = vec![];
     compiled_module
-        .serialize_with_version(
-            compiled_module.version,
-            &mut module,
-            /* publishable */ true,
-        )
+        .serialize_with_version(compiled_module.version, &mut module)
         .expect("Unable to serialize module");
     write_output(&source_path.with_extension(mv_extension), &module);
 }
