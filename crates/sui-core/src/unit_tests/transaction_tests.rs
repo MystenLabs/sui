@@ -1288,9 +1288,28 @@ async fn test_aliased_address() {
     let input_object_id = input_object.id();
     let gas_object_id = gas_object.id();
 
+    // need to construct tx before authority, so we have to hardcode rgp
+    let rgp = 1000;
+
+    let data = TransactionData::new_transfer_full(
+        recipient,
+        input_object_ref,
+        original,
+        gas_object.compute_object_reference(),
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
+    );
+
+    //let digest = data.digest();
+    let digest = TransactionDigest::random();
+
     let authority_state = {
         let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-        protocol_config.push_aliased_addresses_for_testing(original.to_inner(), aliased.to_inner());
+        protocol_config.push_aliased_addresses_for_testing(
+            original.to_inner(),
+            aliased.to_inner(),
+            vec![*digest.inner()],
+        );
 
         let state = TestAuthorityBuilder::new()
             .with_protocol_config(protocol_config)
@@ -1304,19 +1323,6 @@ async fn test_aliased_address() {
     };
 
     authority_state.insert_genesis_object(input_object).await;
-    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
-
-    let gas_object = authority_state.get_object(&gas_object_id).await.unwrap();
-    dbg!(&gas_object);
-
-    let data = TransactionData::new_transfer_full(
-        recipient,
-        input_object_ref,
-        original,
-        gas_object.compute_object_reference(),
-        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        rgp,
-    );
 
     let tx = to_sender_signed_transaction(data, &aliased_key);
 

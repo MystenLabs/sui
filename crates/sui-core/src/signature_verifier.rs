@@ -12,11 +12,12 @@ use mysten_metrics::monitored_scope;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use shared_crypto::intent::Intent;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
+use sui_protocol_config::AliasedAddress;
 use sui_types::base_types::SuiAddress;
-use sui_types::digests::SenderSignedDataDigest;
 use sui_types::digests::ZKLoginInputsDigest;
+use sui_types::digests::{SenderSignedDataDigest, TransactionDigest};
 use sui_types::signature_verification::{
     verify_sender_signed_data_message_signatures, VerifiedDigestCache,
 };
@@ -98,8 +99,9 @@ pub struct SignatureVerifier {
     signed_data_cache: VerifiedDigestCache<SenderSignedDataDigest>,
     zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
 
-    /// Map from original address to aliased address.
-    aliased_addresses: Option<Arc<BTreeMap<SuiAddress, SuiAddress>>>,
+    /// Map from original address to aliased address and the list of transaction digests for
+    /// which the aliasing is allowed to be in effect.
+    aliased_addresses: Option<Arc<BTreeMap<SuiAddress, (SuiAddress, BTreeSet<TransactionDigest>)>>>,
 
     /// Map from JwkId (iss, kid) to the fetched JWK for that key.
     /// We use an immutable data structure because verification of ZKLogins may be slow, so we
@@ -143,7 +145,7 @@ impl SignatureVerifier {
         accept_zklogin_in_multisig: bool,
         accept_passkey_in_multisig: bool,
         zklogin_max_epoch_upper_bound_delta: Option<u64>,
-        aliased_addresses: Vec<([u8; 32], [u8; 32])>,
+        aliased_addresses: Vec<AliasedAddress>,
     ) -> Self {
         let aliased_addresses: Option<Arc<BTreeMap<_, _>>> = if aliased_addresses.is_empty() {
             None
@@ -151,12 +153,24 @@ impl SignatureVerifier {
             Some(Arc::new(
                 aliased_addresses
                     .into_iter()
-                    .map(|(original, aliased)| {
-                        (
-                            SuiAddress::from_bytes(original).unwrap(),
-                            SuiAddress::from_bytes(aliased).unwrap(),
-                        )
-                    })
+                    .map(
+                        |AliasedAddress {
+                             original,
+                             aliased,
+                             allowed_tx_digests,
+                         }| {
+                            (
+                                SuiAddress::from_bytes(original).unwrap(),
+                                (
+                                    SuiAddress::from_bytes(aliased).unwrap(),
+                                    allowed_tx_digests
+                                        .into_iter()
+                                        .map(|d| TransactionDigest::new(d))
+                                        .collect(),
+                                ),
+                            )
+                        },
+                    )
                     .collect(),
             ))
         };
@@ -202,7 +216,7 @@ impl SignatureVerifier {
         accept_zklogin_in_multisig: bool,
         accept_passkey_in_multisig: bool,
         zklogin_max_epoch_upper_bound_delta: Option<u64>,
-        aliased_addresses: Vec<([u8; 32], [u8; 32])>,
+        aliased_addresses: Vec<AliasedAddress>,
     ) -> Self {
         Self::new_with_batch_size(
             committee,
@@ -364,7 +378,7 @@ impl SignatureVerifier {
         metrics: Arc<SignatureVerifierMetrics>,
         buffer: CertBuffer,
         zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
-        aliased_addresses: Option<&BTreeMap<SuiAddress, SuiAddress>>,
+        aliased_addresses: Option<&BTreeMap<SuiAddress, (SuiAddress, BTreeSet<TransactionDigest>)>>,
     ) {
         let _scope = monitored_scope("BatchCertificateVerifier::process_queue");
 
@@ -579,7 +593,7 @@ pub fn batch_verify_certificates(
     committee: &Committee,
     certs: &[&CertifiedTransaction],
     zk_login_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
-    aliased_addresses: Option<&BTreeMap<SuiAddress, SuiAddress>>,
+    aliased_addresses: Option<&BTreeMap<SuiAddress, (SuiAddress, BTreeSet<TransactionDigest>)>>,
 ) -> Vec<SuiResult> {
     // certs.data() is assumed to be verified already by the caller.
     let verify_params = VerifyParams::default();

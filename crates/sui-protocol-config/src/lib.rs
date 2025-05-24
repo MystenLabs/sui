@@ -1502,9 +1502,21 @@ pub struct ProtocolConfig {
     /// The number of commits to consider when computing a deterministic commit rate.
     consensus_commit_rate_estimation_window_size: Option<u32>,
 
-    /// A pair of (original, aliased) addresses.
-    /// For each pair, `aliased` is allowed to act as `original`.
-    aliased_addresses: Vec<([u8; 32], [u8; 32])>,
+    /// A list of effective AliasedAddress.
+    /// For each pair, `aliased` is allowed to act as `original` for any of the transaction digests
+    /// listed in `tx_digests`
+    aliased_addresses: Vec<AliasedAddress>,
+}
+
+/// An aliased address.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct AliasedAddress {
+    /// The original address.
+    pub original: [u8; 32],
+    /// An aliased address which is allowed to act as the original address.
+    pub aliased: [u8; 32],
+    /// A list of transaction digests for which the aliasing is allowed to be in effect.
+    pub allowed_tx_digests: Vec<[u8; 32]>,
 }
 
 // feature flags
@@ -2000,7 +2012,7 @@ impl ProtocolConfig {
         self.feature_flags.allow_unbounded_system_objects
     }
 
-    pub fn get_aliased_addresses(&self) -> &Vec<([u8; 32], [u8; 32])> {
+    pub fn get_aliased_addresses(&self) -> &Vec<AliasedAddress> {
         &self.aliased_addresses
     }
 }
@@ -3783,8 +3795,17 @@ impl ProtocolConfig {
         self.feature_flags.consensus_batched_block_sync = val;
     }
 
-    pub fn push_aliased_addresses_for_testing(&mut self, original: [u8; 32], aliased: [u8; 32]) {
-        self.aliased_addresses.push((original, aliased));
+    pub fn push_aliased_addresses_for_testing(
+        &mut self,
+        original: [u8; 32],
+        aliased: [u8; 32],
+        allowed_tx_digests: Vec<[u8; 32]>,
+    ) {
+        self.aliased_addresses.push(AliasedAddress {
+            original,
+            aliased,
+            allowed_tx_digests,
+        });
     }
 }
 

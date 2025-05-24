@@ -2920,7 +2920,7 @@ impl CertifiedTransaction {
         committee: &Committee,
         verify_params: &VerifyParams,
         zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
-        aliased_addresses: Option<&BTreeMap<SuiAddress, SuiAddress>>,
+        aliased_addresses: Option<&BTreeMap<SuiAddress, (SuiAddress, BTreeSet<TransactionDigest>)>>,
     ) -> SuiResult {
         verify_sender_signed_data_message_signatures(
             self.data(),

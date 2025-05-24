@@ -6,14 +6,14 @@ use shared_crypto::intent::Intent;
 
 use crate::base_types::SuiAddress;
 use crate::committee::EpochId;
-use crate::digests::ZKLoginInputsDigest;
+use crate::digests::{TransactionDigest, ZKLoginInputsDigest};
 use crate::error::{SuiError, SuiResult};
 use crate::signature::VerifyParams;
 use crate::transaction::{SenderSignedData, TransactionDataAPI};
 use lru::LruCache;
 use parking_lot::RwLock;
 use prometheus::IntCounter;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -113,7 +113,7 @@ pub fn verify_sender_signed_data_message_signatures(
     current_epoch: EpochId,
     verify_params: &VerifyParams,
     zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
-    aliased_addresses: Option<&BTreeMap<SuiAddress, SuiAddress>>,
+    aliased_addresses: Option<&BTreeMap<SuiAddress, (SuiAddress, BTreeSet<TransactionDigest>)>>,
 ) -> SuiResult {
     let intent_message = txn.intent_message();
     assert_eq!(intent_message.intent, Intent::sui_transaction());
@@ -128,8 +128,11 @@ pub fn verify_sender_signed_data_message_signatures(
     let mut signers: NonEmpty<_> = txn.intent_message().value.signers();
     if let Some(aliased_addresses) = aliased_addresses {
         for signer in signers.iter_mut() {
-            if let Some(aliased) = aliased_addresses.get(signer) {
-                *signer = *aliased;
+            if let Some((aliased, allowed_digests)) = aliased_addresses.get(signer) {
+                let digest = intent_message.value.digest();
+                if allowed_digests.contains(&digest) {
+                    *signer = *aliased;
+                }
             }
         }
     }
