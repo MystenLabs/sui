@@ -27,12 +27,12 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Indicates that the information came from the source code
 pub type FromSource<T> = Option<T>;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Packages {
     pub packages: BTreeMap<AccountAddress, Package>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Package {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
@@ -40,7 +40,7 @@ pub struct Package {
     pub modules: BTreeMap<Symbol, Module>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Module {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
@@ -56,7 +56,7 @@ pub struct Module {
 
 pub type Attributes = Vec<Attribute>;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 // TODO(cswords): This should mirror the KnownAttribute structure to save consumers of this from
 // from needing to parse attributes a second time.
 pub enum Attribute {
@@ -65,7 +65,7 @@ pub enum Attribute {
     Parameterized(Symbol, Attributes),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Function {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
@@ -88,7 +88,7 @@ pub struct Function {
     pub return_: Vec<Type>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Visibility {
     Public,
     Friend,
@@ -96,7 +96,7 @@ pub enum Visibility {
     Private,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TParam {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
@@ -104,7 +104,7 @@ pub struct TParam {
     pub constraints: AbilitySet,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Parameter {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
@@ -112,10 +112,10 @@ pub struct Parameter {
     type_: Type,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AbilitySet(BTreeSet<Ability>);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Ability {
     Copy,
     Drop,
@@ -123,7 +123,7 @@ pub enum Ability {
     Store,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Struct {
     pub index: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -137,14 +137,14 @@ pub struct Struct {
     pub fields: Fields,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DatatypeTParam {
     pub phantom: bool,
     #[serde(flatten)]
     pub tparam: TParam,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Enum {
     pub index: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -158,7 +158,7 @@ pub struct Enum {
     pub variants: IndexMap<Symbol, Variant>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Variant {
     pub index: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -167,14 +167,14 @@ pub struct Variant {
     pub fields: Fields,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Fields {
     /// True if the variant was known to be defined using positional fields
     pub positional_fields: bool,
     pub fields: IndexMap<Symbol, Field>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Field {
     pub index: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -183,7 +183,7 @@ pub struct Field {
     pub type_: Type,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Type {
     #[serde(rename = "bool")]
     Bool,
@@ -222,7 +222,7 @@ pub enum Type {
     Any,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Datatype {
     pub module: ModuleId,
     pub name: Symbol,
@@ -688,8 +688,13 @@ impl Fields {
             N::StructFields::Native(_) => return,
         };
         self.positional_fields = is_positional;
+        let pos_name_of = if self.positional_fields {
+            |sym| Symbol::from(format!("pos{}", sym))
+        } else {
+            |sym| sym
+        };
         for (name, (_, (doc, _))) in fields.key_cloned_iter() {
-            let field = self.fields.get_mut(&name.0.value).unwrap();
+            let field = self.fields.get_mut(&pos_name_of(name.0.value)).unwrap();
             debug_assert!(field.doc.is_none());
             field.doc = Some(doc_comment(doc));
         }
@@ -702,8 +707,13 @@ impl Fields {
             N::VariantFields::Empty => return,
         };
         self.positional_fields = is_positional;
+        let pos_name_of = if self.positional_fields {
+            |sym| Symbol::from(format!("pos{}", sym))
+        } else {
+            |sym| sym
+        };
         for (name, (_, (doc, ty))) in fields.key_cloned_iter() {
-            let field = self.fields.get_mut(&name.0.value).unwrap();
+            let field = self.fields.get_mut(&pos_name_of(name.0.value)).unwrap();
             debug_assert!(field.doc.is_none());
             field.doc = Some(doc_comment(doc));
             field.type_ = ty.into();
