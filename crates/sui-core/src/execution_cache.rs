@@ -309,6 +309,8 @@ pub trait ObjectCacheRead: Send + Sync {
         results
     }
 
+    fn multi_input_objects_available_cache_only(&self, keys: &[InputKey]) -> Vec<bool>;
+
     /// Return the object with version less then or eq to the provided seq number.
     /// This is used by indexer to find the correct version of dynamic field child object.
     /// We do not store the version of the child object, but because of lamport timestamp,

@@ -139,11 +139,9 @@ impl ExecutionScheduler {
             input_and_receiving_keys
         );
 
-        let availability = self.object_cache_read.multi_input_objects_available(
-            &input_and_receiving_keys,
-            &receiving_object_keys,
-            &epoch,
-        );
+        let availability = self
+            .object_cache_read
+            .multi_input_objects_available_cache_only(&input_and_receiving_keys);
         // Most of the times, the transaction's input objects are already available.
         // We can check the availability of the input objects first, and only wait for the
         // missing input objects if necessary.
