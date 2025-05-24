@@ -1,0 +1,60 @@
+// Move bytecode v6
+module 2.math {
+use 0000000000000000000000000000000000000000000000000000000000000001::u128;
+use 0000000000000000000000000000000000000000000000000000000000000001::u64;
+
+public max(Arg0: u64, Arg1: u64): u64 {
+B0:
+	0: MoveLoc[0](Arg0: u64)
+	1: MoveLoc[1](Arg1: u64)
+	2: Call u64::max(u64, u64): u64
+	3: Ret
+}
+
+public min(Arg0: u64, Arg1: u64): u64 {
+B0:
+	0: MoveLoc[0](Arg0: u64)
+	1: MoveLoc[1](Arg1: u64)
+	2: Call u64::min(u64, u64): u64
+	3: Ret
+}
+
+public diff(Arg0: u64, Arg1: u64): u64 {
+B0:
+	0: MoveLoc[0](Arg0: u64)
+	1: MoveLoc[1](Arg1: u64)
+	2: Call u64::diff(u64, u64): u64
+	3: Ret
+}
+
+public pow(Arg0: u64, Arg1: u8): u64 {
+B0:
+	0: MoveLoc[0](Arg0: u64)
+	1: MoveLoc[1](Arg1: u8)
+	2: Call u64::pow(u64, u8): u64
+	3: Ret
+}
+
+public sqrt(Arg0: u64): u64 {
+B0:
+	0: MoveLoc[0](Arg0: u64)
+	1: Call u64::sqrt(u64): u64
+	2: Ret
+}
+
+public sqrt_u128(Arg0: u128): u128 {
+B0:
+	0: MoveLoc[0](Arg0: u128)
+	1: Call u128::sqrt(u128): u128
+	2: Ret
+}
+
+public divide_and_round_up(Arg0: u64, Arg1: u64): u64 {
+B0:
+	0: MoveLoc[0](Arg0: u64)
+	1: MoveLoc[1](Arg1: u64)
+	2: Call u64::divide_and_round_up(u64, u64): u64
+	3: Ret
+}
+
+}

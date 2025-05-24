@@ -1,0 +1,422 @@
+// Move bytecode v6
+module 2.config {
+use 0000000000000000000000000000000000000000000000000000000000000001::option;
+use 0000000000000000000000000000000000000000000000000000000000000002::dynamic_field;
+use 0000000000000000000000000000000000000000000000000000000000000002::object;
+use 0000000000000000000000000000000000000000000000000000000000000002::transfer;
+use 0000000000000000000000000000000000000000000000000000000000000002::tx_context;
+
+struct Config<phantom Ty0> has key {
+	id: UID
+}
+
+struct Setting<Ty0: copy + drop + store> has drop, store {
+	data: Option<SettingData<Ty0>>
+}
+
+struct SettingData<Ty0: copy + drop + store> has drop, store {
+	newer_value_epoch: u64,
+	newer_value: Option<Ty0>,
+	older_value_opt: Option<Ty0>
+}
+
+public(friend) new<Ty0>(Arg0: &mut Ty0, Arg1: &mut TxContext): Config<Ty0> {
+B0:
+	0: MoveLoc[1](Arg1: &mut TxContext)
+	1: Call object::new(&mut TxContext): UID
+	2: PackGeneric[0](Config<Ty0>)
+	3: Ret
+}
+
+public(friend) share<Ty0>(Arg0: Config<Ty0>) {
+B0:
+	0: MoveLoc[0](Arg0: Config<Ty0>)
+	1: Call transfer::share_object<Config<Ty0>>(Config<Ty0>)
+	2: Ret
+}
+
+public(friend) transfer<Ty0>(Arg0: Config<Ty0>, Arg1: address) {
+B0:
+	0: MoveLoc[0](Arg0: Config<Ty0>)
+	1: MoveLoc[1](Arg1: address)
+	2: Call transfer::transfer<Config<Ty0>>(Config<Ty0>, address)
+	3: Ret
+}
+
+public(friend) add_for_next_epoch<Ty0, Ty1: copy + drop + store, Ty2: copy + drop + store>(Arg0: &mut Config<Ty0>, Arg1: &mut Ty0, Arg2: Ty1, Arg3: Ty2, Arg4: &mut TxContext): Option<Ty2> {
+L5:	loc0: Option<Ty2>
+L6:	loc1: Option<Ty2>
+L7:	loc2: Option<Ty2>
+L8:	loc3: u64
+L9:	loc4: Option<Ty2>
+L10:	loc5: u64
+L11:	loc6: Option<Ty2>
+L12:	loc7: Option<Ty2>
+L13:	loc8: Option<Ty2>
+L14:	loc9: Setting<Ty2>
+L15:	loc10: &mut Setting<Ty2>
+B0:
+	0: MoveLoc[4](Arg4: &mut TxContext)
+	1: FreezeRef
+	2: Call tx_context::epoch(&TxContext): u64
+	3: StLoc[8](loc3: u64)
+	4: CopyLoc[0](Arg0: &mut Config<Ty0>)
+	5: ImmBorrowFieldGeneric[0](Config.id: UID)
+	6: CopyLoc[2](Arg2: Ty1)
+	7: Call dynamic_field::exists_<Ty1>(&UID, Ty1): bool
+	8: Not
+	9: BrFalse(26)
+B1:
+	10: MoveLoc[8](loc3: u64)
+	11: MoveLoc[3](Arg3: Ty2)
+	12: Call option::some<Ty2>(Ty2): Option<Ty2>
+	13: Call option::none<Ty2>(): Option<Ty2>
+	14: PackGeneric[1](SettingData<Ty2>)
+	15: Call option::some<SettingData<Ty2>>(SettingData<Ty2>): Option<SettingData<Ty2>>
+	16: PackGeneric[2](Setting<Ty2>)
+	17: StLoc[14](loc9: Setting<Ty2>)
+	18: MoveLoc[0](Arg0: &mut Config<Ty0>)
+	19: MutBorrowFieldGeneric[0](Config.id: UID)
+	20: MoveLoc[2](Arg2: Ty1)
+	21: MoveLoc[14](loc9: Setting<Ty2>)
+	22: Call dynamic_field::add<Ty1, Setting<Ty2>>(&mut UID, Ty1, Setting<Ty2>)
+	23: Call option::none<Ty2>(): Option<Ty2>
+	24: StLoc[7](loc2: Option<Ty2>)
+	25: Branch(82)
+B2:
+	26: MoveLoc[0](Arg0: &mut Config<Ty0>)
+	27: MutBorrowFieldGeneric[0](Config.id: UID)
+	28: MoveLoc[2](Arg2: Ty1)
+	29: Call dynamic_field::borrow_mut<Ty1, Setting<Ty2>>(&mut UID, Ty1): &mut Setting<Ty2>
+	30: StLoc[15](loc10: &mut Setting<Ty2>)
+	31: CopyLoc[15](loc10: &mut Setting<Ty2>)
+	32: MutBorrowFieldGeneric[1](Setting.data: Option<SettingData<Ty2>>)
+	33: Call option::extract<SettingData<Ty2>>(&mut Option<SettingData<Ty2>>): SettingData<Ty2>
+	34: UnpackGeneric[1](SettingData<Ty2>)
+	35: StLoc[11](loc6: Option<Ty2>)
+	36: StLoc[9](loc4: Option<Ty2>)
+	37: StLoc[10](loc5: u64)
+	38: CopyLoc[8](loc3: u64)
+	39: CopyLoc[10](loc5: u64)
+	40: Gt
+	41: BrFalse(47)
+B3:
+	42: MoveLoc[9](loc4: Option<Ty2>)
+	43: MoveLoc[11](loc6: Option<Ty2>)
+	44: StLoc[6](loc1: Option<Ty2>)
+	45: StLoc[5](loc0: Option<Ty2>)
+	46: Branch(68)
+B4:
+	47: CopyLoc[8](loc3: u64)
+	48: MoveLoc[10](loc5: u64)
+	49: Eq
+	50: BrFalse(52)
+B5:
+	51: Branch(56)
+B6:
+	52: MoveLoc[15](loc10: &mut Setting<Ty2>)
+	53: Pop
+	54: LdU64(13906834543710568447)
+	55: Abort
+B7:
+	56: ImmBorrowLoc[9](loc4: Option<Ty2>)
+	57: Call option::is_none<Ty2>(&Option<Ty2>): bool
+	58: BrFalse(60)
+B8:
+	59: Branch(64)
+B9:
+	60: MoveLoc[15](loc10: &mut Setting<Ty2>)
+	61: Pop
+	62: LdConst[0](u64: 0)
+	63: Abort
+B10:
+	64: MoveLoc[11](loc6: Option<Ty2>)
+	65: Call option::none<Ty2>(): Option<Ty2>
+	66: StLoc[6](loc1: Option<Ty2>)
+	67: StLoc[5](loc0: Option<Ty2>)
+B11:
+	68: MoveLoc[5](loc0: Option<Ty2>)
+	69: MoveLoc[6](loc1: Option<Ty2>)
+	70: StLoc[13](loc8: Option<Ty2>)
+	71: StLoc[12](loc7: Option<Ty2>)
+	72: MoveLoc[15](loc10: &mut Setting<Ty2>)
+	73: MutBorrowFieldGeneric[1](Setting.data: Option<SettingData<Ty2>>)
+	74: MoveLoc[8](loc3: u64)
+	75: MoveLoc[3](Arg3: Ty2)
+	76: Call option::some<Ty2>(Ty2): Option<Ty2>
+	77: MoveLoc[12](loc7: Option<Ty2>)
+	78: PackGeneric[1](SettingData<Ty2>)
+	79: Call option::fill<SettingData<Ty2>>(&mut Option<SettingData<Ty2>>, SettingData<Ty2>)
+	80: MoveLoc[13](loc8: Option<Ty2>)
+	81: StLoc[7](loc2: Option<Ty2>)
+B12:
+	82: MoveLoc[7](loc2: Option<Ty2>)
+	83: Ret
+}
+
+public(friend) remove_for_next_epoch<Ty0, Ty1: copy + drop + store, Ty2: copy + drop + store>(Arg0: &mut Config<Ty0>, Arg1: &mut Ty0, Arg2: Ty1, Arg3: &mut TxContext): Option<Ty2> {
+L4:	loc0: Option<Ty2>
+L5:	loc1: Option<Ty2>
+L6:	loc2: u64
+L7:	loc3: Option<Ty2>
+L8:	loc4: u64
+L9:	loc5: Option<Ty2>
+L10:	loc6: Option<Ty2>
+L11:	loc7: bool
+L12:	loc8: Option<Ty2>
+L13:	loc9: &mut Setting<Ty2>
+B0:
+	0: MoveLoc[3](Arg3: &mut TxContext)
+	1: FreezeRef
+	2: Call tx_context::epoch(&TxContext): u64
+	3: StLoc[6](loc2: u64)
+	4: CopyLoc[0](Arg0: &mut Config<Ty0>)
+	5: ImmBorrowFieldGeneric[0](Config.id: UID)
+	6: CopyLoc[2](Arg2: Ty1)
+	7: Call dynamic_field::exists_<Ty1>(&UID, Ty1): bool
+	8: Not
+	9: BrFalse(14)
+B1:
+	10: MoveLoc[0](Arg0: &mut Config<Ty0>)
+	11: Pop
+	12: Call option::none<Ty2>(): Option<Ty2>
+	13: Ret
+B2:
+	14: CopyLoc[0](Arg0: &mut Config<Ty0>)
+	15: MutBorrowFieldGeneric[0](Config.id: UID)
+	16: CopyLoc[2](Arg2: Ty1)
+	17: Call dynamic_field::borrow_mut<Ty1, Setting<Ty2>>(&mut UID, Ty1): &mut Setting<Ty2>
+	18: StLoc[13](loc9: &mut Setting<Ty2>)
+	19: CopyLoc[13](loc9: &mut Setting<Ty2>)
+	20: MutBorrowFieldGeneric[1](Setting.data: Option<SettingData<Ty2>>)
+	21: Call option::extract<SettingData<Ty2>>(&mut Option<SettingData<Ty2>>): SettingData<Ty2>
+	22: UnpackGeneric[1](SettingData<Ty2>)
+	23: StLoc[9](loc5: Option<Ty2>)
+	24: StLoc[7](loc3: Option<Ty2>)
+	25: StLoc[8](loc4: u64)
+	26: CopyLoc[6](loc2: u64)
+	27: CopyLoc[8](loc4: u64)
+	28: Gt
+	29: BrFalse(35)
+B3:
+	30: MoveLoc[7](loc3: Option<Ty2>)
+	31: Call option::none<Ty2>(): Option<Ty2>
+	32: StLoc[5](loc1: Option<Ty2>)
+	33: StLoc[4](loc0: Option<Ty2>)
+	34: Branch(50)
+B4:
+	35: CopyLoc[6](loc2: u64)
+	36: MoveLoc[8](loc4: u64)
+	37: Eq
+	38: BrFalse(40)
+B5:
+	39: Branch(46)
+B6:
+	40: MoveLoc[13](loc9: &mut Setting<Ty2>)
+	41: Pop
+	42: MoveLoc[0](Arg0: &mut Config<Ty0>)
+	43: Pop
+	44: LdU64(13906834715509260287)
+	45: Abort
+B7:
+	46: MoveLoc[9](loc5: Option<Ty2>)
+	47: MoveLoc[7](loc3: Option<Ty2>)
+	48: StLoc[5](loc1: Option<Ty2>)
+	49: StLoc[4](loc0: Option<Ty2>)
+B8:
+	50: MoveLoc[4](loc0: Option<Ty2>)
+	51: MoveLoc[5](loc1: Option<Ty2>)
+	52: StLoc[12](loc8: Option<Ty2>)
+	53: StLoc[10](loc6: Option<Ty2>)
+	54: ImmBorrowLoc[10](loc6: Option<Ty2>)
+	55: Call option::is_none<Ty2>(&Option<Ty2>): bool
+	56: StLoc[11](loc7: bool)
+	57: MoveLoc[13](loc9: &mut Setting<Ty2>)
+	58: MutBorrowFieldGeneric[1](Setting.data: Option<SettingData<Ty2>>)
+	59: MoveLoc[6](loc2: u64)
+	60: Call option::none<Ty2>(): Option<Ty2>
+	61: MoveLoc[10](loc6: Option<Ty2>)
+	62: PackGeneric[1](SettingData<Ty2>)
+	63: Call option::fill<SettingData<Ty2>>(&mut Option<SettingData<Ty2>>, SettingData<Ty2>)
+	64: MoveLoc[11](loc7: bool)
+	65: BrFalse(72)
+B9:
+	66: MoveLoc[0](Arg0: &mut Config<Ty0>)
+	67: MutBorrowFieldGeneric[0](Config.id: UID)
+	68: MoveLoc[2](Arg2: Ty1)
+	69: Call dynamic_field::remove<Ty1, Setting<Ty2>>(&mut UID, Ty1): Setting<Ty2>
+	70: Pop
+	71: Branch(74)
+B10:
+	72: MoveLoc[0](Arg0: &mut Config<Ty0>)
+	73: Pop
+B11:
+	74: MoveLoc[12](loc8: Option<Ty2>)
+	75: Ret
+}
+
+public(friend) exists_with_type<Ty0, Ty1: copy + drop + store, Ty2: copy + drop + store>(Arg0: &Config<Ty0>, Arg1: Ty1): bool {
+B0:
+	0: MoveLoc[0](Arg0: &Config<Ty0>)
+	1: ImmBorrowFieldGeneric[0](Config.id: UID)
+	2: MoveLoc[1](Arg1: Ty1)
+	3: Call dynamic_field::exists_with_type<Ty1, Setting<Ty2>>(&UID, Ty1): bool
+	4: Ret
+}
+
+public(friend) exists_with_type_for_next_epoch<Ty0, Ty1: copy + drop + store, Ty2: copy + drop + store>(Arg0: &Config<Ty0>, Arg1: Ty1, Arg2: &TxContext): bool {
+L3:	loc0: bool
+L4:	loc1: bool
+L5:	loc2: u64
+L6:	loc3: &Setting<Ty2>
+B0:
+	0: CopyLoc[0](Arg0: &Config<Ty0>)
+	1: ImmBorrowFieldGeneric[0](Config.id: UID)
+	2: CopyLoc[1](Arg1: Ty1)
+	3: Call dynamic_field::exists_with_type<Ty1, Setting<Ty2>>(&UID, Ty1): bool
+	4: BrFalse(35)
+B1:
+	5: MoveLoc[2](Arg2: &TxContext)
+	6: Call tx_context::epoch(&TxContext): u64
+	7: StLoc[5](loc2: u64)
+	8: MoveLoc[0](Arg0: &Config<Ty0>)
+	9: ImmBorrowFieldGeneric[0](Config.id: UID)
+	10: MoveLoc[1](Arg1: Ty1)
+	11: Call dynamic_field::borrow<Ty1, Setting<Ty2>>(&UID, Ty1): &Setting<Ty2>
+	12: StLoc[6](loc3: &Setting<Ty2>)
+	13: MoveLoc[5](loc2: u64)
+	14: CopyLoc[6](loc3: &Setting<Ty2>)
+	15: ImmBorrowFieldGeneric[1](Setting.data: Option<SettingData<Ty2>>)
+	16: Call option::borrow<SettingData<Ty2>>(&Option<SettingData<Ty2>>): &SettingData<Ty2>
+	17: ImmBorrowFieldGeneric[2](SettingData.newer_value_epoch: u64)
+	18: ReadRef
+	19: Eq
+	20: BrFalse(28)
+B2:
+	21: MoveLoc[6](loc3: &Setting<Ty2>)
+	22: ImmBorrowFieldGeneric[1](Setting.data: Option<SettingData<Ty2>>)
+	23: Call option::borrow<SettingData<Ty2>>(&Option<SettingData<Ty2>>): &SettingData<Ty2>
+	24: ImmBorrowFieldGeneric[3](SettingData.newer_value: Option<Ty2>)
+	25: Call option::is_some<Ty2>(&Option<Ty2>): bool
+	26: StLoc[4](loc1: bool)
+	27: Branch(32)
+B3:
+	28: MoveLoc[6](loc3: &Setting<Ty2>)
+	29: Pop
+	30: LdFalse
+	31: StLoc[4](loc1: bool)
+B4:
+	32: MoveLoc[4](loc1: bool)
+	33: StLoc[3](loc0: bool)
+	34: Branch(41)
+B5:
+	35: MoveLoc[2](Arg2: &TxContext)
+	36: Pop
+	37: MoveLoc[0](Arg0: &Config<Ty0>)
+	38: Pop
+	39: LdFalse
+	40: StLoc[3](loc0: bool)
+B6:
+	41: MoveLoc[3](loc0: bool)
+	42: Ret
+}
+
+public(friend) borrow_for_next_epoch_mut<Ty0, Ty1: copy + drop + store, Ty2: copy + drop + store>(Arg0: &mut Config<Ty0>, Arg1: &mut Ty0, Arg2: Ty1, Arg3: &mut TxContext): &mut Ty2 {
+L4:	loc0: &mut SettingData<Ty2>
+L5:	loc1: u64
+B0:
+	0: MoveLoc[3](Arg3: &mut TxContext)
+	1: FreezeRef
+	2: Call tx_context::epoch(&TxContext): u64
+	3: StLoc[5](loc1: u64)
+	4: MoveLoc[0](Arg0: &mut Config<Ty0>)
+	5: MutBorrowFieldGeneric[0](Config.id: UID)
+	6: MoveLoc[2](Arg2: Ty1)
+	7: Call dynamic_field::borrow_mut<Ty1, Setting<Ty2>>(&mut UID, Ty1): &mut Setting<Ty2>
+	8: MutBorrowFieldGeneric[1](Setting.data: Option<SettingData<Ty2>>)
+	9: Call option::borrow_mut<SettingData<Ty2>>(&mut Option<SettingData<Ty2>>): &mut SettingData<Ty2>
+	10: StLoc[4](loc0: &mut SettingData<Ty2>)
+	11: CopyLoc[4](loc0: &mut SettingData<Ty2>)
+	12: ImmBorrowFieldGeneric[2](SettingData.newer_value_epoch: u64)
+	13: ReadRef
+	14: MoveLoc[5](loc1: u64)
+	15: Eq
+	16: BrFalse(18)
+B1:
+	17: Branch(22)
+B2:
+	18: MoveLoc[4](loc0: &mut SettingData<Ty2>)
+	19: Pop
+	20: LdConst[1](u64: 1)
+	21: Abort
+B3:
+	22: CopyLoc[4](loc0: &mut SettingData<Ty2>)
+	23: ImmBorrowFieldGeneric[3](SettingData.newer_value: Option<Ty2>)
+	24: Call option::is_some<Ty2>(&Option<Ty2>): bool
+	25: BrFalse(27)
+B4:
+	26: Branch(31)
+B5:
+	27: MoveLoc[4](loc0: &mut SettingData<Ty2>)
+	28: Pop
+	29: LdConst[1](u64: 1)
+	30: Abort
+B6:
+	31: MoveLoc[4](loc0: &mut SettingData<Ty2>)
+	32: MutBorrowFieldGeneric[3](SettingData.newer_value: Option<Ty2>)
+	33: Call option::borrow_mut<Ty2>(&mut Option<Ty2>): &mut Ty2
+	34: Ret
+}
+
+public(friend) read_setting_for_next_epoch<Ty0, Ty1: copy + drop + store, Ty2: copy + drop + store>(Arg0: &Config<Ty0>, Arg1: Ty1): Option<Ty2> {
+B0:
+	0: CopyLoc[0](Arg0: &Config<Ty0>)
+	1: ImmBorrowFieldGeneric[0](Config.id: UID)
+	2: CopyLoc[1](Arg1: Ty1)
+	3: Call dynamic_field::exists_with_type<Ty1, Setting<Ty2>>(&UID, Ty1): bool
+	4: Not
+	5: BrFalse(10)
+B1:
+	6: MoveLoc[0](Arg0: &Config<Ty0>)
+	7: Pop
+	8: Call option::none<Ty2>(): Option<Ty2>
+	9: Ret
+B2:
+	10: MoveLoc[0](Arg0: &Config<Ty0>)
+	11: ImmBorrowFieldGeneric[0](Config.id: UID)
+	12: MoveLoc[1](Arg1: Ty1)
+	13: Call dynamic_field::borrow<Ty1, Setting<Ty2>>(&UID, Ty1): &Setting<Ty2>
+	14: ImmBorrowFieldGeneric[1](Setting.data: Option<SettingData<Ty2>>)
+	15: Call option::borrow<SettingData<Ty2>>(&Option<SettingData<Ty2>>): &SettingData<Ty2>
+	16: ImmBorrowFieldGeneric[3](SettingData.newer_value: Option<Ty2>)
+	17: ReadRef
+	18: Ret
+}
+
+public(friend) read_setting<Ty0: copy + drop + store, Ty1: copy + drop + store>(Arg0: ID, Arg1: Ty0, Arg2: &TxContext): Option<Ty1> {
+L3:	loc0: address
+L4:	loc1: address
+B0:
+	0: ImmBorrowLoc[0](Arg0: ID)
+	1: Call object::id_to_address(&ID): address
+	2: StLoc[3](loc0: address)
+	3: CopyLoc[3](loc0: address)
+	4: MoveLoc[1](Arg1: Ty0)
+	5: Call dynamic_field::hash_type_and_key<Ty0>(address, Ty0): address
+	6: StLoc[4](loc1: address)
+	7: MoveLoc[3](loc0: address)
+	8: MoveLoc[4](loc1: address)
+	9: MoveLoc[2](Arg2: &TxContext)
+	10: Call tx_context::epoch(&TxContext): u64
+	11: Call read_setting_impl<Field<Ty0, Setting<Ty1>>, Setting<Ty1>, SettingData<Ty1>, Ty1>(address, address, u64): Option<Ty1>
+	12: Ret
+}
+
+native read_setting_impl<Ty0: key, Ty1: store, Ty2: store, Ty3: copy + drop + store>(Arg0: address, Arg1: address, Arg2: u64): Option<Ty3>;
+
+Constants [
+	0 => u64: 0
+	1 => u64: 1
+	2 => u64: 2
+]
+}

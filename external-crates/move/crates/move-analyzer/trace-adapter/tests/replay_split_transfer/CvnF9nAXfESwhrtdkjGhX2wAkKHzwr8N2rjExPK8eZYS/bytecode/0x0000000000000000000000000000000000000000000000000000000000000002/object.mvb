@@ -1,0 +1,218 @@
+// Move bytecode v6
+module 2.object {
+use 0000000000000000000000000000000000000000000000000000000000000001::bcs;
+use 0000000000000000000000000000000000000000000000000000000000000002::address;
+use 0000000000000000000000000000000000000000000000000000000000000002::tx_context;
+
+struct ID has copy, drop, store {
+	bytes: address
+}
+
+struct UID has store {
+	id: ID
+}
+
+public id_to_bytes(Arg0: &ID): vector<u8> {
+B0:
+	0: MoveLoc[0](Arg0: &ID)
+	1: ImmBorrowField[0](ID.bytes: address)
+	2: Call bcs::to_bytes<address>(&address): vector<u8>
+	3: Ret
+}
+
+public id_to_address(Arg0: &ID): address {
+B0:
+	0: MoveLoc[0](Arg0: &ID)
+	1: ImmBorrowField[0](ID.bytes: address)
+	2: ReadRef
+	3: Ret
+}
+
+public id_from_bytes(Arg0: vector<u8>): ID {
+B0:
+	0: MoveLoc[0](Arg0: vector<u8>)
+	1: Call address::from_bytes(vector<u8>): address
+	2: Call id_from_address(address): ID
+	3: Ret
+}
+
+public id_from_address(Arg0: address): ID {
+B0:
+	0: MoveLoc[0](Arg0: address)
+	1: Pack[0](ID)
+	2: Ret
+}
+
+sui_system_state(Arg0: &TxContext): UID {
+B0:
+	0: MoveLoc[0](Arg0: &TxContext)
+	1: Call tx_context::sender(&TxContext): address
+	2: LdConst[7](address: 0x00..)
+	3: Eq
+	4: BrFalse(6)
+B1:
+	5: Branch(8)
+B2:
+	6: LdConst[6](u64: 0)
+	7: Abort
+B3:
+	8: LdConst[0](address: 0x00..)
+	9: Pack[0](ID)
+	10: Pack[1](UID)
+	11: Ret
+}
+
+public(friend) clock(): UID {
+B0:
+	0: LdConst[1](address: 0x00..)
+	1: Pack[0](ID)
+	2: Pack[1](UID)
+	3: Ret
+}
+
+public(friend) authenticator_state(): UID {
+B0:
+	0: LdConst[2](address: 0x00..)
+	1: Pack[0](ID)
+	2: Pack[1](UID)
+	3: Ret
+}
+
+public(friend) randomness_state(): UID {
+B0:
+	0: LdConst[3](address: 0x00..)
+	1: Pack[0](ID)
+	2: Pack[1](UID)
+	3: Ret
+}
+
+public(friend) sui_deny_list_object_id(): UID {
+B0:
+	0: LdConst[4](address: 0x00..)
+	1: Pack[0](ID)
+	2: Pack[1](UID)
+	3: Ret
+}
+
+bridge(): UID {
+B0:
+	0: LdConst[5](address: 0x00..)
+	1: Pack[0](ID)
+	2: Pack[1](UID)
+	3: Ret
+}
+
+public uid_as_inner(Arg0: &UID): &ID {
+B0:
+	0: MoveLoc[0](Arg0: &UID)
+	1: ImmBorrowField[1](UID.id: ID)
+	2: Ret
+}
+
+public uid_to_inner(Arg0: &UID): ID {
+B0:
+	0: MoveLoc[0](Arg0: &UID)
+	1: ImmBorrowField[1](UID.id: ID)
+	2: ReadRef
+	3: Ret
+}
+
+public uid_to_bytes(Arg0: &UID): vector<u8> {
+B0:
+	0: MoveLoc[0](Arg0: &UID)
+	1: ImmBorrowField[1](UID.id: ID)
+	2: ImmBorrowField[0](ID.bytes: address)
+	3: Call bcs::to_bytes<address>(&address): vector<u8>
+	4: Ret
+}
+
+public uid_to_address(Arg0: &UID): address {
+B0:
+	0: MoveLoc[0](Arg0: &UID)
+	1: ImmBorrowField[1](UID.id: ID)
+	2: ImmBorrowField[0](ID.bytes: address)
+	3: ReadRef
+	4: Ret
+}
+
+public new(Arg0: &mut TxContext): UID {
+B0:
+	0: MoveLoc[0](Arg0: &mut TxContext)
+	1: Call tx_context::fresh_object_address(&mut TxContext): address
+	2: Pack[0](ID)
+	3: Pack[1](UID)
+	4: Ret
+}
+
+public delete(Arg0: UID) {
+B0:
+	0: MoveLoc[0](Arg0: UID)
+	1: Unpack[1](UID)
+	2: Unpack[0](ID)
+	3: Call delete_impl(address)
+	4: Ret
+}
+
+public id<Ty0: key>(Arg0: &Ty0): ID {
+B0:
+	0: MoveLoc[0](Arg0: &Ty0)
+	1: Call borrow_uid<Ty0>(&Ty0): &UID
+	2: ImmBorrowField[1](UID.id: ID)
+	3: ReadRef
+	4: Ret
+}
+
+public borrow_id<Ty0: key>(Arg0: &Ty0): &ID {
+B0:
+	0: MoveLoc[0](Arg0: &Ty0)
+	1: Call borrow_uid<Ty0>(&Ty0): &UID
+	2: ImmBorrowField[1](UID.id: ID)
+	3: Ret
+}
+
+public id_bytes<Ty0: key>(Arg0: &Ty0): vector<u8> {
+B0:
+	0: MoveLoc[0](Arg0: &Ty0)
+	1: Call borrow_uid<Ty0>(&Ty0): &UID
+	2: ImmBorrowField[1](UID.id: ID)
+	3: Call bcs::to_bytes<ID>(&ID): vector<u8>
+	4: Ret
+}
+
+public id_address<Ty0: key>(Arg0: &Ty0): address {
+B0:
+	0: MoveLoc[0](Arg0: &Ty0)
+	1: Call borrow_uid<Ty0>(&Ty0): &UID
+	2: ImmBorrowField[1](UID.id: ID)
+	3: ImmBorrowField[0](ID.bytes: address)
+	4: ReadRef
+	5: Ret
+}
+
+native borrow_uid<Ty0: key>(Arg0: &Ty0): &UID;
+
+public(friend) new_uid_from_hash(Arg0: address): UID {
+B0:
+	0: CopyLoc[0](Arg0: address)
+	1: Call record_new_uid(address)
+	2: MoveLoc[0](Arg0: address)
+	3: Pack[0](ID)
+	4: Pack[1](UID)
+	5: Ret
+}
+
+native delete_impl(Arg0: address);
+
+native record_new_uid(Arg0: address);
+
+Constants [
+	0 => address: 0x0000000000000000000000000000000000000000000000000000000000000005
+	1 => address: 0x0000000000000000000000000000000000000000000000000000000000000006
+	2 => address: 0x0000000000000000000000000000000000000000000000000000000000000007
+	3 => address: 0x0000000000000000000000000000000000000000000000000000000000000008
+	4 => address: 0x0000000000000000000000000000000000000000000000000000000000000403
+	5 => address: 0x0000000000000000000000000000000000000000000000000000000000000009
+	6 => u64: 0
+	7 => address: 0x0000000000000000000000000000000000000000000000000000000000000000
+]
+}

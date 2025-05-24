@@ -1,0 +1,326 @@
+// Move bytecode v6
+module 1.option {
+use 0000000000000000000000000000000000000000000000000000000000000001::vector;
+
+struct Option<Ty0> has copy, drop, store {
+	vec: vector<Ty0>
+}
+
+public none<Ty0>(): Option<Ty0> {
+B0:
+	0: VecPack(2, 0)
+	1: PackGeneric[0](Option<Ty0>)
+	2: Ret
+}
+
+public some<Ty0>(Arg0: Ty0): Option<Ty0> {
+B0:
+	0: MoveLoc[0](Arg0: Ty0)
+	1: Call vector::singleton<Ty0>(Ty0): vector<Ty0>
+	2: PackGeneric[0](Option<Ty0>)
+	3: Ret
+}
+
+public is_none<Ty0>(Arg0: &Option<Ty0>): bool {
+B0:
+	0: MoveLoc[0](Arg0: &Option<Ty0>)
+	1: ImmBorrowFieldGeneric[0](Option.vec: vector<Ty0>)
+	2: Call vector::is_empty<Ty0>(&vector<Ty0>): bool
+	3: Ret
+}
+
+public is_some<Ty0>(Arg0: &Option<Ty0>): bool {
+B0:
+	0: MoveLoc[0](Arg0: &Option<Ty0>)
+	1: ImmBorrowFieldGeneric[0](Option.vec: vector<Ty0>)
+	2: Call vector::is_empty<Ty0>(&vector<Ty0>): bool
+	3: Not
+	4: Ret
+}
+
+public contains<Ty0>(Arg0: &Option<Ty0>, Arg1: &Ty0): bool {
+B0:
+	0: MoveLoc[0](Arg0: &Option<Ty0>)
+	1: ImmBorrowFieldGeneric[0](Option.vec: vector<Ty0>)
+	2: MoveLoc[1](Arg1: &Ty0)
+	3: Call vector::contains<Ty0>(&vector<Ty0>, &Ty0): bool
+	4: Ret
+}
+
+public borrow<Ty0>(Arg0: &Option<Ty0>): &Ty0 {
+B0:
+	0: CopyLoc[0](Arg0: &Option<Ty0>)
+	1: Call is_some<Ty0>(&Option<Ty0>): bool
+	2: BrFalse(4)
+B1:
+	3: Branch(8)
+B2:
+	4: MoveLoc[0](Arg0: &Option<Ty0>)
+	5: Pop
+	6: LdConst[1](u64: 262145)
+	7: Abort
+B3:
+	8: MoveLoc[0](Arg0: &Option<Ty0>)
+	9: ImmBorrowFieldGeneric[0](Option.vec: vector<Ty0>)
+	10: LdU64(0)
+	11: VecImmBorrow(2)
+	12: Ret
+}
+
+public borrow_with_default<Ty0>(Arg0: &Option<Ty0>, Arg1: &Ty0): &Ty0 {
+L2:	loc0: &Ty0
+L3:	loc1: &vector<Ty0>
+B0:
+	0: MoveLoc[0](Arg0: &Option<Ty0>)
+	1: ImmBorrowFieldGeneric[0](Option.vec: vector<Ty0>)
+	2: StLoc[3](loc1: &vector<Ty0>)
+	3: CopyLoc[3](loc1: &vector<Ty0>)
+	4: Call vector::is_empty<Ty0>(&vector<Ty0>): bool
+	5: BrFalse(11)
+B1:
+	6: MoveLoc[3](loc1: &vector<Ty0>)
+	7: Pop
+	8: MoveLoc[1](Arg1: &Ty0)
+	9: StLoc[2](loc0: &Ty0)
+	10: Branch(17)
+B2:
+	11: MoveLoc[1](Arg1: &Ty0)
+	12: Pop
+	13: MoveLoc[3](loc1: &vector<Ty0>)
+	14: LdU64(0)
+	15: VecImmBorrow(2)
+	16: StLoc[2](loc0: &Ty0)
+B3:
+	17: MoveLoc[2](loc0: &Ty0)
+	18: Ret
+}
+
+public get_with_default<Ty0: copy + drop>(Arg0: &Option<Ty0>, Arg1: Ty0): Ty0 {
+L2:	loc0: Ty0
+L3:	loc1: &vector<Ty0>
+B0:
+	0: MoveLoc[0](Arg0: &Option<Ty0>)
+	1: ImmBorrowFieldGeneric[0](Option.vec: vector<Ty0>)
+	2: StLoc[3](loc1: &vector<Ty0>)
+	3: CopyLoc[3](loc1: &vector<Ty0>)
+	4: Call vector::is_empty<Ty0>(&vector<Ty0>): bool
+	5: BrFalse(11)
+B1:
+	6: MoveLoc[3](loc1: &vector<Ty0>)
+	7: Pop
+	8: MoveLoc[1](Arg1: Ty0)
+	9: StLoc[2](loc0: Ty0)
+	10: Branch(16)
+B2:
+	11: MoveLoc[3](loc1: &vector<Ty0>)
+	12: LdU64(0)
+	13: VecImmBorrow(2)
+	14: ReadRef
+	15: StLoc[2](loc0: Ty0)
+B3:
+	16: MoveLoc[2](loc0: Ty0)
+	17: Ret
+}
+
+public fill<Ty0>(Arg0: &mut Option<Ty0>, Arg1: Ty0) {
+L2:	loc0: &mut vector<Ty0>
+B0:
+	0: MoveLoc[0](Arg0: &mut Option<Ty0>)
+	1: MutBorrowFieldGeneric[0](Option.vec: vector<Ty0>)
+	2: StLoc[2](loc0: &mut vector<Ty0>)
+	3: CopyLoc[2](loc0: &mut vector<Ty0>)
+	4: FreezeRef
+	5: Call vector::is_empty<Ty0>(&vector<Ty0>): bool
+	6: BrFalse(8)
+B1:
+	7: Branch(12)
+B2:
+	8: MoveLoc[2](loc0: &mut vector<Ty0>)
+	9: Pop
+	10: LdConst[0](u64: 262144)
+	11: Abort
+B3:
+	12: MoveLoc[2](loc0: &mut vector<Ty0>)
+	13: MoveLoc[1](Arg1: Ty0)
+	14: VecPushBack(2)
+	15: Ret
+}
+
+public extract<Ty0>(Arg0: &mut Option<Ty0>): Ty0 {
+B0:
+	0: CopyLoc[0](Arg0: &mut Option<Ty0>)
+	1: FreezeRef
+	2: Call is_some<Ty0>(&Option<Ty0>): bool
+	3: BrFalse(5)
+B1:
+	4: Branch(9)
+B2:
+	5: MoveLoc[0](Arg0: &mut Option<Ty0>)
+	6: Pop
+	7: LdConst[1](u64: 262145)
+	8: Abort
+B3:
+	9: MoveLoc[0](Arg0: &mut Option<Ty0>)
+	10: MutBorrowFieldGeneric[0](Option.vec: vector<Ty0>)
+	11: VecPopBack(2)
+	12: Ret
+}
+
+public borrow_mut<Ty0>(Arg0: &mut Option<Ty0>): &mut Ty0 {
+B0:
+	0: CopyLoc[0](Arg0: &mut Option<Ty0>)
+	1: FreezeRef
+	2: Call is_some<Ty0>(&Option<Ty0>): bool
+	3: BrFalse(5)
+B1:
+	4: Branch(9)
+B2:
+	5: MoveLoc[0](Arg0: &mut Option<Ty0>)
+	6: Pop
+	7: LdConst[1](u64: 262145)
+	8: Abort
+B3:
+	9: MoveLoc[0](Arg0: &mut Option<Ty0>)
+	10: MutBorrowFieldGeneric[0](Option.vec: vector<Ty0>)
+	11: LdU64(0)
+	12: VecMutBorrow(2)
+	13: Ret
+}
+
+public swap<Ty0>(Arg0: &mut Option<Ty0>, Arg1: Ty0): Ty0 {
+L2:	loc0: Ty0
+L3:	loc1: &mut vector<Ty0>
+B0:
+	0: CopyLoc[0](Arg0: &mut Option<Ty0>)
+	1: FreezeRef
+	2: Call is_some<Ty0>(&Option<Ty0>): bool
+	3: BrFalse(5)
+B1:
+	4: Branch(9)
+B2:
+	5: MoveLoc[0](Arg0: &mut Option<Ty0>)
+	6: Pop
+	7: LdConst[1](u64: 262145)
+	8: Abort
+B3:
+	9: MoveLoc[0](Arg0: &mut Option<Ty0>)
+	10: MutBorrowFieldGeneric[0](Option.vec: vector<Ty0>)
+	11: StLoc[3](loc1: &mut vector<Ty0>)
+	12: CopyLoc[3](loc1: &mut vector<Ty0>)
+	13: VecPopBack(2)
+	14: StLoc[2](loc0: Ty0)
+	15: MoveLoc[3](loc1: &mut vector<Ty0>)
+	16: MoveLoc[1](Arg1: Ty0)
+	17: VecPushBack(2)
+	18: MoveLoc[2](loc0: Ty0)
+	19: Ret
+}
+
+public swap_or_fill<Ty0>(Arg0: &mut Option<Ty0>, Arg1: Ty0): Option<Ty0> {
+L2:	loc0: Option<Ty0>
+L3:	loc1: Option<Ty0>
+L4:	loc2: &mut vector<Ty0>
+B0:
+	0: MoveLoc[0](Arg0: &mut Option<Ty0>)
+	1: MutBorrowFieldGeneric[0](Option.vec: vector<Ty0>)
+	2: StLoc[4](loc2: &mut vector<Ty0>)
+	3: CopyLoc[4](loc2: &mut vector<Ty0>)
+	4: FreezeRef
+	5: Call vector::is_empty<Ty0>(&vector<Ty0>): bool
+	6: BrFalse(10)
+B1:
+	7: Call none<Ty0>(): Option<Ty0>
+	8: StLoc[2](loc0: Option<Ty0>)
+	9: Branch(14)
+B2:
+	10: CopyLoc[4](loc2: &mut vector<Ty0>)
+	11: VecPopBack(2)
+	12: Call some<Ty0>(Ty0): Option<Ty0>
+	13: StLoc[2](loc0: Option<Ty0>)
+B3:
+	14: MoveLoc[2](loc0: Option<Ty0>)
+	15: StLoc[3](loc1: Option<Ty0>)
+	16: MoveLoc[4](loc2: &mut vector<Ty0>)
+	17: MoveLoc[1](Arg1: Ty0)
+	18: VecPushBack(2)
+	19: MoveLoc[3](loc1: Option<Ty0>)
+	20: Ret
+}
+
+public destroy_with_default<Ty0: drop>(Arg0: Option<Ty0>, Arg1: Ty0): Ty0 {
+L2:	loc0: Ty0
+L3:	loc1: vector<Ty0>
+B0:
+	0: MoveLoc[0](Arg0: Option<Ty0>)
+	1: UnpackGeneric[0](Option<Ty0>)
+	2: StLoc[3](loc1: vector<Ty0>)
+	3: ImmBorrowLoc[3](loc1: vector<Ty0>)
+	4: Call vector::is_empty<Ty0>(&vector<Ty0>): bool
+	5: BrFalse(9)
+B1:
+	6: MoveLoc[1](Arg1: Ty0)
+	7: StLoc[2](loc0: Ty0)
+	8: Branch(12)
+B2:
+	9: MutBorrowLoc[3](loc1: vector<Ty0>)
+	10: VecPopBack(2)
+	11: StLoc[2](loc0: Ty0)
+B3:
+	12: MoveLoc[2](loc0: Ty0)
+	13: Ret
+}
+
+public destroy_some<Ty0>(Arg0: Option<Ty0>): Ty0 {
+L1:	loc0: Ty0
+L2:	loc1: vector<Ty0>
+B0:
+	0: ImmBorrowLoc[0](Arg0: Option<Ty0>)
+	1: Call is_some<Ty0>(&Option<Ty0>): bool
+	2: BrFalse(4)
+B1:
+	3: Branch(6)
+B2:
+	4: LdConst[1](u64: 262145)
+	5: Abort
+B3:
+	6: MoveLoc[0](Arg0: Option<Ty0>)
+	7: UnpackGeneric[0](Option<Ty0>)
+	8: StLoc[2](loc1: vector<Ty0>)
+	9: MutBorrowLoc[2](loc1: vector<Ty0>)
+	10: VecPopBack(2)
+	11: StLoc[1](loc0: Ty0)
+	12: MoveLoc[2](loc1: vector<Ty0>)
+	13: VecUnpack(2, 0)
+	14: MoveLoc[1](loc0: Ty0)
+	15: Ret
+}
+
+public destroy_none<Ty0>(Arg0: Option<Ty0>) {
+B0:
+	0: ImmBorrowLoc[0](Arg0: Option<Ty0>)
+	1: Call is_none<Ty0>(&Option<Ty0>): bool
+	2: BrFalse(4)
+B1:
+	3: Branch(6)
+B2:
+	4: LdConst[0](u64: 262144)
+	5: Abort
+B3:
+	6: MoveLoc[0](Arg0: Option<Ty0>)
+	7: UnpackGeneric[0](Option<Ty0>)
+	8: VecUnpack(2, 0)
+	9: Ret
+}
+
+public to_vec<Ty0>(Arg0: Option<Ty0>): vector<Ty0> {
+B0:
+	0: MoveLoc[0](Arg0: Option<Ty0>)
+	1: UnpackGeneric[0](Option<Ty0>)
+	2: Ret
+}
+
+Constants [
+	0 => u64: 262144
+	1 => u64: 262145
+]
+}
