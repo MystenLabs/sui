@@ -171,7 +171,7 @@ async fn test_wait_for_object() {
                     initial_shared_version: version,
                 },
             );
-            cache.write_object_entry(&object_id, version, ObjectEntry::Object(object));
+            cache.write_object_entry_for_test(object);
         }
     });
     let result = timeout(
@@ -185,7 +185,7 @@ async fn test_wait_for_object() {
     tokio::spawn({
         let cache = cache.clone();
         async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            tokio::time::sleep(Duration::from_secs(1)).await;
             let object = Object::with_id_owner_version_for_testing(
                 object_id,
                 version,
@@ -193,7 +193,7 @@ async fn test_wait_for_object() {
                     initial_shared_version: version,
                 },
             );
-            cache.write_object_entry(&object_id, version, ObjectEntry::Object(object));
+            cache.write_object_entry_for_test(object);
         }
     });
     timeout(
