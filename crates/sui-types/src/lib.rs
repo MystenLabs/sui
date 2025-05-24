@@ -7,6 +7,8 @@
     rust_2021_compatibility
 )]
 
+use std::collections::BTreeSet;
+
 use base_types::{SequenceNumber, SuiAddress};
 use move_binary_format::file_format::{AbilitySet, SignatureToken};
 use move_binary_format::CompiledModule;
@@ -19,6 +21,7 @@ use object::OBJECT_START_VERSION;
 use base_types::ObjectID;
 
 pub use mysten_network::multiaddr;
+use once_cell::sync::Lazy;
 
 use crate::base_types::{RESOLVED_ASCII_STR, RESOLVED_UTF8_STR};
 use crate::{base_types::RESOLVED_STD_OPTION, id::RESOLVED_SUI_ID};
@@ -131,6 +134,18 @@ built_in_ids! {
     SUI_BRIDGE_ADDRESS / SUI_BRIDGE_OBJECT_ID = 0x9;
     SUI_DENY_LIST_ADDRESS / SUI_DENY_LIST_OBJECT_ID = 0x403;
 }
+
+/// The set of well-known system (Move) objects
+pub static KNOWN_SYSTEM_OBJECTS: Lazy<BTreeSet<ObjectID>> = Lazy::new(|| {
+    BTreeSet::from([
+        SUI_SYSTEM_STATE_OBJECT_ID,
+        SUI_CLOCK_OBJECT_ID,
+        SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+        SUI_RANDOMNESS_STATE_OBJECT_ID,
+        SUI_BRIDGE_OBJECT_ID,
+        SUI_DENY_LIST_OBJECT_ID,
+    ])
+});
 
 pub const SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
 pub const SUI_CLOCK_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;

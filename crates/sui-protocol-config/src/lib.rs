@@ -700,6 +700,11 @@ struct FeatureFlags {
     // Allow objects created or mutated in system transactions to exceed the max object size limit.
     #[serde(skip_serializing_if = "is_false")]
     allow_unbounded_system_objects: bool,
+
+    // Allow system objects that may exceed the max object size limit to be mutated by non-system
+    // transactions.
+    #[serde(skip_serializing_if = "is_false")]
+    allow_unbounded_system_object_mutations: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1994,6 +1999,12 @@ impl ProtocolConfig {
 
     pub fn allow_unbounded_system_objects(&self) -> bool {
         self.feature_flags.allow_unbounded_system_objects
+    }
+
+    pub fn allow_unbounded_system_object_mutations(&self) -> bool {
+        self.feature_flags
+            .allow_unbounded_system_object_mutations
+     
     }
 }
 
@@ -3580,6 +3591,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_party_transfer = true;
                     }
+                    cfg.feature_flags.allow_unbounded_system_object_mutations = true;
                 }
                 // Use this template when making changes:
                 //

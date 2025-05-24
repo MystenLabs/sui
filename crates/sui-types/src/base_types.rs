@@ -34,6 +34,7 @@ use crate::signature::GenericSignature;
 use crate::sui_serde::to_custom_deser_error;
 use crate::sui_serde::to_sui_struct_tag_string;
 use crate::sui_serde::Readable;
+use crate::sui_system_state::is_sui_system_inner_state_type;
 use crate::transaction::Transaction;
 use crate::transaction::VerifiedTransaction;
 use crate::zk_login_authenticator::ZkLoginAuthenticator;
@@ -396,6 +397,27 @@ impl MoveObjectType {
             }
             MoveObjectType_::Other(s) => DynamicFieldInfo::is_dynamic_field(s),
         }
+    }
+
+    pub fn is_inner_system_state_object(&self) -> bool {
+        if !self.is_dynamic_field() {
+            return false;
+        }
+
+        // Dynamic field keyed by a u64
+        if !self
+            .try_extract_field_name(&DynamicFieldType::DynamicField)
+            .is_ok_and(|field_name| field_name == TypeTag::U64)
+        {
+            return false;
+        }
+
+        // The value is a sui system state innner struct
+        let Some(TypeTag::Struct(struct_tag)) = self.try_extract_field_value().ok() else {
+            return false;
+        };
+
+        is_sui_system_inner_state_type(&struct_tag)
     }
 
     pub fn try_extract_field_name(&self, type_: &DynamicFieldType) -> SuiResult<TypeTag> {
