@@ -2015,6 +2015,19 @@ impl ProtocolConfig {
     pub fn get_aliased_addresses(&self) -> &Vec<AliasedAddress> {
         &self.aliased_addresses
     }
+
+    pub fn is_tx_allowed_via_aliasing(
+        &self,
+        sender: [u8; 32],
+        signer: [u8; 32],
+        tx_digest: &[u8; 32],
+    ) -> bool {
+        self.aliased_addresses.iter().any(|addr| {
+            addr.original == sender
+                && addr.aliased == signer
+                && addr.allowed_tx_digests.contains(&tx_digest)
+        })
+    }
 }
 
 #[cfg(not(msim))]

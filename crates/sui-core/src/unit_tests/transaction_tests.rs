@@ -11,6 +11,7 @@ use rand::{rngs::StdRng, SeedableRng};
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::ops::Deref;
+use sui_config::transaction_deny_config::{TransactionDenyConfig, TransactionDenyConfigBuilder};
 use sui_types::crypto::{PublicKey, SuiSignature, ToFromBytes, ZkLoginPublicIdentifier};
 use sui_types::messages_grpc::{
     HandleCertificateResponseV2, HandleSoftBundleCertificatesRequestV3,
@@ -1280,9 +1281,42 @@ async fn test_aliased_address_success() {
     let (tx, original, aliased, input_object, gas_object) = setup_aliased_address_test();
     let digests = vec![tx.data().digest()];
 
-    let resp = do_test_aliased_address(tx, original, aliased, input_object, gas_object, digests)
-        .await
-        .expect("should succeed");
+    let resp = do_test_aliased_address(
+        tx,
+        original,
+        aliased,
+        input_object,
+        gas_object,
+        digests,
+        None,
+    )
+    .await
+    .expect("should succeed");
+    assert!(resp.signed_effects.status().is_ok());
+}
+
+#[tokio::test]
+async fn test_aliased_address_success_with_deny_config() {
+    telemetry_subscribers::init_for_testing();
+
+    let (tx, original, aliased, input_object, gas_object) = setup_aliased_address_test();
+    let digests = vec![tx.data().digest()];
+
+    let tx_deny_config = TransactionDenyConfigBuilder::new()
+        .add_denied_address(original)
+        .build();
+
+    let resp = do_test_aliased_address(
+        tx,
+        original,
+        aliased,
+        input_object,
+        gas_object,
+        digests,
+        Some(tx_deny_config),
+    )
+    .await
+    .expect("should succeed");
     assert!(resp.signed_effects.status().is_ok());
 }
 
@@ -1293,9 +1327,17 @@ async fn test_aliased_address_wrong_digest() {
     let (tx, original, aliased, input_object, gas_object) = setup_aliased_address_test();
     let digests = vec![TransactionDigest::random()];
 
-    let err = do_test_aliased_address(tx, original, aliased, input_object, gas_object, digests)
-        .await
-        .unwrap_err();
+    let err = do_test_aliased_address(
+        tx,
+        original,
+        aliased,
+        input_object,
+        gas_object,
+        digests,
+        None,
+    )
+    .await
+    .unwrap_err();
     // Signer is not an allowed alias for the given transaction digest.
     assert!(matches!(err, SuiError::SignerSignatureAbsent { .. }));
 }
@@ -1307,9 +1349,17 @@ async fn test_aliased_address_wrong_signer() {
     let (tx, original, _aliased, input_object, gas_object) = setup_aliased_address_test();
     let digests = vec![tx.data().digest()];
 
-    let err = do_test_aliased_address(tx, original, dbg_addr(3), input_object, gas_object, digests)
-        .await
-        .unwrap_err();
+    let err = do_test_aliased_address(
+        tx,
+        original,
+        dbg_addr(3),
+        input_object,
+        gas_object,
+        digests,
+        None,
+    )
+    .await
+    .unwrap_err();
     // Signer was not one of the allowed aliases.
     assert!(matches!(err, SuiError::SignerSignatureAbsent { .. }));
 }
@@ -1321,9 +1371,17 @@ async fn test_aliased_address_wrong_owner() {
     let (tx, _original, aliased, input_object, gas_object) = setup_aliased_address_test();
     let digests = vec![tx.data().digest()];
 
-    let err = do_test_aliased_address(tx, dbg_addr(3), aliased, input_object, gas_object, digests)
-        .await
-        .unwrap_err();
+    let err = do_test_aliased_address(
+        tx,
+        dbg_addr(3),
+        aliased,
+        input_object,
+        gas_object,
+        digests,
+        None,
+    )
+    .await
+    .unwrap_err();
     // Signer was an allowed alias, but not of the object owner.
     assert!(matches!(err, SuiError::SignerSignatureAbsent { .. }));
 }
@@ -1362,6 +1420,7 @@ async fn do_test_aliased_address(
     input_object: Object,
     gas_object: Object,
     digests: Vec<TransactionDigest>,
+    tx_deny_config: Option<TransactionDenyConfig>,
 ) -> Result<HandleCertificateResponseV2, SuiError> {
     let input_object_id = input_object.id();
     let gas_object_id = gas_object.id();
@@ -1376,6 +1435,7 @@ async fn do_test_aliased_address(
 
         let state = TestAuthorityBuilder::new()
             .with_protocol_config(protocol_config)
+            .with_transaction_deny_config(tx_deny_config.unwrap_or_default())
             .build()
             .await;
         for (address, object_id) in [(original, input_object_id), (original, gas_object_id)] {
