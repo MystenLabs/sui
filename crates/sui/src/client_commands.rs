@@ -164,9 +164,6 @@ pub enum SuiClientCommands {
         /// ObjectIDs, Addresses must be hex strings
         #[clap(long, num_args(1..))]
         args: Vec<SuiJsonValue>,
-        /// Optional gas price for this call. Currently use only for testing and not in production environments.
-        #[clap(hide = true)]
-        gas_price: Option<u64>,
 
         #[clap(flatten)]
         opts: OptsWithGas,
@@ -616,6 +613,15 @@ pub struct Opts {
     /// dry run call.
     #[arg(long)]
     pub gas_budget: Option<u64>,
+    /// An optional gas price for this transaction (in MIST). If gas price is not provided, the
+    /// tool will use the current reference gas price from RPC.
+    ///
+    /// Transactions with a gas price lower than the reference will not be signed by enough
+    /// validators to execute. Transactions accessing congested shared objects are prioritized by
+    /// gas price, so setting a higher gas price higher than the reference can ensure the
+    /// transaction accesses the shared object sooner.
+    #[arg(long)]
+    pub gas_price: Option<u64>,
     /// Compute the transaction digest and print it out, but do not execute the transaction.
     #[arg(long)]
     pub tx_digest: bool,
@@ -654,6 +660,7 @@ impl Opts {
     pub fn for_testing(gas_budget: u64) -> Self {
         Self {
             gas_budget: Some(gas_budget),
+            gas_price: None,
             tx_digest: false,
             dry_run: false,
             dev_inspect: false,
@@ -666,6 +673,7 @@ impl Opts {
     pub fn for_testing_dry_run(gas_budget: u64) -> Self {
         Self {
             gas_budget: Some(gas_budget),
+            gas_price: None,
             tx_digest: false,
             dry_run: true,
             dev_inspect: false,
@@ -995,7 +1003,7 @@ impl SuiClientCommands {
                     .await?;
 
                 let result = dry_run_or_execute_or_serialize(
-                    sender, tx_kind, context, None, None, opts.gas, opts.rest,
+                    sender, tx_kind, context, None, opts.gas, opts.rest,
                 )
                 .await?;
 
@@ -1097,7 +1105,7 @@ impl SuiClientCommands {
                     .publish_tx_kind(sender, compiled_modules, dep_ids)
                     .await?;
                 let result = dry_run_or_execute_or_serialize(
-                    sender, tx_kind, context, None, None, opts.gas, opts.rest,
+                    sender, tx_kind, context, None, opts.gas, opts.rest,
                 )
                 .await?;
 
@@ -1253,7 +1261,6 @@ impl SuiClientCommands {
                 module,
                 function,
                 type_args,
-                gas_price,
                 args,
                 opts,
             } => {
@@ -1283,10 +1290,8 @@ impl SuiClientCommands {
                     context.active_address()?
                 };
 
-                dry_run_or_execute_or_serialize(
-                    sender, tx_kind, context, None, gas_price, opts.gas, opts.rest,
-                )
-                .await?
+                dry_run_or_execute_or_serialize(sender, tx_kind, context, None, opts.gas, opts.rest)
+                    .await?
             }
 
             SuiClientCommands::Transfer {
@@ -1301,10 +1306,8 @@ impl SuiClientCommands {
                     .transaction_builder()
                     .transfer_object_tx_kind(object_id, to)
                     .await?;
-                dry_run_or_execute_or_serialize(
-                    signer, tx_kind, context, None, None, opts.gas, opts.rest,
-                )
-                .await?
+                dry_run_or_execute_or_serialize(signer, tx_kind, context, None, opts.gas, opts.rest)
+                    .await?
             }
 
             SuiClientCommands::TransferSui {
@@ -1323,7 +1326,6 @@ impl SuiClientCommands {
                     signer,
                     tx_kind,
                     context,
-                    None,
                     None,
                     Some(object_id),
                     opts,
@@ -1371,10 +1373,8 @@ impl SuiClientCommands {
                     }
                 }
 
-                dry_run_or_execute_or_serialize(
-                    signer, tx_kind, context, None, None, opts.gas, opts.rest,
-                )
-                .await?
+                dry_run_or_execute_or_serialize(signer, tx_kind, context, None, opts.gas, opts.rest)
+                    .await?
             }
 
             SuiClientCommands::PaySui {
@@ -1416,7 +1416,6 @@ impl SuiClientCommands {
                     context,
                     Some(input_coins),
                     None,
-                    None,
                     opts,
                 )
                 .await?
@@ -1440,7 +1439,6 @@ impl SuiClientCommands {
                     tx_kind,
                     context,
                     Some(input_coins),
-                    None,
                     None,
                     opts,
                 )
@@ -1583,10 +1581,8 @@ impl SuiClientCommands {
                     .split_coin_tx_kind(coin_id, amounts, count)
                     .await?;
                 let signer = context.get_object_owner(&coin_id).await?;
-                dry_run_or_execute_or_serialize(
-                    signer, tx_kind, context, None, None, opts.gas, opts.rest,
-                )
-                .await?
+                dry_run_or_execute_or_serialize(signer, tx_kind, context, None, opts.gas, opts.rest)
+                    .await?
             }
             SuiClientCommands::MergeCoin {
                 primary_coin,
@@ -1600,10 +1596,8 @@ impl SuiClientCommands {
                     .merge_coins_tx_kind(primary_coin, coin_to_merge)
                     .await?;
 
-                dry_run_or_execute_or_serialize(
-                    signer, tx_kind, context, None, None, opts.gas, opts.rest,
-                )
-                .await?
+                dry_run_or_execute_or_serialize(signer, tx_kind, context, None, opts.gas, opts.rest)
+                    .await?
             }
             SuiClientCommands::Switch { address, env } => {
                 let mut addr = None;
@@ -2991,18 +2985,17 @@ pub async fn max_gas_budget(client: &SuiClient) -> Result<u64, anyhow::Error> {
 ///
 /// This basically extracts the logical code for each command that deals with dry run, executing,
 /// or serializing a transaction and puts it in a function to reduce code duplication.
-// TODO (stefan): Add gas_price option for all commands and remove it from this function
 pub(crate) async fn dry_run_or_execute_or_serialize(
     signer: SuiAddress,
     tx_kind: TransactionKind,
     context: &mut WalletContext,
     gas_payment: Option<Vec<ObjectID>>,
-    gas_price: Option<u64>,
     gas: Option<ObjectID>,
     opts: Opts,
 ) -> Result<SuiClientCommandResult, anyhow::Error> {
     let Opts {
         gas_budget,
+        gas_price,
         tx_digest,
         dry_run,
         dev_inspect,
@@ -3014,6 +3007,7 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         !serialize_unsigned_transaction || !serialize_signed_transaction,
         "Cannot specify both flags: --serialize-unsigned-transaction and --serialize-signed-transaction."
     );
+
     let gas_price = if let Some(gas_price) = gas_price {
         gas_price
     } else {
