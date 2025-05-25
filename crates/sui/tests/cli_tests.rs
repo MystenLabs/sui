@@ -531,7 +531,6 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
         function: "new_shared".to_string(),
         type_args: vec![],
         opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        gas_price: None,
         args: vec![],
     }
     .execute(context)
@@ -864,7 +863,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         type_args: vec![],
         args,
         opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
-        gas_price: None,
     }
     .execute(context)
     .await?;
@@ -901,7 +899,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         type_args: vec![],
         args: args.to_vec(),
         opts: OptsWithGas::for_testing(Some(gas), rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
-        gas_price: None,
     }
     .execute(context)
     .await;
@@ -925,7 +922,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         type_args: vec![],
         args: args.to_vec(),
         opts: OptsWithGas::for_testing(Some(gas), rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
-        gas_price: None,
     }
     .execute(context)
     .await;
@@ -945,8 +941,13 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         function: "transfer".to_string(),
         type_args: vec![],
         args: args.to_vec(),
-        opts: OptsWithGas::for_testing(Some(gas), rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
-        gas_price: Some(1),
+        opts: OptsWithGas {
+            gas: Some(gas),
+            rest: Opts {
+                gas_price: Some(1),
+                ..Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS)
+            },
+        },
     }
     .execute(context)
     .await;
@@ -973,7 +974,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         function: "transfer".to_string(),
         type_args: vec![],
         args: args.to_vec(),
-        gas_price: None,
         opts: OptsWithGas::for_testing(Some(gas), rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
     }
     .execute(context)
@@ -991,8 +991,13 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         function: "create".to_string(),
         type_args: vec![],
         args,
-        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
-        gas_price: Some(12345),
+        opts: OptsWithGas {
+            gas: None,
+            rest: Opts {
+                gas_price: Some(12345),
+                ..Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS)
+            },
+        },
     }
     .execute(context)
     .await?;
@@ -1222,7 +1227,6 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
         function: "start".to_string(),
         type_args: vec![],
         opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        gas_price: None,
         args: vec![],
     }
     .execute(context)
@@ -1242,7 +1246,6 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
         function: "delete".to_string(),
         type_args: vec![],
         opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        gas_price: None,
         args: vec![SuiJsonValue::from_str(&shared_id.to_string()).unwrap()],
     }
     .execute(context)
@@ -1327,7 +1330,6 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
         function: "start".to_string(),
         type_args: vec![],
         opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        gas_price: None,
         args: vec![],
     }
     .execute(context)
@@ -1364,7 +1366,6 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
         function: "receiver".to_string(),
         type_args: vec![],
         opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        gas_price: None,
         args: vec![
             SuiJsonValue::from_str(&parent.object_id.to_string()).unwrap(),
             SuiJsonValue::from_str(&child.object_id.to_string()).unwrap(),
@@ -1451,7 +1452,6 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
         module: "tto".to_string(),
         function: "start".to_string(),
         type_args: vec![],
-        gas_price: None,
         args: vec![],
         opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
@@ -1488,7 +1488,6 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
         module: "tto".to_string(),
         function: "invalid_call_immut_ref".to_string(),
         type_args: vec![],
-        gas_price: None,
         args: vec![
             SuiJsonValue::from_str(&parent.object_id.to_string()).unwrap(),
             SuiJsonValue::from_str(&child.object_id.to_string()).unwrap(),
@@ -1576,7 +1575,6 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
         module: "tto".to_string(),
         function: "start".to_string(),
         type_args: vec![],
-        gas_price: None,
         args: vec![],
         opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
@@ -1613,7 +1611,6 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
         module: "tto".to_string(),
         function: "invalid_call_mut_ref".to_string(),
         type_args: vec![],
-        gas_price: None,
         args: vec![
             SuiJsonValue::from_str(&parent.object_id.to_string()).unwrap(),
             SuiJsonValue::from_str(&child.object_id.to_string()).unwrap(),
@@ -3223,6 +3220,7 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
         amount: Some(1),
         opts: Opts {
             gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            gas_price: None,
             tx_digest: false,
             dry_run: false,
             dev_inspect: false,
@@ -3239,6 +3237,7 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
         amount: Some(1),
         opts: Opts {
             gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            gas_price: None,
             tx_digest: false,
             dry_run: false,
             dev_inspect: false,
@@ -3256,6 +3255,7 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
         amount: Some(1),
         opts: Opts {
             gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            gas_price: None,
             tx_digest: false,
             dry_run: false,
             dev_inspect: false,
@@ -4104,6 +4104,7 @@ async fn test_gas_estimation() -> Result<(), anyhow::Error> {
         amount: Some(amount),
         opts: Opts {
             gas_budget: None,
+            gas_price: None,
             tx_digest: false,
             dry_run: false,
             dev_inspect: false,
@@ -4208,7 +4209,6 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
         function: "aborter".to_string(),
         type_args: vec![],
         opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        gas_price: None,
         args: vec![],
     }
     .execute(context)
@@ -4222,7 +4222,6 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
         function: "aborter_line_no".to_string(),
         type_args: vec![],
         opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        gas_price: None,
         args: vec![],
     }
     .execute(context)
@@ -4236,7 +4235,6 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
         function: "clever_aborter".to_string(),
         type_args: vec![],
         opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        gas_price: None,
         args: vec![],
     }
     .execute(context)
@@ -4250,7 +4248,6 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
         function: "clever_aborter_not_a_string".to_string(),
         type_args: vec![],
         opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        gas_price: None,
         args: vec![],
     }
     .execute(context)
