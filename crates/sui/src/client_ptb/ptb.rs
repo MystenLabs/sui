@@ -211,15 +211,15 @@ impl PTB {
                 dry_run: program_metadata.dry_run_set,
                 dev_inspect: program_metadata.dev_inspect_set,
                 gas_budget: program_metadata.gas_budget.map(|x| x.value),
+                gas_price: None, // TODO (amnn): support gas price in PTB
                 serialize_unsigned_transaction: program_metadata.serialize_unsigned_set,
                 serialize_signed_transaction: program_metadata.serialize_signed_set,
             },
         };
 
-        let transaction_response = dry_run_or_execute_or_serialize(
-            sender, tx_kind, context, None, None, opts.gas, opts.rest,
-        )
-        .await?;
+        let transaction_response =
+            dry_run_or_execute_or_serialize(sender, tx_kind, context, None, opts.gas, opts.rest)
+                .await?;
 
         let transaction_response = match transaction_response {
             SuiClientCommandResult::ComputeTransactionDigest(_)
