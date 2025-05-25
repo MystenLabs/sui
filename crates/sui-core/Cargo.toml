@@ -98,6 +98,7 @@ clap.workspace = true
 criterion.workspace = true
 expect-test.workspace = true
 fs_extra.workspace = true
+insta.workspace = true
 more-asserts.workspace = true
 pretty_assertions.workspace = true
 rstest.workspace = true

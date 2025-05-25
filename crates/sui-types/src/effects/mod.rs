@@ -14,7 +14,7 @@ use crate::digests::{
 use crate::error::SuiResult;
 use crate::event::Event;
 use crate::execution::SharedInput;
-use crate::execution_status::ExecutionStatus;
+use crate::execution_status::{ExecutionStatus, MoveLocation};
 use crate::gas::GasCostSummary;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::object::Owner;
@@ -316,6 +316,7 @@ pub trait TransactionEffectsAPI {
     fn into_status(self) -> ExecutionStatus;
     fn executed_epoch(&self) -> EpochId;
     fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)>;
+    fn move_abort(&self) -> Option<(MoveLocation, u64)>;
 
     /// The version assigned to all output objects (apart from packages).
     fn lamport_version(&self) -> SequenceNumber;

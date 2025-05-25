@@ -25,6 +25,7 @@ json_to_table.workspace = true
 tabled.workspace = true
 
 move-binary-format.workspace = true
+move-command-line-common.workspace = true
 move-core-types.workspace = true
 move-bytecode-utils.workspace = true
 move-disassembler.workspace = true

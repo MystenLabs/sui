@@ -8991,6 +8991,39 @@
           }
         }
       },
+      "SuiMoveAbort": {
+        "type": "object",
+        "properties": {
+          "error_code": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "function": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "line": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "minimum": 0.0
+          },
+          "module_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "SuiMoveModuleId": {
         "type": "object",
         "required": [
@@ -10437,6 +10470,17 @@
               "transactionDigest"
             ],
             "properties": {
+              "abortError": {
+                "description": "The abort error populated if the transaction failed with an abort code.",
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SuiMoveAbort"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "created": {
                 "description": "ObjectRef and owner of new objects created.",
                 "type": "array",
