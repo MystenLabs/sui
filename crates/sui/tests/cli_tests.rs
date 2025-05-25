@@ -942,7 +942,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         type_args: vec![],
         args: args.to_vec(),
         opts: OptsWithGas {
-            gas: Some(gas),
+            gas: vec![gas],
             rest: Opts {
                 gas_price: Some(1),
                 ..Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS)
@@ -992,7 +992,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         type_args: vec![],
         args,
         opts: OptsWithGas {
-            gas: None,
+            gas: vec![],
             rest: Opts {
                 gas_price: Some(12345),
                 ..Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS)
@@ -4082,6 +4082,72 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
     } else {
         panic!("TransferSui test failed");
     }
+    Ok(())
+}
+
+#[sim_test]
+async fn test_transfer_gas_smash() -> Result<(), anyhow::Error> {
+    // Like `test_transfer` but using multiple gas objects.
+    let (mut test_cluster, client, rgp, objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let (object_id0, object_id1, object_id2) = (objects[0], objects[1], objects[2]);
+    let recipient1 = &recipients[0];
+    let address2 = addresses[0];
+    let context = &mut test_cluster.wallet;
+    let transfer = SuiClientCommands::Transfer {
+        to: KeyIdentity::Address(address2),
+        object_id: object_id1,
+        opts: OptsWithGas {
+            gas: vec![object_id0, object_id1],
+            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+        },
+    }
+    .execute(context)
+    .await;
+
+    // Overlap between the object being transferred and the gas objects should fail.
+    assert!(transfer.is_err());
+
+    let transfer = SuiClientCommands::Transfer {
+        to: recipient1.clone(),
+        object_id: object_id2,
+        opts: OptsWithGas {
+            gas: vec![object_id0, object_id1],
+            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+        },
+    }
+    .execute(context)
+    .await?;
+
+    // transfer command will transfer the object_id2 to address2, and use object_id0, and
+    // object_id1 as gas we check if object1 is owned by address 2 and the gas object used.
+    let SuiClientCommandResult::TransactionBlock(response) = transfer else {
+        panic!("Transfer test failed");
+    };
+
+    assert!(response.status_ok().unwrap());
+    assert_eq!(
+        response.effects.as_ref().unwrap().gas_object().object_id(),
+        object_id0
+    );
+    let objs_refs = client
+        .read_api()
+        .get_owned_objects(
+            address2,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::full_content(),
+            )),
+            None,
+            None,
+        )
+        .await?;
+    assert!(!objs_refs.has_next_page);
+    assert_eq!(objs_refs.data.len(), 1);
+    assert_eq!(
+        objs_refs.data.first().unwrap().object().unwrap().object_id,
+        object_id2
+    );
+
     Ok(())
 }
 

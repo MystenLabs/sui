@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    client_commands::{dry_run_or_execute_or_serialize, Opts, OptsWithGas, SuiClientCommandResult},
+    client_commands::{dry_run_or_execute_or_serialize, Opts, SuiClientCommandResult},
     client_ptb::{
         ast::{ParsedProgram, Program},
         builder::{resolve_package, PTBBuilder},
@@ -204,27 +204,25 @@ impl PTB {
             commands: ptb.commands,
         });
 
-        let opts = OptsWithGas {
-            gas: program_metadata.gas_object_id.map(|x| x.value),
-            rest: Opts {
-                tx_digest: program_metadata.tx_digest_set,
-                dry_run: program_metadata.dry_run_set,
-                dev_inspect: program_metadata.dev_inspect_set,
-                gas_budget: program_metadata.gas_budget.map(|x| x.value),
-                gas_price: None, // TODO (amnn): support gas price in PTB
-                serialize_unsigned_transaction: program_metadata.serialize_unsigned_set,
-                serialize_signed_transaction: program_metadata.serialize_signed_set,
-            },
+        // TODO (amnn): support multiple gas objects
+        let gas: Vec<_> = program_metadata
+            .gas_object_id
+            .into_iter()
+            .map(|x| x.value)
+            .collect();
+
+        let opts = Opts {
+            tx_digest: program_metadata.tx_digest_set,
+            dry_run: program_metadata.dry_run_set,
+            dev_inspect: program_metadata.dev_inspect_set,
+            gas_budget: program_metadata.gas_budget.map(|x| x.value),
+            gas_price: None, // TODO (amnn): support gas price in PTB
+            serialize_unsigned_transaction: program_metadata.serialize_unsigned_set,
+            serialize_signed_transaction: program_metadata.serialize_signed_set,
         };
 
-        let transaction_response = dry_run_or_execute_or_serialize(
-            sender,
-            tx_kind,
-            context,
-            opts.gas.into_iter().collect(),
-            opts.rest,
-        )
-        .await?;
+        let transaction_response =
+            dry_run_or_execute_or_serialize(sender, tx_kind, context, gas, opts).await?;
 
         let transaction_response = match transaction_response {
             SuiClientCommandResult::ComputeTransactionDigest(_)
