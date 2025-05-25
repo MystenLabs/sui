@@ -186,6 +186,7 @@ pub fn update_object_ref_for_testing(object_ref: ObjectRef) -> ObjectRef {
     )
 }
 
+#[derive(Debug, Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct FullObjectRef(pub FullObjectID, pub SequenceNumber, pub ObjectDigest);
 
 impl FullObjectRef {

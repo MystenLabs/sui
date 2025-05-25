@@ -1065,6 +1065,7 @@ mod test {
         shared_counter_max_tip: u64,
         expected_failure_weight: u32,
         expected_failure_config: ExpectedFailurePayloadCfg,
+        party_weight: u32,
     }
 
     impl Default for SimulatedLoadConfig {
@@ -1087,6 +1088,7 @@ mod test {
                 expected_failure_config: ExpectedFailurePayloadCfg {
                     failure_type: ExpectedFailureType::try_from(0).unwrap(),
                 },
+                party_weight: 0,
             }
         }
     }
@@ -1170,6 +1172,7 @@ mod test {
             expected_failure: config.expected_failure_weight,
             randomized_transaction: config.randomized_transaction_weight,
             slow: config.slow_weight,
+            party: config.party_weight,
         };
 
         let workload_config = WorkloadConfig {
