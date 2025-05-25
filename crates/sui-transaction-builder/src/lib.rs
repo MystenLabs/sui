@@ -104,11 +104,11 @@ impl TransactionBuilder {
         kind: TransactionKind,
         gas_budget: u64,
         gas_price: u64,
-        gas_payment: Option<Vec<ObjectID>>,
+        gas_payment: Vec<ObjectID>,
         gas_sponsor: Option<SuiAddress>,
     ) -> TransactionData {
         let gas_payment = self
-            .input_refs(gas_payment.unwrap_or_default().as_ref())
+            .input_refs(gas_payment.as_ref())
             .await
             .unwrap_or_default();
         let gas_sponsor = gas_sponsor.unwrap_or(sender);
