@@ -217,9 +217,14 @@ impl PTB {
             },
         };
 
-        let transaction_response =
-            dry_run_or_execute_or_serialize(sender, tx_kind, context, None, opts.gas, opts.rest)
-                .await?;
+        let transaction_response = dry_run_or_execute_or_serialize(
+            sender,
+            tx_kind,
+            context,
+            opts.gas.into_iter().collect(),
+            opts.rest,
+        )
+        .await?;
 
         let transaction_response = match transaction_response {
             SuiClientCommandResult::ComputeTransactionDigest(_)
