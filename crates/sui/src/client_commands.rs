@@ -616,6 +616,9 @@ pub struct Opts {
     /// dry run call.
     #[arg(long)]
     pub gas_budget: Option<u64>,
+    /// Compute the transaction digest and print it out, but do not execute the transaction.
+    #[arg(long)]
+    pub tx_digest: bool,
     /// Perform a dry run of the transaction, without executing it.
     #[arg(long)]
     pub dry_run: bool,
@@ -651,6 +654,7 @@ impl Opts {
     pub fn for_testing(gas_budget: u64) -> Self {
         Self {
             gas_budget: Some(gas_budget),
+            tx_digest: false,
             dry_run: false,
             dev_inspect: false,
             serialize_unsigned_transaction: false,
@@ -662,6 +666,7 @@ impl Opts {
     pub fn for_testing_dry_run(gas_budget: u64) -> Self {
         Self {
             gas_budget: Some(gas_budget),
+            tx_digest: false,
             dry_run: true,
             dev_inspect: false,
             serialize_unsigned_transaction: false,
@@ -2250,6 +2255,9 @@ impl Display for SuiClientCommandResult {
                 };
                 writeln!(writer, "{}", raw_object)?;
             }
+            SuiClientCommandResult::ComputeTransactionDigest(tx_data) => {
+                writeln!(writer, "{}", tx_data.digest())?;
+            }
             SuiClientCommandResult::SerializedUnsignedTransaction(tx_data) => {
                 writeln!(
                     writer,
@@ -2499,6 +2507,7 @@ impl SuiClientCommandResult {
             | SuiClientCommandResult::ActiveEnv(_)
             | SuiClientCommandResult::Addresses(_)
             | SuiClientCommandResult::Balance(_, _)
+            | SuiClientCommandResult::ComputeTransactionDigest(_)
             | SuiClientCommandResult::ChainIdentifier(_)
             | SuiClientCommandResult::DynamicFieldQuery(_)
             | SuiClientCommandResult::DevInspect(_)
@@ -2656,6 +2665,7 @@ pub enum SuiClientCommandResult {
     Addresses(AddressesOutput),
     Balance(Vec<(Option<SuiCoinMetadata>, Vec<Coin>)>, bool),
     ChainIdentifier(String),
+    ComputeTransactionDigest(TransactionData),
     DynamicFieldQuery(DynamicFieldPage),
     DryRun(DryRunTransactionBlockResponse),
     DevInspect(DevInspectResults),
@@ -2991,19 +3001,15 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
     gas: Option<ObjectID>,
     opts: Opts,
 ) -> Result<SuiClientCommandResult, anyhow::Error> {
-    let (
+    let Opts {
+        gas_budget,
+        tx_digest,
         dry_run,
         dev_inspect,
-        gas_budget,
         serialize_unsigned_transaction,
         serialize_signed_transaction,
-    ) = (
-        opts.dry_run,
-        opts.dev_inspect,
-        opts.gas_budget,
-        opts.serialize_unsigned_transaction,
-        opts.serialize_signed_transaction,
-    );
+    } = opts;
+
     ensure!(
         !serialize_unsigned_transaction || !serialize_signed_transaction,
         "Cannot specify both flags: --serialize-unsigned-transaction and --serialize-signed-transaction."
@@ -3084,6 +3090,8 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         Ok(SuiClientCommandResult::SerializedUnsignedTransaction(
             tx_data,
         ))
+    } else if tx_digest {
+        Ok(SuiClientCommandResult::ComputeTransactionDigest(tx_data))
     } else {
         let signature = context.config.keystore.sign_secure(
             &tx_data.sender(),

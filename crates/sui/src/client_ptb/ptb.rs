@@ -207,6 +207,7 @@ impl PTB {
         let opts = OptsWithGas {
             gas: program_metadata.gas_object_id.map(|x| x.value),
             rest: Opts {
+                tx_digest: program_metadata.tx_digest_set,
                 dry_run: program_metadata.dry_run_set,
                 dev_inspect: program_metadata.dev_inspect_set,
                 gas_budget: program_metadata.gas_budget.map(|x| x.value),
@@ -221,13 +222,11 @@ impl PTB {
         .await?;
 
         let transaction_response = match transaction_response {
-            SuiClientCommandResult::DryRun(_) => {
-                println!("{}", transaction_response);
-                return Ok(());
-            }
-            SuiClientCommandResult::SerializedUnsignedTransaction(_)
+            SuiClientCommandResult::ComputeTransactionDigest(_)
+            | SuiClientCommandResult::DryRun(_)
+            | SuiClientCommandResult::SerializedUnsignedTransaction(_)
             | SuiClientCommandResult::SerializedSignedTransaction(_) => {
-                println!("{}", transaction_response);
+                println!("{transaction_response}");
                 return Ok(());
             }
             SuiClientCommandResult::TransactionBlock(response) => response,
@@ -446,7 +445,11 @@ pub fn ptb_description() -> clap::Command {
         ).value_hint(ValueHint::DirPath))
         .arg(arg!(
             --"preview"
-            "Preview the list of PTB transactions instead of executing them."
+            "Instead of executing the transaction, preview its PTB commands."
+        ))
+        .arg(arg!(
+            --"tx-digest"
+            "Instead of executing the transaction, print its digest."
         ))
         .arg(arg!(
             --"serialize-unsigned-transaction"

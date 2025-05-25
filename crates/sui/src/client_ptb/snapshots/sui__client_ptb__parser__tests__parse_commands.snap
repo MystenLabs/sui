@@ -31,6 +31,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -73,6 +74,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -124,6 +126,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -194,6 +197,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -255,6 +259,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -331,6 +336,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -401,6 +407,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -462,6 +469,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -532,6 +540,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -593,6 +602,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -642,6 +652,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -710,6 +721,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -825,6 +837,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -917,6 +930,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -1009,6 +1023,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -1052,6 +1067,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -1120,6 +1136,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -1173,6 +1190,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -1226,6 +1244,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -1313,6 +1332,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -1372,6 +1392,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -1437,6 +1458,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -1471,6 +1493,7 @@ expression: parsed
                 },
             ),
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -1497,6 +1520,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -1523,6 +1547,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: true,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -1543,12 +1568,40 @@ expression: parsed
             warn_shadows_set: false,
         },
         ProgramMetadata {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            tx_digest_set: true,
+            dry_run_set: false,
+            dev_inspect_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 12,
+                        end: 26,
+                    },
+                    value: 1,
+                },
+            ),
+            mvr_names: {},
+        },
+    ),
+    (
+        Program {
+            commands: [],
+            warn_shadows_set: false,
+        },
+        ProgramMetadata {
             preview_set: true,
             summary_set: false,
             serialize_unsigned_set: false,
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -1575,6 +1628,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
