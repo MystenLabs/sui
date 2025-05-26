@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    client_commands::{dry_run_or_execute_or_serialize, Opts, SuiClientCommandResult},
+    client_commands::{
+        dry_run_or_execute_or_serialize, GasDataArgs, SuiClientCommandResult, TxProcessingArgs,
+    },
     client_ptb::{
         ast::{ParsedProgram, Program},
         builder::{resolve_package, PTBBuilder},
@@ -197,20 +199,30 @@ impl PTB {
             commands: ptb.commands,
         });
 
-        let opts = Opts {
+        let gas_data = GasDataArgs {
+            gas_budget: program_metadata.gas_budget.map(|x| x.value),
+            gas_price: None, // TODO (amnn): support gas price in PTB
+        };
+
+        let processing = TxProcessingArgs {
             tx_digest: program_metadata.tx_digest_set,
             dry_run: program_metadata.dry_run_set,
             dev_inspect: program_metadata.dev_inspect_set,
-            gas_budget: program_metadata.gas_budget.map(|x| x.value),
-            gas_price: None, // TODO (amnn): support gas price in PTB
             serialize_unsigned_transaction: program_metadata.serialize_unsigned_set,
             serialize_signed_transaction: program_metadata.serialize_signed_set,
         };
 
         let gas_payment = client.transaction_builder().input_refs(&gas).await?;
 
-        let transaction_response =
-            dry_run_or_execute_or_serialize(sender, tx_kind, context, gas_payment, opts).await?;
+        let transaction_response = dry_run_or_execute_or_serialize(
+            sender,
+            tx_kind,
+            context,
+            gas_payment,
+            gas_data,
+            processing,
+        )
+        .await?;
 
         let transaction_response = match transaction_response {
             SuiClientCommandResult::ComputeTransactionDigest(_)
