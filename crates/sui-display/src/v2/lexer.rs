@@ -352,6 +352,8 @@ impl fmt::Display for TokenSet<'_> {
             return write!(f, "nothing");
         }
 
+        // TODO: Keyword support.
+
         let (head, [tail]) = tokens.split_at(tokens.len() - 1) else {
             unreachable!("tail contains exactly one token");
         };
@@ -386,153 +388,123 @@ fn is_valid_decimal_byte(b: u8) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use insta::assert_snapshot;
     use Lexeme as L;
-    use Token as T;
+
+    fn lexemes(src: &str) -> String {
+        Lexer::new(src)
+            .map(|L(t, o, s)| format!("L({t:?}, {o:?}, {s:?})"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
 
     /// Simple test for a  raw literal string.
     #[test]
     fn test_all_text() {
-        let lexer = Lexer::new("foo bar");
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(lexemes, vec![L(T::Text, 0, "foo bar")]);
+        assert_snapshot!(lexemes("foo bar"), @r###"L(Text, 0, "foo bar")"###);
     }
 
     /// Escape sequences are all text, but they will be split into multiple tokens.
     #[test]
     fn test_escapes() {
-        let lexer = Lexer::new(r#"foo {{ar}}"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(
-            lexemes,
-            vec![
-                L(T::Text, 0, "foo "),
-                L(T::LLBrace, 5, "{"),
-                L(T::Text, 6, "ar"),
-                L(T::RRBrace, 9, "}"),
-            ]
-        );
+        assert_snapshot!(lexemes(r#"foo {{bar}}"#), @r###"
+        L(Text, 0, "foo ")
+        L(LLBrace, 5, "{")
+        L(Text, 6, "bar")
+        L(RRBrace, 10, "}")
+        "###);
     }
 
     /// Text inside braces is tokenized as if it's an expression.
     #[test]
     fn test_expressions() {
-        let lexer = Lexer::new(r#"foo {bar}"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(
-            lexemes,
-            vec![
-                L(T::Text, 0, "foo "),
-                L(T::LBrace, 4, "{"),
-                L(T::Ident, 5, "bar"),
-                L(T::RBrace, 8, "}"),
-            ],
-        );
+        assert_snapshot!(lexemes(r#"foo {bar}"#), @r###"
+        L(Text, 0, "foo ")
+        L(LBrace, 4, "{")
+        L(Ident, 5, "bar")
+        L(RBrace, 8, "}")
+        "###);
     }
 
     /// Expressions are tokenized to ignore whitespace.
     #[test]
     fn test_expression_whitespace() {
-        let lexer = Lexer::new(r#"foo {  bar   }"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(
-            lexemes,
-            vec![
-                L(T::Text, 0, "foo "),
-                L(T::LBrace, 4, "{"),
-                L(T::Whitespace, 5, "  "),
-                L(T::Ident, 7, "bar"),
-                L(T::Whitespace, 10, "   "),
-                L(T::RBrace, 13, "}"),
-            ],
-        );
+        assert_snapshot!(lexemes(r#"foo {  bar   }"#), @r###"
+        L(Text, 0, "foo ")
+        L(LBrace, 4, "{")
+        L(Whitespace, 5, "  ")
+        L(Ident, 7, "bar")
+        L(Whitespace, 10, "   ")
+        L(RBrace, 13, "}")
+        "###);
     }
 
     /// Field names are separated by dots in an expression.
     #[test]
     fn test_expression_dots() {
-        let lexer = Lexer::new(r#"foo {bar. baz  . qux}"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(
-            lexemes,
-            vec![
-                L(T::Text, 0, "foo "),
-                L(T::LBrace, 4, "{"),
-                L(T::Ident, 5, "bar"),
-                L(T::Dot, 8, "."),
-                L(T::Whitespace, 9, " "),
-                L(T::Ident, 10, "baz"),
-                L(T::Whitespace, 13, "  "),
-                L(T::Dot, 15, "."),
-                L(T::Whitespace, 16, " "),
-                L(T::Ident, 17, "qux"),
-                L(T::RBrace, 20, "}"),
-            ],
-        );
+        assert_snapshot!(lexemes(r#"foo {bar. baz  . qux}"#), @r###"
+        L(Text, 0, "foo ")
+        L(LBrace, 4, "{")
+        L(Ident, 5, "bar")
+        L(Dot, 8, ".")
+        L(Whitespace, 9, " ")
+        L(Ident, 10, "baz")
+        L(Whitespace, 13, "  ")
+        L(Dot, 15, ".")
+        L(Whitespace, 16, " ")
+        L(Ident, 17, "qux")
+        L(RBrace, 20, "}")
+        "###);
     }
 
     /// Multiple expressions test switching and back and forth between lexer modes.
     #[test]
     fn test_multiple_expressions() {
-        let lexer = Lexer::new(r#"foo {bar.baz} qux {quy.quz}"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(
-            lexemes,
-            vec![
-                L(T::Text, 0, "foo "),
-                L(T::LBrace, 4, "{"),
-                L(T::Ident, 5, "bar"),
-                L(T::Dot, 8, "."),
-                L(T::Ident, 9, "baz"),
-                L(T::RBrace, 12, "}"),
-                L(T::Text, 13, " qux "),
-                L(T::LBrace, 18, "{"),
-                L(T::Ident, 19, "quy"),
-                L(T::Dot, 22, "."),
-                L(T::Ident, 23, "quz"),
-                L(T::RBrace, 26, "}"),
-            ],
-        );
+        assert_snapshot!(lexemes(r#"foo {bar.baz} qux {quy.quz}"#), @r###"
+        L(Text, 0, "foo ")
+        L(LBrace, 4, "{")
+        L(Ident, 5, "bar")
+        L(Dot, 8, ".")
+        L(Ident, 9, "baz")
+        L(RBrace, 12, "}")
+        L(Text, 13, " qux ")
+        L(LBrace, 18, "{")
+        L(Ident, 19, "quy")
+        L(Dot, 22, ".")
+        L(Ident, 23, "quz")
+        L(RBrace, 26, "}")
+        "###);
     }
 
     /// The lexer will still tokenize curlies even if they are not balanced.
     #[test]
     fn test_unbalanced_curlies() {
-        let lexer = Lexer::new(r#"foo}{bar{}}"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(
-            lexemes,
-            vec![
-                L(T::Text, 0, "foo"),
-                L(T::RBrace, 3, "}"),
-                L(T::LBrace, 4, "{"),
-                L(T::Ident, 5, "bar"),
-                L(T::LBrace, 8, "{"),
-                L(T::RBrace, 9, "}"),
-                L(T::RBrace, 10, "}"),
-            ],
-        );
+        assert_snapshot!(lexemes(r#"foo}{bar{}}"#), @r###"
+        L(Text, 0, "foo")
+        L(RBrace, 3, "}")
+        L(LBrace, 4, "{")
+        L(Ident, 5, "bar")
+        L(LBrace, 8, "{")
+        L(RBrace, 9, "}")
+        L(RBrace, 10, "}")
+        "###);
     }
 
     /// Unexpected characters are tokenized so that the parser can produce an error.
     #[test]
     fn test_unexpected_characters() {
-        let lexer = Lexer::new(r#"anything goes {? % ! 🔥}"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(
-            lexemes,
-            vec![
-                L(T::Text, 0, "anything goes "),
-                L(T::LBrace, 14, "{"),
-                L(T::Unexpected, 15, "?"),
-                L(T::Whitespace, 16, " "),
-                L(T::Unexpected, 17, "%"),
-                L(T::Whitespace, 18, " "),
-                L(T::Unexpected, 19, "!"),
-                L(T::Whitespace, 20, " "),
-                L(T::Unexpected, 21, "🔥"),
-                L(T::RBrace, 25, "}"),
-            ],
-        );
+        assert_snapshot!(lexemes(r#"anything goes {? % ! 🔥}"#), @r###"
+        L(Text, 0, "anything goes ")
+        L(LBrace, 14, "{")
+        L(Unexpected, 15, "?")
+        L(Whitespace, 16, " ")
+        L(Unexpected, 17, "%")
+        L(Whitespace, 18, " ")
+        L(Unexpected, 19, "!")
+        L(Whitespace, 20, " ")
+        L(Unexpected, 21, "🔥")
+        L(RBrace, 25, "}")
+        "###);
     }
 
     // Escaped curlies shouldn't be tokenized greedily. '{{{' in text mode should be tokenized as
@@ -540,58 +512,48 @@ mod tests {
     // exercises these and similar cases.
     #[test]
     fn test_triple_curlies() {
-        let lexer = Lexer::new(r#"foo {{{bar} {baz}}} }}} { {{ } qux"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(
-            lexemes,
-            vec![
-                L(T::Text, 0, "foo "),
-                L(T::LLBrace, 5, "{"),
-                L(T::LBrace, 6, "{"),
-                L(T::Ident, 7, "bar"),
-                L(T::RBrace, 10, "}"),
-                L(T::Text, 11, " "),
-                L(T::LBrace, 12, "{"),
-                L(T::Ident, 13, "baz"),
-                L(T::RBrace, 16, "}"),
-                L(T::RRBrace, 18, "}"),
-                L(T::Text, 19, " "),
-                L(T::RRBrace, 21, "}"),
-                L(T::RBrace, 22, "}"),
-                L(T::Text, 23, " "),
-                L(T::LBrace, 24, "{"),
-                L(T::Whitespace, 25, " "),
-                L(T::LBrace, 26, "{"),
-                L(T::LBrace, 27, "{"),
-                L(T::Whitespace, 28, " "),
-                L(T::RBrace, 29, "}"),
-                L(T::Text, 30, " qux"),
-            ],
-        );
+        assert_snapshot!(lexemes(r#"foo {{{bar} {baz}}} }}} { {{ } qux"#), @r###"
+        L(Text, 0, "foo ")
+        L(LLBrace, 5, "{")
+        L(LBrace, 6, "{")
+        L(Ident, 7, "bar")
+        L(RBrace, 10, "}")
+        L(Text, 11, " ")
+        L(LBrace, 12, "{")
+        L(Ident, 13, "baz")
+        L(RBrace, 16, "}")
+        L(RRBrace, 18, "}")
+        L(Text, 19, " ")
+        L(RRBrace, 21, "}")
+        L(RBrace, 22, "}")
+        L(Text, 23, " ")
+        L(LBrace, 24, "{")
+        L(Whitespace, 25, " ")
+        L(LBrace, 26, "{")
+        L(LBrace, 27, "{")
+        L(Whitespace, 28, " ")
+        L(RBrace, 29, "}")
+        L(Text, 30, " qux")
+        "###);
     }
 
     /// Pipes separate top-level expressions, but are only parsed inside expressions, not inside
     /// text.
     #[test]
     fn test_alternates() {
-        let lexer = Lexer::new(r#"foo | {bar | baz.qux} | quy"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(
-            lexemes,
-            vec![
-                L(T::Text, 0, "foo | "),
-                L(T::LBrace, 6, "{"),
-                L(T::Ident, 7, "bar"),
-                L(T::Whitespace, 10, " "),
-                L(T::Pipe, 11, "|"),
-                L(T::Whitespace, 12, " "),
-                L(T::Ident, 13, "baz"),
-                L(T::Dot, 16, "."),
-                L(T::Ident, 17, "qux"),
-                L(T::RBrace, 20, "}"),
-                L(T::Text, 21, " | quy"),
-            ],
-        );
+        assert_snapshot!(lexemes(r#"foo | {bar | baz.qux} | quy"#), @r###"
+        L(Text, 0, "foo | ")
+        L(LBrace, 6, "{")
+        L(Ident, 7, "bar")
+        L(Whitespace, 10, " ")
+        L(Pipe, 11, "|")
+        L(Whitespace, 12, " ")
+        L(Ident, 13, "baz")
+        L(Dot, 16, ".")
+        L(Ident, 17, "qux")
+        L(RBrace, 20, "}")
+        L(Text, 21, " | quy")
+        "###);
     }
 
     // Display supports two kinds of index -- `foo[i]` and `bar[[j]]`. Unlike braces, doubly nested
@@ -599,255 +561,210 @@ mod tests {
     // uses significant whitespace to distinguish between two separate `]`'s vs a single `]]`.
     #[test]
     fn test_indices() {
-        let lexer = Lexer::new(r#"foo {bar[baz].qux[[quy]][quz]}"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(
-            lexemes,
-            vec![
-                L(T::Text, 0, "foo "),
-                L(T::LBrace, 4, "{"),
-                L(T::Ident, 5, "bar"),
-                L(T::LBracket, 8, "["),
-                L(T::Ident, 9, "baz"),
-                L(T::RBracket, 12, "]"),
-                L(T::Dot, 13, "."),
-                L(T::Ident, 14, "qux"),
-                L(T::LBracket, 17, "["),
-                L(T::LBracket, 18, "["),
-                L(T::Ident, 19, "quy"),
-                L(T::RBracket, 22, "]"),
-                L(T::RBracket, 23, "]"),
-                L(T::LBracket, 24, "["),
-                L(T::Ident, 25, "quz"),
-                L(T::RBracket, 28, "]"),
-                L(T::RBrace, 29, "}"),
-            ],
-        );
+        assert_snapshot!(lexemes(r#"foo {bar[baz].qux[[quy]][quz]}"#), @r###"
+        L(Text, 0, "foo ")
+        L(LBrace, 4, "{")
+        L(Ident, 5, "bar")
+        L(LBracket, 8, "[")
+        L(Ident, 9, "baz")
+        L(RBracket, 12, "]")
+        L(Dot, 13, ".")
+        L(Ident, 14, "qux")
+        L(LBracket, 17, "[")
+        L(LBracket, 18, "[")
+        L(Ident, 19, "quy")
+        L(RBracket, 22, "]")
+        L(RBracket, 23, "]")
+        L(LBracket, 24, "[")
+        L(Ident, 25, "quz")
+        L(RBracket, 28, "]")
+        L(RBrace, 29, "}")
+        "###);
     }
 
     /// Numbers can be represented in decimal or hexadecimal (prefixed with 0x).
     #[test]
     fn test_numeric_literals() {
-        let lexer = Lexer::new(r#"{123 0x123 def 0xdef}"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(
-            lexemes,
-            vec![
-                L(T::LBrace, 0, "{"),
-                L(T::NumDec, 1, "123"),
-                L(T::Whitespace, 4, " "),
-                L(T::NumHex, 7, "123"),
-                L(T::Whitespace, 10, " "),
-                L(T::Ident, 11, "def"),
-                L(T::Whitespace, 14, " "),
-                L(T::NumHex, 17, "def"),
-                L(T::RBrace, 20, "}"),
-            ],
-        );
+        assert_snapshot!(lexemes(r#"{123 0x123 def 0xdef}"#), @r###"
+        L(LBrace, 0, "{")
+        L(NumDec, 1, "123")
+        L(Whitespace, 4, " ")
+        L(NumHex, 7, "123")
+        L(Whitespace, 10, " ")
+        L(Ident, 11, "def")
+        L(Whitespace, 14, " ")
+        L(NumHex, 17, "def")
+        L(RBrace, 20, "}")
+        "###);
     }
 
     /// Numbers can optionally be grouped using underscores. Underscores cannot be trailing, but
     /// otherwise can appear in every position
     #[test]
     fn test_numeric_literal_underscores() {
-        let lexer = Lexer::new(r#"{123_456 0x12_ab_de _123}"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(
-            lexemes,
-            vec![
-                L(T::LBrace, 0, "{"),
-                L(T::NumDec, 1, "123_456"),
-                L(T::Whitespace, 8, " "),
-                L(T::NumHex, 11, "12_ab_de"),
-                L(T::Whitespace, 19, " "),
-                L(T::Unexpected, 20, "_"),
-                L(T::NumDec, 21, "123"),
-                L(T::RBrace, 24, "}"),
-            ],
-        );
+        assert_snapshot!(lexemes(r#"{123_456 0x12_ab_de _123}"#), @r###"
+        L(LBrace, 0, "{")
+        L(NumDec, 1, "123_456")
+        L(Whitespace, 8, " ")
+        L(NumHex, 11, "12_ab_de")
+        L(Whitespace, 19, " ")
+        L(Unexpected, 20, "_")
+        L(NumDec, 21, "123")
+        L(RBrace, 24, "}")
+        "###);
     }
 
     /// Address literals are numbers prefixed with '@' -- typically, they are hexadecimal numbers
     /// but both kinds are supported.
     #[test]
     fn test_address_literals() {
-        let lexer = Lexer::new(r#"{@123 @0x123}"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(
-            lexemes,
-            vec![
-                L(T::LBrace, 0, "{"),
-                L(T::At, 1, "@"),
-                L(T::NumDec, 2, "123"),
-                L(T::Whitespace, 5, " "),
-                L(T::At, 6, "@"),
-                L(T::NumHex, 9, "123"),
-                L(T::RBrace, 12, "}"),
-            ],
-        );
+        assert_snapshot!(lexemes(r#"{@123 @0x123}"#), @r###"
+        L(LBrace, 0, "{")
+        L(At, 1, "@")
+        L(NumDec, 2, "123")
+        L(Whitespace, 5, " ")
+        L(At, 6, "@")
+        L(NumHex, 9, "123")
+        L(RBrace, 12, "}")
+        "###);
     }
 
     /// If the hexadecimal token is incomplete, it is not recognised as a number.
     #[test]
     fn test_incomplete_hexadecimal() {
-        let lexer = Lexer::new(r#"{0x}"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(
-            lexemes,
-            vec![
-                L(T::LBrace, 0, "{"),
-                L(T::NumDec, 1, "0"),
-                L(T::Ident, 2, "x"),
-                L(T::RBrace, 3, "}"),
-            ],
-        );
+        assert_snapshot!(lexemes(r#"{0x}"#), @r###"
+        L(LBrace, 0, "{")
+        L(NumDec, 1, "0")
+        L(Ident, 2, "x")
+        L(RBrace, 3, "}")
+        "###);
     }
 
     /// Vector literals are always prefixed by the 'vector' keyword. Empty vectors must specify a
     /// type parameter (which is optional for non-empty vectors).
     #[test]
     fn test_vector_literals() {
-        let lexer = Lexer::new(r#"{vector[1, 2, 3] vector<u32> vector[4u64]}"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(
-            lexemes,
-            vec![
-                L(T::LBrace, 0, "{"),
-                L(T::Ident, 1, "vector"),
-                L(T::LBracket, 7, "["),
-                L(T::NumDec, 8, "1"),
-                L(T::Comma, 9, ","),
-                L(T::Whitespace, 10, " "),
-                L(T::NumDec, 11, "2"),
-                L(T::Comma, 12, ","),
-                L(T::Whitespace, 13, " "),
-                L(T::NumDec, 14, "3"),
-                L(T::RBracket, 15, "]"),
-                L(T::Whitespace, 16, " "),
-                L(T::Ident, 17, "vector"),
-                L(T::LAngle, 23, "<"),
-                L(T::Ident, 24, "u32"),
-                L(T::RAngle, 27, ">"),
-                L(T::Whitespace, 28, " "),
-                L(T::Ident, 29, "vector"),
-                L(T::LBracket, 35, "["),
-                L(T::NumDec, 36, "4"),
-                L(T::Ident, 37, "u64"),
-                L(T::RBracket, 40, "]"),
-                L(T::RBrace, 41, "}"),
-            ],
-        );
+        assert_snapshot!(lexemes(r#"{vector[1, 2, 3] vector<u32> vector[4u64]}"#), @r###"
+        L(LBrace, 0, "{")
+        L(Ident, 1, "vector")
+        L(LBracket, 7, "[")
+        L(NumDec, 8, "1")
+        L(Comma, 9, ",")
+        L(Whitespace, 10, " ")
+        L(NumDec, 11, "2")
+        L(Comma, 12, ",")
+        L(Whitespace, 13, " ")
+        L(NumDec, 14, "3")
+        L(RBracket, 15, "]")
+        L(Whitespace, 16, " ")
+        L(Ident, 17, "vector")
+        L(LAngle, 23, "<")
+        L(Ident, 24, "u32")
+        L(RAngle, 27, ">")
+        L(Whitespace, 28, " ")
+        L(Ident, 29, "vector")
+        L(LBracket, 35, "[")
+        L(NumDec, 36, "4")
+        L(Ident, 37, "u64")
+        L(RBracket, 40, "]")
+        L(RBrace, 41, "}")
+        "###);
     }
 
     /// Struct types are fully-qualified, with a numerical (hexadecimal) address.
     #[test]
     fn test_types() {
-        let lexer = Lexer::new(r#"{0x2::table::Table<address, 0x2::coin::Coin<0x2::sui::SUI>>}"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(
-            lexemes,
-            vec![
-                L(T::LBrace, 0, "{"),
-                L(T::NumHex, 3, "2"),
-                L(T::CColon, 4, "::"),
-                L(T::Ident, 6, "table"),
-                L(T::CColon, 11, "::"),
-                L(T::Ident, 13, "Table"),
-                L(T::LAngle, 18, "<"),
-                L(T::Ident, 19, "address"),
-                L(T::Comma, 26, ","),
-                L(T::Whitespace, 27, " "),
-                L(T::NumHex, 30, "2"),
-                L(T::CColon, 31, "::"),
-                L(T::Ident, 33, "coin"),
-                L(T::CColon, 37, "::"),
-                L(T::Ident, 39, "Coin"),
-                L(T::LAngle, 43, "<"),
-                L(T::NumHex, 46, "2"),
-                L(T::CColon, 47, "::"),
-                L(T::Ident, 49, "sui"),
-                L(T::CColon, 52, "::"),
-                L(T::Ident, 54, "SUI"),
-                L(T::RAngle, 57, ">"),
-                L(T::RAngle, 58, ">"),
-                L(T::RBrace, 59, "}"),
-            ],
-        );
+        assert_snapshot!(lexemes(r#"{0x2::table::Table<address, 0x2::coin::Coin<0x2::sui::SUI>>}"#), @r###"
+        L(LBrace, 0, "{")
+        L(NumHex, 3, "2")
+        L(CColon, 4, "::")
+        L(Ident, 6, "table")
+        L(CColon, 11, "::")
+        L(Ident, 13, "Table")
+        L(LAngle, 18, "<")
+        L(Ident, 19, "address")
+        L(Comma, 26, ",")
+        L(Whitespace, 27, " ")
+        L(NumHex, 30, "2")
+        L(CColon, 31, "::")
+        L(Ident, 33, "coin")
+        L(CColon, 37, "::")
+        L(Ident, 39, "Coin")
+        L(LAngle, 43, "<")
+        L(NumHex, 46, "2")
+        L(CColon, 47, "::")
+        L(Ident, 49, "sui")
+        L(CColon, 52, "::")
+        L(Ident, 54, "SUI")
+        L(RAngle, 57, ">")
+        L(RAngle, 58, ">")
+        L(RBrace, 59, "}")
+        "###);
     }
 
     /// A positional struct literal is a struct type followed by its (positional) fields, separated
     /// by commas, surrounded by parentheses.
     #[test]
     fn test_positional_struct_literals() {
-        let lexer = Lexer::new(r#"{0x2::balance::Balance<0x2::sui::SUI>(42u64)}"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(
-            lexemes,
-            vec![
-                L(T::LBrace, 0, "{"),
-                L(T::NumHex, 3, "2"),
-                L(T::CColon, 4, "::"),
-                L(T::Ident, 6, "balance"),
-                L(T::CColon, 13, "::"),
-                L(T::Ident, 15, "Balance"),
-                L(T::LAngle, 22, "<"),
-                L(T::NumHex, 25, "2"),
-                L(T::CColon, 26, "::"),
-                L(T::Ident, 28, "sui"),
-                L(T::CColon, 31, "::"),
-                L(T::Ident, 33, "SUI"),
-                L(T::RAngle, 36, ">"),
-                L(T::LParen, 37, "("),
-                L(T::NumDec, 38, "42"),
-                L(T::Ident, 40, "u64"),
-                L(T::RParen, 43, ")"),
-                L(T::RBrace, 44, "}"),
-            ],
-        );
+        assert_snapshot!(lexemes(r#"{0x2::balance::Balance<0x2::sui::SUI>(42u64)}"#), @r###"
+        L(LBrace, 0, "{")
+        L(NumHex, 3, "2")
+        L(CColon, 4, "::")
+        L(Ident, 6, "balance")
+        L(CColon, 13, "::")
+        L(Ident, 15, "Balance")
+        L(LAngle, 22, "<")
+        L(NumHex, 25, "2")
+        L(CColon, 26, "::")
+        L(Ident, 28, "sui")
+        L(CColon, 31, "::")
+        L(Ident, 33, "SUI")
+        L(RAngle, 36, ">")
+        L(LParen, 37, "(")
+        L(NumDec, 38, "42")
+        L(Ident, 40, "u64")
+        L(RParen, 43, ")")
+        L(RBrace, 44, "}")
+        "###);
     }
 
     /// Struct literals can also include field names -- these are purely informational, they don't
     /// affect the encoded output.
     #[test]
     fn test_struct_literals() {
-        let lexer = Lexer::new(r#"{0x2::coin::Coin<0x2::sui::SUI> { id: @0x123, value: 42u64 }}"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(
-            lexemes,
-            vec![
-                L(T::LBrace, 0, "{"),
-                L(T::NumHex, 3, "2"),
-                L(T::CColon, 4, "::"),
-                L(T::Ident, 6, "coin"),
-                L(T::CColon, 10, "::"),
-                L(T::Ident, 12, "Coin"),
-                L(T::LAngle, 16, "<"),
-                L(T::NumHex, 19, "2"),
-                L(T::CColon, 20, "::"),
-                L(T::Ident, 22, "sui"),
-                L(T::CColon, 25, "::"),
-                L(T::Ident, 27, "SUI"),
-                L(T::RAngle, 30, ">"),
-                L(T::Whitespace, 31, " "),
-                L(T::LBrace, 32, "{"),
-                L(T::Whitespace, 33, " "),
-                L(T::Ident, 34, "id"),
-                L(T::Colon, 36, ":"),
-                L(T::Whitespace, 37, " "),
-                L(T::At, 38, "@"),
-                L(T::NumHex, 41, "123"),
-                L(T::Comma, 44, ","),
-                L(T::Whitespace, 45, " "),
-                L(T::Ident, 46, "value"),
-                L(T::Colon, 51, ":"),
-                L(T::Whitespace, 52, " "),
-                L(T::NumDec, 53, "42"),
-                L(T::Ident, 55, "u64"),
-                L(T::Whitespace, 58, " "),
-                L(T::RBrace, 59, "}"),
-                L(T::RBrace, 60, "}"),
-            ],
-        );
+        assert_snapshot!(lexemes(r#"{0x2::coin::Coin<0x2::sui::SUI> { id: @0x123, value: 42u64 }}"#), @r###"
+        L(LBrace, 0, "{")
+        L(NumHex, 3, "2")
+        L(CColon, 4, "::")
+        L(Ident, 6, "coin")
+        L(CColon, 10, "::")
+        L(Ident, 12, "Coin")
+        L(LAngle, 16, "<")
+        L(NumHex, 19, "2")
+        L(CColon, 20, "::")
+        L(Ident, 22, "sui")
+        L(CColon, 25, "::")
+        L(Ident, 27, "SUI")
+        L(RAngle, 30, ">")
+        L(Whitespace, 31, " ")
+        L(LBrace, 32, "{")
+        L(Whitespace, 33, " ")
+        L(Ident, 34, "id")
+        L(Colon, 36, ":")
+        L(Whitespace, 37, " ")
+        L(At, 38, "@")
+        L(NumHex, 41, "123")
+        L(Comma, 44, ",")
+        L(Whitespace, 45, " ")
+        L(Ident, 46, "value")
+        L(Colon, 51, ":")
+        L(Whitespace, 52, " ")
+        L(NumDec, 53, "42")
+        L(Ident, 55, "u64")
+        L(Whitespace, 58, " ")
+        L(RBrace, 59, "}")
+        L(RBrace, 60, "}")
+        "###);
     }
 
     /// Enums are like structs but with an additional variant component. The variant must at least
@@ -855,93 +772,75 @@ mod tests {
     /// relevant for documentation purposes (it does not affect the encoding).
     #[test]
     fn test_enum_literals() {
-        let lexer =
-            Lexer::new(r#"{0x2::option::Option<u64>::1(42) 0x2::option::Option<u64>::Some#1(43)}"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(
-            lexemes,
-            vec![
-                L(T::LBrace, 0, "{"),
-                L(T::NumHex, 3, "2"),
-                L(T::CColon, 4, "::"),
-                L(T::Ident, 6, "option"),
-                L(T::CColon, 12, "::"),
-                L(T::Ident, 14, "Option"),
-                L(T::LAngle, 20, "<"),
-                L(T::Ident, 21, "u64"),
-                L(T::RAngle, 24, ">"),
-                L(T::CColon, 25, "::"),
-                L(T::NumDec, 27, "1"),
-                L(T::LParen, 28, "("),
-                L(T::NumDec, 29, "42"),
-                L(T::RParen, 31, ")"),
-                L(T::Whitespace, 32, " "),
-                L(T::NumHex, 35, "2"),
-                L(T::CColon, 36, "::"),
-                L(T::Ident, 38, "option"),
-                L(T::CColon, 44, "::"),
-                L(T::Ident, 46, "Option"),
-                L(T::LAngle, 52, "<"),
-                L(T::Ident, 53, "u64"),
-                L(T::RAngle, 56, ">"),
-                L(T::CColon, 57, "::"),
-                L(T::Ident, 59, "Some"),
-                L(T::Pound, 63, "#"),
-                L(T::NumDec, 64, "1"),
-                L(T::LParen, 65, "("),
-                L(T::NumDec, 66, "43"),
-                L(T::RParen, 68, ")"),
-                L(T::RBrace, 69, "}"),
-            ],
-        );
+        assert_snapshot!(lexemes(r#"{0x2::option::Option<u64>::1(42) 0x2::option::Option<u64>::Some#1(43)}"#), @r###"
+        L(LBrace, 0, "{")
+        L(NumHex, 3, "2")
+        L(CColon, 4, "::")
+        L(Ident, 6, "option")
+        L(CColon, 12, "::")
+        L(Ident, 14, "Option")
+        L(LAngle, 20, "<")
+        L(Ident, 21, "u64")
+        L(RAngle, 24, ">")
+        L(CColon, 25, "::")
+        L(NumDec, 27, "1")
+        L(LParen, 28, "(")
+        L(NumDec, 29, "42")
+        L(RParen, 31, ")")
+        L(Whitespace, 32, " ")
+        L(NumHex, 35, "2")
+        L(CColon, 36, "::")
+        L(Ident, 38, "option")
+        L(CColon, 44, "::")
+        L(Ident, 46, "Option")
+        L(LAngle, 52, "<")
+        L(Ident, 53, "u64")
+        L(RAngle, 56, ">")
+        L(CColon, 57, "::")
+        L(Ident, 59, "Some")
+        L(Pound, 63, "#")
+        L(NumDec, 64, "1")
+        L(LParen, 65, "(")
+        L(NumDec, 66, "43")
+        L(RParen, 68, ")")
+        L(RBrace, 69, "}")
+        "###);
     }
 
     /// Tokenizing three kinds of string literals hex, binary, and regular.
     #[test]
     fn string_literals() {
-        let lexer = Lexer::new(r#"{x'0f00' b'bar' 'baz'}"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(
-            lexemes,
-            vec![
-                L(T::LBrace, 0, "{"),
-                L(T::Ident, 1, "x"),
-                L(T::String, 3, "0f00"),
-                L(T::Whitespace, 8, " "),
-                L(T::Ident, 9, "b"),
-                L(T::String, 11, "bar"),
-                L(T::Whitespace, 15, " "),
-                L(T::String, 17, "baz"),
-                L(T::RBrace, 21, "}"),
-            ],
-        );
+        assert_snapshot!(lexemes(r#"{x'0f00' b'bar' 'baz'}"#), @r###"
+        L(LBrace, 0, "{")
+        L(Ident, 1, "x")
+        L(String, 3, "0f00")
+        L(Whitespace, 8, " ")
+        L(Ident, 9, "b")
+        L(String, 11, "bar")
+        L(Whitespace, 15, " ")
+        L(String, 17, "baz")
+        L(RBrace, 21, "}")
+        "###);
     }
 
     /// Make sure the string does not stop early on an escaped quote, it's fine to escape random
     /// characters, and an escaped backslash does not eat the closing quote.
     #[test]
     fn test_string_literal_escapes() {
-        let lexer = Lexer::new(r#"{'\' \x \\'}"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(
-            lexemes,
-            vec![
-                L(T::LBrace, 0, "{"),
-                L(T::String, 2, r#"\' \x \\"#),
-                L(T::RBrace, 11, "}"),
-            ],
-        );
+        assert_snapshot!(lexemes(r#"{'\' \x \\'}"#), @r###"
+        L(LBrace, 0, "{")
+        L(String, 2, "\\' \\x \\\\")
+        L(RBrace, 11, "}")
+        "###);
     }
 
     /// If the string literal is not closed, the whole sequence is treated as an "unexpected"
     /// token.
     #[test]
     fn test_string_literal_trailing() {
-        let lexer = Lexer::new(r#"{'foo bar}"#);
-        let lexemes: Vec<_> = lexer.collect();
-        assert_eq!(
-            lexemes,
-            vec![L(T::LBrace, 0, "{"), L(T::Unexpected, 1, "'foo bar}"),]
-        );
+        assert_snapshot!(lexemes(r#"{'foo bar}"#), @r###"
+        L(LBrace, 0, "{")
+        L(Unexpected, 1, "'foo bar}")
+        "###);
     }
 }
