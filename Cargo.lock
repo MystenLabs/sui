@@ -13949,6 +13949,7 @@ name = "sui-display"
 version = "1.54.0"
 dependencies = [
  "anyhow",
+ "insta",
  "move-core-types",
  "sui-json-rpc-types",
  "sui-types",
