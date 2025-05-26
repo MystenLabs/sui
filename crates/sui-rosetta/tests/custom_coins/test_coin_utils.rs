@@ -152,17 +152,14 @@ pub async fn init_package(
         .await?;
 
     let gas_data = select_gas(client, sender, None, None, vec![], None).await?;
-    let tx_data = client
-        .transaction_builder()
-        .tx_data(
-            sender,
-            tx_kind,
-            gas_data.budget,
-            gas_data.price,
-            vec![gas_data.object.0],
-            None,
-        )
-        .await?;
+    let tx_data = TransactionData::new_with_gas_coins_allow_sponsor(
+        tx_kind,
+        sender,
+        vec![gas_data.object],
+        gas_data.budget,
+        gas_data.price,
+        sender,
+    );
 
     let sig = keystore.sign_secure(&tx_data.sender(), &tx_data, Intent::sui_transaction())?;
 
