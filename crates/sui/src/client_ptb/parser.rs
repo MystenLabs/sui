@@ -46,6 +46,7 @@ struct ProgramParsingState {
     dev_inspect_set: bool,
     gas_object_id: Option<Spanned<ObjectID>>,
     gas_budget: Option<Spanned<u64>>,
+    gas_price: Option<Spanned<u64>>,
 }
 
 macro_rules! mvr_ident {
@@ -77,6 +78,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 dev_inspect_set: false,
                 gas_object_id: None,
                 gas_budget: None,
+                gas_price: None,
             },
         })
     }
@@ -130,17 +132,36 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                     let specifier = try_!(self.parse_gas_specifier());
                     self.state.gas_object_id = Some(specifier);
                 }
+
                 L(T::Command, A::GAS_BUDGET) => {
-                    let budget = try_!(self.parse_gas_budget()).widen_span(sp);
+                    let budget = try_!(self.parse_gas_denomination()).widen_span(sp);
                     if let Some(other) = self.state.gas_budget.replace(budget) {
                         self.state.errors.extend([
                             err!(
                                 other.span,
                                 "Multiple gas budgets found. Gas budget first set here.",
                             ),
-                            err!(budget.span => help: {
-                                "PTBs must have exactly one gas budget set."
-                            },"Budget set again here."),
+                            err!(
+                                budget.span => help: { "PTBs must have exactly one gas budget set." },
+                                "Budget set again here."
+                            ),
+                        ]);
+                        self.fast_forward_to_next_command();
+                    }
+                }
+
+                L(T::Command, A::GAS_PRICE) => {
+                    let price = try_!(self.parse_gas_denomination()).widen_span(sp);
+                    if let Some(other) = self.state.gas_price.replace(price) {
+                        self.state.errors.extend([
+                            err!(
+                                other.span,
+                                "Multiple gas prices found. Gas price first set here.",
+                            ),
+                            err!(
+                                price.span => help: { "PTBs must have at most one gas price set." },
+                                "Price set again here."
+                            ),
                         ]);
                         self.fast_forward_to_next_command();
                     }
@@ -224,6 +245,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                     dry_run_set: self.state.dry_run_set,
                     dev_inspect_set: self.state.dev_inspect_set,
                     gas_budget: self.state.gas_budget,
+                    gas_price: self.state.gas_price,
                     mvr_names: self.state.mvr_names_with_span,
                 },
             ))
@@ -372,9 +394,8 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         Ok(sp.wrap(ParsedPTBCommand::MoveCall(function, ty_args, args)))
     }
 
-    /// Parse a gas-budget command.
-    /// The expected format is: `--gas-budget <u64>`
-    fn parse_gas_budget(&mut self) -> PTBResult<Spanned<u64>> {
+    /// Parse a quantity of gas, as a numeric literal that is or can be inferred to be a u64.
+    fn parse_gas_denomination(&mut self) -> PTBResult<Spanned<u64>> {
         Ok(match self.parse_argument()? {
             sp!(sp, Argument::U64(u)) => sp.wrap(u),
             sp!(sp, Argument::InferredNum(n)) => {
@@ -1059,8 +1080,10 @@ mod tests {
             "--assign a vector[1, 2, 3]",
             "--assign a none",
             "--assign a some(1)",
-            // Gas-coin
+            // Gas coin
             "--gas-coin @0x1",
+            // Gas price
+            "--gas-price 1000",
             "--summary",
             "--json",
             "--tx-digest",
@@ -1123,11 +1146,16 @@ mod tests {
             "--gas-budget [1]",
             "--gas-budget @0x1",
             "--gas-budget woah",
-            // Gas-coin
+            // Gas coin
             "--gas-coin nope",
             "--gas-coin",
             "--gas-coin @0x1 @0x2",
             "--gas-coin 1",
+            // Gas price
+            "--gas-price nuhuh",
+            "--gas-price [1, 2, 3]",
+            "--gas-price @0x2",
+            "--gas-price 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
         ];
         let mut parsed = Vec::new();
         for input in inputs {
