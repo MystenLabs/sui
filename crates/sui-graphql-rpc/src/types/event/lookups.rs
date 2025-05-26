@@ -120,9 +120,17 @@ pub(crate) fn add_bounds(
     mut query: RawQuery,
     tx_digest_filter: &Option<Digest>,
     page: &Page<Cursor>,
+    tx_lo: i64,
     tx_hi: i64,
 ) -> RawQuery {
-    query = filter!(query, format!("tx_sequence_number < {}", tx_hi));
+    // Temporally bounds the query to the unpruned data range
+    query = filter!(
+        query,
+        format!(
+            "tx_sequence_number >= {} AND tx_sequence_number < {}",
+            tx_lo, tx_hi
+        )
+    );
 
     if let Some(after) = page.after() {
         query = filter!(
