@@ -997,6 +997,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         gas_data: GasDataArgs {
             gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
             gas_price: Some(1),
+            ..Default::default()
         },
         processing: TxProcessingArgs::default(),
     }
@@ -1051,6 +1052,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         gas_data: GasDataArgs {
             gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
             gas_price: Some(12345),
+            ..Default::default()
         },
         processing: TxProcessingArgs::default(),
     }
@@ -4500,6 +4502,64 @@ async fn test_transfer_gas_smash() -> Result<(), anyhow::Error> {
         objs_refs.data.first().unwrap().object().unwrap().object_id,
         object_id2
     );
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_transfer_sponsored() -> Result<(), anyhow::Error> {
+    // Like `test_transfer` but the gas is sponsored by the recipient.
+    let (mut cluster, _, rgp, o, _, _) = test_cluster_helper().await;
+    let a0 = cluster.get_address_0();
+    let a1 = cluster.get_address_1();
+    let context = &mut cluster.wallet;
+
+    // A0 sends O1 to A1
+    let transfer = SuiClientCommands::TransferSui {
+        to: KeyIdentity::Address(a1),
+        sui_coin_object_id: o[1],
+        amount: None,
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(response) = transfer else {
+        panic!("Failed to set-up test")
+    };
+
+    assert_eq!(response.status_ok(), Some(true));
+
+    // A1 sends 01 back to A0, but sponsored by A0.
+    let transfer_back = SuiClientCommands::Transfer {
+        to: KeyIdentity::Address(a0),
+        object_id: o[1],
+        payment: PaymentArgs::default(),
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            gas_sponsor: Some(a0),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(response) = transfer_back else {
+        panic!("Failed to run sponsored transfer")
+    };
+
+    let Some(tx) = &response.transaction else {
+        panic!("TransactionBlock response should contain a transaction");
+    };
+
+    assert_eq!(response.status_ok(), Some(true));
+    assert_eq!(tx.data.gas_data().owner, a0);
+    assert_eq!(tx.data.sender(), &a1);
 
     Ok(())
 }
