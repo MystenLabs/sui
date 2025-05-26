@@ -167,7 +167,13 @@ pub enum SuiClientCommands {
         args: Vec<SuiJsonValue>,
 
         #[clap(flatten)]
-        opts: OptsWithGas,
+        payment: PaymentArgs,
+
+        #[clap(flatten)]
+        gas_data: GasDataArgs,
+
+        #[clap(flatten)]
+        processing: TxProcessingArgs,
     },
 
     /// Query the chain identifier from the rpc endpoint.
@@ -238,8 +244,15 @@ pub enum SuiClientCommands {
         /// The address of the coin to be merged.
         #[clap(long)]
         coin_to_merge: ObjectID,
+
         #[clap(flatten)]
-        opts: OptsWithGas,
+        payment: PaymentArgs,
+
+        #[clap(flatten)]
+        gas_data: GasDataArgs,
+
+        #[clap(flatten)]
+        processing: TxProcessingArgs,
     },
 
     /// Generate new address and keypair with keypair scheme flag {ed25519 | secp256k1 | secp256r1}
@@ -305,7 +318,13 @@ pub enum SuiClientCommands {
         amounts: Vec<u64>,
 
         #[clap(flatten)]
-        opts: OptsWithGas,
+        payment: PaymentArgs,
+
+        #[clap(flatten)]
+        gas_data: GasDataArgs,
+
+        #[clap(flatten)]
+        processing: TxProcessingArgs,
     },
 
     /// Pay all residual SUI coins to the recipient with input coins, after deducting the gas cost.
@@ -320,7 +339,10 @@ pub enum SuiClientCommands {
         recipient: KeyIdentity,
 
         #[clap(flatten)]
-        opts: Opts,
+        gas_data: GasDataArgs,
+
+        #[clap(flatten)]
+        processing: TxProcessingArgs,
     },
 
     /// Pay SUI coins to recipients following following specified amounts, with input coins.
@@ -341,7 +363,10 @@ pub enum SuiClientCommands {
         amounts: Vec<u64>,
 
         #[clap(flatten)]
-        opts: Opts,
+        gas_data: GasDataArgs,
+
+        #[clap(flatten)]
+        processing: TxProcessingArgs,
     },
 
     /// Run a PTB from the provided args
@@ -359,9 +384,6 @@ pub enum SuiClientCommands {
         #[clap(flatten)]
         build_config: MoveBuildConfig,
 
-        #[clap(flatten)]
-        opts: OptsWithGas,
-
         /// Publish the package without checking whether dependency source code compiles to the
         /// on-chain bytecode
         #[clap(long)]
@@ -375,6 +397,15 @@ pub enum SuiClientCommands {
         /// Also publish transitive dependencies that have not already been published.
         #[clap(long)]
         with_unpublished_dependencies: bool,
+
+        #[clap(flatten)]
+        payment: PaymentArgs,
+
+        #[clap(flatten)]
+        gas_data: GasDataArgs,
+
+        #[clap(flatten)]
+        processing: TxProcessingArgs,
     },
 
     /// Split a coin object into multiple coins.
@@ -389,8 +420,15 @@ pub enum SuiClientCommands {
         /// Count of equal-size coins to split into
         #[clap(long)]
         count: Option<u64>,
+
         #[clap(flatten)]
-        opts: OptsWithGas,
+        payment: PaymentArgs,
+
+        #[clap(flatten)]
+        gas_data: GasDataArgs,
+
+        #[clap(flatten)]
+        processing: TxProcessingArgs,
     },
 
     /// Switch active address and network(e.g., devnet, local rpc server).
@@ -426,7 +464,13 @@ pub enum SuiClientCommands {
         object_id: ObjectID,
 
         #[clap(flatten)]
-        opts: OptsWithGas,
+        payment: PaymentArgs,
+
+        #[clap(flatten)]
+        gas_data: GasDataArgs,
+
+        #[clap(flatten)]
+        processing: TxProcessingArgs,
     },
 
     /// Transfer SUI, and pay gas with the same SUI coin object.
@@ -447,7 +491,10 @@ pub enum SuiClientCommands {
         amount: Option<u64>,
 
         #[clap(flatten)]
-        opts: Opts,
+        gas_data: GasDataArgs,
+
+        #[clap(flatten)]
+        processing: TxProcessingArgs,
     },
 
     /// Upgrade Move modules
@@ -464,9 +511,6 @@ pub enum SuiClientCommands {
         /// Package build options
         #[clap(flatten)]
         build_config: MoveBuildConfig,
-
-        #[clap(flatten)]
-        opts: OptsWithGas,
 
         /// Verify package compatibility locally before publishing.
         #[clap(long)]
@@ -485,6 +529,15 @@ pub enum SuiClientCommands {
         /// Also publish transitive dependencies that have not already been published.
         #[clap(long)]
         with_unpublished_dependencies: bool,
+
+        #[clap(flatten)]
+        payment: PaymentArgs,
+
+        #[clap(flatten)]
+        gas_data: GasDataArgs,
+
+        #[clap(flatten)]
+        processing: TxProcessingArgs,
     },
 
     /// Run the bytecode verifier on the package
@@ -605,9 +658,18 @@ pub enum SuiClientCommands {
     },
 }
 
-/// Global options for most transaction execution related commands
-#[derive(Args, Debug)]
-pub struct Opts {
+/// Arguments related to providing coins for gas payment
+#[derive(Args, Debug, Default)]
+pub struct PaymentArgs {
+    /// IDs of gas objects to be used for gas payment. If none are provided, coins are selected
+    /// automatically to cover the gas budget.
+    #[clap(long, num_args(1..))]
+    pub gas: Vec<ObjectID>,
+}
+
+/// Arguments related to setting gas data, apart from payment coins.
+#[derive(Args, Debug, Default)]
+pub struct GasDataArgs {
     /// An optional gas budget for this transaction (in MIST). If gas budget is not provided, the
     /// tool will first perform a dry run to estimate the gas cost, and then it will execute the
     /// transaction. Please note that this incurs a small cost in performance due to the additional
@@ -623,6 +685,11 @@ pub struct Opts {
     /// transaction accesses the shared object sooner.
     #[arg(long)]
     pub gas_price: Option<u64>,
+}
+
+/// Arguments related to what to do to a transaction after it has been built.
+#[derive(Args, Debug, Default)]
+pub struct TxProcessingArgs {
     /// Compute the transaction digest and print it out, but do not execute the transaction.
     #[arg(long)]
     pub tx_digest: bool,
@@ -635,72 +702,14 @@ pub struct Opts {
     /// Instead of executing the transaction, serialize the bcs bytes of the unsigned transaction data
     /// (TransactionData) using base64 encoding, and print out the string <TX_BYTES>. The string can
     /// be used to execute transaction with `sui client execute-signed-tx --tx-bytes <TX_BYTES>`.
-    #[arg(long, required = false)]
+    #[arg(long)]
     pub serialize_unsigned_transaction: bool,
     /// Instead of executing the transaction, serialize the bcs bytes of the signed transaction data
     /// (SenderSignedData) using base64 encoding, and print out the string <SIGNED_TX_BYTES>. The
     /// string can be used to execute transaction with
     /// `sui client execute-combined-signed-tx --signed-tx-bytes <SIGNED_TX_BYTES>`.
-    #[arg(long, required = false)]
+    #[arg(long)]
     pub serialize_signed_transaction: bool,
-}
-
-/// Global options with gas
-#[derive(Args, Debug)]
-pub struct OptsWithGas {
-    /// IDs of gas objects to be used for gas payment. If none are provided, coins are selected
-    /// automatically to cover the gas budget.
-    #[clap(long, num_args(1..))]
-    pub gas: Vec<ObjectID>,
-    #[clap(flatten)]
-    pub rest: Opts,
-}
-
-impl Opts {
-    /// Uses the passed gas_budget for the gas budget variable and sets all other flags to false.
-    pub fn for_testing(gas_budget: u64) -> Self {
-        Self {
-            gas_budget: Some(gas_budget),
-            gas_price: None,
-            tx_digest: false,
-            dry_run: false,
-            dev_inspect: false,
-            serialize_unsigned_transaction: false,
-            serialize_signed_transaction: false,
-        }
-    }
-    /// Uses the passed gas_budget for the gas budget variable, sets dry run to true,
-    /// and sets all other flags to false.
-    pub fn for_testing_dry_run(gas_budget: u64) -> Self {
-        Self {
-            gas_budget: Some(gas_budget),
-            gas_price: None,
-            tx_digest: false,
-            dry_run: true,
-            dev_inspect: false,
-            serialize_unsigned_transaction: false,
-            serialize_signed_transaction: false,
-        }
-    }
-}
-
-impl OptsWithGas {
-    /// Sets the gas object to gas, and uses the passed gas_budget for the gas budget variable.
-    /// All other flags are set to false.
-    pub fn for_testing(gas: Option<ObjectID>, gas_budget: u64) -> Self {
-        Self {
-            gas: gas.into_iter().collect(),
-            rest: Opts::for_testing(gas_budget),
-        }
-    }
-    /// Sets the gas object to gas, and uses the passed gas_budget for the gas budget variable.
-    /// Dry run is set to true, all other flags to false.
-    pub fn for_testing_dry_run(gas: Option<ObjectID>, gas_budget: u64) -> Self {
-        Self {
-            gas: gas.into_iter().collect(),
-            rest: Opts::for_testing_dry_run(gas_budget),
-        }
-    }
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -907,9 +916,11 @@ impl SuiClientCommands {
                 verify_deps,
                 verify_compatibility,
                 with_unpublished_dependencies,
-                opts,
+                payment,
+                gas_data,
+                processing,
             } => {
-                let sender = context.infer_sender(&opts.gas).await?;
+                let sender = context.infer_sender(&payment.gas).await?;
                 let client = context.get_client().await?;
                 let read_api = client.read_api();
                 let chain_id = read_api.get_chain_identifier().await.ok();
@@ -1002,13 +1013,18 @@ impl SuiClientCommands {
                     )
                     .await?;
 
-                let gas_payment = client.transaction_builder().input_refs(&opts.gas).await?;
+                let gas_payment = client
+                    .transaction_builder()
+                    .input_refs(&payment.gas)
+                    .await?;
+
                 let result = dry_run_or_execute_or_serialize(
                     sender,
                     tx_kind,
                     context,
                     gas_payment,
-                    opts.rest,
+                    gas_data,
+                    processing,
                 )
                 .await?;
 
@@ -1038,7 +1054,9 @@ impl SuiClientCommands {
                 skip_dependency_verification,
                 verify_deps,
                 with_unpublished_dependencies,
-                opts,
+                payment,
+                gas_data,
+                processing,
             } => {
                 if build_config.test_mode {
                     return Err(SuiError::ModulePublishFailure {
@@ -1055,7 +1073,7 @@ impl SuiClientCommands {
                     .into());
                 }
 
-                let sender = context.infer_sender(&opts.gas).await?;
+                let sender = context.infer_sender(&payment.gas).await?;
                 let client = context.get_client().await?;
                 let read_api = client.read_api();
                 let chain_id = read_api.get_chain_identifier().await.ok();
@@ -1109,14 +1127,18 @@ impl SuiClientCommands {
                     .publish_tx_kind(sender, compiled_modules, dep_ids)
                     .await?;
 
-                let gas_payment = client.transaction_builder().input_refs(&opts.gas).await?;
+                let gas_payment = client
+                    .transaction_builder()
+                    .input_refs(&payment.gas)
+                    .await?;
 
                 let result = dry_run_or_execute_or_serialize(
                     sender,
                     tx_kind,
                     context,
                     gas_payment,
-                    opts.rest,
+                    gas_data,
+                    processing,
                 )
                 .await?;
 
@@ -1273,7 +1295,9 @@ impl SuiClientCommands {
                 function,
                 type_args,
                 args,
-                opts,
+                payment,
+                gas_data,
+                processing,
             } => {
                 // Convert all numeric input to String, this will allow number input from the CLI
                 // without failing SuiJSON's checks.
@@ -1294,17 +1318,29 @@ impl SuiClientCommands {
                     .move_call_tx_kind(package, &module, &function, type_args, args)
                     .await?;
 
-                let sender = context.infer_sender(&opts.gas).await?;
-                let gas_payment = client.transaction_builder().input_refs(&opts.gas).await?;
+                let sender = context.infer_sender(&payment.gas).await?;
+                let gas_payment = client
+                    .transaction_builder()
+                    .input_refs(&payment.gas)
+                    .await?;
 
-                dry_run_or_execute_or_serialize(sender, tx_kind, context, gas_payment, opts.rest)
-                    .await?
+                dry_run_or_execute_or_serialize(
+                    sender,
+                    tx_kind,
+                    context,
+                    gas_payment,
+                    gas_data,
+                    processing,
+                )
+                .await?
             }
 
             SuiClientCommands::Transfer {
                 to,
                 object_id,
-                opts,
+                payment,
+                gas_data,
+                processing,
             } => {
                 let signer = context.get_object_owner(&object_id).await?;
                 let to = get_identity_address(Some(to), context)?;
@@ -1315,17 +1351,28 @@ impl SuiClientCommands {
                     .transfer_object_tx_kind(object_id, to)
                     .await?;
 
-                let gas_payment = client.transaction_builder().input_refs(&opts.gas).await?;
+                let gas_payment = client
+                    .transaction_builder()
+                    .input_refs(&payment.gas)
+                    .await?;
 
-                dry_run_or_execute_or_serialize(signer, tx_kind, context, gas_payment, opts.rest)
-                    .await?
+                dry_run_or_execute_or_serialize(
+                    signer,
+                    tx_kind,
+                    context,
+                    gas_payment,
+                    gas_data,
+                    processing,
+                )
+                .await?
             }
 
             SuiClientCommands::TransferSui {
                 to,
                 sui_coin_object_id: object_id,
                 amount,
-                opts,
+                gas_data,
+                processing,
             } => {
                 let signer = context.get_object_owner(&object_id).await?;
                 let to = get_identity_address(Some(to), context)?;
@@ -1340,14 +1387,24 @@ impl SuiClientCommands {
                     .input_refs(&[object_id])
                     .await?;
 
-                dry_run_or_execute_or_serialize(signer, tx_kind, context, gas_payment, opts).await?
+                dry_run_or_execute_or_serialize(
+                    signer,
+                    tx_kind,
+                    context,
+                    gas_payment,
+                    gas_data,
+                    processing,
+                )
+                .await?
             }
 
             SuiClientCommands::Pay {
                 input_coins,
                 recipients,
                 amounts,
-                opts,
+                payment,
+                gas_data,
+                processing,
             } => {
                 ensure!(
                     !input_coins.is_empty(),
@@ -1378,21 +1435,32 @@ impl SuiClientCommands {
                     .await?;
 
                 ensure!(
-                    !opts.gas.iter().any(|gas| input_coins.contains(gas)),
+                    !payment.gas.iter().any(|gas| input_coins.contains(gas)),
                     "Gas coin is in input coins of Pay transaction, use PaySui transaction instead!"
                 );
 
-                let gas_payment = client.transaction_builder().input_refs(&opts.gas).await?;
+                let gas_payment = client
+                    .transaction_builder()
+                    .input_refs(&payment.gas)
+                    .await?;
 
-                dry_run_or_execute_or_serialize(signer, tx_kind, context, gas_payment, opts.rest)
-                    .await?
+                dry_run_or_execute_or_serialize(
+                    signer,
+                    tx_kind,
+                    context,
+                    gas_payment,
+                    gas_data,
+                    processing,
+                )
+                .await?
             }
 
             SuiClientCommands::PaySui {
                 input_coins,
                 recipients,
                 amounts,
-                opts,
+                gas_data,
+                processing,
             } => {
                 ensure!(
                     !input_coins.is_empty(),
@@ -1427,13 +1495,22 @@ impl SuiClientCommands {
                     .input_refs(&input_coins)
                     .await?;
 
-                dry_run_or_execute_or_serialize(signer, tx_kind, context, gas_payment, opts).await?
+                dry_run_or_execute_or_serialize(
+                    signer,
+                    tx_kind,
+                    context,
+                    gas_payment,
+                    gas_data,
+                    processing,
+                )
+                .await?
             }
 
             SuiClientCommands::PayAllSui {
                 input_coins,
                 recipient,
-                opts,
+                gas_data,
+                processing,
             } => {
                 ensure!(
                     !input_coins.is_empty(),
@@ -1449,7 +1526,15 @@ impl SuiClientCommands {
                     .input_refs(&input_coins)
                     .await?;
 
-                dry_run_or_execute_or_serialize(signer, tx_kind, context, gas_payment, opts).await?
+                dry_run_or_execute_or_serialize(
+                    signer,
+                    tx_kind,
+                    context,
+                    gas_payment,
+                    gas_data,
+                    processing,
+                )
+                .await?
             }
 
             SuiClientCommands::Objects { address } => {
@@ -1574,7 +1659,9 @@ impl SuiClientCommands {
                 coin_id,
                 amounts,
                 count,
-                opts,
+                payment,
+                gas_data,
+                processing,
             } => {
                 match (amounts.as_ref(), count) {
                     (None, None) => bail!("You must use one of amounts or count options."),
@@ -1591,15 +1678,27 @@ impl SuiClientCommands {
                     .split_coin_tx_kind(coin_id, amounts, count)
                     .await?;
 
-                let gas_payment = client.transaction_builder().input_refs(&opts.gas).await?;
+                let gas_payment = client
+                    .transaction_builder()
+                    .input_refs(&payment.gas)
+                    .await?;
 
-                dry_run_or_execute_or_serialize(signer, tx_kind, context, gas_payment, opts.rest)
-                    .await?
+                dry_run_or_execute_or_serialize(
+                    signer,
+                    tx_kind,
+                    context,
+                    gas_payment,
+                    gas_data,
+                    processing,
+                )
+                .await?
             }
             SuiClientCommands::MergeCoin {
                 primary_coin,
                 coin_to_merge,
-                opts,
+                payment,
+                gas_data,
+                processing,
             } => {
                 let client = context.get_client().await?;
                 let signer = context.get_object_owner(&primary_coin).await?;
@@ -1609,10 +1708,20 @@ impl SuiClientCommands {
                     .merge_coins_tx_kind(primary_coin, coin_to_merge)
                     .await?;
 
-                let gas_payment = client.transaction_builder().input_refs(&opts.gas).await?;
+                let gas_payment = client
+                    .transaction_builder()
+                    .input_refs(&payment.gas)
+                    .await?;
 
-                dry_run_or_execute_or_serialize(signer, tx_kind, context, gas_payment, opts.rest)
-                    .await?
+                dry_run_or_execute_or_serialize(
+                    signer,
+                    tx_kind,
+                    context,
+                    gas_payment,
+                    gas_data,
+                    processing,
+                )
+                .await?
             }
             SuiClientCommands::Switch { address, env } => {
                 let mut addr = None;
@@ -3009,17 +3118,21 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
     tx_kind: TransactionKind,
     context: &mut WalletContext,
     gas_payment: Vec<ObjectRef>,
-    opts: Opts,
+    gas_data: GasDataArgs,
+    processing: TxProcessingArgs,
 ) -> Result<SuiClientCommandResult, anyhow::Error> {
-    let Opts {
+    let GasDataArgs {
         gas_budget,
         gas_price,
+    } = gas_data;
+
+    let TxProcessingArgs {
         tx_digest,
         dry_run,
         dev_inspect,
         serialize_unsigned_transaction,
         serialize_signed_transaction,
-    } = opts;
+    } = processing;
 
     ensure!(
         !serialize_unsigned_transaction || !serialize_signed_transaction,
