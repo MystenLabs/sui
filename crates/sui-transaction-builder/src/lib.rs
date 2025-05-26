@@ -59,7 +59,7 @@ impl TransactionBuilder {
         Self(data_reader)
     }
 
-    async fn select_gas(
+    pub async fn select_gas(
         &self,
         signer: SuiAddress,
         input_gas: Option<ObjectID>,
@@ -95,69 +95,6 @@ impl TransactionBuilder {
             }
             Err(anyhow!("Cannot find gas coin for signer address {signer} with amount sufficient for the required gas budget {gas_budget}. If you are using the pay or transfer commands, you can use pay-sui or transfer-sui commands instead, which will use the only object as gas payment."))
         }
-    }
-
-    /// Construct the transaction data for a dry run
-    pub async fn tx_data_for_dry_run(
-        &self,
-        sender: SuiAddress,
-        kind: TransactionKind,
-        gas_budget: u64,
-        gas_price: u64,
-        gas_payment: Vec<ObjectID>,
-        gas_sponsor: Option<SuiAddress>,
-    ) -> TransactionData {
-        let gas_payment = self
-            .input_refs(gas_payment.as_ref())
-            .await
-            .unwrap_or_default();
-        let gas_sponsor = gas_sponsor.unwrap_or(sender);
-        TransactionData::new_with_gas_coins_allow_sponsor(
-            kind,
-            sender,
-            gas_payment,
-            gas_budget,
-            gas_price,
-            gas_sponsor,
-        )
-    }
-
-    /// Construct the transaction data from a transaction kind, and other parameters.
-    /// If the gas_payment list is empty, it will pick the first gas coin that has at least
-    /// the required gas budget that is not in the input coins.
-    pub async fn tx_data(
-        &self,
-        sender: SuiAddress,
-        kind: TransactionKind,
-        gas_budget: u64,
-        gas_price: u64,
-        gas_payment: Vec<ObjectID>,
-        gas_sponsor: Option<SuiAddress>,
-    ) -> Result<TransactionData, anyhow::Error> {
-        let gas_payment = if gas_payment.is_empty() {
-            let input_objs = kind
-                .input_objects()?
-                .iter()
-                .flat_map(|obj| match obj {
-                    InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => Some(*id),
-                    _ => None,
-                })
-                .collect();
-            vec![
-                self.select_gas(sender, None, gas_budget, input_objs, gas_price)
-                    .await?,
-            ]
-        } else {
-            self.input_refs(&gas_payment).await?
-        };
-        Ok(TransactionData::new_with_gas_coins_allow_sponsor(
-            kind,
-            sender,
-            gas_payment,
-            gas_budget,
-            gas_price,
-            gas_sponsor.unwrap_or(sender),
-        ))
     }
 
     pub async fn transfer_object_tx_kind(

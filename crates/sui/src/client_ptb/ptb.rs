@@ -145,9 +145,7 @@ impl PTB {
             names: program_metadata.mvr_names.into_keys().collect(),
         };
         if mvr_resolver.should_resolve() {
-            let resolved = mvr_resolver
-                .resolve_names(context.get_client().await?.read_api())
-                .await?;
+            let resolved = mvr_resolver.resolve_names(client.read_api()).await?;
             let mut mvr_data: BTreeMap<String, AddressData> = BTreeMap::new();
             for (name, package_id) in resolved.resolution {
                 let span = mvr_names.get(&name).unwrap_or(&Span { start: 0, end: 0 });
@@ -159,7 +157,7 @@ impl PTB {
             starting_addresses.extend(mvr_data);
         }
 
-        let (res, warnings) = Self::build_ptb(program, starting_addresses, client).await;
+        let (res, warnings) = Self::build_ptb(program, starting_addresses, client.clone()).await;
 
         // Render warnings
         if !warnings.is_empty() {
@@ -183,33 +181,21 @@ impl PTB {
             Ok(x) => x,
         };
 
-        // get all the metadata needed for executing the PTB: sender, gas, signing tx
-        let gas = program_metadata.gas_object_id.map(|x| x.value);
-
-        // the sender is the gas object if gas is provided, otherwise the active address
-        let sender = match gas {
-            Some(gas) => context
-                .get_object_owner(&gas)
-                .await
-                .map_err(|_| anyhow!("Could not find owner for gas object ID"))?,
-            None => context
-                .config
-                .active_address
-                .ok_or_else(|| anyhow!("No active address, cannot execute PTB"))?,
-        };
-
-        // build the tx kind
-        let tx_kind = TransactionKind::ProgrammableTransaction(ProgrammableTransaction {
-            inputs: ptb.inputs,
-            commands: ptb.commands,
-        });
-
         // TODO (amnn): support multiple gas objects
         let gas: Vec<_> = program_metadata
             .gas_object_id
             .into_iter()
             .map(|x| x.value)
             .collect();
+
+        // the sender is the gas object if gas is provided, otherwise the active address
+        let sender = context.infer_sender(&gas).await?;
+
+        // build the tx kind
+        let tx_kind = TransactionKind::ProgrammableTransaction(ProgrammableTransaction {
+            inputs: ptb.inputs,
+            commands: ptb.commands,
+        });
 
         let opts = Opts {
             tx_digest: program_metadata.tx_digest_set,
@@ -221,8 +207,10 @@ impl PTB {
             serialize_signed_transaction: program_metadata.serialize_signed_set,
         };
 
+        let gas_payment = client.transaction_builder().input_refs(&gas).await?;
+
         let transaction_response =
-            dry_run_or_execute_or_serialize(sender, tx_kind, context, gas, opts).await?;
+            dry_run_or_execute_or_serialize(sender, tx_kind, context, gas_payment, opts).await?;
 
         let transaction_response = match transaction_response {
             SuiClientCommandResult::ComputeTransactionDigest(_)

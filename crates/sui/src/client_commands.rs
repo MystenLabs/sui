@@ -67,7 +67,7 @@ use sui_sdk::{
     SUI_TESTNET_URL,
 };
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     crypto::{EmptySignInfo, SignatureScheme},
     digests::TransactionDigest,
     error::SuiError,
@@ -81,7 +81,8 @@ use sui_types::{
     signature::GenericSignature,
     sui_serde,
     transaction::{
-        SenderSignedData, Transaction, TransactionData, TransactionDataAPI, TransactionKind,
+        InputObjectKind, SenderSignedData, Transaction, TransactionData, TransactionDataAPI,
+        TransactionKind,
     },
 };
 
@@ -1001,9 +1002,15 @@ impl SuiClientCommands {
                     )
                     .await?;
 
-                let result =
-                    dry_run_or_execute_or_serialize(sender, tx_kind, context, opts.gas, opts.rest)
-                        .await?;
+                let gas_payment = client.transaction_builder().input_refs(&opts.gas).await?;
+                let result = dry_run_or_execute_or_serialize(
+                    sender,
+                    tx_kind,
+                    context,
+                    gas_payment,
+                    opts.rest,
+                )
+                .await?;
 
                 if let SuiClientCommandResult::TransactionBlock(ref response) = result {
                     if let Err(e) = sui_package_management::update_lock_file(
@@ -1101,9 +1108,17 @@ impl SuiClientCommands {
                     .transaction_builder()
                     .publish_tx_kind(sender, compiled_modules, dep_ids)
                     .await?;
-                let result =
-                    dry_run_or_execute_or_serialize(sender, tx_kind, context, opts.gas, opts.rest)
-                        .await?;
+
+                let gas_payment = client.transaction_builder().input_refs(&opts.gas).await?;
+
+                let result = dry_run_or_execute_or_serialize(
+                    sender,
+                    tx_kind,
+                    context,
+                    gas_payment,
+                    opts.rest,
+                )
+                .await?;
 
                 if let SuiClientCommandResult::TransactionBlock(ref response) = result {
                     if let Err(e) = sui_package_management::update_lock_file(
@@ -1272,15 +1287,17 @@ impl SuiClientCommands {
                     .map(|arg| arg.into())
                     .collect::<Vec<_>>();
 
-                let tx_kind = context
-                    .get_client()
-                    .await?
+                let client = context.get_client().await?;
+
+                let tx_kind = client
                     .transaction_builder()
                     .move_call_tx_kind(package, &module, &function, type_args, args)
                     .await?;
 
                 let sender = context.infer_sender(&opts.gas).await?;
-                dry_run_or_execute_or_serialize(sender, tx_kind, context, opts.gas, opts.rest)
+                let gas_payment = client.transaction_builder().input_refs(&opts.gas).await?;
+
+                dry_run_or_execute_or_serialize(sender, tx_kind, context, gas_payment, opts.rest)
                     .await?
             }
 
@@ -1292,11 +1309,15 @@ impl SuiClientCommands {
                 let signer = context.get_object_owner(&object_id).await?;
                 let to = get_identity_address(Some(to), context)?;
                 let client = context.get_client().await?;
+
                 let tx_kind = client
                     .transaction_builder()
                     .transfer_object_tx_kind(object_id, to)
                     .await?;
-                dry_run_or_execute_or_serialize(signer, tx_kind, context, opts.gas, opts.rest)
+
+                let gas_payment = client.transaction_builder().input_refs(&opts.gas).await?;
+
+                dry_run_or_execute_or_serialize(signer, tx_kind, context, gas_payment, opts.rest)
                     .await?
             }
 
@@ -1309,11 +1330,17 @@ impl SuiClientCommands {
                 let signer = context.get_object_owner(&object_id).await?;
                 let to = get_identity_address(Some(to), context)?;
                 let client = context.get_client().await?;
+
                 let tx_kind = client
                     .transaction_builder()
                     .transfer_sui_tx_kind(to, amount);
-                dry_run_or_execute_or_serialize(signer, tx_kind, context, vec![object_id], opts)
-                    .await?
+
+                let gas_payment = client
+                    .transaction_builder()
+                    .input_refs(&[object_id])
+                    .await?;
+
+                dry_run_or_execute_or_serialize(signer, tx_kind, context, gas_payment, opts).await?
             }
 
             SuiClientCommands::Pay {
@@ -1355,7 +1382,9 @@ impl SuiClientCommands {
                     "Gas coin is in input coins of Pay transaction, use PaySui transaction instead!"
                 );
 
-                dry_run_or_execute_or_serialize(signer, tx_kind, context, opts.gas, opts.rest)
+                let gas_payment = client.transaction_builder().input_refs(&opts.gas).await?;
+
+                dry_run_or_execute_or_serialize(signer, tx_kind, context, gas_payment, opts.rest)
                     .await?
             }
 
@@ -1388,11 +1417,17 @@ impl SuiClientCommands {
                     .map_err(|e| anyhow!("{e}"))?;
                 let signer = context.get_object_owner(&input_coins[0]).await?;
                 let client = context.get_client().await?;
+
                 let tx_kind = client
                     .transaction_builder()
                     .pay_sui_tx_kind(recipients, amounts)?;
 
-                dry_run_or_execute_or_serialize(signer, tx_kind, context, input_coins, opts).await?
+                let gas_payment = client
+                    .transaction_builder()
+                    .input_refs(&input_coins)
+                    .await?;
+
+                dry_run_or_execute_or_serialize(signer, tx_kind, context, gas_payment, opts).await?
             }
 
             SuiClientCommands::PayAllSui {
@@ -1407,8 +1442,14 @@ impl SuiClientCommands {
                 let recipient = get_identity_address(Some(recipient), context)?;
                 let signer = context.get_object_owner(&input_coins[0]).await?;
                 let client = context.get_client().await?;
+
                 let tx_kind = client.transaction_builder().pay_all_sui_tx_kind(recipient);
-                dry_run_or_execute_or_serialize(signer, tx_kind, context, input_coins, opts).await?
+                let gas_payment = client
+                    .transaction_builder()
+                    .input_refs(&input_coins)
+                    .await?;
+
+                dry_run_or_execute_or_serialize(signer, tx_kind, context, gas_payment, opts).await?
             }
 
             SuiClientCommands::Objects { address } => {
@@ -1541,13 +1582,18 @@ impl SuiClientCommands {
                     (None, Some(0)) => bail!("Coin split count must be greater than 0"),
                     _ => { /*no_op*/ }
                 }
+
                 let client = context.get_client().await?;
+                let signer = context.get_object_owner(&coin_id).await?;
+
                 let tx_kind = client
                     .transaction_builder()
                     .split_coin_tx_kind(coin_id, amounts, count)
                     .await?;
-                let signer = context.get_object_owner(&coin_id).await?;
-                dry_run_or_execute_or_serialize(signer, tx_kind, context, opts.gas, opts.rest)
+
+                let gas_payment = client.transaction_builder().input_refs(&opts.gas).await?;
+
+                dry_run_or_execute_or_serialize(signer, tx_kind, context, gas_payment, opts.rest)
                     .await?
             }
             SuiClientCommands::MergeCoin {
@@ -1557,12 +1603,15 @@ impl SuiClientCommands {
             } => {
                 let client = context.get_client().await?;
                 let signer = context.get_object_owner(&primary_coin).await?;
+
                 let tx_kind = client
                     .transaction_builder()
                     .merge_coins_tx_kind(primary_coin, coin_to_merge)
                     .await?;
 
-                dry_run_or_execute_or_serialize(signer, tx_kind, context, opts.gas, opts.rest)
+                let gas_payment = client.transaction_builder().input_refs(&opts.gas).await?;
+
+                dry_run_or_execute_or_serialize(signer, tx_kind, context, gas_payment, opts.rest)
                     .await?
             }
             SuiClientCommands::Switch { address, env } => {
@@ -2864,7 +2913,7 @@ pub async fn execute_dry_run(
     kind: TransactionKind,
     gas_budget: Option<u64>,
     gas_price: u64,
-    gas_payment: Vec<ObjectID>,
+    gas_payment: Vec<ObjectRef>,
     sponsor: Option<SuiAddress>,
 ) -> Result<SuiClientCommandResult, anyhow::Error> {
     let client = context.get_client().await?;
@@ -2872,16 +2921,20 @@ pub async fn execute_dry_run(
         Some(gas_budget) => gas_budget,
         None => max_gas_budget(&client).await?,
     };
-    let dry_run_tx_data = client
-        .transaction_builder()
-        .tx_data_for_dry_run(signer, kind, gas_budget, gas_price, gas_payment, sponsor)
-        .await;
+    let tx_data = TransactionData::new_with_gas_coins_allow_sponsor(
+        kind,
+        signer,
+        gas_payment,
+        gas_budget,
+        gas_price,
+        sponsor.unwrap_or(signer),
+    );
     debug!("Executing dry run");
     let response = client
         .read_api()
-        .dry_run_transaction_block(dry_run_tx_data)
+        .dry_run_transaction_block(tx_data)
         .await
-        .map_err(|e| anyhow!("Dry run failed: {e}"))?;
+        .context("Dry run failed")?;
     debug!("Finished executing dry run");
     let resp = SuiClientCommandResult::DryRun(response)
         .prerender_clever_errors(context)
@@ -2904,7 +2957,7 @@ pub async fn estimate_gas_budget(
     signer: SuiAddress,
     kind: TransactionKind,
     gas_price: u64,
-    gas_payment: Vec<ObjectID>,
+    gas_payment: Vec<ObjectRef>,
     sponsor: Option<SuiAddress>,
 ) -> Result<u64, anyhow::Error> {
     let client = context.get_client().await?;
@@ -2955,7 +3008,7 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
     signer: SuiAddress,
     tx_kind: TransactionKind,
     context: &mut WalletContext,
-    gas_payment: Vec<ObjectID>,
+    gas_payment: Vec<ObjectRef>,
     opts: Opts,
 ) -> Result<SuiClientCommandResult, anyhow::Error> {
     let Opts {
@@ -3026,11 +3079,35 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         }
     };
 
+    let gas_payment = if !gas_payment.is_empty() {
+        gas_payment
+    } else {
+        let input_objects: Vec<_> = tx_kind
+            .input_objects()?
+            .iter()
+            .filter_map(|o| match o {
+                InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => Some(*id),
+                _ => None,
+            })
+            .collect();
+
+        let gas_payment = client
+            .transaction_builder()
+            .select_gas(signer, None, gas_budget, input_objects, gas_price)
+            .await?;
+
+        vec![gas_payment]
+    };
+
     debug!("Preparing transaction data");
-    let tx_data = client
-        .transaction_builder()
-        .tx_data(signer, tx_kind, gas_budget, gas_price, gas_payment, None)
-        .await?;
+    let tx_data = TransactionData::new_with_gas_coins_allow_sponsor(
+        tx_kind,
+        signer,
+        gas_payment,
+        gas_budget,
+        gas_price,
+        signer,
+    );
     debug!("Finished preparing transaction data");
 
     if serialize_unsigned_transaction {
@@ -3080,18 +3157,12 @@ async fn execute_dev_inspect(
     tx_kind: TransactionKind,
     gas_budget: Option<u64>,
     gas_price: u64,
-    gas_payment: Vec<ObjectID>,
+    gas_objects: Vec<ObjectRef>,
     gas_sponsor: Option<SuiAddress>,
     skip_checks: Option<bool>,
 ) -> Result<SuiClientCommandResult, anyhow::Error> {
     let client = context.get_client().await?;
     let gas_budget = gas_budget.map(sui_serde::BigInt::from);
-
-    let mut gas_objects = vec![];
-    for o in gas_payment.iter() {
-        let obj_ref = context.get_object_ref(*o).await?;
-        gas_objects.push(obj_ref);
-    }
 
     let dev_inspect_args = DevInspectArgs {
         gas_sponsor,
