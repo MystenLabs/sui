@@ -7871,6 +7871,7 @@ dependencies = [
  "move-ir-types",
  "move-model-2",
  "move-package",
+ "move-stackless-bytecode-2",
  "move-stdlib",
  "move-stdlib-natives",
  "move-symbol-pool",
@@ -8205,6 +8206,19 @@ dependencies = [
  "enum-compat-util",
  "quote",
  "syn 2.0.99",
+]
+
+[[package]]
+name = "move-stackless-bytecode-2"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "move-binary-format",
+ "move-disassembler",
+ "move-ir-types",
+ "move-model-2",
+ "move-symbol-pool",
 ]
 
 [[package]]

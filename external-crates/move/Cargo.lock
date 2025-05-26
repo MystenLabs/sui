@@ -2111,6 +2111,7 @@ dependencies = [
  "move-ir-types",
  "move-model-2",
  "move-package",
+ "move-stackless-bytecode-2",
  "move-stdlib",
  "move-stdlib-natives",
  "move-symbol-pool",
@@ -2524,6 +2525,19 @@ dependencies = [
  "petgraph",
  "regex",
  "serde",
+]
+
+[[package]]
+name = "move-stackless-bytecode-2"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 4.5.28",
+ "move-binary-format",
+ "move-disassembler",
+ "move-ir-types",
+ "move-model-2",
+ "move-symbol-pool",
 ]
 
 [[package]]

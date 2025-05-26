@@ -45,6 +45,7 @@ move-unit-test.workspace = true
 move-bytecode-viewer.workspace = true
 move-model-2.workspace = true
 move-trace-format.workspace = true
+move-stackless-bytecode-2 = { version = "0.1.0", path = "../move-stackless-bytecode-2" }
 
 [dev-dependencies]
 datatest-stable.workspace = true
