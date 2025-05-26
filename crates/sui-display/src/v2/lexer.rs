@@ -304,7 +304,7 @@ impl fmt::Display for OwnedLexeme {
             L(T::RRBrace, _, _) => write!(f, "'}}}}'"),
             L(T::String, _, s) => write!(f, "string {s:?}"),
             L(T::Text, _, s) => write!(f, "text {s:?}"),
-            L(T::Unexpected, _, s) => write!(f, "unexpected {s:?}"),
+            L(T::Unexpected, _, s) => write!(f, "{s:?}"),
             L(T::Whitespace, _, _) => write!(f, "whitespace"),
         }?;
 
@@ -338,7 +338,7 @@ impl fmt::Display for Token {
             T::RRBrace => write!(f, "'}}}}'"),
             T::String => write!(f, "a string"),
             T::Text => write!(f, "text"),
-            T::Unexpected => write!(f, "an unexpected character"),
+            T::Unexpected => write!(f, "unexpected input"),
             T::Whitespace => write!(f, "whitespace"),
         }
     }
