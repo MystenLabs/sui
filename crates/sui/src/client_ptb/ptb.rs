@@ -201,7 +201,7 @@ impl PTB {
 
         let gas_data = GasDataArgs {
             gas_budget: program_metadata.gas_budget.map(|x| x.value),
-            gas_price: None,   // TODO (amnn): support gas price in PTB
+            gas_price: program_metadata.gas_price.map(|x| x.value),
             gas_sponsor: None, // TODO (amnn): support gas sponsors in PTB
         };
 
@@ -369,6 +369,11 @@ pub fn ptb_description() -> clap::Command {
             tool will first perform a dry run to estimate the gas cost, and then it will execute \
             the transaction. Please note that this incurs a small cost in performance due to the \
             additional dry run call."
+        ))
+        .arg(arg!(
+            --"gas-price" <MIST>
+            "An optional gas price for this PTB (in MIST). If not specified, the reference gas price \
+            is fetched from RPC."
         ))
         .arg(arg!(
             --"make-move-vec" <MAKE_MOVE_VEC>
