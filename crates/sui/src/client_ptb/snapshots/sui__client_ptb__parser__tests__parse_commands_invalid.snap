@@ -432,4 +432,50 @@ expression: parsed
             severity: Error,
         },
     ],
+    [
+        PTBError {
+            message: "Expected a u64 value",
+            span: Span {
+                start: 12,
+                end: 17,
+            },
+            help: None,
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected '['",
+            span: Span {
+                start: 12,
+                end: 13,
+            },
+            help: Some(
+                "Expected an argument here",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected a u64 value",
+            span: Span {
+                start: 12,
+                end: 16,
+            },
+            help: None,
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Value does not fit within a u64",
+            span: Span {
+                start: 12,
+                end: 75,
+            },
+            help: None,
+            severity: Error,
+        },
+    ],
 ]
