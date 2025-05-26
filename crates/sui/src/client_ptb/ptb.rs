@@ -201,7 +201,8 @@ impl PTB {
 
         let gas_data = GasDataArgs {
             gas_budget: program_metadata.gas_budget.map(|x| x.value),
-            gas_price: None, // TODO (amnn): support gas price in PTB
+            gas_price: None,   // TODO (amnn): support gas price in PTB
+            gas_sponsor: None, // TODO (amnn): support gas sponsors in PTB
         };
 
         let processing = TxProcessingArgs {
