@@ -1,0 +1,13 @@
+[package]
+name = "move-stackless-bytecode-2"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+move-binary-format.workspace = true
+move-disassembler.workspace = true
+move-ir-types.workspace = true
+move-model-2.workspace = true
+move-symbol-pool.workspace = true
