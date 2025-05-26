@@ -25,14 +25,14 @@ impl Pad {
             table_size,
             options,
         };
-        slf.pad_cosntant_table(module);
+        slf.pad_constant_table(module);
         slf.pad_identifier_table(module);
         slf.pad_address_identifier_table(module);
         slf.pad_signatures(module);
         slf.pad_function_bodies(module);
     }
 
-    fn pad_cosntant_table(&mut self, module: &mut CompiledModule) {
+    fn pad_constant_table(&mut self, module: &mut CompiledModule) {
         // TODO actual constant generation
         module.constant_pool = vec![]
     }
