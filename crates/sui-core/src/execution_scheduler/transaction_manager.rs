@@ -20,7 +20,7 @@ use sui_types::{
     fp_ensure,
     message_envelope::Message,
     storage::InputKey,
-    transaction::{TransactionDataAPI, VerifiedCertificate},
+    transaction::TransactionDataAPI,
 };
 use sui_types::{executable_transaction::VerifiedExecutableTransaction, fp_bail};
 use tokio::sync::mpsc::UnboundedSender;
@@ -35,9 +35,7 @@ use sui_config::node::AuthorityOverloadConfig;
 use sui_types::transaction::SenderSignedData;
 use tap::TapOptional;
 
-#[cfg(test)]
-#[path = "unit_tests/transaction_manager_tests.rs"]
-mod transaction_manager_tests;
+use super::{ExecutionSchedulerAPI, PendingCertificate, PendingCertificateStats};
 
 /// Minimum capacity of HashMaps used in TransactionManager.
 const MIN_HASHMAP_CAPACITY: usize = 1000;
@@ -49,7 +47,7 @@ const MIN_HASHMAP_CAPACITY: usize = 1000;
 /// executes them in parallel.
 /// The actual execution logic is inside AuthorityState. After a transaction commits and updates
 /// storage, committed objects and certificates are notified back to TransactionManager.
-pub struct TransactionManager {
+pub(crate) struct TransactionManager {
     object_cache_read: Arc<dyn ObjectCacheRead>,
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
@@ -58,28 +56,6 @@ pub struct TransactionManager {
     // before the inner lock (for read or write) can be acquired. During reconfiguration, we acquire
     // the outer lock for write, to ensure that no other threads can be running while we reconfigure.
     inner: RwLock<RwLock<Inner>>,
-}
-
-#[derive(Clone, Debug)]
-pub struct PendingCertificateStats {
-    // The time this certificate enters transaction manager.
-    #[allow(unused)]
-    pub enqueue_time: Instant,
-    // The time this certificate becomes ready for execution.
-    pub ready_time: Option<Instant>,
-}
-
-#[derive(Clone, Debug)]
-pub struct PendingCertificate {
-    // Certified transaction to be executed.
-    pub certificate: VerifiedExecutableTransaction,
-    // When executing from checkpoint, the certified effects digest is provided, so that forks can
-    // be detected prior to committing the transaction.
-    pub expected_effects_digest: Option<TransactionEffectsDigest>,
-    // The input object this certificate is waiting for to become available in order to be executed.
-    pub waiting_input_objects: BTreeSet<InputKey>,
-    // Stores stats about this transaction.
-    pub stats: PendingCertificateStats,
 }
 
 struct CacheInner {
@@ -339,10 +315,11 @@ impl TransactionManager {
     pub(crate) fn new(
         object_cache_read: Arc<dyn ObjectCacheRead>,
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
-        epoch_store: &AuthorityPerEpochStore,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
         metrics: Arc<AuthorityMetrics>,
     ) -> TransactionManager {
+        tracing::info!("Creating new TransactionManager");
         TransactionManager {
             object_cache_read,
             transaction_cache_read,
@@ -352,54 +329,63 @@ impl TransactionManager {
         }
     }
 
-    /// Enqueues certificates / verified transactions into TransactionManager. Once all of the input objects are available
-    /// locally for a certificate, the certified transaction will be sent to execution driver.
-    ///
-    /// REQUIRED: Shared object locks must be taken before calling enqueueing transactions
-    /// with shared objects!
-    #[instrument(level = "trace", skip_all)]
-    pub(crate) fn enqueue_certificates(
-        &self,
-        certs: Vec<VerifiedCertificate>,
-        epoch_store: &AuthorityPerEpochStore,
-    ) {
-        let executable_txns = certs
-            .into_iter()
-            .map(VerifiedExecutableTransaction::new_from_certificate)
-            .collect();
-        self.enqueue(executable_txns, epoch_store)
+    // Reconfigures the TransactionManager for a new epoch. Existing transactions will be dropped
+    // because they are no longer relevant and may be incorrect in the new epoch.
+    // This function is only available for TransactionManager.
+    pub(crate) fn reconfigure(&self, new_epoch: EpochId) {
+        let reconfig_lock = self.inner.write();
+        let mut inner = reconfig_lock.write();
+        *inner = Inner::new(new_epoch, self.metrics.clone());
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub(crate) fn enqueue(
+    pub(crate) fn notify_commit(
         &self,
-        certs: Vec<VerifiedExecutableTransaction>,
+        digest: &TransactionDigest,
+        output_object_keys: Vec<InputKey>,
         epoch_store: &AuthorityPerEpochStore,
     ) {
-        let certs = certs.into_iter().map(|cert| (cert, None)).collect();
-        self.enqueue_impl(certs, epoch_store)
-    }
+        let _scope = monitored_scope("TransactionManager::notify_commit");
+        let reconfig_lock = self.inner.read();
+        {
+            let commit_time = Instant::now();
+            let mut inner = reconfig_lock.write();
 
-    #[instrument(level = "trace", skip_all)]
-    pub(crate) fn enqueue_with_expected_effects_digest(
-        &self,
-        certs: Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
-        epoch_store: &AuthorityPerEpochStore,
-    ) {
-        let certs = certs
-            .into_iter()
-            .map(|(cert, fx)| (cert, Some(fx)))
-            .collect();
-        self.enqueue_impl(certs, epoch_store)
-    }
+            if inner.epoch != epoch_store.epoch() {
+                warn!("Ignoring committed certificate from wrong epoch. Expected={} Actual={} CertificateDigest={:?}", inner.epoch, epoch_store.epoch(), digest);
+                return;
+            }
 
+            self.objects_available_locked(
+                &mut inner,
+                epoch_store,
+                output_object_keys,
+                true,
+                commit_time,
+            );
+
+            if !inner.executing_certificates.remove(digest) {
+                trace!("{:?} not found in executing certificates, likely because it is a system transaction", digest);
+                return;
+            }
+
+            self.metrics
+                .transaction_manager_num_executing_certificates
+                .set(inner.executing_certificates.len() as i64);
+
+            inner.maybe_shrink_capacity();
+        }
+    }
+}
+
+impl ExecutionSchedulerAPI for TransactionManager {
     fn enqueue_impl(
         &self,
         certs: Vec<(
             VerifiedExecutableTransaction,
             Option<TransactionEffectsDigest>,
         )>,
-        epoch_store: &AuthorityPerEpochStore,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
         let reconfig_lock = self.inner.read();
 
@@ -507,8 +493,8 @@ impl TransactionManager {
             .object_cache_read
             .multi_input_objects_available(
                 &input_object_cache_misses,
-                receiving_objects,
-                epoch_store.epoch(),
+                &receiving_objects,
+                &epoch_store.epoch(),
             )
             .into_iter()
             .zip(input_object_cache_misses);
@@ -560,6 +546,7 @@ impl TransactionManager {
                     enqueue_time: pending_cert_enqueue_time,
                     ready_time: None,
                 },
+                executing_guard: None,
             });
         }
 
@@ -664,156 +651,13 @@ impl TransactionManager {
         inner.maybe_reserve_capacity();
     }
 
-    #[cfg(test)]
-    pub(crate) fn objects_available(
-        &self,
-        input_keys: Vec<InputKey>,
-        epoch_store: &AuthorityPerEpochStore,
-    ) {
-        let reconfig_lock = self.inner.read();
-        let mut inner = reconfig_lock.write();
-        let _scope = monitored_scope("TransactionManager::objects_available::wlock");
-        self.objects_available_locked(&mut inner, epoch_store, input_keys, true, Instant::now());
-        inner.maybe_shrink_capacity();
-    }
-
-    #[instrument(level = "trace", skip_all)]
-    fn objects_available_locked(
-        &self,
-        inner: &mut Inner,
-        epoch_store: &AuthorityPerEpochStore,
-        input_keys: Vec<InputKey>,
-        update_cache: bool,
-        available_time: Instant,
-    ) {
-        if inner.epoch != epoch_store.epoch() {
-            warn!(
-                "Ignoring objects committed from wrong epoch. Expected={} Actual={} \
-                 Objects={:?}",
-                inner.epoch,
-                epoch_store.epoch(),
-                input_keys,
-            );
-            return;
-        }
-
-        for input_key in input_keys {
-            trace!(?input_key, "object available");
-            for mut ready_cert in
-                inner.find_ready_transactions(input_key, update_cache, &self.metrics)
-            {
-                ready_cert.stats.ready_time = Some(available_time);
-                self.certificate_ready(inner, ready_cert);
-            }
-        }
-
-        self.metrics
-            .transaction_manager_num_missing_objects
-            .set(inner.missing_inputs.len() as i64);
-        self.metrics
-            .transaction_manager_num_pending_certificates
-            .set(inner.pending_certificates.len() as i64);
-        self.metrics
-            .transaction_manager_num_executing_certificates
-            .set(inner.executing_certificates.len() as i64);
-    }
-
-    /// Notifies TransactionManager about a transaction that has been committed.
-    #[instrument(level = "trace", skip_all)]
-    pub(crate) fn notify_commit(
-        &self,
-        digest: &TransactionDigest,
-        output_object_keys: Vec<InputKey>,
-        epoch_store: &AuthorityPerEpochStore,
-    ) {
-        let _scope = monitored_scope("TransactionManager::notify_commit");
-        let reconfig_lock = self.inner.read();
-        {
-            let commit_time = Instant::now();
-            let mut inner = reconfig_lock.write();
-
-            if inner.epoch != epoch_store.epoch() {
-                warn!("Ignoring committed certificate from wrong epoch. Expected={} Actual={} CertificateDigest={:?}", inner.epoch, epoch_store.epoch(), digest);
-                return;
-            }
-
-            self.objects_available_locked(
-                &mut inner,
-                epoch_store,
-                output_object_keys,
-                true,
-                commit_time,
-            );
-
-            if !inner.executing_certificates.remove(digest) {
-                trace!("{:?} not found in executing certificates, likely because it is a system transaction", digest);
-                return;
-            }
-
-            self.metrics
-                .transaction_manager_num_executing_certificates
-                .set(inner.executing_certificates.len() as i64);
-
-            inner.maybe_shrink_capacity();
-        }
-    }
-
-    /// Sends the ready certificate for execution.
-    fn certificate_ready(&self, inner: &mut Inner, pending_certificate: PendingCertificate) {
-        trace!(tx_digest = ?pending_certificate.certificate.digest(), "certificate ready");
-        assert_eq!(pending_certificate.waiting_input_objects.len(), 0);
-        // Record as an executing certificate.
-        assert!(inner
-            .executing_certificates
-            .insert(*pending_certificate.certificate.digest()));
-        self.metrics.txn_ready_rate_tracker.lock().record();
-        let _ = self.tx_ready_certificates.send(pending_certificate);
-        self.metrics.transaction_manager_num_ready.inc();
-        self.metrics.execution_driver_dispatch_queue.inc();
-    }
-
-    // Returns the number of transactions waiting on each object ID, as well as the age of the oldest transaction in the queue.
-    pub(crate) fn objects_queue_len_and_age(
-        &self,
-        keys: Vec<FullObjectID>,
-    ) -> Vec<(FullObjectID, usize, Option<Duration>)> {
-        let reconfig_lock = self.inner.read();
-        let inner = reconfig_lock.read();
-        keys.into_iter()
-            .map(|key| {
-                let default_map = TransactionQueue::default();
-                let txns = inner.input_objects.get(&key).unwrap_or(&default_map);
-                (
-                    key,
-                    txns.len(),
-                    txns.first().map(|(time, _)| time.elapsed()),
-                )
-            })
-            .collect()
-    }
-
-    // Returns the number of transactions pending or being executed right now.
-    pub(crate) fn inflight_queue_len(&self) -> usize {
-        let reconfig_lock = self.inner.read();
-        let inner = reconfig_lock.read();
-        inner.pending_certificates.len() + inner.executing_certificates.len()
-    }
-
-    // Reconfigures the TransactionManager for a new epoch. Existing transactions will be dropped
-    // because they are no longer relevant and may be incorrect in the new epoch.
-    pub(crate) fn reconfigure(&self, new_epoch: EpochId) {
-        let reconfig_lock = self.inner.write();
-        let mut inner = reconfig_lock.write();
-        *inner = Inner::new(new_epoch, self.metrics.clone());
-    }
-
-    pub(crate) fn check_execution_overload(
+    fn check_execution_overload(
         &self,
         overload_config: &AuthorityOverloadConfig,
         tx_data: &SenderSignedData,
     ) -> SuiResult {
         // Too many transactions are pending execution.
-        let inflight_queue_len = self.inflight_queue_len();
+        let inflight_queue_len = self.num_pending_certificates();
         fp_ensure!(
             inflight_queue_len < overload_config.max_transaction_manager_queue_length,
             SuiError::TooManyTransactionsPendingExecution {
@@ -865,9 +709,14 @@ impl TransactionManager {
         Ok(())
     }
 
-    // Verify TM has no pending item for tests.
+    fn num_pending_certificates(&self) -> usize {
+        let reconfig_lock = self.inner.read();
+        let inner = reconfig_lock.read();
+        inner.pending_certificates.len() + inner.executing_certificates.len()
+    }
+
     #[cfg(test)]
-    pub(crate) fn check_empty_for_testing(&self) {
+    fn check_empty_for_testing(&self) {
         let reconfig_lock = self.inner.read();
         let inner = reconfig_lock.read();
         assert!(
@@ -890,6 +739,83 @@ impl TransactionManager {
             "Executing certificates: {:?}",
             inner.executing_certificates
         );
+    }
+}
+
+impl TransactionManager {
+    #[instrument(level = "trace", skip_all)]
+    fn objects_available_locked(
+        &self,
+        inner: &mut Inner,
+        epoch_store: &AuthorityPerEpochStore,
+        input_keys: Vec<InputKey>,
+        update_cache: bool,
+        available_time: Instant,
+    ) {
+        if inner.epoch != epoch_store.epoch() {
+            warn!(
+                "Ignoring objects committed from wrong epoch. Expected={} Actual={} \
+                 Objects={:?}",
+                inner.epoch,
+                epoch_store.epoch(),
+                input_keys,
+            );
+            return;
+        }
+
+        for input_key in input_keys {
+            trace!(?input_key, "object available");
+            for mut ready_cert in
+                inner.find_ready_transactions(input_key, update_cache, &self.metrics)
+            {
+                ready_cert.stats.ready_time = Some(available_time);
+                self.certificate_ready(inner, ready_cert);
+            }
+        }
+
+        self.metrics
+            .transaction_manager_num_missing_objects
+            .set(inner.missing_inputs.len() as i64);
+        self.metrics
+            .transaction_manager_num_pending_certificates
+            .set(inner.pending_certificates.len() as i64);
+        self.metrics
+            .transaction_manager_num_executing_certificates
+            .set(inner.executing_certificates.len() as i64);
+    }
+
+    /// Sends the ready certificate for execution.
+    fn certificate_ready(&self, inner: &mut Inner, pending_certificate: PendingCertificate) {
+        trace!(tx_digest = ?pending_certificate.certificate.digest(), "certificate ready");
+        assert_eq!(pending_certificate.waiting_input_objects.len(), 0);
+        // Record as an executing certificate.
+        assert!(inner
+            .executing_certificates
+            .insert(*pending_certificate.certificate.digest()));
+        self.metrics.txn_ready_rate_tracker.lock().record();
+        let _ = self.tx_ready_certificates.send(pending_certificate);
+        self.metrics.transaction_manager_num_ready.inc();
+        self.metrics.execution_driver_dispatch_queue.inc();
+    }
+
+    // Returns the number of transactions waiting on each object ID, as well as the age of the oldest transaction in the queue.
+    fn objects_queue_len_and_age(
+        &self,
+        keys: Vec<FullObjectID>,
+    ) -> Vec<(FullObjectID, usize, Option<Duration>)> {
+        let reconfig_lock = self.inner.read();
+        let inner = reconfig_lock.read();
+        keys.into_iter()
+            .map(|key| {
+                let default_map = TransactionQueue::default();
+                let txns = inner.input_objects.get(&key).unwrap_or(&default_map);
+                (
+                    key,
+                    txns.len(),
+                    txns.first().map(|(time, _)| time.elapsed()),
+                )
+            })
+            .collect()
     }
 }
 
