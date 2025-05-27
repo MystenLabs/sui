@@ -398,7 +398,7 @@ fn unnecessary_alias_error(context: &mut Context, unnecessary: UnnecessaryAlias)
 /// We mark named addresses as having a conflict if there is not a bidirectional mapping between
 /// the name and its value
 fn compute_address_conflicts(
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
     prog: &P::Program,
 ) -> BTreeSet<Symbol> {
     let mut name_to_addr: BTreeMap<Symbol, BTreeSet<AccountAddress>> = BTreeMap::new();
@@ -406,6 +406,7 @@ fn compute_address_conflicts(
     let all_addrs = prog.named_address_maps.all().iter().chain(
         pre_compiled_lib
             .iter()
+            .flat_map(|pre_vec| pre_vec.iter())
             .flat_map(|pre| pre.parser.named_address_maps.all()),
     );
     for map in all_addrs {
@@ -498,7 +499,7 @@ fn default_aliases(context: &mut Context) -> AliasMapBuilder {
 
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
     prog: P::Program,
 ) -> E::Program {
     let address_conflicts = compute_address_conflicts(pre_compiled_lib.clone(), &prog);
@@ -533,14 +534,16 @@ pub fn program(
             &prog.lib_definitions,
         );
         if let Some(pre_compiled) = pre_compiled_lib.clone() {
-            assert!(pre_compiled.parser.lib_definitions.is_empty());
-            all_module_members(
-                &mut member_computation_context,
-                &pre_compiled.parser.named_address_maps,
-                &mut members,
-                false,
-                &pre_compiled.parser.source_definitions,
-            );
+            for pre_compiled in pre_compiled {
+                assert!(pre_compiled.parser.lib_definitions.is_empty());
+                all_module_members(
+                    &mut member_computation_context,
+                    &pre_compiled.parser.named_address_maps,
+                    &mut members,
+                    false,
+                    &pre_compiled.parser.source_definitions,
+                );
+            }
         }
         members
     };

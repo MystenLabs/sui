@@ -55,7 +55,7 @@ pub struct Compiler {
     targets: Vec<IndexedPhysicalPackagePath>,
     deps: Vec<IndexedPhysicalPackagePath>,
     interface_files_dir_opt: Option<String>,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
     compiled_module_named_address_mapping: BTreeMap<CompiledModuleId, String>,
     flags: Flags,
     visitors: Vec<Visitor>,
@@ -74,7 +74,7 @@ pub struct Compiler {
 
 pub struct SteppedCompiler<const P: Pass> {
     compilation_env: CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
     program: Option<PassResult>,
 }
 
@@ -247,7 +247,10 @@ impl Compiler {
         self
     }
 
-    pub fn set_pre_compiled_lib(mut self, pre_compiled_lib: Arc<FullyCompiledProgram>) -> Self {
+    pub fn set_pre_compiled_lib(
+        mut self,
+        pre_compiled_lib: Vec<Arc<FullyCompiledProgram>>,
+    ) -> Self {
         assert!(self.pre_compiled_lib.is_none());
         self.pre_compiled_lib = Some(pre_compiled_lib);
         self
@@ -255,7 +258,7 @@ impl Compiler {
 
     pub fn set_pre_compiled_lib_opt(
         mut self,
-        pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
     ) -> Self {
         assert!(self.pre_compiled_lib.is_none());
         self.pre_compiled_lib = pre_compiled_lib;
@@ -539,7 +542,7 @@ macro_rules! ast_stepped_compilers {
             impl<'a> SteppedCompiler<{$pass}> {
                 fn $new(
                     compilation_env: CompilationEnv,
-                    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+                    pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
                     ast: $mod::ast::Program,
                 ) -> Self {
                     Self {
@@ -638,6 +641,7 @@ impl SteppedCompiler<PASS_COMPILATION> {
 pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol>>(
     targets: Vec<PackagePaths<Paths, NamedAddress>>,
     interface_files_dir_opt: Option<String>,
+    pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
     flags: Flags,
     vfs_root: Option<VfsPath>,
 ) -> anyhow::Result<Result<FullyCompiledProgram, (MappedFiles, Diagnostics)>> {
@@ -656,6 +660,7 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
         Vec::<PackagePaths<Paths, NamedAddress>>::new(),
     )?
     .set_interface_files_dir_opt(interface_files_dir_opt)
+    .set_pre_compiled_lib_opt(pre_compiled_lib.clone())
     .set_flags(flags)
     .add_save_hook(&hook)
     .run::<PASS_PARSER>()?;
@@ -668,7 +673,7 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
     let (empty_compiler, ast) = stepped.into_ast();
     let compilation_env = empty_compiler.compilation_env;
     let start = PassResult::Parser(ast);
-    match run(&compilation_env, None, start, PASS_COMPILATION) {
+    match run(&compilation_env, pre_compiled_lib, start, PASS_COMPILATION) {
         Err((_pass, errors)) => Ok(Err((files, errors))),
         Ok(PassResult::Compilation(compiled, _)) => Ok(Ok(FullyCompiledProgram {
             files,
@@ -952,14 +957,14 @@ impl PassResult {
 
 fn run(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
     cur: PassResult,
     until: Pass,
 ) -> Result<PassResult, (Pass, Diagnostics)> {
     #[growing_stack]
     fn rec(
         compilation_env: &CompilationEnv,
-        pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
         cur: PassResult,
         until: Pass,
     ) -> Result<PassResult, (Pass, Diagnostics)> {

@@ -19,7 +19,7 @@ use std::{collections::BTreeMap, sync::Arc};
 /// type or for unknown base types.
 pub fn modules(
     env: &CompilationEnv,
-    pre_compiled_lib_opt: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib_opt: Option<Vec<Arc<FullyCompiledProgram>>>,
     modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
 ) {
     let reporter = env.diagnostic_reporter_at_top_level();
@@ -34,14 +34,16 @@ pub fn modules(
         )
     }
     if let Some(pre_compiled_lib) = pre_compiled_lib_opt {
-        for (mident, m) in pre_compiled_lib.expansion.modules.key_cloned_iter() {
-            check_prim_definer(
-                &reporter,
-                /* allow shadowing */ true,
-                &mut definers,
-                mident,
-                m,
-            )
+        for pre_compiled_lib in pre_compiled_lib {
+            for (mident, m) in pre_compiled_lib.expansion.modules.key_cloned_iter() {
+                check_prim_definer(
+                    &reporter,
+                    /* allow shadowing */ true,
+                    &mut definers,
+                    mident,
+                    m,
+                )
+            }
         }
     }
     env.set_primitive_type_definers(definers)

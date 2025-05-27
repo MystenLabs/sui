@@ -67,7 +67,7 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
 
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_deps: Option<Vec<Arc<FullyCompiledProgram>>>,
         task_opt: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
         _path: &Path,
     ) -> (Self, Option<String>) {
@@ -303,6 +303,7 @@ pub static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
             named_address_map: move_stdlib::move_stdlib_named_addresses(),
         }],
         None,
+        None,
         move_compiler::Flags::empty(),
         None,
     )
@@ -350,6 +351,9 @@ fn test_vm_config() -> VMConfig {
 
 #[tokio::main]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    run_test_impl::<SimpleVMTestAdapter>(path, Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())))
-        .await
+    run_test_impl::<SimpleVMTestAdapter>(
+        path,
+        Some(vec![Arc::new(PRECOMPILED_MOVE_STDLIB.clone())]),
+    )
+    .await
 }

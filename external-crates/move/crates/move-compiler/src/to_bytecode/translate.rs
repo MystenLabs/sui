@@ -38,7 +38,7 @@ type CollectedInfo = (Vec<(Mutability, Var, H::SingleType)>, Attributes);
 
 fn extract_decls(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
     prog: &G::Program,
 ) -> (
     HashMap<ModuleIdent, usize>,
@@ -46,13 +46,16 @@ fn extract_decls(
     HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>,
 ) {
     let pre_compiled_modules = || {
-        pre_compiled_lib.iter().flat_map(|pre_compiled| {
-            pre_compiled
-                .cfgir
-                .modules
-                .key_cloned_iter()
-                .filter(|(mident, _m)| !prog.modules.contains_key(mident))
-        })
+        pre_compiled_lib
+            .iter()
+            .flat_map(|pre_compiled_vec| pre_compiled_vec.iter())
+            .flat_map(|pre_compiled| {
+                pre_compiled
+                    .cfgir
+                    .modules
+                    .key_cloned_iter()
+                    .filter(|(mident, _m)| !prog.modules.contains_key(mident))
+            })
     };
 
     let mut max_ordering = 0;
@@ -127,7 +130,7 @@ fn extract_decls(
 
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
     prog: G::Program,
 ) -> Vec<AnnotatedCompiledUnit> {
     let mut units = vec![];

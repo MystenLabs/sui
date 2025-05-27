@@ -57,7 +57,7 @@ use std::{
 
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
     prog: N::Program,
 ) -> T::Program {
     let N::Program {
@@ -95,7 +95,7 @@ pub fn program(
 
 fn extract_macros(
     modules: &UniqueMap<ModuleIdent, N::ModuleDefinition>,
-    pre_compiled_lib: &Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: &Option<Vec<Arc<FullyCompiledProgram>>>,
 ) -> UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>> {
     // Merges the methods of the module into the local methods for each macro.
     fn merge_use_funs(module_use_funs: &N::UseFuns, mut macro_use_funs: N::UseFuns) -> N::UseFuns {
@@ -126,18 +126,22 @@ fn extract_macros(
     // Prefer local module definitions to previous ones. This is ostensibly an error, but naming
     // should have already produced that error. To avoid unnecessary error handling, we simply
     // prefer the non-precompiled definitions.
-    let all_modules: UniqueMap<ModuleIdent, &N::ModuleDefinition> =
-        UniqueMap::maybe_from_iter(modules.key_cloned_iter().chain(
-            pre_compiled_lib.iter().flat_map(|pre_compiled| {
-                pre_compiled
-                    .naming
-                    .inner
-                    .modules
-                    .key_cloned_iter()
-                    .filter(|(mident, _m)| !modules.contains_key(mident))
-            }),
-        ))
-        .unwrap();
+    let all_modules: UniqueMap<ModuleIdent, &N::ModuleDefinition> = UniqueMap::maybe_from_iter(
+        modules.key_cloned_iter().chain(
+            pre_compiled_lib
+                .iter()
+                .flat_map(|pre_compiled_vec| pre_compiled_vec.iter())
+                .flat_map(|pre_compiled| {
+                    pre_compiled
+                        .naming
+                        .inner
+                        .modules
+                        .key_cloned_iter()
+                        .filter(|(mident, _m)| !modules.contains_key(mident))
+                }),
+        ),
+    )
+    .unwrap();
 
     all_modules.map(|_mident, mdef| {
         mdef.functions.ref_filter_map(|_name, f| {
