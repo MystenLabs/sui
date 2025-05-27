@@ -118,6 +118,9 @@ pub struct ModuleCache {
 
     /// Global cache of loaded datatypes, shared among all modules.
     datatypes: BinaryCache<(ModuleId, Identifier), CachedDatatype>,
+    /// A mapping of the different defining IDs that we have seen and that are present in the type
+    /// cache. This is a mapping of a defining ID to the runtime/original ID of the package.
+    defining_linkages: BTreeMap<AccountAddress, AccountAddress>,
     /// Global list of loaded functions, shared among all modules.
     functions: Vec<Arc<Function>>,
 }
@@ -137,6 +140,7 @@ impl ModuleCache {
             loaded_modules: BinaryCache::new(),
             datatypes: BinaryCache::new(),
             functions: vec![],
+            defining_linkages: BTreeMap::new(),
         }
     }
 
@@ -254,6 +258,17 @@ impl ModuleCache {
 
             let defining_id = data_store.defining_module(&runtime_id, name)?;
 
+            if let Some(other) = self
+                .defining_linkages
+                .insert(*defining_id.address(), *runtime_id.address())
+            {
+                assert_eq!(
+                    other,
+                    *runtime_id.address(),
+                    "[struct] Original IDs must always be the same"
+                );
+            }
+
             self.datatypes.insert(
                 struct_key,
                 CachedDatatype {
@@ -301,6 +316,17 @@ impl ModuleCache {
             variant_defs.push((idx, variant_info));
 
             let defining_id = data_store.defining_module(&runtime_id, name)?;
+            if let Some(other) = self
+                .defining_linkages
+                .insert(*defining_id.address(), *runtime_id.address())
+            {
+                assert_eq!(
+                    other,
+                    *runtime_id.address(),
+                    "[enum] Original IDs must always be the same"
+                );
+            }
+
             self.datatypes.insert(
                 enum_key,
                 CachedDatatype {
@@ -1042,6 +1068,64 @@ impl Loader {
             // Should work if the type exists, because module was loaded above.
             .resolve_type_by_name(name, runtime_id)
             .map_err(|e| e.finish(Location::Undefined))
+    }
+
+    /// Try to load a type tag from the cache. The `type_tag` must be a defining ID-based type tag.
+    /// Returns the loaded type with the defining IDs replaced by their Runtime IDs
+    /// (i.e., package IDs used in the VM for package resolution /execution).
+    pub(crate) fn try_load_cached_type(&self, type_tag: &TypeTag) -> VMResult<Option<Type>> {
+        Ok(Some(match type_tag {
+            TypeTag::Bool => Type::Bool,
+            TypeTag::U8 => Type::U8,
+            TypeTag::U16 => Type::U16,
+            TypeTag::U32 => Type::U32,
+            TypeTag::U64 => Type::U64,
+            TypeTag::U128 => Type::U128,
+            TypeTag::U256 => Type::U256,
+            TypeTag::Address => Type::Address,
+            TypeTag::Signer => Type::Signer,
+            TypeTag::Vector(tt) => {
+                let Some(inner_ty) = self.try_load_cached_type(tt)? else {
+                    return Ok(None);
+                };
+                Type::Vector(Box::new(inner_ty))
+            }
+            TypeTag::Struct(struct_tag) => {
+                let Some(runtime_address) = self
+                    .module_cache
+                    .read()
+                    .defining_linkages
+                    .get(&struct_tag.address)
+                    .cloned()
+                else {
+                    return Ok(None);
+                };
+                let runtime_id = ModuleId::new(runtime_address, struct_tag.module.clone());
+                let Some((idx, struct_type)) = self
+                    .module_cache
+                    .read()
+                    .resolve_type_by_name(&struct_tag.name, &runtime_id)
+                    .ok()
+                else {
+                    return Ok(None);
+                };
+                if struct_type.type_parameters.is_empty() && struct_tag.type_params.is_empty() {
+                    Type::Datatype(idx)
+                } else {
+                    let mut type_params = vec![];
+                    for ty_param in &struct_tag.type_params {
+                        if let Some(ty_param) = self.try_load_cached_type(ty_param)? {
+                            type_params.push(ty_param);
+                        } else {
+                            return Ok(None);
+                        }
+                    }
+                    self.verify_ty_args(struct_type.type_param_constraints(), &type_params)
+                        .map_err(|e| e.finish(Location::Undefined))?;
+                    Type::DatatypeInstantiation(Box::new((idx, type_params)))
+                }
+            }
+        }))
     }
 
     pub(crate) fn load_type(
