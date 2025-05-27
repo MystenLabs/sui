@@ -633,6 +633,12 @@ pub struct Opts {
     /// `sui client execute-combined-signed-tx --signed-tx-bytes <SIGNED_TX_BYTES>`.
     #[arg(long, required = false)]
     pub serialize_signed_transaction: bool,
+    /// Use a custom signer for the transaction. This option must be used with
+    /// --serialize-unsigned-transaction since the custom signer's private key
+    /// is not available in the keystore. The resulting unsigned transaction
+    /// can then be signed externally using the custom signer's private key.
+    #[arg(long, required = false, value_parser)]
+    pub custom_signer: Option<SuiAddress>,
 }
 
 /// Global options with gas
@@ -655,6 +661,7 @@ impl Opts {
             dev_inspect: false,
             serialize_unsigned_transaction: false,
             serialize_signed_transaction: false,
+            custom_signer: None,
         }
     }
     /// Uses the passed gas_budget for the gas budget variable, sets dry run to true,
@@ -666,6 +673,7 @@ impl Opts {
             dev_inspect: false,
             serialize_unsigned_transaction: false,
             serialize_signed_transaction: false,
+            custom_signer: None,
         }
     }
 }
@@ -2997,12 +3005,14 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         gas_budget,
         serialize_unsigned_transaction,
         serialize_signed_transaction,
+        custom_signer,
     ) = (
         opts.dry_run,
         opts.dev_inspect,
         opts.gas_budget,
         opts.serialize_unsigned_transaction,
         opts.serialize_signed_transaction,
+        opts.custom_signer,
     );
     ensure!(
         !serialize_unsigned_transaction || !serialize_signed_transaction,
@@ -3015,6 +3025,8 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
     };
 
     let client = context.get_client().await?;
+
+    let signer = custom_signer.unwrap_or(signer);
 
     if dev_inspect {
         return execute_dev_inspect(

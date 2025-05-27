@@ -8,7 +8,10 @@ use move_core_types::parsing::{
     parser::{parse_u128, parse_u16, parse_u256, parse_u32, parse_u64, parse_u8},
     types::{ParsedFqName, ParsedModuleId, ParsedStructType, ParsedType},
 };
-use sui_types::{base_types::ObjectID, Identifier};
+use sui_types::{
+    base_types::{ObjectID, SuiAddress},
+    Identifier,
+};
 
 use crate::{
     client_ptb::{
@@ -45,6 +48,8 @@ struct ProgramParsingState {
     dev_inspect_set: bool,
     gas_object_id: Option<Spanned<ObjectID>>,
     gas_budget: Option<Spanned<u64>>,
+    custom_signer_set: bool,
+    custom_signer: Option<Spanned<SuiAddress>>,
 }
 
 macro_rules! mvr_ident {
@@ -75,6 +80,8 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 dev_inspect_set: false,
                 gas_object_id: None,
                 gas_budget: None,
+                custom_signer_set: false,
+                custom_signer: None,
             },
         })
     }
@@ -141,6 +148,11 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                         ]);
                         self.fast_forward_to_next_command();
                     }
+                }
+                L(T::Command, A::CUSTOM_SIGNER) => {
+                    flag!(custom_signer_set);
+                    let custom_signer = try_!(self.parse_custom_signer());
+                    self.state.custom_signer = Some(custom_signer);
                 }
 
                 L(T::Command, A::TRANSFER_OBJECTS) => command!(self.parse_transfer_objects()),
@@ -221,6 +233,8 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                     dev_inspect_set: self.state.dev_inspect_set,
                     gas_budget: self.state.gas_budget,
                     mvr_names: self.state.mvr_names_with_span,
+                    custom_signer_set: self.state.custom_signer_set,
+                    custom_signer: self.state.custom_signer,
                 },
             ))
         } else {
@@ -842,6 +856,15 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
 
         let sp!(end_sp, _) = self.expect(T::RBracket)?;
         Ok(start_sp.widen(end_sp).wrap(values))
+    }
+
+
+    /// Parse a custom signer.
+    /// The expected format is: `--custom-signer <address>`
+    fn parse_custom_signer(&mut self) -> PTBResult<Spanned<SuiAddress>> {
+        Ok(self
+            .parse_address_literal()?
+            .map(|a| SuiAddress::from(a.into_inner())))
     }
 }
 
