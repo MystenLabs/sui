@@ -7,7 +7,7 @@ use crate::authority::backpressure::BackpressureManager;
 use crate::authority::epoch_start_configuration::EpochFlag;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::AuthorityStore;
-use crate::state_accumulator::AccumulatorStore;
+use crate::global_state_hasher::GlobalStateHashStore;
 use crate::transaction_outputs::TransactionOutputs;
 use mysten_common::fatal;
 use sui_types::bridge::Bridge;
@@ -62,7 +62,7 @@ pub struct ExecutionCacheTraitPointers {
     pub backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
     pub object_store: Arc<dyn ObjectStore + Send + Sync>,
     pub reconfig_api: Arc<dyn ExecutionCacheReconfigAPI>,
-    pub accumulator_store: Arc<dyn AccumulatorStore>,
+    pub global_state_hash_store: Arc<dyn GlobalStateHashStore>,
     pub checkpoint_cache: Arc<dyn CheckpointCache>,
     pub state_sync_store: Arc<dyn StateSyncAPI>,
     pub cache_commit: Arc<dyn ExecutionCacheCommit>,
@@ -79,7 +79,7 @@ impl ExecutionCacheTraitPointers {
             + BackingPackageStore
             + ObjectStore
             + ExecutionCacheReconfigAPI
-            + AccumulatorStore
+            + GlobalStateHashStore
             + CheckpointCache
             + StateSyncAPI
             + ExecutionCacheCommit
@@ -94,7 +94,7 @@ impl ExecutionCacheTraitPointers {
             backing_package_store: cache.clone(),
             object_store: cache.clone(),
             reconfig_api: cache.clone(),
-            accumulator_store: cache.clone(),
+            global_state_hash_store: cache.clone(),
             checkpoint_cache: cache.clone(),
             state_sync_store: cache.clone(),
             cache_commit: cache.clone(),
@@ -261,7 +261,7 @@ pub trait ObjectCacheRead: Send + Sync {
         ) {
             assert!(
                 input_key.version().is_none() || input_key.version().unwrap().is_valid(),
-                "Shared objects in cancelled transaction should always be available immediately, 
+                "Shared objects in cancelled transaction should always be available immediately,
                  but it appears that transaction manager is waiting for {:?} to become available",
                 input_key
             );
@@ -397,7 +397,7 @@ pub trait ObjectCacheRead: Send + Sync {
         version: SequenceNumber,
         epoch_id: EpochId,
     ) -> bool {
-        let full_id = FullObjectID::Fastpath(object_id); // function explicilty assumes "fastpath"
+        let full_id = FullObjectID::Fastpath(object_id); // function explicitly assumes "fastpath"
         matches!(
             self.get_latest_marker(full_id, epoch_id),
             Some((marker_version, MarkerValue::FastpathStreamEnded)) if marker_version >= version
@@ -406,6 +406,20 @@ pub trait ObjectCacheRead: Send + Sync {
 
     /// Return the watermark for the highest checkpoint for which we've pruned objects.
     fn get_highest_pruned_checkpoint(&self) -> Option<CheckpointSequenceNumber>;
+
+    /// Given a list of input and receiving objects for a transaction,
+    /// wait until all of them become available, so that the transaction
+    /// can start execution.
+    /// `input_and_receiving_keys` contains both input objects and receiving
+    /// input objects, including canceled objects.
+    /// TODO: Eventually this can return the objects read results,
+    /// so that execution does not need to load them again.
+    fn notify_read_input_objects<'a>(
+        &'a self,
+        input_and_receiving_keys: &'a [InputKey],
+        receiving_keys: &'a HashSet<InputKey>,
+        epoch: &'a EpochId,
+    ) -> BoxFuture<'a, Vec<()>>;
 }
 
 pub trait TransactionCacheRead: Send + Sync {
@@ -707,7 +721,7 @@ macro_rules! implement_storage_traits {
                 // transaction replay due to possible reordering of transactions during replay.
                 if recv_object.owner != Owner::AddressOwner((*owner).into())
                     || self.have_received_object_at_version(
-                        // TODO: Add support for receiving ConsensusV2 objects. For now this assumes fastpath.
+                        // TODO: Add support for receiving consensus objects. For now this assumes fastpath.
                         FullObjectKey::new(
                             FullObjectID::new(*receiving_object_id, None),
                             receive_object_at_version,

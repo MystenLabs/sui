@@ -5,7 +5,7 @@
     "publisher": "mysten",
     "icon": "images/move.png",
     "license": "Apache-2.0",
-    "version": "0.0.7",
+    "version": "0.0.8",
     "preview": true,
     "repository": {
         "url": "https://github.com/MystenLabs/sui.git",
@@ -162,10 +162,10 @@
         "prestart": "npm run compile; tsc -p ../trace-adapter; cp ../trace-adapter/out/*.* ./out/"
     },
     "dependencies": {
-        "@mongodb-js/zstd": "^2.0.1",
         "@vscode/debugadapter": "^1.56.0",
         "@vscode/debugadapter-testsupport": "^1.56.0",
         "@vscode/debugprotocol": "1.66.0",
+        "fzstd": "^0.1.1",
         "toml": "^3.0.0"
     },
     "devDependencies": {

@@ -511,6 +511,18 @@ public fun pool_exchange_rates(
     wrapper.load_system_state_mut().pool_exchange_rates(pool_id)
 }
 
+#[test_only]
+/// Calculate the rewards for a given staked SUI object.
+public fun calculate_rewards(self: &mut SuiSystemState, staked_sui: &StakedSui, epoch: u64): u64 {
+    let system_state = self.load_system_state_mut();
+    let validator_address = system_state.validator_address_by_pool_id(&staked_sui.pool_id());
+
+    system_state
+        .active_validator_by_address(validator_address)
+        .get_staking_pool_ref()
+        .calculate_rewards(staked_sui, epoch)
+}
+
 /// Getter returning addresses of the currently active validators.
 public fun active_validator_addresses(wrapper: &mut SuiSystemState): vector<address> {
     wrapper.load_system_state_mut().active_validator_addresses()
@@ -643,6 +655,12 @@ public fun get_reporters_of(wrapper: &mut SuiSystemState, addr: address): VecSet
 /// Return the current validator set
 public fun validators(wrapper: &mut SuiSystemState): &ValidatorSet {
     wrapper.load_system_state_mut().validators()
+}
+
+#[test_only]
+/// Return a mutable reference to the validator set
+public fun validators_mut(wrapper: &mut SuiSystemState): &mut ValidatorSet {
+    wrapper.load_system_state_mut().validators_mut()
 }
 
 #[test_only]

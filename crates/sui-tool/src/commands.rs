@@ -56,6 +56,9 @@ pub enum ToolCommand {
         /// RPC address to provide the up-to-date committee info
         #[arg(long = "fullnode-rpc-url")]
         fullnode_rpc_url: String,
+        /// If true, uses plain HTTP to connect to validator interface
+        #[arg(long = "no-tls")]
+        no_tls: bool,
         /// Should attempt to rescue the object if it's locked but not fully locked
         #[arg(long = "rescue")]
         rescue: bool,
@@ -79,6 +82,10 @@ pub enum ToolCommand {
         // RPC address to provide the up-to-date committee info
         #[arg(long = "fullnode-rpc-url")]
         fullnode_rpc_url: String,
+
+        /// If true, uses plain HTTP to connect to validator interface
+        #[arg(long = "no-tls")]
+        no_tls: bool,
 
         /// Concise mode groups responses by results.
         /// prints tabular output suitable for processing with unix tools. For
@@ -109,6 +116,10 @@ pub enum ToolCommand {
         // RPC address to provide the up-to-date committee info
         #[arg(long = "fullnode-rpc-url")]
         fullnode_rpc_url: String,
+
+        /// If true, uses plain HTTP to connect to validator interface
+        #[arg(long = "no-tls")]
+        no_tls: bool,
 
         #[arg(long, help = "The transaction ID to fetch")]
         digest: TransactionDigest,
@@ -178,6 +189,10 @@ pub enum ToolCommand {
         // RPC address to provide the up-to-date committee info
         #[arg(long = "fullnode-rpc-url")]
         fullnode_rpc_url: String,
+
+        /// If true, uses plain HTTP to connect to validator interface
+        #[arg(long = "no-tls")]
+        no_tls: bool,
 
         #[arg(long, help = "Fetch checkpoint at a specific sequence number")]
         sequence_number: Option<CheckpointSequenceNumber>,
@@ -374,8 +389,9 @@ async fn check_locked_object(
     committee: Arc<BTreeMap<AuthorityPublicKeyBytes, u64>>,
     id: ObjectID,
     rescue: bool,
+    use_tls: bool,
 ) -> anyhow::Result<()> {
-    let clients = Arc::new(make_clients(sui_client).await?);
+    let clients = Arc::new(make_clients(sui_client, use_tls).await?);
     let output = get_object(id, None, None, clients.clone()).await?;
     let output = GroupedObjectOutput::new(output, committee);
     if output.fully_locked {
@@ -438,6 +454,7 @@ impl ToolCommand {
             ToolCommand::LockedObject {
                 id,
                 fullnode_rpc_url,
+                no_tls,
                 rescue,
                 address,
             } => {
@@ -472,6 +489,7 @@ impl ToolCommand {
                             committee.clone(),
                             *id,
                             rescue,
+                            !no_tls,
                         ))
                     }
                     join_all(tasks)
@@ -485,12 +503,13 @@ impl ToolCommand {
                 validator,
                 version,
                 fullnode_rpc_url,
+                no_tls,
                 verbosity,
                 concise_no_header,
             } => {
                 let sui_client =
                     Arc::new(SuiClientBuilder::default().build(fullnode_rpc_url).await?);
-                let clients = Arc::new(make_clients(&sui_client).await?);
+                let clients = Arc::new(make_clients(&sui_client, !no_tls).await?);
                 let output = get_object(id, version, validator, clients).await?;
 
                 match verbosity {
@@ -521,10 +540,11 @@ impl ToolCommand {
                 digest,
                 show_input_tx,
                 fullnode_rpc_url,
+                no_tls,
             } => {
                 print!(
                     "{}",
-                    get_transaction_block(digest, show_input_tx, fullnode_rpc_url).await?
+                    get_transaction_block(digest, show_input_tx, fullnode_rpc_url, !no_tls).await?
                 );
             }
             ToolCommand::DbTool { db_path, cmd } => {
@@ -573,10 +593,11 @@ impl ToolCommand {
             ToolCommand::FetchCheckpoint {
                 sequence_number,
                 fullnode_rpc_url,
+                no_tls,
             } => {
                 let sui_client =
                     Arc::new(SuiClientBuilder::default().build(fullnode_rpc_url).await?);
-                let clients = make_clients(&sui_client).await?;
+                let clients = make_clients(&sui_client, !no_tls).await?;
 
                 for (name, (_, client)) in clients {
                     let resp = client
@@ -720,89 +741,12 @@ impl ToolCommand {
                     }
                 };
 
-                let archive_bucket = Some(
-                    env::var("FORMAL_SNAPSHOT_ARCHIVE_BUCKET").unwrap_or_else(|_| match network {
-                        Chain::Mainnet => "mysten-mainnet-archives".to_string(),
-                        Chain::Testnet => "mysten-testnet-archives".to_string(),
-                        Chain::Unknown => {
-                            panic!("Cannot generate default archive bucket for unknown network");
-                        }
-                    }),
-                );
-
-                let mut custom_archive_enabled = false;
-                if let Ok(custom_archive_check) = env::var("CUSTOM_ARCHIVE_BUCKET") {
-                    if custom_archive_check == "true" {
-                        custom_archive_enabled = true;
-                    }
-                }
-                let archive_store_config = if custom_archive_enabled {
-                    let aws_region = Some(
-                        env::var("FORMAL_SNAPSHOT_ARCHIVE_REGION")
-                            .unwrap_or("us-west-2".to_string()),
-                    );
-
-                    let archive_bucket_type = env::var("FORMAL_SNAPSHOT_ARCHIVE_BUCKET_TYPE").expect("If setting `CUSTOM_ARCHIVE_BUCKET=true` Must set FORMAL_SNAPSHOT_ARCHIVE_BUCKET_TYPE, and credentials");
-                    match archive_bucket_type.to_ascii_lowercase().as_str()
-                    {
-                        "s3" => ObjectStoreConfig {
-                            object_store: Some(ObjectStoreType::S3),
-                            bucket: archive_bucket.filter(|s| !s.is_empty()),
-                            aws_access_key_id: env::var("AWS_ARCHIVE_ACCESS_KEY_ID").ok(),
-                            aws_secret_access_key: env::var("AWS_ARCHIVE_SECRET_ACCESS_KEY").ok(),
-                            aws_region,
-                            aws_endpoint: env::var("AWS_ARCHIVE_ENDPOINT").ok(),
-                            aws_virtual_hosted_style_request: env::var(
-                                "AWS_ARCHIVE_VIRTUAL_HOSTED_REQUESTS",
-                            )
-                            .ok()
-                            .and_then(|b| b.parse().ok())
-                            .unwrap_or(false),
-                            object_store_connection_limit: 50,
-                            no_sign_request: false,
-                            ..Default::default()
-                        },
-                        "gcs" => ObjectStoreConfig {
-                            object_store: Some(ObjectStoreType::GCS),
-                            bucket: archive_bucket,
-                            google_service_account: env::var(
-                                "GCS_ARCHIVE_SERVICE_ACCOUNT_FILE_PATH",
-                            )
-                            .ok(),
-                            object_store_connection_limit: 50,
-                            no_sign_request: false,
-                            ..Default::default()
-                        },
-                        "azure" => ObjectStoreConfig {
-                            object_store: Some(ObjectStoreType::Azure),
-                            bucket: archive_bucket,
-                            azure_storage_account: env::var("AZURE_ARCHIVE_STORAGE_ACCOUNT").ok(),
-                            azure_storage_access_key: env::var("AZURE_ARCHIVE_STORAGE_ACCESS_KEY")
-                                .ok(),
-                            object_store_connection_limit: 50,
-                            no_sign_request: false,
-                            ..Default::default()
-                        },
-                        _ => panic!("If setting `CUSTOM_ARCHIVE_BUCKET=true` must set FORMAL_SNAPSHOT_ARCHIVE_BUCKET_TYPE to one of 'gcs', 'azure', or 's3' "),
-                    }
-                } else {
-                    // if not explicitly overridden, just default to the permissionless archive store
-                    ObjectStoreConfig {
-                        object_store: Some(ObjectStoreType::S3),
-                        bucket: archive_bucket.filter(|s| !s.is_empty()),
-                        aws_region: Some("us-west-2".to_string()),
-                        aws_endpoint: env::var("AWS_ARCHIVE_ENDPOINT").ok(),
-                        aws_virtual_hosted_style_request: env::var(
-                            "AWS_ARCHIVE_VIRTUAL_HOSTED_REQUESTS",
-                        )
-                        .ok()
-                        .and_then(|b| b.parse().ok())
-                        .unwrap_or(false),
-                        object_store_connection_limit: 200,
-                        no_sign_request: true,
-                        ..Default::default()
-                    }
+                let ingestion_url = match network {
+                    Chain::Mainnet => "https://checkpoints.mainnet.sui.io",
+                    Chain::Testnet => "https://checkpoints.testnet.sui.io",
+                    _ => panic!("Cannot generate default ingestion url for unknown network"),
                 };
+
                 let latest_available_epoch =
                     latest.then_some(get_latest_available_epoch(&snapshot_store_config).await?);
                 let epoch_to_download = epoch.or(latest_available_epoch).expect(
@@ -824,7 +768,7 @@ impl ToolCommand {
                     epoch_to_download,
                     &genesis,
                     snapshot_store_config,
-                    archive_store_config,
+                    ingestion_url,
                     num_parallel_downloads,
                     network,
                     verify,

@@ -25,18 +25,14 @@ pub const PUBLIC_TRANSFER_FUNCTIONS: &[&IdentStr] = &[
     ident_str!("public_share_object"),
     ident_str!("public_receive"),
     ident_str!("receiving_object_id"),
+    ident_str!("public_party_transfer"),
 ];
 pub const PRIVATE_TRANSFER_FUNCTIONS: &[&IdentStr] = &[
     ident_str!("transfer"),
     ident_str!("freeze_object"),
     ident_str!("share_object"),
     ident_str!("receive"),
-];
-pub const TRANSFER_IMPL_FUNCTIONS: &[&IdentStr] = &[
-    ident_str!("transfer_impl"),
-    ident_str!("freeze_object_impl"),
-    ident_str!("share_object_impl"),
-    ident_str!("receive_impl"),
+    ident_str!("party_transfer"),
 ];
 
 /// All transfer functions (the functions in `sui::transfer`) are "private" in that they are
@@ -117,7 +113,7 @@ fn verify_private_transfer(
         PUBLIC_TRANSFER_FUNCTIONS
     } else {
         // Before protocol version 33, the `receiving_object_id` function was not public
-        &PUBLIC_TRANSFER_FUNCTIONS[..PUBLIC_TRANSFER_FUNCTIONS.len() - 1]
+        &PUBLIC_TRANSFER_FUNCTIONS[..4]
     };
     let self_handle = view.module_handle_at(view.self_handle_idx());
     if addr_module(view, self_handle) == (SUI_FRAMEWORK_ADDRESS, TRANSFER_MODULE) {

@@ -95,6 +95,7 @@ static_symbols!(
     "migration",
     "beta",
     "development",
+    "party_transfer",
 );
 
 /// The global, unique cache of strings.

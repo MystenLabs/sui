@@ -34,7 +34,7 @@ use crate::{
     package::{EnvironmentName, PackageName},
 };
 
-use super::{DependencySet, ManifestDependencyInfo, PinnedDependencyInfo, pin};
+use super::{DependencySet, PinnedDependencyInfo, UnpinnedDependencyInfo, pin};
 
 pub type ResolverName = String;
 
@@ -60,6 +60,7 @@ struct RField {
 }
 
 /// Requests from the package mananger to the external resolver
+// TODO: fix typo above
 #[derive(Serialize, Debug)]
 struct ResolveRequest<F: MoveFlavor> {
     #[serde(default)]
@@ -71,7 +72,7 @@ struct ResolveRequest<F: MoveFlavor> {
 #[derive(Deserialize)]
 #[serde(bound = "")]
 struct ResolveResponse<F: MoveFlavor> {
-    result: ManifestDependencyInfo<F>,
+    result: UnpinnedDependencyInfo<F>,
     warnings: Vec<String>,
 }
 
@@ -80,12 +81,13 @@ impl ExternalDependency {
     /// resolvers.
     ///
     /// Note that the set of entries may be changed because external dependencies may be resolved
-    /// differently for different environments - this may cause the addition of a new dep-override;
-    /// this method may also optimize by removing unnecessary dep-overrides.
+    /// differently for different environments - this may cause the addition of a new
+    /// dep-replacement;
+    /// this method may also optimize by removing unnecessary dep-replacements.
     ///
     /// Expects all environments in [deps] to also be contained in [envs]
     pub async fn resolve<F: MoveFlavor>(
-        deps: &mut DependencySet<ManifestDependencyInfo<F>>,
+        deps: &mut DependencySet<UnpinnedDependencyInfo<F>>,
         envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
     ) -> PackageResult<()> {
         // we explode [deps] first so that we know exactly which deps are needed for each env.
@@ -96,7 +98,7 @@ impl ExternalDependency {
             BTreeMap::new();
 
         for (env, pkg, dep) in deps.iter() {
-            if let ManifestDependencyInfo::External::<F>(dep) = dep {
+            if let UnpinnedDependencyInfo::External::<F>(dep) = dep {
                 let env_id = env.map(|id| {
                     envs.get(id)
                         .expect("all environments must be in [envs]")
@@ -134,6 +136,8 @@ impl ExternalDependency {
     }
 }
 
+// TODO: CLEANUP
+// Explain this conversion
 impl TryFrom<RField> for ExternalDependency {
     type Error = PackageError;
 
@@ -174,7 +178,7 @@ impl From<ExternalDependency> for RField {
 async fn resolve_single<F: MoveFlavor>(
     resolver: ResolverName,
     requests: DependencySet<ResolveRequest<F>>,
-) -> PackageResult<DependencySet<ManifestDependencyInfo<F>>> {
+) -> PackageResult<DependencySet<UnpinnedDependencyInfo<F>>> {
     let mut child = Command::new(&resolver)
         .arg(RESOLVE_ARG)
         .stdin(Stdio::piped())
@@ -218,11 +222,11 @@ async fn resolve_single<F: MoveFlavor>(
         return Err(ResolverError::nonzero_exit(&resolver, output.status).into());
     }
 
-    let result: DependencySet<ManifestDependencyInfo<F>> = izip!(envs, pkgs, resps?).collect();
+    let result: DependencySet<UnpinnedDependencyInfo<F>> = izip!(envs, pkgs, resps?).collect();
 
     // ensure no externally resolved responses
     for (_, _, dep) in result.iter() {
-        if let ManifestDependencyInfo::External(_) = dep {
+        if let UnpinnedDependencyInfo::External(_) = dep {
             return Err(ResolverError::bad_resolver(
                 &resolver,
                 "resolvers must return resolved dependencies",

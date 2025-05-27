@@ -36,7 +36,7 @@ pub trait MoveFlavor: Debug {
     /// Pin a batch of [Self::FlavorDependency]s (see TODO). The keys of the returned map should be
     /// the same as the keys of [dep].
     //
-    // TODO: this interface means we can't batch dep-overrides together
+    // TODO: this interface means we can't batch dep-replacements together
     fn pin(
         &self,
         deps: DependencySet<Self::FlavorDependency<Unpinned>>,

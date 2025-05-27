@@ -120,6 +120,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) core_lock_dequeued: IntCounter,
     pub(crate) core_lock_enqueued: IntCounter,
     pub(crate) core_skipped_proposals: IntCounterVec,
+    pub(crate) handler_received_block_missing_ancestors: IntCounterVec,
     pub(crate) highest_accepted_authority_round: IntGaugeVec,
     pub(crate) highest_accepted_round: IntGauge,
     pub(crate) accepted_block_time_drift_ms: IntCounterVec,
@@ -135,6 +136,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) synchronizer_current_missing_blocks_by_authority: IntGaugeVec,
     pub(crate) synchronizer_fetched_blocks_by_authority: IntCounterVec,
     pub(crate) synchronizer_fetch_failures: IntCounterVec,
+    pub(crate) synchronizer_skipped_fetch_requests: IntCounterVec,
     pub(crate) synchronizer_process_fetched_failures: IntCounterVec,
     pub(crate) network_received_excluded_ancestors_from_authority: IntCounterVec,
     pub(crate) network_excluded_ancestors_sent_to_fetch: IntCounterVec,
@@ -346,6 +348,12 @@ impl NodeMetrics {
                 &["reason"],
                 registry,
             ).unwrap(),
+            handler_received_block_missing_ancestors: register_int_counter_vec_with_registry!(
+                "handler_received_block_missing_ancestors",
+                "Number of missing ancestors in blocks received in the handler, separated by peer",
+                &["authority"],
+                registry,
+            ).unwrap(),
             highest_accepted_authority_round: register_int_gauge_vec_with_registry!(
                 "highest_accepted_authority_round",
                 "The highest round where a block has been accepted per authority. Resets on restart.",
@@ -429,6 +437,12 @@ impl NodeMetrics {
                 "synchronizer_fetch_failures",
                 "Number of fetch failures against each peer",
                 &["peer", "type"],
+                registry,
+            ).unwrap(),
+            synchronizer_skipped_fetch_requests: register_int_counter_vec_with_registry!(
+                "synchronizer_skipped_fetch_requests",
+                "Number of fetch requests skipped against each peer, because the peer is saturated",
+                &["peer"],
                 registry,
             ).unwrap(),
             synchronizer_process_fetched_failures: register_int_counter_vec_with_registry!(

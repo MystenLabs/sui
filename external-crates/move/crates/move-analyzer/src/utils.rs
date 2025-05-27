@@ -4,10 +4,32 @@
 use lsp_types::Position;
 use move_command_line_common::files::FileHash;
 use move_compiler::{
-    shared::files::MappedFiles, unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
+    expansion::ast::{Address, ModuleIdent_},
+    shared::files::MappedFiles,
+    unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
+
+/// Produces module ident string of the form pkg::module to be used as a map key
+/// It's important that these are consistent between parsing AST and typed AST.
+pub fn expansion_mod_ident_to_map_key(mod_ident: &ModuleIdent_) -> String {
+    use Address as A;
+    match mod_ident.address {
+        A::Numerical {
+            name,
+            value,
+            name_conflict: _,
+        } => {
+            if let Some(n) = name {
+                format!("({n}={value})::{}", mod_ident.module).to_string()
+            } else {
+                format!("{value}::{}", mod_ident.module).to_string()
+            }
+        }
+        A::NamedUnassigned(n) => format!("{n}::{}", mod_ident.module).to_string(),
+    }
+}
 
 //**************************************************************************************************
 // Location Conversions

@@ -22,15 +22,15 @@ use crate::{
         mysticeti_manager::MysticetiManager, ConsensusManagerMetrics, ConsensusManagerTrait,
     },
     consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
+    global_state_hasher::GlobalStateHasher,
     mysticeti_adapter::LazyMysticetiClient,
-    state_accumulator::StateAccumulator,
 };
 
 pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<CheckpointService> {
     let (output, _result) = mpsc::channel::<(CheckpointContents, CheckpointSummary)>(10);
     let epoch_store = state.epoch_store_for_testing();
-    let accumulator = Arc::new(StateAccumulator::new_for_tests(
-        state.get_accumulator_store().clone(),
+    let accumulator = Arc::new(GlobalStateHasher::new_for_tests(
+        state.get_global_state_hash_store().clone(),
     ));
     let (certified_output, _certified_result) = mpsc::channel::<CertifiedCheckpointSummary>(10);
 

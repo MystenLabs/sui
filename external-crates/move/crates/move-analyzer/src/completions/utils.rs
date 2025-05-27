@@ -4,10 +4,16 @@
 use std::path::PathBuf;
 
 use crate::symbols::{
-    AutoImportInsertionInfo, AutoImportInsertionKind, CompiledPkgInfo, CursorContext, DefInfo,
-    ModuleDefs, Symbols, SymbolsComputationData, compute_symbols_parsed_program,
-    compute_symbols_pre_process, mod_ident_to_ide_string, ret_type_to_ide_str,
-    type_args_to_ide_string, type_list_to_ide_string,
+    Symbols,
+    compilation::{CompiledPkgInfo, SymbolsComputationData},
+    compute_symbols_parsed_program, compute_symbols_pre_process,
+    cursor::CursorContext,
+    def_info::DefInfo,
+    ide_strings::{
+        mod_ident_to_ide_string, ret_type_to_ide_str, type_args_to_ide_string,
+        type_list_to_ide_string,
+    },
+    mod_defs::{AutoImportInsertionInfo, AutoImportInsertionKind, ModuleDefs},
 };
 use lsp_types::{
     CompletionItem, CompletionItemKind, CompletionItemLabelDetails, InsertTextFormat, Position,

@@ -19,7 +19,7 @@ import {
     ILoc,
     IDebugInfoFunction
 } from './debug_info_utils';
-import { decompress } from '@mongodb-js/zstd';
+import { decompress } from 'fzstd';
 
 
 // Data types corresponding to trace file JSON schema.
@@ -385,7 +385,7 @@ export async function readTrace(
 ): Promise<ITrace> {
     const buf = Buffer.from(fs.readFileSync(traceFilePath));
     const decompressed = await decompress(buf);
-    const [header, ...rest] = decompressed.toString('utf8').trimEnd().split('\n');
+    const [header, ...rest] = new TextDecoder().decode(decompressed).trimEnd().split('\n');
     const jsonVersion: number = JSON.parse(header).version;
     const jsonEvents: JSONTraceEvent[] = rest.map((line) => {
         return JSON.parse(line);

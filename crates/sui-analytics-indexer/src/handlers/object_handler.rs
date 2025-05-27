@@ -4,86 +4,30 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use sui_data_ingestion_core::Worker;
-use sui_types::{TypeTag, SYSTEM_PACKAGE_ADDRESSES};
-use tokio::sync::Mutex;
+use sui_types::TypeTag;
 
 use sui_json_rpc_types::SuiMoveStruct;
 use sui_types::base_types::ObjectID;
-use sui_types::effects::TransactionEffects;
-use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::object::Object;
 
 use crate::handlers::{
-    get_move_struct, get_owner_address, get_owner_type, initial_shared_version, AnalyticsHandler,
-    ObjectStatusTracker,
+    get_move_struct, get_owner_address, get_owner_type, initial_shared_version,
+    process_transactions, AnalyticsHandler, ObjectStatusTracker, TransactionProcessor,
 };
-use crate::AnalyticsMetrics;
-
 use crate::package_store::PackageCache;
 use crate::tables::{ObjectEntry, ObjectStatus};
-use crate::FileType;
+use crate::{AnalyticsMetrics, FileType};
 
+use super::{get_is_consensus, wait_for_cache};
+
+const NAME: &str = "object";
+
+#[derive(Clone)]
 pub struct ObjectHandler {
-    state: Mutex<State>,
     package_filter: Option<ObjectID>,
     metrics: AnalyticsMetrics,
     package_cache: Arc<PackageCache>,
-}
-
-struct State {
-    objects: Vec<ObjectEntry>,
-}
-
-#[async_trait::async_trait]
-impl Worker for ObjectHandler {
-    type Result = ();
-
-    async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
-        let CheckpointData {
-            checkpoint_summary,
-            transactions: checkpoint_transactions,
-            ..
-        } = checkpoint_data;
-        let mut state = self.state.lock().await;
-        for checkpoint_transaction in checkpoint_transactions {
-            for object in checkpoint_transaction.output_objects.iter() {
-                self.package_cache.update(object)?;
-            }
-            self.process_transaction(
-                checkpoint_summary.epoch,
-                checkpoint_summary.sequence_number,
-                checkpoint_summary.timestamp_ms,
-                checkpoint_transaction,
-                &checkpoint_transaction.effects,
-                &mut state,
-            )
-            .await?;
-            if checkpoint_summary.end_of_epoch_data.is_some() {
-                self.package_cache
-                    .resolver
-                    .package_store()
-                    .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
-            }
-        }
-        Ok(())
-    }
-}
-
-#[async_trait::async_trait]
-impl AnalyticsHandler<ObjectEntry> for ObjectHandler {
-    async fn read(&self) -> Result<Vec<ObjectEntry>> {
-        let mut state = self.state.lock().await;
-        Ok(std::mem::take(&mut state.objects))
-    }
-
-    fn file_type(&self) -> Result<FileType> {
-        Ok(FileType::Object)
-    }
-
-    fn name(&self) -> &str {
-        "object"
-    }
 }
 
 impl ObjectHandler {
@@ -92,63 +36,13 @@ impl ObjectHandler {
         package_filter: &Option<String>,
         metrics: AnalyticsMetrics,
     ) -> Self {
-        let state = State { objects: vec![] };
         Self {
-            state: Mutex::new(state),
             package_filter: package_filter
                 .clone()
                 .map(|x| ObjectID::from_hex_literal(&x).unwrap()),
             metrics,
             package_cache,
         }
-    }
-    async fn process_transaction(
-        &self,
-        epoch: u64,
-        checkpoint: u64,
-        timestamp_ms: u64,
-        checkpoint_transaction: &CheckpointTransaction,
-        effects: &TransactionEffects,
-        state: &mut State,
-    ) -> Result<()> {
-        let object_status_tracker = ObjectStatusTracker::new(effects);
-        for object in checkpoint_transaction.output_objects.iter() {
-            self.process_object(
-                epoch,
-                checkpoint,
-                timestamp_ms,
-                object,
-                &object_status_tracker,
-                state,
-            )
-            .await?;
-        }
-        for (object_ref, _) in effects.all_removed_objects().iter() {
-            let entry = ObjectEntry {
-                object_id: object_ref.0.to_string(),
-                digest: object_ref.2.to_string(),
-                version: u64::from(object_ref.1),
-                type_: None,
-                checkpoint,
-                epoch,
-                timestamp_ms,
-                owner_type: None,
-                owner_address: None,
-                object_status: ObjectStatus::Deleted,
-                initial_shared_version: None,
-                previous_transaction: checkpoint_transaction.transaction.digest().base58_encode(),
-                has_public_transfer: false,
-                storage_rebate: None,
-                bcs: "".to_string(),
-                coin_type: None,
-                coin_balance: None,
-                struct_tag: None,
-                object_json: None,
-                bcs_length: 0,
-            };
-            state.objects.push(entry);
-        }
-        Ok(())
     }
 
     async fn check_type_hierarchy(
@@ -201,8 +95,7 @@ impl ObjectHandler {
         timestamp_ms: u64,
         object: &Object,
         object_status_tracker: &ObjectStatusTracker,
-        state: &mut State,
-    ) -> Result<()> {
+    ) -> Result<Option<ObjectEntry>> {
         let move_obj_opt = object.data.try_as_move();
         let has_public_transfer = move_obj_opt
             .map(|o| o.has_public_transfer())
@@ -211,7 +104,13 @@ impl ObjectHandler {
             .struct_tag()
             .and_then(|tag| object.data.try_as_move().map(|mo| (tag, mo.contents())))
         {
-            match get_move_struct(&tag, contents, &self.package_cache.resolver).await {
+            match get_move_struct(
+                &tag,
+                contents,
+                &self.package_cache.resolver_for_epoch(epoch),
+            )
+            .await
+            {
                 Ok(move_struct) => Some(move_struct),
                 Err(err)
                     if err
@@ -223,7 +122,7 @@ impl ObjectHandler {
                 {
                     self.metrics
                         .total_too_large_to_deserialize
-                        .with_label_values(&[self.name()])
+                        .with_label_values(&[NAME])
                         .inc();
                     tracing::warn!(
                         "Skipping struct with type {} because it was too large.",
@@ -268,7 +167,7 @@ impl ObjectHandler {
         };
 
         if !is_match {
-            return Ok(());
+            return Ok(None);
         }
 
         let object_id = object.id();
@@ -282,6 +181,7 @@ impl ObjectHandler {
             timestamp_ms,
             owner_type: Some(get_owner_type(object)),
             owner_address: get_owner_address(object),
+            is_consensus: get_is_consensus(object),
             object_status: object_status_tracker
                 .get_object_status(&object_id)
                 .expect("Object must be in output objects"),
@@ -300,8 +200,90 @@ impl ObjectHandler {
             struct_tag: struct_tag.map(|x| x.to_string()),
             object_json: sui_move_struct.map(|x| x.to_json_value().to_string()),
         };
-        state.objects.push(entry);
-        Ok(())
+        Ok(Some(entry))
+    }
+}
+
+#[async_trait::async_trait]
+impl AnalyticsHandler<ObjectEntry> for ObjectHandler {
+    async fn process_checkpoint(
+        &self,
+        checkpoint_data: &Arc<CheckpointData>,
+    ) -> Result<Box<dyn Iterator<Item = ObjectEntry> + Send + Sync>> {
+        wait_for_cache(checkpoint_data, &self.package_cache).await;
+        process_transactions(checkpoint_data.clone(), Arc::new(self.clone())).await
+    }
+
+    fn file_type(&self) -> Result<FileType> {
+        Ok(FileType::Object)
+    }
+
+    fn name(&self) -> &'static str {
+        NAME
+    }
+}
+
+#[async_trait::async_trait]
+impl TransactionProcessor<ObjectEntry> for ObjectHandler {
+    async fn process_transaction(
+        &self,
+        tx_idx: usize,
+        checkpoint_data: &CheckpointData,
+    ) -> Result<Box<dyn Iterator<Item = ObjectEntry> + Send + Sync>> {
+        let checkpoint_transaction = &checkpoint_data.transactions[tx_idx];
+
+        for object in checkpoint_transaction.output_objects.iter() {
+            self.package_cache.update(object)?;
+        }
+
+        let epoch = checkpoint_data.checkpoint_summary.epoch;
+        let checkpoint = checkpoint_data.checkpoint_summary.sequence_number;
+        let timestamp_ms = checkpoint_data.checkpoint_summary.timestamp_ms;
+        let effects = &checkpoint_transaction.effects;
+
+        let object_status_tracker = ObjectStatusTracker::new(effects);
+        let mut vec = Vec::new();
+        for object in checkpoint_transaction.output_objects.iter() {
+            if let Some(object_entry) = self
+                .process_object(
+                    epoch,
+                    checkpoint,
+                    timestamp_ms,
+                    object,
+                    &object_status_tracker,
+                )
+                .await?
+            {
+                vec.push(object_entry);
+            }
+        }
+        for (object_ref, _) in effects.all_removed_objects().iter() {
+            let object_entry = ObjectEntry {
+                object_id: object_ref.0.to_string(),
+                digest: object_ref.2.to_string(),
+                version: u64::from(object_ref.1),
+                type_: None,
+                checkpoint,
+                epoch,
+                timestamp_ms,
+                owner_type: None,
+                owner_address: None,
+                object_status: ObjectStatus::Deleted,
+                initial_shared_version: None,
+                previous_transaction: checkpoint_transaction.transaction.digest().base58_encode(),
+                has_public_transfer: false,
+                is_consensus: false,
+                storage_rebate: None,
+                bcs: "".to_string(),
+                coin_type: None,
+                coin_balance: None,
+                struct_tag: None,
+                object_json: None,
+                bcs_length: 0,
+            };
+            vec.push(object_entry);
+        }
+        Ok(Box::new(vec.into_iter()))
     }
 }
 
@@ -335,12 +317,14 @@ mod tests {
         let registry = Registry::new();
         let metrics = AnalyticsMetrics::new(&registry);
         let package_cache = Arc::new(PackageCache::new(temp_dir.path(), "http://localhost:9000"));
+
+        // Create handler with the necessary context
         let handler = ObjectHandler::new(package_cache, &Some("0xabc".to_string()), metrics);
 
         // 1. Direct match
         let type_tag = create_struct_tag("0xabc", "module", "Type", vec![]);
         assert!(handler
-            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap(),)
+            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap())
             .await
             .unwrap());
 
@@ -348,7 +332,7 @@ mod tests {
         let inner_type = create_struct_tag("0xabc", "module", "Inner", vec![]);
         let type_tag = create_struct_tag("0xcde", "module", "Type", vec![inner_type]);
         assert!(handler
-            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap(),)
+            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap())
             .await
             .unwrap());
 
@@ -357,21 +341,21 @@ mod tests {
         let vector_type = TypeTag::Vector(Box::new(inner_type));
         let type_tag = create_struct_tag("0xcde", "module", "Type", vec![vector_type]);
         assert!(handler
-            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap(),)
+            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap())
             .await
             .unwrap());
 
         // 4. No match
         let type_tag = create_struct_tag("0xcde", "module", "Type", vec![]);
         assert!(!handler
-            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap(),)
+            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap())
             .await
             .unwrap());
 
         // 5. Primitive type
         let type_tag = TypeTag::U64;
         assert!(!handler
-            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap(),)
+            .check_type_hierarchy(&type_tag, ObjectID::from_hex_literal("0xabc").unwrap())
             .await
             .unwrap());
     }

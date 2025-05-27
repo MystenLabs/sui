@@ -5,12 +5,17 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
-    use crate::execution_mode::ExecutionMode;
-    use crate::execution_value::{
-        CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
-        ensure_serialized_size,
+    use crate::{
+        adapter::substitute_package_id,
+        execution_mode::ExecutionMode,
+        execution_value::{
+            CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
+            ensure_serialized_size,
+        },
+        gas_charger::GasCharger,
+        programmable_transactions::{context::*, data_store::SuiDataStore},
+        type_resolver::TypeTagResolver,
     };
-    use crate::gas_charger::GasCharger;
     use move_binary_format::file_format::AbilitySet;
     use move_binary_format::{
         CompiledModule,
@@ -20,6 +25,7 @@ mod checked {
         file_format_common::VERSION_6,
         normalized,
     };
+    use move_core_types::language_storage::StructTag;
     use move_core_types::{
         account_address::AccountAddress,
         identifier::{IdentStr, Identifier},
@@ -33,9 +39,8 @@ mod checked {
     };
     use move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
     use serde::{Deserialize, de::DeserializeSeed};
-    use std::cell::OnceCell;
     use std::{
-        cell::RefCell,
+        cell::{OnceCell, RefCell},
         collections::{BTreeMap, BTreeSet},
         fmt,
         rc::Rc,
@@ -44,11 +49,6 @@ mod checked {
     };
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::execution::{ExecutionTiming, ResultWithTimings};
-    use sui_types::execution_config_utils::to_binary_config;
-    use sui_types::execution_status::{CommandArgumentError, PackageUpgradeError};
-    use sui_types::storage::{PackageObject, get_package_objects};
-    use sui_types::type_input::TypeInput;
     use sui_types::{
         SUI_FRAMEWORK_ADDRESS,
         base_types::{
@@ -58,23 +58,25 @@ mod checked {
         },
         coin::Coin,
         error::{ExecutionError, ExecutionErrorKind, command_argument_error},
+        execution::{ExecutionTiming, ResultWithTimings},
+        execution_config_utils::to_binary_config,
+        execution_status::{CommandArgumentError, PackageUpgradeError},
         id::RESOLVED_SUI_ID,
         metrics::LimitsMetrics,
         move_package::{
             MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt, UpgradeTicket,
             normalize_deserialized_modules,
         },
+        storage::{PackageObject, get_package_objects},
         transaction::{Command, ProgrammableMoveCall, ProgrammableTransaction},
         transfer::RESOLVED_RECEIVING_STRUCT,
+        type_input::{StructInput, TypeInput},
     };
     use sui_verifier::{
         INIT_FN_NAME,
         private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
     };
     use tracing::instrument;
-
-    use crate::adapter::substitute_package_id;
-    use crate::programmable_transactions::context::*;
 
     pub fn execute<Mode: ExecutionMode>(
         protocol_config: &ProtocolConfig,
@@ -1498,22 +1500,84 @@ mod checked {
         }
     }
 
+    // Convert a type input which may refer to a type by multiple different IDs and convert it to a
+    // TypeTag that only uses defining IDs.
+    //
+    // It's suboptimal to traverse the type, load, and then go back to a typetag to resolve to
+    // defining IDs in the typetag, but it's the cleanest solution ATM without adding in additional
+    // machinery. With the new linkage resolution that we will be adding this will
+    // be much cleaner however, we'll hold off on adding that in here, and instead add it in the
+    // new execution code.
     fn to_type_tag(
         context: &mut ExecutionContext<'_, '_, '_>,
         type_input: TypeInput,
     ) -> Result<TypeTag, ExecutionError> {
-        if context.protocol_config.validate_identifier_inputs() {
-            type_input.into_type_tag().map_err(|e| {
-                ExecutionError::new_with_source(
-                    ExecutionErrorKind::VMInvariantViolation,
-                    e.to_string(),
-                )
-            })
+        let type_tag_no_def_ids = to_type_tag_(context, type_input)?;
+        if context
+            .protocol_config
+            .resolve_type_input_ids_to_defining_id()
+        {
+            let ty = context
+                .load_type(&type_tag_no_def_ids)
+                .map_err(|e| context.convert_type_argument_error(0, e))?;
+            context.get_type_tag(&ty)
         } else {
-            // SAFETY: Preserving existing behaviour for identifier deserialization within type
-            // tags and inputs.
-            Ok(unsafe { type_input.into_type_tag_unchecked() })
+            Ok(type_tag_no_def_ids)
         }
+    }
+
+    fn to_type_tag_(
+        context: &mut ExecutionContext<'_, '_, '_>,
+        type_input: TypeInput,
+    ) -> Result<TypeTag, ExecutionError> {
+        use TypeInput as I;
+        use TypeTag as T;
+        let validate_identifiers = context.protocol_config.validate_identifier_inputs();
+        let to_ident = |s: String| {
+            if validate_identifiers {
+                Identifier::new(s).map_err(|e| {
+                    ExecutionError::new_with_source(
+                        ExecutionErrorKind::VMInvariantViolation,
+                        e.to_string(),
+                    )
+                })
+            } else {
+                // SAFETY: Preserving existing behaviour for identifier deserialization within type
+                // tags and inputs.
+                unsafe { Ok(Identifier::new_unchecked(s)) }
+            }
+        };
+
+        Ok(match type_input {
+            I::Bool => T::Bool,
+            I::U8 => T::U8,
+            I::U16 => T::U16,
+            I::U32 => T::U32,
+            I::U64 => T::U64,
+            I::U128 => T::U128,
+            I::U256 => T::U256,
+            I::Address => T::Address,
+            I::Signer => T::Signer,
+            I::Vector(t) => T::Vector(Box::new(to_type_tag_(context, *t)?)),
+            I::Struct(s) => {
+                let StructInput {
+                    address,
+                    module,
+                    name,
+                    type_params,
+                } = *s;
+                let type_params = type_params
+                    .into_iter()
+                    .map(|t| to_type_tag_(context, t))
+                    .collect::<Result<_, _>>()?;
+                T::Struct(Box::new(StructTag {
+                    address,
+                    module: to_ident(module)?,
+                    name: to_ident(name)?,
+                    type_params,
+                }))
+            }
+        })
     }
 
     fn get_datatype_ident(s: &CachedDatatype) -> (&AccountAddress, &IdentStr, &IdentStr) {

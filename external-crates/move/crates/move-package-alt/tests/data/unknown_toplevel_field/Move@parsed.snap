@@ -5,4 +5,4 @@ error: TOML parse error at line 10, column 2
    |
 10 | [unknown_field]
    |  ^^^^^^^^^^^^^
-unknown field `unknown_field`, expected one of `package`, `environments`, `dependencies`, `dep-overrides`
+unknown field `unknown_field`, expected one of `package`, `environments`, `dependencies`, `dep-replacements`

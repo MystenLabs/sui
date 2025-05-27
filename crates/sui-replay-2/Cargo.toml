@@ -34,7 +34,7 @@ tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 
 [build-dependencies]
-sui-graphql-client-build = { git = "https://github.com/mystenlabs/sui-rust-sdk", package = "sui-graphql-client-build",  rev ="83ff809bc11cbabda21b60130e1f5420170548bf" }
+sui-graphql-client-build.workspace = true
 
 [features]
 tracing = [

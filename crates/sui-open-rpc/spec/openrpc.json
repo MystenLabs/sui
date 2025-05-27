@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.49.0"
+    "version": "1.50.0"
   },
   "methods": [
     {
@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "82",
+              "maxSupportedProtocolVersion": "85",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_passkey_in_multisig": false,
@@ -1302,6 +1302,7 @@
                 "advance_epoch_start_time_in_safe_mode": true,
                 "advance_to_highest_supported_protocol_version": false,
                 "allow_receiving_object_id": false,
+                "allow_unbounded_system_objects": false,
                 "authority_capabilities_v2": false,
                 "ban_entry_init": false,
                 "bridge": false,
@@ -1327,6 +1328,8 @@
                 "enable_group_ops_native_functions": false,
                 "enable_jwk_consensus_updates": false,
                 "enable_nitro_attestation": false,
+                "enable_nitro_attestation_upgraded_parsing": false,
+                "enable_party_transfer": false,
                 "enable_poseidon": false,
                 "enable_vdf": false,
                 "end_of_epoch_transaction_supported": false,
@@ -1364,6 +1367,7 @@
                 "relocate_event_module": false,
                 "reshare_at_same_initial_version": false,
                 "resolve_abort_locations_to_package_id": false,
+                "resolve_type_input_ids_to_defining_id": false,
                 "rethrow_serialization_type_layout_errors": false,
                 "scoring_decision_with_validity_cutoff": true,
                 "shared_object_deletion": false,
@@ -1945,6 +1949,7 @@
                 "transfer_freeze_object_cost_base": {
                   "u64": "52"
                 },
+                "transfer_party_transfer_internal_cost_base": null,
                 "transfer_receive_object_cost_base": null,
                 "transfer_share_object_cost_base": {
                   "u64": "52"
@@ -5345,23 +5350,6 @@
       "AdditionalConsensusStateDigest": {
         "$ref": "#/components/schemas/Digest"
       },
-      "Authenticator": {
-        "oneOf": [
-          {
-            "description": "The contained SuiAddress exclusively has all permissions: read, write, delete, transfer",
-            "type": "object",
-            "required": [
-              "SingleOwner"
-            ],
-            "properties": {
-              "SingleOwner": {
-                "$ref": "#/components/schemas/SuiAddress"
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
       "AuthorityPublicKeyBytes": {
         "description": "Defines the compressed version of the public key that we pass around in Sui",
         "allOf": [
@@ -7867,26 +7855,21 @@
             ]
           },
           {
-            "description": "Object is sequenced via consensus. Ownership is managed by the configured authenticator.\n\nNote: wondering what happened to `V1`? `Shared` above was the V1 of consensus objects.",
+            "description": "Object is exclusively owned by a single address and sequenced via consensus.",
             "type": "object",
             "required": [
-              "ConsensusV2"
+              "ConsensusAddressOwner"
             ],
             "properties": {
-              "ConsensusV2": {
+              "ConsensusAddressOwner": {
                 "type": "object",
                 "required": [
-                  "authenticator",
+                  "owner",
                   "start_version"
                 ],
                 "properties": {
-                  "authenticator": {
-                    "description": "The authentication mode of the object",
-                    "allOf": [
-                      {
-                        "$ref": "#/components/schemas/Authenticator"
-                      }
-                    ]
+                  "owner": {
+                    "$ref": "#/components/schemas/SuiAddress"
                   },
                   "start_version": {
                     "description": "The version at which the object most recently became a consensus object. This serves the same function as `initial_shared_version`, except it may change if the object's Owner type changes.",
@@ -9008,6 +8991,39 @@
           }
         }
       },
+      "SuiMoveAbort": {
+        "type": "object",
+        "properties": {
+          "error_code": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "function": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "line": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "minimum": 0.0
+          },
+          "module_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "SuiMoveModuleId": {
         "type": "object",
         "required": [
@@ -9038,6 +9054,16 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SuiMoveStructTypeParameter"
+            }
+          },
+          "variantDeclarationOrder": {
+            "default": null,
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
             }
           },
           "variants": {
@@ -10444,6 +10470,17 @@
               "transactionDigest"
             ],
             "properties": {
+              "abortError": {
+                "description": "The abort error populated if the transaction failed with an abort code.",
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SuiMoveAbort"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "created": {
                 "description": "ObjectRef and owner of new objects created.",
                 "type": "array",

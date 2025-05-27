@@ -6,13 +6,14 @@ use crate::base_types::{
 };
 use crate::digests::{ObjectDigest, TransactionEventsDigest};
 use crate::effects::{InputSharedObject, TransactionEffectsAPI, UnchangedSharedKind};
-use crate::execution_status::ExecutionStatus;
+use crate::execution_status::{ExecutionFailureStatus, ExecutionStatus, MoveLocation};
 use crate::gas::GasCostSummary;
 use crate::object::Owner;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Display, Formatter, Write};
 
+use super::object_change::AccumulatorWriteV1;
 use super::{IDOperation, ObjectChange};
 
 /// The response from processing a transaction or a certified transaction
@@ -148,6 +149,17 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
             .collect()
     }
 
+    fn move_abort(&self) -> Option<(MoveLocation, u64)> {
+        let ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::MoveAbort(move_location, code),
+            ..
+        } = self.status()
+        else {
+            return None;
+        };
+        Some((move_location.clone(), *code))
+    }
+
     fn lamport_version(&self) -> SequenceNumber {
         SequenceNumber::lamport_increment(self.modified_at_versions.iter().map(|(_, v)| *v))
     }
@@ -195,12 +207,12 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     }
 
     fn transferred_from_consensus(&self) -> Vec<ObjectRef> {
-        // ConsensusV2 objects cannot exist with effects v1
+        // Transferrable consensus objects cannot exist with effects v1
         vec![]
     }
 
     fn transferred_to_consensus(&self) -> Vec<ObjectRef> {
-        // ConsensusV2 objects cannot exist with effects v1
+        // Transferrable consensus objects cannot exist with effects v1
         vec![]
     }
 
@@ -303,6 +315,10 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
                 _ => None,
             })
             .collect()
+    }
+
+    fn accumulator_updates(&self) -> Vec<(ObjectID, AccumulatorWriteV1)> {
+        vec![]
     }
 
     fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus {

@@ -886,6 +886,1004 @@ pub mod live_data_service_server {
         const NAME: &'static str = SERVICE_NAME;
     }
 }
+/// A Move Package
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Package {
+    /// The PackageId of this package
+    ///
+    /// A package's `storage_id` is the Sui ObjectId of the package on-chain.
+    /// Outside of system packages the `storage_id` for every package version is
+    /// different.
+    #[prost(string, optional, tag = "1")]
+    pub storage_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// The PackageId of the first published version of this package.
+    ///
+    /// A package's `original_id` (sometimes also called its `runtime_id`) is the
+    /// `storage_id` of the first version of this package that has been published.
+    /// The `original_id`/`runtime_id` is stable across all versions of the
+    /// package and does not ever change.
+    #[prost(string, optional, tag = "2")]
+    pub original_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// The version of this package
+    #[prost(uint64, optional, tag = "3")]
+    pub version: ::core::option::Option<u64>,
+    /// The modules defined by this package
+    #[prost(message, repeated, tag = "4")]
+    pub modules: ::prost::alloc::vec::Vec<Module>,
+}
+/// A Move Module.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Module {
+    /// Name of this module
+    #[prost(string, optional, tag = "1")]
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
+    /// List of DataTypes defined by this module.
+    #[prost(message, repeated, tag = "3")]
+    pub data_types: ::prost::alloc::vec::Vec<DatatypeDescriptor>,
+    /// List of Functions defined by this module.
+    #[prost(message, repeated, tag = "4")]
+    pub functions: ::prost::alloc::vec::Vec<FunctionDescriptor>,
+}
+/// Describes a Move Datatype.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DatatypeDescriptor {
+    /// Fully qualified name of this Datatype.
+    ///
+    /// This is `<defining_id>::<module>::<name>`
+    #[prost(string, optional, tag = "1")]
+    pub type_name: ::core::option::Option<::prost::alloc::string::String>,
+    /// PackageId of the package where this Datatype is defined.
+    ///
+    /// A type's `defining_id` is the `storage_id` of the package version that first introduced or added that type.
+    #[prost(string, optional, tag = "2")]
+    pub defining_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Name of the module where this Datatype is defined
+    #[prost(string, optional, tag = "3")]
+    pub module: ::core::option::Option<::prost::alloc::string::String>,
+    /// Name of this Datatype
+    #[prost(string, optional, tag = "4")]
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
+    /// This type's abilities
+    #[prost(enumeration = "Ability", repeated, tag = "5")]
+    pub abilities: ::prost::alloc::vec::Vec<i32>,
+    /// Ability constraints and phantom status for this type's generic type parameters
+    #[prost(message, repeated, tag = "6")]
+    pub type_parameters: ::prost::alloc::vec::Vec<TypeParameter>,
+    /// Indicates whether this datatype is a 'STRUCT' or an 'ENUM'
+    #[prost(enumeration = "datatype_descriptor::DatatypeKind", optional, tag = "7")]
+    pub kind: ::core::option::Option<i32>,
+    /// Set of fields if this Datatype is a struct.
+    ///
+    /// The order of the entries is the order of how the fields are defined.
+    #[prost(message, repeated, tag = "8")]
+    pub fields: ::prost::alloc::vec::Vec<FieldDescriptor>,
+    /// Set of variants if this Datatype is an enum.
+    ///
+    /// The order of the entries is the order of how the variants are defined.
+    #[prost(message, repeated, tag = "9")]
+    pub variants: ::prost::alloc::vec::Vec<VariantDescriptor>,
+}
+/// Nested message and enum types in `DatatypeDescriptor`.
+pub mod datatype_descriptor {
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash,
+        PartialOrd,
+        Ord,
+        ::prost::Enumeration
+    )]
+    #[repr(i32)]
+    pub enum DatatypeKind {
+        Unknown = 0,
+        Struct = 1,
+        Enum = 2,
+    }
+    impl DatatypeKind {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Self::Unknown => "DATATYPE_KIND_UNKNOWN",
+                Self::Struct => "STRUCT",
+                Self::Enum => "ENUM",
+            }
+        }
+        /// Creates an enum from field names used in the ProtoBuf definition.
+        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+            match value {
+                "DATATYPE_KIND_UNKNOWN" => Some(Self::Unknown),
+                "STRUCT" => Some(Self::Struct),
+                "ENUM" => Some(Self::Enum),
+                _ => None,
+            }
+        }
+    }
+}
+/// A generic type parameter used in the declaration of a struct or enum.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TypeParameter {
+    /// The type parameter constraints
+    #[prost(enumeration = "Ability", repeated, tag = "1")]
+    pub constraints: ::prost::alloc::vec::Vec<i32>,
+    /// Whether the parameter is declared as phantom
+    #[prost(bool, optional, tag = "2")]
+    pub is_phantom: ::core::option::Option<bool>,
+}
+/// Descriptor of a field that belongs to a struct or enum variant
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct FieldDescriptor {
+    /// Name of the field
+    #[prost(string, optional, tag = "1")]
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
+    /// Order or position of the field in the struct or enum variant definition.
+    #[prost(uint32, optional, tag = "2")]
+    pub position: ::core::option::Option<u32>,
+    /// The type of the field
+    #[prost(message, optional, tag = "3")]
+    pub r#type: ::core::option::Option<OpenSignatureBody>,
+}
+/// Descriptor of an enum variant
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct VariantDescriptor {
+    /// Name of the variant
+    #[prost(string, optional, tag = "1")]
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
+    /// Order or position of the variant in the enum definition.
+    #[prost(uint32, optional, tag = "2")]
+    pub position: ::core::option::Option<u32>,
+    /// Set of fields defined by this variant.
+    #[prost(message, repeated, tag = "3")]
+    pub fields: ::prost::alloc::vec::Vec<FieldDescriptor>,
+}
+/// Representation of a type signature that could appear as a field type for a struct or enum
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OpenSignatureBody {
+    /// Type of this signature
+    #[prost(enumeration = "open_signature_body::Type", optional, tag = "1")]
+    pub r#type: ::core::option::Option<i32>,
+    /// Fully qualified name of the datatype when `type` is `DATATYPE`
+    #[prost(string, optional, tag = "2")]
+    pub type_name: ::core::option::Option<::prost::alloc::string::String>,
+    /// Set when `type` is `VECTOR` or `DATATYPE`
+    #[prost(message, repeated, tag = "3")]
+    pub type_parameter_instantiation: ::prost::alloc::vec::Vec<OpenSignatureBody>,
+    /// Position of the type parameter as defined in the containing data type descriptor when `type` is `TYPE_PARAMETER`
+    #[prost(uint32, optional, tag = "4")]
+    pub type_parameter: ::core::option::Option<u32>,
+}
+/// Nested message and enum types in `OpenSignatureBody`.
+pub mod open_signature_body {
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash,
+        PartialOrd,
+        Ord,
+        ::prost::Enumeration
+    )]
+    #[repr(i32)]
+    pub enum Type {
+        Unknown = 0,
+        Address = 1,
+        Bool = 2,
+        U8 = 3,
+        U16 = 4,
+        U32 = 5,
+        U64 = 6,
+        U128 = 7,
+        U256 = 8,
+        Vector = 9,
+        Datatype = 10,
+        Parameter = 11,
+    }
+    impl Type {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Self::Unknown => "TYPE_UNKNOWN",
+                Self::Address => "ADDRESS",
+                Self::Bool => "BOOL",
+                Self::U8 => "U8",
+                Self::U16 => "U16",
+                Self::U32 => "U32",
+                Self::U64 => "U64",
+                Self::U128 => "U128",
+                Self::U256 => "U256",
+                Self::Vector => "VECTOR",
+                Self::Datatype => "DATATYPE",
+                Self::Parameter => "TYPE_PARAMETER",
+            }
+        }
+        /// Creates an enum from field names used in the ProtoBuf definition.
+        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+            match value {
+                "TYPE_UNKNOWN" => Some(Self::Unknown),
+                "ADDRESS" => Some(Self::Address),
+                "BOOL" => Some(Self::Bool),
+                "U8" => Some(Self::U8),
+                "U16" => Some(Self::U16),
+                "U32" => Some(Self::U32),
+                "U64" => Some(Self::U64),
+                "U128" => Some(Self::U128),
+                "U256" => Some(Self::U256),
+                "VECTOR" => Some(Self::Vector),
+                "DATATYPE" => Some(Self::Datatype),
+                "TYPE_PARAMETER" => Some(Self::Parameter),
+                _ => None,
+            }
+        }
+    }
+}
+/// Descriptor of a Move function
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct FunctionDescriptor {
+    /// Name of the function
+    #[prost(string, optional, tag = "1")]
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
+    /// Whether the function is `public`, `private` or `public(friend)`
+    #[prost(enumeration = "function_descriptor::Visibility", optional, tag = "5")]
+    pub visibility: ::core::option::Option<i32>,
+    /// Whether the function is marked `entry` or not.
+    #[prost(bool, optional, tag = "6")]
+    pub is_entry: ::core::option::Option<bool>,
+    /// Ability constraints for type parameters
+    #[prost(enumeration = "Ability", repeated, tag = "7")]
+    pub type_parameters: ::prost::alloc::vec::Vec<i32>,
+    /// Formal parameter types.
+    #[prost(message, repeated, tag = "8")]
+    pub parameters: ::prost::alloc::vec::Vec<OpenSignature>,
+    /// Return types.
+    #[prost(message, repeated, tag = "9")]
+    pub returns: ::prost::alloc::vec::Vec<OpenSignature>,
+}
+/// Nested message and enum types in `FunctionDescriptor`.
+pub mod function_descriptor {
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash,
+        PartialOrd,
+        Ord,
+        ::prost::Enumeration
+    )]
+    #[repr(i32)]
+    pub enum Visibility {
+        Unknown = 0,
+        Private = 1,
+        Public = 2,
+        Friend = 3,
+    }
+    impl Visibility {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Self::Unknown => "VISIBILITY_UNKNOWN",
+                Self::Private => "PRIVATE",
+                Self::Public => "PUBLIC",
+                Self::Friend => "FRIEND",
+            }
+        }
+        /// Creates an enum from field names used in the ProtoBuf definition.
+        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+            match value {
+                "VISIBILITY_UNKNOWN" => Some(Self::Unknown),
+                "PRIVATE" => Some(Self::Private),
+                "PUBLIC" => Some(Self::Public),
+                "FRIEND" => Some(Self::Friend),
+                _ => None,
+            }
+        }
+    }
+}
+/// Representation of a type signature that could appear as a function parameter or return value.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OpenSignature {
+    #[prost(enumeration = "open_signature::Reference", optional, tag = "1")]
+    pub reference: ::core::option::Option<i32>,
+    #[prost(message, optional, tag = "2")]
+    pub body: ::core::option::Option<OpenSignatureBody>,
+}
+/// Nested message and enum types in `OpenSignature`.
+pub mod open_signature {
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash,
+        PartialOrd,
+        Ord,
+        ::prost::Enumeration
+    )]
+    #[repr(i32)]
+    pub enum Reference {
+        Unknown = 0,
+        Immutable = 1,
+        Mutable = 2,
+    }
+    impl Reference {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Self::Unknown => "REFERENCE_UNKNOWN",
+                Self::Immutable => "IMMUTABLE",
+                Self::Mutable => "MUTABLE",
+            }
+        }
+        /// Creates an enum from field names used in the ProtoBuf definition.
+        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+            match value {
+                "REFERENCE_UNKNOWN" => Some(Self::Unknown),
+                "IMMUTABLE" => Some(Self::Immutable),
+                "MUTABLE" => Some(Self::Mutable),
+                _ => None,
+            }
+        }
+    }
+}
+/// An `Ability` classifies what operations are permitted for a given type
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum Ability {
+    Unknown = 0,
+    /// Allows values of types with this ability to be copied
+    Copy = 1,
+    /// Allows values of types with this ability to be dropped.
+    Drop = 2,
+    /// Allows values of types with this ability to exist inside a struct in global storage
+    Store = 3,
+    /// Allows the type to serve as a key for global storage operations
+    Key = 4,
+}
+impl Ability {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unknown => "ABILITY_UNKNOWN",
+            Self::Copy => "COPY",
+            Self::Drop => "DROP",
+            Self::Store => "STORE",
+            Self::Key => "KEY",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "ABILITY_UNKNOWN" => Some(Self::Unknown),
+            "COPY" => Some(Self::Copy),
+            "DROP" => Some(Self::Drop),
+            "STORE" => Some(Self::Store),
+            "KEY" => Some(Self::Key),
+            _ => None,
+        }
+    }
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetPackageRequest {
+    /// Required. The `storage_id` of the requested package.
+    #[prost(string, optional, tag = "1")]
+    pub package_id: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetPackageResponse {
+    /// The package.
+    #[prost(message, optional, tag = "1")]
+    pub package: ::core::option::Option<Package>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetModuleRequest {
+    /// Required. The `storage_id` of the requested package.
+    #[prost(string, optional, tag = "1")]
+    pub package_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Required. The name of the requested module.
+    #[prost(string, optional, tag = "2")]
+    pub module_name: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetModuleResponse {
+    /// The module.
+    #[prost(message, optional, tag = "1")]
+    pub module: ::core::option::Option<Module>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetDatatypeRequest {
+    /// Required. The `storage_id` of the requested package.
+    #[prost(string, optional, tag = "1")]
+    pub package_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Required. The name of the requested module.
+    #[prost(string, optional, tag = "2")]
+    pub module_name: ::core::option::Option<::prost::alloc::string::String>,
+    /// Required. The name of the requested datatype.
+    #[prost(string, optional, tag = "3")]
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetDatatypeResponse {
+    /// The datatype.
+    #[prost(message, optional, tag = "1")]
+    pub datatype: ::core::option::Option<DatatypeDescriptor>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetFunctionRequest {
+    /// Required. The `storage_id` of the requested package.
+    #[prost(string, optional, tag = "1")]
+    pub package_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Required. The name of the requested module.
+    #[prost(string, optional, tag = "2")]
+    pub module_name: ::core::option::Option<::prost::alloc::string::String>,
+    /// Required. The name of the requested function.
+    #[prost(string, optional, tag = "3")]
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetFunctionResponse {
+    /// The function.
+    #[prost(message, optional, tag = "1")]
+    pub function: ::core::option::Option<FunctionDescriptor>,
+}
+/// Generated client implementations.
+pub mod move_package_service_client {
+    #![allow(
+        unused_variables,
+        dead_code,
+        missing_docs,
+        clippy::wildcard_imports,
+        clippy::let_unit_value,
+    )]
+    use tonic::codegen::*;
+    use tonic::codegen::http::Uri;
+    #[derive(Debug, Clone)]
+    pub struct MovePackageServiceClient<T> {
+        inner: tonic::client::Grpc<T>,
+    }
+    impl MovePackageServiceClient<tonic::transport::Channel> {
+        /// Attempt to create a new client by connecting to a given endpoint.
+        pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
+        where
+            D: TryInto<tonic::transport::Endpoint>,
+            D::Error: Into<StdError>,
+        {
+            let conn = tonic::transport::Endpoint::new(dst)?.connect().await?;
+            Ok(Self::new(conn))
+        }
+    }
+    impl<T> MovePackageServiceClient<T>
+    where
+        T: tonic::client::GrpcService<tonic::body::Body>,
+        T::Error: Into<StdError>,
+        T::ResponseBody: Body<Data = Bytes> + std::marker::Send + 'static,
+        <T::ResponseBody as Body>::Error: Into<StdError> + std::marker::Send,
+    {
+        pub fn new(inner: T) -> Self {
+            let inner = tonic::client::Grpc::new(inner);
+            Self { inner }
+        }
+        pub fn with_origin(inner: T, origin: Uri) -> Self {
+            let inner = tonic::client::Grpc::with_origin(inner, origin);
+            Self { inner }
+        }
+        pub fn with_interceptor<F>(
+            inner: T,
+            interceptor: F,
+        ) -> MovePackageServiceClient<InterceptedService<T, F>>
+        where
+            F: tonic::service::Interceptor,
+            T::ResponseBody: Default,
+            T: tonic::codegen::Service<
+                http::Request<tonic::body::Body>,
+                Response = http::Response<
+                    <T as tonic::client::GrpcService<tonic::body::Body>>::ResponseBody,
+                >,
+            >,
+            <T as tonic::codegen::Service<
+                http::Request<tonic::body::Body>,
+            >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
+        {
+            MovePackageServiceClient::new(InterceptedService::new(inner, interceptor))
+        }
+        /// Compress requests with the given encoding.
+        ///
+        /// This requires the server to support it otherwise it might respond with an
+        /// error.
+        #[must_use]
+        pub fn send_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.inner = self.inner.send_compressed(encoding);
+            self
+        }
+        /// Enable decompressing responses.
+        #[must_use]
+        pub fn accept_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.inner = self.inner.accept_compressed(encoding);
+            self
+        }
+        /// Limits the maximum size of a decoded message.
+        ///
+        /// Default: `4MB`
+        #[must_use]
+        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
+            self.inner = self.inner.max_decoding_message_size(limit);
+            self
+        }
+        /// Limits the maximum size of an encoded message.
+        ///
+        /// Default: `usize::MAX`
+        #[must_use]
+        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
+            self.inner = self.inner.max_encoding_message_size(limit);
+            self
+        }
+        pub async fn get_package(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetPackageRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetPackageResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.rpc.v2alpha.MovePackageService/GetPackage",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("sui.rpc.v2alpha.MovePackageService", "GetPackage"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn get_module(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetModuleRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetModuleResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.rpc.v2alpha.MovePackageService/GetModule",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("sui.rpc.v2alpha.MovePackageService", "GetModule"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn get_datatype(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetDatatypeRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetDatatypeResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.rpc.v2alpha.MovePackageService/GetDatatype",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("sui.rpc.v2alpha.MovePackageService", "GetDatatype"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn get_function(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetFunctionRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetFunctionResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.rpc.v2alpha.MovePackageService/GetFunction",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("sui.rpc.v2alpha.MovePackageService", "GetFunction"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+    }
+}
+/// Generated server implementations.
+pub mod move_package_service_server {
+    #![allow(
+        unused_variables,
+        dead_code,
+        missing_docs,
+        clippy::wildcard_imports,
+        clippy::let_unit_value,
+    )]
+    use tonic::codegen::*;
+    /// Generated trait containing gRPC methods that should be implemented for use with MovePackageServiceServer.
+    #[async_trait]
+    pub trait MovePackageService: std::marker::Send + std::marker::Sync + 'static {
+        async fn get_package(
+            &self,
+            request: tonic::Request<super::GetPackageRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetPackageResponse>,
+            tonic::Status,
+        >;
+        async fn get_module(
+            &self,
+            request: tonic::Request<super::GetModuleRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetModuleResponse>,
+            tonic::Status,
+        >;
+        async fn get_datatype(
+            &self,
+            request: tonic::Request<super::GetDatatypeRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetDatatypeResponse>,
+            tonic::Status,
+        >;
+        async fn get_function(
+            &self,
+            request: tonic::Request<super::GetFunctionRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetFunctionResponse>,
+            tonic::Status,
+        >;
+    }
+    #[derive(Debug)]
+    pub struct MovePackageServiceServer<T> {
+        inner: Arc<T>,
+        accept_compression_encodings: EnabledCompressionEncodings,
+        send_compression_encodings: EnabledCompressionEncodings,
+        max_decoding_message_size: Option<usize>,
+        max_encoding_message_size: Option<usize>,
+    }
+    impl<T> MovePackageServiceServer<T> {
+        pub fn new(inner: T) -> Self {
+            Self::from_arc(Arc::new(inner))
+        }
+        pub fn from_arc(inner: Arc<T>) -> Self {
+            Self {
+                inner,
+                accept_compression_encodings: Default::default(),
+                send_compression_encodings: Default::default(),
+                max_decoding_message_size: None,
+                max_encoding_message_size: None,
+            }
+        }
+        pub fn with_interceptor<F>(
+            inner: T,
+            interceptor: F,
+        ) -> InterceptedService<Self, F>
+        where
+            F: tonic::service::Interceptor,
+        {
+            InterceptedService::new(Self::new(inner), interceptor)
+        }
+        /// Enable decompressing requests with the given encoding.
+        #[must_use]
+        pub fn accept_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.accept_compression_encodings.enable(encoding);
+            self
+        }
+        /// Compress responses with the given encoding, if the client supports it.
+        #[must_use]
+        pub fn send_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.send_compression_encodings.enable(encoding);
+            self
+        }
+        /// Limits the maximum size of a decoded message.
+        ///
+        /// Default: `4MB`
+        #[must_use]
+        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
+            self.max_decoding_message_size = Some(limit);
+            self
+        }
+        /// Limits the maximum size of an encoded message.
+        ///
+        /// Default: `usize::MAX`
+        #[must_use]
+        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
+            self.max_encoding_message_size = Some(limit);
+            self
+        }
+    }
+    impl<T, B> tonic::codegen::Service<http::Request<B>> for MovePackageServiceServer<T>
+    where
+        T: MovePackageService,
+        B: Body + std::marker::Send + 'static,
+        B::Error: Into<StdError> + std::marker::Send + 'static,
+    {
+        type Response = http::Response<tonic::body::Body>;
+        type Error = std::convert::Infallible;
+        type Future = BoxFuture<Self::Response, Self::Error>;
+        fn poll_ready(
+            &mut self,
+            _cx: &mut Context<'_>,
+        ) -> Poll<std::result::Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+        fn call(&mut self, req: http::Request<B>) -> Self::Future {
+            match req.uri().path() {
+                "/sui.rpc.v2alpha.MovePackageService/GetPackage" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetPackageSvc<T: MovePackageService>(pub Arc<T>);
+                    impl<
+                        T: MovePackageService,
+                    > tonic::server::UnaryService<super::GetPackageRequest>
+                    for GetPackageSvc<T> {
+                        type Response = super::GetPackageResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetPackageRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as MovePackageService>::get_package(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetPackageSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.rpc.v2alpha.MovePackageService/GetModule" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetModuleSvc<T: MovePackageService>(pub Arc<T>);
+                    impl<
+                        T: MovePackageService,
+                    > tonic::server::UnaryService<super::GetModuleRequest>
+                    for GetModuleSvc<T> {
+                        type Response = super::GetModuleResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetModuleRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as MovePackageService>::get_module(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetModuleSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.rpc.v2alpha.MovePackageService/GetDatatype" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetDatatypeSvc<T: MovePackageService>(pub Arc<T>);
+                    impl<
+                        T: MovePackageService,
+                    > tonic::server::UnaryService<super::GetDatatypeRequest>
+                    for GetDatatypeSvc<T> {
+                        type Response = super::GetDatatypeResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetDatatypeRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as MovePackageService>::get_datatype(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetDatatypeSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.rpc.v2alpha.MovePackageService/GetFunction" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetFunctionSvc<T: MovePackageService>(pub Arc<T>);
+                    impl<
+                        T: MovePackageService,
+                    > tonic::server::UnaryService<super::GetFunctionRequest>
+                    for GetFunctionSvc<T> {
+                        type Response = super::GetFunctionResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetFunctionRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as MovePackageService>::get_function(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetFunctionSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                _ => {
+                    Box::pin(async move {
+                        let mut response = http::Response::new(
+                            tonic::body::Body::default(),
+                        );
+                        let headers = response.headers_mut();
+                        headers
+                            .insert(
+                                tonic::Status::GRPC_STATUS,
+                                (tonic::Code::Unimplemented as i32).into(),
+                            );
+                        headers
+                            .insert(
+                                http::header::CONTENT_TYPE,
+                                tonic::metadata::GRPC_CONTENT_TYPE,
+                            );
+                        Ok(response)
+                    })
+                }
+            }
+        }
+    }
+    impl<T> Clone for MovePackageServiceServer<T> {
+        fn clone(&self) -> Self {
+            let inner = self.inner.clone();
+            Self {
+                inner,
+                accept_compression_encodings: self.accept_compression_encodings,
+                send_compression_encodings: self.send_compression_encodings,
+                max_decoding_message_size: self.max_decoding_message_size,
+                max_encoding_message_size: self.max_encoding_message_size,
+            }
+        }
+    }
+    /// Generated gRPC service name
+    pub const SERVICE_NAME: &str = "sui.rpc.v2alpha.MovePackageService";
+    impl<T> tonic::server::NamedService for MovePackageServiceServer<T> {
+        const NAME: &'static str = SERVICE_NAME;
+    }
+}
 /// Request message for SubscriptionService.SubscribeCheckpoints
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SubscribeCheckpointsRequest {

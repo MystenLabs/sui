@@ -21,8 +21,8 @@ use super::{
 /// The proportion of the query content that was transaction payload versus query payload.
 #[derive(Serialize, Deserialize)]
 pub(super) struct Usage {
-    pub query_payload_size: u32,
-    pub tx_payload_size: u32,
+    pub(super) query_payload_size: u32,
+    pub(super) tx_payload_size: u32,
 }
 
 /// Validation rule that finds parts of the request that correspond to transaction payloads

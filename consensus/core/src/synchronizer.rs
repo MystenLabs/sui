@@ -358,7 +358,16 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                 .try_send(blocks_guard)
                                 .map_err(|err| {
                                     match err {
-                                        TrySendError::Full(_) => ConsensusError::SynchronizerSaturated(peer_index),
+                                        TrySendError::Full(_) => {
+                                            let peer_hostname = &self.context.committee.authority(peer_index).hostname;
+                                            self.context
+                                                .metrics
+                                                .node_metrics
+                                                .synchronizer_skipped_fetch_requests
+                                                .with_label_values(&[peer_hostname])
+                                                .inc();
+                                            ConsensusError::SynchronizerSaturated(peer_index)
+                                        },
                                         TrySendError::Closed(_) => ConsensusError::Shutdown
                                     }
                                 });

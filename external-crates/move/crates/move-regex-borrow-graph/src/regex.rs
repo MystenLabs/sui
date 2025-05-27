@@ -3,6 +3,12 @@
 
 use std::fmt::{Debug, Display};
 
+/// An edge in the graph contains a set of these simple regular expressions. For now, this is
+/// just a (potentially empty) list of labels, and a flag indicating if the last label is a dot
+/// star. This is overly constrained to the current limitations in Move. When we add support for
+/// recursive types, we will need a more general regular expression. Particularly, we will need to
+/// be able to have regular expressions after the dot star. And we will need to star regular
+/// expressions other than dot.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct Regex<Lbl> {
     labels: Vec<Lbl>,
@@ -11,8 +17,11 @@ pub(crate) struct Regex<Lbl> {
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Extension<Lbl> {
+    /// An empty regular expression
     Epsilon,
+    /// A single label
     Label(Lbl),
+    /// A dot star (matching 0 or more labels)
     DotStar,
 }
 
@@ -21,44 +30,55 @@ pub(crate) enum Extension<Lbl> {
 //**************************************************************************************************
 
 impl<Lbl> Regex<Lbl> {
-    pub fn epsilon() -> Self {
+    /// An empty regular expression
+    pub(crate) fn epsilon() -> Self {
         Self {
             labels: vec![],
             ends_in_dot_star: false,
         }
     }
 
-    pub fn label(lbl: Lbl) -> Self {
+    /// A single label
+    pub(crate) fn label(lbl: Lbl) -> Self {
         Self {
             labels: vec![lbl],
             ends_in_dot_star: false,
         }
     }
 
-    pub fn dot_star() -> Self {
+    /// A dot star
+    pub(crate) fn dot_star() -> Self {
         Self {
             labels: vec![],
             ends_in_dot_star: true,
         }
     }
 
-    pub fn is_epsilon(&self) -> bool {
+    /// Returns true if the regex is empty (no labels and no dot star)
+    pub(crate) fn is_epsilon(&self) -> bool {
         self.labels.is_empty() && !self.ends_in_dot_star
     }
 
-    pub fn abstract_size(&self) -> usize {
+    /// Used internally for metering of the graph within the bytecode verifier. We consider even
+    /// an empty regex to be of size 1. Then we add one for each label and one for the dot star.
+    /// In short, `abstract_size` is an abstraction over the Rust allocation size of the regex.
+    pub(crate) fn abstract_size(&self) -> usize {
         1 + self.labels.len() + (self.ends_in_dot_star as usize)
     }
 
-    /// Path for public facing API
-    pub fn pub_path(&self) -> (Vec<Lbl>, bool)
+    /// Internal helper for the public facing API
+    pub(crate) fn query_api_path(&self) -> (Vec<Lbl>, bool)
     where
         Lbl: Clone,
     {
         (self.labels.clone(), self.ends_in_dot_star)
     }
 
-    pub fn extend(mut self, ext: &Extension<Lbl>) -> Self
+    /// This concatenates an extension onto the end of the regular expression.
+    /// If the regular expression ends in dot star, then there is no current need to keep track of
+    /// the labels after. The additional precision of having labels after the dot star is not
+    /// needed currently in Move.
+    pub(crate) fn extend(mut self, ext: &Extension<Lbl>) -> Self
     where
         Lbl: Clone,
     {
@@ -76,8 +96,42 @@ impl<Lbl> Regex<Lbl> {
         }
     }
 
-    /// If self = pq, then remove_prefix(p) returns Some(q) for all possible q
-    pub fn remove_prefix(&self, p: &Extension<Lbl>) -> Vec<Regex<Lbl>>
+    /// If self = pq, then remove_prefix(p) returns Some(q) for all possible q.
+    ///
+    /// The input `p` is restricted to being an `Extension`. This is a practical limitation that
+    /// makes writing the algorithm easier.
+    ///
+    /// Examples where there is a prefix, p:
+    /// Remove epsilon
+    /// "".remove_prefix("") = [""]
+    /// "a".remove_prefix("") = ["a"]
+    /// "ab".remove_prefix("") = ["ab"]
+    /// ".*".remove_prefix("") = [".*"]
+    /// "a.*".remove_prefix("") = ["a.*"]
+    ///
+    /// Remove label
+    /// "ab".remove_prefix("a") = ["b"]
+    /// "abc".remove_prefix("a") = ["bc"]
+    /// ".*".remove_prefix("a") = [".*"]
+    /// "a.*".remove_prefix("a") = [".*"]
+    /// "ab.*".remove_prefix("a") = ["b.*"]
+    ///
+    /// Remove dot star
+    /// "".remove_prefix(".*") = [""]
+    /// "a".remove_prefix(".*") = ["a", ""]
+    /// "ab".remove_prefix(".*") = ["ab", "b", ""]
+    /// "abc".remove_prefix(".*") = ["abc", "bc", "c", ""]
+    /// ".*".remove_prefix(".*") = [".*"]
+    /// "a.*".remove_prefix(".*") = ["a.*", ".*", ""] ==> optimized to [".*"]
+    /// "ab.*".remove_prefix(".*") = ["ab.*", "b.*", ".*", ""] ==> optimized to [".*"]
+    ///
+    /// Cases where there is no prefix:
+    /// "".remove_prefix("a") = []
+    /// "a".remove_prefix("b") = []
+    /// "ab".remove_prefix("b") = []
+    /// "abc".remove_prefix("b") = []
+    /// "a.*".remove_prefix("b") = []
+    pub(crate) fn remove_prefix(&self, p: &Extension<Lbl>) -> Vec<Regex<Lbl>>
     where
         Lbl: Clone,
         Lbl: Eq,
@@ -147,8 +201,36 @@ impl<Lbl> Regex<Lbl> {
 }
 
 impl<Lbl> Extension<Lbl> {
-    /// If self = pq, then remove_prefix(p) returns Some(q) for all possible q
-    pub fn remove_prefix(&self, p: &Regex<Lbl>) -> Vec<Regex<Lbl>>
+    /// If self = pq, then remove_prefix(p) returns Some(q) for all possible q.
+    ///
+    /// This is similar to `Regex::remove_prefix`, but with the restrictions flipped.
+    ///
+    /// Cases where there is a prefix, p:
+    /// Removing from epsilon
+    /// "".remove_prefix("") = [""]
+    /// "".remove_prefix(".*") = [""]
+    ///
+    /// Removing from label
+    /// "a".remove_prefix("") = ["a"]
+    /// "a".remove_prefix("a") = [""]
+    /// "a".remove_prefix(".*") = ["a", ""]
+    /// "a".remove_prefix("a.*") = [""]
+    ///
+    /// Removing from dot star
+    /// ".*".remove_prefix("") = [".*"]
+    /// ".*".remove_prefix("a") = [".*"]
+    /// ".*".remove_prefix("ab") = [".*"]
+    /// ".*".remove_prefix(".*") = [".*"]
+    /// ".*".remove_prefix("a.*") = [".*"]
+    ///
+    /// Cases where there is no prefix:
+    /// "".remove_prefix("a") = []
+    /// "".remove_prefix("ab") = []
+    /// "".remove_prefix("a.*") = []
+    /// "a".remove_prefix("b") = []
+    /// "a".remove_prefix("bc.*") = []
+    /// "a".remove_prefix("ab") = []
+    pub(crate) fn remove_prefix(&self, p: &Regex<Lbl>) -> Vec<Regex<Lbl>>
     where
         Lbl: Clone,
         Lbl: Eq,
@@ -211,7 +293,7 @@ impl<Lbl> Extension<Lbl> {
         }
     }
 
-    fn into_regex(self) -> Regex<Lbl> {
+    pub(crate) fn into_regex(self) -> Regex<Lbl> {
         match self {
             Extension::Epsilon => Regex::epsilon(),
             Extension::Label(lbl) => Regex::label(lbl),
@@ -220,12 +302,14 @@ impl<Lbl> Extension<Lbl> {
     }
 }
 
+// Helper for remove_prefix
 enum Walk<'a, Lbl> {
     EmptySet,
     Epsilon,
     Regex { regex: &'a Regex<Lbl>, idx: usize },
 }
 
+// Helper for remove_prefix
 enum WalkPeek<'a, Lbl> {
     EmptySet,
     Epsilon,
@@ -299,6 +383,8 @@ impl<Lbl> Walk<'_, Lbl> {
 // traits
 //**************************************************************************************************
 
+/// Helper macro to help with Debug and Display. Cannot be a function since we cannot write
+/// `Lbl: Display OR Debug`
 macro_rules! fmt_regex {
     ($f:expr, $path:expr) => {{
         let f = $f;
@@ -318,6 +404,7 @@ macro_rules! fmt_regex {
             }
         }
         if p.ends_in_dot_star {
+            // we use _ instead of . to avoid confusion with field access/extension
             write!(f, "_*")?;
         }
         Ok(())

@@ -21,6 +21,7 @@ pub mod epoch;
 pub mod execution_cache;
 mod execution_driver;
 mod fallback_fetch;
+pub mod global_state_hasher;
 pub mod jsonrpc_index;
 pub mod metrics;
 pub mod mock_consensus;
@@ -34,7 +35,6 @@ pub mod rpc_index;
 pub mod safe_client;
 mod scoring_decision;
 mod stake_aggregator;
-pub mod state_accumulator;
 pub mod storage;
 pub mod streamer;
 pub mod subscription_handler;
@@ -47,6 +47,7 @@ pub mod transaction_orchestrator;
 mod transaction_outputs;
 pub mod validator_tx_finalizer;
 pub mod verify_indexes;
+mod wait_for_effects_request;
 
 #[cfg(test)]
 #[path = "unit_tests/congestion_control_tests.rs"]

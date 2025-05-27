@@ -5,6 +5,38 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
+    use crate::{
+        adapter::new_native_extensions,
+        error::convert_vm_error,
+        execution_mode::ExecutionMode,
+        execution_value::{
+            CommandKind, ExecutionState, InputObjectMetadata, InputValue, ObjectContents,
+            ObjectValue, RawValueType, ResultValue, SizeBound, TryFromValue, UsageKind, Value,
+        },
+        gas_charger::GasCharger,
+        gas_meter::SuiGasMeter,
+        programmable_transactions::{data_store::SuiDataStore, linkage_view::LinkageView},
+        type_resolver::TypeTagResolver,
+    };
+    use move_binary_format::{
+        CompiledModule,
+        errors::{Location, PartialVMError, VMError, VMResult},
+        file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
+    };
+    use move_core_types::{
+        account_address::AccountAddress,
+        identifier::IdentStr,
+        language_storage::{ModuleId, StructTag, TypeTag},
+        vm_status::StatusCode,
+    };
+    use move_trace_format::format::MoveTraceBuilder;
+    use move_vm_runtime::{
+        move_vm::MoveVM,
+        native_extensions::NativeContextExtensions,
+        session::{LoadedFunctionInstantiation, SerializedReturnValues},
+    };
+    use move_vm_types::loaded_data::runtime_types::Type;
+    use mysten_common::debug_fatal;
     use std::{
         borrow::Borrow,
         cell::RefCell,
@@ -12,61 +44,24 @@ mod checked {
         rc::Rc,
         sync::Arc,
     };
-
-    use crate::error::convert_vm_error;
-    use crate::execution_mode::ExecutionMode;
-    use crate::execution_value::{CommandKind, ObjectContents, TryFromValue, Value};
-    use crate::execution_value::{
-        ExecutionState, InputObjectMetadata, InputValue, ObjectValue, RawValueType, ResultValue,
-        UsageKind,
-    };
-    use crate::gas_charger::GasCharger;
-    use crate::gas_meter::SuiGasMeter;
-    use crate::programmable_transactions::linkage_view::LinkageView;
-    use crate::type_resolver::TypeTagResolver;
-    use crate::{adapter::new_native_extensions, execution_value::SizeBound};
-    use indexmap::IndexSet;
-    use move_binary_format::{
-        CompiledModule,
-        errors::{Location, PartialVMError, PartialVMResult, VMError, VMResult},
-        file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
-    };
-    use move_core_types::resolver::ModuleResolver;
-    use move_core_types::vm_status::StatusCode;
-    use move_core_types::{
-        account_address::AccountAddress,
-        identifier::IdentStr,
-        language_storage::{ModuleId, StructTag, TypeTag},
-    };
-    use move_trace_format::format::MoveTraceBuilder;
-    use move_vm_runtime::native_extensions::NativeContextExtensions;
-    use move_vm_runtime::{
-        move_vm::MoveVM,
-        session::{LoadedFunctionInstantiation, SerializedReturnValues},
-    };
-    use move_vm_types::data_store::DataStore;
-    use move_vm_types::loaded_data::runtime_types::Type;
-    use mysten_common::debug_fatal;
     use sui_move_natives::object_runtime::{
         self, LoadedRuntimeObject, ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
     };
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::storage::{DenyListResult, PackageObject};
     use sui_types::{
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
         coin::Coin,
-        error::{ExecutionError, ExecutionErrorKind},
+        error::{ExecutionError, ExecutionErrorKind, command_argument_error},
         event::Event,
-        execution::ExecutionResultsV2,
+        execution::{ExecutionResults, ExecutionResultsV2},
+        execution_status::CommandArgumentError,
         metrics::LimitsMetrics,
         move_package::MovePackage,
         object::{Data, MoveObject, Object, ObjectInner, Owner},
-        storage::BackingPackageStore,
+        storage::{BackingPackageStore, DenyListResult, PackageObject},
         transaction::{Argument, CallArg, ObjectArg},
     };
-    use sui_types::{error::command_argument_error, execution_status::CommandArgumentError};
-    use sui_types::{execution::ExecutionResults, object::Authenticator};
     use tracing::instrument;
 
     /// Maintains all runtime state specific to programmable transactions
@@ -718,7 +713,7 @@ mod checked {
             let mut loaded_runtime_objects = BTreeMap::new();
             let mut additional_writes = BTreeMap::new();
             let mut by_value_shared_objects = BTreeSet::new();
-            let mut authenticator_objects = BTreeMap::new();
+            let mut consensus_owner_objects = BTreeMap::new();
             for input in inputs.into_iter().chain(std::iter::once(gas)) {
                 let InputValue {
                     object_metadata:
@@ -745,8 +740,8 @@ mod checked {
                     add_additional_write(&mut additional_writes, owner, object_value)?;
                 } else if owner.is_shared() {
                     by_value_shared_objects.insert(id);
-                } else if owner.authenticator().is_some() {
-                    authenticator_objects.insert(id, owner.clone());
+                } else if matches!(owner, Owner::ConsensusAddressOwner { .. }) {
+                    consensus_owner_objects.insert(id, owner.clone());
                 }
             }
             // check for unused values
@@ -848,7 +843,7 @@ mod checked {
                 } = additional_write;
                 // safe given the invariant that the runtime correctly propagates has_public_transfer
                 let move_object = unsafe {
-                    create_written_object(
+                    create_written_object::<Mode>(
                         vm,
                         &linkage_view,
                         protocol_config,
@@ -889,7 +884,7 @@ mod checked {
                 };
                 // safe because has_public_transfer has been determined by the abilities
                 let move_object = unsafe {
-                    create_written_object(
+                    create_written_object::<Mode>(
                         vm,
                         &linkage_view,
                         protocol_config,
@@ -940,35 +935,34 @@ mod checked {
                 }
             }
 
-            // Before finishing, enforce restrictions on transfer and deletion for objects configured
-            // with authenticators.
-            for (id, original_owner) in authenticator_objects {
-                let authenticator = original_owner.authenticator().expect("verified before adding to `authenticator_objects` that these have authenticators");
-
-                match authenticator {
-                    Authenticator::SingleOwner(owner) => {
-                        // Already verified in pre-execution checks that tx sender is the object owner.
-                        // SingleOwner is allowed to do anything with the object.
-                        if ref_context.borrow().sender() != *owner {
-                            debug_fatal!(
-                                "transaction with a singly owned input object where the tx sender is not the owner should never be executed"
-                            );
-                            return Err(ExecutionError::new(
+            // Before finishing, enforce auth restrictions on consensus objects.
+            for (id, original_owner) in consensus_owner_objects {
+                let Owner::ConsensusAddressOwner { owner, .. } = original_owner else {
+                    panic!(
+                        "verified before adding to `consensus_owner_objects` that these are ConsensusAddressOwner"
+                    );
+                };
+                // Already verified in pre-execution checks that tx sender is the object owner.
+                // Owner is allowed to do anything with the object.
+                if ref_context.borrow().sender() != owner {
+                    debug_fatal!(
+                        "transaction with a singly owned input object where the tx sender is not the owner should never be executed"
+                    );
+                    return Err(ExecutionError::new(
                                 ExecutionErrorKind::SharedObjectOperationNotAllowed,
                                 Some(
                                     format!("Shared object operation on {} not allowed: \
                                              transaction with singly owned input object must be sent by the owner", id).into(),
                                 ),
                             ));
-                        }
-                    } // Future authenticators with fewer permissions should be checked here. For
-                      // example, transfers and wraps can be detected by comparing `original_owner`
-                      // with:
-                      // let new_owner = written_objects.get(&id).map(|obj| obj.owner);
-                      //
-                      // Deletions can be detected with:
-                      // let deleted = deleted_object_ids.contains(&id);
                 }
+                // If an Owner type is implemented with support for more fine-grained authorization,
+                // checks should be performed here. For example, transfers and wraps can be detected
+                // by comparing `original_owner` with:
+                // let new_owner = written_objects.get(&id).map(|obj| obj.owner);
+                //
+                // Deletions can be detected with:
+                // let deleted = deleted_object_ids.contains(&id);
             }
 
             if protocol_config.enable_coin_deny_list_v2() {
@@ -1608,15 +1602,18 @@ mod checked {
             // protected by transaction input checker
             invariant_violation!("Object {} does not exist yet", id);
         };
-        // override_as_immutable ==> Owner::Shared or Owner::ConsensusV2
+        // override_as_immutable ==> Owner::Shared or Owner::ConsensusAddressOwner
         assert_invariant!(
             !override_as_immutable
-                || matches!(obj.owner, Owner::Shared { .. } | Owner::ConsensusV2 { .. }),
+                || matches!(
+                    obj.owner,
+                    Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. }
+                ),
             "override_as_immutable should only be set for consensus objects"
         );
         let is_mutable_input = match obj.owner {
             Owner::AddressOwner(_) => true,
-            Owner::Shared { .. } | Owner::ConsensusV2 { .. } => !override_as_immutable,
+            Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } => !override_as_immutable,
             Owner::Immutable => false,
             Owner::ObjectOwner(_) => {
                 // protected by transaction input checker
@@ -1783,7 +1780,7 @@ mod checked {
     ///
     /// This function assumes proper generation of has_public_transfer, either from the abilities of
     /// the StructTag, or from the runtime correctly propagating from the inputs
-    unsafe fn create_written_object(
+    unsafe fn create_written_object<Mode: ExecutionMode>(
         vm: &MoveVM,
         linkage_view: &LinkageView,
         protocol_config: &ProtocolConfig,
@@ -1821,96 +1818,8 @@ mod checked {
                 old_obj_ver.unwrap_or_default(),
                 contents,
                 protocol_config,
+                Mode::packages_are_predefined(),
             )
-        }
-    }
-
-    // Implementation of the `DataStore` trait for the Move VM.
-    // When used during execution it may have a list of new packages that have
-    // just been published in the current context. Those are used for module/type
-    // resolution when executing module init.
-    // It may be created with an empty slice of packages either when no publish/upgrade
-    // are performed or when a type is requested not during execution.
-    pub(crate) struct SuiDataStore<'state, 'a> {
-        linkage_view: &'a LinkageView<'state>,
-        new_packages: &'a [MovePackage],
-    }
-
-    impl<'state, 'a> SuiDataStore<'state, 'a> {
-        pub(crate) fn new(
-            linkage_view: &'a LinkageView<'state>,
-            new_packages: &'a [MovePackage],
-        ) -> Self {
-            Self {
-                linkage_view,
-                new_packages,
-            }
-        }
-
-        fn get_module(&self, module_id: &ModuleId) -> Option<&Vec<u8>> {
-            for package in self.new_packages {
-                let module = package.get_module(module_id);
-                if module.is_some() {
-                    return module;
-                }
-            }
-            None
-        }
-    }
-
-    // TODO: `DataStore` will be reworked and this is likely to disappear.
-    //       Leaving this comment around until then as testament to better days to come...
-    impl DataStore for SuiDataStore<'_, '_> {
-        fn link_context(&self) -> AccountAddress {
-            // TODO should we propagate the error
-            self.linkage_view.link_context().unwrap()
-        }
-
-        fn relocate(&self, module_id: &ModuleId) -> PartialVMResult<ModuleId> {
-            self.linkage_view.relocate(module_id).map_err(|err| {
-                PartialVMError::new(StatusCode::LINKER_ERROR)
-                    .with_message(format!("Error relocating {module_id}: {err:?}"))
-            })
-        }
-
-        fn defining_module(
-            &self,
-            runtime_id: &ModuleId,
-            struct_: &IdentStr,
-        ) -> PartialVMResult<ModuleId> {
-            self.linkage_view
-                .defining_module(runtime_id, struct_)
-                .map_err(|err| {
-                    PartialVMError::new(StatusCode::LINKER_ERROR).with_message(format!(
-                        "Error finding defining module for {runtime_id}::{struct_}: {err:?}"
-                    ))
-                })
-        }
-
-        fn load_module(&self, module_id: &ModuleId) -> VMResult<Vec<u8>> {
-            if let Some(bytes) = self.get_module(module_id) {
-                return Ok(bytes.clone());
-            }
-            match self.linkage_view.get_module(module_id) {
-                Ok(Some(bytes)) => Ok(bytes),
-                Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
-                    .with_message(format!("Cannot find {:?} in data cache", module_id))
-                    .finish(Location::Undefined)),
-                Err(err) => {
-                    let msg = format!("Unexpected storage error: {:?}", err);
-                    Err(
-                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                            .with_message(msg)
-                            .finish(Location::Undefined),
-                    )
-                }
-            }
-        }
-
-        fn publish_module(&mut self, _module_id: &ModuleId, _blob: Vec<u8>) -> VMResult<()> {
-            // we cannot panic here because during execution and publishing this is
-            // currently called from the publish flow in the Move runtime
-            Ok(())
         }
     }
 

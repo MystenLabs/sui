@@ -17,7 +17,7 @@ use crate::{
 
 use super::Error;
 
-/// Attempt to to translate the given SuiNS `name` to its address, as long as the mapping exists,
+/// Attempt to translate the given SuiNS `name` to its address, as long as the mapping exists,
 /// and it hasn't expired.
 pub(super) async fn resolved_address(
     ctx: &Context,
@@ -91,7 +91,7 @@ pub(super) async fn resolved_address(
     }
 }
 
-/// Attempt to to translate the given `address` to its SuiNS name, as long as the reverse mapping
+/// Attempt to translate the given `address` to its SuiNS name, as long as the reverse mapping
 /// exists, and the forward mapping points to the address.
 pub(super) async fn resolved_name(
     ctx: &Context,

@@ -27,6 +27,11 @@ pub struct VersionBoundedObjectVersionKey(pub ObjectID, pub u64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]
 pub struct CheckpointBoundedObjectVersionKey(pub ObjectID, pub u64);
 
+/// Key for fetching a [StoredObjVersion] by its ID and version (used to determine the checkpoint
+/// this object version was modified in).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct VersionedObjectVersionKey(pub ObjectID, pub u64);
+
 #[derive(thiserror::Error, Debug, Clone)]
 #[error(transparent)]
 pub enum Error {
@@ -241,6 +246,74 @@ impl Loader<CheckpointBoundedObjectVersionKey> for PgReader {
             .filter_map(|key| {
                 let (bound, stored) = key_to_stored.range(..=key).last()?;
                 (key.0 == bound.0).then(|| (*key, stored.clone()))
+            })
+            .collect())
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<VersionedObjectVersionKey> for PgReader {
+    type Value = StoredObjVersion;
+    type Error = Error;
+
+    async fn load(
+        &self,
+        keys: &[VersionedObjectVersionKey],
+    ) -> Result<HashMap<VersionedObjectVersionKey, StoredObjVersion>, Error> {
+        if keys.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let mut conn = self.connect().await.map_err(Arc::new)?;
+
+        let ids: Vec<_> = keys.iter().map(|k| k.0.into_bytes()).collect();
+        let versions: Vec<_> = keys.iter().map(|k| k.1 as i64).collect();
+        let query = diesel::sql_query(
+            r#"
+                SELECT
+                    k.object_id,
+                    v.object_version,
+                    v.object_digest,
+                    v.cp_sequence_number
+                FROM (
+                    SELECT
+                        UNNEST($1) object_id,
+                        UNNEST($2) object_version
+                ) k
+                CROSS JOIN LATERAL (
+                    SELECT
+                        object_version,
+                        object_digest,
+                        cp_sequence_number
+                    FROM
+                        obj_versions
+                    WHERE
+                        obj_versions.object_id = k.object_id
+                    AND obj_versions.object_version = k.object_version
+                    LIMIT
+                        1
+                ) v
+            "#,
+        )
+        .bind::<Array<Bytea>, _>(ids)
+        .bind::<Array<BigInt>, _>(versions);
+
+        let obj_versions: Vec<StoredObjVersion> = conn.results(query).await.map_err(Arc::new)?;
+        let key_to_stored: HashMap<_, _> = obj_versions
+            .iter()
+            .map(|stored| {
+                let id = &stored.object_id[..];
+                let version = stored.object_version as u64;
+                ((id, version), stored)
+            })
+            .collect();
+
+        Ok(keys
+            .iter()
+            .filter_map(|key| {
+                let slice: &[u8] = key.0.as_ref();
+                let stored = *key_to_stored.get(&(slice, key.1))?;
+                Some((*key, stored.clone()))
             })
             .collect())
     }

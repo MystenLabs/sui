@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::accumulator::Accumulator;
 use crate::base_types::{
     random_object_ref, ExecutionData, ExecutionDigests, VerifiedExecutionData,
 };
@@ -14,6 +13,7 @@ use crate::digests::Digest;
 use crate::effects::{TestEffectsBuilder, TransactionEffectsAPI};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
+use crate::global_state_hash::GlobalStateHash;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::signature::GenericSignature;
 use crate::sui_serde::AsProtocolVersion;
@@ -115,7 +115,7 @@ impl From<fastcrypto::hash::Digest<32>> for ECMHLiveObjectSetDigest {
 
 impl Default for ECMHLiveObjectSetDigest {
     fn default() -> Self {
-        Accumulator::default().digest().into()
+        GlobalStateHash::default().digest().into()
     }
 }
 

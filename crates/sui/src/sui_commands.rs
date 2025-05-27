@@ -57,7 +57,7 @@ use sui_package_management::system_package_versions::latest_system_packages;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_swarm::memory::Swarm;
-use sui_swarm_config::genesis_config::{GenesisConfig, DEFAULT_NUMBER_OF_AUTHORITIES};
+use sui_swarm_config::genesis_config::GenesisConfig;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
@@ -742,15 +742,16 @@ async fn start(
     let config_dir = if force_regenesis {
         let committee_size = match committee_size {
             Some(x) => NonZeroUsize::new(x),
-            None => NonZeroUsize::new(DEFAULT_NUMBER_OF_AUTHORITIES),
+            None => NonZeroUsize::new(1),
         }
         .ok_or_else(|| anyhow!("Committee size must be at least 1."))?;
+        println!("committee_size: {}", committee_size);
         swarm_builder = swarm_builder.committee_size(committee_size);
         let genesis_config = GenesisConfig::custom_genesis(1, 100);
         swarm_builder = swarm_builder.with_genesis_config(genesis_config);
         let epoch_duration_ms = epoch_duration_ms.unwrap_or(DEFAULT_EPOCH_DURATION_MS);
         swarm_builder = swarm_builder.with_epoch_duration_ms(epoch_duration_ms);
-        mysten_common::tempdir()?.into_path()
+        mysten_common::tempdir()?.keep()
     } else {
         // If the config path looks like a YAML file, it is treated as if it is the network.yaml
         // overriding the network.yaml found in the sui config directry. Otherwise it is treated as
@@ -858,7 +859,7 @@ async fn start(
     // note that this overrides the default configuration that is set when running the genesis
     // command, which sets data_ingestion_dir to None.
     if with_indexer.is_some() && data_ingestion_dir.is_none() {
-        data_ingestion_dir = Some(mysten_common::tempdir()?.into_path())
+        data_ingestion_dir = Some(mysten_common::tempdir()?.keep())
     }
 
     if let Some(ref dir) = data_ingestion_dir {
@@ -1126,7 +1127,7 @@ async fn genesis(
     }
     let committee_size = match committee_size {
         Some(x) => NonZeroUsize::new(x),
-        None => NonZeroUsize::new(DEFAULT_NUMBER_OF_AUTHORITIES),
+        None => NonZeroUsize::new(1),
     }
     .ok_or_else(|| anyhow!("Committee size must be at least 1."))?;
 

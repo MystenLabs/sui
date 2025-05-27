@@ -42,6 +42,8 @@ export function useTrophyQuery(game?: Game): [UseTrophyQueryResponse, Invalidate
             const { results } = await client.devInspectTransactionBlock({
                 // It doesn't matter who's sending this query.
                 sender: normalizeSuiAddress("0x0"),
+                // Fails with Transaction type version mismatch
+                // @ts-ignore
                 transactionBlock: tx.ended(game!!),
             });
 

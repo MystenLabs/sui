@@ -1460,7 +1460,7 @@ mod bcs_signable {
     impl BcsSignable for crate::transaction::SenderSignedData {}
     impl BcsSignable for crate::object::ObjectInner {}
 
-    impl BcsSignable for crate::accumulator::Accumulator {}
+    impl BcsSignable for crate::global_state_hash::GlobalStateHash {}
 
     impl BcsSignable for super::bcs_signable_test::Foo {}
     #[cfg(test)]

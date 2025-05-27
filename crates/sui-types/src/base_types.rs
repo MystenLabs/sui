@@ -201,7 +201,7 @@ impl FullObjectRef {
         (self.0.id(), self.1, self.2)
     }
 }
-/// Represents an distinct stream of object versions for a Shared or ConsensusV2 object,
+/// Represents an distinct stream of object versions for a consensus object,
 /// based on the object ID and start version.
 pub type ConsensusObjectSequenceKey = (ObjectID, SequenceNumber);
 

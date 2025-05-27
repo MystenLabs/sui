@@ -21,7 +21,19 @@ use std::{
 };
 
 use crate::{
-    code_action, completions::on_completion_request, context::Context, inlay_hints, symbols,
+    code_action,
+    completions::on_completion_request,
+    context::Context,
+    inlay_hints,
+    symbols::{
+        self,
+        compilation::PrecomputedPkgInfo,
+        requests::{
+            on_document_symbol_request, on_go_to_def_request, on_go_to_type_def_request,
+            on_hover_request, on_references_request,
+        },
+        runner::SymbolicatorRunner,
+    },
     vfs::on_text_document_sync_notification,
 };
 use url::Url;
@@ -47,9 +59,7 @@ pub fn run(implicit_deps: Dependencies) {
 
     let (connection, io_threads) = Connection::stdio();
     let symbols_map = Arc::new(Mutex::new(BTreeMap::new()));
-    let pkg_deps = Arc::new(Mutex::new(
-        BTreeMap::<PathBuf, symbols::PrecomputedPkgInfo>::new(),
-    ));
+    let pkg_deps = Arc::new(Mutex::new(BTreeMap::<PathBuf, PrecomputedPkgInfo>::new()));
     let ide_files_root: VfsPath = MemoryFS::new().into();
 
     let (id, client_response) = connection
@@ -142,7 +152,7 @@ pub fn run(implicit_deps: Dependencies) {
     };
     eprintln!("linting level {:?}", lint);
 
-    let symbolicator_runner = symbols::SymbolicatorRunner::new(
+    let symbolicator_runner = SymbolicatorRunner::new(
         ide_files_root.clone(),
         symbols_map.clone(),
         pkg_deps.clone(),
@@ -158,7 +168,7 @@ pub fn run(implicit_deps: Dependencies) {
     // to be available right after the client is initialized.
     if let Some(uri) = initialize_params.root_uri {
         let build_path = uri.to_file_path().unwrap();
-        if let Some(p) = symbols::SymbolicatorRunner::root_dir(&build_path) {
+        if let Some(p) = SymbolicatorRunner::root_dir(&build_path) {
             if let Ok((Some(new_symbols), _)) = symbols::get_symbols(
                 Arc::new(Mutex::new(BTreeMap::new())),
                 ide_files_root.clone(),
@@ -300,7 +310,7 @@ fn on_request(
     context: &Context,
     request: &Request,
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, symbols::PrecomputedPkgInfo>>>,
+    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
     shutdown_request_received: bool,
     implicit_deps: Dependencies,
 ) -> bool {
@@ -328,19 +338,19 @@ fn on_request(
             implicit_deps,
         ),
         lsp_types::request::GotoDefinition::METHOD => {
-            symbols::on_go_to_def_request(context, request);
+            on_go_to_def_request(context, request);
         }
         lsp_types::request::GotoTypeDefinition::METHOD => {
-            symbols::on_go_to_type_def_request(context, request);
+            on_go_to_type_def_request(context, request);
         }
         lsp_types::request::References::METHOD => {
-            symbols::on_references_request(context, request);
+            on_references_request(context, request);
         }
         lsp_types::request::HoverRequest::METHOD => {
-            symbols::on_hover_request(context, request);
+            on_hover_request(context, request);
         }
         lsp_types::request::DocumentSymbolRequest::METHOD => {
-            symbols::on_document_symbol_request(context, request);
+            on_document_symbol_request(context, request);
         }
         lsp_types::request::InlayHintRequest::METHOD => {
             inlay_hints::on_inlay_hint_request(context, request);
@@ -378,7 +388,7 @@ fn on_response(_context: &Context, _response: &Response) {
 
 fn on_notification(
     ide_files_root: VfsPath,
-    symbolicator_runner: &symbols::SymbolicatorRunner,
+    symbolicator_runner: &SymbolicatorRunner,
     notification: &Notification,
 ) {
     match notification.method.as_str() {

@@ -172,7 +172,10 @@ pub struct NodeConfig {
     pub run_with_range: Option<RunWithRange>,
 
     // For killswitch use None
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default = "default_traffic_controller_policy_config"
+    )]
     pub policy_config: Option<PolicyConfig>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -233,11 +236,17 @@ pub struct ExecutionTimeObserverConfig {
     /// If unspecified, this will default to `50_000`.
     pub object_utilization_cache_size: Option<NonZeroUsize>,
 
-    /// If true, the execution time observer will report per-object utilization metrics.
-    /// Warning: This metric may have very large cardinality.
+    /// If true, the execution time observer will report per-object utilization metrics
+    /// with full object IDs. When set, the metric can have a high cardinality, so this
+    /// should not be used except in controlled tests where there are a small number of
+    /// objects.
+    ///
+    /// If false, object utilization is reported using hash(object_id) % 32 as the key,
+    /// which still allows observation of utilization when there are small numbers of
+    /// over-utilized objects.
     ///
     /// If unspecified, this will default to `false`.
-    pub report_object_utilization_metric: Option<bool>,
+    pub report_object_utilization_metric_with_full_id: Option<bool>,
 
     /// Unless target object utilization is exceeded by at least this amount, no observation
     /// will be shared with consensus.
@@ -288,8 +297,9 @@ impl ExecutionTimeObserverConfig {
             .unwrap_or(nonzero!(50_000usize))
     }
 
-    pub fn report_object_utilization_metric(&self) -> bool {
-        self.report_object_utilization_metric.unwrap_or(false)
+    pub fn report_object_utilization_metric_with_full_id(&self) -> bool {
+        self.report_object_utilization_metric_with_full_id
+            .unwrap_or(false)
     }
 
     pub fn observation_sharing_object_utilization_threshold(&self) -> Duration {
@@ -1235,6 +1245,10 @@ impl Default for AuthorityOverloadConfig {
 
 fn default_authority_overload_config() -> AuthorityOverloadConfig {
     AuthorityOverloadConfig::default()
+}
+
+fn default_traffic_controller_policy_config() -> Option<PolicyConfig> {
+    Some(PolicyConfig::default_dos_protection_policy())
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq)]

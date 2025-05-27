@@ -102,13 +102,13 @@ pub(crate) type WatermarksLock = Arc<RwLock<Arc<Watermarks>>>;
 impl WatermarkTask {
     pub(crate) fn new(
         config: WatermarkConfig,
+        pg_pipelines: Vec<String>,
         pg_reader: PgReader,
         bigtable_reader: Option<BigtableReader>,
         cancel: CancellationToken,
     ) -> Self {
         let WatermarkConfig {
             watermark_polling_interval,
-            pg_pipelines,
         } = config;
 
         Self {
@@ -122,7 +122,7 @@ impl WatermarkTask {
     }
 
     /// The shared watermarks structure that this task writes to.
-    pub fn watermarks(&self) -> WatermarksLock {
+    pub(crate) fn watermarks(&self) -> WatermarksLock {
         self.watermarks.clone()
     }
 
@@ -130,7 +130,7 @@ impl WatermarkTask {
     ///
     /// This operation consume the `self` and returns a handle to the spawned tokio task. The task
     /// will continue to run until its cancellation token is triggered.
-    pub fn run(self) -> JoinHandle<()> {
+    pub(crate) fn run(self) -> JoinHandle<()> {
         tokio::spawn(async move {
             let Self {
                 watermarks,
@@ -200,6 +200,12 @@ impl Watermarks {
         Ok(watermarks)
     }
 
+    /// The high watermark across all pipelines. Returned as an inclusive checkpoint number,
+    /// inclusive epoch number and an exclusive transaction sequence number.
+    pub(crate) fn high_watermark(&self) -> &Watermark {
+        &self.global_hi
+    }
+
     /// Timestamp corresponding to high watermark. Can be `None` if the timestamp is out of range
     /// (should not happen under normal operation).
     pub(crate) fn timestamp_hi(&self) -> Option<DateTime<Utc>> {
@@ -222,6 +228,12 @@ impl Watermarks {
                 transaction: row.tx_lo,
             },
         );
+    }
+}
+
+impl Watermark {
+    pub(crate) fn checkpoint(&self) -> u64 {
+        self.checkpoint as u64
     }
 }
 

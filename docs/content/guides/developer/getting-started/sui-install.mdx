@@ -59,13 +59,13 @@ Each Sui release provides a set of binaries for several operating systems. You c
 1. Click the release tagged **Latest** to open the release's page.
 1. In the **Assets** section of the release, select the .tgz compressed file that corresponds to your operating system.
 1. Extract all files from the .tgz file into the preferred location on your system. These instructions assume you extract the files into a `sui` folder at the user root of your system. Replace references to this location in subsequent steps if you choose a different directory.
-1. Navigate to the expanded folder. You should have the following extracted files: 
-    
+1. Navigate to the expanded folder. You should have the following extracted files:
+
     {@include: ../../../snippets/lists/binaries-file-list.mdx}
 
 1. Add the folder containing the extracted files to your `PATH` variable. To do so, you can update your `~/.zshrc` or `~/.bashrc` to include the location of the Sui binaries. If using the suggested location, you type `export PATH=$PATH:~/sui` and press Enter.
 1. Start a new terminal session or type `source ~/.zshrc` (or `.bashrc`) to load the new `PATH` value.
-1. If running the binaries for the first time, you might receive an error from MacOS that prevents the binaries from running. If you receive this error, close the dialog and type `xattr -d com.apple.quarantine ~/sui/*` in your terminal and press Enter (be sure to adjust the path if different). 
+1. If running the binaries for the first time, you might receive an error from MacOS that prevents the binaries from running. If you receive this error, close the dialog and type `xattr -d com.apple.quarantine ~/sui/*` in your terminal and press Enter (be sure to adjust the path if different).
 
 </TabItem>
 
@@ -79,7 +79,7 @@ Each Sui release provides a set of binaries for several operating systems. You c
 1. In the **Assets** section of the release, select the .tgz compressed file that corresponds to your operating system.
 1. Extract all files from the .tgz file into the preferred location on your system. These instructions assume you extract the files into a `sui` folder at the root of your C drive. Replace references to this location in subsequent steps if you choose a different directory.
 
-    :::info 
+    :::info
 
     Windows does not natively support .tgz files, but you can use a free compressed file app like [7Zip](https://7-zip.org/) to extract.
 
@@ -90,7 +90,7 @@ Each Sui release provides a set of binaries for several operating systems. You c
     {@include: ../../../snippets/lists/binaries-file-list.mdx}
 
 1. Add the folder containing the extracted files to your `PATH` variable. There are several ways to get to the setting depending on your version of Windows. One way that works on all versions of Windows is to type `sysdm.cpl` in a console to open the System Properties window. Under the **Advanced** tab, click the **Environment Variables...** button.
-1. In the Environment Variables window, select the `Path` variable and click the **Edit...** button. 
+1. In the Environment Variables window, select the `Path` variable and click the **Edit...** button.
 1. In the Edit environment variable window, click **New** and add the path to your expanded folder. Using the example path, this would be `C:\sui`.
 1. Click **OK**.
 
@@ -98,9 +98,9 @@ Each Sui release provides a set of binaries for several operating systems. You c
 
 </Tabs>
 
-:::info 
+:::info
 
-Running binaries other than `sui` might require installing prerequisites itemized in the following section. 
+Running binaries other than `sui` might require installing prerequisites itemized in the following section.
 
 :::
 
@@ -144,7 +144,7 @@ The `sui-node` binaries for Ubuntu 22.04 are available for download from AWS. Yo
 
 The URL is in the form `https://sui-releases.s3-accelerate.amazonaws.com/<SHA-OR-TAG>/sui-node`, where you replace `<SHA-OR-TAG>` with the proper value. For example, the URL is `https://sui-releases.s3-accelerate.amazonaws.com/00544a588bb71c395d49d91f756e8bfe96067eca/sui-node` to download the release with the relevant commit sha. If you visit the URL using a browser, the binary downloads automatically.
 
-After downloading, open a console to the file's location and change its permission to `755`. 
+After downloading, open a console to the file's location and change its permission to `755`.
 ```sh
 $ chmod 755 sui-node
 ```
@@ -219,7 +219,7 @@ $ sudo apt-get update
 ```
 
 #### All Linux prerequisites
- 
+
 Reference the relevant sections that follow to install each prerequisite individually, or run the following to install them all at once:
 
 {@include: ../../../snippets/linux-deps.mdx}
@@ -427,8 +427,6 @@ Sui requires the following additional tools on computers running Windows.
 - [C++ build tools](https://visualstudio.microsoft.com/downloads/) is required to [install Rust](#rust-and-cargo).
 - The [LLVM Compiler Infrastructure](https://releases.llvm.org/). Look for a file with a name similar to LLVM-15.0.7-win64.exe for 64-bit Windows, or LLVM-15.0.7-win32.exe for 32-bit Windows.
 
-**Known issue** - The `sui console` command does not work in PowerShell.
-
 </TabItem>
 
 </Tabs>
@@ -439,7 +437,7 @@ With Sui installed, you can interact with Sui networks using the Sui CLI. For mo
 
 ## Installing Sui developer tools
 
-If you use VSCode, you can install the [Move extension](https://marketplace.visualstudio.com/items?itemName=mysten.move) to get language server support for Move, as well as support for building, testing, and debugging Move code within the IDE. 
+If you use VSCode, you can install the [Move extension](https://marketplace.visualstudio.com/items?itemName=mysten.move) to get language server support for Move, as well as support for building, testing, and debugging Move code within the IDE.
 You can install the extension either by searching the fully-qualified extension name, `Mysten.move`, in the extension view, or by pressing `Ctrl-P` or `Cmd-P` and typing `ext install mysten.move`.
 Installing the Move extension also installs the appropriate `move-analyzer` binary for your operating system, as well as the [Move Trace Debugger](https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug) extension, and [Move Syntax](https://marketplace.visualstudio.com/items?itemName=damirka.move-syntax) extension.
 

@@ -416,6 +416,16 @@ impl ExecutionStatus {
             None
         }
     }
+
+    pub fn is_cancelled(&self) -> bool {
+        matches!(
+            self,
+            ExecutionStatus::Failure {
+                error: ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion { .. },
+                ..
+            }
+        )
+    }
 }
 
 pub type CommandIndex = usize;

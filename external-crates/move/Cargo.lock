@@ -1070,9 +1070,9 @@ dependencies = [
 
 [[package]]
 name = "fixedbitset"
-version = "0.2.0"
+version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37ab347416e802de484e4d03c7316c48f1ecb56574dfd4a46a80f173ce1de04d"
+checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
 
 [[package]]
 name = "fnv"
@@ -1708,6 +1708,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
+name = "lcov"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ccfa6d5e585a884db65b37f38184e4364eaf74d884ac35d0a90fe9baf80b723"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
 name = "leb128"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2105,6 +2114,7 @@ dependencies = [
  "move-stdlib",
  "move-stdlib-natives",
  "move-symbol-pool",
+ "move-trace-format",
  "move-unit-test",
  "move-vm-profiler",
  "move-vm-runtime",
@@ -2221,12 +2231,15 @@ dependencies = [
  "codespan",
  "colored",
  "indexmap 2.8.0",
+ "lcov",
  "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-command-line-common",
+ "move-compiler",
  "move-core-types",
  "move-ir-types",
+ "move-trace-format",
  "petgraph",
  "serde",
 ]
@@ -2464,6 +2477,9 @@ dependencies = [
  "insta",
  "itertools 0.10.5",
  "move-command-line-common",
+ "move-core-types",
+ "move-package",
+ "petgraph",
  "regex",
  "serde",
  "serde_json",
@@ -2493,6 +2509,7 @@ dependencies = [
  "itertools 0.10.5",
  "move-binary-format",
  "move-core-types",
+ "petgraph",
 ]
 
 [[package]]
@@ -3176,12 +3193,14 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 
 [[package]]
 name = "petgraph"
-version = "0.5.1"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "467d164a6de56270bd7c4d070df81d07beace25012d5103ced4e9ff08d6afdb7"
+checksum = "7a98c6720655620a521dcc722d0ad66cd8afd5d86e34a89ef691c50b7b24de06"
 dependencies = [
  "fixedbitset",
- "indexmap 1.9.3",
+ "hashbrown 0.15.2",
+ "indexmap 2.8.0",
+ "serde",
 ]
 
 [[package]]
