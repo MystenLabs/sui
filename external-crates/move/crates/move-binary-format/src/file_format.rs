@@ -2933,7 +2933,6 @@ pub fn empty_unpublishable_module() -> CompiledModule {
     }
 }
 
-
 pub fn basic_unpublishable_test_module() -> CompiledModule {
     let mut m = empty_unpublishable_module();
 

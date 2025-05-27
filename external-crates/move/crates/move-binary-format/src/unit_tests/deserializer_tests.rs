@@ -6,8 +6,8 @@ use crate::{
     binary_config::BinaryConfig,
     file_format::{
         Bytecode, CodeUnit, CompiledModule, SignatureIndex, VariantJumpTableIndex,
-        basic_test_module, basic_test_module_with_enum,
-        basic_unpublishable_test_module, basic_unpublishable_test_module_with_enum,
+        basic_test_module, basic_test_module_with_enum, basic_unpublishable_test_module,
+        basic_unpublishable_test_module_with_enum,
     },
     file_format_common::*,
 };
@@ -490,6 +490,6 @@ fn serialize_deserialize_unpublishable_v7_with_flavor() {
 
     let binary_config = BinaryConfig::new_unpublishable();
     let x = CompiledModule::deserialize_with_config(&bin, &binary_config).unwrap();
-    assert!(x.publishable == false);
+    assert!(!x.publishable);
     assert_eq!(x, module);
 }

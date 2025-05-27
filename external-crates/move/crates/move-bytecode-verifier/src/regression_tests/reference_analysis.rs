@@ -121,7 +121,7 @@ fn too_many_locals() {
         .collect::<Vec<_>>();
     let module = CompiledModule {
         version: 5,
-    publishable: true,
+        publishable: true,
         self_module_handle_idx: ModuleHandleIndex(0),
         module_handles: vec![ModuleHandle {
             address: AddressIdentifierIndex(0),
@@ -175,7 +175,7 @@ fn too_many_locals() {
 fn borrow_graph() {
     let module = CompiledModule {
         version: 5,
-    publishable: true,
+        publishable: true,
         self_module_handle_idx: ModuleHandleIndex(0),
         module_handles: vec![ModuleHandle {
             address: AddressIdentifierIndex(0),
@@ -277,7 +277,7 @@ fn indirect_code() {
     assert_eq!(code.len(), (u16::MAX as usize));
     let module = CompiledModule {
         version: 5,
-    publishable: true,
+        publishable: true,
         self_module_handle_idx: ModuleHandleIndex(0),
         module_handles: vec![ModuleHandle {
             address: AddressIdentifierIndex(0),

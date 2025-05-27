@@ -125,5 +125,4 @@ impl BinaryConfig {
     pub fn valid_unpublishable_magic(&self, magic: &[u8]) -> bool {
         self.allow_unpublishable && magic == BinaryConstants::UNPUBLISHABLE_MAGIC
     }
-
 }
