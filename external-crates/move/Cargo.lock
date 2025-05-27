@@ -2503,6 +2503,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-regex-borrow-graph"
+version = "0.0.1"
+dependencies = [
+ "itertools 0.10.5",
+ "move-binary-format",
+ "move-core-types",
+ "petgraph",
+]
+
+[[package]]
 name = "move-stackless-bytecode"
 version = "0.1.0"
 dependencies = [

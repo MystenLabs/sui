@@ -174,6 +174,7 @@ move-model-2 = { path = "crates/move-model-2" }
 move-package = { path = "crates/move-package" }
 move-package-alt = { path = "crates/move-package-alt" }
 move-proc-macros = { path = "crates/move-proc-macros"}
+move-regex-borrow-graph = { path = "crates/move-regex-borrow-graph" }
 move-stackless-bytecode = { path = "crates/move-stackless-bytecode" }
 move-stdlib = { path = "crates/move-stdlib" }
 move-stdlib-natives = { path = "crates/move-stdlib-natives" }
