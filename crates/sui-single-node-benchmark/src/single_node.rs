@@ -163,7 +163,7 @@ impl SingleValidator {
                         .enqueue_certificates_for_execution(vec![cert.clone()], &self.epoch_store);
                 }
                 self.get_validator()
-                    .execute_certificate(&cert, &self.epoch_store)
+                    .wait_for_certificate_execution(&cert, &self.epoch_store)
                     .await
                     .unwrap()
             }
