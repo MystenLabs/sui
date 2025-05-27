@@ -20,8 +20,7 @@ use move_core_types::{
 };
 use move_vm_config::runtime::VMRuntimeLimitsConfig;
 use move_vm_types::{
-    data_store::DataStore, loaded_data::runtime_types::Type, natives::function::NativeResult,
-    values::Value,
+    loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
 };
 use std::{
     cell::RefCell,
@@ -166,12 +165,13 @@ impl<'b> NativeContext<'_, 'b> {
     pub fn type_tag_to_fully_annotated_layout_for_test_scenario_only(
         &self,
         tag: &TypeTag,
-        store: &impl DataStore,
-    ) -> PartialVMResult<A::MoveTypeLayout> {
+    ) -> PartialVMResult<Option<A::MoveTypeLayout>> {
         self.resolver
             .loader()
-            .get_fully_annotated_type_layout(tag, store)
-            .map_err(|e| e.to_partial())
+            .try_load_cached_type(tag)
+            .map_err(|e| e.to_partial())?
+            .map(|ty| self.resolver.loader().type_to_fully_annotated_layout(&ty))
+            .transpose()
     }
 
     // TODO: This is a bit hacky right now since we need to pass the store, however this is only
@@ -181,12 +181,13 @@ impl<'b> NativeContext<'_, 'b> {
     pub fn type_tag_to_layout_for_test_scenario_only(
         &self,
         tag: &TypeTag,
-        store: &impl DataStore,
-    ) -> PartialVMResult<R::MoveTypeLayout> {
+    ) -> PartialVMResult<Option<R::MoveTypeLayout>> {
         self.resolver
             .loader()
-            .get_type_layout(tag, store)
-            .map_err(|e| e.to_partial())
+            .try_load_cached_type(tag)
+            .map_err(|e| e.to_partial())?
+            .map(|ty| self.resolver.loader().type_to_type_layout(&ty))
+            .transpose()
     }
 
     pub fn type_to_abilities(&self, ty: &Type) -> PartialVMResult<AbilitySet> {

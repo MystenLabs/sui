@@ -17,7 +17,6 @@ use move_core_types::{
 };
 use move_vm_runtime::{native_extensions::NativeExtensionMarker, native_functions::NativeContext};
 use move_vm_types::{
-    data_store::DataStore,
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
     pop_arg,
@@ -998,19 +997,17 @@ fn find_all_wrapped_objects<'a, 'i>(
     let uid = UID::layout();
     for (_id, ty, value) in new_object_values {
         let type_tag = TypeTag::from(ty.clone());
-        // NB: We can get the layout with the `EmptyDataStore` since the types and modules
+        // NB: We can get the layout from the VM's cache since the types and modules
         // associated with all of these types must be in the type/module cache in the VM -- THIS IS
-        // BECAUSE WE ARE IN TEST SCENARIO ONLY AND THIS DOES NOT GENERALLY HOLD IN A
+        // BECAUSE WE ARE IN TEST SCENARIO ONLY AND THIS MAY NOT GENERALLY HOLD IN A
         // MULTI-TRANSACTION SETTING.
-        let Ok(layout) =
-            context.type_tag_to_layout_for_test_scenario_only(&type_tag, &EmptyDataStore)
-        else {
+        let Ok(Some(layout)) = context.type_tag_to_layout_for_test_scenario_only(&type_tag) else {
             debug_assert!(false);
             continue;
         };
 
-        let Ok(annotated_layout) = context
-            .type_tag_to_fully_annotated_layout_for_test_scenario_only(&type_tag, &EmptyDataStore)
+        let Ok(Some(annotated_layout)) =
+            context.type_tag_to_fully_annotated_layout_for_test_scenario_only(&type_tag)
         else {
             debug_assert!(false);
             continue;
@@ -1027,45 +1024,5 @@ fn find_all_wrapped_objects<'a, 'i>(
             },
         )
         .unwrap();
-    }
-}
-
-// TODO: This can be removed in the new VM as we do not need a "fake" datastore here in order to
-// get the type layout.
-struct EmptyDataStore;
-// All of these should be unreachable
-impl DataStore for EmptyDataStore {
-    fn link_context(&self) -> AccountAddress {
-        AccountAddress::ZERO
-    }
-
-    fn relocate(
-        &self,
-        _module_id: &move_core_types::language_storage::ModuleId,
-    ) -> PartialVMResult<move_core_types::language_storage::ModuleId> {
-        unreachable!("All types must be in the cache since we're in test scenario")
-    }
-
-    fn defining_module(
-        &self,
-        _module_id: &move_core_types::language_storage::ModuleId,
-        _struct_: &move_core_types::identifier::IdentStr,
-    ) -> PartialVMResult<move_core_types::language_storage::ModuleId> {
-        unreachable!("All types must be in the cache since we're in test scenario")
-    }
-
-    fn load_module(
-        &self,
-        _module_id: &move_core_types::language_storage::ModuleId,
-    ) -> move_binary_format::errors::VMResult<Vec<u8>> {
-        unreachable!("All types must be in the cache since we're in test scenario")
-    }
-
-    fn publish_module(
-        &mut self,
-        _module_id: &move_core_types::language_storage::ModuleId,
-        _blob: Vec<u8>,
-    ) -> move_binary_format::errors::VMResult<()> {
-        unreachable!("All types must be in the cache since we're in test scenario")
     }
 }

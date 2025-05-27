@@ -345,10 +345,19 @@ mod checked {
             let new_events = events
                 .into_iter()
                 .map(|(tag, value)| {
+                    let type_tag = TypeTag::Struct(Box::new(tag.clone()));
                     let ty = unwrap_type_tag_load(
                         self.protocol_config,
-                        self.load_type_from_struct(&tag)
-                            .map_err(|e| self.convert_vm_error(e)),
+                        self.vm
+                            .get_runtime()
+                            .try_load_cached_type(&type_tag)
+                            .map_err(|e| self.convert_vm_error(e))?
+                            .ok_or_else(|| {
+                                make_invariant_violation!(
+                                    "Failed to load type for event tag: {}",
+                                    tag
+                                )
+                            }),
                     )?;
                     let layout = self
                         .vm
@@ -712,7 +721,7 @@ mod checked {
             let Self {
                 protocol_config,
                 vm,
-                mut linkage_view,
+                linkage_view,
                 mut native_extensions,
                 tx_context,
                 gas_charger,
@@ -875,22 +884,25 @@ mod checked {
             }
 
             for (id, (recipient, tag, value)) in writes {
+                let type_tag = TypeTag::Struct(Box::new(StructTag::from(tag.clone())));
                 let ty = unwrap_type_tag_load(
                     protocol_config,
-                    load_type_from_struct(
-                        vm,
-                        &mut linkage_view,
-                        &new_packages,
-                        &StructTag::from(tag.clone()),
-                    )
-                    .map_err(|e| {
-                        convert_vm_error(
-                            e,
-                            vm,
-                            &linkage_view,
-                            protocol_config.resolve_abort_locations_to_package_id(),
-                        )
-                    }),
+                    vm.get_runtime()
+                        .try_load_cached_type(&type_tag)
+                        .map_err(|e| {
+                            convert_vm_error(
+                                e,
+                                vm,
+                                &linkage_view,
+                                protocol_config.resolve_abort_locations_to_package_id(),
+                            )
+                        })?
+                        .ok_or_else(|| {
+                            make_invariant_violation!(
+                                "Failed to load type for object write tag: {}",
+                                tag
+                            )
+                        }),
                 )?;
                 let abilities = vm.get_runtime().get_type_abilities(&ty).map_err(|e| {
                     convert_vm_error(
