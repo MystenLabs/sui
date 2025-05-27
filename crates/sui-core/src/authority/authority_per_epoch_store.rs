@@ -609,6 +609,7 @@ impl AuthorityEpochTables {
         let pending_checkpoint_signatures_config = KeySpaceConfig::new()
             .disable_unload();
         let builder_checkpoint_summary_v2_config = pending_checkpoint_signatures_config.clone();
+        let object_ref_indexing = KeyIndexing::hash();
         let tx_digest_indexing = KeyIndexing::key_reduction(32, 0..16);
         let uniform_key = KeyType::uniform(default_cells_per_mutex());
         let sequence_key = KeyType::prefix_uniform(2, 4);
@@ -619,7 +620,7 @@ impl AuthorityEpochTables {
             ),
             (
                 "owned_object_locked_transactions".to_string(),
-                ThConfig::new_with_config(32 + 8 + 32 + 8, MUTEXES, uniform_key, bloom_config.clone()),
+                ThConfig::new_with_config_indexing(object_ref_indexing, MUTEXES * 2, uniform_key, bloom_config.clone()),
             ),
             (
                 "effects_signatures".to_string(),
