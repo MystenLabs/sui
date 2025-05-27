@@ -107,10 +107,10 @@ pub fn run_cli(
         ),
         Command::Sandbox { storage_dir, cmd } => {
             cmd.handle_command(natives, cost_table, &move_args, &storage_dir)
-        },
+        }
         Command::Stackless(c) => {
             c.execute(move_args.package_path.as_deref(), move_args.build_config)
-        },
+        }
         Command::Summary(summary) => {
             summary.execute(move_args.package_path.as_deref(), move_args.build_config)
         }

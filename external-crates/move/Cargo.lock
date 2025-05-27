@@ -2109,8 +2109,10 @@ dependencies = [
  "move-disassembler",
  "move-docgen",
  "move-ir-types",
+ "move-model",
  "move-model-2",
  "move-package",
+ "move-stackless-bytecode",
  "move-stackless-bytecode-2",
  "move-stdlib",
  "move-stdlib-natives",
@@ -2536,7 +2538,9 @@ dependencies = [
  "move-binary-format",
  "move-disassembler",
  "move-ir-types",
+ "move-model",
  "move-model-2",
+ "move-stackless-bytecode",
  "move-symbol-pool",
 ]
 
