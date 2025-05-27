@@ -2,18 +2,19 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod errors;
+pub mod sha;
+
 use std::{
+    io::BufRead,
     path::{Path, PathBuf},
     process::{Output, Stdio},
 };
 
+use errors::{GitError, GitResult};
+use sha::GitSha;
 use tokio::process::Command;
-use tracing::debug;
-
-use crate::{
-    dependency::{PinnedGitDependency, UnpinnedGitDependency},
-    errors::{GitError, PackageError, PackageResult},
-};
+use tracing::{debug, info};
 
 /// Helper struct that represents a Git repository, with extra information about which folder to
 /// checkout.
@@ -48,21 +49,15 @@ impl GitRepo {
     }
 
     /// Try to fetch the repository at the given sha ([`rev`]).
-    pub async fn fetch(&self) -> PackageResult<PathBuf> {
+    pub async fn fetch(&self) -> GitResult<PathBuf> {
         self.fetch_impl(None).await
     }
 
     /// Internal implementation of fetch. It uses the default folder to fetch the repo to, defined
     /// by the MOVE_HOME env variable.
-    async fn fetch_impl(&self, fetch_to_folder: Option<PathBuf>) -> PackageResult<PathBuf> {
+    async fn fetch_impl(&self, fetch_to_folder: Option<PathBuf>) -> GitResult<PathBuf> {
         let sha = self.find_sha().await?;
 
-        if !is_sha(&sha) {
-            return Err(PackageError::Git(GitError::invalid_sha(
-                &self.repo_url,
-                &sha,
-            )));
-        }
         debug!("git repo: {:?}", self);
 
         let repo_fs_path = format_repo_to_fs_path(&self.repo_url, &sha, fetch_to_folder);
@@ -75,7 +70,7 @@ impl GitRepo {
     }
 
     /// Used for testing to be able to specify which folder to fetch to. Use `fetch` for all other needs.
-    async fn fetch_to_folder(&self, fetch_to_folder: PathBuf) -> PackageResult<PathBuf> {
+    async fn fetch_to_folder(&self, fetch_to_folder: PathBuf) -> GitResult<PathBuf> {
         self.fetch_impl(Some(fetch_to_folder)).await
     }
 
@@ -84,7 +79,7 @@ impl GitRepo {
     /// given sha.
     ///
     // TODO think more about debug statements and what information to log
-    async fn checkout_repo(&self, repo_fs_path: &PathBuf, sha: &str) -> PackageResult<()> {
+    async fn checkout_repo(&self, repo_fs_path: &PathBuf, sha: &GitSha) -> GitResult<()> {
         // Checkout repo if it does not exist already
         if !repo_fs_path.exists() {
             // Sparse checkout repo
@@ -100,127 +95,74 @@ impl GitRepo {
             debug!("Sparse checkout set successful");
 
             self.try_checkout_at_sha(repo_fs_path, sha).await?;
-            debug!("Checkout at sha {sha} successful");
+            debug!("Checkout at sha {sha:?} successful");
         } else if self.is_dirty(repo_fs_path).await? {
             debug!("Repo is dirty");
-            return Err(PackageError::Git(GitError::dirty(&self.repo_url)));
+            return Err(GitError::dirty(&self.repo_url));
         }
 
         Ok(())
     }
 
     /// Check out the given SHA in the given repo
-    async fn try_checkout_at_sha(&self, repo_fs_path: &PathBuf, sha: &str) -> PackageResult<()> {
-        debug!("Checking out with SHA: {sha}");
-        let cmd = self
-            .run_git_cmd_with_args(&["checkout", sha], Some(repo_fs_path))
-            .await?;
+    async fn try_checkout_at_sha(&self, repo_fs_path: &PathBuf, sha: &GitSha) -> GitResult<()> {
+        debug!("Checking out with SHA: {sha:?}");
+        run_git_cmd_with_args(&["checkout", sha.as_ref()], Some(repo_fs_path)).await?;
         Ok(())
     }
 
     /// Set the sparse checkout directory to the given path
-    async fn try_set_sparse_dir(&self, repo_fs_path: &PathBuf, path: &Path) -> PackageResult<()> {
+    async fn try_set_sparse_dir(&self, repo_fs_path: &PathBuf, path: &Path) -> GitResult<()> {
+        // git sparse-checkout set <path>
         debug!("Setting sparse checkout path to: {:?}", path);
-        let cmd = self
-            .run_git_cmd_with_args(
-                &["sparse-checkout", "set", &path.to_string_lossy()],
-                Some(repo_fs_path),
-            )
-            .await?;
+        run_git_cmd_with_args(
+            &["sparse-checkout", "set", &path.to_string_lossy()],
+            Some(repo_fs_path),
+        )
+        .await?;
         Ok(())
     }
 
     /// Try to initialize the repository in sparse-checkout mode.
-    async fn try_sparse_checkout_init(&self, repo_fs_path: &PathBuf) -> PackageResult<()> {
+    async fn try_sparse_checkout_init(&self, repo_fs_path: &PathBuf) -> GitResult<()> {
         // git sparse-checkout init --cone
         debug!("Calling sparse checkout init");
-        let cmd = self
-            .run_git_cmd_with_args(&["sparse-checkout", "init", "--cone"], Some(repo_fs_path))
-            .await?;
-
-        if !cmd.status.success() {
-            return Err(PackageError::Git(GitError::generic(format!(
-                "git sparse-checkout init failed for {}, with error: {}",
-                repo_fs_path.display(),
-                cmd.status
-            ))));
-        }
-
+        run_git_cmd_with_args(&["sparse-checkout", "init", "--cone"], Some(repo_fs_path)).await?;
         Ok(())
     }
 
     /// Try to clone git repository with sparse mode and no checkout.
-    async fn try_clone_sparse_checkout(&self, repo_fs_path: &Path) -> PackageResult<()> {
+    async fn try_clone_sparse_checkout(&self, repo_fs_path: &Path) -> GitResult<()> {
         debug!(
             "Cloning repo with no checkout in sparse mode: {:?}, to folder: {:?}",
             self.repo_url,
             repo_fs_path.display()
         );
-        let cmd = self
-            .run_git_cmd_with_args(
-                &[
-                    "clone",
-                    "--sparse",
-                    "--filter=blob:none",
-                    "--no-checkout",
-                    &self.repo_url,
-                    &repo_fs_path.to_string_lossy(),
-                ],
-                None,
-            )
-            .await;
-
-        if cmd.is_err() {
-            return Err(PackageError::Git(GitError::generic(format!(
-                "git clone failed for {}, with error: {}",
-                self.repo_url,
-                cmd.unwrap_err()
-            ))));
-        }
-
+        run_git_cmd_with_args(
+            &[
+                "clone",
+                "--sparse",
+                "--filter=blob:none",
+                "--no-checkout",
+                &self.repo_url,
+                &repo_fs_path.to_string_lossy(),
+            ],
+            None,
+        )
+        .await?;
         Ok(())
     }
 
-    /// Runs a git command from the provided arguments.
-    // TODO: check for error codes here
-    pub async fn run_git_cmd_with_args(
-        &self,
-        args: &[&str],
-        cwd: Option<&PathBuf>,
-    ) -> PackageResult<Output> {
-        // Run the git command
-        debug!(
-            "Running git command with args {:?} in cwd: {}",
-            args,
-            cwd.unwrap_or(&PathBuf::from(".")).display()
-        );
-
-        let mut cmd = Command::new("git");
-
-        if let Some(cwd) = cwd {
-            cmd.current_dir(cwd);
-        }
-
-        cmd.args(args)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .await
-            .map_err(|e| PackageError::Git(GitError::command_error(e.to_string())))
-    }
-
     /// Check if the git repository is dirty
-    pub async fn is_dirty(&self, repo_fs_path: &PathBuf) -> PackageResult<bool> {
+    pub async fn is_dirty(&self, repo_fs_path: &PathBuf) -> GitResult<bool> {
         debug!("Checking if repo is dirty");
-        let cmd = self
-            .run_git_cmd_with_args(
-                &["status", "--porcelain", "--untracked-files=no"],
-                Some(repo_fs_path),
-            )
-            .await?;
+        let output = run_git_cmd_with_args(
+            &["status", "--porcelain", "--untracked-files=no"],
+            Some(repo_fs_path),
+        )
+        .await?;
 
-        if !cmd.stdout.is_empty() {
+        if !output.is_empty() {
             debug!("Repo {} is dirty", self.repo_url);
             return Ok(true);
         }
@@ -230,10 +172,10 @@ impl GitRepo {
 
     /// Find the SHA of the given commit/branch in the given repo. This will make a remote call so
     /// network is required.
-    pub(crate) async fn find_sha(&self) -> PackageResult<String> {
+    pub(crate) async fn find_sha(&self) -> GitResult<GitSha> {
         if let Some(r) = self.rev.as_ref() {
-            if is_sha(r) {
-                return Ok(r.to_string());
+            if let Ok(sha) = GitSha::try_from(r.to_string()) {
+                return Ok(sha);
             }
 
             // if there is some revision which is likely a branch, a tag, or a wrong SHA (e.g., capital
@@ -242,31 +184,19 @@ impl GitRepo {
 
             // we have a branch or tag
             // git ls-remote https://github.com/user/repo.git refs/heads/main
-            let cmd = self
-                .run_git_cmd_with_args(
-                    &["ls-remote", &self.repo_url, &format!("refs/heads/{r}")],
-                    None,
-                )
-                .await?;
-
-            if !cmd.status.success() {
-                debug!(
-                    "Could not run git ls-remote command, return non-zero exit code: {:?}",
-                    cmd
-                );
-                return Err(PackageError::Git(GitError::generic(format!(
-                    "git ls-remote failed for {}, with error: {}",
-                    self.repo_url, cmd.status
-                ))));
-            }
-
-            let stdout = String::from_utf8(cmd.stdout)?;
+            let stdout = run_git_cmd_with_args(
+                &["ls-remote", &self.repo_url, &format!("refs/heads/{r}")],
+                None,
+            )
+            .await?;
 
             Ok(stdout
                 .split_whitespace()
                 .next()
-                .ok_or(PackageError::Git(GitError::no_sha(&self.repo_url, r)))?
-                .to_string())
+                .ok_or(GitError::no_sha(&self.repo_url, r))?
+                .to_string()
+                .try_into()
+                .expect("git returns valid shas"))
         } else {
             // nothing specified, so we need to find the default branch
             self.find_default_branch_and_get_sha().await
@@ -274,82 +204,89 @@ impl GitRepo {
     }
 
     /// Find the default branch and return the SHA
-    pub(crate) async fn find_default_branch_and_get_sha(&self) -> PackageResult<String> {
-        let cmd = self
-            .run_git_cmd_with_args(&["ls-remote", "--symref", &self.repo_url, "HEAD"], None)
-            .await?;
+    pub(crate) async fn find_default_branch_and_get_sha(&self) -> GitResult<GitSha> {
+        let stdout =
+            run_git_cmd_with_args(&["ls-remote", "--symref", &self.repo_url, "HEAD"], None).await?;
 
-        if !cmd.status.success() {
-            debug!(
-                "Could not run git ls-remote --symref command, return non-zero exit code: {:?}",
-                cmd
-            );
-            return Err(PackageError::Git(GitError::generic(format!(
-                "git ls-remote failed for {}, with error: {}",
-                self.repo_url, cmd.status
-            ))));
-        }
-
-        let stdout = String::from_utf8(cmd.stdout)?;
         let lines: Vec<_> = stdout.lines().collect();
+        // TODO: default_branch is ignored here; are we guaranteed that the sha is always the
+        // second line?
         let default_branch = lines[0].split_whitespace().nth(1).ok_or_else(|| {
-            debug!(
-                "Could not find default branch.\nlines{:?}\nself{:?}",
-                lines, self
-            );
-            PackageError::Git(GitError::no_sha(&self.repo_url, "HEAD"))
+            debug!("Could not find default branch.\nlines {lines:?}\nself{self:?}");
+            GitError::no_sha(&self.repo_url, "HEAD")
         })?;
-        let sha = lines[1].split_whitespace().next().ok_or_else(|| {
-            debug!(
-                "Could not find sha for default branch.\nlines: {:?}\nself: {:?}\n",
-                lines, self
-            );
-            PackageError::Git(GitError::no_sha(&self.repo_url, "HEAD"))
+        let sha_str = lines[1].split_whitespace().next().ok_or_else(|| {
+            debug!("Could not find sha for default branch.\nlines: {lines:?}\nself: {self:?}\n");
+            GitError::no_sha(&self.repo_url, "HEAD")
         })?;
 
-        Ok(sha.to_string())
-    }
-}
+        let sha = GitSha::try_from(sha_str.to_string())
+            .expect("Git should return correctly formatted shas");
 
-impl From<&UnpinnedGitDependency> for GitRepo {
-    fn from(dep: &UnpinnedGitDependency) -> Self {
-        GitRepo::new(dep.repo.clone(), dep.rev.clone(), dep.path.clone())
+        Ok(sha)
     }
-}
-
-impl From<&PinnedGitDependency> for GitRepo {
-    fn from(dep: &PinnedGitDependency) -> Self {
-        GitRepo::new(dep.repo.clone(), Some(dep.rev.clone()), dep.path.clone())
-    }
-}
-
-impl From<UnpinnedGitDependency> for GitRepo {
-    fn from(dep: UnpinnedGitDependency) -> Self {
-        GitRepo::new(dep.repo, dep.rev, dep.path)
-    }
-}
-
-impl From<PinnedGitDependency> for GitRepo {
-    fn from(dep: PinnedGitDependency) -> Self {
-        GitRepo::new(dep.repo, Some(dep.rev), dep.path)
-    }
-}
-
-/// Check if the given string is a valid commit SHA, i.e., 40 character long with only
-/// lowercase letters and digits
-pub fn is_sha(input: &str) -> bool {
-    input.len() == 40
-        && input
-            .chars()
-            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
 }
 
 /// Format the repository URL to a filesystem name based on the SHA
-pub fn format_repo_to_fs_path(repo: &str, sha: &str, root_path: Option<PathBuf>) -> PathBuf {
+pub fn format_repo_to_fs_path(repo: &str, sha: &GitSha, root_path: Option<PathBuf>) -> PathBuf {
     let root_path = root_path
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|| (*move_command_line_common::env::MOVE_HOME).to_string());
-    PathBuf::from(format!("{}/{}_{}", root_path, url_to_file_name(repo), sha))
+    PathBuf::from(format!(
+        "{}/{}_{:?}",
+        root_path,
+        url_to_file_name(repo),
+        sha
+    ))
+}
+
+/// Runs `git <args>` in `cwd`. Fails if there is an io failure or if `git` returns a non-zero
+/// exit status; returns the standard output.
+async fn run_git_cmd_with_args(args: &[&str], cwd: Option<&PathBuf>) -> GitResult<String> {
+    // Run the git command
+
+    let mut cmd = Command::new("git");
+    cmd.args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    if let Some(cwd) = cwd {
+        cmd.current_dir(cwd);
+    }
+
+    debug!(
+        "Running {}{cmd:?}",
+        match cwd {
+            Some(p) => format!("(in dir {p:?}) "),
+            None => String::new(),
+        }
+    );
+
+    let output = cmd
+        .output()
+        .await
+        .map_err(|e| GitError::io_error(&cmd, &cwd, e))?;
+
+    if !output.status.success() {
+        return Err(GitError::nonzero_exit_status(&cmd, &cwd, output.status));
+    }
+
+    if !output.stderr.is_empty() {
+        info!("output from {cmd:?}:");
+        for line in output.stderr.lines() {
+            info!("  │ {}", line.expect("vector read can't fail"));
+        }
+    }
+
+    if !output.stdout.is_empty() {
+        debug!("stdout from {cmd:?}:");
+        for line in output.stdout.lines() {
+            debug!("  │ {}", line.expect("vector read can't fail"));
+        }
+    }
+
+    String::from_utf8(output.stdout).map_err(|e| GitError::non_utf_output(&cmd, &cwd))
 }
 
 /// Transform a repository URL into a directory name
