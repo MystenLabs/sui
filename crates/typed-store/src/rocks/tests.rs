@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::reopen;
 use rstest::rstest;
 
 fn temp_dir() -> std::path::PathBuf {
@@ -73,34 +72,6 @@ async fn test_reopen() {
     assert!(db
         .contains_key(&123456789)
         .expect("Failed to retrieve item in storage"));
-}
-
-#[tokio::test]
-async fn test_reopen_macro() {
-    const FIRST_CF: &str = "First_CF";
-    const SECOND_CF: &str = "Second_CF";
-
-    let rocks = open_cf_opts(
-        temp_dir(),
-        None,
-        MetricConf::default(),
-        &[
-            (FIRST_CF, rocksdb::Options::default()),
-            (SECOND_CF, rocksdb::Options::default()),
-        ],
-    )
-    .unwrap();
-
-    let (db_map_1, db_map_2) = reopen!(&rocks, FIRST_CF;<i32, String>, SECOND_CF;<i32, String>);
-
-    let keys_vals_cf1 = (1..100).map(|i| (i, i.to_string()));
-    let keys_vals_cf2 = (1..100).map(|i| (i, i.to_string()));
-
-    assert_eq!(db_map_1.cf, FIRST_CF);
-    assert_eq!(db_map_2.cf, SECOND_CF);
-
-    assert!(db_map_1.multi_insert(keys_vals_cf1).is_ok());
-    assert!(db_map_2.multi_insert(keys_vals_cf2).is_ok());
 }
 
 #[tokio::test]

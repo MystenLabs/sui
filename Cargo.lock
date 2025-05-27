@@ -2912,6 +2912,7 @@ dependencies = [
  "consensus-config",
  "dashmap",
  "enum_dispatch",
+ "eyre",
  "fastcrypto",
  "futures",
  "http 1.1.0",
