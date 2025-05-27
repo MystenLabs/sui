@@ -1,0 +1,5 @@
+---
+source: crates/sui-core/src/unit_tests/authority_tests.rs
+expression: execution_error_source.unwrap()
+---
+VMError with status ABORTED with sub status 1 at location Module ModuleId { address: 0000000000000000000000000000000000000000000000000000000000000002, name: Identifier("dynamic_field") } at code offset 0 in function definition 13
