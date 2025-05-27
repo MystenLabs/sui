@@ -242,7 +242,7 @@ impl StoredExecutionTimeObservations {
         }
     }
 
-    pub fn filter_and_sort_v1<P>(&self, predicate: P) -> Self
+    pub fn filter_and_sort_v1<P>(&self, predicate: P, limit: usize) -> Self
     where
         P: FnMut(&&(ExecutionTimeObservationKey, Vec<(AuthorityName, Duration)>)) -> bool,
     {
@@ -252,6 +252,7 @@ impl StoredExecutionTimeObservations {
                     .iter()
                     .filter(predicate)
                     .sorted_by_key(|(key, _)| key)
+                    .take(limit)
                     .cloned()
                     .collect(),
             ),
@@ -1953,9 +1954,9 @@ impl TransactionData {
                 Owner::Shared {
                     initial_shared_version,
                 }
-                | Owner::ConsensusV2 {
+                | Owner::ConsensusAddressOwner {
                     start_version: initial_shared_version,
-                    authenticator: _,
+                    ..
                 } => ObjectArg::SharedObject {
                     id: upgrade_capability.0,
                     initial_shared_version,

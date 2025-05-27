@@ -460,7 +460,7 @@ pub enum SuiClientCommands {
         package_path: PathBuf,
 
         /// ID of the upgrade capability for the package being upgraded.
-        #[clap(long)]
+        #[clap(long, short = 'c')]
         upgrade_capability: ObjectID,
 
         /// Package build options

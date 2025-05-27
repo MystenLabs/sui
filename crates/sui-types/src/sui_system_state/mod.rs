@@ -158,8 +158,8 @@ impl SuiSystemStateWrapper {
         );
         let new_contents = bcs::to_bytes(&field).expect("bcs serialization should never fail");
         move_object
-            .update_contents(new_contents, protocol_config)
-            .expect("Update sui system object content cannot fail since it should be small");
+            .update_contents_advance_epoch_safe_mode(new_contents, protocol_config)
+            .expect("Update sui system object content cannot fail since it should be small or unbounded");
     }
 }
 

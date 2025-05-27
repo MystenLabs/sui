@@ -118,6 +118,11 @@ pub struct BuildConfig {
     /// Additional dependencies to be automatically included in every package
     #[clap(skip)]
     pub implicit_dependencies: Dependencies,
+
+    /// Forces use of lock file without checking if it needs to be updated
+    /// (regenerates it only if it doesn't exist)
+    #[clap(skip)]
+    pub force_lock_file: bool,
 }
 
 #[derive(
@@ -290,6 +295,7 @@ impl BuildConfig {
             writer,
             install_dir.clone(),
             self.implicit_dependencies.clone(),
+            self.force_lock_file,
         );
         let (dependency_graph, modified) = dep_graph_builder.get_graph(
             &DependencyKind::default(),

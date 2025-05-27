@@ -270,7 +270,7 @@ async fn test_state_sync_using_archive() -> anyhow::Result<()> {
     // build mock data
     let (ordered_checkpoints, ordered_contents, sequence_number_to_digest, checkpoints) =
         committee.make_empty_checkpoints(100, None);
-    let temp_dir = tempdir()?.into_path();
+    let temp_dir = tempdir()?.keep();
     // We will delete all checkpoints older than this checkpoint on Node 2
     let oldest_checkpoint_to_keep: u64 = 10;
 

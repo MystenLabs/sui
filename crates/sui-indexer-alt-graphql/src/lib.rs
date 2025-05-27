@@ -4,6 +4,7 @@
 use std::{any::Any, net::SocketAddr, sync::Arc};
 
 use anyhow::{self, Context};
+use api::types::{addressable::IAddressable, object::IObject};
 use async_graphql::{
     extensions::ExtensionFactory, http::GraphiQLSource, EmptyMutation, EmptySubscription,
     ObjectType, Schema, SchemaBuilder, SubscriptionType,
@@ -55,9 +56,11 @@ pub mod config;
 mod error;
 mod extensions;
 mod health;
+mod intersect;
 mod metrics;
 mod middleware;
 mod pagination;
+mod scope;
 mod task;
 
 #[derive(clap::Args, Clone, Debug)]
@@ -239,7 +242,9 @@ impl Default for RpcArgs {
 
 /// The GraphQL schema this service will serve, without any extensions or context added.
 pub fn schema() -> SchemaBuilder<Query, EmptyMutation, EmptySubscription> {
-    Schema::build(Query, EmptyMutation, EmptySubscription)
+    Schema::build(Query::default(), EmptyMutation, EmptySubscription)
+        .register_output_type::<IAddressable>()
+        .register_output_type::<IObject>()
 }
 
 /// Set-up and run the RPC service, using the provided arguments (expected to be extracted from the
@@ -266,6 +271,7 @@ pub async fn start_rpc(
     system_package_task_args: SystemPackageTaskArgs,
     version: &'static str,
     config: RpcConfig,
+    pg_pipelines: Vec<String>,
     registry: &Registry,
     cancel: CancellationToken,
 ) -> anyhow::Result<JoinHandle<()>> {
@@ -324,6 +330,7 @@ pub async fn start_rpc(
 
     let watermark_task = WatermarkTask::new(
         config.watermark,
+        pg_pipelines,
         pg_reader.clone(),
         bigtable_reader,
         cancel.child_token(),

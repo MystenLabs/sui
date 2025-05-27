@@ -19,7 +19,7 @@ use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber},
-    object::{Authenticator, Owner},
+    object::Owner,
 };
 
 const E_SHARED_NON_NEW_OBJECT: u64 = 0;
@@ -81,6 +81,7 @@ pub fn receive_object_internal(
         parent,
         child_id,
         child_receiver_sequence_number,
+        &child_ty,
         &layout,
         &annotated_layout,
         MoveObjectType::from(tag),
@@ -230,9 +231,9 @@ pub fn party_transfer_internal(
 
     // Dummy version, to be filled with the correct initial version when the effects of the
     // transaction are written to storage.
-    let owner = Owner::ConsensusV2 {
+    let owner = Owner::ConsensusAddressOwner {
         start_version: SequenceNumber::new(),
-        authenticator: Box::new(Authenticator::SingleOwner(address.into())),
+        owner: address.into(),
     };
     object_runtime_transfer(context, owner, ty, obj)?;
     let cost = context.gas_used();
@@ -330,16 +331,13 @@ fn object_runtime_transfer(
     ty: Type,
     obj: Value,
 ) -> PartialVMResult<TransferResult> {
-    let object_type = match context.type_to_type_tag(&ty)? {
-        TypeTag::Struct(s) => MoveObjectType::from(*s),
-        _ => {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Sui verifier guarantees this is a struct".to_string()),
-            );
-        }
-    };
+    if !matches!(context.type_to_type_tag(&ty)?, TypeTag::Struct(_)) {
+        return Err(
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message("Sui verifier guarantees this is a struct".to_string()),
+        );
+    }
 
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
-    obj_runtime.transfer(owner, object_type, obj)
+    obj_runtime.transfer(owner, ty, obj)
 }

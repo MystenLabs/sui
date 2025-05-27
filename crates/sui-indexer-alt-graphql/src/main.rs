@@ -6,7 +6,7 @@ use clap::Parser;
 use prometheus::Registry;
 use sui_indexer_alt_graphql::{
     args::{Args, Command},
-    config::RpcLayer,
+    config::{IndexerConfig, RpcLayer},
     start_rpc,
 };
 use sui_indexer_alt_metrics::MetricsService;
@@ -46,6 +46,7 @@ async fn main() -> anyhow::Result<()> {
             system_package_task_args,
             metrics_args,
             config,
+            indexer_config,
         } => {
             let rpc_config = if let Some(path) = config {
                 let contents = fs::read_to_string(path)
@@ -57,6 +58,21 @@ async fn main() -> anyhow::Result<()> {
                 RpcLayer::default()
             }
             .finish();
+
+            let mut pg_pipelines = vec![];
+            for path in indexer_config {
+                let contents = fs::read_to_string(&path).await.with_context(|| {
+                    format!(
+                        "Failed to read indexer configuration TOML file: {}",
+                        path.display()
+                    )
+                })?;
+
+                let config: IndexerConfig = toml::from_str(&contents)
+                    .context("Failed to parse indexer configuration TOML file")?;
+
+                pg_pipelines.extend(config.pipelines().map(|p| p.to_owned()));
+            }
 
             let cancel = CancellationToken::new();
 
@@ -87,6 +103,7 @@ async fn main() -> anyhow::Result<()> {
                 system_package_task_args,
                 VERSION,
                 rpc_config,
+                pg_pipelines,
                 metrics.registry(),
                 cancel.child_token(),
             )

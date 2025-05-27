@@ -511,7 +511,7 @@ impl SuiValue {
             Owner::Shared {
                 initial_shared_version,
             }
-            | Owner::ConsensusV2 {
+            | Owner::ConsensusAddressOwner {
                 start_version: initial_shared_version,
                 ..
             } => Ok(ObjectArg::SharedObject {

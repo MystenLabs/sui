@@ -95,7 +95,7 @@ impl store::Connection for Connection<'_> {
 
         if let Some(watermark) = watermark {
             Ok(Some(store::PrunerWatermark {
-                wait_for_ms: watermark.0 as u64,
+                wait_for_ms: watermark.0,
                 pruner_hi: watermark.1 as u64,
                 reader_lo: watermark.2 as u64,
             }))

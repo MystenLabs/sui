@@ -18,8 +18,8 @@ use super::{
 /// How many input nodes the query used, and how deep the deepest part of the query was.
 #[derive(Serialize, Deserialize)]
 pub(super) struct Usage {
-    pub nodes: u32,
-    pub depth: u32,
+    pub(super) nodes: u32,
+    pub(super) depth: u32,
 }
 
 /// Check input node limits for the query in `doc` regarding depth and number of nodes. These

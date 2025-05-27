@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 83;
+const MAX_PROTOCOL_VERSION: u64 = 85;
 
 // Record history of protocol version allocations here:
 //
@@ -239,6 +239,8 @@ const MAX_PROTOCOL_VERSION: u64 = 83;
 // Version 83: Resolve `TypeInput` IDs to defining ID when converting to `TypeTag`s in the adapter.
 //             Enable execution time estimate mode for congestion control on mainnet.
 //             Enable nitro attestation upgraded parsing and mainnet.
+// Version 84: Limit number of stored execution time observations between epochs.
+// Version 85: Enable party transfer in devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -695,9 +697,9 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_party_transfer: bool,
 
-    // Signifies the cut-over of using type tags instead of `Type`s in the object runtime.
+    // Allow objects created or mutated in system transactions to exceed the max object size limit.
     #[serde(skip_serializing_if = "is_false")]
-    type_tags_in_object_runtime: bool,
+    allow_unbounded_system_objects: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -739,6 +741,13 @@ pub struct ExecutionTimeEstimateParams {
 
     // Absolute maximum allowed transaction duration estimate (in microseconds).
     pub max_estimate_us: u64,
+
+    // Number of the final checkpoints in an epoch whose observations should be
+    // stored for use in the next epoch.
+    pub stored_observations_num_included_checkpoints: u64,
+
+    // Absolute limit on the number of saved observations at end of epoch.
+    pub stored_observations_limit: u64,
 }
 
 // The config for per object congestion control in consensus handler.
@@ -1983,8 +1992,8 @@ impl ProtocolConfig {
         self.feature_flags.enable_party_transfer
     }
 
-    pub fn type_tags_in_object_runtime(&self) -> bool {
-        self.feature_flags.type_tags_in_object_runtime
+    pub fn allow_unbounded_system_objects(&self) -> bool {
+        self.feature_flags.allow_unbounded_system_objects
     }
 }
 
@@ -3490,6 +3499,8 @@ impl ProtocolConfig {
                                     allowed_txn_cost_overage_burst_limit_us: 100_000, // 100 ms
                                     randomness_scalar: 20,
                                     max_estimate_us: 1_500_000, // 1.5s
+                                    stored_observations_num_included_checkpoints: 10,
+                                    stored_observations_limit: u64::MAX,
                                 },
                             );
                     }
@@ -3537,6 +3548,8 @@ impl ProtocolConfig {
                                 allowed_txn_cost_overage_burst_limit_us: 100_000, // 100 ms
                                 randomness_scalar: 20,
                                 max_estimate_us: 1_500_000, // 1.5s
+                                stored_observations_num_included_checkpoints: 10,
+                                stored_observations_limit: u64::MAX,
                             },
                         );
 
@@ -3547,7 +3560,26 @@ impl ProtocolConfig {
                     // native function on mainnet.
                     cfg.feature_flags.enable_nitro_attestation_upgraded_parsing = true;
                     cfg.feature_flags.enable_nitro_attestation = true;
-                    cfg.feature_flags.type_tags_in_object_runtime = true;
+                }
+                84 => {
+                    // Limit the number of stored execution time observations at end of epoch.
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                            ExecutionTimeEstimateParams {
+                                target_utilization: 30,
+                                allowed_txn_cost_overage_burst_limit_us: 100_000, // 100 ms
+                                randomness_scalar: 20,
+                                max_estimate_us: 1_500_000, // 1.5s
+                                stored_observations_num_included_checkpoints: 10,
+                                stored_observations_limit: 20,
+                            },
+                        );
+                    cfg.feature_flags.allow_unbounded_system_objects = true;
+                }
+                85 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_party_transfer = true;
+                    }
                 }
                 // Use this template when making changes:
                 //

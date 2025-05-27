@@ -100,7 +100,7 @@ pub fn print_table_metadata(
             if epoch_tables.contains_key(table_name) {
                 let epoch = epoch.ok_or_else(|| anyhow!("--epoch is required"))?;
                 AuthorityEpochTables::open_readonly(epoch, &db_path)
-                    .next_shared_object_versions
+                    .next_shared_object_versions_v2
                     .db
             } else {
                 AuthorityPerpetualTables::open_readonly(&db_path).objects.db
@@ -303,7 +303,7 @@ mod test {
 
     #[tokio::test]
     async fn db_dump_population() -> Result<(), anyhow::Error> {
-        let primary_path = tempfile::tempdir()?.into_path();
+        let primary_path = tempfile::tempdir()?.keep();
 
         // Open the DB for writing
         let _: AuthorityEpochTables = AuthorityEpochTables::open(0, &primary_path, None);

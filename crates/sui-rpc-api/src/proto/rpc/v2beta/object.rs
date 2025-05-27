@@ -30,6 +30,7 @@ impl Object {
     pub const PREVIOUS_TRANSACTION_FIELD: &'static MessageField =
         &MessageField::new("previous_transaction");
     pub const STORAGE_REBATE_FIELD: &'static MessageField = &MessageField::new("storage_rebate");
+    pub const JSON_FIELD: &'static MessageField = &MessageField::new("json");
 }
 
 impl MessageFields for Object {
@@ -47,6 +48,7 @@ impl MessageFields for Object {
         Self::LINKAGE_TABLE_FIELD,
         Self::PREVIOUS_TRANSACTION_FIELD,
         Self::STORAGE_REBATE_FIELD,
+        Self::JSON_FIELD,
     ];
 }
 
@@ -74,6 +76,7 @@ impl MessageMerge<&Object> for Object {
             linkage_table,
             previous_transaction,
             storage_rebate,
+            json,
         } = source;
 
         if mask.contains(Self::BCS_FIELD.name) {
@@ -126,6 +129,10 @@ impl MessageMerge<&Object> for Object {
 
         if mask.contains(Self::LINKAGE_TABLE_FIELD.name) {
             self.linkage_table = linkage_table.clone();
+        }
+
+        if mask.contains(Self::JSON_FIELD.name) {
+            self.json = json.clone();
         }
     }
 }
@@ -562,6 +569,14 @@ impl From<sui_sdk_types::Owner> for super::Owner {
                 OwnerKind::Shared
             }
             Immutable => OwnerKind::Immutable,
+            ConsensusAddress {
+                start_version,
+                owner,
+            } => {
+                message.version = Some(start_version);
+                message.address = Some(owner.to_string());
+                OwnerKind::ConsensusAddress
+            }
         };
 
         message.set_kind(kind);
@@ -591,6 +606,13 @@ impl TryFrom<&super::Owner> for sui_sdk_types::Owner {
             ),
             OwnerKind::Shared => Self::Shared(value.version()),
             OwnerKind::Immutable => Self::Immutable,
+            OwnerKind::ConsensusAddress => Self::ConsensusAddress {
+                start_version: value.version(),
+                owner: value
+                    .address()
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?,
+            },
         }
         .pipe(Ok)
     }

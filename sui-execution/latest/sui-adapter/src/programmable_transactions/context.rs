@@ -7,10 +7,6 @@ pub use checked::*;
 mod checked {
     use crate::{
         adapter::new_native_extensions,
-        data_store::{
-            PackageStore, cached_data_store::CachedPackageStore, linkage_view::LinkageView,
-            sui_data_store::SuiDataStore,
-        },
         error::convert_vm_error,
         execution_mode::ExecutionMode,
         execution_value::{
@@ -19,6 +15,7 @@ mod checked {
         },
         gas_charger::GasCharger,
         gas_meter::SuiGasMeter,
+        programmable_transactions::{data_store::SuiDataStore, linkage_view::LinkageView},
         type_resolver::TypeTagResolver,
     };
     use move_binary_format::{
@@ -61,8 +58,8 @@ mod checked {
         execution_status::CommandArgumentError,
         metrics::LimitsMetrics,
         move_package::MovePackage,
-        object::{Authenticator, Data, MoveObject, Object, ObjectInner, Owner},
-        storage::DenyListResult,
+        object::{Data, MoveObject, Object, ObjectInner, Owner},
+        storage::{BackingPackageStore, DenyListResult, PackageObject},
         transaction::{Argument, CallArg, ObjectArg},
     };
     use tracing::instrument;
@@ -147,9 +144,7 @@ mod checked {
         where
             'a: 'state,
         {
-            let mut linkage_view = LinkageView::new(Box::new(CachedPackageStore::new(Box::new(
-                state_view.as_sui_resolver(),
-            ))));
+            let mut linkage_view = LinkageView::new(Box::new(state_view.as_sui_resolver()));
             let mut input_object_map = BTreeMap::new();
             let inputs = inputs
                 .into_iter()
@@ -290,10 +285,10 @@ mod checked {
                     .unwrap_or(*package_id));
             }
 
-            let move_package = get_package(&self.linkage_view, package_id)
+            let package = package_for_linkage(&self.linkage_view, package_id)
                 .map_err(|e| self.convert_vm_error(e))?;
 
-            self.linkage_view.set_linkage(&move_package)
+            self.linkage_view.set_linkage(package.move_package())
         }
 
         /// Load a type using the context's current session.
@@ -346,12 +341,7 @@ mod checked {
             }
             let new_events = events
                 .into_iter()
-                .map(|(tag, value)| {
-                    let ty = unwrap_type_tag_load(
-                        self.protocol_config,
-                        self.load_type_from_struct(&tag)
-                            .map_err(|e| self.convert_vm_error(e)),
-                    )?;
+                .map(|(ty, tag, value)| {
                     let layout = self
                         .vm
                         .get_runtime()
@@ -714,7 +704,7 @@ mod checked {
             let Self {
                 protocol_config,
                 vm,
-                mut linkage_view,
+                linkage_view,
                 mut native_extensions,
                 tx_context,
                 gas_charger,
@@ -733,7 +723,7 @@ mod checked {
             let mut loaded_runtime_objects = BTreeMap::new();
             let mut additional_writes = BTreeMap::new();
             let mut by_value_shared_objects = BTreeSet::new();
-            let mut authenticator_objects = BTreeMap::new();
+            let mut consensus_owner_objects = BTreeMap::new();
             for input in inputs.into_iter().chain(std::iter::once(gas)) {
                 let InputValue {
                     object_metadata:
@@ -760,8 +750,8 @@ mod checked {
                     add_additional_write(&mut additional_writes, owner, object_value)?;
                 } else if owner.is_shared() {
                     by_value_shared_objects.insert(id);
-                } else if owner.authenticator().is_some() {
-                    authenticator_objects.insert(id, owner.clone());
+                } else if matches!(owner, Owner::ConsensusAddressOwner { .. }) {
+                    consensus_owner_objects.insert(id, owner.clone());
                 }
             }
             // check for unused values
@@ -849,6 +839,12 @@ mod checked {
             loaded_runtime_objects.extend(loaded_child_objects);
 
             let mut written_objects = BTreeMap::new();
+            for package in new_packages {
+                let package_obj = Object::new_from_package(package, tx_digest);
+                let id = package_obj.id();
+                created_object_ids.insert(id);
+                written_objects.insert(id, package_obj);
+            }
             for (id, additional_write) in additional_writes {
                 let AdditionalWrite {
                     recipient,
@@ -858,7 +854,7 @@ mod checked {
                 } = additional_write;
                 // safe given the invariant that the runtime correctly propagates has_public_transfer
                 let move_object = unsafe {
-                    create_written_object(
+                    create_written_object::<Mode>(
                         vm,
                         &linkage_view,
                         protocol_config,
@@ -876,24 +872,7 @@ mod checked {
                 }
             }
 
-            for (id, (recipient, tag, value)) in writes {
-                let ty = unwrap_type_tag_load(
-                    protocol_config,
-                    load_type_from_struct(
-                        vm,
-                        &mut linkage_view,
-                        &new_packages,
-                        &StructTag::from(tag.clone()),
-                    )
-                    .map_err(|e| {
-                        convert_vm_error(
-                            e,
-                            vm,
-                            &linkage_view,
-                            protocol_config.resolve_abort_locations_to_package_id(),
-                        )
-                    }),
-                )?;
+            for (id, (recipient, ty, value)) in writes {
                 let abilities = vm.get_runtime().get_type_abilities(&ty).map_err(|e| {
                     convert_vm_error(
                         e,
@@ -916,7 +895,7 @@ mod checked {
                 };
                 // safe because has_public_transfer has been determined by the abilities
                 let move_object = unsafe {
-                    create_written_object(
+                    create_written_object::<Mode>(
                         vm,
                         &linkage_view,
                         protocol_config,
@@ -929,13 +908,6 @@ mod checked {
                 };
                 let object = Object::new_move(move_object, recipient, tx_digest);
                 written_objects.insert(id, object);
-            }
-
-            for package in new_packages {
-                let package_obj = Object::new_from_package(package, tx_digest);
-                let id = package_obj.id();
-                created_object_ids.insert(id);
-                written_objects.insert(id, package_obj);
             }
 
             // Before finishing, ensure that any shared object taken by value by the transaction is either:
@@ -974,35 +946,34 @@ mod checked {
                 }
             }
 
-            // Before finishing, enforce restrictions on transfer and deletion for objects configured
-            // with authenticators.
-            for (id, original_owner) in authenticator_objects {
-                let authenticator = original_owner.authenticator().expect("verified before adding to `authenticator_objects` that these have authenticators");
-
-                match authenticator {
-                    Authenticator::SingleOwner(owner) => {
-                        // Already verified in pre-execution checks that tx sender is the object owner.
-                        // SingleOwner is allowed to do anything with the object.
-                        if ref_context.borrow().sender() != *owner {
-                            debug_fatal!(
-                                "transaction with a singly owned input object where the tx sender is not the owner should never be executed"
-                            );
-                            return Err(ExecutionError::new(
+            // Before finishing, enforce auth restrictions on consensus objects.
+            for (id, original_owner) in consensus_owner_objects {
+                let Owner::ConsensusAddressOwner { owner, .. } = original_owner else {
+                    panic!(
+                        "verified before adding to `consensus_owner_objects` that these are ConsensusAddressOwner"
+                    );
+                };
+                // Already verified in pre-execution checks that tx sender is the object owner.
+                // Owner is allowed to do anything with the object.
+                if ref_context.borrow().sender() != owner {
+                    debug_fatal!(
+                        "transaction with a singly owned input object where the tx sender is not the owner should never be executed"
+                    );
+                    return Err(ExecutionError::new(
                                 ExecutionErrorKind::SharedObjectOperationNotAllowed,
                                 Some(
                                     format!("Shared object operation on {} not allowed: \
                                              transaction with singly owned input object must be sent by the owner", id).into(),
                                 ),
                             ));
-                        }
-                    } // Future authenticators with fewer permissions should be checked here. For
-                      // example, transfers and wraps can be detected by comparing `original_owner`
-                      // with:
-                      // let new_owner = written_objects.get(&id).map(|obj| obj.owner);
-                      //
-                      // Deletions can be detected with:
-                      // let deleted = deleted_object_ids.contains(&id);
                 }
+                // If an Owner type is implemented with support for more fine-grained authorization,
+                // checks should be performed here. For example, transfers and wraps can be detected
+                // by comparing `original_owner` with:
+                // let new_owner = written_objects.get(&id).map(|obj| obj.owner);
+                //
+                // Deletions can be detected with:
+                // let deleted = deleted_object_ids.contains(&id);
             }
 
             if protocol_config.enable_coin_deny_list_v2() {
@@ -1051,6 +1022,7 @@ mod checked {
 
         /// Special case errors for type arguments to Move functions
         pub fn convert_type_argument_error(&self, idx: usize, error: VMError) -> ExecutionError {
+            use move_core_types::vm_status::StatusCode;
             use sui_types::execution_status::TypeArgumentError;
             match error.major_status() {
                 StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH => {
@@ -1311,17 +1283,22 @@ mod checked {
 
     /// Fetch the package at `package_id` with a view to using it as a link context.  Produces an error
     /// if the object at that ID does not exist, or is not a package.
-    fn get_package(
-        package_store: &dyn PackageStore,
+    fn package_for_linkage(
+        linkage_view: &LinkageView,
         package_id: ObjectID,
-    ) -> VMResult<Rc<MovePackage>> {
-        match package_store.get_package(&package_id) {
+    ) -> VMResult<PackageObject> {
+        use move_binary_format::errors::PartialVMError;
+        use move_core_types::vm_status::StatusCode;
+
+        match linkage_view.get_package_object(&package_id) {
             Ok(Some(package)) => Ok(package),
             Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
                 .with_message(format!("Cannot find link context {package_id} in store"))
                 .finish(Location::Undefined)),
             Err(err) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
-                .with_message(format!("Error loading {package_id} from store: {err}"))
+                .with_message(format!(
+                    "Error loading link context {package_id} from store: {err}"
+                ))
                 .finish(Location::Undefined)),
         }
     }
@@ -1345,27 +1322,22 @@ mod checked {
 
         // Load the package that the struct is defined in, in storage
         let defining_id = ObjectID::from_address(*address);
-
-        let data_store = SuiDataStore::new(linkage_view, new_packages);
-        let move_package = get_package(&data_store, defining_id)?;
-
-        // Save the link context as we need to set it while loading the struct and we don't want to
-        // clobber it.
-        let saved_linkage = linkage_view.steal_linkage();
+        let package = package_for_linkage(linkage_view, defining_id)?;
 
         // Set the defining package as the link context while loading the
         // struct
         let original_address = linkage_view
-            .set_linkage(&move_package)
-            .expect("Linkage context was just stolen. Therefore must be empty");
+            .set_linkage(package.move_package())
+            .map_err(|e| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(e.to_string())
+                    .finish(Location::Undefined)
+            })?;
 
         let runtime_id = ModuleId::new(original_address, module.clone());
         let data_store = SuiDataStore::new(linkage_view, new_packages);
         let res = vm.get_runtime().load_type(&runtime_id, name, &data_store);
         linkage_view.reset_linkage();
-        linkage_view
-            .restore_linkage(saved_linkage)
-            .expect("Linkage context was just reset. Therefore must be empty");
         let (idx, struct_type) = res?;
 
         // Recursively load type parameters, if necessary
@@ -1517,15 +1489,18 @@ mod checked {
             // protected by transaction input checker
             invariant_violation!("Object {} does not exist yet", id);
         };
-        // override_as_immutable ==> Owner::Shared or Owner::ConsensusV2
+        // override_as_immutable ==> Owner::Shared or Owner::ConsensusAddressOwner
         assert_invariant!(
             !override_as_immutable
-                || matches!(obj.owner, Owner::Shared { .. } | Owner::ConsensusV2 { .. }),
+                || matches!(
+                    obj.owner,
+                    Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. }
+                ),
             "override_as_immutable should only be set for consensus objects"
         );
         let is_mutable_input = match obj.owner {
             Owner::AddressOwner(_) => true,
-            Owner::Shared { .. } | Owner::ConsensusV2 { .. } => !override_as_immutable,
+            Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } => !override_as_immutable,
             Owner::Immutable => false,
             Owner::ObjectOwner(_) => {
                 // protected by transaction input checker
@@ -1692,7 +1667,7 @@ mod checked {
     ///
     /// This function assumes proper generation of has_public_transfer, either from the abilities of
     /// the StructTag, or from the runtime correctly propagating from the inputs
-    unsafe fn create_written_object(
+    unsafe fn create_written_object<Mode: ExecutionMode>(
         vm: &MoveVM,
         linkage_view: &LinkageView,
         protocol_config: &ProtocolConfig,
@@ -1730,18 +1705,8 @@ mod checked {
                 old_obj_ver.unwrap_or_default(),
                 contents,
                 protocol_config,
+                Mode::packages_are_predefined(),
             )
-        }
-    }
-
-    fn unwrap_type_tag_load(
-        protocol_config: &ProtocolConfig,
-        ty: Result<Type, ExecutionError>,
-    ) -> Result<Type, ExecutionError> {
-        if ty.is_err() && !protocol_config.type_tags_in_object_runtime() {
-            panic!("Failed to load a type tag from the object runtime -- this shouldn't happen")
-        } else {
-            ty
         }
     }
 

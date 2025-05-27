@@ -72,7 +72,7 @@ impl Context {
             AuthorityIndex::new_for_test(0),
             committee,
             Parameters {
-                db_path: temp_dir.into_path(),
+                db_path: temp_dir.keep(),
                 ..Default::default()
             },
             ProtocolConfig::get_for_max_version_UNSAFE(),

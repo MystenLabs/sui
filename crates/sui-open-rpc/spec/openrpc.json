@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "83",
+              "maxSupportedProtocolVersion": "85",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_passkey_in_multisig": false,
@@ -1302,6 +1302,7 @@
                 "advance_epoch_start_time_in_safe_mode": true,
                 "advance_to_highest_supported_protocol_version": false,
                 "allow_receiving_object_id": false,
+                "allow_unbounded_system_objects": false,
                 "authority_capabilities_v2": false,
                 "ban_entry_init": false,
                 "bridge": false,
@@ -1375,7 +1376,6 @@
                 "soft_bundle": false,
                 "throughput_aware_consensus_submission": false,
                 "txn_base_cost_as_multiplier": false,
-                "type_tags_in_object_runtime": false,
                 "uncompressed_g1_group_elements": false,
                 "upgraded_multisig_supported": false,
                 "validate_identifier_inputs": false,
@@ -5350,23 +5350,6 @@
       "AdditionalConsensusStateDigest": {
         "$ref": "#/components/schemas/Digest"
       },
-      "Authenticator": {
-        "oneOf": [
-          {
-            "description": "The contained SuiAddress exclusively has all permissions: read, write, delete, transfer",
-            "type": "object",
-            "required": [
-              "SingleOwner"
-            ],
-            "properties": {
-              "SingleOwner": {
-                "$ref": "#/components/schemas/SuiAddress"
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
       "AuthorityPublicKeyBytes": {
         "description": "Defines the compressed version of the public key that we pass around in Sui",
         "allOf": [
@@ -7872,26 +7855,21 @@
             ]
           },
           {
-            "description": "Object is sequenced via consensus. Ownership is managed by the configured authenticator.\n\nNote: wondering what happened to `V1`? `Shared` above was the V1 of consensus objects.",
+            "description": "Object is exclusively owned by a single address and sequenced via consensus.",
             "type": "object",
             "required": [
-              "ConsensusV2"
+              "ConsensusAddressOwner"
             ],
             "properties": {
-              "ConsensusV2": {
+              "ConsensusAddressOwner": {
                 "type": "object",
                 "required": [
-                  "authenticator",
+                  "owner",
                   "start_version"
                 ],
                 "properties": {
-                  "authenticator": {
-                    "description": "The authentication mode of the object",
-                    "allOf": [
-                      {
-                        "$ref": "#/components/schemas/Authenticator"
-                      }
-                    ]
+                  "owner": {
+                    "$ref": "#/components/schemas/SuiAddress"
                   },
                   "start_version": {
                     "description": "The version at which the object most recently became a consensus object. This serves the same function as `initial_shared_version`, except it may change if the object's Owner type changes.",

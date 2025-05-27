@@ -4,6 +4,27 @@ AccountAddress:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
+AccumulatorOperation:
+  ENUM:
+    0:
+      Merge: UNIT
+    1:
+      Split: UNIT
+AccumulatorValue:
+  ENUM:
+    0:
+      U64:
+        NEWTYPE: U64
+AccumulatorWriteV1:
+  STRUCT:
+    - recipient:
+        TYPENAME: SuiAddress
+    - accumulator_type:
+        TYPENAME: StructTag
+    - operation:
+        TYPENAME: AccumulatorOperation
+    - value:
+        TYPENAME: AccumulatorValue
 ActiveJwk:
   STRUCT:
     - jwk_id:
@@ -29,12 +50,6 @@ Argument:
         TUPLE:
           - U16
           - U16
-Authenticator:
-  ENUM:
-    0:
-      SingleOwner:
-        NEWTYPE:
-          TYPENAME: SuiAddress
 AuthenticatorStateExpire:
   STRUCT:
     - min_epoch: U64
@@ -829,6 +844,10 @@ ObjectOut:
           TUPLE:
             - TYPENAME: SequenceNumber
             - TYPENAME: ObjectDigest
+    3:
+      AccumulatorWriteV1:
+        NEWTYPE:
+          TYPENAME: AccumulatorWriteV1
 Owner:
   ENUM:
     0:
@@ -847,12 +866,12 @@ Owner:
     3:
       Immutable: UNIT
     4:
-      ConsensusV2:
+      ConsensusAddressOwner:
         STRUCT:
           - start_version:
               TYPENAME: SequenceNumber
-          - authenticator:
-              TYPENAME: Authenticator
+          - owner:
+              TYPENAME: SuiAddress
 PackageUpgradeError:
   ENUM:
     0:

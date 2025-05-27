@@ -35,6 +35,15 @@ fn main() -> Result<()> {
         )
         .method(
             Method::builder()
+                .name("wait_for_effects")
+                .route_name("WaitForEffects")
+                .input_type("sui_types::messages_grpc::RawWaitForEffectsRequest")
+                .output_type("sui_types::messages_grpc::RawWaitForEffectsResponse")
+                .codec_path(prost_codec_path)
+                .build(),
+        )
+        .method(
+            Method::builder()
                 .name("transaction")
                 .route_name("Transaction")
                 .input_type("sui_types::transaction::Transaction")

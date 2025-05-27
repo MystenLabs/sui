@@ -19,7 +19,7 @@ impl Build {
     pub async fn execute(&self) -> PackageResult<()> {
         let path = self.path.clone().unwrap_or_else(|| PathBuf::from("."));
 
-        let package = Package::<Vanilla>::load(path, &Vanilla {}).await?;
+        let package = Package::<Vanilla>::load_root(path).await?;
 
         Ok(())
     }
