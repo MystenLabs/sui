@@ -27,7 +27,7 @@ use serde::{
 use tracing::debug;
 
 use crate::{
-    errors::{GitError, PackageError, PackageResult, ResolverError},
+    errors::{PackageError, PackageResult, ResolverError},
     flavor::MoveFlavor,
     package::{EnvironmentName, PackageName, PackagePath},
 };
