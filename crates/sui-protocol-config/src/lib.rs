@@ -2025,7 +2025,7 @@ impl ProtocolConfig {
         self.aliased_addresses.iter().any(|addr| {
             addr.original == sender
                 && addr.aliased == signer
-                && addr.allowed_tx_digests.contains(&tx_digest)
+                && addr.allowed_tx_digests.contains(tx_digest)
         })
     }
 }

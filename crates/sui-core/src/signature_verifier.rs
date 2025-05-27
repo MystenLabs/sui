@@ -90,6 +90,7 @@ impl CertBuffer {
     }
 }
 
+pub type AliasedAddressMap = BTreeMap<SuiAddress, (SuiAddress, BTreeSet<TransactionDigest>)>;
 /// Verifies signatures in ways that faster than verifying each signature individually.
 /// - BLS signatures - caching and batch verification.
 /// - User signed data - caching.
@@ -101,7 +102,7 @@ pub struct SignatureVerifier {
 
     /// Map from original address to aliased address and the list of transaction digests for
     /// which the aliasing is allowed to be in effect.
-    aliased_addresses: Option<Arc<BTreeMap<SuiAddress, (SuiAddress, BTreeSet<TransactionDigest>)>>>,
+    aliased_addresses: Option<Arc<AliasedAddressMap>>,
 
     /// Map from JwkId (iss, kid) to the fetched JWK for that key.
     /// We use an immutable data structure because verification of ZKLogins may be slow, so we
@@ -165,7 +166,7 @@ impl SignatureVerifier {
                                     SuiAddress::from_bytes(aliased).unwrap(),
                                     allowed_tx_digests
                                         .into_iter()
-                                        .map(|d| TransactionDigest::new(d))
+                                        .map(TransactionDigest::new)
                                         .collect(),
                                 ),
                             )
