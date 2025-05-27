@@ -74,7 +74,8 @@ async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     if !cfg!(msim) {
         // start the adapter first to start the executor (simulacrum)
         let (output, mut adapter) =
-            create_adapter::<SuiTestAdapter>(path, Some(Arc::new(PRE_COMPILED.clone()))).await?;
+            create_adapter::<SuiTestAdapter>(path, Some(vec![Arc::new(PRE_COMPILED.clone())]))
+                .await?;
 
         // In another crate like `sui-mvr-graphql-e2e-tests`, this would be the place to translate
         // from `offchain_config` to something compatible with the indexer and graphql flavor of

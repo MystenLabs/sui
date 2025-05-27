@@ -330,7 +330,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_deps: Option<Vec<Arc<FullyCompiledProgram>>>,
         task_opt: Option<
             move_transactional_test_runner::tasks::TaskInput<(
                 move_transactional_test_runner::tasks::InitCommand,
@@ -2207,6 +2207,7 @@ pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
             ],
             named_address_map: NAMED_ADDRESSES.clone(),
         }],
+        None,
         None,
         Flags::empty(),
         None,

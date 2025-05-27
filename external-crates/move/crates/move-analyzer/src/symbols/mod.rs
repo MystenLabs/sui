@@ -59,7 +59,7 @@ use crate::{
     compiler_info::CompilerInfo,
     symbols::{
         compilation::{
-            CompiledPkgInfo, CompiledProgram, PrecomputedPkgInfo, SymbolsComputationData,
+            CachedPkgInfo, CompiledPkgInfo, CompiledProgram, SymbolsComputationData,
             get_compiled_pkg,
         },
         cursor::CursorContext,
@@ -72,6 +72,7 @@ use crate::{
 };
 
 use anyhow::Result;
+use compilation::CachedPackagesInfo;
 use lsp_types::{Diagnostic, Position};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -156,7 +157,7 @@ pub type FileModules = BTreeMap<PathBuf, BTreeSet<ModuleDefs>>;
 /// the ones in `modified_files` (if `modified_paths` contains a path not representing
 /// a Move file but rather a directory, then we conservatively do not re-use any cached info).
 pub fn get_symbols(
-    packages_info: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
+    packages_info: Arc<Mutex<CachedPackagesInfo>>,
     ide_files_root: VfsPath,
     pkg_path: &Path,
     modified_files: Option<Vec<PathBuf>>,
@@ -188,7 +189,7 @@ pub fn get_symbols(
 /// Compute symbols for a given package from the parsed and typed ASTs,
 /// as well as other auxiliary data provided in `compiled_pkg_info`.
 pub fn compute_symbols(
-    packages_info: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
+    packages_info: Arc<Mutex<CachedPackagesInfo>>,
     mut compiled_pkg_info: CompiledPkgInfo,
     cursor_info: Option<(&PathBuf, Position)>,
 ) -> Symbols {
@@ -235,9 +236,9 @@ pub fn compute_symbols(
             // dependencies may have changed or not, but we still need to update the cache
             // with new file hashes and user program info
             eprintln!("caching pre-compiled program and pre-computed symbols");
-            pkg_deps.insert(
+            pkg_deps.pkg_infos.insert(
                 pkg_path,
-                PrecomputedPkgInfo {
+                CachedPkgInfo {
                     manifest_hash,
                     deps_hash,
                     deps: cached_deps.program_deps.clone(),
@@ -290,17 +291,19 @@ pub fn compute_symbols_pre_process(
             } else {
                 // No cached dependency symbols data but we still have cached compilation results.
                 // Fill out dependency symbols from compiled package info to cache them at the end of analysis
-                pre_process_typed_modules(
-                    &cached_deps.program_deps.typing.modules,
-                    &FieldOrderInfo::new(),
-                    &compiled_pkg_info.mapped_files,
-                    &mut computation_data_deps.mod_outer_defs,
-                    &mut computation_data_deps.mod_use_defs,
-                    &mut computation_data_deps.references,
-                    &mut computation_data_deps.def_info,
-                    &compiled_pkg_info.edition,
-                    None, // Cursor can never be in a compiled library(?)
-                );
+                for compiled in &cached_deps.program_deps {
+                    pre_process_typed_modules(
+                        &compiled.typing.modules,
+                        &FieldOrderInfo::new(),
+                        &compiled_pkg_info.mapped_files,
+                        &mut computation_data_deps.mod_outer_defs,
+                        &mut computation_data_deps.mod_use_defs,
+                        &mut computation_data_deps.references,
+                        &mut computation_data_deps.def_info,
+                        &compiled_pkg_info.edition,
+                        None, // Cursor can never be in a compiled library(?)
+                    );
+                }
                 (
                     computation_data_deps.mod_outer_defs.clone(),
                     computation_data_deps.def_info.clone(),
@@ -333,12 +336,14 @@ pub fn compute_symbols_parsed_program(
         // is not available to fill out dependency symbols from compiled package info
         // to cache them at the end of analysis
         if cached_deps.symbols_data.is_none() {
-            run_parsing_analysis(
-                computation_data_deps,
-                compiled_pkg_info,
-                None,
-                &cached_deps.program_deps.parser,
-            );
+            for compiled in &cached_deps.program_deps {
+                run_parsing_analysis(
+                    computation_data_deps,
+                    compiled_pkg_info,
+                    None,
+                    &compiled.parser,
+                );
+            }
         }
     }
     cursor_context
@@ -349,8 +354,8 @@ pub fn compute_symbols_parsed_program(
 /// - optional cacheable symbols data (obtained either from cache or recomputed)
 /// - compiled user program
 pub fn compute_symbols_typed_program(
-    computation_data: SymbolsComputationData,
-    computation_data_deps: SymbolsComputationData,
+    mut computation_data: SymbolsComputationData,
+    mut computation_data_deps: SymbolsComputationData,
     mut compiled_pkg_info: CompiledPkgInfo,
     cursor_context: Option<CursorContext>,
 ) -> (
@@ -361,8 +366,8 @@ pub fn compute_symbols_typed_program(
     // run typing analysis for the main user program
     let compiler_info = &mut compiled_pkg_info.compiler_info.as_mut().unwrap();
     let mapped_files = &compiled_pkg_info.mapped_files;
-    let mut computation_data = run_typing_analysis(
-        computation_data,
+    run_typing_analysis(
+        &mut computation_data,
         mapped_files,
         compiler_info,
         &compiled_pkg_info.program.typed_modules,
@@ -379,12 +384,14 @@ pub fn compute_symbols_typed_program(
             } else {
                 // No cached dependency symbols data but we still have cached compilation results.
                 // Fill out dependency symbols from compiled package info to cache them at the end of analysis
-                let computation_data_deps = run_typing_analysis(
-                    computation_data_deps,
-                    mapped_files,
-                    compiler_info,
-                    &cached_deps.program_deps.typing.modules,
-                );
+                for compiled in cached_deps.program_deps {
+                    run_typing_analysis(
+                        &mut computation_data_deps,
+                        mapped_files,
+                        compiler_info,
+                        &compiled.typing.modules,
+                    );
+                }
                 Arc::new(computation_data_deps)
             };
             // create `file_use_defs` map and merge references to produce complete symbols data

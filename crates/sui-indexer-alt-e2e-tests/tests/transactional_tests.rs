@@ -182,7 +182,7 @@ async fn run_test(path: &Path) -> Result<(), Box<dyn Error>> {
 
     // start the adapter first to start the executor (simulacrum)
     let (output, mut adapter) =
-        create_adapter::<SuiTestAdapter>(path, Some(Arc::new(PRE_COMPILED.clone()))).await?;
+        create_adapter::<SuiTestAdapter>(path, Some(vec![Arc::new(PRE_COMPILED.clone())])).await?;
 
     // configure access to the off-chain reader
     let c = cluster(adapter.offchain_config.as_ref().unwrap()).await;

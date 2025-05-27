@@ -16,6 +16,7 @@ use crate::{
 
 use anyhow::Result;
 use lsp_types::{Diagnostic, Position};
+use move_symbol_pool::Symbol;
 use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -31,25 +32,33 @@ use vfs::{
 
 use move_command_line_common::files::FileHash;
 use move_compiler::{
-    PASS_CFGIR, PASS_PARSER, PASS_TYPING,
-    command_line::compiler::FullyCompiledProgram,
-    command_line::compiler::construct_pre_compiled_lib,
-    editions::Edition,
-    editions::Flavor,
+    Flags, PASS_CFGIR, PASS_PARSER, PASS_TYPING,
+    command_line::compiler::{FullyCompiledProgram, construct_pre_compiled_lib},
+    editions::{Edition, Flavor},
     expansion::ast::ModuleIdent,
     linters::LintLevel,
     parser::ast as P,
-    shared::{files::MappedFiles, unique_map::UniqueMap},
+    shared::{PackagePaths, files::MappedFiles, unique_map::UniqueMap},
     typing::ast::ModuleDefinition,
 };
 use move_ir_types::location::Loc;
 use move_package::{
     compilation::{build_plan::BuildPlan, compiled_package::ModuleFormat},
     resolution::resolution_graph::ResolvedGraph,
-    source_package::parsed_manifest::Dependencies,
+    source_package::parsed_manifest::{Dependencies, PackageName},
 };
 
 pub const MANIFEST_FILE_NAME: &str = "Move.toml";
+
+/// Top-level cache to contain info about compiled/analyzer packages
+#[derive(Clone)]
+pub struct CachedPackagesInfo {
+    pub pkg_infos: BTreeMap<PathBuf, CachedPkgInfo>,
+    /// Pre-compiled binaries for individual packages, keyed on the
+    /// package path to accomodate different versions of the same package
+    /// within the same workspace
+    pub compiled_dep_pkgs: BTreeMap<PathBuf, Arc<FullyCompiledProgram>>,
+}
 
 /// Information about compiled program (ASTs at different levels)
 #[derive(Clone)]
@@ -83,13 +92,13 @@ pub struct CompiledPkgInfo {
 /// Precomputed information about the package and its dependencies
 /// cached with the purpose of being re-used during the analysis.
 #[derive(Clone)]
-pub struct PrecomputedPkgInfo {
+pub struct CachedPkgInfo {
     /// Hash of the manifest file for a given package
     pub manifest_hash: Option<FileHash>,
     /// Hash of dependency source files
     pub deps_hash: String,
     /// Precompiled deps
-    pub deps: Arc<FullyCompiledProgram>,
+    pub deps: Vec<Arc<FullyCompiledProgram>>,
     /// Symbols computation data
     pub deps_symbols_data: Arc<SymbolsComputationData>,
     /// Compiled user program
@@ -106,7 +115,7 @@ pub struct PrecomputedPkgInfo {
 #[derive(Clone)]
 pub struct AnalyzedPkgInfo {
     /// Cached fully compiled program representing dependencies
-    pub program_deps: Arc<FullyCompiledProgram>,
+    pub program_deps: Vec<Arc<FullyCompiledProgram>>,
     /// Cached symbols computation data for dependencies
     pub symbols_data: Option<Arc<SymbolsComputationData>>,
     /// Compiled user program
@@ -133,6 +142,15 @@ pub struct SymbolsComputationData {
     pub mod_to_alias_lengths: BTreeMap<String, BTreeMap<Position, usize>>,
 }
 
+impl CachedPackagesInfo {
+    pub fn new() -> Self {
+        Self {
+            pkg_infos: BTreeMap::new(),
+            compiled_dep_pkgs: BTreeMap::new(),
+        }
+    }
+}
+
 impl Default for SymbolsComputationData {
     fn default() -> Self {
         Self::new()
@@ -155,7 +173,7 @@ impl SymbolsComputationData {
 /// and typed AST as well as (regardless of success) diagnostics.
 /// See `get_symbols` for explanation of what `modified_files` parameter is.
 pub fn get_compiled_pkg(
-    packages_info: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
+    packages_info: Arc<Mutex<CachedPackagesInfo>>,
     ide_files_root: VfsPath,
     pkg_path: &Path,
     modified_files: Option<Vec<PathBuf>>,
@@ -202,7 +220,7 @@ pub fn get_compiled_pkg(
     };
 
     // Hash dependencies so we can check if something has changed.
-    let (mapped_files, deps_hash) =
+    let (mapped_files, deps_hash, dep_pkg_paths) =
         compute_mapped_files(&resolution_graph, overlay_fs_root.clone());
     let file_hashes: Arc<BTreeMap<PathBuf, FileHash>> = Arc::new(
         mapped_files
@@ -226,20 +244,17 @@ pub fn get_compiled_pkg(
                 .iter()
                 .filter_map(|(p, b)| {
                     if let ModuleFormat::Source = b {
-                        Some(p.clone())
+                        p.name.as_ref().map(|(n, _)| (*n, p.clone()))
                     } else {
                         None
                     }
                 })
-                .collect::<Vec<_>>();
+                .collect::<BTreeMap<_, _>>();
 
-            let src_names = src_deps
-                .iter()
-                .filter_map(|p| p.name.as_ref().map(|(n, _)| *n))
-                .collect::<BTreeSet<_>>();
+            let src_names = src_deps.keys().cloned().collect::<BTreeSet<_>>();
 
-            let pkg_info = packages_info.lock().unwrap();
-            let (pkg_cached_deps, edition, compiler_info) = match pkg_info.get(pkg_path) {
+            let mut pkg_info = packages_info.lock().unwrap();
+            let (pkg_cached_deps, edition, compiler_info) = match pkg_info.pkg_infos.get(pkg_path) {
                 Some(d)
                     if manifest_hash.is_some()
                         && manifest_hash == d.manifest_hash
@@ -258,18 +273,19 @@ pub fn get_compiled_pkg(
                     )
                 }
                 _ => (
-                    construct_pre_compiled_lib(
+                    compiled_dep_pkgs(
+                        &mut pkg_info.compiled_dep_pkgs,
+                        dep_pkg_paths,
                         src_deps,
-                        None,
+                        resolution_graph.root_package(),
+                        &resolution_graph.topological_order(),
                         compiler_flags,
-                        Some(overlay_fs_root.clone()),
+                        overlay_fs_root.clone(),
                     )
-                    .ok()
-                    .and_then(|pprog_and_comments_res| pprog_and_comments_res.ok())
                     .map(|libs| {
                         eprintln!("created pre-compiled libs for {:?}", pkg_path);
                         AnalyzedPkgInfo {
-                            program_deps: Arc::new(libs),
+                            program_deps: libs,
                             symbols_data: None,
                             program: None,
                             file_hashes: file_hashes.clone(),
@@ -428,23 +444,104 @@ pub fn get_compiled_pkg(
     Ok((Some(compiled_pkg_info), ide_diagnostics))
 }
 
-fn has_precompiled_deps(
-    pkg_path: &Path,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
-) -> bool {
+/// Get compiled dependencies from cache or compile them if not present
+/// and update the cache with new dependencies.
+fn compiled_dep_pkgs(
+    compiled_dep_pkgs: &mut BTreeMap<PathBuf, Arc<FullyCompiledProgram>>,
+    mut dep_paths: BTreeMap<Symbol, PathBuf>,
+    mut dep_infos: BTreeMap<Symbol, PackagePaths>,
+    root_package_name: Symbol,
+    topological_order: &[PackageName],
+    compiler_flags: Flags,
+    vfs_root: VfsPath,
+) -> Option<Vec<Arc<FullyCompiledProgram>>> {
+    let mut deps = Vec::new();
+    for pkg_name in topological_order.iter().rev() {
+        if *pkg_name == root_package_name {
+            continue;
+        }
+        let Some(dep_path) = dep_paths.remove(pkg_name) else {
+            eprintln!("no dep path for {pkg_name}, no caching");
+            // do non-cached path
+            return None;
+        };
+        let Some(dep_info) = dep_infos.remove(pkg_name) else {
+            eprintln!("no dep info for {pkg_name}, no caching");
+            // do non-cached path
+            return None;
+        };
+        let Some((name, _)) = dep_info.name else {
+            eprintln!("no pkg name, no caching");
+            // do non-cached path
+            return None;
+        };
+        if let Some(dep_pkg) = compiled_dep_pkgs.get(&dep_path) {
+            eprintln!("found cached dep for {:?}", dep_path);
+            deps.push(dep_pkg.clone());
+            continue;
+        }
+        eprintln!("pre-compiling dep {name} with deps length {}", deps.len());
+        let new_deps_opt = construct_pre_compiled_lib(
+            vec![dep_info],
+            None,
+            if !deps.is_empty() {
+                Some(deps.clone())
+            } else {
+                None
+            },
+            compiler_flags.clone(),
+            Some(vfs_root.clone()),
+        )
+        .inspect_err(|e| {
+            eprintln!("failed to pre-compile dep {name}: {e}");
+        })
+        .ok()
+        .and_then(|pprog_and_comments_res| {
+            pprog_and_comments_res
+                .inspect_err(|e| {
+                    eprintln!(
+                        "failed to get pre-compiled dep {name}: {:?} (all diags number: {})",
+                        e.clone()
+                            .1
+                            .into_vec()
+                            .first()
+                            .map(|d| d.primary_msg())
+                            .unwrap_or("no diags`"),
+                        e.1.len()
+                    )
+                })
+                .ok()
+        });
+        if let Some(new_deps) = new_deps_opt {
+            eprintln!("inserting new dep into cache for {:?}", dep_path);
+            let deps_ref = Arc::new(new_deps);
+            compiled_dep_pkgs.insert(dep_path, deps_ref.clone());
+            deps.push(deps_ref);
+        } else {
+            // bail even if we can construct just one dependency
+            // and do non-cached path
+            return None;
+        }
+    }
+
+    Some(deps)
+}
+
+fn has_precompiled_deps(pkg_path: &Path, pkg_dependencies: Arc<Mutex<CachedPackagesInfo>>) -> bool {
     let pkg_deps = pkg_dependencies.lock().unwrap();
-    pkg_deps.contains_key(pkg_path)
+    pkg_deps.pkg_infos.contains_key(pkg_path)
 }
 
 fn compute_mapped_files(
     resolved_graph: &ResolvedGraph,
     overlay_fs: VfsPath,
-) -> (MappedFiles, String) {
+) -> (MappedFiles, String, BTreeMap<Symbol, PathBuf>) {
     let mut mapped_files: MappedFiles = MappedFiles::empty();
     let mut hasher = Sha256::new();
+    let mut dep_pkg_paths = BTreeMap::new();
     for rpkg in resolved_graph.package_table.values() {
+        let is_dep = rpkg.package_path != resolved_graph.graph.root_path;
         for f in rpkg.get_sources(&resolved_graph.build_options).unwrap() {
-            let is_dep = rpkg.package_path != resolved_graph.graph.root_path;
             // dunce does a better job of canonicalization on Windows
             let fname = dunce::canonicalize(f.as_str())
                 .map(|p| p.to_string_lossy().to_string())
@@ -459,6 +556,7 @@ fn compute_mapped_files(
             let fhash = FileHash::new(&contents);
             if is_dep {
                 hasher.update(fhash.0);
+                dep_pkg_paths.insert(rpkg.source_package.package.name, rpkg.package_path.clone());
             }
             // write to top layer of the overlay file system so that the content
             // is immutable for the duration of compilation and symbolication
@@ -468,7 +566,11 @@ fn compute_mapped_files(
             mapped_files.add(fhash, fname.into(), Arc::from(contents.into_boxed_str()));
         }
     }
-    (mapped_files, format!("{:X}", hasher.finalize()))
+    (
+        mapped_files,
+        format!("{:X}", hasher.finalize()),
+        dep_pkg_paths,
+    )
 }
 
 /// Merges a cached compiled program with newly computed compiled program
