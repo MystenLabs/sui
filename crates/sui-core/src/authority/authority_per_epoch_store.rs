@@ -611,6 +611,7 @@ impl AuthorityEpochTables {
         let builder_checkpoint_summary_v2_config = pending_checkpoint_signatures_config.clone();
         let tx_digest_indexing = KeyIndexing::key_reduction(32, 0..16);
         let uniform_key = KeyType::uniform(default_cells_per_mutex());
+        let sequence_key = KeyType::prefix_uniform(2, 4);
         let configs = vec![
             (
                 "signed_transactions".to_string(),
@@ -670,15 +671,15 @@ impl AuthorityEpochTables {
             ),
             (
                 "builder_checkpoint_summary_v2".to_string(),
-                ThConfig::new_with_config(8, MUTEXES, uniform_key, builder_checkpoint_summary_v2_config),
+                ThConfig::new_with_config(8, MUTEXES, sequence_key, builder_checkpoint_summary_v2_config),
             ),
             (
                 "state_hash_by_checkpoint".to_string(),
-                ThConfig::new_with_config(8, MUTEXES, uniform_key, bloom_config.clone()),
+                ThConfig::new_with_config(8, MUTEXES, sequence_key, bloom_config.clone()),
             ),
             (
                 "running_root_accumulators".to_string(),
-                ThConfig::new_with_config(8, MUTEXES, uniform_key, bloom_config.clone()),
+                ThConfig::new_with_config(8, MUTEXES, sequence_key, bloom_config.clone()),
             ),
             (
                 "authority_capabilities".to_string(),
