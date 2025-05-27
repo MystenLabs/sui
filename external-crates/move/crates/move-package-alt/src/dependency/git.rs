@@ -4,20 +4,9 @@
 
 //! Types and methods for external dependencies (of the form `{ git = "<repo>" }`)
 //!
-//! Git dependencies are cached in `~/.move`, which has the following structure:
-//!
-//! TODO: this doesn't match the implementation below:
-//! ```ignore
-//! .move/
-//!   git/
-//!     <remote 1>/ # a headless, sparse, and shallow git repository
-//!       <sha 1>/ # a worktree checked out to the given sha
-//!       <sha 2>/
-//!       ...
-//!     <remote 2>/
-//!       ...
-//!     ...
-//! ```
+//! Git dependencies are cached in `~/.move`. Each dependency has a sparse, shallow checkout
+//! in the directory `~/.move/<remote>_<sha>` (see [crate::git::format_repo_to_fs_path])
+
 use std::{
     fmt,
     marker::PhantomData,

@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod dependency_set;
-// TODO: this shouldn't be pub; need to move resolver error into resolver module
 pub mod external;
 mod git;
 mod local;
@@ -27,7 +26,7 @@ use serde::{
 use tracing::debug;
 
 use crate::{
-    errors::{PackageError, PackageResult, ResolverError},
+    errors::{Located, PackageError, PackageResult},
     flavor::MoveFlavor,
     package::{EnvironmentName, PackageName, PackagePath},
 };
@@ -132,6 +131,7 @@ where
                 let dep = UnpinnedGitDependency::deserialize(data).map_err(de::Error::custom)?;
                 Ok(UnpinnedDependencyInfo::Git(dep))
             } else if tbl.contains_key("r") {
+                debug!("found `r` field");
                 let dep = ExternalDependency::deserialize(data).map_err(de::Error::custom)?;
                 Ok(UnpinnedDependencyInfo::External(dep))
             } else if tbl.contains_key("local") {
