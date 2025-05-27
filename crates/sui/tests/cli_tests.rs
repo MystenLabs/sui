@@ -12,6 +12,7 @@ use std::env;
 use std::str::FromStr;
 
 use expect_test::expect;
+use fastcrypto::encoding::{Base64, Encoding};
 use move_package::{lock_file::schema::ManagedPackage, BuildConfig as MoveBuildConfig};
 use serde_json::json;
 use sui::client_commands::{GasDataArgs, PaymentArgs, TxProcessingArgs};
@@ -22,7 +23,7 @@ use sui_sdk::SuiClient;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::object::Owner;
 use sui_types::transaction::{
-    TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
+    TransactionDataAPI, TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
     TEST_ONLY_GAS_UNIT_FOR_PUBLISH, TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
@@ -4560,6 +4561,130 @@ async fn test_transfer_sponsored() -> Result<(), anyhow::Error> {
     assert_eq!(response.status_ok(), Some(true));
     assert_eq!(tx.data.gas_data().owner, a0);
     assert_eq!(tx.data.sender(), &a1);
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_transfer_serialized_data() -> Result<(), anyhow::Error> {
+    // Like `test_transfer` but the transaction is pre-generated and serialized into a
+    // Base64 string containing a Base64-encoded TransactionData.
+    let (mut cluster, client, rgp, o, _, a) = test_cluster_helper().await;
+    let context = &mut cluster.wallet;
+
+    // Build the transaction without running it.
+    let transfer = SuiClientCommands::Transfer {
+        to: KeyIdentity::Address(a[1]),
+        object_id: o[0],
+        payment: PaymentArgs { gas: vec![o[1]] },
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs {
+            serialize_unsigned_transaction: true,
+            ..Default::default()
+        },
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::SerializedUnsignedTransaction(tx_data) = transfer else {
+        panic!("Expected SerializedUnsignedTransaction result");
+    };
+
+    let tx_bytes = Base64::encode(bcs::to_bytes(&tx_data)?);
+    let transfer_serialized = SuiClientCommands::SerializedTx {
+        tx_bytes,
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(response) = transfer_serialized else {
+        panic!("Expected TransactionBlock result");
+    };
+
+    let Some(effects) = &response.effects else {
+        panic!("TransactionBlock response should contain effects");
+    };
+
+    assert!(effects.status().is_ok());
+    assert_eq!(effects.gas_object().object_id(), o[1]);
+
+    let a1_objs = client
+        .read_api()
+        .get_owned_objects(a[1], None, None, None)
+        .await?;
+
+    assert!(!a1_objs.has_next_page);
+
+    let page = a1_objs.data;
+    assert_eq!(page.len(), 1);
+    assert_eq!(page.first().unwrap().object().unwrap().object_id, o[0]);
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_transfer_serialized_kind() -> Result<(), anyhow::Error> {
+    // Like `test_transfer` but the transaction is pre-generated and serialized into a
+    // Base64 string containing a Base64-encoded TransactionKind.
+    let (mut cluster, client, rgp, o, _, a) = test_cluster_helper().await;
+    let context = &mut cluster.wallet;
+
+    // Build the transaction without running it.
+    let transfer = SuiClientCommands::Transfer {
+        to: KeyIdentity::Address(a[1]),
+        object_id: o[0],
+        payment: PaymentArgs::default(),
+        gas_data: GasDataArgs::default(),
+        processing: TxProcessingArgs {
+            serialize_unsigned_transaction: true,
+            ..Default::default()
+        },
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::SerializedUnsignedTransaction(tx_data) = transfer else {
+        panic!("Expected SerializedUnsignedTransaction result");
+    };
+
+    let tx_bytes = Base64::encode(bcs::to_bytes(tx_data.kind())?);
+    let transfer_serialized = SuiClientCommands::SerializedTxKind {
+        tx_bytes,
+        payment: PaymentArgs { gas: vec![o[1]] },
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(response) = transfer_serialized else {
+        panic!("Expected TransactionBlock result");
+    };
+
+    let Some(effects) = &response.effects else {
+        panic!("TransactionBlock response should contain effects");
+    };
+
+    assert!(effects.status().is_ok());
+    assert_eq!(effects.gas_object().object_id(), o[1]);
+
+    let a1_objs = client
+        .read_api()
+        .get_owned_objects(a[1], None, None, None)
+        .await?;
+
+    assert!(!a1_objs.has_next_page);
+
+    let page = a1_objs.data;
+    assert_eq!(page.len(), 1);
+    assert_eq!(page.first().unwrap().object().unwrap().object_id, o[0]);
 
     Ok(())
 }
