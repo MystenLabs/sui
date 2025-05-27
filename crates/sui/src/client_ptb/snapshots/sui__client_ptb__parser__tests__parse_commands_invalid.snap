@@ -478,4 +478,43 @@ expression: parsed
             severity: Error,
         },
     ],
+    [
+        PTBError {
+            message: "Expected an address",
+            span: Span {
+                start: 14,
+                end: 18,
+            },
+            help: Some(
+                "Addresses or object IDs require the character '@' in front",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected an address",
+            span: Span {
+                start: 13,
+                end: 13,
+            },
+            help: Some(
+                "Addresses or object IDs require the character '@' in front",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Expected an address",
+            span: Span {
+                start: 14,
+                end: 16,
+            },
+            help: Some(
+                "Addresses or object IDs require the character '@' in front",
+            ),
+            severity: Error,
+        },
+    ],
 ]

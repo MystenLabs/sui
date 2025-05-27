@@ -47,6 +47,7 @@ struct ProgramParsingState {
     gas_object_id: Option<Spanned<ObjectID>>,
     gas_budget: Option<Spanned<u64>>,
     gas_price: Option<Spanned<u64>>,
+    gas_sponsor: Option<Spanned<NumericalAddress>>,
 }
 
 macro_rules! mvr_ident {
@@ -79,6 +80,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 gas_object_id: None,
                 gas_budget: None,
                 gas_price: None,
+                gas_sponsor: None,
             },
         })
     }
@@ -131,6 +133,10 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 L(T::Command, A::GAS_COIN) => {
                     let specifier = try_!(self.parse_gas_specifier());
                     self.state.gas_object_id = Some(specifier);
+                }
+                L(T::Command, A::GAS_SPONSOR) => {
+                    let sponsor = try_!(self.parse_address_literal());
+                    self.state.gas_sponsor = Some(sponsor);
                 }
 
                 L(T::Command, A::GAS_BUDGET) => {
@@ -246,6 +252,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                     dev_inspect_set: self.state.dev_inspect_set,
                     gas_budget: self.state.gas_budget,
                     gas_price: self.state.gas_price,
+                    gas_sponsor: self.state.gas_sponsor,
                     mvr_names: self.state.mvr_names_with_span,
                 },
             ))
@@ -1084,6 +1091,8 @@ mod tests {
             "--gas-coin @0x1",
             // Gas price
             "--gas-price 1000",
+            // Gas sponsor
+            "--gas-sponsor @0x2",
             "--summary",
             "--json",
             "--tx-digest",
@@ -1156,6 +1165,10 @@ mod tests {
             "--gas-price [1, 2, 3]",
             "--gas-price @0x2",
             "--gas-price 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            // Gas sponsor
+            "--gas-sponsor nope",
+            "--gas-sponsor",
+            "--gas-sponsor 42",
         ];
         let mut parsed = Vec::new();
         for input in inputs {
