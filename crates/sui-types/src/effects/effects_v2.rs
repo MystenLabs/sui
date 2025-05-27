@@ -10,7 +10,7 @@ use crate::base_types::{
 use crate::digests::{EffectsAuxDataDigest, TransactionEventsDigest};
 use crate::effects::{InputSharedObject, TransactionEffectsAPI};
 use crate::execution::SharedInput;
-use crate::execution_status::ExecutionStatus;
+use crate::execution_status::{ExecutionFailureStatus, ExecutionStatus, MoveLocation};
 use crate::gas::GasCostSummary;
 #[cfg(debug_assertions)]
 use crate::is_system_package;
@@ -85,6 +85,17 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                 }
             })
             .collect()
+    }
+
+    fn move_abort(&self) -> Option<(MoveLocation, u64)> {
+        let ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::MoveAbort(move_location, code),
+            ..
+        } = self.status()
+        else {
+            return None;
+        };
+        Some((move_location.clone(), *code))
     }
 
     fn lamport_version(&self) -> SequenceNumber {
