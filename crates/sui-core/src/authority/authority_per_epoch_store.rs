@@ -139,6 +139,7 @@ pub(crate) mod consensus_quarantine;
 use consensus_quarantine::ConsensusCommitOutput;
 use consensus_quarantine::ConsensusOutputCache;
 use consensus_quarantine::ConsensusOutputQuarantine;
+use typed_store::tidehunter_util::default_cells_per_mutex;
 
 // CertLockGuard and CertTxGuard are functionally identical right now, but we retain a distinction
 // anyway. If we need to support distributed object storage, having this distinction will be
@@ -594,7 +595,7 @@ impl AuthorityEpochTables {
         not(feature = "rocksdb")
     ))]
     pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
-        use typed_store::tidehunter_util::{default_cells_per_mutex, KeySpaceConfig, ThConfig, KeyIndexing};
+        use typed_store::tidehunter_util::{default_cells_per_mutex, KeySpaceConfig, ThConfig, KeyIndexing, KeyType};
         const MUTEXES: usize = 1024;
         let mut digest_prefix = vec![0; 8];
         digest_prefix[7] = 32;
@@ -609,146 +610,147 @@ impl AuthorityEpochTables {
             .disable_unload();
         let builder_checkpoint_summary_v2_config = pending_checkpoint_signatures_config.clone();
         let tx_digest_indexing = KeyIndexing::key_reduction(32, 0..16);
+        let uniform_key = KeyType::uniform(default_cells_per_mutex());
         let configs = vec![
             (
                 "signed_transactions".to_string(),
-                ThConfig::new_with_rm_prefix_indexing(tx_digest_indexing.clone(), MUTEXES, default_cells_per_mutex(), lru_bloom_config.clone(), digest_prefix.clone()),
+                ThConfig::new_with_rm_prefix_indexing(tx_digest_indexing.clone(), MUTEXES, uniform_key, lru_bloom_config.clone(), digest_prefix.clone()),
             ),
             (
                 "owned_object_locked_transactions".to_string(),
-                ThConfig::new_with_config(32 + 8 + 32 + 8, MUTEXES, default_cells_per_mutex(), bloom_config.clone()),
+                ThConfig::new_with_config(32 + 8 + 32 + 8, MUTEXES, uniform_key, bloom_config.clone()),
             ),
             (
                 "effects_signatures".to_string(),
-                ThConfig::new_with_rm_prefix_indexing(tx_digest_indexing.clone(), MUTEXES, default_cells_per_mutex(), lru_bloom_config.clone(), digest_prefix.clone()),
+                ThConfig::new_with_rm_prefix_indexing(tx_digest_indexing.clone(), MUTEXES, uniform_key, lru_bloom_config.clone(), digest_prefix.clone()),
             ),
             (
                 "signed_effects_digests".to_string(),
-                ThConfig::new_with_rm_prefix_indexing(tx_digest_indexing.clone(), MUTEXES, default_cells_per_mutex(), bloom_config.clone(), digest_prefix.clone()),
+                ThConfig::new_with_rm_prefix_indexing(tx_digest_indexing.clone(), MUTEXES, uniform_key, bloom_config.clone(), digest_prefix.clone()),
             ),
             (
                 "transaction_cert_signatures".to_string(),
-                ThConfig::new_with_rm_prefix_indexing(tx_digest_indexing.clone(), MUTEXES, default_cells_per_mutex(), lru_bloom_config.clone(), digest_prefix.clone()),
+                ThConfig::new_with_rm_prefix_indexing(tx_digest_indexing.clone(), MUTEXES, uniform_key, lru_bloom_config.clone(), digest_prefix.clone()),
             ),
             (
                 "next_shared_object_versions_v2".to_string(),
-                ThConfig::new_with_config(32 + 8, MUTEXES, default_cells_per_mutex(), lru_only_config.clone()),
+                ThConfig::new_with_config(32 + 8, MUTEXES, uniform_key, lru_only_config.clone()),
             ),
             (
                 "consensus_message_processed".to_string(),
-                ThConfig::new_with_config_indexing(KeyIndexing::Hash, MUTEXES, default_cells_per_mutex(), bloom_config.clone()),
+                ThConfig::new_with_config_indexing(KeyIndexing::Hash, MUTEXES, uniform_key, bloom_config.clone()),
             ),
             (
                 "pending_consensus_transactions".to_string(),
-                ThConfig::new_with_config_indexing(KeyIndexing::Hash, MUTEXES, default_cells_per_mutex(), KeySpaceConfig::default()),
+                ThConfig::new_with_config_indexing(KeyIndexing::Hash, MUTEXES, uniform_key, KeySpaceConfig::default()),
             ),
             (
                 "last_consensus_stats".to_string(),
-                ThConfig::new(8, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(8, 1, KeyType::uniform(1)),
             ),
             (
                 "reconfig_state".to_string(),
-                ThConfig::new(8, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(8, 1, KeyType::uniform(1)),
             ),
             (
                 "end_of_publish".to_string(),
-                ThConfig::new(104, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(104, 1, KeyType::uniform(1)),
             ),
             (
                 "builder_digest_to_checkpoint".to_string(),
-                ThConfig::new_with_rm_prefix_indexing(tx_digest_indexing.clone(), MUTEXES * 4, default_cells_per_mutex(), lru_bloom_config.clone(), digest_prefix.clone()),
+                ThConfig::new_with_rm_prefix_indexing(tx_digest_indexing.clone(), MUTEXES * 4, uniform_key, lru_bloom_config.clone(), digest_prefix.clone()),
             ),
             (
                 "transaction_key_to_digest".to_string(),
-                ThConfig::new_with_config_indexing(KeyIndexing::Hash, MUTEXES, default_cells_per_mutex(), KeySpaceConfig::default()),
+                ThConfig::new_with_config_indexing(KeyIndexing::Hash, MUTEXES, uniform_key, KeySpaceConfig::default()),
             ),
             (
                 "pending_checkpoint_signatures".to_string(),
-                ThConfig::new_with_config(8 + 8, MUTEXES, default_cells_per_mutex(), pending_checkpoint_signatures_config),
+                ThConfig::new_with_config(8 + 8, MUTEXES, uniform_key, pending_checkpoint_signatures_config),
             ),
             (
                 "builder_checkpoint_summary_v2".to_string(),
-                ThConfig::new_with_config(8, MUTEXES, default_cells_per_mutex(), builder_checkpoint_summary_v2_config),
+                ThConfig::new_with_config(8, MUTEXES, uniform_key, builder_checkpoint_summary_v2_config),
             ),
             (
                 "state_hash_by_checkpoint".to_string(),
-                ThConfig::new_with_config(8, MUTEXES, default_cells_per_mutex(), bloom_config.clone()),
+                ThConfig::new_with_config(8, MUTEXES, uniform_key, bloom_config.clone()),
             ),
             (
                 "running_root_accumulators".to_string(),
-                ThConfig::new_with_config(8, MUTEXES, default_cells_per_mutex(), bloom_config.clone()),
+                ThConfig::new_with_config(8, MUTEXES, uniform_key, bloom_config.clone()),
             ),
             (
                 "authority_capabilities".to_string(),
-                ThConfig::new(104, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(104, MUTEXES, uniform_key),
             ),
             (
                 "authority_capabilities_v2".to_string(),
-                ThConfig::new(104, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(104,  1, KeyType::uniform(1)),
             ),
             (
                 "override_protocol_upgrade_buffer_stake".to_string(),
-                ThConfig::new(8, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(8,  1, KeyType::uniform(1)),
             ),
             (
                 "executed_transactions_to_checkpoint".to_string(),
-                ThConfig::new_with_rm_prefix_indexing(tx_digest_indexing.clone(), MUTEXES * 4, default_cells_per_mutex(), lru_bloom_config.clone(), digest_prefix.clone()),
+                ThConfig::new_with_rm_prefix_indexing(tx_digest_indexing.clone(), MUTEXES * 4, uniform_key, lru_bloom_config.clone(), digest_prefix.clone()),
             ),
             (
                 "pending_jwks".to_string(),
-                ThConfig::new_with_config_indexing(KeyIndexing::Hash, MUTEXES, default_cells_per_mutex(), KeySpaceConfig::default()),
+                ThConfig::new_with_config_indexing(KeyIndexing::Hash,  1, KeyType::uniform(1), KeySpaceConfig::default()),
             ),
             (
                 "active_jwks".to_string(),
-                ThConfig::new_with_config_indexing(KeyIndexing::Hash, MUTEXES, default_cells_per_mutex(), KeySpaceConfig::default()),
+                ThConfig::new_with_config_indexing(KeyIndexing::Hash,  1, KeyType::uniform(1), KeySpaceConfig::default()),
             ),
             (
                 "deferred_transactions".to_string(),
-                ThConfig::new(1 + 8 + 8, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(1 + 8 + 8, MUTEXES, uniform_key),
             ),
             (
                 "deferred_transactions".to_string(),
-                ThConfig::new(1 + 8 + 8, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(1 + 8 + 8, MUTEXES, uniform_key),
             ),
             (
                 "dkg_processed_messages_v2".to_string(),
-                ThConfig::new(2, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(2,  1, KeyType::uniform(1)),
             ),
             (
                 "dkg_used_messages_v2".to_string(),
-                ThConfig::new(8, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(8,  1, KeyType::uniform(1)),
             ),
             (
                 "dkg_confirmations_v2".to_string(),
-                ThConfig::new(2, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(2,  1, KeyType::uniform(1)),
             ),
             (
                 "dkg_output".to_string(),
-                ThConfig::new(8, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(8,  1, KeyType::uniform(1)),
             ),
             (
                 "randomness_next_round".to_string(),
-                ThConfig::new(8, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(8,  1, KeyType::uniform(1)),
             ),
             (
                 "randomness_highest_completed_round".to_string(),
-                ThConfig::new(8, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(8,  1, KeyType::uniform(1)),
             ),
             (
                 "randomness_last_round_timestamp".to_string(),
-                ThConfig::new(8, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(8,  1, KeyType::uniform(1)),
             ),
             (
                 "congestion_control_object_debts".to_string(),
-                ThConfig::new(32, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(32, MUTEXES, uniform_key),
             ),
             (
                 "congestion_control_randomness_object_debts".to_string(),
-                ThConfig::new(32, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(32, MUTEXES, uniform_key),
             ),
             (
                 "execution_time_observations".to_string(),
-                ThConfig::new(8 + 4, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new(8 + 4, MUTEXES, uniform_key),
             ),
         ];
         Self::open_tables_read_write(
