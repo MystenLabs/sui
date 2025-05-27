@@ -81,7 +81,8 @@ use sui_types::{
     signature::GenericSignature,
     sui_serde,
     transaction::{
-        InputObjectKind, SenderSignedData, Transaction, TransactionData, TransactionKind,
+        InputObjectKind, SenderSignedData, Transaction, TransactionData, TransactionDataAPI,
+        TransactionKind,
     },
 };
 
@@ -396,6 +397,30 @@ pub enum SuiClientCommands {
         /// Also publish transitive dependencies that have not already been published.
         #[clap(long)]
         with_unpublished_dependencies: bool,
+
+        #[clap(flatten)]
+        payment: PaymentArgs,
+
+        #[clap(flatten)]
+        gas_data: GasDataArgs,
+
+        #[clap(flatten)]
+        processing: TxProcessingArgs,
+    },
+
+    /// Execute, dry-run, dev-inspect or otherwise inspect an already serialized transaction.
+    SerializedTx {
+        /// Base64-encoded BCS-serialized TransactionData.
+        tx_bytes: String,
+
+        #[clap(flatten)]
+        processing: TxProcessingArgs,
+    },
+
+    /// Execute, dry-run, dev-inspect or otherwise inspect an already serialized transaction kind.
+    SerializedTxKind {
+        /// Base64-encoded BCS-serialized TransactionKind.
+        tx_bytes: String,
 
         #[clap(flatten)]
         payment: PaymentArgs,
@@ -1721,6 +1746,68 @@ impl SuiClientCommands {
 
                 dry_run_or_execute_or_serialize(
                     signer,
+                    tx_kind,
+                    context,
+                    gas_payment,
+                    gas_data,
+                    processing,
+                )
+                .await?
+            }
+            SuiClientCommands::SerializedTx {
+                tx_bytes,
+                processing,
+            } => {
+                let Ok(bytes) = Base64::decode(&tx_bytes) else {
+                    bail!("Invalid Base64 encoding");
+                };
+
+                let Ok(tx_data): Result<TransactionData, _> = bcs::from_bytes(&bytes) else {
+                    bail!("Failed to parse --tx-bytes as TransactionData");
+                };
+
+                let sender = tx_data.sender();
+                let gas_payment = tx_data.gas().to_owned();
+                let gas_data = GasDataArgs {
+                    gas_budget: Some(tx_data.gas_budget()),
+                    gas_price: Some(tx_data.gas_price()),
+                    gas_sponsor: Some(tx_data.gas_owner()),
+                };
+                let tx_kind = tx_data.into_kind();
+
+                dry_run_or_execute_or_serialize(
+                    sender,
+                    tx_kind,
+                    context,
+                    gas_payment,
+                    gas_data,
+                    processing,
+                )
+                .await?
+            }
+            SuiClientCommands::SerializedTxKind {
+                tx_bytes,
+                payment,
+                gas_data,
+                processing,
+            } => {
+                let Ok(bytes) = Base64::decode(&tx_bytes) else {
+                    bail!("Invalid Base64 encoding");
+                };
+
+                let Ok(tx_kind): Result<TransactionKind, _> = bcs::from_bytes(&bytes) else {
+                    bail!("Failed to parse --tx-bytes as TransactionKind");
+                };
+
+                let client = context.get_client().await?;
+                let sender = context.infer_sender(&payment.gas).await?;
+                let gas_payment = client
+                    .transaction_builder()
+                    .input_refs(&payment.gas)
+                    .await?;
+
+                dry_run_or_execute_or_serialize(
+                    sender,
                     tx_kind,
                     context,
                     gas_payment,
