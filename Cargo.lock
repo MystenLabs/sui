@@ -7841,8 +7841,10 @@ dependencies = [
  "move-disassembler",
  "move-docgen",
  "move-ir-types",
+ "move-model",
  "move-model-2",
  "move-package",
+ "move-stackless-bytecode",
  "move-stackless-bytecode-2",
  "move-stdlib",
  "move-stdlib-natives",
@@ -8198,16 +8200,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-stackless-bytecode"
+version = "0.1.0"
+dependencies = [
+ "codespan",
+ "codespan-reporting",
+ "ethnum",
+ "im",
+ "itertools 0.10.5",
+ "log",
+ "move-binary-format",
+ "move-command-line-common",
+ "move-compiler",
+ "move-core-types",
+ "move-model",
+ "num",
+ "petgraph 0.8.2",
+ "serde",
+]
+
+[[package]]
 name = "move-stackless-bytecode-2"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-disassembler",
  "move-ir-types",
+ "move-model",
  "move-model-2",
+ "move-stackless-bytecode",
  "move-symbol-pool",
+ "move-vm-runtime",
 ]
 
 [[package]]

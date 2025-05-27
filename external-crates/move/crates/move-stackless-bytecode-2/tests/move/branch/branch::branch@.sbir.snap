@@ -1,0 +1,26 @@
+---
+source: crates/move-stackless-bytecode-2/tests/tests.rs
+---
+Module branch::branch
+    Function is_even
+        reg_0 = U64(10)
+        reg_2 = StoreLoc(reg_0)
+        reg_1 = MoveLoc(reg_0)
+        reg_2 = U64(2)
+        reg_3 = Modulo(reg_1, reg_2)
+        reg_4 = U64(0)
+        Unimplemented(Eq)
+        Unimplemented(BrFalse(13))
+        reg_5 = MoveLoc(reg_2)
+        reg_6 = U64(20)
+        reg_7 = Add(reg_5, reg_6)
+        reg_1 = StoreLoc(reg_7)
+        Unimplemented(Branch(17))
+        reg_8 = MoveLoc(reg_2)
+        reg_9 = U64(30)
+        reg_10 = Add(reg_8, reg_9)
+        reg_1 = StoreLoc(reg_10)
+        reg_11 = MoveLoc(reg_1)
+        reg_12 = U64(13)
+        reg_13 = Multiply(reg_11, reg_12)
+        Return(reg_13)

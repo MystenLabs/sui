@@ -1,4 +1,3 @@
-// Copyright (c) The Diem Core Contributors
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
@@ -6,10 +5,11 @@ use move_binary_format::file_format::CompiledModule;
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
 
-use std::fs::File;
-use std::io::{BufReader, Read};
-use std::path::Path;
-use std::path::PathBuf;
+use std::{
+    fs::File,
+    io::{BufReader, Read},
+    path::{Path, PathBuf},
+};
 
 #[derive(Clone, Debug)]
 pub struct Utils {
@@ -75,4 +75,12 @@ pub(crate) fn disassemble(module: &CompiledModule) -> anyhow::Result<String> {
 
     // println!("{}", disassemble_string);
     Ok(disassemble_string)
+}
+
+pub(crate) fn comma_separated<T: std::fmt::Display>(items: &[T]) -> String {
+    items
+        .iter()
+        .map(|item| format!("{}", item))
+        .collect::<Vec<_>>()
+        .join(", ")
 }

@@ -117,7 +117,7 @@ pub fn run_cli(
             ),
         Command::Stackless(c) => {
             c.execute(move_args.package_path.as_deref(), move_args.build_config)
-        },
+        }
     }
 }
 
