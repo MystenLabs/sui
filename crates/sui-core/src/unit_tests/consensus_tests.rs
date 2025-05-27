@@ -8,6 +8,7 @@ use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::SequencedConsensusTransaction;
+use crate::execution_scheduler::ExecutionSchedulerAPI;
 use crate::mock_consensus::with_block_status;
 use consensus_core::{BlockRef, BlockStatus};
 use fastcrypto::traits::KeyPair;
@@ -256,7 +257,7 @@ pub fn make_consensus_adapter_for_test(
 
             if self.execute {
                 self.state
-                    .transaction_manager()
+                    .execution_scheduler()
                     .enqueue(transactions, epoch_store);
             }
 

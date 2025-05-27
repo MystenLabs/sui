@@ -1502,6 +1502,26 @@ impl ObjectCacheRead for WritebackCache {
         }
     }
 
+    fn multi_input_objects_available_cache_only(&self, keys: &[InputKey]) -> Vec<bool> {
+        keys.iter()
+            .map(|key| {
+                if key.is_cancelled() {
+                    true
+                } else {
+                    match key {
+                        InputKey::VersionedObject { id, version } => {
+                            matches!(
+                                self.get_object_by_key_cache_only(&id.id(), *version),
+                                CacheResult::Hit(_)
+                            )
+                        }
+                        InputKey::Package { id } => self.packages.contains_key(id),
+                    }
+                }
+            })
+            .collect()
+    }
+
     #[instrument(level = "trace", skip_all, fields(object_id, version_bound))]
     fn find_object_lt_or_eq_version(
         &self,
@@ -1804,78 +1824,15 @@ impl ObjectCacheRead for WritebackCache {
         input_and_receiving_keys: &'a [InputKey],
         receiving_keys: &'a HashSet<InputKey>,
         epoch: &'a EpochId,
-    ) -> BoxFuture<'a, Vec<()>> {
+    ) -> BoxFuture<'a, ()> {
         self.object_notify_read
             .read(input_and_receiving_keys, |keys| {
-                let mut results = vec![None; keys.len()];
-
-                let (keys_with_version, keys_without_version): (Vec<_>, Vec<_>) = keys
-                    .iter()
-                    .enumerate()
-                    .filter(|(idx, key)| {
-                        if key.is_cancelled() {
-                            // Shared objects in canceled transactions are always available.
-                            results[*idx] = Some(());
-                            false
-                        } else {
-                            true
-                        }
-                    })
-                    .partition(|(_, key)| key.version().is_some());
-                let versioned_object_keys: Vec<_> = keys_with_version
-                    .iter()
-                    .map(|(_, key)| ObjectKey(key.id().id(), key.version().unwrap()))
-                    .collect();
-                ObjectCacheRead::multi_get_objects_by_key(self, &versioned_object_keys)
+                self.multi_input_objects_available(keys, receiving_keys, epoch)
                     .into_iter()
-                    .zip(keys_with_version.iter())
-                    .for_each(|(o, (idx, input_key))| match o {
-                        Some(_) => results[*idx] = Some(()),
-                        None => {
-                            if receiving_keys.contains(input_key) {
-                                // There could be a more recent version of this object, and the object at the
-                                // specified version could have already been pruned. In such a case `has_key` will
-                                // be false, but since this is a receiving object we should mark it as available if
-                                // we can determine that an object with a version greater than or equal to the
-                                // specified version exists or was deleted. We will then let mark it as available
-                                // to let the transaction through so it can fail at execution.
-                                let is_available =
-                                    ObjectCacheRead::get_object(self, &input_key.id().id())
-                                        .map(|obj| obj.version() >= input_key.version().unwrap())
-                                        .unwrap_or(false)
-                                        || self.fastpath_stream_ended_at_version_or_after(
-                                            input_key.id().id(),
-                                            input_key.version().unwrap(),
-                                            *epoch,
-                                        );
-                                if is_available {
-                                    results[*idx] = Some(());
-                                }
-                            } else if self
-                                .get_consensus_stream_end_tx_digest(
-                                    FullObjectKey::new(
-                                        input_key.id(),
-                                        input_key.version().unwrap(),
-                                    ),
-                                    *epoch,
-                                )
-                                .is_some()
-                            {
-                                // If the object is an already-removed consensus object, mark it as available if the
-                                // version for that object is in the marker table.
-                                results[*idx] = Some(());
-                            }
-                        }
-                    });
-                keys_without_version.iter().for_each(|(idx, key)| {
-                    // unwrap is safe since this only errors when the object is not a package,
-                    // which is impossible if we have a certificate for execution.
-                    if self.get_package_object(&key.id().id()).unwrap().is_some() {
-                        results[*idx] = Some(());
-                    }
-                });
-                results
+                    .map(|available| if available { Some(()) } else { None })
+                    .collect::<Vec<_>>()
             })
+            .map(|_| ())
             .boxed()
     }
 }
@@ -2173,6 +2130,11 @@ impl ExecutionCacheWrite for WritebackCache {
 
     fn write_transaction_outputs(&self, epoch_id: EpochId, tx_outputs: Arc<TransactionOutputs>) {
         WritebackCache::write_transaction_outputs(self, epoch_id, tx_outputs);
+    }
+
+    #[cfg(test)]
+    fn write_object_entry_for_test(&self, object: Object) {
+        self.write_object_entry(&object.id(), object.version(), object.into());
     }
 }
 
