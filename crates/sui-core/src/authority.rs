@@ -1159,23 +1159,28 @@ impl AuthorityState {
             .inc();
     }
 
-    /// Executes a certificate for its effects.
+    /// Wait for a certificate to be executed.
+    /// For consensus transactions, it needs to be sequenced by the consensus.
+    /// For owned object transactions, this function will enqueue the transaction for execution.
+    // TODO: The next 3 functions are very similar. We should refactor them.
     #[instrument(level = "trace", skip_all)]
-    pub async fn execute_certificate(
+    pub async fn wait_for_certificate_execution(
         &self,
         certificate: &VerifiedCertificate,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<TransactionEffects> {
-        self.execute_transaction(
+        self.wait_for_transaction_execution(
             &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
             epoch_store,
         )
         .await
     }
 
-    /// Executes a certificate for its effects.
+    /// Wait for a transaction to be executed.
+    /// For consensus transactions, it needs to be sequenced by the consensus.
+    /// For owned object transactions, this function will enqueue the transaction for execution.
     #[instrument(level = "trace", skip_all)]
-    pub async fn execute_transaction(
+    pub async fn wait_for_transaction_execution(
         &self,
         transaction: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -1300,7 +1305,7 @@ impl AuthorityState {
             )
             .tap_err(|e| info!("process_certificate failed: {e}"))
             .tap_ok(
-            |(fx, _, _)| debug!(?tx_digest, fx_digest=?fx.digest(), "process_certificate succeeded"),
+            |(fx, _)| debug!(?tx_digest, fx_digest=?fx.digest(), "process_certificate succeeded"),
         )?;
 
         Ok((effects, execution_error_opt))
@@ -1411,7 +1416,7 @@ impl AuthorityState {
         let _scope = monitored_scope("Execution::process_certificate");
 
         fail_point_if!("correlated-crash-process-certificate", || {
-            if sui_simulator::random::deterministic_probability_once(&digest, 0.01) {
+            if sui_simulator::random::deterministic_probability_once(&tx_digest, 0.01) {
                 sui_simulator::task::kill_current_node(None);
             }
         });
@@ -1451,7 +1456,7 @@ impl AuthorityState {
             epoch_store,
         ) {
             Err(e) => {
-                info!(name = ?self.name, ?tx_digest, "Error preparing transaction: {e}");
+                info!(name = ?self.name, ?tx_digest, "Error executing transaction: {e}");
                 tx_guard.release();
                 return Err(e);
             }
