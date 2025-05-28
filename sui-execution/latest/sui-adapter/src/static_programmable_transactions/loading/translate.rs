@@ -42,7 +42,9 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
             let arg = match obj.owner {
                 Owner::AddressOwner(_) => L::ObjectArg::OwnedObject(oref),
                 Owner::Immutable => L::ObjectArg::ImmObject(oref),
-                Owner::ObjectOwner(_) | Owner::Shared { .. } | Owner::ConsensusV2 { .. } => {
+                Owner::ObjectOwner(_)
+                | Owner::Shared { .. }
+                | Owner::ConsensusAddressOwner { .. } => {
                     invariant_violation!("Unepected owner for ImmOrOwnedObject: {:?}", obj.owner);
                 }
             };

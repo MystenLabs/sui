@@ -4,7 +4,7 @@
 use super::LinkageView;
 use crate::{
     execution_value::ExecutionState,
-    programmable_transactions::context::SuiDataStore,
+    programmable_transactions::data_store::SuiDataStore,
     static_programmable_transactions::loading::ast::{self as L, LoadedFunction, Type},
 };
 use move_binary_format::{

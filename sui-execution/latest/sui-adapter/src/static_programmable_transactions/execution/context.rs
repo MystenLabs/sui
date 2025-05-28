@@ -10,6 +10,7 @@ use std::{
 
 use crate::{
     adapter::new_native_extensions,
+    execution_mode::ExecutionMode,
     gas_charger::GasCharger,
     gas_meter::SuiGasMeter,
     programmable_transactions::context::finish,
@@ -186,12 +187,12 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         })
     }
 
-    pub fn finish(mut self) -> Result<ExecutionResults, ExecutionError> {
+    pub fn finish<Mode: ExecutionMode>(mut self) -> Result<ExecutionResults, ExecutionError> {
         let gas = std::mem::take(&mut self.gas);
         let inputs = std::mem::replace(&mut self.inputs, Inputs::new([])?);
         let mut loaded_runtime_objects = BTreeMap::new();
         let mut by_value_shared_objects = BTreeSet::new();
-        let mut authenticator_objects = BTreeMap::new();
+        let mut consensus_owner_objects = BTreeMap::new();
         let gas_object = gas
             .map(|g| g.into_objects())
             .transpose()?
@@ -222,8 +223,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 self.transfer_object(owner, type_, CtxValue(object))?;
             } else if owner.is_shared() {
                 by_value_shared_objects.insert(id);
-            } else if owner.authenticator().is_some() {
-                authenticator_objects.insert(id, owner.clone());
+            } else if matches!(owner, Owner::ConsensusAddressOwner { .. }) {
+                consensus_owner_objects.insert(id, owner.clone());
             }
         }
 
@@ -280,7 +281,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             };
             // safe because has_public_transfer has been determined by the abilities
             let move_object = unsafe {
-                create_written_object(
+                create_written_object::<Mode>(
                     env,
                     &loaded_runtime_objects,
                     id,
@@ -339,7 +340,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             gas_charger,
             tx_context,
             &by_value_shared_objects,
-            &authenticator_objects,
+            &consensus_owner_objects,
             loaded_runtime_objects,
             written_objects,
             created_object_ids,
@@ -824,7 +825,7 @@ fn refund_max_gas_budget<OType>(
 ///
 /// This function assumes proper generation of has_public_transfer, either from the abilities of
 /// the StructTag, or from the runtime correctly propagating from the inputs
-unsafe fn create_written_object(
+unsafe fn create_written_object<Mode: ExecutionMode>(
     env: &Env,
     objects_modified_at: &BTreeMap<ObjectID, LoadedRuntimeObject>,
     id: ObjectID,
@@ -855,6 +856,7 @@ unsafe fn create_written_object(
             old_obj_ver.unwrap_or_default(),
             contents,
             &env.protocol_config,
+            Mode::packages_are_predefined(),
         )
     }
 }

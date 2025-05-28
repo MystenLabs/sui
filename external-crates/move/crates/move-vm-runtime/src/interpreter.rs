@@ -115,6 +115,9 @@ impl Interpreter {
             runtime_limits_config: loader.vm_config().runtime_limits_config.clone(),
         };
 
+        let link_context = data_store
+            .link_context()
+            .map_err(|e| e.finish(Location::Undefined))?;
         open_initial_frame!(
             tracer,
             &args,
@@ -122,7 +125,7 @@ impl Interpreter {
             &function,
             loader,
             gas_meter,
-            data_store.link_context()
+            link_context
         );
 
         if function.is_native() {
@@ -132,7 +135,9 @@ impl Interpreter {
                     .push(arg)
                     .map_err(|e| e.finish(Location::Undefined))?;
             }
-            let link_context = data_store.link_context();
+            let link_context = data_store
+                .link_context()
+                .map_err(|e| e.finish(Location::Undefined))?;
             let resolver = function.get_resolver(link_context, loader);
 
             let return_values = interpreter
@@ -188,7 +193,9 @@ impl Interpreter {
                 .map_err(|e| self.set_location(e))?;
         }
 
-        let link_context = data_store.link_context();
+        let link_context = data_store
+            .link_context()
+            .map_err(|e| e.finish(Location::Undefined))?;
         let mut current_frame = self
             .make_new_frame(function, ty_args, locals)
             .map_err(|err| self.set_location(err))?;
