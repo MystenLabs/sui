@@ -9,8 +9,8 @@ mod checked {
         adapter::substitute_package_id,
         execution_mode::ExecutionMode,
         execution_value::{
-            CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
-            ensure_serialized_size,
+            ensure_serialized_size, CommandKind, ExecutionState, ObjectContents, ObjectValue,
+            RawValueType, Value,
         },
         gas_charger::GasCharger,
         programmable_transactions::{context::*, data_store::SuiDataStore},
@@ -18,12 +18,11 @@ mod checked {
     };
     use move_binary_format::file_format::AbilitySet;
     use move_binary_format::{
-        CompiledModule,
         compatibility::{Compatibility, InclusionCheck},
         errors::{Location, PartialVMResult, VMResult},
         file_format::{CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
         file_format_common::VERSION_6,
-        normalized,
+        normalized, CompiledModule,
     };
     use move_core_types::language_storage::StructTag;
     use move_core_types::{
@@ -38,7 +37,8 @@ mod checked {
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
     };
     use move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
-    use serde::{Deserialize, de::DeserializeSeed};
+    use mysten_metrics::monitored_scope;
+    use serde::{de::DeserializeSeed, Deserialize};
     use std::{
         cell::{OnceCell, RefCell},
         collections::{BTreeMap, BTreeSet},
@@ -50,31 +50,31 @@ mod checked {
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
-        SUI_FRAMEWORK_ADDRESS,
         base_types::{
-            MoveLegacyTxContext, MoveObjectType, ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION,
-            RESOLVED_UTF8_STR, SuiAddress, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
-            TxContext, TxContextKind,
+            MoveLegacyTxContext, MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind,
+            RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME,
+            TX_CONTEXT_STRUCT_NAME,
         },
         coin::Coin,
-        error::{ExecutionError, ExecutionErrorKind, command_argument_error},
+        error::{command_argument_error, ExecutionError, ExecutionErrorKind},
         execution::{ExecutionTiming, ResultWithTimings},
         execution_config_utils::to_binary_config,
         execution_status::{CommandArgumentError, PackageUpgradeError},
         id::RESOLVED_SUI_ID,
         metrics::LimitsMetrics,
         move_package::{
-            MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt, UpgradeTicket,
-            normalize_deserialized_modules,
+            normalize_deserialized_modules, MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt,
+            UpgradeTicket,
         },
-        storage::{PackageObject, get_package_objects},
+        storage::{get_package_objects, PackageObject},
         transaction::{Command, ProgrammableMoveCall, ProgrammableTransaction},
         transfer::RESOLVED_RECEIVING_STRUCT,
         type_input::{StructInput, TypeInput},
+        SUI_FRAMEWORK_ADDRESS,
     };
     use sui_verifier::{
-        INIT_FN_NAME,
         private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
+        INIT_FN_NAME,
     };
     use tracing::instrument;
 
@@ -118,6 +118,7 @@ mod checked {
         pt: ProgrammableTransaction,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Mode::ExecutionResults, ExecutionError> {
+        let _scope = monitored_scope("Execution::execute_inner");
         let ProgrammableTransaction { inputs, commands } = pt;
         let mut context = ExecutionContext::new(
             protocol_config,

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use mysten_metrics::monitored_scope;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use sui_types::base_types::{FullObjectID, ObjectRef};
@@ -34,6 +35,7 @@ impl TransactionOutputs {
         effects: TransactionEffects,
         inner_temporary_store: InnerTemporaryStore,
     ) -> TransactionOutputs {
+        let _scope = monitored_scope("Execution::build_transaction_outputs");
         let output_keys = inner_temporary_store.get_output_keys(&effects);
 
         let InnerTemporaryStore {

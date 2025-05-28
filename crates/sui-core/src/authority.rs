@@ -1609,6 +1609,7 @@ impl AuthorityState {
         inner_temporary_store: &InnerTemporaryStore,
         effects: &TransactionEffects,
     ) {
+        let _scope = monitored_scope("Execution::update_metrics");
         // count signature by scheme, for zklogin and multisig
         if certificate.has_zklogin_sig() {
             self.metrics.zklogin_sig_count.inc();
@@ -1671,6 +1672,7 @@ impl AuthorityState {
         let _metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
         let prepare_certificate_start_time = tokio::time::Instant::now();
 
+        let check_scope = monitored_scope("Execution::prepare_certificate_check_inputs");
         // TODO: We need to move this to a more appropriate place to avoid redundant checks.
         let tx_data = certificate.data().transaction_data();
         tx_data.validity_check(epoch_store.protocol_config())?;
@@ -1691,6 +1693,9 @@ impl AuthorityState {
         let protocol_config = epoch_store.protocol_config();
         let transaction_data = &certificate.data().intent_message().value;
         let (kind, signer, gas_data) = transaction_data.execution_parts();
+        if let Some(check_scope) = check_scope {
+            drop(check_scope);
+        }
 
         #[allow(unused_mut)]
         let (inner_temp_store, _, mut effects, timings, execution_error_opt) =

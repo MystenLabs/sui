@@ -20,9 +20,9 @@ mod checked {
     };
     use indexmap::IndexSet;
     use move_binary_format::{
-        CompiledModule,
         errors::{Location, PartialVMError, VMError, VMResult},
         file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
+        CompiledModule,
     };
     use move_core_types::{
         account_address::AccountAddress,
@@ -38,6 +38,7 @@ mod checked {
     };
     use move_vm_types::loaded_data::runtime_types::Type;
     use mysten_common::debug_fatal;
+    use mysten_metrics::monitored_scope;
     use std::{
         borrow::Borrow,
         cell::RefCell,
@@ -46,14 +47,14 @@ mod checked {
         sync::Arc,
     };
     use sui_move_natives::object_runtime::{
-        self, LoadedRuntimeObject, ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
+        self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
         coin::Coin,
-        error::{ExecutionError, ExecutionErrorKind, command_argument_error},
+        error::{command_argument_error, ExecutionError, ExecutionErrorKind},
         event::Event,
         execution::{ExecutionResults, ExecutionResultsV2},
         execution_status::CommandArgumentError,
@@ -145,6 +146,7 @@ mod checked {
         where
             'a: 'state,
         {
+            let _scope = monitored_scope("Execution::new_execution_context");
             let mut linkage_view = LinkageView::new(Box::new(state_view.as_sui_resolver()));
             let mut input_object_map = BTreeMap::new();
             let inputs = inputs
@@ -1328,6 +1330,7 @@ mod checked {
         new_packages: &[MovePackage],
         struct_tag: &StructTag,
     ) -> VMResult<Type> {
+        let _scope = monitored_scope("Execution::load_type_from_struct");
         fn verification_error<T>(code: StatusCode) -> VMResult<T> {
             Err(PartialVMError::new(code).finish(Location::Undefined))
         }
