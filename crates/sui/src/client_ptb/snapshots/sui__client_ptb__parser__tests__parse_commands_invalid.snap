@@ -408,19 +408,6 @@ expression: parsed
     ],
     [
         PTBError {
-            message: "Unexpected '@'",
-            span: Span {
-                start: 16,
-                end: 17,
-            },
-            help: Some(
-                "Expected to find a command here",
-            ),
-            severity: Error,
-        },
-    ],
-    [
-        PTBError {
             message: "Expected an address",
             span: Span {
                 start: 11,
