@@ -152,6 +152,7 @@ impl From<Owner> for crate::object::Owner {
                 initial_shared_version: initial_shared_version.into(),
             },
             Owner::Immutable => crate::object::Owner::Immutable,
+            Owner::ConsensusAddress { .. } => todo!(),
         }
     }
 }
@@ -483,6 +484,132 @@ impl From<TransactionExpiration> for crate::transaction::TransactionExpiration {
         match value {
             TransactionExpiration::None => Self::None,
             TransactionExpiration::Epoch(epoch) => Self::Epoch(epoch),
+        }
+    }
+}
+
+impl From<crate::execution_status::TypeArgumentError> for TypeArgumentError {
+    fn from(value: crate::execution_status::TypeArgumentError) -> Self {
+        match value {
+            crate::execution_status::TypeArgumentError::TypeNotFound => Self::TypeNotFound,
+            crate::execution_status::TypeArgumentError::ConstraintNotSatisfied => {
+                Self::ConstraintNotSatisfied
+            }
+        }
+    }
+}
+
+impl From<crate::execution_status::PackageUpgradeError> for PackageUpgradeError {
+    fn from(value: crate::execution_status::PackageUpgradeError) -> Self {
+        match value {
+            crate::execution_status::PackageUpgradeError::UnableToFetchPackage { package_id } => {
+                Self::UnableToFetchPackage {
+                    package_id: package_id.into(),
+                }
+            }
+            crate::execution_status::PackageUpgradeError::NotAPackage { object_id } => {
+                Self::NotAPackage {
+                    object_id: object_id.into(),
+                }
+            }
+            crate::execution_status::PackageUpgradeError::IncompatibleUpgrade => {
+                Self::IncompatibleUpgrade
+            }
+            crate::execution_status::PackageUpgradeError::DigestDoesNotMatch { digest } => {
+                Self::DigestDoesNotMatch {
+                    digest: Digest::from_bytes(digest).unwrap(),
+                }
+            }
+            crate::execution_status::PackageUpgradeError::UnknownUpgradePolicy { policy } => {
+                Self::UnknownUpgradePolicy { policy }
+            }
+            crate::execution_status::PackageUpgradeError::PackageIDDoesNotMatch {
+                package_id,
+                ticket_id,
+            } => Self::PackageIdDoesNotMatch {
+                package_id: package_id.into(),
+                ticket_id: ticket_id.into(),
+            },
+        }
+    }
+}
+
+impl From<crate::execution_status::CommandArgumentError> for CommandArgumentError {
+    fn from(value: crate::execution_status::CommandArgumentError) -> Self {
+        match value {
+            crate::execution_status::CommandArgumentError::TypeMismatch => Self::TypeMismatch,
+            crate::execution_status::CommandArgumentError::InvalidBCSBytes => Self::InvalidBcsBytes,
+            crate::execution_status::CommandArgumentError::InvalidUsageOfPureArg => Self::InvalidUsageOfPureArgument,
+            crate::execution_status::CommandArgumentError::InvalidArgumentToPrivateEntryFunction => Self::InvalidArgumentToPrivateEntryFunction,
+            crate::execution_status::CommandArgumentError::IndexOutOfBounds { idx } => Self::IndexOutOfBounds { index: idx },
+            crate::execution_status::CommandArgumentError::SecondaryIndexOutOfBounds { result_idx, secondary_idx } => Self::SecondaryIndexOutOfBounds { result: result_idx, subresult: secondary_idx },
+            crate::execution_status::CommandArgumentError::InvalidResultArity { result_idx } => Self::InvalidResultArity { result: result_idx },
+            crate::execution_status::CommandArgumentError::InvalidGasCoinUsage => Self::InvalidGasCoinUsage,
+            crate::execution_status::CommandArgumentError::InvalidValueUsage => Self::InvalidValueUsage,
+            crate::execution_status::CommandArgumentError::InvalidObjectByValue => Self::InvalidObjectByValue,
+            crate::execution_status::CommandArgumentError::InvalidObjectByMutRef => Self::InvalidObjectByMutRef,
+            crate::execution_status::CommandArgumentError::SharedObjectOperationNotAllowed => Self::SharedObjectOperationNotAllowed,
+            crate::execution_status::CommandArgumentError::InvalidArgumentArity => Self::InvalidArgumentArity,
+        }
+    }
+}
+
+impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
+    fn from(value: crate::execution_status::ExecutionFailureStatus) -> Self {
+        match value {
+            crate::execution_status::ExecutionFailureStatus::InsufficientGas => Self::InsufficientGas,
+            crate::execution_status::ExecutionFailureStatus::InvalidGasObject => Self::InvalidGasObject,
+            crate::execution_status::ExecutionFailureStatus::InvariantViolation => Self::InvariantViolation,
+            crate::execution_status::ExecutionFailureStatus::FeatureNotYetSupported => Self::FeatureNotYetSupported,
+            crate::execution_status::ExecutionFailureStatus::MoveObjectTooBig { object_size, max_object_size } => Self::ObjectTooBig { object_size, max_object_size },
+            crate::execution_status::ExecutionFailureStatus::MovePackageTooBig { object_size, max_object_size } => Self::PackageTooBig { object_size, max_object_size },
+            crate::execution_status::ExecutionFailureStatus::CircularObjectOwnership { object } => Self::CircularObjectOwnership { object: object.into() },
+            crate::execution_status::ExecutionFailureStatus::InsufficientCoinBalance => Self::InsufficientCoinBalance,
+            crate::execution_status::ExecutionFailureStatus::CoinBalanceOverflow => Self::CoinBalanceOverflow,
+            crate::execution_status::ExecutionFailureStatus::PublishErrorNonZeroAddress => Self::PublishErrorNonZeroAddress,
+            crate::execution_status::ExecutionFailureStatus::SuiMoveVerificationError => Self::SuiMoveVerificationError,
+            crate::execution_status::ExecutionFailureStatus::MovePrimitiveRuntimeError(move_location_opt) => Self::MovePrimitiveRuntimeError { location: move_location_opt.0.map(Into::into) },
+            crate::execution_status::ExecutionFailureStatus::MoveAbort(move_location, code) => Self::MoveAbort { location: move_location.into(), code },
+            crate::execution_status::ExecutionFailureStatus::VMVerificationOrDeserializationError => Self::VmVerificationOrDeserializationError,
+            crate::execution_status::ExecutionFailureStatus::VMInvariantViolation => Self::VmInvariantViolation,
+            crate::execution_status::ExecutionFailureStatus::FunctionNotFound => Self::FunctionNotFound,
+            crate::execution_status::ExecutionFailureStatus::ArityMismatch => Self::ArityMismatch,
+            crate::execution_status::ExecutionFailureStatus::TypeArityMismatch => Self::TypeArityMismatch,
+            crate::execution_status::ExecutionFailureStatus::NonEntryFunctionInvoked => Self::NonEntryFunctionInvoked,
+            crate::execution_status::ExecutionFailureStatus::CommandArgumentError { arg_idx, kind } => Self::CommandArgumentError { argument: arg_idx, kind: kind.into() },
+            crate::execution_status::ExecutionFailureStatus::TypeArgumentError { argument_idx, kind } => Self::TypeArgumentError { type_argument: argument_idx, kind: kind.into() },
+            crate::execution_status::ExecutionFailureStatus::UnusedValueWithoutDrop { result_idx, secondary_idx } => Self::UnusedValueWithoutDrop { result: result_idx, subresult: secondary_idx },
+            crate::execution_status::ExecutionFailureStatus::InvalidPublicFunctionReturnType { idx } => Self::InvalidPublicFunctionReturnType { index: idx },
+            crate::execution_status::ExecutionFailureStatus::InvalidTransferObject => Self::InvalidTransferObject,
+            crate::execution_status::ExecutionFailureStatus::EffectsTooLarge { current_size, max_size } => Self::EffectsTooLarge { current_size, max_size },
+            crate::execution_status::ExecutionFailureStatus::PublishUpgradeMissingDependency => Self::PublishUpgradeMissingDependency,
+            crate::execution_status::ExecutionFailureStatus::PublishUpgradeDependencyDowngrade => Self::PublishUpgradeDependencyDowngrade,
+            crate::execution_status::ExecutionFailureStatus::PackageUpgradeError { upgrade_error } => Self::PackageUpgradeError { kind: upgrade_error.into() },
+            crate::execution_status::ExecutionFailureStatus::WrittenObjectsTooLarge { current_size, max_size } => Self::WrittenObjectsTooLarge { object_size: current_size, max_object_size:max_size },
+            crate::execution_status::ExecutionFailureStatus::CertificateDenied => Self::CertificateDenied,
+            crate::execution_status::ExecutionFailureStatus::SuiMoveVerificationTimedout => Self::SuiMoveVerificationTimedout,
+            crate::execution_status::ExecutionFailureStatus::SharedObjectOperationNotAllowed => Self::SharedObjectOperationNotAllowed,
+            crate::execution_status::ExecutionFailureStatus::InputObjectDeleted => Self::InputObjectDeleted,
+            crate::execution_status::ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion { congested_objects } => Self::ExecutionCanceledDueToSharedObjectCongestion { congested_objects: congested_objects.0.into_iter().map(Into::into).collect() },
+            crate::execution_status::ExecutionFailureStatus::AddressDeniedForCoin { address, coin_type } => Self::AddressDeniedForCoin { address: address.into(), coin_type },
+            crate::execution_status::ExecutionFailureStatus::CoinTypeGlobalPause { coin_type } => Self::CoinTypeGlobalPause { coin_type },
+            crate::execution_status::ExecutionFailureStatus::ExecutionCancelledDueToRandomnessUnavailable => Self::ExecutionCanceledDueToRandomnessUnavailable,
+            crate::execution_status::ExecutionFailureStatus::MoveVectorElemTooBig { value_size, max_scaled_size } => Self::MoveVectorElemTooBig { value_size, max_scaled_size },
+            crate::execution_status::ExecutionFailureStatus::MoveRawValueTooBig { value_size, max_scaled_size } => Self::MoveRawValueTooBig { value_size, max_scaled_size },
+        }
+    }
+}
+
+impl From<crate::execution_status::MoveLocation> for MoveLocation {
+    fn from(value: crate::execution_status::MoveLocation) -> Self {
+        Self {
+            package: ObjectId::new(value.module.address().into_bytes()),
+            module: Identifier::new(value.module.name().as_str()).unwrap(),
+            function: value.function,
+            instruction: value.instruction,
+            function_name: value
+                .function_name
+                .map(|name| Identifier::new(name).unwrap()),
         }
     }
 }
