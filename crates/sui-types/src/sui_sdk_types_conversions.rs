@@ -152,6 +152,7 @@ impl From<Owner> for crate::object::Owner {
                 initial_shared_version: initial_shared_version.into(),
             },
             Owner::Immutable => crate::object::Owner::Immutable,
+            Owner::ConsensusAddress { .. } => todo!(),
         }
     }
 }
