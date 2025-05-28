@@ -44,7 +44,7 @@ struct ProgramParsingState {
     tx_digest_set: bool,
     dry_run_set: bool,
     dev_inspect_set: bool,
-    gas_object_id: Option<Spanned<ObjectID>>,
+    gas_object_ids: Option<Vec<Spanned<ObjectID>>>,
     gas_budget: Option<Spanned<u64>>,
     gas_price: Option<Spanned<u64>>,
     gas_sponsor: Option<Spanned<NumericalAddress>>,
@@ -77,7 +77,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 tx_digest_set: false,
                 dry_run_set: false,
                 dev_inspect_set: false,
-                gas_object_id: None,
+                gas_object_ids: None,
                 gas_budget: None,
                 gas_price: None,
                 gas_sponsor: None,
@@ -131,8 +131,8 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 L(T::Command, A::PREVIEW) => flag!(preview_set),
                 L(T::Command, A::WARN_SHADOWS) => flag!(warn_shadows_set),
                 L(T::Command, A::GAS_COIN) => {
-                    let specifier = try_!(self.parse_gas_specifier());
-                    self.state.gas_object_id = Some(specifier);
+                    let coins = try_!(self.parse_gas_coins());
+                    self.state.gas_object_ids = Some(coins);
                 }
                 L(T::Command, A::GAS_SPONSOR) => {
                     let sponsor = try_!(self.parse_address_literal());
@@ -245,7 +245,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                     summary_set: self.state.summary_set,
                     serialize_unsigned_set: self.state.serialize_unsigned_set,
                     serialize_signed_set: self.state.serialize_signed_set,
-                    gas_object_id: self.state.gas_object_id,
+                    gas_object_ids: self.state.gas_object_ids,
                     json_set: self.state.json_set,
                     tx_digest_set: self.state.tx_digest_set,
                     dry_run_set: self.state.dry_run_set,
@@ -412,12 +412,16 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         })
     }
 
-    /// Parse a gas specifier.
-    /// The expected format is: `--gas-coin <address>`
-    fn parse_gas_specifier(&mut self) -> PTBResult<Spanned<ObjectID>> {
-        Ok(self
-            .parse_address_literal()?
-            .map(|a| ObjectID::from(a.into_inner())))
+    /// Parse the gas payment
+    /// The expected format is: `--gas-coin <address> [<address> ...]`
+    fn parse_gas_coins(&mut self) -> PTBResult<Vec<Spanned<ObjectID>>> {
+        // Need at least one gas coin.
+        let mut coins = vec![self.parse_object_id_literal()?];
+        while matches!(self.peek(), sp!(_, Lexeme(Token::At, _))) {
+            coins.push(self.parse_object_id_literal()?)
+        }
+
+        Ok(coins)
     }
 }
 
@@ -841,6 +845,11 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         })
     }
 
+    /// Parse a numeric address literal (must be prefixed by an `@` symbol) as an ObjectID.
+    fn parse_object_id_literal(&mut self) -> PTBResult<Spanned<ObjectID>> {
+        Ok(self.parse_address_literal()?.map(|a| a.into_inner().into()))
+    }
+
     // Parse an array of arguments. Each element of the array is separated by a comma.
     fn parse_array(&mut self) -> PTBResult<Spanned<Vec<Spanned<Argument>>>> {
         use Lexeme as L;
@@ -1089,6 +1098,7 @@ mod tests {
             "--assign a some(1)",
             // Gas coin
             "--gas-coin @0x1",
+            "--gas-coin @0x1 @0x2",
             // Gas price
             "--gas-price 1000",
             // Gas sponsor
@@ -1158,7 +1168,6 @@ mod tests {
             // Gas coin
             "--gas-coin nope",
             "--gas-coin",
-            "--gas-coin @0x1 @0x2",
             "--gas-coin 1",
             // Gas price
             "--gas-price nuhuh",

@@ -183,10 +183,10 @@ impl PTB {
             Ok(x) => x,
         };
 
-        // TODO (amnn): support multiple gas objects
         let gas: Vec<_> = program_metadata
-            .gas_object_id
+            .gas_object_ids
             .into_iter()
+            .flatten()
             .map(|x| x.value)
             .collect();
 

@@ -40,8 +40,15 @@ impl Display for PTBPreview<'_> {
                     .as_str(),
             ]);
         }
-        if let Some(gas_coin_id) = self.program_metadata.gas_object_id {
-            builder.push_record([GAS_COIN, gas_coin_id.value.to_string().as_str()]);
+        if let Some(gas_object_ids) = &self.program_metadata.gas_object_ids {
+            let mut prefix = "";
+            let mut coins = String::new();
+            for coin in gas_object_ids {
+                coins.push_str(prefix);
+                coins.push_str(&coin.value.to_canonical_string(/* with_prefix */ true));
+                prefix = "\n";
+            }
+            builder.push_record([GAS_COIN, &coins]);
         }
         if self.program_metadata.json_set {
             builder.push_record([JSON, "true"]);

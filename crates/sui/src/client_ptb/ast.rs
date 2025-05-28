@@ -115,7 +115,7 @@ pub struct ProgramMetadata {
     pub summary_set: bool,
     pub serialize_unsigned_set: bool,
     pub serialize_signed_set: bool,
-    pub gas_object_id: Option<Spanned<ObjectID>>,
+    pub gas_object_ids: Option<Vec<Spanned<ObjectID>>>,
     pub json_set: bool,
     pub tx_digest_set: bool,
     pub dry_run_set: bool,
