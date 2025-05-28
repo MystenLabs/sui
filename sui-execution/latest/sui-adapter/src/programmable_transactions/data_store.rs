@@ -49,7 +49,7 @@ impl DataStore for SuiDataStore<'_, '_> {
     fn link_context(&self) -> PartialVMResult<AccountAddress> {
         self.linkage_view.link_context().map_err(|e| {
             PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message(format!("Unable to get link context: {e:?}"))
+                .with_message(e.to_string())
         })
     }
 

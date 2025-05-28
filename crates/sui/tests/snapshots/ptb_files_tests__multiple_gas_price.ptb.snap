@@ -1,0 +1,21 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === ERRORS AFTER PARSING INPUT COMMANDS === 
+  × Error when processing PTB
+   ╭─[1:1]
+ 1 │ --gas-price 1000
+   · ────────┬───────
+   ·         ╰── Multiple gas prices found. Gas price first set here.
+ 2 │ --gas-price 2000 
+   ╰────
+
+  × Error when processing PTB
+   ╭─[2:1]
+ 1 │ --gas-price 1000
+ 2 │ --gas-price 2000 
+   · ────────┬───────
+   ·         ╰── Price set again here.
+   ╰────
+  help: PTBs must have at most one gas price set.

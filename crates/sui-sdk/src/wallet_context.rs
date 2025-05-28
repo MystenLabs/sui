@@ -3,7 +3,8 @@
 
 use crate::sui_client_config::{SuiClientConfig, SuiEnv};
 use crate::SuiClient;
-use anyhow::anyhow;
+use anyhow::{anyhow, ensure};
+use futures::future;
 use shared_crypto::intent::Intent;
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -197,6 +198,27 @@ impl WalletContext {
         } else {
             Ok(None)
         }
+    }
+
+    /// Infer the sender of a transaction based on the gas objects provided. If no gas objects are
+    /// provided, assume the active address is the sender.
+    pub async fn infer_sender(&mut self, gas: &[ObjectID]) -> Result<SuiAddress, anyhow::Error> {
+        if gas.is_empty() {
+            return self.active_address();
+        }
+
+        // Find the owners of all supplied object IDs
+        let owners = future::try_join_all(gas.iter().map(|id| self.get_object_owner(id))).await?;
+
+        // SAFETY `gas` is non-empty.
+        let owner = owners.first().copied().unwrap();
+
+        ensure!(
+            owners.iter().all(|o| o == &owner),
+            "Cannot infer sender, not all gas objects have the same owner."
+        );
+
+        Ok(owner)
     }
 
     /// Find a gas object which fits the budget

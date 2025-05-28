@@ -19,6 +19,7 @@ pub use tidehunter::{
 };
 use typed_store_error::TypedStoreError;
 
+#[derive(Clone)]
 pub struct ThConfig {
     key_size: usize,
     mutexes: usize,
