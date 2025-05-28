@@ -20,7 +20,7 @@ use prometheus::{
     TextEncoder,
 };
 use tap::TapFallible;
-use tracing::{warn, Span};
+use tracing::{info,warn, Span};
 
 pub use scopeguard;
 use uuid::Uuid;
@@ -600,6 +600,7 @@ pub const METRICS_ROUTE: &str = "/metrics";
 // and endpoint that prometheus agent can use to poll for the metrics.
 // A RegistryService is returned that can be used to get access in prometheus Registries.
 pub fn start_prometheus_server(addr: SocketAddr) -> RegistryService {
+    info!("Inside start_prometheus_server, starting prometheus server at {}", addr);
     let registry = Registry::new();
 
     let registry_service = RegistryService::new(registry);
@@ -611,12 +612,16 @@ pub fn start_prometheus_server(addr: SocketAddr) -> RegistryService {
         return registry_service;
     }
 
+    info!("Creating metrics router at {}", METRICS_ROUTE);
     let app = Router::new()
         .route(METRICS_ROUTE, get(metrics))
         .layer(Extension(registry_service.clone()));
 
+    info!("Spawning tokio task to bind to {}", addr);
     tokio::spawn(async move {
+        info!("Binding to {}", addr);
         let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+        info!("Bound to {}", addr);
         axum::serve(listener, app.into_make_service())
             .await
             .unwrap();

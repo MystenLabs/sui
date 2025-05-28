@@ -26,26 +26,29 @@ struct Args {
 
 #[tokio::main]
 async fn main() {
+    info!("Starting sui-indexer-alt-jsonrpc-proxy");
     let args = Args::parse();
+
+    let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new().with_env().init();
+    info!("Initialized telemetry");
 
     let (config, client): (ProxyConfig, Client) =
         load(&args.config).await.expect("Failed to load config");
+    info!("Loaded config: {:?}", config);
 
     let registry_service = start_prometheus_server(config.metrics_address);
+    info!("Started prometheus server at {}", config.metrics_address);
+
     let prometheus_registry = registry_service.default_registry();
     mysten_metrics::init_metrics(&prometheus_registry);
-
-    let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
-        .with_env()
-        .with_prom_registry(&prometheus_registry)
-        .init();
-
-    info!("Metrics server started at {}", config.metrics_address);
+    info!("Initialized metrics");
 
     let app_metrics = AppMetrics::new(&prometheus_registry);
+    info!("Created app metrics");
 
     // Create a single shared cursor state
     let cursor_state = Arc::new(PaginationCursorState::new(config.cursor_cache_size));
+    info!("Created cursor state");
 
     let app_state = AppState::new(
         client,
@@ -54,6 +57,7 @@ async fn main() {
         cursor_state,
         app_metrics,
     );
+    info!("Created app state");
 
     let app = Router::new()
         .fallback(any(proxy_handler))
