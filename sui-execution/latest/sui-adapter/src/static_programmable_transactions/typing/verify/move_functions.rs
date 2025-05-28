@@ -194,7 +194,7 @@ fn move_call<Mode: ExecutionMode>(
         .collect::<Vec<_>>();
     if is_entry {
         for (idx, &arg_is_dirty) in arg_dirties.iter().enumerate() {
-            if arg_is_dirty {
+            if arg_is_dirty && !Mode::allow_arbitrary_values() {
                 return Err(command_argument_error(
                     CommandArgumentError::InvalidArgumentToPrivateEntryFunction,
                     idx,
