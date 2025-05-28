@@ -22,11 +22,22 @@ pub mod loading;
 pub mod spanned;
 pub mod typing;
 
-pub fn execute<'pc, 'vm, 'state, 'linkage, Mode: ExecutionMode>(
-    protocol_config: &'pc ProtocolConfig,
-    vm: &'vm MoveVM,
+macro_rules! better_todo {
+    ($($arg:tt)+) => {
+        $crate::static_programmable_transactions::better_todo_(format!("{}", std::format_args!($($arg)+)))
+    };
+}
+pub(crate) use better_todo;
+
+pub fn better_todo_<T>(s: String) -> T {
+    todo!("{}", s)
+}
+
+pub fn execute<'state, Mode: ExecutionMode>(
+    protocol_config: &ProtocolConfig,
+    vm: &MoveVM,
     state_view: &'state mut dyn ExecutionState,
-    linkage_view: &'linkage LinkageView<'state>,
+    linkage_view: &LinkageView<'state>,
     metrics: Arc<LimitsMetrics>,
     tx_context: Rc<RefCell<TxContext>>,
     gas_charger: &mut GasCharger,

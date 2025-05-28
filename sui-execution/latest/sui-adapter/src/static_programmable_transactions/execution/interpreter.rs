@@ -181,11 +181,10 @@ fn execute_command<Mode: ExecutionMode>(
                 )
             );
             coin_ref.coin_ref_subtract_balance(total)?;
-            let coins = amount_values
+            amount_values
                 .into_iter()
                 .map(|a| context.new_coin(a))
-                .collect::<Result<_, _>>()?;
-            coins
+                .collect::<Result<_, _>>()?
         }
         T::Command_::MergeCoins(_, target, coins) => {
             // TODO should we just call a Move function?

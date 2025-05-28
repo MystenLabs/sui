@@ -201,7 +201,7 @@ impl TryFrom<Type> for TypeTag {
                 TypeTag::Vector(Box::new(element_type.clone().try_into()?))
             }
             Type::Datatype(dt) => {
-                let dt: &Datatype = &*dt;
+                let dt: &Datatype = &dt;
                 TypeTag::Struct(Box::new(dt.try_into()?))
             }
             Type::Reference(_, _) => return Err("unexpected reference type"),

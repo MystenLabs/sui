@@ -172,7 +172,7 @@ impl Locals {
     }
 }
 
-impl<'a> Local<'a> {
+impl Local<'_> {
     /// Does the local contain a value?
     pub fn is_invalid(&self) -> Result<bool, ExecutionError> {
         self.0

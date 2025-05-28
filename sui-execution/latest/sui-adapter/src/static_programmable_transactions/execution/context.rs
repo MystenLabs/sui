@@ -16,6 +16,7 @@ use crate::{
     programmable_transactions::context::finish,
     sp,
     static_programmable_transactions::{
+        better_todo,
         env::Env,
         execution::values::{
             ByteValue, InitialInput, InputObjectMetadata, InputValue, Inputs, Local, Locals, Value,
@@ -198,7 +199,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             .transpose()?
             .unwrap_or_default();
         debug_assert!(gas_object.len() <= 1);
-        let gas_id_opt = gas_object.get(0).map(|(o, _)| o.id);
+        let gas_id_opt = gas_object.first().map(|(o, _)| o.id);
         let input_objects = inputs.into_objects()?;
         for (metadata, value) in input_objects.into_iter().chain(gas_object) {
             let InputObjectMetadata {
@@ -237,7 +238,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             user_events,
             ..
         } = self;
-        let ref_context: &RefCell<TxContext> = &*tx_context;
+        let ref_context: &RefCell<TxContext> = &tx_context;
         let tx_context: &TxContext = &ref_context.borrow();
         let tx_digest = ref_context.borrow().digest();
 
@@ -272,7 +273,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         }
 
         for (id, (recipient, ty, value)) in writes {
-            let ty: Type = todo!("OBJECT RUNTIME TYPETAG");
+            let ty: Type = {
+                let _ = ty;
+                better_todo!("OBJECT RUNTIME TYPETAG")
+            };
             let abilities = ty.abilities();
             let has_public_transfer = abilities.has_store();
             let layout = env.runtime_layout(&ty)?;
@@ -405,7 +409,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     > {
         let v = match location {
             T::Location::GasCoin => {
-                todo!("better error here? How do we handle if there is no gas coin?");
+                let () =
+                    better_todo!("better error here? How do we handle if there is no gas coin?");
                 let gas_locals = unwrap!(self.gas.as_mut(), "Gas coin not provided");
                 let InputValue::Loaded(gas_local) = gas_locals.get(0)? else {
                     invariant_violation!("Gas coin should be loaded, not bytes");
@@ -533,17 +538,18 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 Value::tx_context(self.tx_context.borrow().digest())?,
             )),
         }
-        let storage_id = &function.storage_id;
+        let storage_id = function.storage_id.clone();
         let (index, last_instr) = {
-            &function;
+            let _ = &function;
             // access FunctionDefinitionIndex and last instruction CodeOffset
-            todo!("LOADING")
+            better_todo!("LOADING")
         };
         let result = {
-            function;
-            todo!("RUNTIME")
+            let _ = function;
+            let _ = trace_builder_opt;
+            better_todo!("RUNTIME")
         };
-        self.take_user_events(storage_id, index, last_instr)?;
+        self.take_user_events(&storage_id, index, last_instr)?;
         Ok(result)
     }
 
@@ -554,13 +560,14 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         object: CtxValue,
     ) -> Result<(), ExecutionError> {
         let ty = {
-            ty;
+            let _ = ty;
             // ty to vm type
-            todo!("OBJECT RUNTIME TYPETAG")
+            better_todo!("OBJECT RUNTIME TYPETAG")
         };
         object_runtime_mut!(self)?
             .transfer(recipient, ty, object.0.into())
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
+        Ok(())
     }
 
     pub fn copy_value(&mut self, value: &CtxValue) -> Result<CtxValue, ExecutionError> {
@@ -855,7 +862,7 @@ unsafe fn create_written_object<Mode: ExecutionMode>(
             has_public_transfer,
             old_obj_ver.unwrap_or_default(),
             contents,
-            &env.protocol_config,
+            env.protocol_config,
             Mode::packages_are_predefined(),
         )
     }
