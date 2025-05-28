@@ -161,5 +161,5 @@ jobs:
         with:
           repository: MystenLabs/sui-operations
           token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
-          event-type: SUI-release-announce
+          event-type: sui-release-announce
           client-payload: '{"sui_commit": "${{ needs.create-release.outputs.sui_commit }}", "environment": "${{ inputs.network }}"}'
