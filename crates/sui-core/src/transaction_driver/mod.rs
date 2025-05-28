@@ -21,20 +21,20 @@ use rand::seq::SliceRandom as _;
 use sui_types::{
     base_types::ConciseableName,
     committee::EpochId,
-    error::SuiError,
-    messages_grpc::RawGetEffectsRequest,
+    messages_grpc::RawWaitForEffectsRequest,
     quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
 };
 use tokio::{
     task::JoinSet,
     time::{sleep, timeout},
 };
-use tracing::{info, instrument, warn};
+use tracing::{debug, instrument};
 
 use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
+    wait_for_effects_request::{WaitForEffectsRequest, WaitForEffectsResponse},
 };
 
 /// Options for submitting a transaction.
@@ -120,7 +120,6 @@ where
         let clients = auth_agg.authority_clients.iter().collect::<Vec<_>>();
         let (name, client) = clients.choose(&mut rand::thread_rng()).unwrap();
 
-        // TODO(fastpath): Use consensus position
         let consensus_position = timeout(
             Duration::from_secs(2),
             client.submit_transaction(raw_request, options.forwarded_client_addr),
@@ -131,82 +130,71 @@ where
             TransactionDriverError::RpcFailure(name.concise().to_string(), e.to_string())
         })?;
 
-        info!("Transaction submitted to consensus with position: {consensus_position:?}",);
+        debug!("Transaction submitted to consensus at position: {consensus_position:?}",);
 
-        // Retry get_effects up to 5 times with exponential backoff, this can be removed once
-        // wait for effects is in place.
-        let mut retry_count = 0;
-        let max_retries = 5;
-        let mut backoff = Duration::from_millis(100);
-
-        let response = loop {
-            match timeout(
-                Duration::from_secs(2),
-                client.get_effects(
-                    RawGetEffectsRequest {
-                        transaction: bcs::to_bytes(&transaction)
-                            .map_err(|e| {
-                                TransactionDriverError::SerializationError(
-                                    SuiError::TransactionSerializationError {
-                                        error: e.to_string(),
-                                    },
-                                )
-                            })?
-                            .into(),
-                        include_events: true,
-                        include_input_objects: false,
-                        include_output_objects: false,
-                    },
-                    options.forwarded_client_addr,
-                ),
-            )
-            .await
-            {
-                Ok(Ok(response)) => break response,
-                Ok(Err(e)) => {
-                    if retry_count >= max_retries {
-                        return Err(TransactionDriverError::RpcFailure(
-                            name.concise().to_string(),
-                            e.to_string(),
-                        ));
-                    }
-                    warn!(
-                        "Failed to get effects (attempt {}/{}): {}. Retrying in {:?}",
-                        retry_count + 1,
-                        max_retries,
-                        e,
-                        backoff
-                    );
-                }
-                Err(_) => {
-                    if retry_count >= max_retries {
-                        return Err(TransactionDriverError::TimeoutBeforeFinality);
-                    }
-                    warn!(
-                        "Timeout getting effects (attempt {}/{}). Retrying in {:?}",
-                        retry_count + 1,
-                        max_retries,
-                        backoff
-                    );
-                }
+        let response = match timeout(
+            Duration::from_secs(2),
+            client.wait_for_effects(
+                RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
+                    epoch,
+                    transaction_digest: *transaction.digest(),
+                    transaction_position: consensus_position,
+                    include_details: true,
+                })
+                .map_err(TransactionDriverError::SerializationError)?,
+                options.forwarded_client_addr,
+            ),
+        )
+        .await
+        {
+            Ok(Ok(response)) => response,
+            Ok(Err(e)) => {
+                return Err(TransactionDriverError::RpcFailure(
+                    name.concise().to_string(),
+                    e.to_string(),
+                ));
             }
-
-            tokio::time::sleep(backoff).await;
-            backoff *= 2;
-            retry_count += 1;
+            Err(_) => {
+                return Err(TransactionDriverError::TimeoutBeforeFinality);
+            }
         };
 
-        Ok(QuorumSubmitTransactionResponse {
-            effects: FinalizedEffects {
-                effects: response.effects,
-                // TODO(fastpath): return the epoch in response.
-                finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
-            },
-            events: response.events,
-            input_objects: response.input_objects,
-            output_objects: response.output_objects,
-            auxiliary_data: response.auxiliary_data,
-        })
+        match response {
+            WaitForEffectsResponse::Executed {
+                details,
+                effects_digest: _,
+            } => {
+                if details.is_some() {
+                    let details = details.unwrap();
+
+                    return Ok(QuorumSubmitTransactionResponse {
+                        effects: FinalizedEffects {
+                            effects: details.effects,
+                            // TODO(fastpath): return the epoch in response.
+                            finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
+                        },
+                        events: details.events,
+                        input_objects: Some(details.input_objects),
+                        output_objects: Some(details.output_objects),
+                        auxiliary_data: None,
+                    });
+                } else {
+                    return Err(TransactionDriverError::ExecutionDataNotFound(
+                        transaction.digest().to_string(),
+                    ));
+                }
+            }
+            WaitForEffectsResponse::Rejected { reason } => {
+                return Err(TransactionDriverError::TransactionRejected(
+                    reason.to_string(),
+                ));
+            }
+            WaitForEffectsResponse::Expired(round) => {
+                return Err(TransactionDriverError::TransactionExpired(
+                    round.to_string(),
+                ));
+            }
+        };
     }
 
     fn enable_reconfig(

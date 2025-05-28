@@ -37,8 +37,7 @@ use sui_types::{
     messages_grpc::{
         HandleCertificateResponseV2, HandleSoftBundleCertificatesRequestV3,
         HandleSoftBundleCertificatesResponseV3, HandleTransactionResponse, ObjectInfoRequest,
-        ObjectInfoResponse, RawGetEffectsRequest, RawGetEffectsResponse, SystemStateRequest,
-        TransactionInfoRequest, TransactionInfoResponse,
+        ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
     },
     sui_system_state::SuiSystemState,
 };
@@ -107,71 +106,6 @@ impl AuthorityAPI for LocalAuthorityClient {
         };
 
         RawSubmitTxResponse::into_raw(consensus_position)
-    }
-
-    async fn get_effects(
-        &self,
-        request: RawGetEffectsRequest,
-        _client_addr: Option<SocketAddr>,
-    ) -> Result<RawGetEffectsResponse, SuiError> {
-        let state = self.state.clone();
-        let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        let deserialized_transaction = bcs::from_bytes::<Transaction>(&request.transaction)
-            .map_err(|e| SuiError::TransactionDeserializationError {
-                error: e.to_string(),
-            })?;
-        let transaction = epoch_store
-            .verify_transaction(deserialized_transaction.clone())
-            .map(|_| VerifiedTransaction::new_from_verified(deserialized_transaction))?;
-        let tx_output = state.handle_vote_transaction(&epoch_store, transaction.clone())?;
-
-        if let Some((effects, events)) = tx_output {
-            let input_objects = request
-                .include_input_objects
-                .then(|| state.get_transaction_input_objects(&effects))
-                .and_then(Result::ok);
-            let output_objects = request
-                .include_output_objects
-                .then(|| state.get_transaction_output_objects(&effects))
-                .and_then(Result::ok);
-
-            return Ok(RawGetEffectsResponse {
-                effects: bcs::to_bytes(&effects)
-                    .map_err(|e| SuiError::TransactionEffectsSerializationError {
-                        error: e.to_string(),
-                    })?
-                    .into(),
-                events: request.include_events.then_some(
-                    bcs::to_bytes(&events)
-                        .map_err(|e| SuiError::TransactionEventsSerializationError {
-                            error: e.to_string(),
-                        })?
-                        .into(),
-                ),
-                input_objects: input_objects
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|obj| {
-                        bcs::to_bytes(&obj).map_err(|e| SuiError::ObjectSerializationError {
-                            error: e.to_string(),
-                        })
-                    })
-                    .collect::<Result<_, _>>()?,
-                output_objects: output_objects
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|obj| {
-                        bcs::to_bytes(&obj).map_err(|e| SuiError::ObjectSerializationError {
-                            error: e.to_string(),
-                        })
-                    })
-                    .collect::<Result<_, _>>()?,
-            });
-        } else {
-            return Err(SuiError::TransactionEffectsNotFound {
-                digest: *transaction.digest(),
-            });
-        }
     }
 
     async fn handle_transaction(
@@ -418,14 +352,6 @@ impl AuthorityAPI for MockAuthorityApi {
         unimplemented!();
     }
 
-    async fn get_effects(
-        &self,
-        _request: RawGetEffectsRequest,
-        _client_addr: Option<SocketAddr>,
-    ) -> Result<RawGetEffectsResponse, SuiError> {
-        unimplemented!()
-    }
-
     /// Initiate a new transaction to a Sui or Primary account.
     async fn handle_transaction(
         &self,
@@ -535,14 +461,6 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         _request: RawSubmitTxRequest,
         _client_addr: Option<SocketAddr>,
     ) -> Result<RawSubmitTxResponse, SuiError> {
-        unimplemented!()
-    }
-
-    async fn get_effects(
-        &self,
-        _request: RawGetEffectsRequest,
-        _client_addr: Option<SocketAddr>,
-    ) -> Result<RawGetEffectsResponse, SuiError> {
         unimplemented!()
     }
 

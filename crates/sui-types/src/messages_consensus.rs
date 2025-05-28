@@ -37,7 +37,8 @@ pub type TransactionIndex = u16;
 /// Non-decreasing timestamp produced by consensus in ms.
 pub type TimestampMs = u64;
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+/// The position of a transaction in consensus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ConsensusTxPosition {
     // Block containing a transaction.
     pub block: BlockRef,

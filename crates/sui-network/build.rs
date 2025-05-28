@@ -44,15 +44,6 @@ fn main() -> Result<()> {
         )
         .method(
             Method::builder()
-                .name("get_effects")
-                .route_name("GetEffects")
-                .input_type("sui_types::messages_grpc::RawGetEffectsRequest")
-                .output_type("sui_types::messages_grpc::RawGetEffectsResponse")
-                .codec_path(prost_codec_path)
-                .build(),
-        )
-        .method(
-            Method::builder()
                 .name("transaction")
                 .route_name("Transaction")
                 .input_type("sui_types::transaction::Transaction")
