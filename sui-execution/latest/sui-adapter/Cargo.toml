@@ -16,6 +16,7 @@ bcs.workspace = true
 leb128.workspace = true
 tracing.workspace = true
 serde.workspace = true
+indexmap.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
@@ -32,6 +33,7 @@ move-vm-profiler = { path = "../../../external-crates/move/crates/move-vm-profil
 sui-move-natives = { path = "../sui-move-natives", package = "sui-move-natives-latest" }
 sui-verifier = { path = "../sui-verifier", package = "sui-verifier-latest" }
 move-vm-types = { path = "../../../external-crates/move/crates/move-vm-types" }
+move-regex-borrow-graph = { path = "../../../external-crates/move/crates/move-regex-borrow-graph" }
 
 sui-macros.workspace = true
 sui-protocol-config.workspace = true

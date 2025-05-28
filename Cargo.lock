@@ -8226,6 +8226,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-regex-borrow-graph"
+version = "0.0.1"
+dependencies = [
+ "itertools 0.10.5",
+ "move-binary-format",
+ "move-core-types",
+ "petgraph 0.8.1",
+]
+
+[[package]]
 name = "move-stdlib"
 version = "0.1.1"
 dependencies = [
@@ -13151,12 +13161,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
+ "indexmap 2.8.0",
  "leb128",
  "move-binary-format",
  "move-bytecode-utils",
  "move-bytecode-verifier",
  "move-bytecode-verifier-meter",
  "move-core-types",
+ "move-regex-borrow-graph",
  "move-trace-format",
  "move-vm-config",
  "move-vm-profiler",

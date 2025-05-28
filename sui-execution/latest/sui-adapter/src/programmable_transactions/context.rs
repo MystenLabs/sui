@@ -18,6 +18,7 @@ mod checked {
         programmable_transactions::{data_store::SuiDataStore, linkage_view::LinkageView},
         type_resolver::TypeTagResolver,
     };
+    use indexmap::IndexSet;
     use move_binary_format::{
         CompiledModule,
         errors::{Location, PartialVMError, VMError, VMResult},
@@ -900,104 +901,19 @@ mod checked {
                 written_objects.insert(id, object);
             }
 
-            // Before finishing, ensure that any shared object taken by value by the transaction is either:
-            // 1. Mutated (and still has a shared ownership); or
-            // 2. Deleted.
-            // Otherwise, the shared object operation is not allowed and we fail the transaction.
-            for id in &by_value_shared_objects {
-                // If it's been written it must have been reshared so must still have an ownership
-                // of `Shared`.
-                if let Some(obj) = written_objects.get(id) {
-                    if !obj.is_shared() {
-                        return Err(ExecutionError::new(
-                            ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                            Some(
-                                format!(
-                                    "Shared object operation on {} not allowed: \
-                                     cannot be frozen, transferred, or wrapped",
-                                    id
-                                )
-                                .into(),
-                            ),
-                        ));
-                    }
-                } else {
-                    // If it's not in the written objects, the object must have been deleted. Otherwise
-                    // it's an error.
-                    if !deleted_object_ids.contains(id) {
-                        return Err(ExecutionError::new(
-                            ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                            Some(
-                                format!("Shared object operation on {} not allowed: \
-                                         shared objects used by value must be re-shared if not deleted", id).into(),
-                            ),
-                        ));
-                    }
-                }
-            }
-
-            // Before finishing, enforce auth restrictions on consensus objects.
-            for (id, original_owner) in consensus_owner_objects {
-                let Owner::ConsensusAddressOwner { owner, .. } = original_owner else {
-                    panic!(
-                        "verified before adding to `consensus_owner_objects` that these are ConsensusAddressOwner"
-                    );
-                };
-                // Already verified in pre-execution checks that tx sender is the object owner.
-                // Owner is allowed to do anything with the object.
-                if ref_context.borrow().sender() != owner {
-                    debug_fatal!(
-                        "transaction with a singly owned input object where the tx sender is not the owner should never be executed"
-                    );
-                    return Err(ExecutionError::new(
-                                ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                                Some(
-                                    format!("Shared object operation on {} not allowed: \
-                                             transaction with singly owned input object must be sent by the owner", id).into(),
-                                ),
-                            ));
-                }
-                // If an Owner type is implemented with support for more fine-grained authorization,
-                // checks should be performed here. For example, transfers and wraps can be detected
-                // by comparing `original_owner` with:
-                // let new_owner = written_objects.get(&id).map(|obj| obj.owner);
-                //
-                // Deletions can be detected with:
-                // let deleted = deleted_object_ids.contains(&id);
-            }
-
-            if protocol_config.enable_coin_deny_list_v2() {
-                let DenyListResult {
-                    result,
-                    num_non_gas_coin_owners,
-                } = state_view.check_coin_deny_list(&written_objects);
-                gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
-                result?;
-            }
-
-            let user_events = user_events
-                .into_iter()
-                .map(|(module_id, tag, contents)| {
-                    Event::new(
-                        module_id.address(),
-                        module_id.name(),
-                        ref_context.borrow().sender(),
-                        tag,
-                        contents,
-                    )
-                })
-                .collect();
-
-            Ok(ExecutionResults::V2(ExecutionResultsV2 {
+            finish(
+                protocol_config,
+                state_view,
+                gas_charger,
+                &ref_context.borrow(),
+                &by_value_shared_objects,
+                &consensus_owner_objects,
+                loaded_runtime_objects,
                 written_objects,
-                modified_objects: loaded_runtime_objects
-                    .into_iter()
-                    .filter_map(|(id, loaded)| loaded.is_modified.then_some(id))
-                    .collect(),
-                created_object_ids: created_object_ids.into_iter().collect(),
-                deleted_object_ids: deleted_object_ids.into_iter().collect(),
+                created_object_ids,
+                deleted_object_ids,
                 user_events,
-            }))
+            )
         }
 
         /// Convert a VM Error to an execution one
@@ -1291,6 +1207,119 @@ mod checked {
                 ))
                 .finish(Location::Undefined)),
         }
+    }
+
+    pub fn finish(
+        protocol_config: &ProtocolConfig,
+        state_view: &dyn ExecutionState,
+        gas_charger: &mut GasCharger,
+        tx_context: &TxContext,
+        by_value_shared_objects: &BTreeSet<ObjectID>,
+        consensus_owner_objects: &BTreeMap<ObjectID, Owner>,
+        loaded_runtime_objects: BTreeMap<ObjectID, LoadedRuntimeObject>,
+        written_objects: BTreeMap<ObjectID, Object>,
+        created_object_ids: IndexSet<ObjectID>,
+        deleted_object_ids: IndexSet<ObjectID>,
+        user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
+    ) -> Result<ExecutionResults, ExecutionError> {
+        // Before finishing, ensure that any shared object taken by value by the transaction is either:
+        // 1. Mutated (and still has a shared ownership); or
+        // 2. Deleted.
+        // Otherwise, the shared object operation is not allowed and we fail the transaction.
+        for id in by_value_shared_objects {
+            // If it's been written it must have been reshared so must still have an ownership
+            // of `Shared`.
+            if let Some(obj) = written_objects.get(id) {
+                if !obj.is_shared() {
+                    return Err(ExecutionError::new(
+                        ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                        Some(
+                            format!(
+                                "Shared object operation on {} not allowed: \
+                                     cannot be frozen, transferred, or wrapped",
+                                id
+                            )
+                            .into(),
+                        ),
+                    ));
+                }
+            } else {
+                // If it's not in the written objects, the object must have been deleted. Otherwise
+                // it's an error.
+                if !deleted_object_ids.contains(id) {
+                    return Err(ExecutionError::new(
+                            ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                            Some(
+                                format!("Shared object operation on {} not allowed: \
+                                         shared objects used by value must be re-shared if not deleted", id).into(),
+                            ),
+                        ));
+                }
+            }
+        }
+
+        // Before finishing, enforce auth restrictions on consensus objects.
+        for (id, original_owner) in consensus_owner_objects {
+            let Owner::ConsensusAddressOwner { owner, .. } = original_owner else {
+                panic!(
+                    "verified before adding to `consensus_owner_objects` that these are ConsensusAddressOwner"
+                );
+            };
+            // Already verified in pre-execution checks that tx sender is the object owner.
+            // Owner is allowed to do anything with the object.
+            if tx_context.sender() != *owner {
+                debug_fatal!(
+                    "transaction with a singly owned input object where the tx sender is not the owner should never be executed"
+                );
+                return Err(ExecutionError::new(
+                                ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                                Some(
+                                    format!("Shared object operation on {} not allowed: \
+                                             transaction with singly owned input object must be sent by the owner", id).into(),
+                                ),
+                            ));
+            }
+            // If an Owner type is implemented with support for more fine-grained authorization,
+            // checks should be performed here. For example, transfers and wraps can be detected
+            // by comparing `original_owner` with:
+            // let new_owner = written_objects.get(&id).map(|obj| obj.owner);
+            //
+            // Deletions can be detected with:
+            // let deleted = deleted_object_ids.contains(&id);
+        }
+
+        if protocol_config.enable_coin_deny_list_v2() {
+            let DenyListResult {
+                result,
+                num_non_gas_coin_owners,
+            } = state_view.check_coin_deny_list(&written_objects);
+            gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
+            result?;
+        }
+
+        let user_events = user_events
+            .into_iter()
+            .map(|(module_id, tag, contents)| {
+                Event::new(
+                    module_id.address(),
+                    module_id.name(),
+                    tx_context.sender(),
+                    tag,
+                    contents,
+                )
+            })
+            .collect();
+
+        Ok(ExecutionResults::V2(ExecutionResultsV2 {
+            written_objects,
+            modified_objects: loaded_runtime_objects
+                .into_iter()
+                .filter_map(|(id, loaded)| loaded.is_modified.then_some(id))
+                .collect(),
+            created_object_ids: created_object_ids.into_iter().collect(),
+            deleted_object_ids: deleted_object_ids.into_iter().collect(),
+            user_events,
+        }))
     }
 
     pub fn load_type_from_struct(
@@ -1704,7 +1733,7 @@ mod checked {
         }
     }
 
-    enum EitherError {
+    pub enum EitherError {
         CommandArgument(CommandArgumentError),
         Execution(ExecutionError),
     }
@@ -1722,7 +1751,7 @@ mod checked {
     }
 
     impl EitherError {
-        fn into_execution_error(self, command_index: usize) -> ExecutionError {
+        pub fn into_execution_error(self, command_index: usize) -> ExecutionError {
             match self {
                 EitherError::CommandArgument(e) => command_argument_error(e, command_index),
                 EitherError::Execution(e) => e,
