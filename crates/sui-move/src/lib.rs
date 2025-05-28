@@ -14,6 +14,7 @@ pub mod disassemble;
 pub mod manage_package;
 pub mod migrate;
 pub mod new;
+pub mod summary;
 pub mod unit_test;
 
 #[derive(Parser)]
@@ -25,19 +26,20 @@ pub enum Command {
     Migrate(migrate::Migrate),
     New(new::New),
     Test(unit_test::Test),
+    Summary(summary::Summary),
 }
-#[derive(Parser)]
-pub struct Calib {
-    #[clap(name = "runs", short = 'r', long = "runs", default_value = "1")]
-    runs: usize,
-    #[clap(name = "summarize", short = 's', long = "summarize")]
-    summarize: bool,
+
+// Additional per-command metadata that can be passed from other commands (e.g., the Sui CLI) that
+// don't appear in the CLI args.
+pub enum CommandMeta {
+    Summary(summary::PackageSummaryMetadata),
 }
 
 pub fn execute_move_command(
     package_path: Option<&Path>,
     mut build_config: BuildConfig,
     command: Command,
+    command_meta: Option<CommandMeta>,
 ) -> anyhow::Result<()> {
     if let Some(err_msg) = set_sui_flavor(&mut build_config) {
         anyhow::bail!(err_msg);
@@ -53,6 +55,15 @@ pub fn execute_move_command(
         Command::ManagePackage(c) => c.execute(package_path, build_config),
         Command::Migrate(c) => c.execute(package_path, build_config),
         Command::New(c) => c.execute(package_path),
+        Command::Summary(s) => {
+            let additional_metadata = command_meta
+                .map(|meta| {
+                    let CommandMeta::Summary(metadata) = meta;
+                    metadata
+                })
+                .unwrap_or_default();
+            s.execute(package_path, build_config, additional_metadata)
+        }
 
         Command::Test(c) => {
             let result = c.execute(package_path, build_config)?;

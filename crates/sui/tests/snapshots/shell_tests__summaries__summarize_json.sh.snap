@@ -1,0 +1,125 @@
+---
+source: crates/sui/tests/shell_tests.rs
+description: tests/shell_tests/summaries/summarize_json.sh
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Default output format is JSON
+sui move summary --path data/move_package
+ls -1 data/move_package/package_summaries
+ls -1 data/move_package/package_summaries/move_package
+ls -1 data/move_package/package_summaries/sui
+ls -1 data/move_package/package_summaries/std
+# NB: Not root_package_metadata for source packages as these are not generated w.r.t. a specific network.
+cat data/move_package/package_summaries/root_package_metadata.json
+echo
+# This will contain the address mapping for the package from the literal value
+# of the address to the named value of the address (which is what the source
+# package metadata uses for storage).
+cat data/move_package/package_summaries/address_mapping.json
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+INCLUDING DEPENDENCY Bridge
+INCLUDING DEPENDENCY SuiSystem
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING move_package
+
+Summary generation successful. Summaries stored in 'package_summaries'
+address_mapping.json
+bridge
+move_package
+root_package_metadata.json
+std
+sui
+sui_system
+move_package.json
+address.json
+authenticator_state.json
+bag.json
+balance.json
+bcs.json
+bls12381.json
+borrow.json
+clock.json
+coin.json
+config.json
+deny_list.json
+display.json
+dynamic_field.json
+dynamic_object_field.json
+ecdsa_k1.json
+ecdsa_r1.json
+ecvrf.json
+ed25519.json
+event.json
+groth16.json
+group_ops.json
+hash.json
+hex.json
+hmac.json
+kiosk.json
+kiosk_extension.json
+linked_table.json
+math.json
+nitro_attestation.json
+object.json
+object_bag.json
+object_table.json
+package.json
+party.json
+pay.json
+poseidon.json
+priority_queue.json
+prover.json
+random.json
+sui.json
+table.json
+table_vec.json
+token.json
+transfer.json
+transfer_policy.json
+tx_context.json
+types.json
+url.json
+vdf.json
+vec_map.json
+vec_set.json
+versioned.json
+zklogin_verified_id.json
+zklogin_verified_issuer.json
+address.json
+ascii.json
+bcs.json
+bit_vector.json
+bool.json
+debug.json
+fixed_point32.json
+hash.json
+macros.json
+option.json
+string.json
+type_name.json
+u128.json
+u16.json
+u256.json
+u32.json
+u64.json
+u8.json
+uq32_32.json
+uq64_64.json
+vector.json
+{}
+{
+  "0x0000000000000000000000000000000000000000000000000000000000000000": "move_package",
+  "0x0000000000000000000000000000000000000000000000000000000000000001": "std",
+  "0x0000000000000000000000000000000000000000000000000000000000000002": "sui",
+  "0x0000000000000000000000000000000000000000000000000000000000000003": "sui_system",
+  "0x000000000000000000000000000000000000000000000000000000000000000b": "bridge"
+}
+----- stderr -----
