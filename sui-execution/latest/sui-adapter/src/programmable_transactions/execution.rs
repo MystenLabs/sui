@@ -1143,7 +1143,7 @@ mod checked {
                 check_non_entry_signature::<Mode>(context, module_id, function, &signature)?
             }
         };
-        check_private_generics(context, module_id, function, type_arguments)?;
+        check_private_generics(module_id, function)?;
         Ok(LoadedFunctionInfo {
             kind: function_kind,
             signature,
@@ -1242,11 +1242,9 @@ mod checked {
             .collect()
     }
 
-    fn check_private_generics(
-        _context: &mut ExecutionContext,
+    pub fn check_private_generics(
         module_id: &ModuleId,
         function: &IdentStr,
-        _type_arguments: &[Type],
     ) -> Result<(), ExecutionError> {
         let module_ident = (module_id.address(), module_id.name());
         if module_ident == (&SUI_FRAMEWORK_ADDRESS, EVENT_MODULE) {
