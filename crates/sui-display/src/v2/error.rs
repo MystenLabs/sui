@@ -8,6 +8,9 @@ use super::peek::Peekable2Ext;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("Number literal is too large to fit into '{what}'")]
+    NumberOverflow { what: &'static str },
+
     #[error("Unexpected end-of-string, expected {expect}")]
     UnexpectedEos { expect: ExpectedSet },
 

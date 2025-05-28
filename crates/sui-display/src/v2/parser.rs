@@ -352,6 +352,23 @@ impl<'s> Parser<'s> {
     fn try_parse_literal(&mut self) -> Result<Match<Literal<'s>>, Error> {
         self.eat_whitespace();
         Ok(match_token_opt! { self.lexer;
+            Tok(T::At, _, _) => {
+                self.lexer.next();
+                let addr = match_token! { self.lexer;
+                    Tok(T::NumHex, _, slice) => {
+                        self.lexer.next();
+                        read_u256(slice, 16, "address")?
+                    },
+
+                    Tok(T::NumDec, _, slice) => {
+                        self.lexer.next();
+                        read_u256(slice, 10, "address")?
+                    },
+                };
+
+                Literal::Address(AccountAddress::from(addr.to_be_bytes()))
+            },
+
             Lit(T::Ident, _, "true") => {
                 self.lexer.next();
                 Literal::Bool(true)
@@ -402,6 +419,10 @@ impl<'s> Parser<'s> {
             self.lexer.next();
         }
     }
+}
+
+fn read_u256(slice: &str, radix: u32, what: &'static str) -> Result<U256, Error> {
+    U256::from_str_radix(&slice.replace('_', ""), radix).map_err(|_| Error::NumberOverflow { what })
 }
 
 #[cfg(test)]
@@ -733,6 +754,43 @@ mod tests {
     }
 
     #[test]
+    fn test_address_literal() {
+        assert_snapshot!(strands(r#"{@0x1 | @42 | @0x12_34_56}"#), @r###"
+        Expr(
+            Expr {
+                alternates: [
+                    Chain {
+                        root: Some(
+                            Address(
+                                0000000000000000000000000000000000000000000000000000000000000001,
+                            ),
+                        ),
+                        accessors: [],
+                    },
+                    Chain {
+                        root: Some(
+                            Address(
+                                000000000000000000000000000000000000000000000000000000000000002a,
+                            ),
+                        ),
+                        accessors: [],
+                    },
+                    Chain {
+                        root: Some(
+                            Address(
+                                0000000000000000000000000000000000000000000000000000000000123456,
+                            ),
+                        ),
+                        accessors: [],
+                    },
+                ],
+                transform: None,
+            },
+        )
+        "###);
+    }
+
+    #[test]
     fn test_index_chain() {
         assert_snapshot!(strands(r#"{foo[bar][[baz]].qux[quy]}"#), @r###"
         Expr(
@@ -848,7 +906,7 @@ mod tests {
 
     #[test]
     fn test_spaced_out_left_double_index() {
-        assert_snapshot!(strands(r#"{foo[ [bar]]}"#), @"Error: Unexpected '[' at offset 6, expected one of 'false', 'true', or an identifier");
+        assert_snapshot!(strands(r#"{foo[ [bar]]}"#), @"Error: Unexpected '[' at offset 6, expected one of 'false', 'true', '@', or an identifier");
     }
 
     #[test]
@@ -863,11 +921,26 @@ mod tests {
 
     #[test]
     fn test_triple_index() {
-        assert_snapshot!(strands(r#"{foo[[[bar]]]}"#), @"Error: Unexpected '[' at offset 6, expected one of 'false', 'true', or an identifier");
+        assert_snapshot!(strands(r#"{foo[[[bar]]]}"#), @"Error: Unexpected '[' at offset 6, expected one of 'false', 'true', '@', or an identifier");
     }
 
     #[test]
     fn test_unexpected_characters() {
-        assert_snapshot!(strands(r#"anything goes {? % ! 🔥}"#), @r###"Error: Unexpected "?" at offset 15, expected one of 'false', 'true', or an identifier"###);
+        assert_snapshot!(strands(r#"anything goes {? % ! 🔥}"#), @r###"Error: Unexpected "?" at offset 15, expected one of 'false', 'true', '@', or an identifier"###);
+    }
+
+    #[test]
+    fn test_address_literal_whitespace() {
+        assert_snapshot!(strands(r#"{@ 0x3}"#), @"Error: Unexpected whitespace at offset 2, expected one of a decimal number, or a hexadecimal number");
+    }
+
+    #[test]
+    fn test_hex_address_overflow() {
+        assert_snapshot!(strands(r#"{@0x12345678901234567890123456789012345678901234567890123456789012345}"#), @"Error: Number literal is too large to fit into 'address'");
+    }
+
+    #[test]
+    fn test_dec_address_overflow() {
+        assert_snapshot!(strands(r#"{@12345678901234567890123456789012345678901234567890123456789012345678901234567890}"#), @"Error: Number literal is too large to fit into 'address'");
     }
 }
