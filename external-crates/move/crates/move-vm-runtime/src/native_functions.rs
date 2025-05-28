@@ -158,6 +158,38 @@ impl<'b> NativeContext<'_, 'b> {
         }
     }
 
+    // TODO: This is a bit hacky right now since we need to pass the store, however this is only
+    // used in test scenarios so we have some special knowledge that makes this work. In the new VM
+    // however this is _MUCH_ nicer as we don't need to pass the datastore as the VM's linkage
+    // tables must have the type present.
+    pub fn type_tag_to_fully_annotated_layout_for_test_scenario_only(
+        &self,
+        tag: &TypeTag,
+    ) -> PartialVMResult<Option<A::MoveTypeLayout>> {
+        self.resolver
+            .loader()
+            .try_load_cached_type(tag)
+            .map_err(|e| e.to_partial())?
+            .map(|ty| self.resolver.loader().type_to_fully_annotated_layout(&ty))
+            .transpose()
+    }
+
+    // TODO: This is a bit hacky right now since we need to pass the store, however this is only
+    // used in test scenarios so we have some special knowledge that makes this work. In the new VM
+    // however this is _MUCH_ nicer as we don't need to pass the datastore as the VM's linkage
+    // tables must have the type present.
+    pub fn type_tag_to_layout_for_test_scenario_only(
+        &self,
+        tag: &TypeTag,
+    ) -> PartialVMResult<Option<R::MoveTypeLayout>> {
+        self.resolver
+            .loader()
+            .try_load_cached_type(tag)
+            .map_err(|e| e.to_partial())?
+            .map(|ty| self.resolver.loader().type_to_type_layout(&ty))
+            .transpose()
+    }
+
     pub fn type_to_abilities(&self, ty: &Type) -> PartialVMResult<AbilitySet> {
         self.resolver.loader().abilities(ty)
     }
