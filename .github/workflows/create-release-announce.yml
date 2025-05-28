@@ -1,0 +1,165 @@
+name: Create Sui Release and Announce
+run-name: Create Sui Release for ${{ inputs.network }}
+
+concurrency: ${{ github.workflow }}-${{ inputs.network }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        description: Network to generate and announce release for
+        required: true
+        type: choice
+        options:
+          - testnet
+          - mainnet
+      announce:
+        description: Announce the release?
+        type: boolean
+        default: true
+        required: true
+env:
+  RELEASE_NOTES_FILE: './release_notes.txt'
+
+jobs:
+  create-release:
+    name: Create Release for ${{ inputs.network }}
+    runs-on: ubuntu-latest
+    outputs:
+      sui_commit: ${{ steps.release-commit.outputs.sui_commit }}
+
+    steps:
+      - name: Checkout sui main branch
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # pin@v4.1.1
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Get current and previous release branches
+        shell: bash
+        run: |
+          export sui_main_version=$(cat Cargo.toml | grep '^version =' | tr -d '\"' | awk '{ print $3 }')
+          export major_version=$(echo $sui_main_version | cut -d. -f1)
+          export minor_version=$(echo $sui_main_version | cut -d. -f2)
+          export patch_version=$(echo $sui_main_version | cut -d. -f3)
+          export current_minor_version=$(($minor_version - 1))
+          export current_release_version=$major_version.$current_minor_version.$patch_version
+          echo "current_release_version=${current_release_version}" >> $GITHUB_ENV
+
+          export current_release_branch="releases/sui-v${current_release_version}-release"
+          echo "current_release_branch=${current_release_branch}" >> $GITHUB_ENV
+
+          export previous_minor_version=$(($current_minor_version - 1))
+          export previous_release_version=$major_version.$previous_minor_version.$patch_version
+          export previous_release_branch="releases/sui-v${previous_release_version}-release"
+          echo "previous_release_branch=${previous_release_branch}" >> $GITHUB_ENV
+
+      - name: Checkout release branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # pin@v4
+        env:
+          RELEASE_BRANCH: ${{ env.current_release_branch }}
+        with:
+          fetch-depth: 0
+          ref: ${{ env.RELEASE_BRANCH }}
+
+      - name: Update ${{ inputs.network }} branch
+        shell: bash
+        id: release-commit
+        run: |
+          export sui_commit=$(git rev-parse HEAD)
+          echo "sui_commit=${sui_commit}" >> $GITHUB_ENV
+          echo "sui_commit=${sui_commit}" >> "$GITHUB_OUTPUT"
+          export sui_release_version=$(cat Cargo.toml | grep '^version =' | tr -d '\"' | awk '{ print $3 }')
+          echo "sui_release_version=${sui_release_version}" >> $GITHUB_ENV
+
+          echo "${{ secrets.SUI_CREATE_RELEASE }}" | gh auth login --with-token
+          echo "{\"sha\": \"${sui_commit}\", \"force\": true}" | gh api -X PATCH /repos/MystenLabs/sui/git/refs/heads/${{ inputs.network }} \
+            --header "Accept: application/vnd.github+json" --input -
+
+      - name: Create ${{ inputs.network }}-v${{ env.sui_release_version }} release tag
+        shell: bash
+        env:
+          sui_commit: ${{ env.sui_commit }}
+          sui_release_version: ${{ env.sui_release_version }}
+        run: |
+          export release_tag="${{ inputs.network }}-v${{ env.sui_release_version }}"
+          echo "release_tag=${release_tag}" >> $GITHUB_ENV
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/MystenLabs/sui/git/refs \
+            -d "{
+              \"ref\": \"refs/tags/${release_tag}\",
+              \"sha\": \"${{ env.sui_commit }}\"
+            }"
+
+      - name: Get commits for branches
+        shell: bash
+        env:
+          PREVIOUS_BRANCH: ${{ env.previous_release_branch }}
+          CURRENT_BRANCH: ${{ env.current_release_branch }}
+        working-directory: ./
+        run: |
+          echo "previous_commit=$(curl -s \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/MystenLabs/sui/commits/${{ env.PREVIOUS_BRANCH }}| jq .sha | tr -d '"')" >> $GITHUB_ENV
+          echo "current_commit=$(curl -s \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/MystenLabs/sui/commits/${{ env.CURRENT_BRANCH }} | jq .sha | tr -d '"')" >> $GITHUB_ENV
+
+      - name: Checkout main
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # pin@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # pin@v5.6.0
+        with:
+          python-version: 3.10.10
+
+      - name: Generate Release Notes for ${{ env.release_tag }}
+        shell: bash
+        env:
+          PREVIOUS_COMMIT: ${{ env.previous_commit }}
+          CURRENT_COMMIT: ${{ env.current_commit }}
+          RELEASE_TAG: ${{ env.release_tag }}
+        working-directory: ./
+        run: |
+          SUI_REPO_TOKEN=${{ secrets.GITHUB_TOKEN }} \
+          python ./scripts/release_notes.py generate ${{ env.PREVIOUS_COMMIT }} ${{ env.CURRENT_COMMIT }} | tee -a ${{ env.RELEASE_NOTES_FILE }}
+          echo "---" >> ${{ env.RELEASE_NOTES_FILE }}
+          echo "#### Full Log: https://github.com/MystenLabs/sui/commits/${{ env.RELEASE_TAG }}" >> ${{ env.RELEASE_NOTES_FILE }}
+
+          if [[ ${{ env.RELEASE_TAG }} == devnet* ]]; then
+            echo "pre_release=true" >> $GITHUB_ENV
+          else
+            echo "pre_release=false" >> $GITHUB_ENV
+          fi
+
+      - name: Create Release
+        uses: actions/create-release@0cb9c9b65d5d1901c1f53e5e66eaf4afd303e70e # pin@v1
+        env:
+          RELEASE_TAG: ${{ env.release_tag }}
+          GITHUB_TOKEN: ${{ secrets.SUI_CREATE_RELEASE }}
+          PRE_RELEASE: ${{ env.pre_release }}
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          release_name: ${{ env.RELEASE_TAG }}
+          body_path: ${{ env.RELEASE_NOTES_FILE }}
+          draft: false
+          prerelease: ${{ env.PRE_RELEASE }}
+
+  announce-release:
+    name: Announce Release in Discord
+    if: ${{ inputs.announce == true }}
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch Release Announce in MystenLabs/sui-operations
+        uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
+        with:
+          repository: MystenLabs/sui-operations
+          token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
+          event-type: sui-release-announce
+          client-payload: '{"sui_commit": "${{ needs.create-release.outputs.sui_commit }}", "environment": "${{ inputs.network }}"}'
