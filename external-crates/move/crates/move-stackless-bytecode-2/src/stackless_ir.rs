@@ -1,8 +1,14 @@
 #[derive(Debug, Clone)]
+pub enum LabelledInstruction {
+    Instruction(Instruction),
+    Label(Label),
+}
+
+#[derive(Debug, Clone)]
 pub enum Instruction {
-    Return(Vec<Operand>),
+    Return(Operand),
     Assign {
-        lhs: Var,
+        lhs: Vec<Operand>,
         rhs: RValue,
     },
     Jump(Label),
@@ -11,6 +17,7 @@ pub enum Instruction {
         then_label: Label,
         else_label: Label,
     },
+    NotImplemented(String),
 }
 
 #[derive(Debug, Clone)]
@@ -64,6 +71,7 @@ pub enum PrimitiveOp {
     GreaterThanOrEqual,
     MoveLoc,
     CopyLoc,
+    StoreLoc,
     ImmBorrowField,
     MutBorrowField,
     ReadRef,
@@ -71,7 +79,12 @@ pub enum PrimitiveOp {
     Pack,
 }
 
-pub type Var = usize;
+#[derive(Debug, Clone)]
+pub enum Var {
+    Register(usize), // Temporary variable index
+    Unused,          // Represents an unused variable
+}
+
 pub type Label = usize;
 pub type FunctionId = usize;
 pub type PrimitiveOpId = usize;

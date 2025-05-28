@@ -7,31 +7,36 @@ use move_command_line_common::files::{MOVE_COMPILED_EXTENSION, extension_equals,
 use move_package::BuildConfig;
 use move_stackless_bytecode_2::stackless_bytecode_generator::StacklessBytecodeGenerator;
 
-use std::path::Path;
-
-const DEFAULT_OUTPUT_DIRECTORY: &str = "stackless_bytecode";
+use std::path::{Path, PathBuf};
 
 /// Generate a serialized summary of a Move package (e.g., functions, structs, annotations, etc.)
 #[derive(Parser)]
 #[clap(name = "stackless")]
 pub struct Stackless {
-    /// Directory that all generated summaries should be nested under.
-    #[clap(long = "output-directory", value_name = "PATH", default_value = DEFAULT_OUTPUT_DIRECTORY)]
-    output_directory: String,
+    #[arg(name = "legacy-stackless", long = "legacy-stackless")]
+    legacy_stackless: bool,
 
-    #[arg(name = "old", long = "old")]
-    old_stackless: bool,
+    #[arg(name = "legacy-disassemble", long = "legacy-disassemble")]
+    legacy_disassemble: bool,
 
     #[arg(name = "disassemble", long = "disassemble")]
     disassemble: bool,
+
+    #[arg(name = "module_path", long = "module")]
+    module_path: Option<PathBuf>
 }
 
 impl Stackless {
     pub fn execute(self, path: Option<&Path>, _build_config: BuildConfig) -> anyhow::Result<()> {
-        let input_path = path.unwrap_or_else(|| Path::new("."));
-        let bytecode_files = find_filenames(&[input_path], |path| {
-            extension_equals(path, MOVE_COMPILED_EXTENSION)
-        })?;
+        let bytecode_files = if self.module_path.as_deref().is_some_and(|path| path.exists()) {
+            let input_path = self.module_path.as_deref().unwrap();
+            vec![input_path.to_str().unwrap().to_string()]
+        } else {
+            let input_path = path.unwrap_or_else(|| Path::new("."));
+            find_filenames(&[input_path], |path| {
+                extension_equals(path, MOVE_COMPILED_EXTENSION)
+            })?
+        };
 
         let mut modules = Vec::new();
 
@@ -41,18 +46,20 @@ impl Stackless {
             modules.push(module);
         }
 
-        let stackless = StacklessBytecodeGenerator::new(modules.clone());
+        let stackless = StacklessBytecodeGenerator::new(modules);
 
-        if self.old_stackless {
-            let _ = stackless.old_stackless()?;
+        if self.legacy_stackless {
+            return stackless.legacy_stackless();
+        }
+
+        if self.legacy_disassemble {
+            return stackless.legacy_disassemble();
         }
 
         if self.disassemble {
-            let _ = stackless.disassemble_source()?;
+            return stackless.disassemble_source();
         }
 
-        let _ = stackless.execute()?;
-
-        Ok(())
+        stackless.execute()
     }
 }

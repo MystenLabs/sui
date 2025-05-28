@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+move-abstract-interpreter.workspace = true
 move-binary-format.workspace = true
 move-disassembler.workspace = true
 move-ir-types.workspace = true
@@ -13,3 +14,4 @@ move-model.workspace = true
 move-model-2.workspace = true
 move-stackless-bytecode.workspace = true
 move-symbol-pool.workspace = true
+move-vm-runtime.workspace = true

@@ -8236,6 +8236,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-disassembler",
  "move-ir-types",
@@ -8243,6 +8244,7 @@ dependencies = [
  "move-model-2",
  "move-stackless-bytecode",
  "move-symbol-pool",
+ "move-vm-runtime",
 ]
 
 [[package]]
