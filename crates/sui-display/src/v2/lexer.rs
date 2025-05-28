@@ -35,7 +35,7 @@ pub(crate) struct Lexeme<'s>(pub Token, pub usize, pub &'s str);
 #[derive(Debug)]
 pub(crate) struct OwnedLexeme(Token, usize, String);
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Token {
     /// '@'
     At,
@@ -90,9 +90,6 @@ pub(crate) enum Token {
     /// Whitespace around expressions.
     Whitespace,
 }
-
-#[derive(Debug)]
-pub(crate) struct TokenSet<'t>(pub &'t [Token]);
 
 impl<'s> Lexer<'s> {
     pub(crate) fn new(src: &'s str) -> Self {
@@ -341,35 +338,6 @@ impl fmt::Display for Token {
             T::Unexpected => write!(f, "unexpected input"),
             T::Whitespace => write!(f, "whitespace"),
         }
-    }
-}
-
-impl fmt::Display for TokenSet<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let TokenSet(tokens) = self;
-
-        if tokens.is_empty() {
-            return write!(f, "nothing");
-        }
-
-        // TODO: Keyword support.
-
-        let (head, [tail]) = tokens.split_at(tokens.len() - 1) else {
-            unreachable!("tail contains exactly one token");
-        };
-
-        if head.is_empty() {
-            return write!(f, "{tail}");
-        }
-
-        let mut prefix = "one of ";
-        for token in head {
-            write!(f, "{prefix}{token}")?;
-            prefix = ", ";
-        }
-
-        write!(f, ", or {tail}")?;
-        Ok(())
     }
 }
 
