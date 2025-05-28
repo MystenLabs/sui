@@ -20,6 +20,9 @@ impl Build {
         let path = self.path.clone().unwrap_or_else(|| PathBuf::from("."));
 
         let package = Package::<Vanilla>::load_root(path).await?;
+        // repin
+        // save to lockfile
+        //
 
         Ok(())
     }

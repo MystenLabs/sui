@@ -41,6 +41,10 @@ impl MoveFlavor for Vanilla {
         "vanilla".to_string()
     }
 
+    fn new() -> Self {
+        Vanilla
+    }
+
     fn implicit_deps(
         &self,
         environments: impl Iterator<Item = Self::EnvironmentID>,
@@ -67,5 +71,9 @@ impl MoveFlavor for Vanilla {
     ) -> PackageResult<DependencySet<PathBuf>> {
         assert!(deps.is_empty(), "there are no vanilla-flavor dependencies");
         Ok(DependencySet::new())
+    }
+
+    fn unfetched_path(&self) -> PathBuf {
+        PathBuf::from("unfetched")
     }
 }

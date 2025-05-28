@@ -72,6 +72,13 @@ pub struct DepInfo<F: MoveFlavor + fmt::Debug> {
 }
 
 impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
+    pub fn new(
+        pinned: BTreeMap<EnvironmentName, DependencyInfo<F>>,
+        published: BTreeMap<EnvironmentName, Publication<F>>,
+    ) -> Self {
+        Self { pinned, published }
+    }
+
     /// Read `Move.lock` and all `Move.<env>.lock` files from the directory at `path`.
     /// Returns a new empty [Lockfile] if `path` doesn't contain a `Move.lock`.
     pub fn read_from_dir(path: impl AsRef<Path>) -> PackageResult<Self> {

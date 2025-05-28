@@ -8,12 +8,16 @@ use crate::{
     flavor::MoveFlavor,
     package::{
         EnvironmentName, Package, PackageName,
-        lockfile::Lockfile,
+        lockfile::{DepInfo, DependencyInfo, Lockfile},
         manifest::{Manifest, digest},
         paths::PackagePath,
     },
 };
-use petgraph::graph::{DiGraph, NodeIndex};
+use petgraph::{
+    graph::{DiGraph, NodeIndex},
+    visit::EdgeRef,
+};
+use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, btree_map::Entry},
     path::PathBuf,
@@ -49,6 +53,10 @@ impl<F: MoveFlavor> PackageNode<F> {
     fn manifest(&self) -> &Manifest<F> {
         self.package.manifest()
     }
+
+    fn name(&self) -> &PackageName {
+        self.package.manifest().package_name()
+    }
 }
 
 impl<F: MoveFlavor> PackageGraph<F> {
@@ -64,7 +72,10 @@ impl<F: MoveFlavor> PackageGraph<F> {
         if let Some(graph) = builder.load_from_lockfile(path, env).await? {
             Ok(graph)
         } else {
-            builder.load_from_manifests(path, env).await
+            // if there's no lockfile, load from manifests
+            return PackageGraphBuilder::<F>::new()
+                .load_from_manifests(path, env)
+                .await;
         }
     }
 
@@ -89,6 +100,106 @@ impl<F: MoveFlavor> PackageGraph<F> {
         PackageGraphBuilder::new()
             .load_from_lockfile_ignore_digests(path, env)
             .await
+    }
+
+    // TODO: a package graph cannot recreate the whole lockfile? What happens with the published
+    // information, when re-pinning or update deps happens? That is now an invalid lockfile, so it
+    // should not contain much from the previous lockfile? Should it simply replace the lockfile
+    // and remove the published information?
+    pub async fn to_lockfile(
+        &self,
+        path: &PackagePath,
+        env: &EnvironmentName,
+    ) -> PackageResult<()> {
+        let manifest = Manifest::<F>::read_from_file(path.manifest_path())?;
+        let mut new_pinned_deps: BTreeMap<EnvironmentName, DependencyInfo<F>> = BTreeMap::new();
+        let mut data: BTreeMap<String, DepInfo<F>> = BTreeMap::new();
+
+        // Find the root package (the one that matches our path)
+        let root_package = self
+            .inner
+            .node_weights()
+            .find(|p| p.package.path().path() == path.path())
+            .ok_or_else(|| PackageError::Generic("Root package not found in graph".to_string()))?;
+
+        // Get the root package's direct dependencies
+        let root_deps = root_package.package.direct_deps(env).await?;
+
+        // Create DepInfo for root package
+        let mut root_deps_map = BTreeMap::new();
+        for (dep_name, pinned_dep) in root_deps.iter() {
+            root_deps_map.insert(dep_name.clone(), dep_name.to_string());
+        }
+
+        let root_dep_info = DepInfo {
+            source: PinnedDependencyInfo::<F>::root_dependency(path),
+            manifest_digest: digest(std::fs::read_to_string(path.manifest_path())?.as_bytes()),
+            deps: root_deps_map,
+        };
+
+        // Add root package to data
+        data.insert(root_package.name().to_string(), root_dep_info);
+
+        // Process all packages in the graph
+        for package in self.inner.node_weights() {
+            if package.package.path().path() == path.path() {
+                continue; // Skip root package as we've already processed it
+            }
+
+            // Get all outgoing edges (dependencies) for this node
+            let mut deps = BTreeMap::new();
+            for edge in self.inner.edges(
+                self.inner
+                    .node_indices()
+                    .find(|idx| {
+                        self.inner.node_weight(*idx).unwrap().package.path()
+                            == package.package.path()
+                    })
+                    .unwrap(),
+            ) {
+                let dep_name = edge.weight().clone();
+                deps.insert(dep_name.clone(), dep_name.to_string());
+            }
+
+            // Get the pinned dependencies for this package
+            let pkg_deps = package.package.direct_deps(env).await?;
+            for (dep_name, pinned_dep) in pkg_deps.iter() {
+                // Create a new pinned dependency with the correct relative path
+                let mut source = pinned_dep.clone();
+                let path = source.unfetched_path();
+                // Calculate the relative path from the root package to this package
+
+                // Update the local path to be relative to the root package
+
+                let dep_info = DepInfo {
+                    source,
+                    manifest_digest: digest(
+                        std::fs::read_to_string(package.package.path().manifest_path())?.as_bytes(),
+                    ),
+                    deps: deps.clone(),
+                };
+
+                // Use the package name as the key
+                data.insert(package.name().to_string(), dep_info);
+            }
+        }
+
+        // Create the DependencyInfo for this environment
+        new_pinned_deps.insert(env.clone(), DependencyInfo { data });
+
+        // Get the environment ID from the manifest
+        let envs = manifest
+            .environments()
+            .iter()
+            .filter(|(e, _)| *e == env)
+            .map(|(e, id)| (e.clone(), id.clone()))
+            .collect();
+
+        // Create and write the lockfile
+        let lockfile = Lockfile::new(new_pinned_deps, BTreeMap::new());
+        lockfile.write_to(path.path(), envs)?;
+
+        Ok(())
     }
 }
 
@@ -225,7 +336,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
 
         // add outgoing edges for dependencies
         // Note: this loop could be parallel if we want parallel fetching:
-        for (name, dep) in package.package.direct_deps(env).iter() {
+        for (name, dep) in package.package.direct_deps(env).await?.iter() {
             // TODO: to handle use-environment we need to traverse with a different env here
             let future =
                 self.add_transitive_manifest_deps(dep, env, graph.clone(), visited.clone());

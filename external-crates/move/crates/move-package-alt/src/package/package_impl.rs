@@ -18,13 +18,13 @@ use super::{
     paths::PackagePath,
 };
 use crate::{
-    dependency::{DependencySet, PinnedDependencyInfo},
+    dependency::{DependencySet, PinnedDependencyInfo, pin},
     errors::{ManifestError, PackageResult},
     flavor::MoveFlavor,
     git::GitRepo,
 };
 use move_core_types::identifier::Identifier;
-use tracing::debug;
+use tracing::{debug, info};
 
 pub type EnvironmentName = String;
 pub type PackageName = Identifier;
@@ -38,7 +38,7 @@ pub struct Package<F: MoveFlavor + fmt::Debug> {
 }
 
 impl<F: MoveFlavor> Package<F> {
-    /// Load a package from the manifest and lock files in directory [path].
+    /// Load a package from the manifest.
     /// Makes a best effort to translate old-style packages into the current format,
     ///
     /// Fails if [path] does not exist, or if it doesn't contain a manifest
@@ -63,16 +63,33 @@ impl<F: MoveFlavor> Package<F> {
         &self.path
     }
 
+    pub fn name(&self) -> &PackageName {
+        self.manifest().package_name()
+    }
+
     /// TODO: comment
     pub fn manifest(&self) -> &Manifest<F> {
         &self.manifest
     }
 
     /// The resolved and pinned dependencies from the manifest for environment `env`
-    pub fn direct_deps(
+    pub async fn direct_deps(
         &self,
         env: &EnvironmentName,
-    ) -> BTreeMap<PackageName, PinnedDependencyInfo<F>> {
-        todo!()
+    ) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo<F>>> {
+        let mut deps = self.manifest.dependencies();
+        let envs: BTreeMap<_, _> = self
+            .manifest()
+            .environments()
+            .into_iter()
+            .filter(|(e, _)| *e == env)
+            .map(|(env, id)| (env.clone(), id.clone()))
+            .collect();
+        let pinned_deps = pin(&F::new(), deps.clone(), &envs).await?;
+
+        Ok(pinned_deps
+            .into_iter()
+            .map(|(_, id, dep)| (id, dep))
+            .collect())
     }
 }

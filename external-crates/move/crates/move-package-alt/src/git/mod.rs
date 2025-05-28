@@ -69,6 +69,11 @@ impl GitRepo {
         Ok(repo_fs_path)
     }
 
+    pub async fn to_fs_path(&self) -> GitResult<PathBuf> {
+        let sha = self.find_sha().await?;
+        Ok(format_repo_to_fs_path(&self.repo_url, &sha, None))
+    }
+
     /// Used for testing to be able to specify which folder to fetch to. Use `fetch` for all other needs.
     async fn fetch_to_folder(&self, fetch_to_folder: PathBuf) -> GitResult<PathBuf> {
         self.fetch_impl(Some(fetch_to_folder)).await
