@@ -174,6 +174,38 @@ Here are some examples for `transfer-objects` and `gas-coin`:
 $ sui client ptb --transfer-objects "[ARRAY_OF_OBJECTS]" @0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331 --gas-coin @0x00002819ee07a66e53800495ccf5eeade8a02054a2e0827546c70e4b226f0495
 ```
 
+### Vectors
+
+CLI PTBs support vectors of serializable types as input (which includes all the primitive types, `ID`s, and `Option`s). Vectors are represented as a comma-separated list of values in square brackets prefixed with `vector`.
+
+```sh
+$ sui client ptb --move-call "$PKG::m::f" vector[1, 2, 3]
+```
+
+Example above illustrates a vector of integer values. Depending on the type of the vector, you can pass any supported type:
+
+```sh
+--move-call package::module::function vector[@0x1, @0x2, @0x3] # vector<address>
+--move-call package::module::function vector[none, none]       # vector<Option<T>>
+--move-call package::module::function vector["1", "2", "3"]    # vector<String>
+```
+
+### Option
+
+Options are represented as `none` or `some(value)`. The value can be any supported primitive type, `ID`, or `Option`.
+
+```sh
+$ sui client ptb --move-call "0x1::option::destroy_some" some(2)
+```
+
+For `none`, you can use the `none` keyword. For `some`, you can use the `some` keyword followed by the value.
+
+```sh
+$ sui client ptb --move-call "0x1::option::destroy_none" none
+```
+
+### Addresses
+
 ### Assign
 
 Use the `--assign` argument to bind values to variables. There are two ways you can use it:
