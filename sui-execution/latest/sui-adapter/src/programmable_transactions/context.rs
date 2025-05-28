@@ -277,11 +277,11 @@ mod checked {
             &mut self,
             package_id: ObjectID,
         ) -> Result<AccountAddress, ExecutionError> {
-            if self.linkage_view.has_linkage(package_id) {
+            if self.linkage_view.has_linkage(package_id)? {
                 // Setting same context again, can skip.
                 return Ok(self
                     .linkage_view
-                    .original_package_id()
+                    .original_package_id()?
                     .unwrap_or(*package_id));
             }
 
@@ -293,22 +293,12 @@ mod checked {
 
         /// Load a type using the context's current session.
         pub fn load_type(&mut self, type_tag: &TypeTag) -> VMResult<Type> {
-            load_type(
-                self.vm,
-                &mut self.linkage_view,
-                &self.new_packages,
-                type_tag,
-            )
+            load_type(self.vm, &self.linkage_view, &self.new_packages, type_tag)
         }
 
         /// Load a type using the context's current session.
         pub fn load_type_from_struct(&mut self, struct_tag: &StructTag) -> VMResult<Type> {
-            load_type_from_struct(
-                self.vm,
-                &mut self.linkage_view,
-                &self.new_packages,
-                struct_tag,
-            )
+            load_type_from_struct(self.vm, &self.linkage_view, &self.new_packages, struct_tag)
         }
 
         pub fn get_type_abilities(&self, t: &Type) -> Result<AbilitySet, ExecutionError> {
@@ -1305,7 +1295,7 @@ mod checked {
 
     pub fn load_type_from_struct(
         vm: &MoveVM,
-        linkage_view: &mut LinkageView,
+        linkage_view: &LinkageView,
         new_packages: &[MovePackage],
         struct_tag: &StructTag,
     ) -> VMResult<Type> {
@@ -1337,7 +1327,11 @@ mod checked {
         let runtime_id = ModuleId::new(original_address, module.clone());
         let data_store = SuiDataStore::new(linkage_view, new_packages);
         let res = vm.get_runtime().load_type(&runtime_id, name, &data_store);
-        linkage_view.reset_linkage();
+        linkage_view.reset_linkage().map_err(|e| {
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message(e.to_string())
+                .finish(Location::Undefined)
+        })?;
         let (idx, struct_type) = res?;
 
         // Recursively load type parameters, if necessary
@@ -1373,7 +1367,7 @@ mod checked {
     /// reset after this operation, because during the operation, it may change when loading a struct.
     pub fn load_type(
         vm: &MoveVM,
-        linkage_view: &mut LinkageView,
+        linkage_view: &LinkageView,
         new_packages: &[MovePackage],
         type_tag: &TypeTag,
     ) -> VMResult<Type> {

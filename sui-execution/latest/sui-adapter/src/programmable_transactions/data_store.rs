@@ -46,8 +46,11 @@ impl<'state, 'a> SuiDataStore<'state, 'a> {
 // TODO: `DataStore` will be reworked and this is likely to disappear.
 //       Leaving this comment around until then as testament to better days to come...
 impl DataStore for SuiDataStore<'_, '_> {
-    fn link_context(&self) -> AccountAddress {
-        self.linkage_view.link_context()
+    fn link_context(&self) -> PartialVMResult<AccountAddress> {
+        self.linkage_view.link_context().map_err(|e| {
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message(e.to_string())
+        })
     }
 
     fn relocate(&self, module_id: &ModuleId) -> PartialVMResult<ModuleId> {
