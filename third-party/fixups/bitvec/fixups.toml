@@ -1,0 +1,8 @@
+[env]
+# Only <1.0 really needs this.
+CARGO_PKG_REPOSITORY = ""
+
+# Version rather than platform-specific
+[platform_fixup.'cfg(all())']
+version = ">=1.0"
+extra_srcs = ["README.md", "doc/**/*.md"]
