@@ -11,6 +11,7 @@ use sui_types::base_types::{ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message;
+use sui_types::messages_consensus::ConsensusTxPosition;
 use sui_types::messages_grpc::RawWaitForEffectsRequest;
 use sui_types::object::Object;
 use sui_types::transaction::VerifiedTransaction;
@@ -25,7 +26,7 @@ use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::authority_server::AuthorityServer;
 use crate::execution_scheduler::SchedulingSource;
 use crate::wait_for_effects_request::{
-    ConsensusTxPosition, RejectReason, WaitForEffectsRequest, WaitForEffectsResponse,
+    RejectReason, WaitForEffectsRequest, WaitForEffectsResponse,
 };
 
 use super::AuthorityServerHandle;

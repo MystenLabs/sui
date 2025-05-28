@@ -31,8 +31,8 @@ use sui_types::{
     executable_transaction::{TrustedExecutableTransaction, VerifiedExecutableTransaction},
     messages_consensus::{
         AuthorityIndex, ConsensusDeterminedVersionAssignments, ConsensusTransaction,
-        ConsensusTransactionKey, ConsensusTransactionKind, ExecutionTimeObservation,
-        TransactionIndex,
+        ConsensusTransactionKey, ConsensusTransactionKind, ConsensusTxPosition,
+        ExecutionTimeObservation, TransactionIndex,
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{SenderSignedData, VerifiedTransaction},
@@ -57,7 +57,6 @@ use crate::{
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
     execution_scheduler::{ExecutionSchedulerAPI, ExecutionSchedulerWrapper, SchedulingSource},
     scoring_decision::update_low_scoring_authorities,
-    wait_for_effects_request::ConsensusTxPosition,
 };
 
 pub struct ConsensusHandlerInitializer {

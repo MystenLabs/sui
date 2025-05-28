@@ -562,16 +562,6 @@ pub enum SuiError {
     TransactionOrchestratorLocalExecutionError { error: String },
 
     // Errors returned by authority and client read API's
-    #[error(
-        "Failure serializing consensus position in the requested format: {:?}",
-        error
-    )]
-    ConsensusPositionSerializationError { error: String },
-    #[error(
-        "Failure deserializing consensus position from the provided format: {:?}",
-        error
-    )]
-    ConsensusPositionDeserializationError { error: String },
     #[error("Failure serializing transaction in the requested format: {:?}", error)]
     TransactionSerializationError { error: String },
     #[error(

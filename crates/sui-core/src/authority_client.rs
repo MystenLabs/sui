@@ -29,9 +29,9 @@ use sui_network::tonic::transport::Channel;
 use sui_types::messages_grpc::{
     HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
     HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-    HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawGetEffectsRequest,
-    RawGetEffectsResponse, RawSubmitTxRequest, RawSubmitTxResponse, RawWaitForEffectsRequest,
-    RawWaitForEffectsResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+    HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
+    RawSubmitTxResponse, RawWaitForEffectsRequest, RawWaitForEffectsResponse, SystemStateRequest,
+    TransactionInfoRequest, TransactionInfoResponse,
 };
 
 #[async_trait]
@@ -41,12 +41,6 @@ pub trait AuthorityAPI {
         request: RawSubmitTxRequest,
         client_addr: Option<SocketAddr>,
     ) -> Result<RawSubmitTxResponse, SuiError>;
-
-    async fn get_effects(
-        &self,
-        request: RawGetEffectsRequest,
-        client_addr: Option<SocketAddr>,
-    ) -> Result<RawGetEffectsResponse, SuiError>;
 
     /// Initiate a new transaction to a Sui or Primary account.
     async fn handle_transaction(
@@ -181,22 +175,6 @@ impl AuthorityAPI for NetworkAuthorityClient {
 
         self.client()?
             .submit_transaction(request)
-            .await
-            .map(tonic::Response::into_inner)
-            .map_err(Into::into)
-    }
-
-    /// Get effects for a submmitted transaction to the Sui network.
-    async fn get_effects(
-        &self,
-        request: RawGetEffectsRequest,
-        client_addr: Option<SocketAddr>,
-    ) -> Result<RawGetEffectsResponse, SuiError> {
-        let mut request = request.into_request();
-        insert_metadata(&mut request, client_addr);
-
-        self.client()?
-            .get_effects(request)
             .await
             .map(tonic::Response::into_inner)
             .map_err(Into::into)

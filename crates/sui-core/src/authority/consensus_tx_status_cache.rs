@@ -3,13 +3,14 @@
 
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::{
+    error::{SuiError, SuiResult},
+    messages_consensus::ConsensusTxPosition,
+};
 use tokio::sync::watch;
 use tracing::debug;
 
 use mysten_common::sync::notify_read::NotifyRead;
-
-use crate::wait_for_effects_request::ConsensusTxPosition;
 
 /// The number of consensus rounds to retain transaction status information before garbage collection.
 /// Used to expire positions from old rounds, as well as to check if a transaction is too far ahead of the last committed round.

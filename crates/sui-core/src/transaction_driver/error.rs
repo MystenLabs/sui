@@ -17,4 +17,10 @@ pub enum TransactionDriverError {
     TimeoutBeforeFinality,
     #[error("Failed to call validator {0}: {1}")]
     RpcFailure(String, String),
+    #[error("Failed to find execution data: {0}")]
+    ExecutionDataNotFound(String),
+    #[error("Transaction rejected with reason: {0}")]
+    TransactionRejected(String),
+    #[error("Transaction expired at round: {0}")]
+    TransactionExpired(String),
 }
