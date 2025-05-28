@@ -562,6 +562,7 @@ impl From<sui_sdk_types::Owner> for super::Owner {
                 OwnerKind::Shared
             }
             Immutable => OwnerKind::Immutable,
+            ConsensusAddress { .. } => todo!(),
         };
 
         message.set_kind(kind);
