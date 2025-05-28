@@ -28,9 +28,9 @@ impl Graph {
         let path = path.canonicalize().unwrap();
         let package_path = PackagePath::new(path.clone())?;
 
-        let graph = PackageGraph::<Vanilla>::load(&package_path, &"mainnet".to_string()).await?;
+        let graph = PackageGraph::<Vanilla>::load(&package_path).await?;
 
-        info!("Package graph loaded successfully\n: {:#?}", graph);
+        println!("Package graph: {:?}", graph);
 
         Ok(())
     }

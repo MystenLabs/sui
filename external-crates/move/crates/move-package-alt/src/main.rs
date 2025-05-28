@@ -4,7 +4,7 @@
 
 use clap::{Parser, Subcommand};
 use move_package_alt::{
-    cli::{Build, Graph, New, Parse},
+    cli::{Build, Graph, New, Parse, UpdateDeps},
     errors::PackageResult,
 };
 
@@ -24,6 +24,7 @@ pub enum Commands {
     Test,
     /// Parse a manifest or lockfile, or both
     Parse(Parse),
+    UpdateDeps(UpdateDeps),
 }
 
 impl Commands {
@@ -34,6 +35,7 @@ impl Commands {
             Commands::New(n) => n.execute(),
             Commands::Test => todo!(),
             Commands::Parse(p) => p.execute(),
+            Commands::UpdateDeps(u) => u.execute().await,
         }
     }
 }

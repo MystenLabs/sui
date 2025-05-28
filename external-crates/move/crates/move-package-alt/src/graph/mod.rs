@@ -8,18 +8,25 @@ use crate::{
     flavor::MoveFlavor,
     package::{
         EnvironmentName, Package, PackageName,
-        lockfile::Lockfile,
+        lockfile::{DepInfo, DependencyInfo, Lockfile},
         manifest::{Manifest, digest},
         paths::PackagePath,
     },
 };
-use petgraph::graph::{DiGraph, NodeIndex};
+use move_core_types::identifier::Identifier;
+use petgraph::{
+    graph::{DiGraph, NodeIndex},
+    visit::EdgeRef,
+};
+use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, btree_map::Entry},
+    fs::read_to_string,
     path::PathBuf,
     sync::{Arc, Mutex},
 };
 use tokio::sync::OnceCell;
+use tracing::{debug, info};
 
 #[derive(Debug)]
 pub struct PackageGraph<F: MoveFlavor> {
@@ -49,38 +56,72 @@ impl<F: MoveFlavor> PackageNode<F> {
     fn manifest(&self) -> &Manifest<F> {
         self.package.manifest()
     }
+
+    fn name(&self) -> &PackageName {
+        self.package.manifest().package_name()
+    }
 }
 
 impl<F: MoveFlavor> PackageGraph<F> {
-    // TODO: load should load for all environments and return a map
+    /// Loads the package graph for each environment defined in the manifest. It checks whether the
+    /// resolution graph in the lockfile inside `path` is up-to-date (i.e., whether any of the
+    /// manifests digests are out of date). If the resolution graph is up-to-date, it is returned.
+    /// Otherwise a new resolution graph is constructed by traversing (only) the manifest files.
+    pub async fn load(path: &PackagePath) -> PackageResult<BTreeMap<EnvironmentName, Self>> {
+        let manifest = Manifest::<F>::read_from_file(path.manifest_path())?;
+        let envs = manifest.environments();
+        let builder = PackageGraphBuilder::<F>::new();
+        let mut output = BTreeMap::new();
 
-    /// Check to see whether the resolution graph in the lockfile inside `path` is up-to-date (i.e.
-    /// whether any of the manifests digests are out of date). If the resolution graph is
-    /// up-to-date, it is returned. Otherwise a new resolution graph is constructed by traversing
-    /// (only) the manifest files.
-    pub async fn load(path: &PackagePath, env: &EnvironmentName) -> PackageResult<Self> {
-        let builder = PackageGraphBuilder::new();
-
-        if let Some(graph) = builder.load_from_lockfile(path, env).await? {
-            Ok(graph)
-        } else {
-            builder.load_from_manifests(path, env).await
+        for env in envs.keys() {
+            if let Some(graph) = builder.load_from_lockfile(path, env).await? {
+                output.insert(env.clone(), graph);
+            } else {
+                output.insert(
+                    env.clone(),
+                    PackageGraphBuilder::<F>::new()
+                        .load_from_manifests_by_env(path, env)
+                        .await?,
+                );
+            }
         }
+        Ok(output)
+    }
+
+    /// Constructs a [PackageGraph] for each environment in the manifest, by pinning and fetching
+    /// all transitive dependencies from the manifests rooted at `path` (no lockfiles are read).
+    pub async fn load_from_manifests(
+        path: &PackagePath,
+    ) -> PackageResult<BTreeMap<EnvironmentName, Self>> {
+        let manifest = Manifest::<F>::read_from_file(path.manifest_path())?;
+        let envs = manifest.environments();
+        let mut output = BTreeMap::new();
+
+        for env in envs.keys() {
+            debug!("Creating a PackageGraph for env {env}");
+            output.insert(
+                env.clone(),
+                PackageGraphBuilder::<F>::new()
+                    .load_from_manifests_by_env(path, env)
+                    .await?,
+            );
+        }
+        Ok(output)
     }
 
     /// Construct a [PackageGraph] by pinning and fetching all transitive dependencies from the
-    /// manifests rooted at `path` (no lockfiles are read).
-    pub async fn load_from_manifests(
+    /// manifests rooted at `path` (no lockfiles are read) for the passed environment.
+    pub async fn load_from_manifest_by_env(
         path: &PackagePath,
         env: &EnvironmentName,
     ) -> PackageResult<Self> {
         PackageGraphBuilder::new()
-            .load_from_manifests(path, env)
+            .load_from_manifests_by_env(path, env)
             .await
     }
 
     /// Read a [PackageGraph] from a lockfile, ignoring manifest digests. Primarily useful for
-    /// testing - you will usually want [Self::load]
+    /// testing - you will usually want [Self::load].
     /// TODO: probably want to take a path to the lockfile
     pub async fn load_from_lockfile_ignore_digests(
         path: &PackagePath,
@@ -89,6 +130,65 @@ impl<F: MoveFlavor> PackageGraph<F> {
         PackageGraphBuilder::new()
             .load_from_lockfile_ignore_digests(path, env)
             .await
+    }
+
+    // Convert the package graph to a set of pinned dependencies for the given environment.
+    pub async fn to_pinned_deps(
+        &self,
+        path: &PackagePath,
+        env: &EnvironmentName,
+    ) -> PackageResult<BTreeMap<String, DependencyInfo<F>>> {
+        let graph = &self.inner;
+
+        let mut new_pinned_deps: BTreeMap<EnvironmentName, DependencyInfo<F>> = BTreeMap::new();
+        let mut data: BTreeMap<String, DepInfo<F>> = BTreeMap::new();
+
+        let mut name_to_suffix: BTreeMap<PackageName, u8> = BTreeMap::new();
+        let mut node_to_id: BTreeMap<NodeIndex, Identifier> = BTreeMap::new();
+
+        // build index to id map
+        for node in graph.node_indices() {
+            let pkg_node = graph.node_weight(node).expect("node exists");
+            let suffix = name_to_suffix.entry(pkg_node.name().clone()).or_default();
+            let id = if *suffix == 0 {
+                pkg_node.name().clone()
+            } else {
+                Identifier::new(format!("{}_{suffix}", pkg_node.name())).expect("valid identifier")
+            };
+            node_to_id.insert(node, id);
+            *suffix += 1;
+        }
+
+        // encode graph
+        let mut data = BTreeMap::new();
+        for node in graph.node_indices() {
+            let pkg_node = graph.node_weight(node).expect("node exists");
+
+            let edges = self
+                .inner
+                .edges_directed(node, petgraph::Direction::Outgoing);
+
+            let mut deps = BTreeMap::new();
+            for edge in edges {
+                let dep_name = edge.weight().clone();
+                deps.insert(dep_name, node_to_id[&edge.target()].to_string());
+            }
+
+            data.insert(
+                node_to_id[&node].to_string(),
+                DepInfo {
+                    source: pkg_node.pinned_dep.clone(),
+                    manifest_digest: digest(
+                        read_to_string(pkg_node.package.path().manifest_path())?.as_bytes(),
+                    ),
+                    deps: deps.clone(),
+                },
+            );
+        }
+
+        new_pinned_deps.insert(env.clone(), DependencyInfo { data });
+
+        Ok(new_pinned_deps)
     }
 }
 
@@ -140,8 +240,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             for (pkg_id, dep_info) in deps.data.iter() {
                 let package = self.cache.fetch(&dep_info.source).await?;
                 let pkg_manifest_path = package.package.path().manifest_path();
-                let package_manifest_digest =
-                    digest(std::fs::read_to_string(pkg_manifest_path)?.as_bytes());
+                let package_manifest_digest = digest(read_to_string(pkg_manifest_path)?.as_bytes());
                 if check_digests && package_manifest_digest != dep_info.manifest_digest {
                     return Ok(None);
                 }
@@ -168,7 +267,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
     /// Construct a new package graph for `env` by recursively fetching and reading manifest files
     /// starting from the package at `path`.
     /// Lockfiles are ignored. See [PackageGraph::load]
-    async fn load_from_manifests(
+    async fn load_from_manifests_by_env(
         &self,
         path: &PackagePath,
         env: &EnvironmentName,
@@ -225,7 +324,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
 
         // add outgoing edges for dependencies
         // Note: this loop could be parallel if we want parallel fetching:
-        for (name, dep) in package.package.direct_deps(env).iter() {
+        for (name, dep) in package.package.direct_deps(env).await?.iter() {
             // TODO: to handle use-environment we need to traverse with a different env here
             let future =
                 self.add_transitive_manifest_deps(dep, env, graph.clone(), visited.clone());
@@ -275,8 +374,9 @@ impl<F: MoveFlavor> PackageCache<F> {
         })
         .await
         .clone()
-        .ok_or(PackageError::Generic(
-            "TODO: couldn't fetch package".to_string(),
-        ))
+        .ok_or(PackageError::Generic(format!(
+            "TODO: couldn't fetch package {:#?}",
+            dep
+        )))
     }
 }

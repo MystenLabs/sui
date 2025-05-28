@@ -8203,6 +8203,7 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-package",
+ "once_cell",
  "petgraph 0.8.1",
  "regex",
  "serde",
