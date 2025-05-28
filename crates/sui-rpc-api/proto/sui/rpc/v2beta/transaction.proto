@@ -341,6 +341,10 @@ message ConsensusCommitPrologue {
 message VersionAssignment {
   // `ObjectId` of the object.
   optional string object_id = 1;
+  // start version of the consensus stream for this object
+  //
+  // TODO fix field numbering
+  optional uint64 start_version = 3;
   // Assigned version.
   optional uint64 version = 2;
 }
@@ -353,17 +357,13 @@ message CanceledTransaction {
   repeated VersionAssignment version_assignments = 2;
 }
 
-// Set of canceled transactions.
-message CanceledTransactions {
-  repeated CanceledTransaction canceled_transactions = 1;
-}
-
 // Version assignments performed by consensus.
 message ConsensusDeterminedVersionAssignments {
-  oneof kind {
-    // Canceled transaction version assignment.
-    CanceledTransactions canceled_transactions = 2;
-  }
+  // Version of this message
+  optional int32 version = 1;
+
+  // Canceled transaction version assignment.
+  repeated CanceledTransaction canceled_transactions = 3;
 }
 
 // Update the set of valid JWKs.

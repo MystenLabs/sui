@@ -4,12 +4,16 @@
 pub struct Argument {
     #[prost(enumeration = "argument::ArgumentKind", optional, tag = "1")]
     pub kind: ::core::option::Option<i32>,
-    /// Index of an input or the result of another command based on `kind`.
+    /// Index of an input when `kind` is `INPUT`.
     #[prost(uint32, optional, tag = "2")]
-    pub index: ::core::option::Option<u32>,
+    pub input: ::core::option::Option<u32>,
     /// Used to access a nested result when `kind` is `RESULT`.
     #[prost(uint32, optional, tag = "3")]
     pub subresult: ::core::option::Option<u32>,
+    /// Index of a result when `kind` is `RESULT`.
+    /// TODO Fix field numbering
+    #[prost(uint32, optional, tag = "4")]
+    pub result: ::core::option::Option<u32>,
 }
 /// Nested message and enum types in `Argument`.
 pub mod argument {
@@ -811,6 +815,8 @@ pub mod execution_error {
         CoinTypeGlobalPause = 36,
         /// Certificate is canceled because randomness could not be generated this epoch.
         ExecutionCanceledDueToRandomnessUnavailable = 37,
+        MoveVectorElemTooBig = 38,
+        MoveRawValueTooBig = 39,
     }
     impl ExecutionErrorKind {
         /// String value of the enum field names used in the ProtoBuf definition.
@@ -871,6 +877,8 @@ pub mod execution_error {
                 Self::ExecutionCanceledDueToRandomnessUnavailable => {
                     "EXECUTION_CANCELED_DUE_TO_RANDOMNESS_UNAVAILABLE"
                 }
+                Self::MoveVectorElemTooBig => "MOVE_VECTOR_ELEM_TOO_BIG",
+                Self::MoveRawValueTooBig => "MOVE_RAW_VALUE_TOO_BIG",
             }
         }
         /// Creates an enum from field names used in the ProtoBuf definition.
@@ -932,6 +940,8 @@ pub mod execution_error {
                 "EXECUTION_CANCELED_DUE_TO_RANDOMNESS_UNAVAILABLE" => {
                     Some(Self::ExecutionCanceledDueToRandomnessUnavailable)
                 }
+                "MOVE_VECTOR_ELEM_TOO_BIG" => Some(Self::MoveVectorElemTooBig),
+                "MOVE_RAW_VALUE_TOO_BIG" => Some(Self::MoveRawValueTooBig),
                 _ => None,
             }
         }
@@ -1037,6 +1047,9 @@ pub mod command_argument_error {
         /// Shared object operations such as wrapping, freezing, or converting to owned are not
         /// allowed.
         SharedObjectOperationNotAllowed = 12,
+        /// Invalid argument arity. Expected a single argument but found a result that expanded to
+        /// multiple arguments.
+        InvalidArgumentArity = 13,
     }
     impl CommandArgumentErrorKind {
         /// String value of the enum field names used in the ProtoBuf definition.
@@ -1062,6 +1075,7 @@ pub mod command_argument_error {
                 Self::SharedObjectOperationNotAllowed => {
                     "SHARED_OBJECT_OPERATION_NOT_ALLOWED"
                 }
+                Self::InvalidArgumentArity => "INVALID_ARGUMENT_ARITY",
             }
         }
         /// Creates an enum from field names used in the ProtoBuf definition.
@@ -1086,6 +1100,7 @@ pub mod command_argument_error {
                 "SHARED_OBJECT_OPERATION_NOT_ALLOWED" => {
                     Some(Self::SharedObjectOperationNotAllowed)
                 }
+                "INVALID_ARGUMENT_ARITY" => Some(Self::InvalidArgumentArity),
                 _ => None,
             }
         }
@@ -2444,7 +2459,7 @@ pub struct MultisigMemberPublicKey {
     /// The signature scheme of this public key.
     #[prost(enumeration = "SignatureScheme", optional, tag = "1")]
     pub scheme: ::core::option::Option<i32>,
-    /// Public key bytes if scheme is ed25519 | secp256k1 | secp256r1.
+    /// Public key bytes if scheme is ed25519 | secp256k1 | secp256r1 | passkey.
     #[prost(bytes = "bytes", optional, tag = "2")]
     pub public_key: ::core::option::Option<::prost::bytes::Bytes>,
     /// A zklogin public identifier if scheme is zklogin.
@@ -2504,6 +2519,9 @@ pub struct MultisigMemberSignature {
     /// The zklogin authenticator if scheme is `ZKLOGIN`.
     #[prost(message, optional, tag = "3")]
     pub zklogin: ::core::option::Option<ZkLoginAuthenticator>,
+    /// The passkey authenticator if scheme is `PASSKEY`.
+    #[prost(message, optional, tag = "4")]
+    pub passkey: ::core::option::Option<PasskeyAuthenticator>,
 }
 /// A zklogin authenticator.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -2515,6 +2533,7 @@ pub struct ZkLoginAuthenticator {
     #[prost(uint64, optional, tag = "2")]
     pub max_epoch: ::core::option::Option<u64>,
     /// User signature with the public key attested to by the provided proof.
+    /// TODO maybe we make a SimpleSignature message type for better type-safety clarity?
     #[prost(message, optional, boxed, tag = "3")]
     pub signature: ::core::option::Option<::prost::alloc::boxed::Box<UserSignature>>,
 }
@@ -2605,6 +2624,7 @@ pub struct PasskeyAuthenticator {
     #[prost(string, optional, tag = "2")]
     pub client_data_json: ::core::option::Option<::prost::alloc::string::String>,
     /// A secp256r1 signature.
+    /// TODO maybe we make a SimpleSignature message type for better type-safety clarity?
     #[prost(message, optional, boxed, tag = "3")]
     pub signature: ::core::option::Option<::prost::alloc::boxed::Box<UserSignature>>,
 }
@@ -3113,6 +3133,11 @@ pub struct VersionAssignment {
     /// `ObjectId` of the object.
     #[prost(string, optional, tag = "1")]
     pub object_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// start version of the consensus stream for this object
+    ///
+    /// TODO fix field numbering
+    #[prost(uint64, optional, tag = "3")]
+    pub start_version: ::core::option::Option<u64>,
     /// Assigned version.
     #[prost(uint64, optional, tag = "2")]
     pub version: ::core::option::Option<u64>,
@@ -3127,26 +3152,15 @@ pub struct CanceledTransaction {
     #[prost(message, repeated, tag = "2")]
     pub version_assignments: ::prost::alloc::vec::Vec<VersionAssignment>,
 }
-/// Set of canceled transactions.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct CanceledTransactions {
-    #[prost(message, repeated, tag = "1")]
-    pub canceled_transactions: ::prost::alloc::vec::Vec<CanceledTransaction>,
-}
 /// Version assignments performed by consensus.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ConsensusDeterminedVersionAssignments {
-    #[prost(oneof = "consensus_determined_version_assignments::Kind", tags = "2")]
-    pub kind: ::core::option::Option<consensus_determined_version_assignments::Kind>,
-}
-/// Nested message and enum types in `ConsensusDeterminedVersionAssignments`.
-pub mod consensus_determined_version_assignments {
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Kind {
-        /// Canceled transaction version assignment.
-        #[prost(message, tag = "2")]
-        CanceledTransactions(super::CanceledTransactions),
-    }
+    /// Version of this message
+    #[prost(int32, optional, tag = "1")]
+    pub version: ::core::option::Option<i32>,
+    /// Canceled transaction version assignment.
+    #[prost(message, repeated, tag = "3")]
+    pub canceled_transactions: ::prost::alloc::vec::Vec<CanceledTransaction>,
 }
 /// Update the set of valid JWKs.
 #[derive(Clone, PartialEq, ::prost::Message)]

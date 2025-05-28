@@ -384,10 +384,7 @@ fn resolve_ptb(
 
     ProgrammableTransaction {
         inputs,
-        commands: commands
-            .into_iter()
-            .map(TryInto::try_into)
-            .collect::<Result<_, _>>()?,
+        commands: commands.into_iter().map(Into::into).collect(),
     }
     .pipe(Ok)
 }
