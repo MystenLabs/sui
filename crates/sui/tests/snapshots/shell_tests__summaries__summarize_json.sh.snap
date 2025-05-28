@@ -72,6 +72,7 @@ object.json
 object_bag.json
 object_table.json
 package.json
+party.json
 pay.json
 poseidon.json
 priority_queue.json

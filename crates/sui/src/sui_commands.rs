@@ -514,7 +514,7 @@ impl SuiCommand {
                     sui_move::Command::Summary(mut s) if s.package_id.is_some() => {
                         let (_, client) = get_chain_id_and_client(
                             client_config,
-                            "sui move summay --package-id <object_id>",
+                            "sui move summary --package-id <object_id>",
                         )
                         .await?;
                         let Some(client) = client else {
@@ -1414,6 +1414,7 @@ fn read_line() -> Result<String, anyhow::Error> {
     Ok(s.trim_end().to_string())
 }
 
+/// Get the currently configured client, and the chain ID for that client.
 async fn get_chain_id_and_client(
     client_config: SuiEnvConfig,
     command_err_string: &str,
@@ -1469,6 +1470,7 @@ async fn resolve_package(reader: &ReadApi, package_id: ObjectID) -> anyhow::Resu
     )?)
 }
 
+/// Download the package's modules and its dependencies to the specified path.
 async fn download_package_and_deps_under(
     read_api: &ReadApi,
     path: &Path,
@@ -1497,7 +1499,7 @@ async fn download_package_and_deps_under(
             file.write_all(module)?;
         }
 
-        dependencies.insert(*original_id, relative_package_path);
+        dependencies.insert(*original_id, PathBuf::from(relative_package_path));
         linkage.insert(*original_id, pkg_info.clone());
         type_origins.insert(*original_id, package.type_origin_table().clone());
     }
@@ -1510,12 +1512,20 @@ async fn download_package_and_deps_under(
     );
     fs::create_dir_all(&package_path)?;
     for (m_name, module) in root_package.serialized_module_map() {
-        let mut file = fs::File::create(
-            package_path
-                .join(m_name)
-                .with_extension(MOVE_COMPILED_EXTENSION),
-        )?;
-        file.write_all(module)?;
+        let file_path = package_path
+            .join(m_name)
+            .with_extension(MOVE_COMPILED_EXTENSION);
+        let mut file = fs::File::create(&file_path)?;
+        file.write_all(module).with_context(|| {
+            format!(
+                "Unable to write module {m_name} for package {} to {}",
+                root_package
+                    .id()
+                    .deref()
+                    .to_canonical_string(/* with_prefix */ true),
+                file_path.display(),
+            )
+        })?;
     }
 
     Ok(PackageSummaryMetadata {

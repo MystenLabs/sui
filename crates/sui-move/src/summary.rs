@@ -4,7 +4,10 @@
 use clap::Parser;
 use move_cli::base::summary;
 use move_package::BuildConfig;
-use std::{collections::BTreeMap, path::Path};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 use sui_types::{
     base_types::ObjectID,
     move_package::{TypeOrigin, UpgradeInfo},
@@ -15,7 +18,7 @@ use sui_types::{
 pub struct Summary {
     #[clap(flatten)]
     pub summary: summary::Summary,
-    /// The object ID to summarize if present. The `--path` will be ignored if this field is used.
+    /// The object ID to summarize if `package-id` is present. The `--path` will be ignored if this field is used.
     #[clap(long = "package-id", value_parser = ObjectID::from_hex_literal)]
     pub package_id: Option<ObjectID>,
 }
@@ -31,7 +34,7 @@ pub struct PackageSummaryMetadata {
     // Mapping of original package ID to path to the package relative to the summary directory
     // root.
     #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub dependencies: Option<BTreeMap<ObjectID, String>>,
+    pub dependencies: Option<BTreeMap<ObjectID, PathBuf>>,
     // Mapping of original package ID to upgraded (on-chain) package ID.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub linkage: Option<BTreeMap<ObjectID, UpgradeInfo>>,

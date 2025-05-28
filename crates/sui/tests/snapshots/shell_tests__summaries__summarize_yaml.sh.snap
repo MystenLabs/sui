@@ -70,6 +70,7 @@ object.yaml
 object_bag.yaml
 object_table.yaml
 package.yaml
+party.yaml
 pay.yaml
 poseidon.yaml
 priority_queue.yaml

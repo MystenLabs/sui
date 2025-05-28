@@ -108,8 +108,8 @@ impl Summary {
             for (module_name, module) in &package_summary.modules {
                 let module_summary_file = package_dir.join(module_name.to_string());
                 self.serialize_to_file(module, &module_summary_file)?;
-                    }
-                    }
+            }
+        }
 
         self.serialize_to_file(&address_mapping, &output_dir.join(ADDRESS_MAPPING_FILENAME))?;
 
