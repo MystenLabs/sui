@@ -1265,7 +1265,6 @@ impl ConsensusBlockHandler {
                 (block_ref, transactions)
             })
             .collect::<Vec<_>>();
-        let mut pending_consensus_transactions = vec![];
         let mut executable_transactions = vec![];
         for (_block, transactions) in parsed_transactions {
             for parsed in transactions {
@@ -1292,15 +1291,14 @@ impl ConsensusBlockHandler {
                     .consensus_block_handler_txn_processed
                     .with_label_values(&["certified"])
                     .inc();
-                if let ConsensusTransactionKind::UserTransaction(tx) = &parsed.transaction.kind {
+                if let ConsensusTransactionKind::UserTransaction(tx) = parsed.transaction.kind {
                     // TODO(fastpath): use a separate function to check if a transaction should be executed in fastpath.
                     // If we do schedule a fast-path transaction for execution, we also need to
                     // track it in case we need to revert it later due to post-commit reject.
                     if tx.contains_shared_object() {
                         continue;
                     }
-                    pending_consensus_transactions.push(parsed.transaction.clone());
-                    let tx = VerifiedTransaction::new_unchecked(*tx.clone());
+                    let tx = VerifiedTransaction::new_unchecked(*tx);
                     executable_transactions.push(
                         VerifiedExecutableTransaction::new_from_consensus(
                             tx,
@@ -1311,28 +1309,10 @@ impl ConsensusBlockHandler {
             }
         }
 
-        if pending_consensus_transactions.is_empty() {
+        if executable_transactions.is_empty() {
             return;
         }
-        {
-            let reconfig_state = self.epoch_store.get_reconfig_state_read_lock_guard();
-            // Stop executing fastpath transactions when epoch change starts.
-            if !reconfig_state.should_accept_user_certs() {
-                return;
-            }
-            // Otherwise, try to ensure the certified transactions get into consensus before epoch change.
-            // TODO(fastpath): avoid race with removals in consensus adapter, by waiting to handle commit after
-            // all blocks in the commit are processed via the transaction handler. Other kinds of races need to be
-            // avoided as well. Or we can track pending consensus transactions inside consensus instead.
-            self.epoch_store
-                .insert_pending_consensus_transactions(
-                    &pending_consensus_transactions,
-                    Some(&reconfig_state),
-                )
-                .unwrap_or_else(|e| {
-                    panic!("Failed to insert pending consensus transactions: {}", e)
-                });
-        }
+
         self.metrics
             .consensus_block_handler_fastpath_executions
             .inc_by(executable_transactions.len() as u64);
