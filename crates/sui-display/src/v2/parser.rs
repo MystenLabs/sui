@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(dead_code)]
 
-use std::{borrow::Cow, iter::Peekable};
+use std::borrow::Cow;
 
 use move_core_types::{
     account_address::AccountAddress,
@@ -10,7 +10,9 @@ use move_core_types::{
     u256::U256,
 };
 
-use super::lexer::{Lexeme as L, Lexer, OwnedLexeme, Token as T, TokenSet};
+use super::error::{Error, Expected, ExpectedSet, Match};
+use super::lexer::{Lexeme as Lex, Lexer, Token as T};
+use super::peek::{Peekable2, Peekable2Ext};
 
 /// A single Display string template is a sequence of strands.
 #[derive(Debug)]
@@ -109,46 +111,87 @@ pub enum Fields<'s> {
 }
 
 pub(crate) struct Parser<'s> {
-    lexer: Peekable<Lexer<'s>>,
+    lexer: Peekable2<Lexer<'s>>,
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    #[error("Unexpected end-of-string, expected {expect}")]
-    UnexpectedEos { expect: TokenSet<'static> },
+/// Helper macro for constructing an `Expected` enum variant based on the kind of pattern being
+/// matched on in the parser. The first argument is the kind, which denotes whether the pattern was
+/// looking for a token, regardless of the contents of the underlying slice, or a literal match on
+/// a particular string slice.
+macro_rules! expected {
+    (Lit, $pat:path, $slice:tt) => {
+        Expected::Literal($slice)
+    };
 
-    #[error("Unexpected {actual}, expected {expect}")]
-    UnexpectedToken {
-        actual: OwnedLexeme,
-        expect: TokenSet<'static>,
-    },
+    (Tok, $pat:path, $slice:tt) => {
+        Expected::Token($pat)
+    };
+}
+
+/// Construct a set of expected tokens, (tokens that the parser tried to match against at the
+/// current position).
+///
+/// The first argument is an optional previous `ExpectedSet`, used to chain together multiple
+/// different match expressions. The remaining arguments are a list of lexeme pattern matches.
+macro_rules! expected_set {
+    ($prev:expr; $($kind:ident, $pat:path, $slice:tt),+) => {
+        ExpectedSet {
+            prev: Some(Box::new($prev)),
+            tried: &[$(expected!($kind, $pat, $slice)),+],
+        }
+    };
+
+    ($($kind:ident, $pat:path, $slice:tt),+) => {
+        ExpectedSet {
+            prev: None,
+            tried: &[$(expected!($kind, $pat, $slice)),+],
+        }
+    };
 }
 
 /// Pattern match on the next token in the lexer, without consuming it. Returns an error if there
 /// is no next token, or if the next token doesn't match any of the provided patterns. The error
-/// enumerates all the tokens that were expected.
+/// enumerates all the tokens that were expected, including the tokens that were checked
+/// `$prev`iously, if any were provided.
 macro_rules! match_token {
-    ($lexer:expr; $(L($($pat:path)|+, $off:pat, $slice:pat) => $expr:expr),+ $(,)?) => {{
-        const EXPECTED: TokenSet = TokenSet(&[$($($pat),+),+]);
-
-        match $lexer.peek().ok_or_else(|| Error::UnexpectedEos { expect: EXPECTED })? {
-            $(&L($($pat)|+, $off, $slice) => $expr,)+
-            &actual => return Err(Error::UnexpectedToken {
+    (
+        $lexer:expr $(, $prev:expr)?;
+        $($kind:ident($($pat:path)|+, $off:pat, $slice:tt) => $expr:expr),+
+        $(,)?
+    ) => {{
+        match $lexer.peek() {
+            $(Some(&Lex($($pat)|+, $off, $slice)) => $expr,)+
+            Some(&actual) => return Err(Error::UnexpectedToken {
                 actual: actual.detach(),
-                expect: EXPECTED,
+                expect: expected_set!($($prev;)? $($($kind, $pat, $slice),+),+),
+            }),
+            None => return Err(Error::UnexpectedEos {
+                expect: expected_set!($($prev;)? $($($kind, $pat, $slice),+),+),
             }),
         }
     }};
 }
 
-// Expression variant of `match_token!`, which evaluates to `Some(...)` if an arm matches,
-// consuming the next token, or `None` without consuming if there is no next token, or it doesn't
-// match any of the provided patterns.
+/// Expression variant of `match_token!`, which evaluates to `Match::Found(...)` if an arm matches,
+/// consuming the next token, or `Match::Tried(...)` without consuming if there is no next token,
+/// or it doesn't match any of the provided patterns.
+///
+/// In the latter case, the set of patterns checked is included in the output, so that the parser
+/// can accumulate all the patterns it has tried to match against at the current position.
+///
+/// The optional `$prev` argument can be used to include the set of patterns that were checked
+/// before this match.
 macro_rules! match_token_opt {
-    ($lexer:expr; $(L($($pat:path)|+, $off:pat, $slice:pat) => $expr:expr),+ $(,)?) => {{
+    (
+        $lexer:expr $(, $prev:expr)?;
+        $($kind:ident($($pat:path)|+, $off:pat, $slice:tt) => $expr:expr),+
+        $(,)?
+    ) => {{
         match $lexer.peek() {
-            $(Some(&L($($pat)|+, $off, $slice)) => Some($expr),)+
-            Some(_) | None => None
+            $(Some(&Lex($($pat)|+, $off, $slice)) => Match::Found($expr),)+
+            Some(_) | None => Match::Tried(
+                expected_set!($($prev;)? $($($kind, $pat, $slice),+),+)
+            ),
         }
     }};
 }
@@ -203,7 +246,7 @@ impl<'s> Parser<'s> {
     /// Construct a new parser, consuming input from the `src` string.
     pub(crate) fn new(src: &'s str) -> Self {
         Self {
-            lexer: Lexer::new(src).peekable(),
+            lexer: Lexer::new(src).peekable2(),
         }
     }
 
@@ -220,14 +263,14 @@ impl<'s> Parser<'s> {
 
     fn parse_strand(&mut self) -> Result<Strand<'s>, Error> {
         Ok(match_token! { self.lexer;
-            L(T::Text | T::LLBrace | T::RRBrace, _, _) => Strand::Text(self.parse_text()?),
-            L(T::LBrace, _, _) => Strand::Expr(self.parse_expr()?),
+            Tok(T::Text | T::LLBrace | T::RRBrace, _, _) => Strand::Text(self.parse_text()?),
+            Tok(T::LBrace, _, _) => Strand::Expr(self.parse_expr()?),
         })
     }
 
     fn parse_text(&mut self) -> Result<Cow<'s, str>, Error> {
         let mut text = self.parse_part()?;
-        while let Some(L(T::Text | T::LLBrace | T::RRBrace, _, _)) = self.lexer.peek() {
+        while let Some(Lex(T::Text | T::LLBrace | T::RRBrace, _, _)) = self.lexer.peek() {
             text += self.parse_part()?;
         }
 
@@ -236,7 +279,7 @@ impl<'s> Parser<'s> {
 
     fn parse_part(&mut self) -> Result<Cow<'s, str>, Error> {
         Ok(match_token! { self.lexer;
-            L(T::Text | T::LLBrace | T::RRBrace, _, slice) => {
+            Tok(T::Text | T::LLBrace | T::RRBrace, _, slice) => {
                 self.lexer.next();
                 Cow::Borrowed(slice)
             }
@@ -244,33 +287,33 @@ impl<'s> Parser<'s> {
     }
 
     fn parse_expr(&mut self) -> Result<Expr<'s>, Error> {
-        match_token! { self.lexer; L(T::LBrace, _, _) => self.lexer.next() };
+        match_token! { self.lexer; Tok(T::LBrace, _, _) => self.lexer.next() };
         let mut alternates = vec![self.parse_chain()?];
         let mut transform = None;
 
         loop {
             self.eat_whitespace();
             match_token! { self.lexer;
-                L(T::RBrace, _, _) => {
+                Tok(T::RBrace, _, _) => {
                     self.lexer.next();
                     break;
                 },
 
-                L(T::Colon, _, _) => {
+                Tok(T::Colon, _, _) => {
                     self.lexer.next();
                     self.eat_whitespace();
-                    match_token! { self.lexer; L(T::Ident, _, t) => {
+                    match_token! { self.lexer; Tok(T::Ident, _, t) => {
                         self.lexer.next();
                         transform = Some(t);
                     }};
                     self.eat_whitespace();
-                    match_token! { self.lexer; L(T::RBrace, _, _) => {
+                    match_token! { self.lexer; Tok(T::RBrace, _, _) => {
                         self.lexer.next()
                     }};
                     break;
                 },
 
-                L(T::Pipe, _, _) => {
+                Tok(T::Pipe, _, _) => {
                     self.lexer.next();
                     alternates.push(self.parse_chain()?);
                 }
@@ -285,59 +328,67 @@ impl<'s> Parser<'s> {
 
     fn parse_chain(&mut self) -> Result<Chain<'s>, Error> {
         let mut accessors = vec![];
-        let root = self.try_parse_literal()?;
 
         // If there is no root literal, the chain must start with an identifier, representing a
         // field on the object being displayed.
-        if root.is_none() {
-            accessors.push(match_token! { self.lexer; L(T::Ident, _, i) => {
-                self.lexer.next();
-                Accessor::Field(i)
-            }})
-        }
+        let root = match self.try_parse_literal()? {
+            Match::Found(literal) => Some(literal),
+            Match::Tried(tried) => {
+                accessors.push(match_token! { self.lexer, tried; Tok(T::Ident, _, i) => {
+                    self.lexer.next();
+                    Accessor::Field(i)
+                }});
+                None
+            }
+        };
 
-        while let Some(accessor) = self.try_parse_accessor()? {
+        while let Match::Found(accessor) = self.try_parse_accessor()? {
             accessors.push(accessor);
         }
 
         Ok(Chain { root, accessors })
     }
 
-    fn try_parse_literal(&mut self) -> Result<Option<Literal<'s>>, Error> {
+    fn try_parse_literal(&mut self) -> Result<Match<Literal<'s>>, Error> {
         self.eat_whitespace();
         Ok(match_token_opt! { self.lexer;
-            L(T::Ident, _, "true") => {
+            Lit(T::Ident, _, "true") => {
                 self.lexer.next();
                 Literal::Bool(true)
+            },
+
+            Lit(T::Ident, _, "false") => {
+                self.lexer.next();
+                Literal::Bool(false)
             },
         })
     }
 
-    fn try_parse_accessor(&mut self) -> Result<Option<Accessor<'s>>, Error> {
+    fn try_parse_accessor(&mut self) -> Result<Match<Accessor<'s>>, Error> {
         self.eat_whitespace();
         Ok(match_token_opt! { self.lexer;
-            L(T::Dot, _, _) => {
+            Tok(T::Dot, _, _) => {
                 self.lexer.next();
                 self.eat_whitespace();
-                match_token! { self.lexer; L(T::Ident, _, f) => {
+                match_token! { self.lexer; Tok(T::Ident, _, f) => {
                     self.lexer.next();
                     Accessor::Field(f)
                 }}
             },
 
-            L(T::LBracket, _, _) => {
+            Tok(T::LBracket, _, _) => {
                 self.lexer.next();
-                if matches!(self.lexer.peek(), Some(L(T::LBracket, _, _))) {
+                if matches!(self.lexer.peek(), Some(Lex(T::LBracket, _, _))) {
                     self.lexer.next();
                     let chain = self.parse_chain()?;
                     self.eat_whitespace();
-                    match_token! { self.lexer; L(T::RBracket, _, _) => self.lexer.next() };
-                    match_token! { self.lexer; L(T::RBracket, _, _) => self.lexer.next() };
+                    match_token! { self.lexer; Tok(T::RBracket, _, _) => self.lexer.next() };
+                    match_token! { self.lexer; Tok(T::RBracket, _, _) => self.lexer.next() };
                     Accessor::IIndex(chain)
                 } else {
                     let chain = self.parse_chain()?;
                     self.eat_whitespace();
-                    match_token! { self.lexer; L(T::RBracket, _, _) => self.lexer.next() };
+                    match_token! { self.lexer; Tok(T::RBracket, _, _) => self.lexer.next() };
                     Accessor::Index(chain)
                 }
             },
@@ -347,7 +398,7 @@ impl<'s> Parser<'s> {
     fn eat_whitespace(&mut self) {
         // The lexer merges together consecutive whitespace tokens, so if one is found, there is no
         // need to check for more.
-        if let Some(L(T::Whitespace, _, _)) = self.lexer.peek() {
+        if let Some(Lex(T::Whitespace, _, _)) = self.lexer.peek() {
             self.lexer.next();
         }
     }
@@ -653,6 +704,35 @@ mod tests {
     }
 
     #[test]
+    fn test_bool_literals() {
+        assert_snapshot!(strands(r#"{true | false}"#), @r###"
+        Expr(
+            Expr {
+                alternates: [
+                    Chain {
+                        root: Some(
+                            Bool(
+                                true,
+                            ),
+                        ),
+                        accessors: [],
+                    },
+                    Chain {
+                        root: Some(
+                            Bool(
+                                false,
+                            ),
+                        ),
+                        accessors: [],
+                    },
+                ],
+                transform: None,
+            },
+        )
+        "###)
+    }
+
+    #[test]
     fn test_index_chain() {
         assert_snapshot!(strands(r#"{foo[bar][[baz]].qux[quy]}"#), @r###"
         Expr(
@@ -753,7 +833,7 @@ mod tests {
 
     #[test]
     fn test_unbalanced_curlies() {
-        assert_snapshot!(strands(r#"{foo"#), @"Error: Unexpected end-of-string, expected one of '}', ':', or '|'");
+        assert_snapshot!(strands(r#"{foo"#), @"Error: Unexpected end-of-string, expected one of ':', '|', or '}'");
     }
 
     #[test]
@@ -768,7 +848,7 @@ mod tests {
 
     #[test]
     fn test_spaced_out_left_double_index() {
-        assert_snapshot!(strands(r#"{foo[ [bar]]}"#), @"Error: Unexpected '[' at offset 6, expected an identifier");
+        assert_snapshot!(strands(r#"{foo[ [bar]]}"#), @"Error: Unexpected '[' at offset 6, expected one of 'false', 'true', or an identifier");
     }
 
     #[test]
@@ -783,11 +863,11 @@ mod tests {
 
     #[test]
     fn test_triple_index() {
-        assert_snapshot!(strands(r#"{foo[[[bar]]]}"#), @"Error: Unexpected '[' at offset 6, expected an identifier");
+        assert_snapshot!(strands(r#"{foo[[[bar]]]}"#), @"Error: Unexpected '[' at offset 6, expected one of 'false', 'true', or an identifier");
     }
 
     #[test]
     fn test_unexpected_characters() {
-        assert_snapshot!(strands(r#"anything goes {? % ! 🔥}"#), @r###"Error: Unexpected "?" at offset 15, expected an identifier"###);
+        assert_snapshot!(strands(r#"anything goes {? % ! 🔥}"#), @r###"Error: Unexpected "?" at offset 15, expected one of 'false', 'true', or an identifier"###);
     }
 }
