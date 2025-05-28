@@ -30,8 +30,7 @@ struct PackageCache<F: MoveFlavor> {
     cache: Mutex<BTreeMap<PathBuf, Arc<OnceCell<Option<Arc<Package<F>>>>>>>,
 }
 
-// TODO: make non-pub
-pub struct PackageGraphBuilder<F: MoveFlavor> {
+struct PackageGraphBuilder<F: MoveFlavor> {
     cache: PackageCache<F>,
 }
 
@@ -43,7 +42,6 @@ impl<F: MoveFlavor> PackageGraph<F> {
     /// up-to-date, it is returned. Otherwise a new resolution graph is constructed by traversing
     /// (only) the manifest files.
     pub async fn load(path: &PackagePath, env: &EnvironmentName) -> PackageResult<Self> {
-        /*
         let builder = PackageGraphBuilder::new();
 
         if let Some(graph) = builder.load_from_lockfile(path, env).await? {
@@ -51,8 +49,6 @@ impl<F: MoveFlavor> PackageGraph<F> {
         } else {
             builder.load_from_manifests(path, env).await
         }
-        */
-        todo!()
     }
 
     /// Construct a [PackageGraph] by pinning and fetching all transitive dependencies from the
@@ -64,6 +60,16 @@ impl<F: MoveFlavor> PackageGraph<F> {
         PackageGraphBuilder::new()
             .load_from_manifests(path, env)
             .await
+    }
+
+    /// Read a [PackageGraph] from a lockfile, ignoring manifest digests. Primarily useful for
+    /// testing - you will usually want [Self::load]
+    /// TODO: probably want to take a path to the lockfile
+    pub async fn load_from_lockfile_ignore_digests(
+        path: &PackagePath,
+        env: &EnvironmentName,
+    ) -> PackageResult<Self> {
+        todo!()
     }
 }
 
@@ -81,7 +87,27 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         &self,
         path: &PackagePath,
         env: &EnvironmentName,
-    ) -> PackageResult<PackageGraph<F>> {
+    ) -> PackageResult<Option<PackageGraph<F>>> {
+        self.load_from_lockfile_impl(path, env, true).await
+    }
+
+    /// Load a [PackageGraph] from the lockfile at `path`. Returns [None] if there is no lockfile
+    pub async fn load_from_lockfile_ignore_digests(
+        &self,
+        path: &PackagePath,
+        env: &EnvironmentName,
+    ) -> PackageResult<Option<PackageGraph<F>>> {
+        self.load_from_lockfile_impl(path, env, false).await
+    }
+
+    /// Load a [PackageGraph] from the lockfile at `path`. Returns [None] if there is no lockfile.
+    /// Also returns [None] if `check_digests` is true and any of the digests don't match.
+    async fn load_from_lockfile_impl(
+        &self,
+        path: &PackagePath,
+        env: &EnvironmentName,
+        check_digests: bool,
+    ) -> PackageResult<Option<PackageGraph<F>>> {
         let lockfile = Lockfile::<F>::read_from_dir(path.as_path())?;
         let mut graph = PackageGraph {
             inner: DiGraph::new(),
@@ -93,8 +119,11 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         if let Some(deps) = deps {
             // First pass: create nodes for all packages
             for (pkg_id, dep_info) in deps.data.iter() {
-                let package = Package::load(dep_info.source.clone()).await?;
-                let index = graph.inner.add_node(Arc::new(package));
+                let package = self.cache.fetch(&dep_info.source).await?;
+                if check_digests && package.manifest().digest() != dep_info.manifest_digest {
+                    return Ok(None);
+                }
+                let index = graph.inner.add_node(package);
                 package_indices.insert(pkg_id.clone(), index);
             }
 
@@ -113,7 +142,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
 
         println!("Package graph: {:?}", graph.inner);
 
-        Ok(graph)
+        Ok(Some(graph))
     }
 
     /// Construct a new package graph for `env` by recursively fetching and reading manifest files
@@ -178,9 +207,10 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         // Note: this loop could be parallel if we want parallel fetching:
         for (name, dep) in package.direct_deps(env).iter() {
             // TODO: to handle use-environment we need to traverse with a different env here
-            let dep_index = self
-                .add_transitive_manifest_deps(dep, env, graph.clone(), visited.clone())
-                .await?;
+            let future =
+                self.add_transitive_manifest_deps(dep, env, graph.clone(), visited.clone());
+            let dep_index = Box::pin(future).await?;
+
             graph
                 .lock()
                 .expect("unpoisoned")
