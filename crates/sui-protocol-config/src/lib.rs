@@ -8,6 +8,7 @@ use std::{
 };
 
 use clap::*;
+use fastcrypto::encoding::{Base58, Encoding, Hex};
 use move_vm_config::verifier::VerifierConfig;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -3570,33 +3571,92 @@ impl ProtocolConfig {
                     cfg.feature_flags.max_ptb_value_size_v2 = true;
                 }
                 83 => {
-                    cfg.feature_flags.resolve_type_input_ids_to_defining_id = true;
-                    cfg.transfer_party_transfer_internal_cost_base = Some(52);
+                    if chain == Chain::Mainnet {
+                        // The address that will sign the recovery transaction.
+                        let aliased: [u8; 32] = Hex::decode(
+                            "0x0b2da327ba6a4cacbe75dddd50e6e8bbf81d6496e92d66af9154c61c77f7332f",
+                        )
+                        .unwrap()
+                        .try_into()
+                        .unwrap();
 
-                    // Enable execution time estimate mode for congestion control on mainnet.
-                    cfg.feature_flags.record_additional_state_digest_in_prologue = true;
-                    cfg.consensus_commit_rate_estimation_window_size = Some(10);
-                    cfg.feature_flags.per_object_congestion_control_mode =
-                        PerObjectCongestionControlMode::ExecutionTimeEstimate(
-                            ExecutionTimeEstimateParams {
-                                target_utilization: 30,
-                                allowed_txn_cost_overage_burst_limit_us: 100_000, // 100 ms
-                                randomness_scalar: 20,
-                                max_estimate_us: 1_500_000, // 1.5s
-                                stored_observations_num_included_checkpoints: 10,
-                                stored_observations_limit: u64::MAX,
-                            },
-                        );
+                        // Allow aliasing for the two addresses that contain stolen funds.
+                        cfg.aliased_addresses.push(AliasedAddress {
+                            original: Hex::decode("0xcd8962dad278d8b50fa0f9eb0186bfa4cbdecc6d59377214c88d0286a0ac9562").unwrap().try_into().unwrap(),
+                            aliased,
+                            allowed_tx_digests: vec![
+                                Base58::decode("B2eGLFoMHgj93Ni8dAJBfqGzo8EWSTLBesZzhEpTPA4").unwrap().try_into().unwrap(),
+                            ],
+                        });
 
-                    // Enable the new depth-first block sync logic.
-                    cfg.feature_flags.consensus_batched_block_sync = true;
+                        cfg.aliased_addresses.push(AliasedAddress {
+                            original: Hex::decode("0xe28b50cef1d633ea43d3296a3f6b67ff0312a5f1a99f0af753c85b8b5de8ff06").unwrap().try_into().unwrap(),
+                            aliased,
+                            allowed_tx_digests: vec![
+                                Base58::decode("J4QqSAgp7VrQtQpMy5wDX4QGsCSEZu3U5KuDAkbESAge").unwrap().try_into().unwrap(),
+                            ],
+                        });
+                    }
 
-                    // Enable nitro attestation upgraded parsing logic and enable the
-                    // native function on mainnet.
-                    cfg.feature_flags.enable_nitro_attestation_upgraded_parsing = true;
-                    cfg.feature_flags.enable_nitro_attestation = true;
+                    // These features had to be deferred to v84 for mainnet in order to ship the recovery protocol
+                    // upgrade as a patch to 1.48
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.resolve_type_input_ids_to_defining_id = true;
+                        cfg.transfer_party_transfer_internal_cost_base = Some(52);
+
+                        // Enable execution time estimate mode for congestion control on mainnet.
+                        cfg.feature_flags.record_additional_state_digest_in_prologue = true;
+                        cfg.consensus_commit_rate_estimation_window_size = Some(10);
+                        cfg.feature_flags.per_object_congestion_control_mode =
+                            PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                                ExecutionTimeEstimateParams {
+                                    target_utilization: 30,
+                                    allowed_txn_cost_overage_burst_limit_us: 100_000, // 100 ms
+                                    randomness_scalar: 20,
+                                    max_estimate_us: 1_500_000, // 1.5s
+                                    stored_observations_num_included_checkpoints: 10,
+                                    stored_observations_limit: u64::MAX,
+                                },
+                            );
+
+                        // Enable the new depth-first block sync logic.
+                        cfg.feature_flags.consensus_batched_block_sync = true;
+
+                        // Enable nitro attestation upgraded parsing logic and enable the
+                        // native function on mainnet.
+                        cfg.feature_flags.enable_nitro_attestation_upgraded_parsing = true;
+                        cfg.feature_flags.enable_nitro_attestation = true;
+                    }
                 }
                 84 => {
+                    if chain == Chain::Mainnet {
+                        cfg.feature_flags.resolve_type_input_ids_to_defining_id = true;
+                        cfg.transfer_party_transfer_internal_cost_base = Some(52);
+
+                        // Enable execution time estimate mode for congestion control on mainnet.
+                        cfg.feature_flags.record_additional_state_digest_in_prologue = true;
+                        cfg.consensus_commit_rate_estimation_window_size = Some(10);
+                        cfg.feature_flags.per_object_congestion_control_mode =
+                            PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                                ExecutionTimeEstimateParams {
+                                    target_utilization: 30,
+                                    allowed_txn_cost_overage_burst_limit_us: 100_000, // 100 ms
+                                    randomness_scalar: 20,
+                                    max_estimate_us: 1_500_000, // 1.5s
+                                    stored_observations_num_included_checkpoints: 10,
+                                    stored_observations_limit: u64::MAX,
+                                },
+                            );
+
+                        // Enable the new depth-first block sync logic.
+                        cfg.feature_flags.consensus_batched_block_sync = true;
+
+                        // Enable nitro attestation upgraded parsing logic and enable the
+                        // native function on mainnet.
+                        cfg.feature_flags.enable_nitro_attestation_upgraded_parsing = true;
+                        cfg.feature_flags.enable_nitro_attestation = true;
+                    }
+
                     // Limit the number of stored execution time observations at end of epoch.
                     cfg.feature_flags.per_object_congestion_control_mode =
                         PerObjectCongestionControlMode::ExecutionTimeEstimate(
