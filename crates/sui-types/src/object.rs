@@ -13,6 +13,7 @@ use move_core_types::annotated_value::{MoveStruct, MoveStructLayout, MoveTypeLay
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
 use mysten_common::debug_fatal;
+use prometheus::proto;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -24,7 +25,6 @@ use crate::crypto::{default_hash, deterministic_random_account_key};
 use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
 use crate::error::{SuiError, SuiResult};
 use crate::gas_coin::GAS;
-use crate::is_system_package;
 use crate::layout_resolver::LayoutResolver;
 use crate::move_package::MovePackage;
 use crate::{
@@ -33,6 +33,7 @@ use crate::{
     },
     gas_coin::GasCoin,
 };
+use crate::{is_system_package, KNOWN_SYSTEM_OBJECTS};
 use sui_protocol_config::ProtocolConfig;
 
 use self::balance_traversal::BalanceTraversal;
@@ -82,7 +83,13 @@ impl MoveObject {
         protocol_config: &ProtocolConfig,
         system_mutation: bool,
     ) -> Result<Self, ExecutionError> {
-        let bound = if protocol_config.allow_unbounded_system_objects() && system_mutation {
+        let bound = if protocol_config.allow_unbounded_system_objects()
+            && Self::is_allowed_system_object_mutation(
+                &type_,
+                &contents,
+                protocol_config,
+                system_mutation,
+            ) {
             if contents.len() as u64 > protocol_config.max_move_object_size() {
                 debug_fatal!(
                     "System created object (ID = {:?}) of type {:?} and size {} exceeds normal max size {}",
@@ -364,6 +371,26 @@ impl MoveObject {
     pub fn get_total_sui(&self, layout_resolver: &mut dyn LayoutResolver) -> Result<u64, SuiError> {
         let balances = self.get_coin_balances(layout_resolver)?;
         Ok(balances.get(&GAS::type_tag()).copied().unwrap_or(0))
+    }
+
+    /// Predicated determining whether a mutation to a system object is allowed. After
+    /// `allow_unbounded_system_object_mutations` is enabled in the protocol config, this function
+    /// will allow mutations of select system objects (`KNOWN_SYSTEM_OBJECTS` and the inner system
+    /// state object) by non-system transactions to exceed the max size limit.
+    fn is_allowed_system_object_mutation(
+        type_: &MoveObjectType,
+        contents: &[u8],
+        protocol_config: &ProtocolConfig,
+        system_mutation: bool,
+    ) -> bool {
+        let allowed_user_tx_mutation = || {
+            protocol_config.allow_unbounded_system_object_mutations()
+                && (MoveObject::id_opt(contents).is_ok_and(|id| KNOWN_SYSTEM_OBJECTS.contains(&id))
+                    || type_.is_inner_system_state_object())
+        };
+        system_mutation
+            || contents.len() as u64 <= protocol_config.max_move_object_size()
+            || allowed_user_tx_mutation()
     }
 }
 

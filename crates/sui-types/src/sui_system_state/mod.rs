@@ -43,6 +43,9 @@ pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
 pub const ADVANCE_EPOCH_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch");
 pub const ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch_safe_mode");
 
+pub const SUI_SYSTEM_STATE_INNER_V1: &IdentStr = ident_str!("SuiSystemStateInnerV1");
+pub const SUI_SYSTEM_STATE_INNER_V2: &IdentStr = ident_str!("SuiSystemStateInnerV2");
+
 #[cfg(msim)]
 pub const SUI_SYSTEM_STATE_SIM_TEST_V1: u64 = 18446744073709551605; // u64::MAX - 10
 #[cfg(msim)]
@@ -219,6 +222,13 @@ impl SuiSystemState {
     pub fn version(&self) -> u64 {
         self.system_state_version()
     }
+}
+
+pub fn is_sui_system_inner_state_type(tag: &StructTag) -> bool {
+    tag.address == SUI_SYSTEM_ADDRESS
+        && tag.module.as_ident_str() == SUI_SYSTEM_MODULE_NAME
+        && (tag.name.as_ident_str() == SUI_SYSTEM_STATE_INNER_V1
+            || tag.name.as_ident_str() == SUI_SYSTEM_STATE_INNER_V2)
 }
 
 pub fn get_sui_system_state_wrapper(
