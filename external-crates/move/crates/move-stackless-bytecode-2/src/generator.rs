@@ -2,48 +2,52 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Ok;
-use move_binary_format::{
-    CompiledModule,
-    normalized::Bytecode::{
-        self, Add, BrFalse, Branch, CopyLoc, Eq as Equal, ImmBorrowField, LdU64, Mod, MoveLoc, Mul,
-        MutBorrowField, Pack, ReadRef, Ret, StLoc, WriteRef,
-    },
-};
+use crate::{stackless, utils::disassemble};
+
+use move_binary_format::{CompiledModule, normalized::Bytecode as NB};
 use move_model::run_bytecode_model_builder;
-use move_model_2::{
-    model::{Model as Model2, Module},
-    source_kind::{SourceKind, WithoutSource},
-};
+use move_model_2::{model::Model as Model2, source_kind::{SourceKind, WithoutSource}};
 use move_stackless_bytecode::{
     function_target::FunctionTarget,
     stackless_bytecode_generator::StacklessBytecodeGenerator as OldGenerator,
 };
 use move_symbol_pool::Symbol;
-use std::{
-    collections::BTreeMap,
-    fmt::{Debug, Display},
-    hash::Hash,
-};
 
-use crate::ir::{
-    Constant, Instruction, Operand::Var, PrimitiveOp, RValue, Var::Register,
-};
-use crate::utils::disassemble;
+use anyhow::Ok;
 
-pub struct StacklessBytecodeGenerator {
+use std::collections::BTreeMap;
+
+// -------------------------------------------------------------------------------------------------
+// Types
+// -------------------------------------------------------------------------------------------------
+
+// TODO: Consider eliminating this struct.
+pub struct StacklessBytecodeGenerator<S: SourceKind> {
     pub(crate) modules: Vec<CompiledModule>,
-    pub(crate) model: Model2<WithoutSource>,
+    pub(crate) model: Model2<S>,
 }
 
-impl StacklessBytecodeGenerator {
+// -------------------------------------------------------------------------------------------------
+// Impls
+// -------------------------------------------------------------------------------------------------
+
+impl StacklessBytecodeGenerator<WithoutSource> {
     pub fn new(modules: Vec<CompiledModule>) -> Self {
         Self {
             modules: modules.clone(),
             model: Model2::from_compiled(&BTreeMap::new(), modules),
         }
     }
+}
 
+impl<S: SourceKind> StacklessBytecodeGenerator<S> {
+    pub fn from_model(model: Model2<S>) -> Self {
+        // This is dubious, but so is holding the compiled modules instead of the normalized ones.
+        let modules = vec![];
+        Self { modules, model }
+    }
+
+    // TODO: Return a thing instead of printing
     pub fn legacy_stackless(&self) -> anyhow::Result<()> {
         let global_env = run_bytecode_model_builder(&self.modules)?;
         let module_envs = global_env.get_modules();
@@ -60,6 +64,7 @@ impl StacklessBytecodeGenerator {
         Ok(())
     }
 
+    // TODO: Return a thing instead of printing
     pub fn legacy_disassemble(&self) -> anyhow::Result<()> {
         for module in &self.modules {
             let disassembled = disassemble(module)?;
@@ -68,6 +73,31 @@ impl StacklessBytecodeGenerator {
         Ok(())
     }
 
+    // TODO: At some point this should hand back a set of stackless bytecode pacakges or similar --
+    // look at the old interface and mirror that as a start (?)
+    pub fn generate_stackless_bytecode(&self) -> anyhow::Result<Vec<stackless::ast::Package>> {
+        let packages = self.model.packages();
+
+        packages
+            .into_iter()
+            .map(|pkg| {
+                let name = pkg
+                    .name()
+                    .unwrap_or_else(|| format!("{}", pkg.address()).into());
+                let modules = pkg
+                    .modules()
+                    .map(stackless::translate::module)
+                    .collect::<Result<Vec<_>, _>>()?;
+                let modules = modules
+                    .into_iter()
+                    .map(|m| (m.name, m))
+                    .collect::<BTreeMap<_, _>>();
+                Ok(stackless::ast::Package { name, modules })
+            })
+            .collect::<Result<_, _>>()
+    }
+
+    // TODO: Return a thing instead of printing
     pub fn disassemble_source(&self) -> anyhow::Result<()> {
         let packages = self.model.packages();
 
@@ -90,52 +120,52 @@ impl StacklessBytecodeGenerator {
                     for op in bytecode {
                         match op {
                             // MoveLoc
-                            MoveLoc(loc) => {
+                            NB::MoveLoc(loc) => {
                                 println!("MoveLoc [{}]", loc);
                             }
 
                             // ImmBorrowField
-                            ImmBorrowField(field_ref) => {
+                            NB::ImmBorrowField(field_ref) => {
                                 println!("ImmBorrowField<{}> ", field_ref.field.type_);
                             }
 
                             // ReadRef
-                            ReadRef => {
+                            NB::ReadRef => {
                                 println!("ReadRef");
                             }
 
                             // Ret
-                            Ret => {
+                            NB::Ret => {
                                 println!("Ret");
                             }
 
                             // LdU64
-                            LdU64(value) => {
+                            NB::LdU64(value) => {
                                 println!("LdU64({})", value);
                             }
 
                             // Pack
-                            Pack(struct_ref) => {
+                            NB::Pack(struct_ref) => {
                                 println!("Pack<{}>", struct_ref.struct_.name);
                             }
 
                             // CopyLoc
-                            CopyLoc(loc) => {
+                            NB::CopyLoc(loc) => {
                                 println!("CopyLoc [{}]", loc);
                             }
 
                             // Add
-                            Add => {
+                            NB::Add => {
                                 println!("Add");
                             }
 
                             // MutBorrowField
-                            MutBorrowField(field_ref) => {
+                            NB::MutBorrowField(field_ref) => {
                                 println!("MutBorrowField<{}> ", field_ref.field.type_);
                             }
 
                             // WriteRef
-                            WriteRef => {
+                            NB::WriteRef => {
                                 println!("WriteRef");
                             }
 
@@ -152,6 +182,8 @@ impl StacklessBytecodeGenerator {
         Ok(())
     }
 
+    // TODO: The CLI execution should be this -- so that we know printing is happening there, not
+    // as part of the stackless bytecode interface itself.
     pub fn execute(&self) -> anyhow::Result<()> {
         let m_packages = self.model.packages();
 
@@ -163,311 +195,10 @@ impl StacklessBytecodeGenerator {
             let m_modules = m_package.modules();
 
             for m_module in m_modules {
-                let mut ctx = Context::new();
-
-                let _ = module(&mut ctx, m_module);
+                println!("{}", stackless::translate::module(m_module)?);
             }
         }
 
         Ok(())
-    }
-}
-
-pub struct Context {
-    pub(crate) var_counter: VarCounter,
-    pub(crate) ir_instructions: Vec<Instruction>,
-}
-
-impl Context {
-    pub fn new() -> Self {
-        Self {
-            var_counter: VarCounter::new(),
-            ir_instructions: Vec::new(),
-        }
-    }
-
-    pub fn get_var_counter(&mut self) -> &mut VarCounter {
-        &mut self.var_counter
-    }
-}
-
-pub struct VarCounter {
-    pub(crate) count: usize,
-}
-impl VarCounter {
-    pub fn new() -> Self {
-        Self { count: 0 }
-    }
-
-    pub fn next(&mut self) -> usize {
-        let current = self.count;
-        self.count += 1;
-        current
-    }
-
-    pub fn prev(&mut self) -> usize {
-        if self.count == 0 {
-            panic!("Cannot decrement VarCounter below zero");
-        }
-        self.count -= 1;
-        self.count
-    }
-
-    pub fn reset(&mut self) {
-        self.count = 0;
-    }
-
-    pub fn current(&self) -> usize {
-        self.count
-    }
-
-    pub fn last(&self) -> usize {
-        if self.count == 0 {
-            panic!("VarCounter is empty, cannot return last value");
-        }
-        self.count - 1
-    }
-
-    pub fn set(&mut self, value: usize) {
-        self.count = value;
-    }
-
-    pub fn increment(&mut self) {
-        self.count += 1;
-    }
-
-    pub fn decrement(&mut self) {
-        if self.count == 0 {
-            panic!("Cannot decrement VarCounter below zero");
-        }
-        self.count -= 1;
-    }
-}
-
-impl Default for VarCounter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-fn module<K: SourceKind>(ctx: &mut Context, module: Module<K>) -> anyhow::Result<()> {
-    let module = module.compiled();
-    let module_name = module.name();
-    let module_address = module.address();
-    println!("\nModule: {} ({})", module_name, module_address);
-
-    for function in module.functions.values() {
-        let function_name = &function.name;
-        println!("\nFunction: {}", function_name);
-        let code = function.code();
-        // TODO call the CFG and get blocks
-        for op in code {
-            let instruction = bytecode(ctx, &op)?;
-            ctx.ir_instructions.push(instruction);
-        }
-    }
-
-    for instruction in &ctx.ir_instructions {
-        match instruction {
-            Instruction::Return(operands) => {
-                println!("Return: {:?}", operands);
-            }
-            Instruction::Assign { lhs, rhs } => {
-                println!("Assign: Var{:?} = {:?}", lhs, rhs);
-            }
-            _ => {
-                // Handle other instructions as needed
-                println!("Instruction: {:?}", instruction);
-            }
-        }
-    }
-
-    Ok(())
-}
-
-fn bytecode<S: Hash + Eq + Display + Debug>(
-    ctx: &mut Context,
-    op: &Bytecode<S>,
-) -> anyhow::Result<Instruction> {
-    match op {
-        // MoveLoc
-        MoveLoc(loc) => {
-            let inst = Instruction::Assign {
-                lhs: vec![Register(ctx.var_counter.next())],
-                rhs: RValue::Primitive {
-                    op: PrimitiveOp::MoveLoc,
-                    args: vec![Var(Register((*loc).into()))],
-                },
-            };
-            return Ok(inst);
-        }
-
-        // CopyLoc
-        CopyLoc(loc) => {
-            let inst = Instruction::Assign {
-                lhs: vec![Register(ctx.var_counter.next())],
-                rhs: RValue::Primitive {
-                    op: PrimitiveOp::CopyLoc,
-                    args: vec![Var(Register((*loc).into()))],
-                },
-            };
-            return Ok(inst);
-        }
-
-        // StoreLoc
-        StLoc(loc) => {
-            if ctx.var_counter.current() < 1 {
-                panic!("Not enough variables to perform StLoc operation");
-            }
-            let inst = Instruction::Assign {
-                lhs: vec![Register((*loc).into())],
-                rhs: RValue::Primitive {
-                    op: PrimitiveOp::StoreLoc,
-                    args: vec![Var(Register(ctx.var_counter.last()))],
-                },
-            };
-            return Ok(inst);
-        }
-
-        // ImmBorrowField
-        ImmBorrowField(_field_ref) => {
-            let inst = Instruction::Assign {
-                lhs: vec![Register(ctx.var_counter.next())],
-                rhs: RValue::Primitive {
-                    op: PrimitiveOp::ImmBorrowField,
-                    args: vec![Var(Register(ctx.var_counter.last()))],
-                },
-            };
-            return Ok(inst);
-        }
-
-        // MutBorrowField
-        MutBorrowField(_field_ref) => {
-            let inst = Instruction::Assign {
-                lhs: vec![Register(ctx.var_counter.next())],
-                rhs: RValue::Primitive {
-                    op: PrimitiveOp::MutBorrowField,
-                    args: vec![Var(Register(ctx.var_counter.last()))],
-                },
-            };
-            return Ok(inst);
-        }
-
-        // Pack
-        Pack(_struct_ref) => {
-            let inst = Instruction::Assign {
-                lhs: vec![Register(ctx.var_counter.next())],
-                rhs: RValue::Primitive {
-                    op: PrimitiveOp::Pack,
-                    // TODO get how many args are needed
-                    args: vec![Var(Register(ctx.var_counter.last()))],
-                },
-            };
-            return Ok(inst);
-        }
-
-        // ReadRef
-        ReadRef => {
-            let inst = Instruction::Assign {
-                lhs: vec![Register(ctx.var_counter.next())],
-                rhs: RValue::Primitive {
-                    op: PrimitiveOp::ReadRef,
-                    args: vec![Var(Register(ctx.var_counter.last()))],
-                },
-            };
-            return Ok(inst);
-        }
-
-        // WriteRef
-        WriteRef => {
-            if ctx.var_counter.current() < 1 {
-                panic!("Not enough variables to perform WriteRef operation");
-            }
-            let inst = Instruction::Assign {
-                lhs: vec![(Register(ctx.var_counter.prev()))],
-                rhs: RValue::Primitive {
-                    op: PrimitiveOp::WriteRef,
-                    args: vec![Var(Register(ctx.var_counter.last()))],
-                },
-            };
-            ctx.var_counter.increment();
-            return Ok(inst);
-        }
-
-        // Add
-        Add => {
-            if ctx.var_counter.current() < 2 {
-                panic!("Not enough variables to perform Add operation");
-            }
-            let rhs = Var(Register(ctx.var_counter.prev()));
-            let lhs = Var(Register(ctx.var_counter.last()));
-            ctx.var_counter.increment();
-            let inst = Instruction::Assign {
-                lhs: vec![Register(ctx.var_counter.next())],
-                rhs: RValue::Primitive {
-                    op: PrimitiveOp::Add,
-                    args: vec![lhs, rhs],
-                },
-            };
-            return Ok(inst);
-        }
-
-        // Mul
-        Mul => {
-            if ctx.var_counter.current() < 2 {
-                panic!("Not enough variables to perform Mul operation");
-            }
-            let rhs = Var(Register(ctx.var_counter.prev()));
-            let lhs = Var(Register(ctx.var_counter.last()));
-            ctx.var_counter.increment();
-            let inst = Instruction::Assign {
-                lhs: vec![Register(ctx.var_counter.next())],
-                rhs: RValue::Primitive {
-                    op: PrimitiveOp::Multiply,
-                    args: vec![lhs, rhs],
-                },
-            };
-            return Ok(inst);
-        }
-
-        // Mod
-        Mod => {
-            if ctx.var_counter.current() < 2 {
-                panic!("Not enough variables to perform Mod operation");
-            }
-            let rhs = Var(Register(ctx.var_counter.prev()));
-            let lhs = Var(Register(ctx.var_counter.last()));
-            ctx.var_counter.increment();
-            let inst = Instruction::Assign {
-                lhs: vec![Register(ctx.var_counter.next())],
-                rhs: RValue::Primitive {
-                    op: PrimitiveOp::Modulo,
-                    args: vec![lhs, rhs],
-                },
-            };
-            return Ok(inst);
-        }
-
-        // LdU64
-        LdU64(value) => {
-            // let newReg = value;
-            let inst = Instruction::Assign {
-                lhs: vec![Register(ctx.var_counter.next())],
-                rhs: RValue::Constant(Constant::U64(*value)),
-            };
-            return Ok(inst);
-        }
-
-        // Ret
-        Ret => {
-            let inst = Instruction::Return(Var(Register(ctx.var_counter.last())));
-            return Ok(inst);
-        }
-
-        _ => {
-            // Handle other bytecode operations as needed
-            // println!("Not implemented: {:?}", op);
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
-        }
     }
 }

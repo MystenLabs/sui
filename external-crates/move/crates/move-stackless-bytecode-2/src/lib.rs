@@ -5,6 +5,6 @@
 pub mod cfg;
 pub mod disassembler;
 pub mod generator;
-pub mod ir;
+pub mod stackless;
 pub mod tester;
 pub mod utils;
