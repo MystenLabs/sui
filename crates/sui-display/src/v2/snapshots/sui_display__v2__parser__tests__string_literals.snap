@@ -1,0 +1,51 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(\"{'foo' | 'bar\\nbaz' | 'qux\\\\'quux' | 'quy\\\\\\\\quz' | 'xyz\\\\zy' }\")"
+---
+Expr(
+    Expr {
+        alternates: [
+            Chain {
+                root: Some(
+                    String(
+                        "foo",
+                    ),
+                ),
+                accessors: [],
+            },
+            Chain {
+                root: Some(
+                    String(
+                        "bar\nbaz",
+                    ),
+                ),
+                accessors: [],
+            },
+            Chain {
+                root: Some(
+                    String(
+                        "qux'quux",
+                    ),
+                ),
+                accessors: [],
+            },
+            Chain {
+                root: Some(
+                    String(
+                        "quy\\quz",
+                    ),
+                ),
+                accessors: [],
+            },
+            Chain {
+                root: Some(
+                    String(
+                        "xyzzy",
+                    ),
+                ),
+                accessors: [],
+            },
+        ],
+        transform: None,
+    },
+)

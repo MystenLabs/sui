@@ -2,4 +2,4 @@
 source: crates/sui-display/src/v2/parser.rs
 expression: "strands(r#\"{foo[ [bar]]}\"#)"
 ---
-Error: Unexpected '[' at offset 6, expected one of 'false', 'true', '@', an identifier, a decimal number, or a hexadecimal number
+Error: Unexpected '[' at offset 6, expected one of 'false', 'true', '@', an identifier, a decimal number, a hexadecimal number, or a string
