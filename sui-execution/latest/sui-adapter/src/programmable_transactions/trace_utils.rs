@@ -1,6 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! This module implements support for tracing related to PTB execution. IMPORTANT:
+//! Bodies of all public functions in this module should be enclosed in a large if statement checking if
+//! tracing is enabled or not to make sure that any errors coming from these functions only manifest itself
+//! when tracing is enabled.
+
 use crate::execution_value::{ObjectContents, ObjectValue, Value};
 use crate::programmable_transactions::context::*;
 use move_core_types::language_storage::StructTag;
@@ -20,7 +25,8 @@ use sui_types::{
     ptb_trace::MoveValueInfo,
 };
 
-/// Inserts Move call start event into the trace.
+/// Inserts Move call start event into the trace. As is the case for all other public functions in this module,
+/// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
 pub fn trace_move_call_start(trace_builder_opt: &mut Option<MoveTraceBuilder>) {
     if let Some(trace_builder) = trace_builder_opt {
         trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
@@ -29,7 +35,8 @@ pub fn trace_move_call_start(trace_builder_opt: &mut Option<MoveTraceBuilder>) {
     }
 }
 
-/// Inserts Move call end event into the trace.
+/// Inserts Move call end event into the trace. As is the case for all other public functions in this module,
+/// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
 pub fn trace_move_call_end(trace_builder_opt: &mut Option<MoveTraceBuilder>) {
     if let Some(trace_builder) = trace_builder_opt {
         trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
@@ -38,7 +45,8 @@ pub fn trace_move_call_end(trace_builder_opt: &mut Option<MoveTraceBuilder>) {
     }
 }
 
-/// Inserts transfer event into the trace.
+/// Inserts transfer event into the trace. As is the case for all other public functions in this module,
+/// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
 pub fn trace_transfer(
     context: &mut ExecutionContext<'_, '_, '_>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
@@ -56,7 +64,8 @@ pub fn trace_transfer(
     Ok(())
 }
 
-/// Inserts PTB summary event into the trace.
+/// Inserts PTB summary event into the trace. As is the case for all other public functions in this module,
+/// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
 pub fn trace_ptb_summary(
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     commands: &[Command],
@@ -92,7 +101,8 @@ pub fn trace_ptb_summary(
     Ok(())
 }
 
-/// Inserts split coins event into the trace.
+/// Inserts split coins event into the trace. As is the case for all other public functions in this module,
+/// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
 pub fn trace_split_coins(
     context: &mut ExecutionContext<'_, '_, '_>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
