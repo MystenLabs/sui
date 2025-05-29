@@ -8,7 +8,7 @@ pub enum LabelledInstruction {
 pub enum Instruction {
     Return(Operand),
     Assign {
-        lhs: Vec<Operand>,
+        lhs: Vec<Var>,
         rhs: RValue,
     },
     Jump(Label),
@@ -24,7 +24,6 @@ pub enum Instruction {
 pub enum Operand {
     Var(Var),
     Constant(Constant),
-    Location(u8),
 }
 
 #[derive(Debug, Clone)]
@@ -82,7 +81,7 @@ pub enum PrimitiveOp {
 #[derive(Debug, Clone)]
 pub enum Var {
     Register(usize), // Temporary variable index
-    Unused,          // Represents an unused variable
+                     // Unused,          // Represents an unused variable
 }
 
 pub type Label = usize;

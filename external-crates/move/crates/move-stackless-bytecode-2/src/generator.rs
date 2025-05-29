@@ -3,10 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Ok;
-use move_binary_format::CompiledModule;
-use move_binary_format::normalized::Bytecode::{
-    self, Add, BrFalse, Branch, CopyLoc, Eq as Equal, ImmBorrowField, LdU64, Mod, MoveLoc, Mul,
-    MutBorrowField, Pack, ReadRef, Ret, StLoc, WriteRef,
+use move_binary_format::{
+    CompiledModule,
+    normalized::Bytecode::{
+        self, Add, BrFalse, Branch, CopyLoc, Eq as Equal, ImmBorrowField, LdU64, Mod, MoveLoc, Mul,
+        MutBorrowField, Pack, ReadRef, Ret, StLoc, WriteRef,
+    },
 };
 use move_model::run_bytecode_model_builder;
 use move_model_2::{
@@ -24,13 +26,8 @@ use std::{
     hash::Hash,
 };
 
-use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
-
-use crate::stackless_ir::{
-    Constant, Instruction,
-    Operand::{Location, Var},
-    PrimitiveOp, RValue,
-    Var::{Register, Unused},
+use crate::ir::{
+    Constant, Instruction, Operand::Var, PrimitiveOp, RValue, Var::Register,
 };
 use crate::utils::disassemble;
 
@@ -156,19 +153,19 @@ impl StacklessBytecodeGenerator {
     }
 
     pub fn execute(&self) -> anyhow::Result<()> {
-        let packages = self.model.packages();
+        let m_packages = self.model.packages();
 
-        for package in packages {
-            let package_name = package.name().unwrap_or(Symbol::from("Name not found"));
-            let package_address = package.address();
+        for m_package in m_packages {
+            let package_name = m_package.name().unwrap_or(Symbol::from("Name not found"));
+            let package_address = m_package.address();
             println!("Package: {} ({})", package_name, package_address);
 
-            let modules = package.modules();
+            let m_modules = m_package.modules();
 
-            for module in modules {
+            for m_module in m_modules {
                 let mut ctx = Context::new();
 
-                let _ = module_to_bytecode(&mut ctx, module);
+                let _ = module(&mut ctx, m_module);
             }
         }
 
@@ -253,7 +250,7 @@ impl Default for VarCounter {
     }
 }
 
-fn module_to_bytecode<K: SourceKind>(ctx: &mut Context, module: Module<K>) -> anyhow::Result<()> {
+fn module<K: SourceKind>(ctx: &mut Context, module: Module<K>) -> anyhow::Result<()> {
     let module = module.compiled();
     let module_name = module.name();
     let module_address = module.address();
@@ -263,6 +260,7 @@ fn module_to_bytecode<K: SourceKind>(ctx: &mut Context, module: Module<K>) -> an
         let function_name = &function.name;
         println!("\nFunction: {}", function_name);
         let code = function.code();
+        // TODO call the CFG and get blocks
         for op in code {
             let instruction = bytecode(ctx, &op)?;
             ctx.ir_instructions.push(instruction);
@@ -295,10 +293,10 @@ fn bytecode<S: Hash + Eq + Display + Debug>(
         // MoveLoc
         MoveLoc(loc) => {
             let inst = Instruction::Assign {
-                lhs: vec![Var(Register(ctx.var_counter.next()))],
+                lhs: vec![Register(ctx.var_counter.next())],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::MoveLoc,
-                    args: vec![Location(*loc)],
+                    args: vec![Var(Register((*loc).into()))],
                 },
             };
             return Ok(inst);
@@ -307,10 +305,10 @@ fn bytecode<S: Hash + Eq + Display + Debug>(
         // CopyLoc
         CopyLoc(loc) => {
             let inst = Instruction::Assign {
-                lhs: vec![Var(Register(ctx.var_counter.next()))],
+                lhs: vec![Register(ctx.var_counter.next())],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::CopyLoc,
-                    args: vec![Location(*loc)],
+                    args: vec![Var(Register((*loc).into()))],
                 },
             };
             return Ok(inst);
@@ -322,7 +320,7 @@ fn bytecode<S: Hash + Eq + Display + Debug>(
                 panic!("Not enough variables to perform StLoc operation");
             }
             let inst = Instruction::Assign {
-                lhs: vec![Location(*loc)],
+                lhs: vec![Register((*loc).into())],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::StoreLoc,
                     args: vec![Var(Register(ctx.var_counter.last()))],
@@ -334,7 +332,7 @@ fn bytecode<S: Hash + Eq + Display + Debug>(
         // ImmBorrowField
         ImmBorrowField(_field_ref) => {
             let inst = Instruction::Assign {
-                lhs: vec![Var(Register(ctx.var_counter.next()))],
+                lhs: vec![Register(ctx.var_counter.next())],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::ImmBorrowField,
                     args: vec![Var(Register(ctx.var_counter.last()))],
@@ -346,7 +344,7 @@ fn bytecode<S: Hash + Eq + Display + Debug>(
         // MutBorrowField
         MutBorrowField(_field_ref) => {
             let inst = Instruction::Assign {
-                lhs: vec![Var(Register(ctx.var_counter.next()))],
+                lhs: vec![Register(ctx.var_counter.next())],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::MutBorrowField,
                     args: vec![Var(Register(ctx.var_counter.last()))],
@@ -358,7 +356,7 @@ fn bytecode<S: Hash + Eq + Display + Debug>(
         // Pack
         Pack(_struct_ref) => {
             let inst = Instruction::Assign {
-                lhs: vec![Var(Register(ctx.var_counter.next()))],
+                lhs: vec![Register(ctx.var_counter.next())],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::Pack,
                     // TODO get how many args are needed
@@ -371,7 +369,7 @@ fn bytecode<S: Hash + Eq + Display + Debug>(
         // ReadRef
         ReadRef => {
             let inst = Instruction::Assign {
-                lhs: vec![Var(Register(ctx.var_counter.next()))],
+                lhs: vec![Register(ctx.var_counter.next())],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::ReadRef,
                     args: vec![Var(Register(ctx.var_counter.last()))],
@@ -386,7 +384,7 @@ fn bytecode<S: Hash + Eq + Display + Debug>(
                 panic!("Not enough variables to perform WriteRef operation");
             }
             let inst = Instruction::Assign {
-                lhs: vec![Var(Register(ctx.var_counter.prev()))],
+                lhs: vec![(Register(ctx.var_counter.prev()))],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::WriteRef,
                     args: vec![Var(Register(ctx.var_counter.last()))],
@@ -405,7 +403,7 @@ fn bytecode<S: Hash + Eq + Display + Debug>(
             let lhs = Var(Register(ctx.var_counter.last()));
             ctx.var_counter.increment();
             let inst = Instruction::Assign {
-                lhs: vec![Var(Register(ctx.var_counter.next()))],
+                lhs: vec![Register(ctx.var_counter.next())],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::Add,
                     args: vec![lhs, rhs],
@@ -423,7 +421,7 @@ fn bytecode<S: Hash + Eq + Display + Debug>(
             let lhs = Var(Register(ctx.var_counter.last()));
             ctx.var_counter.increment();
             let inst = Instruction::Assign {
-                lhs: vec![Var(Register(ctx.var_counter.next()))],
+                lhs: vec![Register(ctx.var_counter.next())],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::Multiply,
                     args: vec![lhs, rhs],
@@ -441,7 +439,7 @@ fn bytecode<S: Hash + Eq + Display + Debug>(
             let lhs = Var(Register(ctx.var_counter.last()));
             ctx.var_counter.increment();
             let inst = Instruction::Assign {
-                lhs: vec![Var(Register(ctx.var_counter.next()))],
+                lhs: vec![Register(ctx.var_counter.next())],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::Modulo,
                     args: vec![lhs, rhs],
@@ -454,7 +452,7 @@ fn bytecode<S: Hash + Eq + Display + Debug>(
         LdU64(value) => {
             // let newReg = value;
             let inst = Instruction::Assign {
-                lhs: vec![Var(Register(ctx.var_counter.next()))],
+                lhs: vec![Register(ctx.var_counter.next())],
                 rhs: RValue::Constant(Constant::U64(*value)),
             };
             return Ok(inst);
@@ -473,21 +471,3 @@ fn bytecode<S: Hash + Eq + Display + Debug>(
         }
     }
 }
-
-// TODO adapt basic block genration algorithm
-// fn generate_basic_blocks(
-//     input: &[FF::Bytecode],
-//     jump_tables: &[FF::VariantJumpTable],
-// ) -> BTreeMap<ast::Label, Vec<ast::Bytecode>> {
-//     let cfg = VMControlFlowGraph::new(input, jump_tables);
-//     cfg.blocks()
-//         .iter()
-//         .map(|label| {
-//             let start = cfg.block_start(*label) as usize;
-//             let end = cfg.block_end(*label) as usize;
-//             let label = *label as ast::Label;
-//             let code = input[start..(end + 1)].iter().map(bytecode).collect();
-//             (label, code)
-//         })
-//         .collect::<BTreeMap<ast::Label, Vec<ast::Bytecode>>>()
-// }

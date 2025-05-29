@@ -5,7 +5,7 @@ use clap::*;
 use move_binary_format::CompiledModule;
 use move_command_line_common::files::{MOVE_COMPILED_EXTENSION, extension_equals, find_filenames};
 use move_package::BuildConfig;
-use move_stackless_bytecode_2::stackless_bytecode_generator::StacklessBytecodeGenerator;
+use move_stackless_bytecode_2::generator::StacklessBytecodeGenerator;
 
 use std::path::{Path, PathBuf};
 
