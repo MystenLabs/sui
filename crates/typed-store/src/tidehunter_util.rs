@@ -10,10 +10,10 @@ use std::sync::Arc;
 use tidehunter::config::Config;
 use tidehunter::db::Db;
 use tidehunter::iterators::db_iterator::DbIterator;
-use tidehunter::key_shape::{KeyIndexing, KeyShape, KeySpace, KeyType};
+use tidehunter::key_shape::{KeyShape, KeySpace};
 use tidehunter::metrics::Metrics;
 pub use tidehunter::{
-    key_shape::{KeyShapeBuilder, KeySpaceConfig},
+    key_shape::{KeyShapeBuilder, KeySpaceConfig, KeyIndexing, KeyType},
     minibytes::Bytes,
     WalPosition,
 };
