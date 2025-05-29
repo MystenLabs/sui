@@ -212,7 +212,7 @@ impl AuthorityPerpetualTables {
     pub fn open(parent_path: &Path, _: Option<AuthorityPerpetualTablesOptions>) -> Self {
         tracing::warn!("AuthorityPerpetualTables using tidehunter");
         use typed_store::tidehunter_util::{
-            default_cells_per_mutex, Bytes, KeySpaceConfig, ThConfig, WalPosition, KeyIndexing,
+            default_cells_per_mutex, Bytes, KeyIndexing, KeySpaceConfig, ThConfig, WalPosition,
         };
         const MUTEXES: usize = 1024;
         const VALUE_CACHE_SIZE: usize = 20_000;
@@ -262,8 +262,7 @@ impl AuthorityPerpetualTables {
                     KeyIndexing::key_reduction(32, 0..16),
                     MUTEXES,
                     uniform_key,
-                    KeySpaceConfig::new()
-                        .with_value_cache_size(VALUE_CACHE_SIZE),
+                    KeySpaceConfig::new().with_value_cache_size(VALUE_CACHE_SIZE),
                     digest_prefix.clone(),
                 ),
             ),
@@ -273,9 +272,7 @@ impl AuthorityPerpetualTables {
                     KeyIndexing::key_reduction(32, 0..16),
                     MUTEXES,
                     uniform_key,
-                    bloom_config
-                        .clone()
-                        .with_value_cache_size(VALUE_CACHE_SIZE),
+                    bloom_config.clone().with_value_cache_size(VALUE_CACHE_SIZE),
                     digest_prefix.clone(),
                 ),
             ),
@@ -285,9 +282,7 @@ impl AuthorityPerpetualTables {
                     KeyIndexing::key_reduction(32, 0..16),
                     MUTEXES,
                     uniform_key,
-                    bloom_config
-                        .clone()
-                        .with_value_cache_size(VALUE_CACHE_SIZE),
+                    bloom_config.clone().with_value_cache_size(VALUE_CACHE_SIZE),
                     digest_prefix.clone(),
                 ),
             ),
@@ -323,23 +318,23 @@ impl AuthorityPerpetualTables {
             ),
             (
                 "root_state_hash_by_epoch".to_string(),
-                ThConfig::new(8,  1, KeyType::uniform(1)),
+                ThConfig::new(8, 1, KeyType::uniform(1)),
             ),
             (
                 "epoch_start_configuration".to_string(),
-                ThConfig::new(0,  1, KeyType::uniform(1)),
+                ThConfig::new(0, 1, KeyType::uniform(1)),
             ),
             (
                 "pruned_checkpoint".to_string(),
-                ThConfig::new(0, 1, KeyType::uniform(1))
+                ThConfig::new(0, 1, KeyType::uniform(1)),
             ),
             (
                 "expected_network_sui_amount".to_string(),
-                ThConfig::new(0,  1, KeyType::uniform(1)),
+                ThConfig::new(0, 1, KeyType::uniform(1)),
             ),
             (
                 "expected_storage_fund_imbalance".to_string(),
-                ThConfig::new(0,  1, KeyType::uniform(1)),
+                ThConfig::new(0, 1, KeyType::uniform(1)),
             ),
             (
                 "object_per_epoch_marker_table".to_string(),
