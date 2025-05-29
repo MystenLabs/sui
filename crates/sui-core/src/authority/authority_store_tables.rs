@@ -212,7 +212,7 @@ impl AuthorityPerpetualTables {
     pub fn open(parent_path: &Path, _: Option<AuthorityPerpetualTablesOptions>) -> Self {
         tracing::warn!("AuthorityPerpetualTables using tidehunter");
         use typed_store::tidehunter_util::{
-            default_cells_per_mutex, Bytes, KeySpaceConfig, ThConfig, WalPosition,
+            default_cells_per_mutex, Bytes, KeySpaceConfig, ThConfig, WalPosition, KeyIndexing,
         };
         const MUTEXES: usize = 1024;
         const VALUE_CACHE_SIZE: usize = 20_000;
@@ -235,6 +235,7 @@ impl AuthorityPerpetualTables {
         };
         let mut digest_prefix = vec![0; 8];
         digest_prefix[7] = 32;
+        let uniform_key = KeyType::uniform(default_cells_per_mutex());
 
         let configs = vec![
             (
@@ -242,7 +243,7 @@ impl AuthorityPerpetualTables {
                 ThConfig::new_with_config(
                     32 + 8,
                     MUTEXES,
-                    default_cells_per_mutex() * 4,
+                    KeyType::uniform(default_cells_per_mutex() * 4),
                     KeySpaceConfig::new().with_compactor(Box::new(objects_compactor)),
                 ),
             ),
@@ -251,44 +252,41 @@ impl AuthorityPerpetualTables {
                 ThConfig::new_with_config(
                     32 + 8 + 32 + 8,
                     MUTEXES,
-                    default_cells_per_mutex() * 4,
+                    KeyType::uniform(default_cells_per_mutex() * 4),
                     bloom_config.clone(),
                 ),
             ),
             (
                 "transactions".to_string(),
-                ThConfig::new_with_rm_prefix(
-                    32,
+                ThConfig::new_with_rm_prefix_indexing(
+                    KeyIndexing::key_reduction(32, 0..16),
                     MUTEXES,
-                    default_cells_per_mutex(),
+                    uniform_key,
                     KeySpaceConfig::new()
-                        .with_key_reduction(0..16)
                         .with_value_cache_size(VALUE_CACHE_SIZE),
                     digest_prefix.clone(),
                 ),
             ),
             (
                 "effects".to_string(),
-                ThConfig::new_with_rm_prefix(
-                    32,
+                ThConfig::new_with_rm_prefix_indexing(
+                    KeyIndexing::key_reduction(32, 0..16),
                     MUTEXES,
-                    default_cells_per_mutex(),
+                    uniform_key,
                     bloom_config
                         .clone()
-                        .with_key_reduction(0..16)
                         .with_value_cache_size(VALUE_CACHE_SIZE),
                     digest_prefix.clone(),
                 ),
             ),
             (
                 "executed_effects".to_string(),
-                ThConfig::new_with_rm_prefix(
-                    32,
+                ThConfig::new_with_rm_prefix_indexing(
+                    KeyIndexing::key_reduction(32, 0..16),
                     MUTEXES,
-                    default_cells_per_mutex(),
+                    uniform_key,
                     bloom_config
                         .clone()
-                        .with_key_reduction(0..16)
                         .with_value_cache_size(VALUE_CACHE_SIZE),
                     digest_prefix.clone(),
                 ),
@@ -298,7 +296,7 @@ impl AuthorityPerpetualTables {
                 ThConfig::new_with_rm_prefix(
                     32 + 8,
                     MUTEXES,
-                    default_cells_per_mutex(),
+                    uniform_key,
                     KeySpaceConfig::default(),
                     digest_prefix.clone(),
                 ),
@@ -308,7 +306,7 @@ impl AuthorityPerpetualTables {
                 ThConfig::new_with_rm_prefix(
                     32,
                     MUTEXES,
-                    default_cells_per_mutex(),
+                    uniform_key,
                     KeySpaceConfig::default(),
                     digest_prefix.clone(),
                 ),
@@ -318,34 +316,37 @@ impl AuthorityPerpetualTables {
                 ThConfig::new_with_rm_prefix(
                     32,
                     MUTEXES,
-                    default_cells_per_mutex(),
+                    uniform_key,
                     KeySpaceConfig::default(),
                     digest_prefix.clone(),
                 ),
             ),
             (
                 "root_state_hash_by_epoch".to_string(),
-                ThConfig::new(8, 1, 1),
+                ThConfig::new(8,  1, KeyType::uniform(1)),
             ),
             (
                 "epoch_start_configuration".to_string(),
-                ThConfig::new(0, 1, 1),
+                ThConfig::new(0,  1, KeyType::uniform(1)),
             ),
-            ("pruned_checkpoint".to_string(), ThConfig::new(0, 1, 1)),
+            (
+                "pruned_checkpoint".to_string(),
+                ThConfig::new(0, 1, KeyType::uniform(1))
+            ),
             (
                 "expected_network_sui_amount".to_string(),
-                ThConfig::new(0, 1, 1),
+                ThConfig::new(0,  1, KeyType::uniform(1)),
             ),
             (
                 "expected_storage_fund_imbalance".to_string(),
-                ThConfig::new(0, 1, 1),
+                ThConfig::new(0,  1, KeyType::uniform(1)),
             ),
             (
                 "object_per_epoch_marker_table".to_string(),
                 ThConfig::new_with_config(
                     32 + 8 + 8,
                     MUTEXES,
-                    default_cells_per_mutex(),
+                    uniform_key,
                     KeySpaceConfig::new_with_key_offset(8),
                 ),
             ),
@@ -354,7 +355,7 @@ impl AuthorityPerpetualTables {
                 ThConfig::new_with_config(
                     32 + 8 + 8,
                     MUTEXES,
-                    default_cells_per_mutex(),
+                    uniform_key,
                     KeySpaceConfig::new_with_key_offset(8),
                 ),
             ),
