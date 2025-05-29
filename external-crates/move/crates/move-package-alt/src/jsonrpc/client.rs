@@ -18,7 +18,6 @@ pub struct Endpoint<I: AsyncRead, O: AsyncWrite> {
     sqn: RequestID,
 }
 
-// TODO: think if we keep errors here or move them in their own error module
 #[derive(Error, Debug)]
 pub enum JsonRpcError {
     #[error(transparent)]
@@ -27,10 +26,10 @@ pub enum JsonRpcError {
     #[error(transparent)]
     IoError(#[from] tokio::io::Error),
 
-    #[error("Received wrong set of responses")]
+    #[error("received wrong set of responses")]
     IncorrectQueryResults,
 
-    #[error("TODO: couldn't deserialize something")]
+    #[error("response was not serialized correctly")]
     SerializationError(#[from] serde_json::Error),
 }
 

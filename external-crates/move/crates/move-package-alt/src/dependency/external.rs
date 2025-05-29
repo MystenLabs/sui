@@ -46,7 +46,7 @@ pub struct ExternalDependency {
 
 #[derive(Error, Debug)]
 pub enum ResolverError {
-    #[error("I/O Error when running external resolver {resolver}")]
+    #[error("I/O Error when running external resolver `{resolver}`: {source}")]
     IoError {
         resolver: ResolverName,
 
@@ -55,21 +55,21 @@ pub enum ResolverError {
     },
 
     /// This indicates that the resolver was faulty
-    #[error("{resolver} did not follow the external resolver protocol: {message}")]
+    #[error("`{resolver}` did not follow the external resolver protocol ({message})")]
     BadResolver {
         resolver: ResolverName,
         message: String,
     },
 
     /// This indicates that the resolver returned a non-successful exit code
-    #[error("{resolver} returned error code: {code}")]
+    #[error("`{resolver}` returned error code: {code}")]
     ResolverUnsuccessful {
         resolver: ResolverName,
         code: ExitStatus,
     },
 
     /// This indicates that the resolver executed successfully but returned an error
-    #[error("{resolver} couldn't resolve {dep} in {env_str}: {message}")]
+    #[error("`{resolver}` couldn't resolve `{dep}` in environment `{env_str}`: {message}")]
     ResolverFailed {
         resolver: ResolverName,
         dep: PackageName,
