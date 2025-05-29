@@ -1,0 +1,5 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(r#\"{ 0x90_1234_5678u32 }\"#)"
+---
+Error: Number literal is too large to fit into 'u32'
