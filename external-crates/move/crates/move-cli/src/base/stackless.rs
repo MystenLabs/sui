@@ -23,12 +23,16 @@ pub struct Stackless {
     disassemble: bool,
 
     #[arg(name = "module_path", long = "module")]
-    module_path: Option<PathBuf>
+    module_path: Option<PathBuf>,
 }
 
 impl Stackless {
     pub fn execute(self, path: Option<&Path>, _build_config: BuildConfig) -> anyhow::Result<()> {
-        let bytecode_files = if self.module_path.as_deref().is_some_and(|path| path.exists()) {
+        let bytecode_files = if self
+            .module_path
+            .as_deref()
+            .is_some_and(|path| path.exists())
+        {
             let input_path = self.module_path.as_deref().unwrap();
             vec![input_path.to_str().unwrap().to_string()]
         } else {

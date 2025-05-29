@@ -6,7 +6,10 @@ use crate::{stackless, utils::disassemble};
 
 use move_binary_format::{CompiledModule, normalized::Bytecode as NB};
 use move_model::run_bytecode_model_builder;
-use move_model_2::{model::Model as Model2, source_kind::{SourceKind, WithoutSource}};
+use move_model_2::{
+    model::Model as Model2,
+    source_kind::{SourceKind, WithoutSource},
+};
 use move_stackless_bytecode::{
     function_target::FunctionTarget,
     stackless_bytecode_generator::StacklessBytecodeGenerator as OldGenerator,

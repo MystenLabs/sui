@@ -24,6 +24,7 @@ impl Context {
         }
     }
 
+    #[allow(unused)]
     pub fn get_var_counter(&mut self) -> &mut VarCounter {
         &mut self.var_counter
     }
@@ -63,6 +64,7 @@ impl VarCounter {
         self.count - 1
     }
 
+    #[allow(unused)]
     pub fn set(&mut self, value: usize) {
         self.count = value;
     }
@@ -71,6 +73,7 @@ impl VarCounter {
         self.count += 1;
     }
 
+    #[allow(unused)]
     pub fn decrement(&mut self) {
         if self.count == 0 {
             panic!("Cannot decrement VarCounter below zero");

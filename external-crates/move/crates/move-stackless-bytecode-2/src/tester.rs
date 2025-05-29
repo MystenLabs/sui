@@ -30,8 +30,7 @@ pub fn main() -> anyhow::Result<()> {
     let deserialized_module = deserialize(&args.module_path)?;
     // println!("Deserialized module: {:?}", deserialized_module);
 
-    let mut modules = Vec::new();
-    modules.push(deserialized_module.clone());
+    let _modules = vec![deserialized_module.clone()];
 
     let disassembled = disassemble(&deserialized_module)?;
     if args.debug {

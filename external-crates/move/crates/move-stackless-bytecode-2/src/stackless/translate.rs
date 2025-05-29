@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::stackless::{
-    ast::{
-        self, Instruction, Operand::Var, PrimitiveOp, RValue, Var::Register,
-    },
+    ast::{self, Instruction, Operand::Var, PrimitiveOp, RValue, Var::Register},
     context::Context,
 };
 
@@ -39,7 +37,7 @@ pub(crate) fn module<K: SourceKind>(module: Module<K>) -> anyhow::Result<ast::Mo
         context.var_counter.reset();
         let function_name = fun.name;
         // TODO: Check we did not clobber an old function?
-        functions.insert(function_name, function(&mut context, &fun)?);
+        functions.insert(function_name, function(&mut context, fun)?);
     }
 
     let module = ast::Module { name, functions };
@@ -59,7 +57,7 @@ pub(crate) fn function(
     // TODO call the CFG and get blocks, then translate hose instead.
 
     let instructions = code
-        .into_iter()
+        .iter()
         .map(|op| bytecode(ctxt, op))
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -82,7 +80,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
                     args: vec![Var(Register((*loc).into()))],
                 },
             };
-            return Ok(inst);
+            Ok(inst)
         }
 
         // CopyLoc
@@ -94,7 +92,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
                     args: vec![Var(Register((*loc).into()))],
                 },
             };
-            return Ok(inst);
+            Ok(inst)
         }
 
         // StoreLoc
@@ -109,7 +107,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
                     args: vec![Var(Register(ctxt.var_counter.last()))],
                 },
             };
-            return Ok(inst);
+            Ok(inst)
         }
 
         // ImmBorrowField
@@ -121,7 +119,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
                     args: vec![Var(Register(ctxt.var_counter.last()))],
                 },
             };
-            return Ok(inst);
+            Ok(inst)
         }
 
         // MutBorrowField
@@ -133,7 +131,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
                     args: vec![Var(Register(ctxt.var_counter.last()))],
                 },
             };
-            return Ok(inst);
+            Ok(inst)
         }
 
         // Pack
@@ -146,7 +144,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
                     args: vec![Var(Register(ctxt.var_counter.last()))],
                 },
             };
-            return Ok(inst);
+            Ok(inst)
         }
 
         // ReadRef
@@ -158,7 +156,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
                     args: vec![Var(Register(ctxt.var_counter.last()))],
                 },
             };
-            return Ok(inst);
+            Ok(inst)
         }
 
         // WriteRef
@@ -174,7 +172,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
                 },
             };
             ctxt.var_counter.increment();
-            return Ok(inst);
+            Ok(inst)
         }
 
         // Add
@@ -192,7 +190,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
                     args: vec![lhs, rhs],
                 },
             };
-            return Ok(inst);
+            Ok(inst)
         }
 
         // Mul
@@ -210,7 +208,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
                     args: vec![lhs, rhs],
                 },
             };
-            return Ok(inst);
+            Ok(inst)
         }
 
         // Mod
@@ -228,7 +226,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
                     args: vec![lhs, rhs],
                 },
             };
-            return Ok(inst);
+            Ok(inst)
         }
 
         // LdU64
@@ -238,7 +236,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
                 lhs: vec![Register(ctxt.var_counter.next())],
                 rhs: RValue::Immediate(Immediate::U64(*value)),
             };
-            return Ok(inst);
+            Ok(inst)
         }
 
         // Ret
@@ -246,7 +244,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             // TODO: This should look at the function's return arity and grab values off the
             // logical stack accordingly
             let inst = Instruction::Return(vec![Register(ctxt.var_counter.last())]);
-            return Ok(inst);
+            Ok(inst)
         }
 
         _ => {

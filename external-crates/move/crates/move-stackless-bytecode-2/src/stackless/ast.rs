@@ -31,6 +31,7 @@ pub struct Function {
 }
 
 #[derive(Debug, Clone)]
+#[allow(unused)]
 pub struct BasicBlock {
     label: Label,
     instructions: Vec<Instruction>,
@@ -206,10 +207,10 @@ impl std::fmt::Display for RValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RValue::Call { function, args } => {
-                        write!(f, "Call({}, ", function);
-                        write!(f, "{}", comma_separated(args))?;
-                        write!(f, ")")
-                    }
+                write!(f, "Call({}, ", function)?;
+                write!(f, "{}", comma_separated(args))?;
+                write!(f, ")")
+            }
             RValue::Constant(constant) => write!(f, "Constant({})", constant),
             RValue::Primitive { op, args } => write!(f, "{}({})", op, comma_separated(args)),
             RValue::Immediate(immediate) => write!(f, "{immediate}"),
