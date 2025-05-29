@@ -288,6 +288,7 @@ impl<'s> Parser<'s> {
 
     fn parse_expr(&mut self) -> Result<Expr<'s>, Error> {
         match_token! { self.lexer; Tok(T::LBrace, _, _) => self.lexer.next() };
+        self.eat_whitespace();
         let mut alternates = vec![self.parse_chain()?];
         let mut transform = None;
 
@@ -315,6 +316,7 @@ impl<'s> Parser<'s> {
 
                 Tok(T::Pipe, _, _) => {
                     self.lexer.next();
+                    self.eat_whitespace();
                     alternates.push(self.parse_chain()?);
                 }
             }
@@ -342,7 +344,10 @@ impl<'s> Parser<'s> {
             }
         };
 
-        while let Match::Found(accessor) = self.try_parse_accessor()? {
+        while let Match::Found(accessor) = {
+            self.eat_whitespace();
+            self.try_parse_accessor()?
+        } {
             accessors.push(accessor);
         }
 
@@ -350,7 +355,6 @@ impl<'s> Parser<'s> {
     }
 
     fn try_parse_literal(&mut self) -> Result<Match<Literal<'s>>, Error> {
-        self.eat_whitespace();
         Ok(match_token_opt! { self.lexer;
             Tok(T::At, _, _) => {
                 self.lexer.next();
@@ -445,7 +449,6 @@ impl<'s> Parser<'s> {
     }
 
     fn try_parse_accessor(&mut self) -> Result<Match<Accessor<'s>>, Error> {
-        self.eat_whitespace();
         Ok(match_token_opt! { self.lexer;
             Tok(T::Dot, _, _) => {
                 self.lexer.next();
@@ -460,12 +463,14 @@ impl<'s> Parser<'s> {
                 self.lexer.next();
                 if matches!(self.lexer.peek(), Some(Lex(T::LBracket, _, _))) {
                     self.lexer.next();
+                    self.eat_whitespace();
                     let chain = self.parse_chain()?;
                     self.eat_whitespace();
                     match_token! { self.lexer; Tok(T::RBracket, _, _) => self.lexer.next() };
                     match_token! { self.lexer; Tok(T::RBracket, _, _) => self.lexer.next() };
                     Accessor::IIndex(chain)
                 } else {
+                    self.eat_whitespace();
                     let chain = self.parse_chain()?;
                     self.eat_whitespace();
                     match_token! { self.lexer; Tok(T::RBracket, _, _) => self.lexer.next() };
