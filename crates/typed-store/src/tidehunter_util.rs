@@ -154,7 +154,6 @@ impl ThConfig {
             config,
             prefix: None,
         }
-
     }
 
     pub fn new_with_config(
@@ -166,12 +165,20 @@ impl ThConfig {
         Self::new_with_config_indexing(KeyIndexing::none(key_size), mutexes, key_type, config)
     }
 
-    pub fn new_with_rm_prefix(key_size: usize,
-                              mutexes: usize,
-                              key_type: KeyType,
-                              config: KeySpaceConfig,
-                              prefix: Vec<u8>) -> Self {
-        Self::new_with_rm_prefix_indexing(KeyIndexing::none(key_size), mutexes, key_type, config, prefix)
+    pub fn new_with_rm_prefix(
+        key_size: usize,
+        mutexes: usize,
+        key_type: KeyType,
+        config: KeySpaceConfig,
+        prefix: Vec<u8>,
+    ) -> Self {
+        Self::new_with_rm_prefix_indexing(
+            KeyIndexing::none(key_size),
+            mutexes,
+            key_type,
+            config,
+            prefix,
+        )
     }
 
     pub fn new_with_rm_prefix_indexing(
