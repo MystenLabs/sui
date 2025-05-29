@@ -12,7 +12,7 @@ use codespan_reporting::{
 use move_package_alt::{
     dependency::{self, DependencySet, UnpinnedDependencyInfo},
     flavor::Vanilla,
-    graph::PackageGraphBuilder,
+    graph::PackageGraph,
     package::{lockfile::Lockfile, manifest::Manifest, paths::PackagePath},
 };
 use std::path::Path;
@@ -111,9 +111,11 @@ impl Test<'_> {
 
 async fn run_graph_test(input_path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let package_path = PackagePath::new(input_path.parent().unwrap().to_path_buf())?;
-    let package = PackageGraphBuilder::<Vanilla>::new()
-        .load_from_lockfile(&package_path, &"mainnet".to_string())
-        .await?;
+    let package = PackageGraph::<Vanilla>::load_from_lockfile_ignore_digests(
+        &package_path,
+        &"mainnet".to_string(),
+    )
+    .await?;
 
     let output = format!("{:#?}", package.inner);
     Ok(output)
