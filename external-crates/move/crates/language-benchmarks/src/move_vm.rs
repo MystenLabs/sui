@@ -26,6 +26,7 @@ static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         }],
         None,
         None,
+        None,
         move_compiler::Flags::empty(),
         None,
     )

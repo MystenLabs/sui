@@ -2209,6 +2209,7 @@ pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         }],
         None,
         None,
+        None,
         Flags::empty(),
         None,
     )

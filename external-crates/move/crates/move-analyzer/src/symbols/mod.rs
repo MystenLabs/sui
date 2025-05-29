@@ -236,12 +236,26 @@ pub fn compute_symbols(
             // dependencies may have changed or not, but we still need to update the cache
             // with new file hashes and user program info
             eprintln!("caching pre-compiled program and pre-computed symbols");
+            // This shouldn't be necessary as `pkg_infos` in `pkg_deps` is
+            // updated each time user program changes which should result in
+            // dependencies without function bodies eventually replacing
+            // the fully compiled ones, and the ref count of the compiled ones
+            // to drop to zero. If we do insert fully compiled dependencies
+            // here, though, they seem to stick around after all actually
+            // increasing memory footprint (as both versions of dependencies,
+            // "light" and "heavy", are kept around).
+            let deps = if cached_deps.deps_fully_compiled {
+                None
+            } else {
+                Some(cached_deps.program_deps.clone())
+            };
             pkg_deps.pkg_infos.insert(
                 pkg_path,
                 CachedPkgInfo {
                     manifest_hash,
                     deps_hash,
-                    deps: cached_deps.program_deps.clone(),
+                    deps,
+                    deps_fully_compiled: cached_deps.deps_fully_compiled,
                     deps_symbols_data,
                     program: Arc::new(program),
                     file_hashes: Arc::new(file_hashes),

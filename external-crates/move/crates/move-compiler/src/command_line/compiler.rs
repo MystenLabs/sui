@@ -642,6 +642,7 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
     targets: Vec<PackagePaths<Paths, NamedAddress>>,
     interface_files_dir_opt: Option<String>,
     pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
+    files_to_compile: Option<BTreeSet<PathBuf>>,
     flags: Flags,
     vfs_root: Option<VfsPath>,
 ) -> anyhow::Result<Result<FullyCompiledProgram, (MappedFiles, Diagnostics)>> {
@@ -661,6 +662,7 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
     )?
     .set_interface_files_dir_opt(interface_files_dir_opt)
     .set_pre_compiled_lib_opt(pre_compiled_lib.clone())
+    .set_files_to_compile(files_to_compile)
     .set_flags(flags)
     .add_save_hook(&hook)
     .run::<PASS_PARSER>()?;

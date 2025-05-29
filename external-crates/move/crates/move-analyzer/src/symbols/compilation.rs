@@ -98,7 +98,9 @@ pub struct CachedPkgInfo {
     /// Hash of dependency source files
     pub deps_hash: String,
     /// Precompiled deps
-    pub deps: Vec<Arc<FullyCompiledProgram>>,
+    pub deps: Option<Vec<Arc<FullyCompiledProgram>>>,
+    /// Are deps fully compiled (with function bodies)?
+    pub deps_fully_compiled: bool,
     /// Symbols computation data
     pub deps_symbols_data: Arc<SymbolsComputationData>,
     /// Compiled user program
@@ -116,6 +118,8 @@ pub struct CachedPkgInfo {
 pub struct AnalyzedPkgInfo {
     /// Cached fully compiled program representing dependencies
     pub program_deps: Vec<Arc<FullyCompiledProgram>>,
+    /// Are deps fully compiled (with function bodies)?
+    pub deps_fully_compiled: bool,
     /// Cached symbols computation data for dependencies
     pub symbols_data: Option<Arc<SymbolsComputationData>>,
     /// Compiled user program
@@ -254,47 +258,72 @@ pub fn get_compiled_pkg(
             let src_names = src_deps.keys().cloned().collect::<BTreeSet<_>>();
 
             let mut pkg_info = packages_info.lock().unwrap();
-            let (pkg_cached_deps, edition, compiler_info) = match pkg_info.pkg_infos.get(pkg_path) {
-                Some(d)
-                    if manifest_hash.is_some()
+            // need to extract all data from pkg_info first so that we can
+            // borrow it mutably later
+            let (
+                cached_pkg_info,
+                deps_fully_compiled,
+                symbols_data,
+                program,
+                file_hashes,
+                edition,
+                compiler_info,
+            ) = match pkg_info.pkg_infos.get(pkg_path) {
+                Some(d) => {
+                    if !d.deps_fully_compiled
+                        && manifest_hash.is_some()
                         && manifest_hash == d.manifest_hash
-                        && deps_hash == d.deps_hash =>
-                {
-                    eprintln!("found cached deps for {:?}", pkg_path);
-                    (
-                        Some(AnalyzedPkgInfo {
-                            program_deps: d.deps.clone(),
-                            symbols_data: Some(d.deps_symbols_data.clone()),
-                            program: Some(d.program.clone()),
-                            file_hashes: d.file_hashes.clone(),
-                        }),
-                        d.edition,
-                        d.compiler_info.clone(),
-                    )
+                        && deps_hash == d.deps_hash
+                    {
+                        eprintln!("found cached deps for {:?}", pkg_path);
+                        (
+                            Some(d.deps.clone().unwrap()),
+                            false,
+                            Some(d.deps_symbols_data.clone()),
+                            Some(d.program.clone()),
+                            d.file_hashes.clone(),
+                            d.edition,
+                            d.compiler_info.clone(),
+                        )
+                    } else {
+                        eprintln!("found fully compiled cached deps for {:?}", pkg_path);
+                        (
+                            None,
+                            false,
+                            Some(d.deps_symbols_data.clone()),
+                            Some(d.program.clone()),
+                            d.file_hashes.clone(),
+                            None,
+                            None,
+                        )
+                    }
                 }
-                _ => (
-                    compiled_dep_pkgs(
-                        &mut pkg_info.compiled_dep_pkgs,
-                        dep_pkg_paths,
-                        src_deps,
-                        resolution_graph.root_package(),
-                        &resolution_graph.topological_order(),
-                        compiler_flags,
-                        overlay_fs_root.clone(),
-                    )
-                    .map(|libs| {
-                        eprintln!("created pre-compiled libs for {:?}", pkg_path);
-                        AnalyzedPkgInfo {
-                            program_deps: libs,
-                            symbols_data: None,
-                            program: None,
-                            file_hashes: file_hashes.clone(),
-                        }
-                    }),
-                    None,
-                    None,
-                ),
+                None => {
+                    eprintln!("no cached deps for {:?}", pkg_path);
+                    (None, true, None, None, file_hashes.clone(), None, None)
+                }
             };
+
+            let program_deps_opt = cached_pkg_info.or_else(|| {
+                compiled_dep_pkgs(
+                    &mut pkg_info.compiled_dep_pkgs,
+                    dep_pkg_paths,
+                    src_deps,
+                    resolution_graph.root_package(),
+                    &resolution_graph.topological_order(),
+                    compiler_flags,
+                    overlay_fs_root.clone(),
+                    deps_fully_compiled,
+                )
+            });
+            let pkg_cached_deps = program_deps_opt.map(|program_deps| AnalyzedPkgInfo {
+                program_deps,
+                deps_fully_compiled,
+                symbols_data,
+                program,
+                file_hashes,
+            });
+
             if pkg_cached_deps.is_some() {
                 // if successful, remove only source deps but keep bytecode deps as they
                 // were not used to construct pre-compiled lib in the first place
@@ -444,8 +473,14 @@ pub fn get_compiled_pkg(
     Ok((Some(compiled_pkg_info), ide_diagnostics))
 }
 
-/// Get compiled dependencies from cache or compile them if not present
-/// and update the cache with new dependencies.
+/// Get compiled dependencies from cache or compile them if either
+/// - not present in the cache (updata the cache if version of dependencies requested
+///   is one with function bodies)
+/// - a fully-compiled (with function bodies) version of the dependency is requested
+///   (do not update the cache in this case)
+///
+/// The reason for it is that in steady state (after the first full compilation)
+/// only smaller version of deps are shared between packages.
 fn compiled_dep_pkgs(
     compiled_dep_pkgs: &mut BTreeMap<PathBuf, Arc<FullyCompiledProgram>>,
     mut dep_paths: BTreeMap<Symbol, PathBuf>,
@@ -454,6 +489,7 @@ fn compiled_dep_pkgs(
     topological_order: &[PackageName],
     compiler_flags: Flags,
     vfs_root: VfsPath,
+    fully_compile_deps: bool,
 ) -> Option<Vec<Arc<FullyCompiledProgram>>> {
     let mut deps = Vec::new();
     for pkg_name in topological_order.iter().rev() {
@@ -475,10 +511,14 @@ fn compiled_dep_pkgs(
             // do non-cached path
             return None;
         };
-        if let Some(dep_pkg) = compiled_dep_pkgs.get(&dep_path) {
-            eprintln!("found cached dep for {:?}", dep_path);
-            deps.push(dep_pkg.clone());
-            continue;
+        if !fully_compile_deps {
+            // global cache only contains deps without function bodies
+            // so get the cached values only if such deps are requested
+            if let Some(dep_pkg) = compiled_dep_pkgs.get(&dep_path) {
+                eprintln!("found cached dep for {:?}", dep_path);
+                deps.push(dep_pkg.clone());
+                continue;
+            }
         }
         eprintln!("pre-compiling dep {name} with deps length {}", deps.len());
         let new_deps_opt = construct_pre_compiled_lib(
@@ -488,6 +528,11 @@ fn compiled_dep_pkgs(
                 Some(deps.clone())
             } else {
                 None
+            },
+            if fully_compile_deps {
+                None
+            } else {
+                Some(BTreeSet::new())
             },
             compiler_flags.clone(),
             Some(vfs_root.clone()),
@@ -513,9 +558,12 @@ fn compiled_dep_pkgs(
                 .ok()
         });
         if let Some(new_deps) = new_deps_opt {
-            eprintln!("inserting new dep into cache for {:?}", dep_path);
             let deps_ref = Arc::new(new_deps);
-            compiled_dep_pkgs.insert(dep_path, deps_ref.clone());
+            if !fully_compile_deps {
+                // cahe only version of deps that does not have function bodies
+                eprintln!("inserting new dep into cache for {:?}", dep_path);
+                compiled_dep_pkgs.insert(dep_path, deps_ref.clone());
+            }
             deps.push(deps_ref);
         } else {
             // bail even if we can construct just one dependency
