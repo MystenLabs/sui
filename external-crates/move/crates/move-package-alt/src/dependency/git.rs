@@ -7,26 +7,16 @@
 //! Git dependencies are cached in `~/.move`. Each dependency has a sparse, shallow checkout
 //! in the directory `~/.move/<remote>_<sha>` (see [crate::git::format_repo_to_fs_path])
 
-use std::{
-    fmt,
-    marker::PhantomData,
-    path::{Path, PathBuf},
-    process::{ExitStatus, Output, Stdio},
-};
+use std::path::PathBuf;
 
-use derive_where::derive_where;
-use serde::de::Error;
-use serde::{Deserialize, Deserializer, Serialize, de};
-use tokio::process::Command;
-use tracing::debug;
+use serde::{Deserialize, Serialize};
 
-use crate::git::GitRepo;
 use crate::{
-    errors::{Located, PackageError, PackageResult},
-    git::sha::GitSha,
+    errors::PackageResult,
+    git::{GitRepo, sha::GitSha},
 };
 
-use super::{DependencySet, Pinned, Unpinned};
+use super::DependencySet;
 
 /// TODO keep same style around all types
 ///

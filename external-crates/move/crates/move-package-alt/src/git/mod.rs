@@ -228,6 +228,8 @@ impl GitRepo {
 }
 
 /// Format the repository URL to a filesystem name based on the SHA
+// TODO: this almost certainly belongs in dependency::git instead of here, but moving it requires a
+// little refactoring
 pub fn format_repo_to_fs_path(repo: &str, sha: &GitSha, root_path: Option<PathBuf>) -> PathBuf {
     let root_path = root_path
         .map(|p| p.to_string_lossy().to_string())
@@ -366,7 +368,7 @@ mod tests {
 
         // Get commits SHA
         let output = run_git_cmd(&["log"], &root_path).await;
-        eprintln!("{output:?}");
+        debug!("{output:?}");
         let commits = run_git_cmd(&["log", "--pretty=format:%H"], &root_path).await;
         let commits = String::from_utf8_lossy(&commits.stdout);
         let commits: Vec<_> = commits.lines().collect();

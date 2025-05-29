@@ -78,11 +78,13 @@ where
     let mut request_json = serde_json::to_vec(&request).expect("requests should be serializable");
     request_json.push(b'\n');
 
+    debug!("sending request: {request_json:?}");
     endpoint.output.write_all(&request_json).await?;
     endpoint.output.flush().await?;
 
     let mut response_json = String::new();
     endpoint.input.read_line(&mut response_json).await?;
+    debug!("received:{response_json}");
 
     let response: Response<R> = serde_json::de::from_str(response_json.as_str())?;
 
@@ -109,6 +111,7 @@ pub async fn batch_call<A: Serialize, R: DeserializeOwned>(
     let mut batch_json = serde_json::to_vec(&requests).expect("requests should be serializable");
     batch_json.push(b'\n');
 
+    debug!("sending:{}", String::from_utf8_lossy(batch_json.as_slice()));
     endpoint.output.write_all(&batch_json).await?;
 
     let mut response_json = String::new();

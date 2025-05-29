@@ -6,6 +6,7 @@
 
 use std::{
     collections::BTreeMap,
+    ffi::OsStr,
     fmt::Debug,
     ops::Range,
     process::{ExitStatus, Stdio},
@@ -154,8 +155,6 @@ impl ExternalDependency {
             deps.insert(env, pkg, dep);
         }
 
-        debug!("done resolving");
-
         Ok(())
     }
 }
@@ -205,7 +204,6 @@ impl TryFrom<RField> for ExternalDependency {
 
     /// Convert from [RField] (`{r.<res> = <data>}`) to [ExternalDependency] (`{ res, data }`)
     fn try_from(value: RField) -> Result<Self, Self::Error> {
-        debug!("try_from: {:?}", value.r);
         if value.r.len() != 1 {
             return Err("Externally resolved dependencies should have the form `{r.<resolver-name> = <resolver-data>}`".to_string());
         }
@@ -238,11 +236,24 @@ async fn resolve_single<F: MoveFlavor>(
     resolver: ResolverName,
     requests: DependencySet<ResolveRequest<F>>,
 ) -> ResolverResult<DependencySet<UnpinnedDependencyInfo<F>>> {
-    let mut child = Command::new(&resolver)
+    let mut command = Command::new(&resolver);
+    command
         .arg(RESOLVE_ARG)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    debug!(
+        "running external resolver `{} {}`",
+        command.as_std().get_program().to_string_lossy(),
+        command
+            .as_std()
+            .get_args()
+            .map(OsStr::to_string_lossy)
+            .join(" ")
+    );
+
+    let mut child = command
         .spawn()
         .map_err(|e| ResolverError::io_error(&resolver, e))?;
 
@@ -252,11 +263,6 @@ async fn resolve_single<F: MoveFlavor>(
     );
 
     let (envs, pkgs, reqs): (Vec<_>, Vec<_>, Vec<_>) = requests.into_iter().multiunzip();
-
-    debug!(
-        "requests for {resolver}:\n{}",
-        serde_json::to_string_pretty(&reqs).unwrap_or("serialization error".to_string())
-    );
 
     let resps = endpoint
         .batch_call("resolve", reqs)

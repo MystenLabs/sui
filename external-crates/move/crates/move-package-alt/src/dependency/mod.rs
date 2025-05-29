@@ -9,30 +9,21 @@ mod local;
 
 pub use dependency_set::DependencySet;
 
-use std::{
-    collections::BTreeMap,
-    fmt::{self, Debug},
-    marker::PhantomData,
-    path::{Path, PathBuf},
-    process::{Command, Stdio},
-};
+use std::{collections::BTreeMap, path::PathBuf};
 
 use derive_where::derive_where;
-use serde::{
-    Deserialize, Deserializer, Serialize,
-    de::{self, MapAccess, SeqAccess, Visitor},
-};
+use serde::{Deserialize, Deserializer, Serialize, de};
 
 use tracing::debug;
 
 use crate::{
-    errors::{Located, PackageError, PackageResult},
+    errors::PackageResult,
     flavor::MoveFlavor,
-    package::{EnvironmentName, PackageName, PackagePath},
+    package::{EnvironmentName, PackagePath},
 };
 
 use external::ExternalDependency;
-pub use git::{PinnedGitDependency, UnpinnedGitDependency, fetch_dep};
+use git::{PinnedGitDependency, UnpinnedGitDependency, fetch_dep};
 use local::LocalDependency;
 
 // TODO (potential refactor): consider using objects for manifest dependencies (i.e. `Box<dyn UnpinnedDependency>`).
@@ -131,7 +122,6 @@ where
                 let dep = UnpinnedGitDependency::deserialize(data).map_err(de::Error::custom)?;
                 Ok(UnpinnedDependencyInfo::Git(dep))
             } else if tbl.contains_key("r") {
-                debug!("found `r` field");
                 let dep = ExternalDependency::deserialize(data).map_err(de::Error::custom)?;
                 Ok(UnpinnedDependencyInfo::External(dep))
             } else if tbl.contains_key("local") {
