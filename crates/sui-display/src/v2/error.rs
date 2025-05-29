@@ -8,8 +8,14 @@ use super::peek::Peekable2Ext;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("Hex {0} contains invalid character")]
+    InvalidHexCharacter(OwnedLexeme),
+
     #[error("Number literal is too large to fit into '{what}'")]
     NumberOverflow { what: &'static str },
+
+    #[error("Odd number of characters in hex {0}")]
+    OddHexLiteral(OwnedLexeme),
 
     #[error("Unexpected end-of-string, expected {expect}")]
     UnexpectedEos { expect: ExpectedSet },

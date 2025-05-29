@@ -431,6 +431,16 @@ impl<'s> Parser<'s> {
                 let output = read_string_literal(slice);
                 Literal::ByteArray(output.into_owned().into_bytes())
             },
+
+            Lit(T::Ident, _, "x") if self.lexer.peek2().is_some_and(|Lex(t, _, _)| *t == T::String) => {
+                self.lexer.next();
+                let Some(lex@Lex(T::String, _, slice)) = self.lexer.next() else {
+                    unreachable!("SAFETY: match guard confirms this token exists")
+                };
+
+                let output = read_hex_literal(&lex, slice)?;
+                Literal::ByteArray(output)
+            },
         })
     }
 
@@ -518,6 +528,21 @@ fn read_string_literal(slice: &str) -> Cow<'_, str> {
     output
 }
 
+fn read_hex_literal(lexeme: &Lex<'_>, slice: &str) -> Result<Vec<u8>, Error> {
+    if slice.len() % 2 != 0 {
+        return Err(Error::OddHexLiteral(lexeme.detach()));
+    }
+
+    let mut output = Vec::with_capacity(slice.len() / 2);
+    for i in (0..slice.len()).step_by(2) {
+        let byte = u8::from_str_radix(&slice[i..i + 2], 16)
+            .map_err(|_| Error::InvalidHexCharacter(lexeme.detach()))?;
+        output.push(byte);
+    }
+
+    Ok(output)
+}
+
 #[cfg(test)]
 mod tests {
     use insta::assert_snapshot;
@@ -551,7 +576,7 @@ mod tests {
     #[test]
     fn test_pseudo_keyword_expr() {
         // Certain identifiers are keywords if they are followed by some tokens, but otherwise not.
-        assert_snapshot!(strands(r#"{b}"#));
+        assert_snapshot!(strands(r#"{b | x}"#));
     }
 
     #[test]
@@ -627,6 +652,11 @@ mod tests {
         assert_snapshot!(strands(
             "{b'foo' | b'bar\nbaz' | b'qux\\'quux' | b'quy\\\\quz' | b'xyz\\zy' }"
         ));
+    }
+
+    #[test]
+    fn test_hex_literals() {
+        assert_snapshot!(strands("{x'1234' | x'0d0e0f'}"));
     }
 
     #[test]
@@ -732,5 +762,20 @@ mod tests {
     #[test]
     fn test_byte_literal_whitespace() {
         assert_snapshot!(strands(r#"{b 'foo'}"#));
+    }
+
+    #[test]
+    fn test_hex_literal_whitespace() {
+        assert_snapshot!(strands(r#"{x '1234'}"#));
+    }
+
+    #[test]
+    fn test_hex_literal_odd_length() {
+        assert_snapshot!(strands(r#"{x'123'}"#));
+    }
+
+    #[test]
+    fn test_hex_literal_invalid_char() {
+        assert_snapshot!(strands(r#"{x'123g'}"#));
     }
 }
