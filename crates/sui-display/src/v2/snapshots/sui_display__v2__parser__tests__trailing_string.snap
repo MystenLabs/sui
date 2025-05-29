@@ -2,4 +2,4 @@
 source: crates/sui-display/src/v2/parser.rs
 expression: "strands(r#\"{'foo\"#)"
 ---
-Error: Unexpected "'foo" at offset 1, expected one of 'false', 'true', '@', an identifier, a decimal number, a hexadecimal number, or a string
+Error: Unexpected "'foo" at offset 1, expected one of 'b', 'false', 'true', '@', an identifier, a decimal number, a hexadecimal number, or a string
