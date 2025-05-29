@@ -416,6 +416,11 @@ impl<'s> Parser<'s> {
                     Literal::U64(read_u64(hex, 16, "u64")?)
                 }
             },
+
+            Tok(T::String, _, slice) => {
+                self.lexer.next();
+                Literal::String(read_string_literal(slice))
+            },
         })
     }
 
@@ -481,6 +486,26 @@ fn read_u128(slice: &str, radix: u32, what: &'static str) -> Result<u128, Error>
 
 fn read_u256(slice: &str, radix: u32, what: &'static str) -> Result<U256, Error> {
     U256::from_str_radix(&slice.replace('_', ""), radix).map_err(|_| Error::NumberOverflow { what })
+}
+
+fn read_string_literal(slice: &str) -> Cow<'_, str> {
+    let mut start = slice.find('\\').unwrap_or(slice.len());
+    let mut output = Cow::Borrowed(&slice[0..start]);
+
+    while start < slice.len() {
+        // Skip the escape character.
+        start += 1;
+
+        // Slurp up to the next escape character, or the end of the string.
+        let end = slice[start + 1..]
+            .find('\\')
+            .map_or(slice.len(), |i| start + 1 + i);
+
+        output += &slice[start..end];
+        start = end;
+    }
+
+    output
 }
 
 #[cfg(test)]
@@ -571,6 +596,13 @@ mod tests {
             Hexadecimal literals: \
             { 0x42 | 0x42u8 | 0x123u16 | 0x4_5678u32 | 0x90_1234_5678u64 | 0x90_1234_5678_9012_3456u128 | 0x78_9012_3456_7890_1234_5679_0123_4567_8901u256 }\
             "
+        ));
+    }
+
+    #[test]
+    fn test_string_literals() {
+        assert_snapshot!(strands(
+            "{'foo' | 'bar\nbaz' | 'qux\\'quux' | 'quy\\\\quz' | 'xyz\\zy' }"
         ));
     }
 
@@ -667,5 +699,10 @@ mod tests {
     #[test]
     fn test_numeric_type_suffix_whitespace() {
         assert_snapshot!(strands(r#"{42 u64}"#));
+    }
+
+    #[test]
+    fn test_trailing_string() {
+        assert_snapshot!(strands(r#"{'foo"#));
     }
 }
