@@ -1,6 +1,6 @@
 ---
 source: crates/sui-display/src/v2/parser.rs
-expression: "strands(r#\"{b}\"#)"
+expression: "strands(r#\"{b | x}\"#)"
 ---
 Expr(
     Expr {
@@ -10,6 +10,14 @@ Expr(
                 accessors: [
                     Field(
                         "b",
+                    ),
+                ],
+            },
+            Chain {
+                root: None,
+                accessors: [
+                    Field(
+                        "x",
                     ),
                 ],
             },
