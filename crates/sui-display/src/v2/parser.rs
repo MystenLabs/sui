@@ -156,11 +156,11 @@ macro_rules! expected_set {
 macro_rules! match_token {
     (
         $lexer:expr $(, $prev:expr)?;
-        $($kind:ident($($pat:path)|+, $off:pat, $slice:tt) => $expr:expr),+
+        $($kind:ident($($pat:path)|+, $off:pat, $slice:tt) $(if $cond:expr)? => $expr:expr),+
         $(,)?
     ) => {{
         match $lexer.peek() {
-            $(Some(&Lex($($pat)|+, $off, $slice)) => $expr,)+
+            $(Some(&Lex($($pat)|+, $off, $slice)) $(if $cond)? => $expr,)+
             Some(&actual) => return Err(Error::UnexpectedToken {
                 actual: actual.detach(),
                 expect: expected_set!($($prev;)? $($($kind, $pat, $slice),+),+),
@@ -184,11 +184,11 @@ macro_rules! match_token {
 macro_rules! match_token_opt {
     (
         $lexer:expr $(, $prev:expr)?;
-        $($kind:ident($($pat:path)|+, $off:pat, $slice:tt) => $expr:expr),+
+        $($kind:ident($($pat:path)|+, $off:pat, $slice:tt) $(if $cond:expr)? => $expr:expr),+
         $(,)?
     ) => {{
         match $lexer.peek() {
-            $(Some(&Lex($($pat)|+, $off, $slice)) => Match::Found($expr),)+
+            $(Some(&Lex($($pat)|+, $off, $slice)) $(if $cond)? => Match::Found($expr),)+
             Some(_) | None => Match::Tried(
                 expected_set!($($prev;)? $($($kind, $pat, $slice),+),+)
             ),
@@ -421,6 +421,16 @@ impl<'s> Parser<'s> {
                 self.lexer.next();
                 Literal::String(read_string_literal(slice))
             },
+
+            Lit(T::Ident, _, "b") if self.lexer.peek2().is_some_and(|Lex(t, _, _)| *t == T::String) => {
+                self.lexer.next();
+                let Some(Lex(T::String, _, slice)) = self.lexer.next() else {
+                    unreachable!("SAFETY: match guard confirms this token exists")
+                };
+
+                let output = read_string_literal(slice);
+                Literal::ByteArray(output.into_owned().into_bytes())
+            },
         })
     }
 
@@ -539,6 +549,12 @@ mod tests {
     }
 
     #[test]
+    fn test_pseudo_keyword_expr() {
+        // Certain identifiers are keywords if they are followed by some tokens, but otherwise not.
+        assert_snapshot!(strands(r#"{b}"#));
+    }
+
+    #[test]
     fn test_literal_expr() {
         assert_snapshot!(strands(r#"{true}"#));
     }
@@ -603,6 +619,13 @@ mod tests {
     fn test_string_literals() {
         assert_snapshot!(strands(
             "{'foo' | 'bar\nbaz' | 'qux\\'quux' | 'quy\\\\quz' | 'xyz\\zy' }"
+        ));
+    }
+
+    #[test]
+    fn test_byte_literals() {
+        assert_snapshot!(strands(
+            "{b'foo' | b'bar\nbaz' | b'qux\\'quux' | b'quy\\\\quz' | b'xyz\\zy' }"
         ));
     }
 
@@ -704,5 +727,10 @@ mod tests {
     #[test]
     fn test_trailing_string() {
         assert_snapshot!(strands(r#"{'foo"#));
+    }
+
+    #[test]
+    fn test_byte_literal_whitespace() {
+        assert_snapshot!(strands(r#"{b 'foo'}"#));
     }
 }

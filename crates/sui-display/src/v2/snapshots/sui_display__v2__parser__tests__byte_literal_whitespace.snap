@@ -1,0 +1,5 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(r#\"{b 'foo'}\"#)"
+---
+Error: Unexpected string "foo" at offset 4, expected one of ':', '|', or '}'
