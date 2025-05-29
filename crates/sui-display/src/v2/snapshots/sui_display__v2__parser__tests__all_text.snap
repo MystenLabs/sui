@@ -1,0 +1,7 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(r#\"foo bar\"#)"
+---
+Text(
+    "foo bar",
+)

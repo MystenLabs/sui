@@ -1,0 +1,35 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(r#\"{foo | bar | baz}\"#)"
+---
+Expr(
+    Expr {
+        alternates: [
+            Chain {
+                root: None,
+                accessors: [
+                    Field(
+                        "foo",
+                    ),
+                ],
+            },
+            Chain {
+                root: None,
+                accessors: [
+                    Field(
+                        "bar",
+                    ),
+                ],
+            },
+            Chain {
+                root: None,
+                accessors: [
+                    Field(
+                        "baz",
+                    ),
+                ],
+            },
+        ],
+        transform: None,
+    },
+)
