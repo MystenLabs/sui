@@ -1506,6 +1506,7 @@ pub struct ProtocolConfig {
     /// A list of effective AliasedAddress.
     /// For each pair, `aliased` is allowed to act as `original` for any of the transaction digests
     /// listed in `tx_digests`
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     aliased_addresses: Vec<AliasedAddress>,
 }
 
