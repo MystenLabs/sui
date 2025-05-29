@@ -155,6 +155,7 @@ pub struct BuilderCheckpointSummary {
 }
 
 #[derive(DBMapUtils)]
+#[cfg_attr(tidehunter, tidehunter)]
 pub struct CheckpointStoreTables {
     /// Maps checkpoint contents digest to checkpoint contents
     pub(crate) checkpoint_content: DBMap<CheckpointContentsDigest, CheckpointContents>,
@@ -198,8 +199,48 @@ fn full_checkpoint_content_table_default_config() -> DBOptions {
 }
 
 impl CheckpointStoreTables {
+    #[cfg(not(tidehunter))]
     pub fn new(path: &Path, metric_name: &'static str) -> Self {
         Self::open_tables_read_write(path.to_path_buf(), MetricConf::new(metric_name), None, None)
+    }
+
+    #[cfg(tidehunter)]
+    pub fn new(path: &Path, metric_name: &'static str) -> Self {
+        tracing::warn!("Checkpoint DB using tidehunter");
+        use typed_store::tidehunter_util::{default_cells_per_mutex, KeySpaceConfig, ThConfig};
+        const MUTEXES: usize = 1024;
+        let config_u64 = ThConfig::new(8, MUTEXES, default_cells_per_mutex());
+        let prefix_config = ThConfig::new_with_rm_prefix(
+            32,
+            MUTEXES,
+            default_cells_per_mutex(),
+            KeySpaceConfig::default(),
+            vec![0, 0, 0, 0, 0, 0, 0, 32],
+        );
+        let configs = vec![
+            ("checkpoint_content", prefix_config.clone()),
+            (
+                "checkpoint_sequence_by_contents_digest",
+                prefix_config.clone(),
+            ),
+            ("full_checkpoint_content", config_u64.clone()),
+            ("certified_checkpoints", config_u64.clone()),
+            ("checkpoint_by_digest", prefix_config.clone()),
+            ("locally_computed_checkpoints", config_u64.clone()),
+            ("epoch_last_checkpoint_map", config_u64.clone()),
+            (
+                "watermarks",
+                ThConfig::new(4, MUTEXES, default_cells_per_mutex()),
+            ),
+        ];
+        Self::open_tables_read_write(
+            path.to_path_buf(),
+            MetricConf::new(metric_name),
+            configs
+                .into_iter()
+                .map(|(cf, config)| (cf.to_string(), config))
+                .collect(),
+        )
     }
 
     pub fn open_readonly(path: &Path) -> CheckpointStoreTablesReadOnly {
