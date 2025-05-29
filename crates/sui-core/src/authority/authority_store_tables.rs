@@ -212,7 +212,8 @@ impl AuthorityPerpetualTables {
     pub fn open(parent_path: &Path, _: Option<AuthorityPerpetualTablesOptions>) -> Self {
         tracing::warn!("AuthorityPerpetualTables using tidehunter");
         use typed_store::tidehunter_util::{
-            default_cells_per_mutex, Bytes, KeyIndexing, KeySpaceConfig, ThConfig, WalPosition,
+            default_cells_per_mutex, Bytes, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
+            WalPosition,
         };
         const MUTEXES: usize = 1024;
         const VALUE_CACHE_SIZE: usize = 20_000;
