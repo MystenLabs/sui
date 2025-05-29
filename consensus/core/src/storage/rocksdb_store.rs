@@ -84,8 +84,8 @@ impl RocksDBStore {
     #[cfg(tidehunter)]
     pub(crate) fn new(path: &str) -> Self {
         tracing::warn!("Consensus RocksDBStore using tidehunter");
-        use typed_store::tidehunter_util::{default_cells_per_mutex, ThConfig};
-        let config = ThConfig::new(4, 1024, default_cells_per_mutex());
+        use typed_store::tidehunter_util::{default_cells_per_mutex, ThConfig, KeyType};
+        let config = ThConfig::new(4, 1024, KeyType::uniform(default_cells_per_mutex()));
         let cfs = [
             Self::BLOCKS_CF,
             Self::DIGESTS_BY_AUTHORITIES_CF,
