@@ -378,6 +378,44 @@ impl<'s> Parser<'s> {
                 self.lexer.next();
                 Literal::Bool(false)
             },
+
+            Tok(T::NumDec, _, dec) => {
+                self.lexer.next();
+                let literal = match_token_opt! { self.lexer;
+                    Lit(T::Ident, _, "u8") => { self.lexer.next(); Literal::U8(read_u8(dec, 10, "u8")?) },
+                    Lit(T::Ident, _, "u16") => { self.lexer.next(); Literal::U16(read_u16(dec, 10, "u16")?) },
+                    Lit(T::Ident, _, "u32") => { self.lexer.next(); Literal::U32(read_u32(dec, 10, "u32")?) },
+                    Lit(T::Ident, _, "u64") => { self.lexer.next(); Literal::U64(read_u64(dec, 10, "u64")?) },
+                    Lit(T::Ident, _, "u128") => { self.lexer.next(); Literal::U128(read_u128(dec, 10, "u128")?) },
+                    Lit(T::Ident, _, "u256") => { self.lexer.next(); Literal::U256(read_u256(dec, 10, "u256")?) },
+                };
+
+                // If there was no explicit type suffix, assume `u64`.
+                if let Match::Found(lit) = literal {
+                    lit
+                } else {
+                    Literal::U64(read_u64(dec, 10, "u64")?)
+                }
+            },
+
+            Tok(T::NumHex, _, hex) => {
+                self.lexer.next();
+                let literal = match_token_opt! { self.lexer;
+                    Lit(T::Ident, _, "u8") => { self.lexer.next(); Literal::U8(read_u8(hex, 16, "u8")?) },
+                    Lit(T::Ident, _, "u16") => { self.lexer.next(); Literal::U16(read_u16(hex, 16, "u16")?) },
+                    Lit(T::Ident, _, "u32") => { self.lexer.next(); Literal::U32(read_u32(hex, 16, "u32")?) },
+                    Lit(T::Ident, _, "u64") => { self.lexer.next(); Literal::U64(read_u64(hex, 16, "u64")?) },
+                    Lit(T::Ident, _, "u128") => { self.lexer.next(); Literal::U128(read_u128(hex, 16, "u128")?) },
+                    Lit(T::Ident, _, "u256") => { self.lexer.next(); Literal::U256(read_u256(hex, 16, "u256")?) },
+                };
+
+                // If there was no explicit type suffix, assume `u64`.
+                if let Match::Found(lit) = literal {
+                    lit
+                } else {
+                    Literal::U64(read_u64(hex, 16, "u64")?)
+                }
+            },
         })
     }
 
@@ -419,6 +457,26 @@ impl<'s> Parser<'s> {
             self.lexer.next();
         }
     }
+}
+
+fn read_u8(slice: &str, radix: u32, what: &'static str) -> Result<u8, Error> {
+    u8::from_str_radix(&slice.replace('_', ""), radix).map_err(|_| Error::NumberOverflow { what })
+}
+
+fn read_u16(slice: &str, radix: u32, what: &'static str) -> Result<u16, Error> {
+    u16::from_str_radix(&slice.replace('_', ""), radix).map_err(|_| Error::NumberOverflow { what })
+}
+
+fn read_u32(slice: &str, radix: u32, what: &'static str) -> Result<u32, Error> {
+    u32::from_str_radix(&slice.replace('_', ""), radix).map_err(|_| Error::NumberOverflow { what })
+}
+
+fn read_u64(slice: &str, radix: u32, what: &'static str) -> Result<u64, Error> {
+    u64::from_str_radix(&slice.replace('_', ""), radix).map_err(|_| Error::NumberOverflow { what })
+}
+
+fn read_u128(slice: &str, radix: u32, what: &'static str) -> Result<u128, Error> {
+    u128::from_str_radix(&slice.replace('_', ""), radix).map_err(|_| Error::NumberOverflow { what })
 }
 
 fn read_u256(slice: &str, radix: u32, what: &'static str) -> Result<U256, Error> {
@@ -496,13 +554,24 @@ mod tests {
     }
 
     #[test]
+    fn test_address_literal() {
+        assert_snapshot!(strands(r#"{@0x1 | @42 | @0x12_34_56}"#));
+    }
+
+    #[test]
     fn test_bool_literals() {
         assert_snapshot!(strands(r#"{true | false}"#));
     }
 
     #[test]
-    fn test_address_literal() {
-        assert_snapshot!(strands(r#"{@0x1 | @42 | @0x12_34_56}"#));
+    fn test_numeric_literals() {
+        assert_snapshot!(strands(
+            "Decimal Literals: \
+            { 42 | 42u8 | 1_234u16 | 56_789_012_345u64 | 678_901_234_567_890_123_456u128 | 7_890_123_456_789_012_345_678_901_234_567_890_123_456u256 } \
+            Hexadecimal literals: \
+            { 0x42 | 0x42u8 | 0x123u16 | 0x4_5678u32 | 0x90_1234_5678u64 | 0x90_1234_5678_9012_3456u128 | 0x78_9012_3456_7890_1234_5679_0123_4567_8901u256 }\
+            "
+        ));
     }
 
     #[test]
@@ -514,6 +583,12 @@ mod tests {
     fn test_index_with_root() {
         assert_snapshot!(strands(r#"{true[[foo]][bar].baz}"#));
     }
+
+    /**
+     * Error Cases
+     *
+     * All the below cases are invalid syntax, and should return a parser error.
+     */
 
     #[test]
     fn test_unbalanced_curlies() {
@@ -572,5 +647,25 @@ mod tests {
         assert_snapshot!(strands(
             r#"{@12345678901234567890123456789012345678901234567890123456789012345678901234567890}"#
         ));
+    }
+
+    #[test]
+    fn test_address_literal_ident() {
+        assert_snapshot!(strands(r#"{@foo}"#));
+    }
+
+    #[test]
+    fn test_numeric_overflow_implicit() {
+        assert_snapshot!(strands(r#"{ 678_901_234_567_890_123_456 }"#));
+    }
+
+    #[test]
+    fn test_numeric_overflow_explicit() {
+        assert_snapshot!(strands(r#"{ 0x90_1234_5678u32 }"#));
+    }
+
+    #[test]
+    fn test_numeric_type_suffix_whitespace() {
+        assert_snapshot!(strands(r#"{42 u64}"#));
     }
 }
