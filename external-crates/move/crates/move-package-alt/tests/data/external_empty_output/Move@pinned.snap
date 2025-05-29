@@ -1,4 +1,4 @@
 ---
-source: crates/move-package-alt/tests/pinning_tests.rs
+source: crates/move-package-alt/tests/test_runner.rs
 ---
-mock-resolver did not follow the external resolver protocol: TODO: couldn't deserialize something
+`mock-resolver` did not follow the external resolver protocol (response was not serialized correctly)

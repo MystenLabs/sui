@@ -7,7 +7,6 @@ mod manifest_error;
 use append_only_vec::AppendOnlyVec;
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::files::SimpleFiles;
-mod git_error;
 pub use lockfile_error::LockfileError;
 pub use manifest_error::ManifestError;
 pub use manifest_error::ManifestErrorKind;
@@ -17,9 +16,6 @@ pub use located::{Located, with_file};
 
 mod files;
 pub use files::FileHandle;
-pub use resolver_error::ResolverError;
-
-mod resolver_error;
 
 use std::fs;
 use std::path::Path;
@@ -31,6 +27,7 @@ use codespan_reporting::diagnostic::Diagnostic;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::dependency::external::ResolverError;
 use crate::git::errors::GitError;
 
 /// Result type for package operations

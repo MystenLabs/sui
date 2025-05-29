@@ -5,6 +5,7 @@ authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
 edition = "2024"
+default-run = "move-package-alt"
 
 [dependencies]
 anyhow.workspace = true
