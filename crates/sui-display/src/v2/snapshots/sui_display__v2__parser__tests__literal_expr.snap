@@ -1,0 +1,19 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(r#\"{true}\"#)"
+---
+Expr(
+    Expr {
+        alternates: [
+            Chain {
+                root: Some(
+                    Bool(
+                        true,
+                    ),
+                ),
+                accessors: [],
+            },
+        ],
+        transform: None,
+    },
+)

@@ -447,500 +447,130 @@ mod tests {
 
     #[test]
     fn test_all_text() {
-        assert_snapshot!(strands(r#"foo bar"#), @r###"
-        Text(
-            "foo bar",
-        )
-        "###);
+        assert_snapshot!(strands(r#"foo bar"#))
     }
 
     #[test]
     fn test_field_expr() {
-        assert_snapshot!(strands(r#"{foo}"#), @r###"
-        Expr(
-            Expr {
-                alternates: [
-                    Chain {
-                        root: None,
-                        accessors: [
-                            Field(
-                                "foo",
-                            ),
-                        ],
-                    },
-                ],
-                transform: None,
-            },
-        )
-        "###);
+        assert_snapshot!(strands(r#"{foo}"#));
     }
 
     #[test]
     fn test_literal_expr() {
-        assert_snapshot!(strands(r#"{true}"#), @r###"
-        Expr(
-            Expr {
-                alternates: [
-                    Chain {
-                        root: Some(
-                            Bool(
-                                true,
-                            ),
-                        ),
-                        accessors: [],
-                    },
-                ],
-                transform: None,
-            },
-        )
-        "###);
+        assert_snapshot!(strands(r#"{true}"#));
     }
 
     #[test]
     fn test_nested_field_expr() {
-        assert_snapshot!(strands(r#"{foo.bar.baz}"#), @r###"
-        Expr(
-            Expr {
-                alternates: [
-                    Chain {
-                        root: None,
-                        accessors: [
-                            Field(
-                                "foo",
-                            ),
-                            Field(
-                                "bar",
-                            ),
-                            Field(
-                                "baz",
-                            ),
-                        ],
-                    },
-                ],
-                transform: None,
-            },
-        )
-        "###);
+        assert_snapshot!(strands(r#"{foo.bar.baz}"#));
     }
 
     #[test]
     fn test_text_with_escapes() {
-        assert_snapshot!(strands(r#"foo {{bar}} baz"#), @r###"
-        Text(
-            "foo {bar} baz",
-        )
-        "###);
+        assert_snapshot!(strands(r#"foo {{bar}} baz"#));
     }
 
     #[test]
     fn test_back_to_back_exprs() {
-        assert_snapshot!(strands(r#"{foo . bar}{baz.qux}"#), @r###"
-        Expr(
-            Expr {
-                alternates: [
-                    Chain {
-                        root: None,
-                        accessors: [
-                            Field(
-                                "foo",
-                            ),
-                            Field(
-                                "bar",
-                            ),
-                        ],
-                    },
-                ],
-                transform: None,
-            },
-        )
-        Expr(
-            Expr {
-                alternates: [
-                    Chain {
-                        root: None,
-                        accessors: [
-                            Field(
-                                "baz",
-                            ),
-                            Field(
-                                "qux",
-                            ),
-                        ],
-                    },
-                ],
-                transform: None,
-            },
-        )
-        "###);
+        assert_snapshot!(strands(r#"{foo . bar}{baz.qux}"#));
     }
 
     #[test]
     fn test_triple_curlies() {
-        assert_snapshot!(strands(r#"foo {{{bar} {baz}}}"#), @r###"
-        Text(
-            "foo {",
-        )
-        Expr(
-            Expr {
-                alternates: [
-                    Chain {
-                        root: None,
-                        accessors: [
-                            Field(
-                                "bar",
-                            ),
-                        ],
-                    },
-                ],
-                transform: None,
-            },
-        )
-        Text(
-            " ",
-        )
-        Expr(
-            Expr {
-                alternates: [
-                    Chain {
-                        root: None,
-                        accessors: [
-                            Field(
-                                "baz",
-                            ),
-                        ],
-                    },
-                ],
-                transform: None,
-            },
-        )
-        Text(
-            "}",
-        )
-        "###);
+        assert_snapshot!(strands(r#"foo {{{bar} {baz}}}"#));
     }
 
     #[test]
     fn test_alternates() {
-        assert_snapshot!(strands(r#"{foo | bar | baz}"#), @r###"
-        Expr(
-            Expr {
-                alternates: [
-                    Chain {
-                        root: None,
-                        accessors: [
-                            Field(
-                                "foo",
-                            ),
-                        ],
-                    },
-                    Chain {
-                        root: None,
-                        accessors: [
-                            Field(
-                                "bar",
-                            ),
-                        ],
-                    },
-                    Chain {
-                        root: None,
-                        accessors: [
-                            Field(
-                                "baz",
-                            ),
-                        ],
-                    },
-                ],
-                transform: None,
-            },
-        )
-        "###);
+        assert_snapshot!(strands(r#"{foo | bar | baz}"#));
     }
 
     #[test]
     fn test_alternates_with_transform() {
-        assert_snapshot!(strands(r#"{foo | bar | baz :base64}"#), @r###"
-        Expr(
-            Expr {
-                alternates: [
-                    Chain {
-                        root: None,
-                        accessors: [
-                            Field(
-                                "foo",
-                            ),
-                        ],
-                    },
-                    Chain {
-                        root: None,
-                        accessors: [
-                            Field(
-                                "bar",
-                            ),
-                        ],
-                    },
-                    Chain {
-                        root: None,
-                        accessors: [
-                            Field(
-                                "baz",
-                            ),
-                        ],
-                    },
-                ],
-                transform: Some(
-                    "base64",
-                ),
-            },
-        )
-        "###);
+        assert_snapshot!(strands(r#"{foo | bar | baz :base64}"#));
     }
 
     #[test]
     fn test_expr_with_transform() {
-        assert_snapshot!(strands(r#"{foo.bar.baz:url}"#), @r###"
-        Expr(
-            Expr {
-                alternates: [
-                    Chain {
-                        root: None,
-                        accessors: [
-                            Field(
-                                "foo",
-                            ),
-                            Field(
-                                "bar",
-                            ),
-                            Field(
-                                "baz",
-                            ),
-                        ],
-                    },
-                ],
-                transform: Some(
-                    "url",
-                ),
-            },
-        )
-        "###);
+        assert_snapshot!(strands(r#"{foo.bar.baz:url}"#));
     }
 
     #[test]
     fn test_bool_literals() {
-        assert_snapshot!(strands(r#"{true | false}"#), @r###"
-        Expr(
-            Expr {
-                alternates: [
-                    Chain {
-                        root: Some(
-                            Bool(
-                                true,
-                            ),
-                        ),
-                        accessors: [],
-                    },
-                    Chain {
-                        root: Some(
-                            Bool(
-                                false,
-                            ),
-                        ),
-                        accessors: [],
-                    },
-                ],
-                transform: None,
-            },
-        )
-        "###)
+        assert_snapshot!(strands(r#"{true | false}"#));
     }
 
     #[test]
     fn test_address_literal() {
-        assert_snapshot!(strands(r#"{@0x1 | @42 | @0x12_34_56}"#), @r###"
-        Expr(
-            Expr {
-                alternates: [
-                    Chain {
-                        root: Some(
-                            Address(
-                                0000000000000000000000000000000000000000000000000000000000000001,
-                            ),
-                        ),
-                        accessors: [],
-                    },
-                    Chain {
-                        root: Some(
-                            Address(
-                                000000000000000000000000000000000000000000000000000000000000002a,
-                            ),
-                        ),
-                        accessors: [],
-                    },
-                    Chain {
-                        root: Some(
-                            Address(
-                                0000000000000000000000000000000000000000000000000000000000123456,
-                            ),
-                        ),
-                        accessors: [],
-                    },
-                ],
-                transform: None,
-            },
-        )
-        "###);
+        assert_snapshot!(strands(r#"{@0x1 | @42 | @0x12_34_56}"#));
     }
 
     #[test]
     fn test_index_chain() {
-        assert_snapshot!(strands(r#"{foo[bar][[baz]].qux[quy]}"#), @r###"
-        Expr(
-            Expr {
-                alternates: [
-                    Chain {
-                        root: None,
-                        accessors: [
-                            Field(
-                                "foo",
-                            ),
-                            Index(
-                                Chain {
-                                    root: None,
-                                    accessors: [
-                                        Field(
-                                            "bar",
-                                        ),
-                                    ],
-                                },
-                            ),
-                            IIndex(
-                                Chain {
-                                    root: None,
-                                    accessors: [
-                                        Field(
-                                            "baz",
-                                        ),
-                                    ],
-                                },
-                            ),
-                            Field(
-                                "qux",
-                            ),
-                            Index(
-                                Chain {
-                                    root: None,
-                                    accessors: [
-                                        Field(
-                                            "quy",
-                                        ),
-                                    ],
-                                },
-                            ),
-                        ],
-                    },
-                ],
-                transform: None,
-            },
-        )
-        "###);
+        assert_snapshot!(strands(r#"{foo[bar][[baz]].qux[quy]}"#));
     }
 
     #[test]
     fn test_index_with_root() {
-        assert_snapshot!(strands(r#"{true[[foo]][bar].baz}"#), @r###"
-        Expr(
-            Expr {
-                alternates: [
-                    Chain {
-                        root: Some(
-                            Bool(
-                                true,
-                            ),
-                        ),
-                        accessors: [
-                            IIndex(
-                                Chain {
-                                    root: None,
-                                    accessors: [
-                                        Field(
-                                            "foo",
-                                        ),
-                                    ],
-                                },
-                            ),
-                            Index(
-                                Chain {
-                                    root: None,
-                                    accessors: [
-                                        Field(
-                                            "bar",
-                                        ),
-                                    ],
-                                },
-                            ),
-                            Field(
-                                "baz",
-                            ),
-                        ],
-                    },
-                ],
-                transform: None,
-            },
-        )
-        "###);
+        assert_snapshot!(strands(r#"{true[[foo]][bar].baz}"#));
     }
 
     #[test]
     fn test_unbalanced_curlies() {
-        assert_snapshot!(strands(r#"{foo"#), @"Error: Unexpected end-of-string, expected one of ':', '|', or '}'");
+        assert_snapshot!(strands(r#"{foo"#));
     }
 
     #[test]
     fn test_missing_field_identifier() {
-        assert_snapshot!(strands(r#"{foo..bar}"#), @"Error: Unexpected '.' at offset 5, expected an identifier");
+        assert_snapshot!(strands(r#"{foo..bar}"#));
     }
 
     #[test]
     fn test_unbalanced_index() {
-        assert_snapshot!(strands(r#"{foo[bar}"#), @"Error: Unexpected '}' at offset 8, expected ']'");
+        assert_snapshot!(strands(r#"{foo[bar}"#));
     }
 
     #[test]
     fn test_spaced_out_left_double_index() {
-        assert_snapshot!(strands(r#"{foo[ [bar]]}"#), @"Error: Unexpected '[' at offset 6, expected one of 'false', 'true', '@', or an identifier");
+        assert_snapshot!(strands(r#"{foo[ [bar]]}"#));
     }
 
     #[test]
     fn test_spaced_out_right_double_index() {
-        assert_snapshot!(strands(r#"{foo[[bar] ]}"#), @"Error: Unexpected whitespace at offset 10, expected ']'");
+        assert_snapshot!(strands(r#"{foo[[bar] ]}"#));
     }
 
     #[test]
     fn test_unbalanced_double_index() {
-        assert_snapshot!(strands(r#"{foo[[bar}"#), @"Error: Unexpected '}' at offset 9, expected ']'");
+        assert_snapshot!(strands(r#"{foo[[bar}"#));
     }
 
     #[test]
     fn test_triple_index() {
-        assert_snapshot!(strands(r#"{foo[[[bar]]]}"#), @"Error: Unexpected '[' at offset 6, expected one of 'false', 'true', '@', or an identifier");
+        assert_snapshot!(strands(r#"{foo[[[bar]]]}"#));
     }
 
     #[test]
     fn test_unexpected_characters() {
-        assert_snapshot!(strands(r#"anything goes {? % ! 🔥}"#), @r###"Error: Unexpected "?" at offset 15, expected one of 'false', 'true', '@', or an identifier"###);
+        assert_snapshot!(strands(r#"anything goes {? % ! 🔥}"#));
     }
 
     #[test]
     fn test_address_literal_whitespace() {
-        assert_snapshot!(strands(r#"{@ 0x3}"#), @"Error: Unexpected whitespace at offset 2, expected one of a decimal number, or a hexadecimal number");
+        assert_snapshot!(strands(r#"{@ 0x3}"#));
     }
 
     #[test]
     fn test_hex_address_overflow() {
-        assert_snapshot!(strands(r#"{@0x12345678901234567890123456789012345678901234567890123456789012345}"#), @"Error: Number literal is too large to fit into 'address'");
+        assert_snapshot!(strands(
+            r#"{@0x12345678901234567890123456789012345678901234567890123456789012345}"#
+        ));
     }
 
     #[test]
     fn test_dec_address_overflow() {
-        assert_snapshot!(strands(r#"{@12345678901234567890123456789012345678901234567890123456789012345678901234567890}"#), @"Error: Number literal is too large to fit into 'address'");
+        assert_snapshot!(strands(
+            r#"{@12345678901234567890123456789012345678901234567890123456789012345678901234567890}"#
+        ));
     }
 }
