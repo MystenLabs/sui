@@ -19,7 +19,6 @@ use tokio::process::Command;
 use tracing::{debug, info};
 
 use crate::{
-    errors::{FileHandle, Located, ManifestError, ManifestErrorKind},
     flavor::MoveFlavor,
     jsonrpc::Endpoint,
     package::{EnvironmentName, PackageName},
@@ -43,12 +42,6 @@ pub struct ExternalDependency {
 
     /// the `<data>` in `{ r.<res> = <data> }`
     data: toml::Value,
-
-    /// The source file containing this dependency
-    file: FileHandle,
-
-    /// The range within the source file
-    span: Range<usize>,
 }
 
 #[derive(Error, Debug)]
@@ -88,7 +81,7 @@ pub enum ResolverError {
 /// Convenience type for serializing/deserializing external deps
 #[derive(Serialize, Deserialize)]
 struct RField {
-    r: Located<BTreeMap<String, toml::Value>>,
+    r: BTreeMap<String, toml::Value>,
 }
 
 /// Requests from the package mananger to the external resolver
@@ -208,50 +201,32 @@ impl ResolverError {
 }
 
 impl TryFrom<RField> for ExternalDependency {
-    type Error = ManifestError;
+    type Error = String;
 
     /// Convert from [RField] (`{r.<res> = <data>}`) to [ExternalDependency] (`{ res, data }`)
     fn try_from(value: RField) -> Result<Self, Self::Error> {
         debug!("try_from: {:?}", value.r);
-        if value.r.as_ref().len() != 1 {
-            return Err(ManifestError {
-                kind: ManifestErrorKind::BadExternalDependency,
-                span: Some(value.r.span()),
-                handle: value.r.file(),
-            });
+        if value.r.len() != 1 {
+            return Err("Externally resolved dependencies should have the form `{r.<resolver-name> = <resolver-data>}`".to_string());
         }
-
-        let file = value.r.file();
-        let span = value.r.span();
 
         let (resolver, data) = value
             .r
-            .into_inner()
             .into_iter()
             .next()
             .expect("iterator of length 1 structure is nonempty");
 
-        Ok(Self {
-            resolver,
-            data,
-            file,
-            span,
-        })
+        Ok(Self { resolver, data })
     }
 }
 
 impl From<ExternalDependency> for RField {
     /// Translate from [ExternalDependency] `{ res, data }` to [RField] `{r.<res> = data}`
     fn from(value: ExternalDependency) -> Self {
-        let ExternalDependency {
-            resolver,
-            data,
-            file,
-            span,
-        } = value;
+        let ExternalDependency { resolver, data } = value;
 
         RField {
-            r: Located::new(BTreeMap::from([(resolver, data)]), file, span),
+            r: BTreeMap::from([(resolver, data)]),
         }
     }
 }
@@ -283,18 +258,17 @@ async fn resolve_single<F: MoveFlavor>(
         serde_json::to_string_pretty(&reqs).unwrap_or("serialization error".to_string())
     );
 
-    // TODO
     let resps = endpoint
         .batch_call("resolve", reqs)
         .await
         .map_err(|e| ResolverError::bad_resolver(&resolver, e.to_string()));
 
-    // dump standard error
     let output = child
         .wait_with_output()
         .await
         .map_err(|e| ResolverError::io_error(&resolver, e))?;
 
+    // dump standard error
     if !output.stderr.is_empty() {
         info!(
             "Output from {resolver}:\n{}",
