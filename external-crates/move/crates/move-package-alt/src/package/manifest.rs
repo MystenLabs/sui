@@ -10,6 +10,7 @@ use std::{
 
 use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
+use tracing::{debug, info};
 
 use crate::{
     dependency::{DependencySet, UnpinnedDependencyInfo},
@@ -87,7 +88,7 @@ pub struct ManifestDependencyReplacement<F: MoveFlavor> {
 impl<F: MoveFlavor> Manifest<F> {
     /// Read the manifest file at the given path, returning a [`Manifest`].
     pub fn read_from_file(path: impl AsRef<Path>) -> PackageResult<Self> {
-        println!("Reading manifest from {:?}", path.as_ref());
+        debug!("Reading manifest from {:?}", path.as_ref());
         let contents = std::fs::read_to_string(&path)?;
 
         let (manifest, file_id) = with_file(&path, toml_edit::de::from_str::<Self>)?;

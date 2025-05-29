@@ -18,7 +18,6 @@ pub struct Endpoint<I: AsyncRead, O: AsyncWrite> {
     sqn: RequestID,
 }
 
-// TODO: think if we keep errors here or move them in their own error module
 #[derive(Error, Debug)]
 pub enum JsonRpcError {
     #[error(transparent)]
@@ -27,10 +26,10 @@ pub enum JsonRpcError {
     #[error(transparent)]
     IoError(#[from] tokio::io::Error),
 
-    #[error("Received wrong set of responses")]
+    #[error("received wrong set of responses")]
     IncorrectQueryResults,
 
-    #[error("TODO: couldn't deserialize something")]
+    #[error("response was not serialized correctly")]
     SerializationError(#[from] serde_json::Error),
 }
 
@@ -44,13 +43,22 @@ impl<I: AsyncRead + Unpin, O: AsyncWrite + Unpin> Endpoint<I, O> {
         }
     }
 
-    /// Call the RPC method [method] with argument [arg]; decode the output
+    /// Call the RPC method [method] with argument [arg]; decode and return the output
     pub async fn call<A, R>(&mut self, method: impl AsRef<str>, arg: A) -> Result<R, JsonRpcError>
     where
         A: Serialize,
         R: DeserializeOwned,
     {
-        call(self, method, arg).await
+        let request = self.make_request(method, arg);
+
+        self.send(&request).await?;
+        let response: Response<R> = self.receive().await?;
+
+        if response.id != request.id {
+            Err(JsonRpcError::IncorrectQueryResults)
+        } else {
+            response.result.get()
+        }
     }
 
     /// Call the method [method] once for each argument in [args] using a JSON RPC batch request
@@ -61,98 +69,65 @@ impl<I: AsyncRead + Unpin, O: AsyncWrite + Unpin> Endpoint<I, O> {
         method: impl AsRef<str>,
         args: impl IntoIterator<Item = A>,
     ) -> Result<impl Iterator<Item = R>, JsonRpcError> {
-        batch_call(self, method, args).await
-    }
-}
+        let requests: Vec<Request<A>> = args
+            .into_iter()
+            .map(|arg| self.make_request(&method, arg))
+            .collect();
 
-/// Call the RPC method [method] with argument [arg]; decode the output
-pub async fn call<A, R, I: AsyncRead + Unpin, O: AsyncWrite + Unpin>(
-    endpoint: &mut Endpoint<I, O>,
-    method: impl AsRef<str>,
-    arg: A,
-) -> Result<R, JsonRpcError>
-where
-    A: Serialize,
-    R: DeserializeOwned,
-{
-    let request = make_request(endpoint, method, arg);
-    let mut request_json = serde_json::to_vec(&request).expect("requests should be serializable");
-    request_json.push(b'\n');
+        self.send(&requests).await?;
+        let responses: BatchResponse<R> = self.receive().await?;
 
-    endpoint.output.write_all(&request_json).await?;
-    endpoint.output.flush().await?;
+        // match up requests and responses
+        if responses.len() != requests.len() {
+            return Err(JsonRpcError::IncorrectQueryResults);
+        }
 
-    let mut response_json = String::new();
-    endpoint.input.read_line(&mut response_json).await?;
+        let mut resp_by_id: BTreeMap<RequestID, Response<R>> = responses
+            .into_iter()
+            .map(|response| (response.id, response))
+            .collect();
 
-    let response: Response<R> = serde_json::de::from_str(response_json.as_str())?;
+        let mut result: Vec<R> = Vec::new();
+        for req in requests {
+            let response = resp_by_id
+                .remove(&req.id)
+                .ok_or(JsonRpcError::IncorrectQueryResults)?;
 
-    if response.id != request.id {
-        Err(JsonRpcError::IncorrectQueryResults)
-    } else {
-        response.result.get()
-    }
-}
+            result.push(response.result.get::<JsonRpcError>()?);
+        }
 
-/// Call the method [method] once for each argument in [args] using a JSON RPC batch request
-/// and await all of the responses. Return the results of the calls in the same order as
-/// [args].
-pub async fn batch_call<A: Serialize, R: DeserializeOwned>(
-    endpoint: &mut Endpoint<impl AsyncRead + Unpin, impl AsyncWrite + Unpin>,
-    method: impl AsRef<str>,
-    args: impl IntoIterator<Item = A>,
-) -> Result<impl Iterator<Item = R>, JsonRpcError> {
-    let requests: Vec<Request<A>> = args
-        .into_iter()
-        .map(|arg| make_request(endpoint, &method, arg))
-        .collect();
-
-    let mut batch_json = serde_json::to_vec(&requests).expect("requests should be serializable");
-    batch_json.push(b'\n');
-
-    endpoint.output.write_all(&batch_json).await?;
-
-    let mut response_json = String::new();
-    endpoint.input.read_line(&mut response_json).await?;
-
-    debug!("received:{response_json}");
-    let responses: BatchResponse<R> = serde_json::de::from_str(response_json.as_str())?;
-
-    // match up requests and responses
-    if responses.len() != requests.len() {
-        return Err(JsonRpcError::IncorrectQueryResults);
+        Ok(result.into_iter())
     }
 
-    let mut resp_by_id: BTreeMap<RequestID, Response<R>> = responses
-        .into_iter()
-        .map(|response| (response.id, response))
-        .collect();
+    /// Serialize `value` and write it to `self.output`
+    async fn send<T: Serialize>(&mut self, value: &T) -> Result<(), JsonRpcError> {
+        let mut request_json = serde_json::to_vec(&value).expect("requests should be serializable");
+        request_json.push(b'\n');
 
-    let mut result: Vec<R> = Vec::new();
-    for req in requests {
-        let response = resp_by_id
-            .remove(&req.id)
-            .ok_or(JsonRpcError::IncorrectQueryResults)?;
-
-        result.push(response.result.get::<JsonRpcError>()?);
+        debug!("sending request: {request_json:?}");
+        self.output.write_all(&request_json).await?;
+        self.output.flush().await?;
+        Ok(())
     }
 
-    Ok(result.into_iter())
-}
+    /// Read a line from `self.input` and deserialize it as a JSON T
+    async fn receive<T: DeserializeOwned>(&mut self) -> Result<T, JsonRpcError> {
+        let mut response_json = String::new();
+        self.input.read_line(&mut response_json).await?;
+        debug!("received:{response_json}");
+        Ok(serde_json::de::from_str(response_json.as_str())?)
+    }
 
-/// Generate a [Request] to call [method]([arg]) using [self.sqn]; [self.sqn]
-fn make_request<A: Serialize>(
-    endpoint: &mut Endpoint<impl AsyncRead + Unpin, impl AsyncWrite + Unpin>,
-    method: impl AsRef<str>,
-    arg: A,
-) -> Request<A> {
-    let request = Request::<A> {
-        jsonrpc: TwoPointZero,
-        method: method.as_ref().to_string(),
-        params: arg,
-        id: endpoint.sqn,
-    };
-    endpoint.sqn += 1;
+    /// Generate a [Request] to call [method]([arg]) using [self.sqn]; [self.sqn]
+    fn make_request<A: Serialize>(&mut self, method: impl AsRef<str>, arg: A) -> Request<A> {
+        let request = Request::<A> {
+            jsonrpc: TwoPointZero,
+            method: method.as_ref().to_string(),
+            params: arg,
+            id: self.sqn,
+        };
+        self.sqn += 1;
 
-    request
+        request
+    }
 }

@@ -3,37 +3,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod dependency_set;
-// TODO: this shouldn't be pub; need to move resolver error into resolver module
 pub mod external;
 mod git;
 mod local;
 
 pub use dependency_set::DependencySet;
 
-use std::{
-    collections::BTreeMap,
-    fmt::{self, Debug},
-    marker::PhantomData,
-    path::{Path, PathBuf},
-    process::{Command, Stdio},
-};
+use std::{collections::BTreeMap, path::PathBuf};
 
 use derive_where::derive_where;
-use serde::{
-    Deserialize, Deserializer, Serialize,
-    de::{self, MapAccess, SeqAccess, Visitor},
-};
+use serde::{Deserialize, Deserializer, Serialize, de};
 
 use tracing::debug;
 
 use crate::{
-    errors::{PackageError, PackageResult, ResolverError},
+    errors::PackageResult,
     flavor::MoveFlavor,
-    package::{EnvironmentName, PackageName, PackagePath},
+    package::{EnvironmentName, PackagePath},
 };
 
 use external::ExternalDependency;
-pub use git::{PinnedGitDependency, UnpinnedGitDependency, fetch_dep};
+use git::{PinnedGitDependency, UnpinnedGitDependency, fetch_dep};
 use local::LocalDependency;
 
 // TODO (potential refactor): consider using objects for manifest dependencies (i.e. `Box<dyn UnpinnedDependency>`).
