@@ -811,6 +811,8 @@ pub mod execution_error {
         CoinTypeGlobalPause = 36,
         /// Certificate is canceled because randomness could not be generated this epoch.
         ExecutionCanceledDueToRandomnessUnavailable = 37,
+        MoveVectorElemTooBig = 38,
+        MoveRawValueTooBig = 39,
     }
     impl ExecutionErrorKind {
         /// String value of the enum field names used in the ProtoBuf definition.
@@ -871,6 +873,8 @@ pub mod execution_error {
                 Self::ExecutionCanceledDueToRandomnessUnavailable => {
                     "EXECUTION_CANCELED_DUE_TO_RANDOMNESS_UNAVAILABLE"
                 }
+                Self::MoveVectorElemTooBig => "MOVE_VECTOR_ELEM_TOO_BIG",
+                Self::MoveRawValueTooBig => "MOVE_RAW_VALUE_TOO_BIG",
             }
         }
         /// Creates an enum from field names used in the ProtoBuf definition.
@@ -932,6 +936,8 @@ pub mod execution_error {
                 "EXECUTION_CANCELED_DUE_TO_RANDOMNESS_UNAVAILABLE" => {
                     Some(Self::ExecutionCanceledDueToRandomnessUnavailable)
                 }
+                "MOVE_VECTOR_ELEM_TOO_BIG" => Some(Self::MoveVectorElemTooBig),
+                "MOVE_RAW_VALUE_TOO_BIG" => Some(Self::MoveRawValueTooBig),
                 _ => None,
             }
         }
@@ -1037,6 +1043,9 @@ pub mod command_argument_error {
         /// Shared object operations such as wrapping, freezing, or converting to owned are not
         /// allowed.
         SharedObjectOperationNotAllowed = 12,
+        /// Invalid argument arity. Expected a single argument but found a result that expanded to
+        /// multiple arguments.
+        InvalidArgumentArity = 13,
     }
     impl CommandArgumentErrorKind {
         /// String value of the enum field names used in the ProtoBuf definition.
@@ -1062,6 +1071,7 @@ pub mod command_argument_error {
                 Self::SharedObjectOperationNotAllowed => {
                     "SHARED_OBJECT_OPERATION_NOT_ALLOWED"
                 }
+                Self::InvalidArgumentArity => "INVALID_ARGUMENT_ARITY",
             }
         }
         /// Creates an enum from field names used in the ProtoBuf definition.
@@ -1086,6 +1096,7 @@ pub mod command_argument_error {
                 "SHARED_OBJECT_OPERATION_NOT_ALLOWED" => {
                     Some(Self::SharedObjectOperationNotAllowed)
                 }
+                "INVALID_ARGUMENT_ARITY" => Some(Self::InvalidArgumentArity),
                 _ => None,
             }
         }

@@ -188,6 +188,27 @@ impl From<sui_sdk_types::ExecutionError> for super::ExecutionError {
             ExecutionCanceledDueToRandomnessUnavailable => {
                 ExecutionErrorKind::ExecutionCanceledDueToRandomnessUnavailable
             }
+            MoveVectorElemTooBig {
+                value_size,
+                max_scaled_size,
+            } => {
+                message.size_error = Some(super::SizeError {
+                    size: Some(value_size),
+                    max_size: Some(max_scaled_size),
+                });
+
+                ExecutionErrorKind::MoveVectorElemTooBig
+            }
+            MoveRawValueTooBig {
+                value_size,
+                max_scaled_size,
+            } => {
+                message.size_error = Some(super::SizeError {
+                    size: Some(value_size),
+                    max_size: Some(max_scaled_size),
+                });
+                ExecutionErrorKind::MoveRawValueTooBig
+            }
         };
 
         message.set_kind(kind);
@@ -372,6 +393,31 @@ impl TryFrom<&super::ExecutionError> for sui_sdk_types::ExecutionError {
             ExecutionCanceledDueToRandomnessUnavailable => {
                 Self::ExecutionCanceledDueToRandomnessUnavailable
             }
+
+            MoveVectorElemTooBig => {
+                let super::SizeError { size, max_size } = value
+                    .size_error
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("size_error"))?;
+
+                Self::MoveVectorElemTooBig {
+                    value_size: size.ok_or_else(|| TryFromProtoError::missing("size"))?,
+                    max_scaled_size: max_size
+                        .ok_or_else(|| TryFromProtoError::missing("max_size"))?,
+                }
+            }
+            MoveRawValueTooBig => {
+                let super::SizeError { size, max_size } = value
+                    .size_error
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("size_error"))?;
+
+                Self::MoveRawValueTooBig {
+                    value_size: size.ok_or_else(|| TryFromProtoError::missing("size"))?,
+                    max_scaled_size: max_size
+                        .ok_or_else(|| TryFromProtoError::missing("max_size"))?,
+                }
+            }
         }
         .pipe(Ok)
     }
@@ -415,6 +461,7 @@ impl From<sui_sdk_types::CommandArgumentError> for super::CommandArgumentError {
             SharedObjectOperationNotAllowed => {
                 CommandArgumentErrorKind::SharedObjectOperationNotAllowed
             }
+            InvalidArgumentArity => CommandArgumentErrorKind::InvalidArgumentArity,
         };
 
         message.set_kind(kind);
@@ -465,6 +512,7 @@ impl TryFrom<&super::CommandArgumentError> for sui_sdk_types::CommandArgumentErr
             InvalidObjectByValue => Self::InvalidObjectByValue,
             InvalidObjectByMutRef => Self::InvalidObjectByMutRef,
             SharedObjectOperationNotAllowed => Self::SharedObjectOperationNotAllowed,
+            InvalidArgumentArity => Self::InvalidArgumentArity,
         }
         .pipe(Ok)
     }
