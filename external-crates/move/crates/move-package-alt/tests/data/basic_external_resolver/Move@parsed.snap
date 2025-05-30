@@ -42,6 +42,7 @@ Manifest {
                             ),
                         },
                     ),
+                    relative_to_parent_dir: "tests/data/basic_external_resolver",
                 },
             ),
             is_override: false,

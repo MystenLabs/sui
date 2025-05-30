@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::{
-    errors::{PackageResult, current_file},
+    errors::{PackageResult, parsing_dir},
     flavor::MoveFlavor,
     package::paths::PackagePath,
 };
@@ -58,11 +58,4 @@ impl LocalDependency {
                 )
             })
     }
-}
-
-fn parsing_dir() -> PathBuf {
-    current_file()
-        .parent()
-        .unwrap_or(Path::new("."))
-        .to_path_buf()
 }
