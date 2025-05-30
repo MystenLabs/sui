@@ -1,0 +1,29 @@
+---
+source: crates/move-stackless-bytecode-2/tests/tests.rs
+---
+Module counter::counter
+    Function create
+        reg_0 = U64(0)
+        reg_1 = Pack(reg_1)
+        Return(reg_1)
+    Function increment
+        reg_0 = CopyLoc(reg_0)
+        reg_1 = ImmBorrowField(reg_1)
+        reg_2 = ReadRef(reg_2)
+        reg_3 = U64(1)
+        reg_4 = Add(reg_2, reg_3)
+        reg_5 = MoveLoc(reg_0)
+        reg_6 = MutBorrowField(reg_6)
+        reg_6 = WriteRef(reg_5)
+        Return(reg_6)
+    Function set_value
+        reg_0 = MoveLoc(reg_1)
+        reg_1 = MoveLoc(reg_0)
+        reg_2 = MutBorrowField(reg_2)
+        reg_2 = WriteRef(reg_1)
+        Return(reg_2)
+    Function value
+        reg_0 = MoveLoc(reg_0)
+        reg_1 = ImmBorrowField(reg_1)
+        reg_2 = ReadRef(reg_2)
+        Return(reg_2)

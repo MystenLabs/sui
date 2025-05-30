@@ -10,7 +10,7 @@ use move_binary_format::{
 use std::{
     collections::{BTreeMap, BTreeSet, btree_map::Entry},
     fmt::{Debug, Display},
-    hash::Hash
+    hash::Hash,
 };
 // BTree/Hash agnostic type wrappers
 type Map<K, V> = BTreeMap<K, V>;

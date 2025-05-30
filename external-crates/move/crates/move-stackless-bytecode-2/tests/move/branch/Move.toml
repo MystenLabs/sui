@@ -3,8 +3,5 @@ name = "Branch"
 version = "0.0.1"
 edition = "2024.beta"
 
-[dependencies]
-Sui = { local = "../../../../../../../crates/sui-framework/packages/sui-framework" }
-
 [addresses]
 branch = "0x0"
