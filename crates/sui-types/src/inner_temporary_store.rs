@@ -57,8 +57,8 @@ impl InnerTemporaryStore {
         let deleted_output_keys = effects
             .deleted()
             .into_iter()
-            .chain(effects.transferred_from_consensus().into_iter())
-            .chain(effects.consensus_owner_changed().into_iter())
+            .chain(effects.transferred_from_consensus())
+            .chain(effects.consensus_owner_changed())
             .map(|oref| (oref.0, oref.1))
             .filter_map(|(id, seq)| {
                 self.input_objects
