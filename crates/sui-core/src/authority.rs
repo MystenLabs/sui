@@ -909,14 +909,39 @@ impl AuthorityState {
         // Note: the deny checks may do redundant package loads but:
         // - they only load packages when there is an active package deny map
         // - the loads are cached anyway
-        sui_transaction_checks::deny::check_transaction_for_signing(
+        let deny_status = sui_transaction_checks::deny::check_transaction_for_signing(
             tx_data,
             transaction.tx_signatures(),
             &input_object_kinds,
             &receiving_objects_refs,
             &self.config.transaction_deny_config,
             self.get_backing_package_store().as_ref(),
-        )?;
+        );
+
+        match deny_status {
+            Ok(_) => {}
+            // If the transaction was blocked, it may still be allowed if it is in
+            // the aliased address list.
+            // TODO: Delete this code after protocol version 86.
+            Err(e) => {
+                let allowed = transaction
+                    .inner()
+                    .data()
+                    .tx_signatures()
+                    .iter()
+                    .filter_map(|sig| sig.try_into().ok())
+                    .any(|signer: SuiAddress| {
+                        epoch_store.protocol_config().is_tx_allowed_via_aliasing(
+                            tx_data.sender().to_inner(),
+                            signer.to_inner(),
+                            tx_digest.inner(),
+                        )
+                    });
+                if !allowed {
+                    return Err(e);
+                }
+            }
+        }
 
         let (input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
             Some(tx_digest),
