@@ -7,9 +7,13 @@ pub mod external;
 mod git;
 mod local;
 
+use async_trait::async_trait;
 pub use dependency_set::DependencySet;
 
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 use derive_where::derive_where;
 use serde::{Deserialize, Deserializer, Serialize, de};
@@ -25,6 +29,24 @@ use crate::{
 use external::ExternalDependency;
 use git::{PinnedGitDependency, UnpinnedGitDependency, fetch_dep};
 use local::LocalDependency;
+
+trait UnpinnedDependency {}
+
+#[async_trait]
+pub trait PinnedDependency {
+    /// Return the path on the local filesystem that this package would be fetched to, without
+    /// necessarily fetching the package
+    fn unfetched_path(&self) -> PathBuf;
+
+    /// Fetch this dependency and return the path to it. The returned path must be the same as
+    /// that returned by `unfetched_path`
+    async fn fetch(&self) -> PackageResult<PackagePath>;
+
+    /// Return a new pinned dependency for the local dependency at `local` relative to `self`.
+    /// For example, if `self` represents a git dep `{ git = "...", path = "A/B/C" }`, then
+    /// `self.canonicalize("../D")` would return a git dep `{ git = "...", path = "A/B/D" }`.
+    fn canonicalize(&self, local: Path) -> PackageResult<Box<dyn PinnedDependency>>;
+}
 
 // TODO (potential refactor): consider using objects for manifest dependencies (i.e. `Box<dyn UnpinnedDependency>`).
 //      part of the complexity here would be deserialization - probably need a flavor-specific
