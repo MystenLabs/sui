@@ -90,16 +90,6 @@ impl<F: MoveFlavor> PinnedDependencyInfo<F> {
         Self::Local(LocalDependency::root_dependency(path))
     }
 
-    // pub async fn fetch(&self) -> PackagePath {
-    //     // TODO: take this from [Package]
-    //
-    //     match self {
-    //         PinnedDependencyInfo::Git(pinned_git_dependency) => pinned_git_dependency
-    //         PinnedDependencyInfo::Local(local_dependency) => todo!(),
-    //         PinnedDependencyInfo::FlavorSpecific(_) => todo!(),
-    //     }
-    // }
-
     /// Return the absolute path to the directory that this package would be fetched into, without
     /// actually fetching it
     pub fn unfetched_path(&self) -> PathBuf {
