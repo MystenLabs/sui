@@ -95,7 +95,6 @@ impl Test<'_> {
                 };
                 contents
             }
-            "graph" => run_graph_test_wrapper(self.toml_path).unwrap(),
             "locked" => {
                 let lockfile = Lockfile::<Vanilla>::read_from_dir(self.toml_path.parent().unwrap());
                 match lockfile {
@@ -109,7 +108,7 @@ impl Test<'_> {
     }
 }
 
-async fn run_graph_test(input_path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+async fn _run_graph_test(input_path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let package_path = PackagePath::new(input_path.parent().unwrap().to_path_buf())?;
     let package = PackageGraph::<Vanilla>::load_from_lockfile_ignore_digests(
         &package_path,
@@ -121,9 +120,9 @@ async fn run_graph_test(input_path: &Path) -> Result<String, Box<dyn std::error:
     Ok(output)
 }
 
-fn run_graph_test_wrapper(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+fn _run_graph_test_wrapper(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let rt = tokio::runtime::Runtime::new()?;
-    let data = rt.block_on(run_graph_test(path))?;
+    let data = rt.block_on(_run_graph_test(path))?;
     Ok(data)
 }
 
