@@ -14,7 +14,7 @@ use tracing::{debug, info};
 
 use crate::{
     dependency::{DependencySet, UnpinnedDependencyInfo},
-    errors::{FileHandle, Located, ManifestError, ManifestErrorKind, PackageResult, with_file},
+    errors::{FileHandle, Located, ManifestError, ManifestErrorKind, PackageResult, TheFile},
     flavor::{MoveFlavor, Vanilla},
 };
 
@@ -92,7 +92,7 @@ impl<F: MoveFlavor> Manifest<F> {
         debug!("Reading manifest from {:?}", path.as_ref());
         let contents = std::fs::read_to_string(&path)?;
 
-        let (manifest, file_id) = with_file(&path, toml_edit::de::from_str::<Self>)?;
+        let (manifest, file_id) = TheFile::with_file(&path, toml_edit::de::from_str::<Self>)?;
 
         match manifest {
             Ok(manifest) => {

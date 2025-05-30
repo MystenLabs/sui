@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::{
-    errors::{PackageResult, parsing_dir},
+    errors::{FileHandle, PackageResult, TheFile},
     flavor::MoveFlavor,
     package::paths::PackagePath,
 };
@@ -25,9 +25,10 @@ pub struct LocalDependency {
     /// The path on the filesystem, relative to the location of the containing file (which is
     /// stored in the `Located` wrapper)
     local: PathBuf,
-    #[serde(skip_serializing, default = "parsing_dir")]
+
     /// This is the directory to which this local dependency is relative to. As this is local
     /// dependency, the directory should be the parent directory that contains this dependency.
+    #[serde(skip, default = "TheFile::parent_dir")]
     relative_to_parent_dir: PathBuf,
 }
 
