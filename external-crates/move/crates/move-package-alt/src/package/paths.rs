@@ -16,16 +16,20 @@ pub type PackagePathResult<T> = Result<T, PackagePathError>;
 
 /// A canonical path to a directory containing a loaded Move package (in particular, the directory
 /// must have a Move.toml)
-#[derive(Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialOrd, Ord, PartialEq, Eq)]
 pub struct PackagePath(PathBuf);
 
 impl PackagePath {
     /// Create a canonical path from the given [`dir`]. This function checks that there is a
     /// `Move.toml` file in this directory.
     pub fn new(dir: PathBuf) -> PackagePathResult<Self> {
+        println!("Creating PackagePath from directory: {}", dir.display());
+
         let path = dir
             .canonicalize()
             .map_err(|e| PackagePathError::InvalidDirectory { path: dir.clone() })?;
+
+        println!("Canonicalized path: {}", path.display());
 
         if !dir.is_dir() {
             return Err(PackagePathError::InvalidDirectory { path: dir.clone() });
@@ -55,16 +59,6 @@ pub enum PackagePathError {
 
     #[error("Package does not have a Move.toml file at `{path}`")]
     InvalidPackage { path: PathBuf },
-}
-
-pub struct IoError {}
-
-impl Debug for PackagePath {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let relative_path = self.0.strip_prefix(&cwd).unwrap_or(&self.0);
-        write!(f, "PackagePath: {}", relative_path.display())
-    }
 }
 
 #[cfg(test)]
