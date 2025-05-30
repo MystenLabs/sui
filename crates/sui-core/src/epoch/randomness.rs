@@ -854,7 +854,12 @@ mod tests {
                     tx_consensus.try_send(transactions.to_vec()).unwrap();
                     true
                 })
-                .returning(|_, _| Ok(with_block_status(BlockStatus::Sequenced(BlockRef::MIN))));
+                .returning(|_, _| {
+                    Ok((
+                        Vec::new(),
+                        with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+                    ))
+                });
 
             let state = TestAuthorityBuilder::new()
                 .with_protocol_config(protocol_config.clone())
@@ -1002,9 +1007,10 @@ mod tests {
                     true
                 })
                 .returning(|_, _| {
-                    Ok(with_block_status(consensus_core::BlockStatus::Sequenced(
-                        BlockRef::MIN,
-                    )))
+                    Ok((
+                        Vec::new(),
+                        with_block_status(consensus_core::BlockStatus::Sequenced(BlockRef::MIN)),
+                    ))
                 });
 
             let state = TestAuthorityBuilder::new()
