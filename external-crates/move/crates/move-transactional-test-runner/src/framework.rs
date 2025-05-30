@@ -50,7 +50,7 @@ use std::{
 use tempfile::NamedTempFile;
 
 pub struct CompiledState {
-    pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_deps: Option<Vec<Arc<FullyCompiledProgram>>>,
     pre_compiled_ids: BTreeSet<(AccountAddress, String)>,
     compiled_module_named_address_mapping: BTreeMap<ModuleId, Symbol>,
     pub named_address_mapping: BTreeMap<String, NumericalAddress>,
@@ -120,7 +120,7 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
     fn default_syntax(&self) -> SyntaxChoice;
     async fn init(
         default_syntax: SyntaxChoice,
-        option: Option<Arc<FullyCompiledProgram>>,
+        option: Option<Vec<Arc<FullyCompiledProgram>>>,
         init_data: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
         path: &Path,
     ) -> (Self, Option<String>);
@@ -424,7 +424,7 @@ fn display_return_values(return_values: SerializedReturnValues) -> Option<String
 impl CompiledState {
     pub fn new(
         named_address_mapping: BTreeMap<String, NumericalAddress>,
-        pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_deps: Option<Vec<Arc<FullyCompiledProgram>>>,
         default_named_address_mapping: Option<NumericalAddress>,
         compiler_edition: Option<Edition>,
         flavor: Option<Flavor>,
@@ -432,9 +432,8 @@ impl CompiledState {
         let pre_compiled_ids = match pre_compiled_deps.clone() {
             None => BTreeSet::new(),
             Some(pre_compiled) => pre_compiled
-                .cfgir
-                .modules
-                .key_cloned_iter()
+                .iter()
+                .flat_map(|p| p.cfgir.modules.key_cloned_iter())
                 .map(|(ident, _)| {
                     (
                         ident.value.address.into_addr_bytes().into_inner(),
@@ -454,13 +453,15 @@ impl CompiledState {
             default_named_address_mapping,
             temp_files: BTreeMap::new(),
         };
-        if let Some(pcd) = pre_compiled_deps {
-            for unit in &pcd.compiled {
-                let (named_addr_opt, _id) = unit.module_id();
-                state.add_precompiled(
-                    named_addr_opt.map(|n| n.value),
-                    unit.named_module.module.clone(),
-                );
+        if let Some(pcd_vec) = pre_compiled_deps {
+            for pcd in pcd_vec {
+                for unit in &pcd.compiled {
+                    let (named_addr_opt, _id) = unit.module_id();
+                    state.add_precompiled(
+                        named_addr_opt.map(|n| n.value),
+                        unit.named_module.module.clone(),
+                    );
+                }
             }
         }
         state
@@ -678,7 +679,9 @@ pub fn compile_source_units(
     match units_or_diags {
         Err((_pass, diags)) => {
             if let Some(pcd) = state.pre_compiled_deps.clone() {
-                files.extend(pcd.files.clone());
+                for p in pcd {
+                    files.extend(p.files.clone());
+                }
             }
             Err(anyhow!(rendered_diags(&files, diags).unwrap()))
         }
@@ -706,7 +709,7 @@ pub fn compile_ir_module(
 /// if it is a `TaskCommand::Init`. Returns the adapter and the output string.
 pub async fn create_adapter<'a, Adapter>(
     path: &Path,
-    fully_compiled_program_opt: Option<Arc<FullyCompiledProgram>>,
+    fully_compiled_program_opt: Option<Vec<Arc<FullyCompiledProgram>>>,
 ) -> Result<(String, Adapter), Box<dyn std::error::Error>>
 where
     Adapter: MoveTestAdapter<'a>,
@@ -817,7 +820,7 @@ where
 /// not need to extend the adapter.
 pub async fn run_test_impl<'a, Adapter>(
     path: &Path,
-    fully_compiled_program_opt: Option<Arc<FullyCompiledProgram>>,
+    fully_compiled_program_opt: Option<Vec<Arc<FullyCompiledProgram>>>,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
     Adapter: MoveTestAdapter<'a>,

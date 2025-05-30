@@ -17,7 +17,9 @@ use move_analyzer::{
     inlay_hints::inlay_hints_internal,
     symbols::{
         Symbols,
-        compilation::{CompiledPkgInfo, SymbolsComputationData, get_compiled_pkg},
+        compilation::{
+            CachedPackagesInfo, CompiledPkgInfo, SymbolsComputationData, get_compiled_pkg,
+        },
         compute_symbols, compute_symbols_parsed_program, compute_symbols_pre_process,
         requests::{def_info_doc_string, maybe_convert_for_guard},
         use_def::UseDefMap,
@@ -439,7 +441,7 @@ fn initial_symbols(
     project_path.push(project);
 
     let ide_files_root: VfsPath = MemoryFS::new().into();
-    let pkg_deps = Arc::new(Mutex::new(BTreeMap::new()));
+    let pkg_deps = Arc::new(Mutex::new(CachedPackagesInfo::new()));
 
     let (mut compiled_pkg_info_opt, _) = get_compiled_pkg(
         pkg_deps.clone(),
