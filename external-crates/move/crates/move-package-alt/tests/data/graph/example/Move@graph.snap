@@ -13,7 +13,7 @@ Some(
                     manifest: Manifest {
                         package: PackageMetadata {
                             name: Located {
-                                file: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/bar/Move.toml",
+                                file: "tests/data/graph/example/../bar/Move.toml",
                                 value: Spanned {
                                     span: 17..22,
                                     value: Identifier(
@@ -22,7 +22,7 @@ Some(
                                 },
                             },
                             edition: Located {
-                                file: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/bar/Move.toml",
+                                file: "tests/data/graph/example/../bar/Move.toml",
                                 value: Spanned {
                                     span: 33..39,
                                     value: "2024",
@@ -37,13 +37,13 @@ Some(
                         dependencies: {},
                         dep_replacements: {},
                     },
-                    path: PackagePath: tests/data/graph/bar,
+                    path: PackagePath: tests/data/graph/example/../bar,
                 },
                 1: Package {
                     manifest: Manifest {
                         package: PackageMetadata {
                             name: Located {
-                                file: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/baz/Move.toml",
+                                file: "tests/data/graph/example/../baz/Move.toml",
                                 value: Spanned {
                                     span: 17..22,
                                     value: Identifier(
@@ -52,7 +52,7 @@ Some(
                                 },
                             },
                             edition: Located {
-                                file: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/baz/Move.toml",
+                                file: "tests/data/graph/example/../baz/Move.toml",
                                 value: Spanned {
                                     span: 33..39,
                                     value: "2024",
@@ -71,7 +71,7 @@ Some(
                                 dependency_info: Local(
                                     LocalDependency {
                                         local: "../bar",
-                                        relative_to_parent_dir: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/baz",
+                                        relative_to_parent_dir: "tests/data/graph/example/../baz",
                                     },
                                 ),
                                 is_override: false,
@@ -80,13 +80,13 @@ Some(
                         },
                         dep_replacements: {},
                     },
-                    path: PackagePath: tests/data/graph/baz,
+                    path: PackagePath: tests/data/graph/example/../baz,
                 },
                 2: Package {
                     manifest: Manifest {
                         package: PackageMetadata {
                             name: Located {
-                                file: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/example/Move.toml",
+                                file: "tests/data/graph/example/./Move.toml",
                                 value: Spanned {
                                     span: 17..26,
                                     value: Identifier(
@@ -95,7 +95,7 @@ Some(
                                 },
                             },
                             edition: Located {
-                                file: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/example/Move.toml",
+                                file: "tests/data/graph/example/./Move.toml",
                                 value: Spanned {
                                     span: 37..43,
                                     value: "2024",
@@ -114,7 +114,7 @@ Some(
                                 dependency_info: Local(
                                     LocalDependency {
                                         local: "../baz",
-                                        relative_to_parent_dir: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/example",
+                                        relative_to_parent_dir: "tests/data/graph/example",
                                     },
                                 ),
                                 is_override: false,
@@ -123,7 +123,7 @@ Some(
                         },
                         dep_replacements: {},
                     },
-                    path: PackagePath: tests/data/graph/example,
+                    path: PackagePath: tests/data/graph/example/.,
                 },
             },
             edge weights: {

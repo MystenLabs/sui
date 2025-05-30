@@ -124,7 +124,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         if let Some(deps) = deps {
             // First pass: create nodes for all packages
             for (pkg_id, dep_info) in deps.data.iter() {
-                let package = self.cache.fetch(path, &dep_info.source).await?;
+                let package = self.cache.fetch(&dep_info.source).await?;
                 let package_manifest_digest =
                     digest(std::fs::read_to_string(package.path().manifest_path())?.as_bytes());
                 if check_digests && package_manifest_digest != dep_info.manifest_digest {
@@ -163,7 +163,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         let visited = Arc::new(Mutex::new(BTreeMap::new()));
         let root = PinnedDependencyInfo::<F>::root_dependency(path);
 
-        self.add_transitive_manifest_deps(path, &root, env, graph.clone(), visited)
+        self.add_transitive_manifest_deps(&root, env, graph.clone(), visited)
             .await?;
 
         let graph = graph.lock().expect("unpoisoned").map(
@@ -190,7 +190,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
     /// deadlock
     async fn add_transitive_manifest_deps(
         &self,
-        root_pkg_path: &PackagePath,
+        // root_pkg_path: &PackagePath,
         dep: &PinnedDependencyInfo<F>,
         env: &EnvironmentName,
         graph: Arc<Mutex<DiGraph<Option<Arc<Package<F>>>, PackageName>>>,
@@ -207,19 +207,14 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         };
 
         // fetch package and add it to the graph
-        let package = self.cache.fetch(root_pkg_path, dep).await?;
+        let package = self.cache.fetch(dep).await?;
 
         // add outgoing edges for dependencies
         // Note: this loop could be parallel if we want parallel fetching:
         for (name, dep) in package.direct_deps(env).iter() {
             // TODO: to handle use-environment we need to traverse with a different env here
-            let future = self.add_transitive_manifest_deps(
-                root_pkg_path,
-                dep,
-                env,
-                graph.clone(),
-                visited.clone(),
-            );
+            let future =
+                self.add_transitive_manifest_deps(dep, env, graph.clone(), visited.clone());
             let dep_index = Box::pin(future).await?;
 
             graph
@@ -247,11 +242,7 @@ impl<F: MoveFlavor> PackageCache<F> {
     }
 
     /// Return a reference to a cached [Package], loading it if necessary
-    pub async fn fetch(
-        &self,
-        root_pkg_path: &PackagePath,
-        dep: &PinnedDependencyInfo<F>,
-    ) -> PackageResult<Arc<Package<F>>> {
+    pub async fn fetch(&self, dep: &PinnedDependencyInfo<F>) -> PackageResult<Arc<Package<F>>> {
         let cell = self
             .cache
             .lock()
@@ -260,16 +251,11 @@ impl<F: MoveFlavor> PackageCache<F> {
             .or_default()
             .clone();
 
-        cell.get_or_init(async || {
-            Package::load(dep.clone(), root_pkg_path.path())
-                .await
-                .ok()
-                .map(Arc::new)
-        })
-        .await
-        .clone()
-        .ok_or(PackageError::Generic(
-            "TODO: couldn't fetch package".to_string(),
-        ))
+        cell.get_or_init(async || Package::load(dep.clone()).await.ok().map(Arc::new))
+            .await
+            .clone()
+            .ok_or(PackageError::Generic(
+                "TODO: couldn't fetch package".to_string(),
+            ))
     }
 }
