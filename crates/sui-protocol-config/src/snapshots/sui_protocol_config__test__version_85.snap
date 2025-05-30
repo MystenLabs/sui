@@ -67,6 +67,7 @@ feature_flags:
   mysticeti_use_committed_subdag_digest: true
   enable_vdf: true
   record_consensus_determined_version_assignments_in_prologue: true
+  record_consensus_determined_version_assignments_in_prologue_v2: true
   fresh_vm_on_framework_upgrade: true
   prepend_prologue_tx_in_consensus_commit_in_checkpoints: true
   mysticeti_num_leaders_per_round: 1
