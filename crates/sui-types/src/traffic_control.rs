@@ -269,6 +269,8 @@ pub struct PolicyConfig {
     /// and any blocklist related configuration will be ignored.
     #[serde(default)]
     pub allow_list: Option<Vec<String>>,
+    #[serde(default = "default_weight_spam_by_request_size")]
+    pub weight_spam_by_request_size: bool,
 }
 
 impl Default for PolicyConfig {
@@ -283,6 +285,7 @@ impl Default for PolicyConfig {
             spam_sample_rate: default_spam_sample_rate(),
             dry_run: default_dry_run(),
             allow_list: None,
+            weight_spam_by_request_size: default_weight_spam_by_request_size(),
         }
     }
 }
@@ -328,4 +331,8 @@ pub fn default_dry_run() -> bool {
 
 pub fn default_spam_sample_rate() -> Weight {
     Weight::new(0.2).unwrap()
+}
+
+pub fn default_weight_spam_by_request_size() -> bool {
+    true
 }
