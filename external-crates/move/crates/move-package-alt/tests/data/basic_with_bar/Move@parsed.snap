@@ -66,6 +66,7 @@ Manifest {
                     data: String(
                         "@pkg/qwer",
                     ),
+                    relative_to_parent_dir: "tests/data/basic_with_bar",
                 },
             ),
             is_override: false,

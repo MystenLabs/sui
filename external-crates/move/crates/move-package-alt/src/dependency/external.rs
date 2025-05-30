@@ -9,6 +9,7 @@ use std::{
     ffi::OsStr,
     fmt::Debug,
     ops::Range,
+    path::PathBuf,
     process::{ExitStatus, Stdio},
 };
 
@@ -20,6 +21,7 @@ use tokio::process::Command;
 use tracing::{debug, info};
 
 use crate::{
+    errors::parsing_dir,
     flavor::MoveFlavor,
     jsonrpc::Endpoint,
     package::{EnvironmentName, PackageName},
@@ -43,6 +45,8 @@ pub struct ExternalDependency {
 
     /// the `<data>` in `{ r.<res> = <data> }`
     data: toml::Value,
+
+    relative_to_parent_dir: PathBuf,
 }
 
 #[derive(Error, Debug)]
@@ -83,6 +87,8 @@ pub enum ResolverError {
 #[derive(Serialize, Deserialize)]
 struct RField {
     r: BTreeMap<String, toml::Value>,
+    #[serde(skip, default = "parsing_dir")]
+    relative_to_parent_dir: PathBuf,
 }
 
 /// Requests from the package mananger to the external resolver
@@ -214,17 +220,26 @@ impl TryFrom<RField> for ExternalDependency {
             .next()
             .expect("iterator of length 1 structure is nonempty");
 
-        Ok(Self { resolver, data })
+        Ok(Self {
+            resolver,
+            data,
+            relative_to_parent_dir: value.relative_to_parent_dir,
+        })
     }
 }
 
 impl From<ExternalDependency> for RField {
     /// Translate from [ExternalDependency] `{ res, data }` to [RField] `{r.<res> = data}`
     fn from(value: ExternalDependency) -> Self {
-        let ExternalDependency { resolver, data } = value;
+        let ExternalDependency {
+            resolver,
+            data,
+            relative_to_parent_dir,
+        } = value;
 
         RField {
             r: BTreeMap::from([(resolver, data)]),
+            relative_to_parent_dir,
         }
     }
 }

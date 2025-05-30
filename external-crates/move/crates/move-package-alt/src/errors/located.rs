@@ -97,6 +97,7 @@ impl Drop for Guard {
     }
 }
 
+// TODO move this function to files
 pub fn current_file() -> PathBuf {
     let file = PARSING_FILE.with_borrow(|f| {
         *f.as_ref()
@@ -104,6 +105,14 @@ pub fn current_file() -> PathBuf {
     });
 
     file.path().to_path_buf()
+}
+
+// TODO move this function to files
+pub fn parsing_dir() -> PathBuf {
+    current_file()
+        .parent()
+        .unwrap_or(Path::new("."))
+        .to_path_buf()
 }
 
 /// Allows deserialization of [Located] values; sets their [file]s to [file]
