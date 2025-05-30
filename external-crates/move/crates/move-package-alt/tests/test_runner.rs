@@ -117,7 +117,7 @@ async fn run_graph_test(input_path: &Path) -> Result<String, Box<dyn std::error:
     )
     .await?;
 
-    let output = format!("{:#?}", package.inner);
+    let output = format!("{:#?}", package);
     Ok(output)
 }
 

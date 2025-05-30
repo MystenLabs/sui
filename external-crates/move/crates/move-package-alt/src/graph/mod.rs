@@ -82,8 +82,10 @@ impl<F: MoveFlavor> PackageGraph<F> {
     pub async fn load_from_lockfile_ignore_digests(
         path: &PackagePath,
         env: &EnvironmentName,
-    ) -> PackageResult<Self> {
-        todo!()
+    ) -> PackageResult<Option<Self>> {
+        PackageGraphBuilder::new()
+            .load_from_lockfile_ignore_digests(path, env)
+            .await
     }
 }
 
@@ -129,13 +131,14 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
 
         let deps = lockfile.pinned_deps_for_env(env);
 
-        println!("Loading package graph from lockfile: {:?}", deps);
         let mut package_indices = BTreeMap::new();
         if let Some(deps) = deps {
             // First pass: create nodes for all packages
             for (pkg_id, dep_info) in deps.data.iter() {
                 let package = self.cache.fetch(path, &dep_info.source).await?;
-                if check_digests && package.manifest().digest() != dep_info.manifest_digest {
+                let package_manifest_digest =
+                    digest(std::fs::read_to_string(package.path().manifest_path())?.as_bytes());
+                if check_digests && package_manifest_digest != dep_info.manifest_digest {
                     return Ok(None);
                 }
                 let index = graph.inner.add_node(package);
@@ -154,8 +157,6 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
                 }
             }
         }
-
-        println!("Package graph: {:?}", graph.inner);
 
         Ok(Some(graph))
     }

@@ -19,6 +19,7 @@ use crate::{
 };
 
 use super::*;
+use sha2::{Digest as ShaDigest, Sha256};
 
 // TODO: add 2025 edition
 const ALLOWED_EDITIONS: &[&str] = &["2024", "2024.beta", "legacy"];
@@ -165,9 +166,9 @@ impl<F: MoveFlavor> Manifest<F> {
     pub fn environments(&self) -> &BTreeMap<EnvironmentName, F::EnvironmentID> {
         &self.environments
     }
+}
 
-    /// Compute a digest of this file
-    pub fn digest(&self) -> Digest {
-        todo!()
-    }
+/// Compute a digest of this input data using SHA-256.
+pub fn digest(data: &[u8]) -> Digest {
+    format!("{:X}", Sha256::digest(data))
 }
