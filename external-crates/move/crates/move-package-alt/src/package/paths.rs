@@ -42,6 +42,10 @@ impl PackagePath {
     pub fn path(&self) -> &PathBuf {
         &self.0
     }
+
+    pub fn manifest_path(&self) -> PathBuf {
+        self.0.join("Move.toml")
+    }
 }
 
 impl Debug for PackagePath {

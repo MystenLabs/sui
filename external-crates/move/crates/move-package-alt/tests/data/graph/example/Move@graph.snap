@@ -1,135 +1,139 @@
 ---
 source: crates/move-package-alt/tests/test_runner.rs
 ---
-Graph {
-    Ty: "Directed",
-    node_count: 3,
-    edge_count: 2,
-    edges: (1, 0), (2, 1),
-    node weights: {
-        0: Package {
-            manifest: Manifest {
-                package: PackageMetadata {
-                    name: Located {
-                        file: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/bar/Move.toml",
-                        value: Spanned {
-                            span: 17..22,
-                            value: Identifier(
-                                "bar",
-                            ),
+Some(
+    PackageGraph {
+        inner: Graph {
+            Ty: "Directed",
+            node_count: 3,
+            edge_count: 2,
+            edges: (1, 0), (2, 1),
+            node weights: {
+                0: Package {
+                    manifest: Manifest {
+                        package: PackageMetadata {
+                            name: Located {
+                                file: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/bar/Move.toml",
+                                value: Spanned {
+                                    span: 17..22,
+                                    value: Identifier(
+                                        "bar",
+                                    ),
+                                },
+                            },
+                            edition: Located {
+                                file: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/bar/Move.toml",
+                                value: Spanned {
+                                    span: 33..39,
+                                    value: "2024",
+                                },
+                            },
+                            metadata: (),
                         },
-                    },
-                    edition: Located {
-                        file: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/bar/Move.toml",
-                        value: Spanned {
-                            span: 33..39,
-                            value: "2024",
+                        environments: {
+                            "mainnet": "35834a8a",
+                            "testnet": "4c78adac",
                         },
+                        dependencies: {},
+                        dep_replacements: {},
                     },
-                    metadata: (),
+                    path: PackagePath: tests/data/graph/bar,
                 },
-                environments: {
-                    "mainnet": "35834a8a",
-                    "testnet": "4c78adac",
-                },
-                dependencies: {},
-                dep_replacements: {},
-            },
-            path: PackagePath: tests/data/graph/bar,
-        },
-        1: Package {
-            manifest: Manifest {
-                package: PackageMetadata {
-                    name: Located {
-                        file: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/baz/Move.toml",
-                        value: Spanned {
-                            span: 17..22,
-                            value: Identifier(
+                1: Package {
+                    manifest: Manifest {
+                        package: PackageMetadata {
+                            name: Located {
+                                file: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/baz/Move.toml",
+                                value: Spanned {
+                                    span: 17..22,
+                                    value: Identifier(
+                                        "baz",
+                                    ),
+                                },
+                            },
+                            edition: Located {
+                                file: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/baz/Move.toml",
+                                value: Spanned {
+                                    span: 33..39,
+                                    value: "2024",
+                                },
+                            },
+                            metadata: (),
+                        },
+                        environments: {
+                            "mainnet": "35834a8a",
+                            "testnet": "4c78adac",
+                        },
+                        dependencies: {
+                            Identifier(
                                 "baz",
-                            ),
-                        },
-                    },
-                    edition: Located {
-                        file: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/baz/Move.toml",
-                        value: Spanned {
-                            span: 33..39,
-                            value: "2024",
-                        },
-                    },
-                    metadata: (),
-                },
-                environments: {
-                    "mainnet": "35834a8a",
-                    "testnet": "4c78adac",
-                },
-                dependencies: {
-                    Identifier(
-                        "baz",
-                    ): ManifestDependency {
-                        dependency_info: Local(
-                            LocalDependency {
-                                local: "../bar",
-                                relative_to_parent_dir: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/baz",
+                            ): ManifestDependency {
+                                dependency_info: Local(
+                                    LocalDependency {
+                                        local: "../bar",
+                                        relative_to_parent_dir: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/baz",
+                                    },
+                                ),
+                                is_override: false,
+                                rename_from: None,
                             },
-                        ),
-                        is_override: false,
-                        rename_from: None,
-                    },
-                },
-                dep_replacements: {},
-            },
-            path: PackagePath: tests/data/graph/baz,
-        },
-        2: Package {
-            manifest: Manifest {
-                package: PackageMetadata {
-                    name: Located {
-                        file: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/example/Move.toml",
-                        value: Spanned {
-                            span: 17..26,
-                            value: Identifier(
-                                "example",
-                            ),
                         },
+                        dep_replacements: {},
                     },
-                    edition: Located {
-                        file: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/example/Move.toml",
-                        value: Spanned {
-                            span: 37..43,
-                            value: "2024",
-                        },
-                    },
-                    metadata: (),
+                    path: PackagePath: tests/data/graph/baz,
                 },
-                environments: {
-                    "mainnet": "35834a8a",
-                    "testnet": "4c78adac",
-                },
-                dependencies: {
-                    Identifier(
-                        "baz",
-                    ): ManifestDependency {
-                        dependency_info: Local(
-                            LocalDependency {
-                                local: "../baz",
-                                relative_to_parent_dir: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/example",
+                2: Package {
+                    manifest: Manifest {
+                        package: PackageMetadata {
+                            name: Located {
+                                file: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/example/Move.toml",
+                                value: Spanned {
+                                    span: 17..26,
+                                    value: Identifier(
+                                        "example",
+                                    ),
+                                },
                             },
-                        ),
-                        is_override: false,
-                        rename_from: None,
+                            edition: Located {
+                                file: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/example/Move.toml",
+                                value: Spanned {
+                                    span: 37..43,
+                                    value: "2024",
+                                },
+                            },
+                            metadata: (),
+                        },
+                        environments: {
+                            "mainnet": "35834a8a",
+                            "testnet": "4c78adac",
+                        },
+                        dependencies: {
+                            Identifier(
+                                "baz",
+                            ): ManifestDependency {
+                                dependency_info: Local(
+                                    LocalDependency {
+                                        local: "../baz",
+                                        relative_to_parent_dir: "/Users/stefanstanciulescu/src/sui/external-crates/move/crates/move-package-alt/tests/data/graph/example",
+                                    },
+                                ),
+                                is_override: false,
+                                rename_from: None,
+                            },
+                        },
+                        dep_replacements: {},
                     },
+                    path: PackagePath: tests/data/graph/example,
                 },
-                dep_replacements: {},
             },
-            path: PackagePath: tests/data/graph/example,
+            edge weights: {
+                0: Identifier(
+                    "bar",
+                ),
+                1: Identifier(
+                    "baz",
+                ),
+            },
         },
     },
-    edge weights: {
-        0: Identifier(
-            "bar",
-        ),
-        1: Identifier(
-            "baz",
-        ),
-    },
-}
+)

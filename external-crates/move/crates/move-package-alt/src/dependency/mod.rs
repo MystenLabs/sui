@@ -19,6 +19,7 @@ use tracing::debug;
 use crate::{
     errors::PackageResult,
     flavor::MoveFlavor,
+    git::format_repo_to_fs_path,
     package::{EnvironmentName, paths::PackagePath},
 };
 
@@ -89,15 +90,26 @@ impl<F: MoveFlavor> PinnedDependencyInfo<F> {
         Self::Local(LocalDependency::root_dependency(path))
     }
 
-    pub async fn fetch(&self) -> PackagePath {
-        // TODO: take this from [Package]
-        todo!()
-    }
+    // pub async fn fetch(&self) -> PackagePath {
+    //     // TODO: take this from [Package]
+    //
+    //     match self {
+    //         PinnedDependencyInfo::Git(pinned_git_dependency) => pinned_git_dependency
+    //         PinnedDependencyInfo::Local(local_dependency) => todo!(),
+    //         PinnedDependencyInfo::FlavorSpecific(_) => todo!(),
+    //     }
+    // }
 
     /// Return the absolute path to the directory that this package would be fetched into, without
     /// actually fetching it
     pub fn unfetched_path(&self) -> PathBuf {
-        todo!()
+        match self {
+            PinnedDependencyInfo::Git(dep) => {
+                format_repo_to_fs_path(&dep.repo, &dep.rev, Some(dep.path.clone()))
+            }
+            PinnedDependencyInfo::Local(dep) => dep.unfetch_path(),
+            PinnedDependencyInfo::FlavorSpecific(dep) => todo!(),
+        }
     }
 }
 
