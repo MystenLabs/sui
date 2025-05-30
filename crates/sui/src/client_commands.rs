@@ -741,6 +741,12 @@ pub struct TxProcessingArgs {
     /// `sui client execute-combined-signed-tx --signed-tx-bytes <SIGNED_TX_BYTES>`.
     #[arg(long)]
     pub serialize_signed_transaction: bool,
+    /// Override the sender for the transaction. This option must be used with
+    /// --serialize-unsigned-transaction since the custom signer's private key
+    /// is not available in the keystore. The resulting unsigned transaction
+    /// can then be signed externally using the custom signer's private key.
+    #[arg(long, required = false, value_parser)]
+    pub override_sender: Option<SuiAddress>,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -3226,6 +3232,7 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         dev_inspect,
         serialize_unsigned_transaction,
         serialize_signed_transaction,
+        override_sender,
     } = processing;
 
     ensure!(
@@ -3240,6 +3247,8 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
     };
 
     let client = context.get_client().await?;
+
+    let signer = override_sender.unwrap_or(signer);
 
     if dev_inspect {
         return execute_dev_inspect(

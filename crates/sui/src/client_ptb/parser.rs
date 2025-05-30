@@ -8,7 +8,10 @@ use move_core_types::parsing::{
     parser::{parse_u128, parse_u16, parse_u256, parse_u32, parse_u64, parse_u8},
     types::{ParsedFqName, ParsedModuleId, ParsedStructType, ParsedType},
 };
-use sui_types::{base_types::ObjectID, Identifier};
+use sui_types::{
+    base_types::{ObjectID, SuiAddress},
+    Identifier,
+};
 
 use crate::{
     client_ptb::{
@@ -48,6 +51,8 @@ struct ProgramParsingState {
     gas_budget: Option<Spanned<u64>>,
     gas_price: Option<Spanned<u64>>,
     gas_sponsor: Option<Spanned<NumericalAddress>>,
+    override_sender_set: bool,
+    override_sender: Option<Spanned<SuiAddress>>,
 }
 
 macro_rules! mvr_ident {
@@ -81,6 +86,8 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 gas_budget: None,
                 gas_price: None,
                 gas_sponsor: None,
+                override_sender_set: false,
+                override_sender: None,
             },
         })
     }
@@ -173,6 +180,12 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                     }
                 }
 
+                L(T::Command, A::OVERRIDE_SENDER) => {
+                    flag!(override_sender_set);
+                    let override_sender = try_!(self.parse_override_sender());
+                    self.state.override_sender = Some(override_sender);
+                }
+
                 L(T::Command, A::TRANSFER_OBJECTS) => command!(self.parse_transfer_objects()),
                 L(T::Command, A::SPLIT_COINS) => command!(self.parse_split_coins()),
                 L(T::Command, A::MERGE_COINS) => command!(self.parse_merge_coins()),
@@ -254,6 +267,8 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                     gas_price: self.state.gas_price,
                     gas_sponsor: self.state.gas_sponsor,
                     mvr_names: self.state.mvr_names_with_span,
+                    override_sender_set: self.state.override_sender_set,
+                    override_sender: self.state.override_sender,
                 },
             ))
         } else {
@@ -883,6 +898,14 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
 
         let sp!(end_sp, _) = self.expect(T::RBracket)?;
         Ok(start_sp.widen(end_sp).wrap(values))
+    }
+
+    /// Parse a override sender.
+    /// The expected format is: `--override-sender <address>`
+    fn parse_override_sender(&mut self) -> PTBResult<Spanned<SuiAddress>> {
+        Ok(self
+            .parse_address_literal()?
+            .map(|a| SuiAddress::from(a.into_inner())))
     }
 }
 

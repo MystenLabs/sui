@@ -9,7 +9,9 @@ use move_core_types::parsing::{
 };
 use move_core_types::runtime_value::MoveValue;
 use sui_types::{
-    base_types::{ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
+    base_types::{
+        ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, SuiAddress,
+    },
     id::RESOLVED_SUI_ID,
     Identifier, TypeTag,
 };
@@ -42,6 +44,7 @@ pub const DRY_RUN: &str = "dry-run";
 pub const DEV_INSPECT: &str = "dev-inspect";
 pub const SERIALIZE_UNSIGNED: &str = "serialize-unsigned-transaction";
 pub const SERIALIZE_SIGNED: &str = "serialize-signed-transaction";
+pub const OVERRIDE_SENDER: &str = "override-sender";
 
 // Types
 pub const U8: &str = "u8";
@@ -83,6 +86,7 @@ pub const COMMANDS: &[&str] = &[
     DEV_INSPECT,
     SERIALIZE_UNSIGNED,
     SERIALIZE_SIGNED,
+    OVERRIDE_SENDER,
 ];
 
 pub fn is_keyword(s: &str) -> bool {
@@ -124,6 +128,8 @@ pub struct ProgramMetadata {
     pub gas_price: Option<Spanned<u64>>,
     pub gas_sponsor: Option<Spanned<NumericalAddress>>,
     pub mvr_names: BTreeMap<String, Span>,
+    pub override_sender_set: bool,
+    pub override_sender: Option<Spanned<SuiAddress>>,
 }
 
 /// A parsed module access consisting of the address, module name, and function name.

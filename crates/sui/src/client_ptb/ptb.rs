@@ -213,6 +213,7 @@ impl PTB {
             dev_inspect: program_metadata.dev_inspect_set,
             serialize_unsigned_transaction: program_metadata.serialize_unsigned_set,
             serialize_signed_transaction: program_metadata.serialize_signed_set,
+            override_sender: program_metadata.override_sender.map(|x| x.value),
         };
 
         let gas_payment = client.transaction_builder().input_refs(&gas).await?;
