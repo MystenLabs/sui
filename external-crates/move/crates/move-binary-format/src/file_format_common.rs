@@ -78,6 +78,9 @@ impl BinaryConstants {
     /// The blob that must start a binary.
     pub const MOVE_MAGIC_SIZE: usize = 4;
     pub const MOVE_MAGIC: [u8; BinaryConstants::MOVE_MAGIC_SIZE] = [0xA1, 0x1C, 0xEB, 0x0B];
+    /// Used for testing and other modes, to explicitly disallow publication.
+    pub const UNPUBLISHABLE_MAGIC: [u8; BinaryConstants::MOVE_MAGIC_SIZE] =
+        [0xDE, 0xAD, 0xC0, 0xDE];
     /// The `DIEM_MAGIC` size, 4 byte for major version and 1 byte for table count.
     pub const HEADER_SIZE: usize = BinaryConstants::MOVE_MAGIC_SIZE + 5;
     /// A (Table Type, Start Offset, Byte Count) size, which is 1 byte for the type and
@@ -224,7 +227,7 @@ pub enum SerializedNativeStructFlag {
 #[derive(Clone, Copy, Debug)]
 pub enum SerializedEnumFlag {
     // 0x1 is reserved for NATIVE if we ever decide to add it
-    DECLARED = 0x2, 
+    DECLARED = 0x2,
 }
 
 #[rustfmt::skip]

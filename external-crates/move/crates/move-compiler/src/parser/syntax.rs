@@ -8,7 +8,11 @@
 
 use crate::{
     diag,
-    diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, codes::Category},
+    diagnostics::{
+        Diagnostic, DiagnosticReporter, Diagnostics,
+        codes::Category,
+        warning_filters::{WarningFiltersBuilder, WarningFiltersTable},
+    },
     editions::{Edition, FeatureGate, UPGRADE_NOTE},
     parser::{ast::*, attributes::to_known_attributes, format_one_of, lexer::*, token_set::*},
     shared::{string_utils::*, *},
@@ -1185,7 +1189,7 @@ fn parse_attributes(context: &mut Context) -> Result<Vec<Attributes>, Box<Diagno
                 .into_iter()
                 .flat_map(|attr| to_known_attributes(context, attr))
                 .collect::<Vec<_>>();
-            sp(loc, attrs)
+            sp(loc, Attributes_(attrs))
         })
         .collect::<Vec<_>>();
     Ok(attributes)
@@ -4767,6 +4771,14 @@ fn consume_spec_string(context: &mut Context) -> Result<Spanned<String>, Box<Dia
 //      File =
 //          (<Attributes> (<AddressBlock> | <Module> ))*
 fn parse_file(context: &mut Context) -> Vec<Definition> {
+    // If this is a dependency, do not report warnings in it.
+    let config = context.env.package_config(context.current_package);
+    let mut table = WarningFiltersTable::new();
+    if config.is_dependency {
+        let all_filters_all = table.add(WarningFiltersBuilder::new_all_filter_alls(context.env));
+        context.reporter.push_warning_filter_scope(all_filters_all);
+    }
+
     let mut defs = vec![];
     while context.tokens.peek() != Tok::EOF {
         if let Err(diag) = parse_file_def(context, &mut defs) {
@@ -4776,6 +4788,11 @@ fn parse_file(context: &mut Context) -> Vec<Definition> {
             skip_to_next_desired_tok_or_eof(context, &TokenSet::from(&[Tok::Spec, Tok::Module]));
         }
     }
+
+    if config.is_dependency {
+        context.reporter.pop_warning_filter_scope();
+    }
+
     defs
 }
 

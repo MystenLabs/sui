@@ -401,6 +401,7 @@ impl CompiledModuleStrategyGen {
                     // Build a compiled module
                     CompiledModule {
                         version: crate::file_format_common::VERSION_MAX,
+                        publishable: true,
                         module_handles,
                         self_module_handle_idx,
                         datatype_handles,

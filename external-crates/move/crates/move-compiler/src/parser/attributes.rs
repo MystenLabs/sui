@@ -52,8 +52,9 @@ pub(crate) fn to_known_attributes(
         // -- external attributes --------
         KA::ExternalAttribute::EXTERNAL => parse_external(context, attribute),
         // -- mode attributes ------------
-        KA::TestingAttribute::TEST_ONLY => parse_test_only(context, attribute),
-        KA::VerificationAttribute::VERIFY_ONLY => parse_verify_only(context, attribute),
+        KA::ModeAttribute::MODE => parse_mode(context, attribute),
+        KA::ModeAttribute::TEST_ONLY => parse_test_only(context, attribute),
+        KA::ModeAttribute::VERIFY_ONLY => parse_verify_only(context, attribute),
         // -- syntax attribute -----------
         KA::SyntaxAttribute::SYNTAX => {
             let _ =
@@ -380,20 +381,50 @@ fn parse_external(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attr
     }
 }
 
+fn parse_mode(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribute> {
+    use ParsedAttribute_ as PA;
+    let sp!(loc, attr) = attribute;
+    match attr {
+        PA::Parameterized(name, inner_attrs) => {
+            let _prefix_loc = name.loc;
+            let sp!(_, mode_attrs) = inner_attrs;
+            let mut modes = BTreeSet::new();
+            for mode_attr in mode_attrs.into_iter() {
+                let attr_loc = mode_attr.loc;
+                if let Some(mode_name) = expect_name_attr(context, mode_attr) {
+                    if !modes.insert(mode_name) {
+                        let msg = format!("Duplicate mode '{}'", mode_name);
+                        context.add_diag(diag!(Declarations::InvalidAttribute, (attr_loc, msg)));
+                    }
+                }
+            }
+            let mode = sp(loc, Attribute_::Mode { modes });
+            vec![mode]
+        }
+        PA::Name(_) | PA::Assigned(_, _) => {
+            let msg = make_attribute_format_error(
+                &attr,
+                "parameterized attribute as '#[mode(<mode_1>, <mode_1>, ...)]'",
+            );
+            context.add_diag(diag!(Attributes::ValueWarning, (loc, msg)));
+            vec![]
+        }
+    }
+}
+
 fn parse_test_only(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribute> {
     use ParsedAttribute_ as PA;
     let sp!(loc, attr) = attribute;
     match attr {
         // Valid: a bare identifier is required.
         PA::Name(_) => {
-            let test_only_attr = sp(loc, Attribute_::TestOnly);
-            vec![test_only_attr]
+            vec![make_test_mode_attr(loc)]
         }
         // Invalid: any assignment or parameterized use is not allowed.
         PA::Assigned(_, _) | PA::Parameterized(_, _) => {
             let msg = make_attribute_format_error(
                 &attr,
-                &format!("'#[{}]' with no arguments", KA::TestingAttribute::TEST_ONLY),
+                &format!("'#[{}]' with no arguments", KA::ModeAttribute::TEST_ONLY),
             );
             context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
             vec![]
@@ -404,25 +435,32 @@ fn parse_test_only(context: &mut Context, attribute: ParsedAttribute) -> Vec<Att
 fn parse_verify_only(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribute> {
     use ParsedAttribute_ as PA;
     let sp!(loc, attr) = attribute;
+
     match attr {
         // Valid: a bare identifier is required.
         PA::Name(_) => {
-            let verify_only_attr = sp(loc, Attribute_::VerifyOnly);
-            vec![verify_only_attr]
+            let mode = Attribute_::Mode {
+                modes: BTreeSet::from([sp(loc, KA::ModeAttribute::VERIFY_ONLY.into())]),
+            };
+            vec![sp(loc, mode)]
         }
         // Invalid: any assignment or parameterized use is not allowed.
         PA::Assigned(_, _) | PA::Parameterized(_, _) => {
             let msg = make_attribute_format_error(
                 &attr,
-                &format!(
-                    "'#[{}]' with no arguments",
-                    KA::VerificationAttribute::VERIFY_ONLY
-                ),
+                &format!("'#[{}]' with no arguments", KA::ModeAttribute::VERIFY_ONLY),
             );
             context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
             vec![]
         }
     }
+}
+
+fn make_test_mode_attr(loc: Loc) -> Attribute {
+    let mode = Attribute_::Mode {
+        modes: BTreeSet::from([sp(loc, "test".into())]),
+    };
+    sp(loc, mode)
 }
 
 fn parse_test(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribute> {
@@ -432,7 +470,7 @@ fn parse_test(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribut
         // Valid: a bare identifier is required.
         PA::Name(_) => {
             let test_attr = sp(loc, Attribute_::Test);
-            vec![test_attr]
+            vec![test_attr, make_test_mode_attr(loc)]
         }
         PA::Parameterized(_, sp!(attr_loc, _)) => {
             let msg = format!(
@@ -445,7 +483,7 @@ fn parse_test(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribut
                 (attr_loc, "Ignoring these arguments")
             ));
             let test_attr = sp(loc, Attribute_::Test);
-            vec![test_attr]
+            vec![test_attr, make_test_mode_attr(loc)]
         }
         // Invalid: any assignment or parameterized use is not allowed.
         PA::Assigned(_, _) => {
@@ -469,7 +507,7 @@ fn parse_random_test(context: &mut Context, attribute: ParsedAttribute) -> Vec<A
         // Valid: a bare identifier is required.
         PA::Name(_) => {
             let test_attr = sp(loc, Attribute_::RandomTest);
-            vec![test_attr]
+            vec![test_attr, make_test_mode_attr(loc)]
         }
         // Invalid: any assignment or parameterized use is not allowed.
         PA::Assigned(_, _) | PA::Parameterized(_, _) => {

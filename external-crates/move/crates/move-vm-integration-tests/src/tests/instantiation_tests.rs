@@ -384,6 +384,7 @@ fn make_module(
 
     let module = CompiledModule {
         version: 6,
+        publishable: true,
         // Module definition
         self_module_handle_idx: ModuleHandleIndex(0),
         module_handles: vec![ModuleHandle {

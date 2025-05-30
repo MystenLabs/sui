@@ -53,6 +53,8 @@ Options:
           If `true`, disable linters
       --lint
           If `true`, enables extra linters
+      --mode <MODE>
+          Arbitrary mode -- this will be used to enable or filter user-defined `#[mode(<MODE>)]` annodations during compiltaion
   -h, --help
           Print help
   -V, --version
