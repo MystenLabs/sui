@@ -44,17 +44,8 @@ feature_flags:
   allow_receiving_object_id: true
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
-  enable_nitro_attestation: true
-  enable_nitro_attestation_upgraded_parsing: true
   reject_mutable_random_on_entry_functions: true
-  per_object_congestion_control_mode:
-    ExecutionTimeEstimate:
-      target_utilization: 30
-      allowed_txn_cost_overage_burst_limit_us: 100000
-      randomness_scalar: 20
-      max_estimate_us: 1500000
-      stored_observations_num_included_checkpoints: 10
-      stored_observations_limit: 18446744073709551615
+  per_object_congestion_control_mode: TotalGasBudgetWithCap
   consensus_choice: Mysticeti
   consensus_network: Tonic
   zklogin_max_epoch_upper_bound_delta: 30
@@ -83,14 +74,11 @@ feature_flags:
   variant_nodes: true
   consensus_zstd_compression: true
   minimize_child_object_mutations: true
-  record_additional_state_digest_in_prologue: true
   move_native_context: true
   consensus_median_based_commit_timestamp: true
   normalize_ptb_arguments: true
-  consensus_batched_block_sync: true
   enforce_checkpoint_timestamp_monotonicity: true
   max_ptb_value_size_v2: true
-  resolve_type_input_ids_to_defining_id: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -211,7 +199,6 @@ object_borrow_uid_cost_base: 52
 object_delete_impl_cost_base: 52
 object_record_new_uid_cost_base: 52
 transfer_transfer_internal_cost_base: 52
-transfer_party_transfer_internal_cost_base: 52
 transfer_freeze_object_cost_base: 52
 transfer_share_object_cost_base: 52
 transfer_receive_object_cost_base: 52
@@ -383,4 +370,202 @@ gas_budget_based_txn_cost_cap_factor: 400000
 gas_budget_based_txn_cost_absolute_cap_commit_count: 50
 sip_45_consensus_amplification_threshold: 5
 use_object_per_epoch_marker_table_v2: true
-consensus_commit_rate_estimation_window_size: 10
+aliased_addresses:
+  - original:
+      - 205
+      - 137
+      - 98
+      - 218
+      - 210
+      - 120
+      - 216
+      - 181
+      - 15
+      - 160
+      - 249
+      - 235
+      - 1
+      - 134
+      - 191
+      - 164
+      - 203
+      - 222
+      - 204
+      - 109
+      - 89
+      - 55
+      - 114
+      - 20
+      - 200
+      - 141
+      - 2
+      - 134
+      - 160
+      - 172
+      - 149
+      - 98
+    aliased:
+      - 11
+      - 45
+      - 163
+      - 39
+      - 186
+      - 106
+      - 76
+      - 172
+      - 190
+      - 117
+      - 221
+      - 221
+      - 80
+      - 230
+      - 232
+      - 187
+      - 248
+      - 29
+      - 100
+      - 150
+      - 233
+      - 45
+      - 102
+      - 175
+      - 145
+      - 84
+      - 198
+      - 28
+      - 119
+      - 247
+      - 51
+      - 47
+    allowed_tx_digests:
+      - - 2
+        - 145
+        - 170
+        - 78
+        - 99
+        - 246
+        - 130
+        - 221
+        - 11
+        - 53
+        - 228
+        - 241
+        - 202
+        - 113
+        - 56
+        - 105
+        - 120
+        - 236
+        - 143
+        - 114
+        - 165
+        - 106
+        - 212
+        - 165
+        - 196
+        - 178
+        - 239
+        - 253
+        - 97
+        - 66
+        - 98
+        - 197
+  - original:
+      - 226
+      - 139
+      - 80
+      - 206
+      - 241
+      - 214
+      - 51
+      - 234
+      - 67
+      - 211
+      - 41
+      - 106
+      - 63
+      - 107
+      - 103
+      - 255
+      - 3
+      - 18
+      - 165
+      - 241
+      - 169
+      - 159
+      - 10
+      - 247
+      - 83
+      - 200
+      - 91
+      - 139
+      - 93
+      - 232
+      - 255
+      - 6
+    aliased:
+      - 11
+      - 45
+      - 163
+      - 39
+      - 186
+      - 106
+      - 76
+      - 172
+      - 190
+      - 117
+      - 221
+      - 221
+      - 80
+      - 230
+      - 232
+      - 187
+      - 248
+      - 29
+      - 100
+      - 150
+      - 233
+      - 45
+      - 102
+      - 175
+      - 145
+      - 84
+      - 198
+      - 28
+      - 119
+      - 247
+      - 51
+      - 47
+    allowed_tx_digests:
+      - - 253
+        - 118
+        - 94
+        - 221
+        - 205
+        - 105
+        - 164
+        - 185
+        - 146
+        - 65
+        - 207
+        - 179
+        - 194
+        - 136
+        - 51
+        - 126
+        - 222
+        - 28
+        - 78
+        - 230
+        - 151
+        - 0
+        - 147
+        - 120
+        - 44
+        - 55
+        - 155
+        - 111
+        - 243
+        - 35
+        - 173
+        - 119

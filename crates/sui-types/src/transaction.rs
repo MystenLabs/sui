@@ -2854,6 +2854,7 @@ impl Transaction {
             current_epoch,
             verify_params,
             Arc::new(VerifiedDigestCache::new_empty()),
+            None,
         )
     }
 
@@ -2878,6 +2879,7 @@ impl SignedTransaction {
             committee.epoch(),
             verify_params,
             Arc::new(VerifiedDigestCache::new_empty()),
+            None,
         )?;
 
         self.auth_sig().verify_secure(
@@ -2918,12 +2920,14 @@ impl CertifiedTransaction {
         committee: &Committee,
         verify_params: &VerifyParams,
         zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
+        aliased_addresses: Option<&BTreeMap<SuiAddress, (SuiAddress, BTreeSet<TransactionDigest>)>>,
     ) -> SuiResult {
         verify_sender_signed_data_message_signatures(
             self.data(),
             committee.epoch(),
             verify_params,
             zklogin_inputs_cache,
+            aliased_addresses,
         )?;
         self.auth_sig().verify_secure(
             self.data(),
@@ -2941,6 +2945,7 @@ impl CertifiedTransaction {
             committee,
             verify_params,
             Arc::new(VerifiedDigestCache::new_empty()),
+            None,
         )?;
         Ok(VerifiedCertificate::new_from_verified(self))
     }

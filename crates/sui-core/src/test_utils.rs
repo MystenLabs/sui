@@ -311,6 +311,7 @@ pub fn make_cert_with_large_committee(
         committee,
         &Default::default(),
         Arc::new(VerifiedDigestCache::new_empty()),
+        None,
     )
     .unwrap();
     cert
