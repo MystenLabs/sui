@@ -22,7 +22,7 @@ struct Guard;
 /// [TheFile::parent_dir] examine the context.
 ///
 /// For example, you could deserialize a struct containing a file handle as follows:
-/// ```
+/// ```ignore
 ///     #[derive(Deserialize)]
 ///     struct S {
 ///         #[serde(skip, default = "TheFile::handle")]
