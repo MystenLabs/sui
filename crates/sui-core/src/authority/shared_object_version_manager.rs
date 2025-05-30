@@ -286,13 +286,7 @@ mod tests {
     async fn test_assign_versions_from_consensus_basic() {
         let shared_object = Object::shared_for_testing();
         let id = shared_object.id();
-        let init_shared_version = match shared_object.owner {
-            Owner::Shared {
-                initial_shared_version,
-                ..
-            } => initial_shared_version,
-            _ => panic!("expected shared object"),
-        };
+        let init_shared_version = shared_object.owner.start_version().unwrap();
         let authority = TestAuthorityBuilder::new()
             .with_starting_objects(&[shared_object.clone()])
             .build()
@@ -453,20 +447,8 @@ mod tests {
         let shared_object_2 = Object::shared_for_testing();
         let id1 = shared_object_1.id();
         let id2 = shared_object_2.id();
-        let init_shared_version_1 = match shared_object_1.owner {
-            Owner::Shared {
-                initial_shared_version,
-                ..
-            } => initial_shared_version,
-            _ => panic!("expected shared object"),
-        };
-        let init_shared_version_2 = match shared_object_2.owner {
-            Owner::Shared {
-                initial_shared_version,
-                ..
-            } => initial_shared_version,
-            _ => panic!("expected shared object"),
-        };
+        let init_shared_version_1 = shared_object_1.owner.start_version().unwrap();
+        let init_shared_version_2 = shared_object_2.owner.start_version().unwrap();
         let authority = TestAuthorityBuilder::new()
             .with_starting_objects(&[shared_object_1.clone(), shared_object_2.clone()])
             .build()
@@ -619,13 +601,7 @@ mod tests {
     async fn test_assign_versions_from_effects() {
         let shared_object = Object::shared_for_testing();
         let id = shared_object.id();
-        let init_shared_version = match shared_object.owner {
-            Owner::Shared {
-                initial_shared_version,
-                ..
-            } => initial_shared_version,
-            _ => panic!("expected shared object"),
-        };
+        let init_shared_version = shared_object.owner.start_version().unwrap();
         let authority = TestAuthorityBuilder::new()
             .with_starting_objects(&[shared_object.clone()])
             .build()
