@@ -1,0 +1,115 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(\"{ vector<address> | vector<bool> | vector<u8> | vector<u16> | vector<u32> | vector<u64> | vector<u128> | vector<u256>}\")"
+---
+Expr(
+    Expr {
+        alternates: [
+            Chain {
+                root: Some(
+                    Vector(
+                        Vector {
+                            type_: Some(
+                                Address,
+                            ),
+                            elements: [],
+                        },
+                    ),
+                ),
+                accessors: [],
+            },
+            Chain {
+                root: Some(
+                    Vector(
+                        Vector {
+                            type_: Some(
+                                Bool,
+                            ),
+                            elements: [],
+                        },
+                    ),
+                ),
+                accessors: [],
+            },
+            Chain {
+                root: Some(
+                    Vector(
+                        Vector {
+                            type_: Some(
+                                U8,
+                            ),
+                            elements: [],
+                        },
+                    ),
+                ),
+                accessors: [],
+            },
+            Chain {
+                root: Some(
+                    Vector(
+                        Vector {
+                            type_: Some(
+                                U16,
+                            ),
+                            elements: [],
+                        },
+                    ),
+                ),
+                accessors: [],
+            },
+            Chain {
+                root: Some(
+                    Vector(
+                        Vector {
+                            type_: Some(
+                                U32,
+                            ),
+                            elements: [],
+                        },
+                    ),
+                ),
+                accessors: [],
+            },
+            Chain {
+                root: Some(
+                    Vector(
+                        Vector {
+                            type_: Some(
+                                U64,
+                            ),
+                            elements: [],
+                        },
+                    ),
+                ),
+                accessors: [],
+            },
+            Chain {
+                root: Some(
+                    Vector(
+                        Vector {
+                            type_: Some(
+                                U128,
+                            ),
+                            elements: [],
+                        },
+                    ),
+                ),
+                accessors: [],
+            },
+            Chain {
+                root: Some(
+                    Vector(
+                        Vector {
+                            type_: Some(
+                                U256,
+                            ),
+                            elements: [],
+                        },
+                    ),
+                ),
+                accessors: [],
+            },
+        ],
+        transform: None,
+    },
+)

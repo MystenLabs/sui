@@ -1,0 +1,111 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(\"{ vector<vector<u8>> | vector<0x1::string::String> | vector<0x2::coin::Coin< 0x2::sui::SUI >> | vector<3::validator::Validator> }\")"
+---
+Expr(
+    Expr {
+        alternates: [
+            Chain {
+                root: Some(
+                    Vector(
+                        Vector {
+                            type_: Some(
+                                Vector(
+                                    U8,
+                                ),
+                            ),
+                            elements: [],
+                        },
+                    ),
+                ),
+                accessors: [],
+            },
+            Chain {
+                root: Some(
+                    Vector(
+                        Vector {
+                            type_: Some(
+                                Struct(
+                                    StructTag {
+                                        address: 0000000000000000000000000000000000000000000000000000000000000001,
+                                        module: Identifier(
+                                            "string",
+                                        ),
+                                        name: Identifier(
+                                            "String",
+                                        ),
+                                        type_params: [],
+                                    },
+                                ),
+                            ),
+                            elements: [],
+                        },
+                    ),
+                ),
+                accessors: [],
+            },
+            Chain {
+                root: Some(
+                    Vector(
+                        Vector {
+                            type_: Some(
+                                Struct(
+                                    StructTag {
+                                        address: 0000000000000000000000000000000000000000000000000000000000000002,
+                                        module: Identifier(
+                                            "coin",
+                                        ),
+                                        name: Identifier(
+                                            "Coin",
+                                        ),
+                                        type_params: [
+                                            Struct(
+                                                StructTag {
+                                                    address: 0000000000000000000000000000000000000000000000000000000000000002,
+                                                    module: Identifier(
+                                                        "sui",
+                                                    ),
+                                                    name: Identifier(
+                                                        "SUI",
+                                                    ),
+                                                    type_params: [],
+                                                },
+                                            ),
+                                        ],
+                                    },
+                                ),
+                            ),
+                            elements: [],
+                        },
+                    ),
+                ),
+                accessors: [],
+            },
+            Chain {
+                root: Some(
+                    Vector(
+                        Vector {
+                            type_: Some(
+                                Struct(
+                                    StructTag {
+                                        address: 0000000000000000000000000000000000000000000000000000000000000003,
+                                        module: Identifier(
+                                            "validator",
+                                        ),
+                                        name: Identifier(
+                                            "Validator",
+                                        ),
+                                        type_params: [],
+                                    },
+                                ),
+                            ),
+                            elements: [],
+                        },
+                    ),
+                ),
+                accessors: [],
+            },
+        ],
+        transform: None,
+    },
+)

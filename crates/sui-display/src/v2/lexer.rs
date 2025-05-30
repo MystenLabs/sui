@@ -33,7 +33,7 @@ pub(crate) struct Lexeme<'s>(pub Token, pub usize, pub &'s str);
 /// Like [Lexeme] but owns the slice of source string. Useful for capturing context in an error
 /// message.
 #[derive(Debug)]
-pub(crate) struct OwnedLexeme(Token, usize, String);
+pub(crate) struct OwnedLexeme(pub Token, pub usize, pub String);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Token {

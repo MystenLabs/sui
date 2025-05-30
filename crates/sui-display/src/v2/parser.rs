@@ -6,6 +6,7 @@ use std::borrow::Cow;
 
 use move_core_types::{
     account_address::AccountAddress,
+    identifier::Identifier,
     language_storage::{StructTag, TypeTag},
     u256::U256,
 };
@@ -128,27 +129,6 @@ macro_rules! expected {
     };
 }
 
-/// Construct a set of expected tokens, (tokens that the parser tried to match against at the
-/// current position).
-///
-/// The first argument is an optional previous `ExpectedSet`, used to chain together multiple
-/// different match expressions. The remaining arguments are a list of lexeme pattern matches.
-macro_rules! expected_set {
-    ($prev:expr; $($kind:ident, $pat:path, $slice:tt),+) => {
-        ExpectedSet {
-            prev: Some(Box::new($prev)),
-            tried: &[$(expected!($kind, $pat, $slice)),+],
-        }
-    };
-
-    ($($kind:ident, $pat:path, $slice:tt),+) => {
-        ExpectedSet {
-            prev: None,
-            tried: &[$(expected!($kind, $pat, $slice)),+],
-        }
-    };
-}
-
 /// Pattern match on the next token in the lexer, without consuming it. Returns an error if there
 /// is no next token, or if the next token doesn't match any of the provided patterns. The error
 /// enumerates all the tokens that were expected, including the tokens that were checked
@@ -161,13 +141,9 @@ macro_rules! match_token {
     ) => {{
         match $lexer.peek() {
             $(Some(&Lex($($pat)|+, $off, $slice)) $(if $cond)? => $expr,)+
-            Some(&actual) => return Err(Error::UnexpectedToken {
-                actual: actual.detach(),
-                expect: expected_set!($($prev;)? $($($kind, $pat, $slice),+),+),
-            }),
-            None => return Err(Error::UnexpectedEos {
-                expect: expected_set!($($prev;)? $($($kind, $pat, $slice),+),+),
-            }),
+            lexeme => return Err(ExpectedSet::new(&[$($(expected!($kind, $pat, $slice)),+),+])
+                $(.with_prev($prev))?
+                .into_error(lexeme)),
         }
     }};
 }
@@ -189,8 +165,10 @@ macro_rules! match_token_opt {
     ) => {{
         match $lexer.peek() {
             $(Some(&Lex($($pat)|+, $off, $slice)) $(if $cond)? => Match::Found($expr),)+
-            Some(_) | None => Match::Tried(
-                expected_set!($($prev;)? $($($kind, $pat, $slice),+),+)
+            lexeme => Match::Tried(
+                lexeme.map(|l| l.1),
+                ExpectedSet::new(&[$($(expected!($kind, $pat, $slice)),+),+])
+                    $(.with_prev($prev))?
             ),
         }
     }};
@@ -224,8 +202,10 @@ macro_rules! match_token_opt {
 ///
 ///   string   ::= ('b' | 'x')? STRING
 ///
-///   vector   ::= 'vector'  '<' type '>'
-///              | 'vector' ('<' type '>')? '[' chain (',' chain)* ','? ']'
+///   vector   ::= 'vector'  '<' type ','? '>'
+///              | 'vector' ('<' type ','? '>')?  array
+///
+///   array    ::= '[' chain (',' chain)* ','? ']'
 ///
 ///   struct   ::= datatype fields
 ///
@@ -335,7 +315,7 @@ impl<'s> Parser<'s> {
         // field on the object being displayed.
         let root = match self.try_parse_literal()? {
             Match::Found(literal) => Some(literal),
-            Match::Tried(tried) => {
+            Match::Tried(_, tried) => {
                 accessors.push(match_token! { self.lexer, tried; Tok(T::Ident, _, i) => {
                     self.lexer.next();
                     Accessor::Field(i)
@@ -358,19 +338,7 @@ impl<'s> Parser<'s> {
         Ok(match_token_opt! { self.lexer;
             Tok(T::At, _, _) => {
                 self.lexer.next();
-                let addr = match_token! { self.lexer;
-                    Tok(T::NumHex, _, slice) => {
-                        self.lexer.next();
-                        read_u256(slice, 16, "address")?
-                    },
-
-                    Tok(T::NumDec, _, slice) => {
-                        self.lexer.next();
-                        read_u256(slice, 10, "address")?
-                    },
-                };
-
-                Literal::Address(AccountAddress::from(addr.to_be_bytes()))
+                Literal::Address(self.parse_address()?)
             },
 
             Lit(T::Ident, _, "true") => {
@@ -385,40 +353,12 @@ impl<'s> Parser<'s> {
 
             Tok(T::NumDec, _, dec) => {
                 self.lexer.next();
-                let literal = match_token_opt! { self.lexer;
-                    Lit(T::Ident, _, "u8") => { self.lexer.next(); Literal::U8(read_u8(dec, 10, "u8")?) },
-                    Lit(T::Ident, _, "u16") => { self.lexer.next(); Literal::U16(read_u16(dec, 10, "u16")?) },
-                    Lit(T::Ident, _, "u32") => { self.lexer.next(); Literal::U32(read_u32(dec, 10, "u32")?) },
-                    Lit(T::Ident, _, "u64") => { self.lexer.next(); Literal::U64(read_u64(dec, 10, "u64")?) },
-                    Lit(T::Ident, _, "u128") => { self.lexer.next(); Literal::U128(read_u128(dec, 10, "u128")?) },
-                    Lit(T::Ident, _, "u256") => { self.lexer.next(); Literal::U256(read_u256(dec, 10, "u256")?) },
-                };
-
-                // If there was no explicit type suffix, assume `u64`.
-                if let Match::Found(lit) = literal {
-                    lit
-                } else {
-                    Literal::U64(read_u64(dec, 10, "u64")?)
-                }
+                self.parse_numeric_suffix(dec, 10)?
             },
 
             Tok(T::NumHex, _, hex) => {
                 self.lexer.next();
-                let literal = match_token_opt! { self.lexer;
-                    Lit(T::Ident, _, "u8") => { self.lexer.next(); Literal::U8(read_u8(hex, 16, "u8")?) },
-                    Lit(T::Ident, _, "u16") => { self.lexer.next(); Literal::U16(read_u16(hex, 16, "u16")?) },
-                    Lit(T::Ident, _, "u32") => { self.lexer.next(); Literal::U32(read_u32(hex, 16, "u32")?) },
-                    Lit(T::Ident, _, "u64") => { self.lexer.next(); Literal::U64(read_u64(hex, 16, "u64")?) },
-                    Lit(T::Ident, _, "u128") => { self.lexer.next(); Literal::U128(read_u128(hex, 16, "u128")?) },
-                    Lit(T::Ident, _, "u256") => { self.lexer.next(); Literal::U256(read_u256(hex, 16, "u256")?) },
-                };
-
-                // If there was no explicit type suffix, assume `u64`.
-                if let Match::Found(lit) = literal {
-                    lit
-                } else {
-                    Literal::U64(read_u64(hex, 16, "u64")?)
-                }
+                self.parse_numeric_suffix(hex, 16)?
             },
 
             Tok(T::String, _, slice) => {
@@ -428,22 +368,46 @@ impl<'s> Parser<'s> {
 
             Lit(T::Ident, _, "b") if self.lexer.peek2().is_some_and(|Lex(t, _, _)| *t == T::String) => {
                 self.lexer.next();
-                let Some(Lex(T::String, _, slice)) = self.lexer.next() else {
-                    unreachable!("SAFETY: match guard confirms this token exists")
-                };
 
+                // SAFETY: Match guard peeks ahead to this token.
+                let Lex(_, _, slice) = self.lexer.next().unwrap();
                 let output = read_string_literal(slice);
                 Literal::ByteArray(output.into_owned().into_bytes())
             },
 
             Lit(T::Ident, _, "x") if self.lexer.peek2().is_some_and(|Lex(t, _, _)| *t == T::String) => {
                 self.lexer.next();
-                let Some(lex@Lex(T::String, _, slice)) = self.lexer.next() else {
-                    unreachable!("SAFETY: match guard confirms this token exists")
-                };
 
+                // SAFETY: Match guard peeks ahead to this token.
+                let lex @ Lex(_, _, slice) = self.lexer.next().unwrap();
                 let output = read_hex_literal(&lex, slice)?;
                 Literal::ByteArray(output)
+            },
+
+            Tok(T::Ident, offset, "vector") => {
+                self.lexer.next();
+
+                self.eat_whitespace();
+                let mut type_params = self.parse_type_params()?;
+                let type_ = match type_params.len() {
+                    // SAFETY: Bounds check on `type_params.len()` guarantees safety.
+                    1 => Some(type_params.pop().unwrap()),
+                    0 => None,
+                    arity => return Err(Error::VectorArity { offset, arity }),
+                };
+
+                self.eat_whitespace();
+                let elements = self.parse_array_elements()?;
+
+                // If the vector is empty, the type parameter becomes mandatory.
+                if elements.is_empty() && type_.is_none() {
+                    return Err(Error::VectorArity {
+                        offset,
+                        arity: 0,
+                    });
+                }
+
+                Literal::Vector(Box::new(Vector { type_, elements }))
             },
         })
     }
@@ -477,6 +441,181 @@ impl<'s> Parser<'s> {
                     Accessor::Index(chain)
                 }
             },
+        })
+    }
+
+    fn parse_array_elements(&mut self) -> Result<Vec<Chain<'s>>, Error> {
+        let mut elements = vec![];
+
+        if match_token_opt! { self.lexer; Tok(T::LBracket, _, _) => { self.lexer.next(); } }
+            .is_not_found()
+        {
+            return Ok(elements);
+        }
+
+        self.eat_whitespace();
+        let terminated = match_token_opt! { self.lexer;
+            Tok(T::RBracket, _, _) => { self.lexer.next(); }
+        };
+
+        let (offset, terminated) = match terminated {
+            Match::Tried(offset, terminated) => (offset, terminated),
+            Match::Found(_) => return Ok(elements),
+        };
+
+        loop {
+            self.eat_whitespace();
+            elements.push(
+                self.parse_chain()
+                    .map_err(|e| e.also_tried(offset, terminated.clone()))?,
+            );
+
+            self.eat_whitespace();
+            let delimited = match_token_opt! { self.lexer;
+                Tok(T::Comma, _, _) => { self.lexer.next(); }
+            };
+
+            self.eat_whitespace();
+            let terminated = match_token_opt! { self.lexer;
+                Tok(T::RBracket, _, _) => { self.lexer.next(); }
+            };
+
+            match (delimited, terminated) {
+                (_, Match::Found(_)) => break,
+                (Match::Found(_), _) => continue,
+                (Match::Tried(_, delimited), Match::Tried(_, terminated)) => {
+                    return Err(delimited.union(terminated).into_error(self.lexer.peek()))
+                }
+            }
+        }
+
+        Ok(elements)
+    }
+
+    fn parse_type(&mut self) -> Result<TypeTag, Error> {
+        Ok(match_token! { self.lexer;
+            Lit(T::Ident, _, "address") => { self.lexer.next(); TypeTag::Address },
+            Lit(T::Ident, _, "bool") => { self.lexer.next(); TypeTag::Bool },
+            Lit(T::Ident, _, "u8") => { self.lexer.next(); TypeTag::U8 },
+            Lit(T::Ident, _, "u16") => { self.lexer.next(); TypeTag::U16 },
+            Lit(T::Ident, _, "u32") => { self.lexer.next(); TypeTag::U32 },
+            Lit(T::Ident, _, "u64") => { self.lexer.next(); TypeTag::U64 },
+            Lit(T::Ident, _, "u128") => { self.lexer.next(); TypeTag::U128 },
+            Lit(T::Ident, _, "u256") => { self.lexer.next(); TypeTag::U256 },
+
+            Lit(T::Ident, offset, "vector") => {
+                self.lexer.next();
+                self.eat_whitespace();
+                let mut type_params = self.parse_type_params()?;
+                match type_params.len() {
+                    // SAFETY: Bounds check on `type_params.len()` guarantees safety.
+                    1 => TypeTag::Vector(Box::new(type_params.pop().unwrap())),
+                    arity => return Err(Error::VectorArity { offset, arity }),
+                }
+            },
+
+            Tok(T::NumDec | T::NumHex, _, _) => {
+                TypeTag::Struct(Box::new(self.parse_datatype()?))
+            }
+        })
+    }
+
+    fn parse_datatype(&mut self) -> Result<StructTag, Error> {
+        let address = self.parse_address()?;
+
+        match_token! { self.lexer; Tok(T::CColon, _, _) => self.lexer.next() };
+        let module = self.parse_identifier()?;
+
+        match_token! { self.lexer; Tok(T::CColon, _, _) => self.lexer.next() };
+        let name = self.parse_identifier()?;
+
+        self.eat_whitespace();
+        let type_params = self.parse_type_params()?;
+
+        Ok(StructTag {
+            address,
+            module,
+            name,
+            type_params,
+        })
+    }
+
+    fn parse_type_params(&mut self) -> Result<Vec<TypeTag>, Error> {
+        let mut type_params = vec![];
+        if match_token_opt! { self.lexer; Tok(T::LAngle, _, _) => { self.lexer.next(); } }
+            .is_not_found()
+        {
+            return Ok(type_params);
+        }
+
+        loop {
+            self.eat_whitespace();
+            type_params.push(self.parse_type()?);
+
+            self.eat_whitespace();
+            let delimited = match_token_opt! { self.lexer;
+                Tok(T::Comma, _, _) => { self.lexer.next(); }
+            };
+
+            self.eat_whitespace();
+            let terminated = match_token_opt! { self.lexer;
+                Tok(T::RAngle, _, _) => { self.lexer.next(); }
+            };
+
+            match (delimited, terminated) {
+                (_, Match::Found(_)) => break,
+                (Match::Found(_), _) => continue,
+                (Match::Tried(_, delimited), Match::Tried(_, terminated)) => {
+                    return Err(delimited.union(terminated).into_error(self.lexer.peek()))
+                }
+            }
+        }
+
+        Ok(type_params)
+    }
+
+    fn parse_address(&mut self) -> Result<AccountAddress, Error> {
+        let addr = match_token! { self.lexer;
+            Tok(T::NumHex, _, slice) => {
+                self.lexer.next();
+                read_u256(slice, 16, "address")?
+            },
+
+            Tok(T::NumDec, _, slice) => {
+                self.lexer.next();
+                read_u256(slice, 10, "address")?
+            },
+        };
+
+        Ok(AccountAddress::from(addr.to_be_bytes()))
+    }
+
+    fn parse_identifier(&mut self) -> Result<Identifier, Error> {
+        let lex @ Lex(_, _, ident) = match_token! { self.lexer;
+            Tok(T::Ident, _, _) => {
+                // SAFETY: Inside a match token arm, so there is guaranteed to be a next token.
+                self.lexer.next().unwrap()
+            },
+        };
+
+        Identifier::new(ident).map_err(|_| Error::InvalidIdentifier(lex.detach()))
+    }
+
+    fn parse_numeric_suffix(&mut self, num: &'s str, radix: u32) -> Result<Literal<'s>, Error> {
+        let literal = match_token_opt! { self.lexer;
+            Lit(T::Ident, _, "u8") => { self.lexer.next(); Literal::U8(read_u8(num, radix, "u8")?) },
+            Lit(T::Ident, _, "u16") => { self.lexer.next(); Literal::U16(read_u16(num, radix, "u16")?) },
+            Lit(T::Ident, _, "u32") => { self.lexer.next(); Literal::U32(read_u32(num, radix, "u32")?) },
+            Lit(T::Ident, _, "u64") => { self.lexer.next(); Literal::U64(read_u64(num, radix, "u64")?) },
+            Lit(T::Ident, _, "u128") => { self.lexer.next(); Literal::U128(read_u128(num, radix, "u128")?) },
+            Lit(T::Ident, _, "u256") => { self.lexer.next(); Literal::U256(read_u256(num, radix, "u256")?) },
+        };
+
+        // If there was no explicit type suffix, assume `u64`.
+        Ok(if let Match::Found(lit) = literal {
+            lit
+        } else {
+            Literal::U64(read_u64(num, radix, "u64")?)
         })
     }
 
@@ -665,6 +804,42 @@ mod tests {
     }
 
     #[test]
+    fn test_vector_literals() {
+        assert_snapshot!(strands(
+            "{ vector[1u8, 2u8, 3u8, foo.bar, baz[42]] \
+             | vector<u16>[]
+             | vector<u32>
+             | vector< u64 > [10, 11, 12,]
+             | vector <u128,>[ 42u128 ]
+             | vector<u256>[ ] }"
+        ));
+    }
+
+    #[test]
+    fn test_primitive_types() {
+        assert_snapshot!(strands(
+            "{ vector<address> \
+             | vector<bool> \
+             | vector<u8> \
+             | vector<u16> \
+             | vector<u32> \
+             | vector<u64> \
+             | vector<u128> \
+             | vector<u256> }"
+        ))
+    }
+
+    #[test]
+    fn test_compound_types() {
+        assert_snapshot!(strands(
+            "{ vector<vector<u8>> \
+             | vector<0x1::string::String> \
+             | vector<0x2::coin::Coin< 0x2::sui::SUI >> \
+             | vector<3::validator::Validator> }"
+        ));
+    }
+
+    #[test]
     fn test_index_chain() {
         assert_snapshot!(strands(r#"{foo[bar][[baz]].qux[quy]}"#));
     }
@@ -782,5 +957,65 @@ mod tests {
     #[test]
     fn test_hex_literal_invalid_char() {
         assert_snapshot!(strands(r#"{x'123g'}"#));
+    }
+
+    #[test]
+    fn test_vector_literal_trailing() {
+        assert_snapshot!(strands(r#"{vector[1, 2, 3"#));
+    }
+
+    #[test]
+    fn test_vector_literal_arity() {
+        assert_snapshot!(strands(r#"{vector<u64, u8>[1, 2, 3]}"#));
+    }
+
+    #[test]
+    fn test_vector_literal_empty_no_type() {
+        assert_snapshot!(strands(r#"{vector[]}"#));
+    }
+
+    #[test]
+    fn test_vector_literal_empty_angles() {
+        assert_snapshot!(strands(r#"{vector<>[1]}"#));
+    }
+
+    #[test]
+    fn test_vector_keyword_only() {
+        assert_snapshot!(strands(r#"{vector}"#));
+    }
+
+    #[test]
+    fn test_vector_type_arity() {
+        assert_snapshot!(strands(r#"{vector<vector<u64, u8>>}"#));
+    }
+
+    #[test]
+    fn test_vector_type_no_type() {
+        assert_snapshot!(strands(r#"{vector<vector>}"#));
+    }
+
+    #[test]
+    fn test_vector_type_trailing() {
+        assert_snapshot!(strands(r#"{vector<vector<u64"#));
+    }
+
+    #[test]
+    fn test_vector_type_empty_angles() {
+        assert_snapshot!(strands(r#"{vector<vector<>>}"#));
+    }
+
+    #[test]
+    fn test_vector_literal_no_comma() {
+        assert_snapshot!(strands(r#"{vector<u64>[1 2]}"#));
+    }
+
+    #[test]
+    fn test_vector_element_error() {
+        assert_snapshot!(strands(r#"{vector<u64>[1, 2, foo . 'bar']"#));
+    }
+
+    #[test]
+    fn test_type_param_no_comma() {
+        assert_snapshot!(strands(r#"{vector<0x2::table::Table<u64 u64>>}"#));
     }
 }
