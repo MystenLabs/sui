@@ -14,8 +14,8 @@ use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
-use tracing::debug;
 use tracing::error;
+use tracing::warn;
 
 pub const DENY_LIST_MODULE: &IdentStr = ident_str!("deny_list");
 pub const DENY_LIST_CREATE_FUNC: &IdentStr = ident_str!("create");
@@ -106,6 +106,7 @@ fn check_deny_list_v1_impl(
     if count == 0 {
         return Ok(());
     }
+    let mut err = None;
     for coin_type in coin_types {
         let Ok(denied_addresses) = get_dynamic_field_from_store::<Vec<u8>, VecSet<SuiAddress>>(
             object_store,
@@ -116,14 +117,17 @@ fn check_deny_list_v1_impl(
         };
         let denied_addresses: BTreeSet<_> = denied_addresses.contents.into_iter().collect();
         if denied_addresses.contains(&address) {
-            debug!(
+            warn!(
                 "Address {} is denied for coin package {:?}",
                 address, coin_type
             );
-            return Err(UserInputError::AddressDeniedForCoin { address, coin_type });
+            err = Some(Err(UserInputError::AddressDeniedForCoin {
+                address,
+                coin_type,
+            }));
         }
     }
-    Ok(())
+    err.unwrap_or(Ok(()))
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

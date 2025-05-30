@@ -19,6 +19,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use tracing::warn;
 
 pub const CONFIG_SETTING_DYNAMIC_FIELD_SIZE_FOR_GAS: usize = 1000;
 
@@ -107,6 +108,7 @@ pub fn check_coin_deny_list_v2_during_signing(
     object_store: &dyn ObjectStore,
 ) -> UserInputResult {
     let coin_types = input_object_coin_types_for_denylist_check(input_objects, receiving_objects);
+    let mut err = None;
     for coin_type in coin_types {
         let Some(deny_list) = get_per_type_coin_deny_list_v2(&coin_type, object_store) else {
             continue;
@@ -115,10 +117,14 @@ pub fn check_coin_deny_list_v2_during_signing(
             return Err(UserInputError::CoinTypeGlobalPause { coin_type });
         }
         if check_address_denied_by_config(&deny_list, address, object_store, None) {
-            return Err(UserInputError::AddressDeniedForCoin { address, coin_type });
+            warn!("address {} denied for coin type: {}", address, coin_type);
+            err = Some(Err(UserInputError::AddressDeniedForCoin {
+                address,
+                coin_type,
+            }));
         }
     }
-    Ok(())
+    err.unwrap_or(Ok(()))
 }
 
 /// Returns 1) whether the coin deny list check passed,

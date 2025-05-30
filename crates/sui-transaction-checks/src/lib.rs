@@ -101,7 +101,7 @@ mod checked {
         reference_gas_price: u64,
         transaction: &TransactionData,
         mut input_objects: InputObjects,
-        receiving_objects: ReceivingObjects,
+        receiving_objects: &ReceivingObjects,
         gas_object: Object,
         metrics: &Arc<BytecodeVerifierMetrics>,
         verifier_signing_config: &VerifierSigningConfig,
@@ -116,7 +116,7 @@ mod checked {
             &input_objects,
             &[gas_object_ref],
         )?;
-        check_receiving_objects(&input_objects, &receiving_objects)?;
+        check_receiving_objects(&input_objects, receiving_objects)?;
         // Runs verifier, which could be expensive.
         check_non_system_packages_to_be_published(
             transaction,

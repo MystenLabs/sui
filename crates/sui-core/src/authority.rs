@@ -1883,7 +1883,7 @@ impl AuthorityState {
                     epoch_store.reference_gas_price(),
                     &transaction,
                     input_objects,
-                    receiving_objects,
+                    &receiving_objects,
                     gas_object,
                     &self.metrics.bytecode_verifier_metrics,
                     &self.config.verifier_signing_config,
@@ -1904,6 +1904,24 @@ impl AuthorityState {
                 None,
             )
         };
+
+        if epoch_store.coin_deny_list_v1_enabled() {
+            check_coin_deny_list_v1(
+                transaction.sender(),
+                &checked_input_objects,
+                &receiving_objects,
+                &self.get_object_store(),
+            )?;
+        }
+
+        if epoch_store.protocol_config().enable_coin_deny_list_v2() {
+            check_coin_deny_list_v2_during_signing(
+                transaction.sender(),
+                &checked_input_objects,
+                &receiving_objects,
+                &self.get_object_store(),
+            )?;
+        }
 
         let protocol_config = epoch_store.protocol_config();
         let (kind, signer, _) = transaction.execution_parts();
@@ -2081,7 +2099,7 @@ impl AuthorityState {
                     epoch_store.reference_gas_price(),
                     &transaction,
                     input_objects,
-                    receiving_objects,
+                    &receiving_objects,
                     gas_object,
                     &self.metrics.bytecode_verifier_metrics,
                     &self.config.verifier_signing_config,
@@ -2269,7 +2287,7 @@ impl AuthorityState {
                     epoch_store.reference_gas_price(),
                     &transaction,
                     input_objects,
-                    receiving_objects,
+                    &receiving_objects,
                     dummy_gas_object,
                     &self.metrics.bytecode_verifier_metrics,
                     &self.config.verifier_signing_config,
