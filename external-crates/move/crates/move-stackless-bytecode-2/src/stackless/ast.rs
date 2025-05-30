@@ -26,8 +26,7 @@ pub struct Module {
 #[derive(Debug, Clone)]
 pub struct Function {
     pub name: Symbol,
-    // TODO: This should be a basic block map or similar
-    pub instructions: Vec<Instruction>,
+    pub basic_blocks: Vec<BasicBlock>,
 }
 
 #[derive(Debug, Clone)]
@@ -124,6 +123,21 @@ pub type PrimitiveOpId = usize;
 // Impls
 // -------------------------------------------------------------------------------------------------
 
+impl BasicBlock {
+    pub fn new(label: Label) -> Self {
+        Self {
+            label,
+            instructions: Vec::new(),
+        }
+    }
+
+    pub fn from_instructions(label: Label, instructions: Vec<Instruction>) -> Self {
+        Self {
+            label,
+            instructions,
+        }
+    }
+}
 // -------------------------------------------------------------------------------------------------
 // Display
 // -------------------------------------------------------------------------------------------------
@@ -151,8 +165,18 @@ impl std::fmt::Display for Module {
 impl std::fmt::Display for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "    Function: {}", self.name)?;
-        for (i, instr) in self.instructions.iter().enumerate() {
-            writeln!(f, "      {}: {}", i, instr)?;
+        for (i, bb) in self.basic_blocks.iter().enumerate() {
+            writeln!(f, "      {}: {}", i, bb)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for BasicBlock {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "BasicBlock {}:", self.label)?;
+        for instr in &self.instructions {
+            writeln!(f, "  {}", instr)?;
         }
         Ok(())
     }

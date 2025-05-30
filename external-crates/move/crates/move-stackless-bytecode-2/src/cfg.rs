@@ -4,13 +4,14 @@
 
 //! This module defines the control-flow graph uses for bytecode verification.
 use move_binary_format::{
-    file_format::{CodeOffset, JumpTableInner, VariantJumpTable},
-    normalized::Bytecode,
+    file_format::{CodeOffset, JumpTableInner},
+    normalized::{Bytecode, VariantJumpTable}
 };
 use std::{
     collections::{BTreeMap, BTreeSet, btree_map::Entry},
     fmt::{Debug, Display},
     hash::Hash,
+    rc::Rc,
 };
 // BTree/Hash agnostic type wrappers
 type Map<K, V> = BTreeMap<K, V>;
@@ -88,7 +89,7 @@ const ENTRY_BLOCK_ID: BlockId = 0;
 impl StacklessControlFlowGraph {
     pub fn new<S: Hash + Eq + Display + Debug>(
         code: &[Bytecode<S>],
-        jump_tables: &[VariantJumpTable],
+        jump_tables: &[Rc<VariantJumpTable<S>>],
     ) -> Self {
         let code_len = code.len() as CodeOffset;
         // First go through and collect block ids, i.e., offsets that begin basic blocks.
@@ -255,7 +256,7 @@ impl StacklessControlFlowGraph {
     fn record_block_ids<S: Hash + Eq + Display + Debug>(
         pc: CodeOffset,
         code: &[Bytecode<S>],
-        jump_tables: &[VariantJumpTable],
+        jump_tables: &[Rc<VariantJumpTable<S>>],
         block_ids: &mut Set<BlockId>,
     ) {
         let bytecode = &code[pc as usize];
@@ -491,7 +492,7 @@ fn is_conditional_branch<S: Hash + Eq + Display + Debug>(bytecode: &Bytecode<S>)
 fn get_successors<S: Hash + Eq + Display + Debug>(
     pc: CodeOffset,
     code: &[Bytecode<S>],
-    jump_tables: &[VariantJumpTable],
+    jump_tables: &[Rc<VariantJumpTable<S>>],
 ) -> Vec<BlockId> {
     assert!(
         // The program counter must remain within the bounds of the code
@@ -524,7 +525,7 @@ fn get_successors<S: Hash + Eq + Display + Debug>(
 
 pub fn offsets<S: Hash + Eq + Display + Debug>(
     bytecode: &Bytecode<S>,
-    jump_tables: &[VariantJumpTable],
+    jump_tables: &[Rc<VariantJumpTable<S>>],
 ) -> Vec<CodeOffset> {
     match bytecode {
             Bytecode::BrFalse(offset) | Bytecode::BrTrue(offset) | Bytecode::Branch(offset) => {
