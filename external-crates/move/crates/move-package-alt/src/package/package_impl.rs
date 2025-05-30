@@ -8,6 +8,7 @@ use std::{
     marker::PhantomData,
     path::{Path, PathBuf},
     process::Command,
+    sync::Arc,
 };
 
 use serde::{Deserialize, Serialize};
@@ -26,8 +27,13 @@ use tracing::debug;
 pub type EnvironmentName = String;
 pub type PackageName = Identifier;
 
+pub struct PackageInEnvironment<F: MoveFlavor> {
+    package: Arc<Package<F>>,
+    environment: EnvironmentName,
+}
+
 #[derive(Debug)]
-pub struct Package<F: MoveFlavor + fmt::Debug> {
+pub struct Package<F: MoveFlavor> {
     // TODO: maybe hold a lock on the lock file? Maybe not if move-analyzer wants to hold on to a
     // Package long term?
     manifest: Manifest<F>,

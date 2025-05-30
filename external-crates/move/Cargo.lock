@@ -2470,6 +2470,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "append-only-vec",
+ "async-trait",
  "clap 4.5.28",
  "codespan-reporting",
  "datatest-stable",
