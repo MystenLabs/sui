@@ -2,12 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeSet;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::Result;
-use sui_types::digests::TransactionDigest;
-use sui_types::messages_checkpoint::CheckpointContents;
 use tracing::error;
 
 use sui_types::effects::TransactionEffectsAPI;
@@ -57,7 +54,6 @@ impl TransactionProcessor<TransactionEntry> for TransactionHandler {
         let checkpoint_seq = checkpoint.checkpoint_summary.sequence_number;
         let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
 
-        let transaction_positions = compute_transaction_positions(&checkpoint.checkpoint_contents);
 
         let checkpoint_transaction = transaction;
         let effects = &transaction.effects;
@@ -77,29 +73,7 @@ impl TransactionProcessor<TransactionEntry> for TransactionHandler {
             .collect::<Vec<_>>()
             .join("-");
         let transaction_digest = transaction.digest().base58_encode();
-        let events_digest = checkpoint_transaction
-            .events
-            .as_ref()
-            .map(|events| events.digest().base58_encode());
 
-        let transaction_position = *transaction_positions
-            .get(transaction.digest())
-            .expect("Expect transaction to exist in checkpoint_contents.")
-            as u64;
-
-        let transaction_data_bcs_length = bcs::to_bytes(&txn_data).unwrap().len() as u64;
-        let effects_bcs_length = bcs::to_bytes(&checkpoint_transaction.effects)
-            .unwrap()
-            .len() as u64;
-        let events_bcs_length = checkpoint_transaction
-            .events
-            .as_ref()
-            .map(|events| bcs::to_bytes(events).unwrap().len() as u64)
-            .unwrap_or(0);
-        let signatures_bcs_length =
-            bcs::to_bytes(&checkpoint_transaction.transaction.data().tx_signatures())
-                .unwrap()
-                .len() as u64;
 
         let mut transfers: u64 = 0;
         let mut split_coins: u64 = 0;
@@ -181,30 +155,13 @@ impl TransactionProcessor<TransactionEntry> for TransactionHandler {
             has_upgraded_multisig: transaction.has_upgraded_multisig(),
             transaction_json: Some(transaction_json),
             effects_json: Some(effects_json),
-            transaction_position,
-            events_digest,
             raw_transaction: "".to_string(),
-            transaction_data_bcs_length,
-            effects_bcs_length,
-            events_bcs_length,
-            signatures_bcs_length,
         };
 
         Ok(Box::new(std::iter::once(entry)))
     }
 }
 
-fn compute_transaction_positions(
-    checkpoint_contents: &CheckpointContents,
-) -> HashMap<TransactionDigest, usize> {
-    let mut digest_to_position: HashMap<TransactionDigest, usize> = HashMap::new();
-
-    for (position, execution_digest) in checkpoint_contents.iter().enumerate() {
-        digest_to_position.insert(execution_digest.transaction, position);
-    }
-
-    digest_to_position
-}
 
 #[cfg(test)]
 mod tests {
@@ -242,16 +199,9 @@ mod tests {
 
         // Check that the transaction was stored correctly.
         assert_eq!(db_txn.transaction_digest, transaction.digest().to_string());
-        assert_eq!(
-            db_txn.transaction_data_bcs_length,
-            bcs::to_bytes(&transaction.transaction_data())
-                .unwrap()
-                .len() as u64
-        );
         assert_eq!(db_txn.epoch, checkpoint.epoch);
         assert_eq!(db_txn.timestamp_ms, checkpoint.timestamp_ms);
         assert_eq!(db_txn.checkpoint, checkpoint.sequence_number);
-        assert_eq!(db_txn.transaction_position, 0);
         Ok(())
     }
 }

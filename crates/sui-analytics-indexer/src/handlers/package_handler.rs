@@ -62,7 +62,6 @@ impl TransactionProcessor<MovePackageEntry> for PackageHandler {
                     epoch,
                     timestamp_ms,
                     bcs: "".to_string(),
-                    bcs_length: bcs::to_bytes(object).unwrap().len() as u64,
                     transaction_digest: object.previous_transaction.to_string(),
                     original_package_id: Some(original_package_id.to_string()),
                 };

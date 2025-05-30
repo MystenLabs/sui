@@ -89,7 +89,6 @@ impl TransactionProcessor<EventEntry> for EventHandler {
                     module: transaction_module.to_string(),
                     event_type: type_.to_string(),
                     bcs: "".to_string(),
-                    bcs_length: contents.len() as u64,
                     event_json: event_json.to_string(),
                 };
 

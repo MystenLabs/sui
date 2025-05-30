@@ -11,7 +11,6 @@ use anyhow::{anyhow, Result};
 use arrow_array::{Array, Int32Array};
 use gcp_bigquery_client::model::query_request::QueryRequest;
 use gcp_bigquery_client::Client;
-use handlers::transaction_bcs_handler::TransactionBCSHandler;
 use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
 use object_store::path::Path;
@@ -63,7 +62,6 @@ const EPOCH_DIR_PREFIX: &str = "epoch_";
 const CHECKPOINT_DIR_PREFIX: &str = "checkpoints";
 const OBJECT_DIR_PREFIX: &str = "objects";
 const TRANSACTION_DIR_PREFIX: &str = "transactions";
-const TRANSACTION_BCS_DIR_PREFIX: &str = "transaction_bcs";
 const EVENT_DIR_PREFIX: &str = "events";
 const TRANSACTION_OBJECT_DIR_PREFIX: &str = "transaction_objects";
 const MOVE_CALL_PREFIX: &str = "move_call";
@@ -334,10 +332,6 @@ impl TaskContext {
             }
             FileType::Transaction => {
                 self.create_processor_for_handler(Box::new(TransactionHandler::new()))
-                    .await
-            }
-            FileType::TransactionBCS => {
-                self.create_processor_for_handler(Box::new(TransactionBCSHandler::new()))
                     .await
             }
             FileType::Event => {
@@ -674,7 +668,6 @@ pub enum FileType {
     Checkpoint = 0,
     Object,
     Transaction,
-    TransactionBCS,
     TransactionObjects,
     Event,
     MoveCall,
@@ -688,7 +681,6 @@ impl FileType {
         match self {
             FileType::Checkpoint => Path::from(CHECKPOINT_DIR_PREFIX),
             FileType::Transaction => Path::from(TRANSACTION_DIR_PREFIX),
-            FileType::TransactionBCS => Path::from(TRANSACTION_BCS_DIR_PREFIX),
             FileType::TransactionObjects => Path::from(TRANSACTION_OBJECT_DIR_PREFIX),
             FileType::Object => Path::from(OBJECT_DIR_PREFIX),
             FileType::Event => Path::from(EVENT_DIR_PREFIX),
