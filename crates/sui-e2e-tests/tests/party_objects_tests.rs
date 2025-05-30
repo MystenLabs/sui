@@ -209,7 +209,7 @@ async fn party_object_transfer() {
     let object_id = object.0;
     let object_initial_shared_version = object.1;
 
-    // Make a transaction to delete the party object.
+    // Make a transaction to transfer the party object.
     let transaction = test_cluster
         .test_transaction_builder()
         .await
@@ -240,7 +240,7 @@ async fn party_object_transfer() {
     assert_eq!(
         mutated_party.owner,
         Owner::ConsensusAddressOwner {
-            start_version: object_initial_shared_version,
+            start_version: object_initial_shared_version.next(),
             owner: SuiAddress::ZERO,
         }
     );
