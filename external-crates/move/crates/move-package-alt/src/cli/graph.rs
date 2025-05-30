@@ -8,7 +8,7 @@ use crate::{
     errors::PackageResult,
     flavor::Vanilla,
     graph::PackageGraph,
-    package::{EnvironmentName, Package, PackagePath},
+    package::{EnvironmentName, Package, paths::PackagePath},
 };
 use clap::{Command, Parser, Subcommand};
 use petgraph::dot::{Config, Dot};
@@ -26,7 +26,7 @@ impl Graph {
     pub async fn execute(&self) -> PackageResult<()> {
         let path = self.path.clone().unwrap_or_else(|| PathBuf::from("."));
         let path = path.canonicalize().unwrap();
-        let package_path = PackagePath::new(path.clone());
+        let package_path = PackagePath::new(path.clone())?;
 
         let graph = PackageGraph::<Vanilla>::load(&package_path, &"mainnet".to_string()).await?;
 

@@ -12,7 +12,8 @@ use codespan_reporting::{
 use move_package_alt::{
     dependency::{self, DependencySet, UnpinnedDependencyInfo},
     flavor::Vanilla,
-    package::{lockfile::Lockfile, manifest::Manifest},
+    graph::PackageGraph,
+    package::{lockfile::Lockfile, manifest::Manifest, paths::PackagePath},
 };
 use std::path::Path;
 use tracing_subscriber::EnvFilter;
@@ -36,6 +37,7 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     let kind = path.extension().unwrap().to_string_lossy();
     let toml_path = path.with_extension("toml");
     let test = Test::from_path_with_kind(&toml_path, &kind)?;
+
     test.run()
 }
 
@@ -104,6 +106,24 @@ impl Test<'_> {
             ext => bail!("Unrecognised snapshot type: '{ext}'"),
         })
     }
+}
+
+async fn _run_graph_test(input_path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    let package_path = PackagePath::new(input_path.parent().unwrap().to_path_buf())?;
+    let package = PackageGraph::<Vanilla>::load_from_lockfile_ignore_digests(
+        &package_path,
+        &"mainnet".to_string(),
+    )
+    .await?;
+
+    let output = format!("{:#?}", package);
+    Ok(output)
+}
+
+fn _run_graph_test_wrapper(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    let rt = tokio::runtime::Runtime::new()?;
+    let data = rt.block_on(_run_graph_test(path))?;
+    Ok(data)
 }
 
 async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String> {

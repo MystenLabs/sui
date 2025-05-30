@@ -20,7 +20,7 @@ use toml_edit::{
 
 use crate::{
     dependency::{DependencySet, PinnedDependencyInfo, UnpinnedDependencyInfo, pin},
-    errors::{Located, LockfileError, PackageError, PackageResult, with_file},
+    errors::{Located, LockfileError, PackageError, PackageResult, TheFile},
     flavor::MoveFlavor,
 };
 
@@ -81,7 +81,7 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
             return Ok(Self::default());
         };
 
-        let (result, file_id) = with_file(lockfile_name, toml_edit::de::from_str::<Self>)?;
+        let (result, file_id) = TheFile::with_file(lockfile_name, toml_edit::de::from_str::<Self>)?;
 
         let Ok(mut lockfiles) = result else {
             return Err(result.unwrap_err().into());
@@ -97,7 +97,7 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
             };
 
             let (metadata, file_id) =
-                with_file(file.path(), toml_edit::de::from_str::<Publication<F>>)?;
+                TheFile::with_file(file.path(), toml_edit::de::from_str::<Publication<F>>)?;
 
             let Ok(metadata) = metadata else {
                 return Err(metadata.unwrap_err().into());

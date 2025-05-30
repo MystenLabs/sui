@@ -51,6 +51,14 @@ pub struct PinnedGitDependency {
     pub path: PathBuf,
 }
 
+impl PinnedGitDependency {
+    /// Fetch the given git dependency and return the path to the checked out repo
+    pub async fn fetch(&self) -> PackageResult<PathBuf> {
+        let git_repo = GitRepo::from(self);
+        Ok(git_repo.fetch().await?)
+    }
+}
+
 impl UnpinnedGitDependency {
     /// Replace all commit-ishes in [deps] with commits (i.e. SHAs). Requires fetching the git
     /// repositories
@@ -105,10 +113,4 @@ impl From<PinnedGitDependency> for GitRepo {
     fn from(dep: PinnedGitDependency) -> Self {
         GitRepo::new(dep.repo, Some(dep.rev.into()), dep.path)
     }
-}
-
-/// Fetch the given git dependency and return the path to the checked out repo
-pub async fn fetch_dep(dep: PinnedGitDependency) -> PackageResult<PathBuf> {
-    let git_repo = GitRepo::from(&dep);
-    Ok(git_repo.fetch().await?)
 }

@@ -54,6 +54,7 @@ Manifest {
                     data: String(
                         "@pkg/qwer",
                     ),
+                    containing_file: "tests/data/basic/Move.toml",
                 },
             ),
             is_override: false,

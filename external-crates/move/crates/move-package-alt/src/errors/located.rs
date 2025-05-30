@@ -13,12 +13,7 @@ use codespan_reporting::files::SimpleFiles;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_spanned::Spanned;
 
-use super::{FileHandle, PackageResult};
-
-thread_local! {
-    /// The ID of the file currently being parsed
-    static PARSING_FILE: RefCell<Option<FileHandle>> = const { RefCell::new(None) };
-}
+use super::{FileHandle, PackageResult, TheFile};
 
 /// A located value contains both a file location and a span. Located values (and data structures
 /// that contain them) can only be deserialized inside of [with_file]; attempting to deserialize
@@ -31,8 +26,6 @@ pub struct Located<T> {
 
     value: Spanned<T>,
 }
-
-struct Guard;
 
 impl<T> Located<T> {
     pub fn new(value: T, file: FileHandle, span: Range<usize>) -> Self {
@@ -76,42 +69,6 @@ impl<T> Located<T> {
     }
 }
 
-impl Guard {
-    fn new(file: FileHandle) -> Self {
-        let result = Self {};
-        PARSING_FILE.with_borrow(|old| {
-            if let Some(old) = old {
-                panic!(
-                    "Cannot call parse_toml_file from within a deserializer; replacing {old:?} with {file:?}",
-                );
-            }
-        });
-        PARSING_FILE.set(Some(file));
-        result
-    }
-}
-
-impl Drop for Guard {
-    fn drop(&mut self) {
-        PARSING_FILE.set(None)
-    }
-}
-
-/// Allows deserialization of [Located] values; sets their [file]s to [file]
-// TODO: better error return types?
-pub fn with_file<R, F: FnOnce(&str) -> R>(
-    file: impl AsRef<Path>,
-    f: F,
-) -> PackageResult<(R, FileHandle)> {
-    let buf = file.as_ref().to_path_buf();
-    let file_id = FileHandle::new(buf)?;
-
-    let guard = Guard::new(file_id);
-    let result: R = f(file_id.source());
-
-    Ok((result, file_id))
-}
-
 impl<'de, T> Deserialize<'de> for Located<T>
 where
     T: Deserialize<'de>,
@@ -121,11 +78,7 @@ where
         D: serde::Deserializer<'de>,
     {
         let value: Spanned<T> = Spanned::<T>::deserialize(deserializer)?;
-        let file = PARSING_FILE.with_borrow(|f| {
-            *f.as_ref()
-                .expect("Located<T> should only be deserialized in with_file")
-        });
-
+        let file = TheFile::handle();
         Ok(Self { file, value })
     }
 }
