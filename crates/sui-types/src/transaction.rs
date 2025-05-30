@@ -27,6 +27,7 @@ use crate::signature_verification::{
 };
 use crate::type_input::TypeInput;
 use crate::{
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ACCUMULATOR_ROOT_OBJECT_SHARED_VERSION,
     SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
     SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID,
     SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
@@ -100,6 +101,11 @@ impl CallArg {
     pub const AUTHENTICATOR_MUT: Self = Self::Object(ObjectArg::SharedObject {
         id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
         initial_shared_version: SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
+        mutable: true,
+    });
+    pub const ACCUMULATOR_ROOT_MUT: Self = Self::Object(ObjectArg::SharedObject {
+        id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+        initial_shared_version: SUI_ACCUMULATOR_ROOT_OBJECT_SHARED_VERSION,
         mutable: true,
     });
 }
@@ -1232,6 +1238,12 @@ impl SharedInputObject {
     pub const SUI_SYSTEM_OBJ: Self = Self {
         id: SUI_SYSTEM_STATE_OBJECT_ID,
         initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+        mutable: true,
+    };
+
+    pub const SUI_ACCUMULATOR_ROOT_OBJ: Self = Self {
+        id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+        initial_shared_version: SUI_ACCUMULATOR_ROOT_OBJECT_SHARED_VERSION,
         mutable: true,
     };
 

@@ -4,16 +4,18 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
+use consensus_config::Epoch;
 use fastcrypto::hash::{Blake2b256, HashFunction};
 use mysten_common::fatal;
 use sui_types::accumulator_event::AccumulatorEvent;
+use sui_types::committee::EpochId;
 use sui_types::digests::Digest;
 use sui_types::effects::{
     AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
     TransactionEffects, TransactionEffectsAPI,
 };
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{CallArg, TransactionKind};
+use sui_types::transaction::{Argument, CallArg, TransactionKind};
 use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID};
 
 use crate::execution_cache::TransactionCacheRead;
@@ -29,6 +31,7 @@ enum MergedValue {
 impl MergedValue {
     fn add_move_call(
         self,
+        root: Argument,
         address: &AccumulatorAddress,
         builder: &mut ProgrammableTransactionBuilder,
     ) {
@@ -39,18 +42,17 @@ impl MergedValue {
                 // Note: for event streams, the type of the accumulator is fixed
                 // to be EventStreamHead.
                 let args = vec![
-                    CallArg::Pure(bcs::to_bytes(&address.address).unwrap()),
-                    CallArg::Pure(bcs::to_bytes(&digest).unwrap()),
+                    root,
+                    builder.pure(address.address).unwrap(),
+                    builder.pure(digest).unwrap(),
                 ];
-                builder
-                    .move_call(
-                        SUI_FRAMEWORK_PACKAGE_ID,
-                        Identifier::new("event").unwrap(),
-                        Identifier::new("update_head").unwrap(),
-                        vec![],
-                        args,
-                    )
-                    .unwrap();
+                builder.programmable_move_call(
+                    SUI_FRAMEWORK_PACKAGE_ID,
+                    Identifier::new("event").unwrap(),
+                    Identifier::new("update_head").unwrap(),
+                    vec![],
+                    args,
+                );
             }
         }
     }
@@ -121,6 +123,8 @@ impl MergedValueIntermediate {
 }
 
 pub fn create_accumulator_update_transactions(
+    epoch: EpochId,
+    checkpoint_height: u64,
     cache: Option<&dyn TransactionCacheRead>,
     ckpt_effects: &[TransactionEffects],
 ) -> Vec<TransactionKind> {
@@ -175,15 +179,29 @@ pub fn create_accumulator_update_transactions(
 
     let mut builder = ProgrammableTransactionBuilder::new();
 
+    let root = builder.input(CallArg::ACCUMULATOR_ROOT_MUT).unwrap();
+
     for (accumulator_obj, merged_value) in merges {
         let address = addresses.get(&accumulator_obj).unwrap();
         let merged_value = MergedValue::from(merged_value);
-        merged_value.add_move_call(address, &mut builder);
+        merged_value.add_move_call(root, address, &mut builder);
     }
 
     for (_accumulator_obj, _merged_value) in splits {
         todo!();
     }
+
+    let epoch_arg = builder.pure(epoch).unwrap();
+    let checkpoint_height_arg = builder.pure(checkpoint_height).unwrap();
+    let idx_arg = builder.pure(0).unwrap();
+
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("accumulator").unwrap(),
+        Identifier::new("commit_to_checkpoint").unwrap(),
+        vec![],
+        vec![epoch_arg, checkpoint_height_arg, idx_arg],
+    );
 
     vec![TransactionKind::ProgrammableTransaction(builder.finish())]
 }

@@ -59,6 +59,13 @@ impl MockCheckpointBuilder {
             .push(VerifiedExecutionData::new(transaction, effects))
     }
 
+    pub fn get_next_checkpoint_number(&self) -> u64 {
+        self.previous_checkpoint
+            .as_ref()
+            .map(|c| c.sequence_number + 1)
+            .unwrap_or_default()
+    }
+
     /// Override the next checkpoint number to generate.
     /// This can be useful to generate checkpoints with specific sequence numbers.
     pub fn override_next_checkpoint_number(
@@ -113,7 +120,9 @@ impl MockCheckpointBuilder {
             .iter()
             .map(|e| e.effects.clone())
             .collect();
-        create_accumulator_update_transactions(None, &effects)
+        let epoch = self.epoch;
+        let checkpoint = self.get_next_checkpoint_number();
+        create_accumulator_update_transactions(epoch, checkpoint, None, &effects)
             .into_iter()
             .map(|tx| VerifiedTransaction::new_system_transaction(tx).into_inner())
             .collect()

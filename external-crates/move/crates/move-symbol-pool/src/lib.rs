@@ -72,6 +72,7 @@ static_symbols!(
     "TxContext",
     "ID",
     "SUI",
+    "accumulator",
     "authenticator_state",
     "AuthenticatorState",
     "random",

@@ -231,6 +231,8 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
                 .expect("settlement txn cannot fail");
         }
 
+        let next_checkpoint_number = self.checkpoint_builder.get_next_checkpoint_number();
+
         let committee = CommitteeWithKeys::new(&self.keystore, self.epoch_state.committee());
         let (checkpoint, contents, _) = self
             .checkpoint_builder
