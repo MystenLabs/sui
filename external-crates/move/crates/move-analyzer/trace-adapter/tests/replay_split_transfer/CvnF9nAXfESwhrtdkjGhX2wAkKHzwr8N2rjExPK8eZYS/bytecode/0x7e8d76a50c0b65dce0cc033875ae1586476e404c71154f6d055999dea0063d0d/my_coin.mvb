@@ -1,0 +1,65 @@
+// Move bytecode v6
+module 7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d.my_coin {
+use 0000000000000000000000000000000000000000000000000000000000000001::option;
+use 0000000000000000000000000000000000000000000000000000000000000002::balance;
+use 0000000000000000000000000000000000000000000000000000000000000002::coin;
+use 0000000000000000000000000000000000000000000000000000000000000002::transfer;
+use 0000000000000000000000000000000000000000000000000000000000000002::tx_context;
+use 0000000000000000000000000000000000000000000000000000000000000002::url;
+
+struct MY_COIN has drop {
+	dummy_field: bool
+}
+
+init(Arg0: MY_COIN, Arg1: &mut TxContext) {
+L2:	loc0: CoinMetadata<MY_COIN>
+L3:	loc1: TreasuryCap<MY_COIN>
+B0:
+	0: MoveLoc[0](Arg0: MY_COIN)
+	1: LdU8(6)
+	2: LdConst[0](vector<u8>: "MY_..)
+	3: LdConst[1](vector<u8>: "" /..)
+	4: LdConst[1](vector<u8>: "" /..)
+	5: Call option::none<Url>(): Option<Url>
+	6: CopyLoc[1](Arg1: &mut TxContext)
+	7: Call coin::create_currency<MY_COIN>(MY_COIN, u8, vector<u8>, vector<u8>, vector<u8>, Option<Url>, &mut TxContext): TreasuryCap<MY_COIN> * CoinMetadata<MY_COIN>
+	8: StLoc[2](loc0: CoinMetadata<MY_COIN>)
+	9: StLoc[3](loc1: TreasuryCap<MY_COIN>)
+	10: MoveLoc[2](loc0: CoinMetadata<MY_COIN>)
+	11: Call transfer::public_freeze_object<CoinMetadata<MY_COIN>>(CoinMetadata<MY_COIN>)
+	12: MoveLoc[3](loc1: TreasuryCap<MY_COIN>)
+	13: MoveLoc[1](Arg1: &mut TxContext)
+	14: FreezeRef
+	15: Call tx_context::sender(&TxContext): address
+	16: Call transfer::public_transfer<TreasuryCap<MY_COIN>>(TreasuryCap<MY_COIN>, address)
+	17: Ret
+}
+
+public mint(Arg0: &mut TreasuryCap<MY_COIN>, Arg1: u64, Arg2: &mut TxContext): Coin<MY_COIN> {
+B0:
+	0: MoveLoc[0](Arg0: &mut TreasuryCap<MY_COIN>)
+	1: MoveLoc[1](Arg1: u64)
+	2: MoveLoc[2](Arg2: &mut TxContext)
+	3: Call coin::mint<MY_COIN>(&mut TreasuryCap<MY_COIN>, u64, &mut TxContext): Coin<MY_COIN>
+	4: Ret
+}
+
+public burn(Arg0: &mut TreasuryCap<MY_COIN>, Arg1: Coin<MY_COIN>) {
+L2:	loc0: Balance<MY_COIN>
+B0:
+	0: MoveLoc[1](Arg1: Coin<MY_COIN>)
+	1: Call coin::into_balance<MY_COIN>(Coin<MY_COIN>): Balance<MY_COIN>
+	2: StLoc[2](loc0: Balance<MY_COIN>)
+	3: MoveLoc[0](Arg0: &mut TreasuryCap<MY_COIN>)
+	4: Call coin::supply_mut<MY_COIN>(&mut TreasuryCap<MY_COIN>): &mut Supply<MY_COIN>
+	5: MoveLoc[2](loc0: Balance<MY_COIN>)
+	6: Call balance::decrease_supply<MY_COIN>(&mut Supply<MY_COIN>, Balance<MY_COIN>): u64
+	7: Pop
+	8: Ret
+}
+
+Constants [
+	0 => vector<u8>: "MY_COIN" // interpreted as UTF8 string
+	1 => vector<u8>: "" // interpreted as UTF8 string
+]
+}

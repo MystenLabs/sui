@@ -1,0 +1,10 @@
+// Move bytecode v6
+module 1.address {
+
+public length(): u64 {
+B0:
+	0: LdU64(32)
+	1: Ret
+}
+
+}
