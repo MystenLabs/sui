@@ -943,6 +943,11 @@ impl<S: Hash + Eq> Function<S> {
             && vec_ordered_equivalent(jump_tables, &other.jump_tables, |j1, j2| j1.equivalent(j2))
             && vec_ordered_equivalent(code, &other.code, |b1, b2| b1.equivalent(b2))
     }
+
+    pub fn jump_tables(&self) -> &[Rc<VariantJumpTable<S>>] {
+        assert!(self.code_included);
+        &self.jump_tables
+    }
 }
 
 impl<S: Hash + Eq> Enum<S> {

@@ -1,10 +1,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::stackless::{
-    ast::{self, Instruction, Operand::Var, PrimitiveOp, RValue, Var::Register},
+use crate::{cfg::{ControlFlowGraph, StacklessControlFlowGraph}, stackless::{
+    ast::{self, Instruction, Operand::Var, PrimitiveOp, RValue, Var::Register, BasicBlock},
     context::Context,
-};
+}};
 
 use move_binary_format::{normalized as N, normalized::Bytecode as IB};
 use move_model_2::{model::Module, source_kind::SourceKind};
@@ -14,7 +14,7 @@ use anyhow::Ok;
 use std::{
     collections::BTreeMap,
     fmt::{Debug, Display},
-    hash::Hash,
+    hash::Hash
 };
 
 use super::ast::Immediate;
@@ -55,13 +55,24 @@ pub(crate) fn function(
     let code = function.code();
 
     // TODO call the CFG and get blocks, then translate hose instead.
+    let cfg = StacklessControlFlowGraph::new(code, function.jump_tables());
+    let mut block_id = cfg.entry_block_id();
 
-    let instructions = code
-        .iter()
-        .map(|op| bytecode(ctxt, op))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut bbs = vec![];
+    while cfg.next_block(block_id).is_some() {
+        let blk_start = cfg.block_start(block_id);
+        let blk_end = cfg.block_end(block_id);
+        let code_range = &code[blk_start as usize..blk_end as usize];
+        let block_instructions = code_range
+            .iter()
+            .map(|op| bytecode(ctxt, op))
+            .collect::<Result<Vec<_>, _>>()?;
+        let bb = BasicBlock::from_instructions(block_id as usize, block_instructions);
+        bbs.push(bb);
+        block_id = cfg.next_block(block_id).unwrap();
 
-    let function = ast::Function { name, instructions };
+    }
+    let function = ast::Function { name, basic_blocks: bbs };
 
     Ok(function)
 }
