@@ -3676,6 +3676,9 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_party_transfer = true;
                     }
+
+                    cfg.feature_flags
+                        .record_consensus_determined_version_assignments_in_prologue_v2 = true;
                 }
                 // Use this template when making changes:
                 //
