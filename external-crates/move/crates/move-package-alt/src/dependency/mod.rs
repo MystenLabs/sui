@@ -93,7 +93,7 @@ impl<F: MoveFlavor> PinnedDependencyInfo<F> {
     pub async fn fetch(&self) -> PackageResult<PathBuf> {
         match self {
             PinnedDependencyInfo::Git(dep) => dep.fetch().await,
-            PinnedDependencyInfo::Local(dep) => Ok(dep.unfetch_path().clone()),
+            PinnedDependencyInfo::Local(dep) => Ok(dep.unfetched_path().clone()),
             PinnedDependencyInfo::FlavorSpecific(dep) => todo!(),
         }
     }
@@ -105,7 +105,7 @@ impl<F: MoveFlavor> PinnedDependencyInfo<F> {
             PinnedDependencyInfo::Git(dep) => {
                 format_repo_to_fs_path(&dep.repo, &dep.rev, Some(dep.path.clone()))
             }
-            PinnedDependencyInfo::Local(dep) => dep.unfetch_path(),
+            PinnedDependencyInfo::Local(dep) => dep.unfetched_path(),
             PinnedDependencyInfo::FlavorSpecific(dep) => todo!(),
         }
     }
@@ -304,7 +304,7 @@ pub async fn fetch<F: MoveFlavor>(
 
     let mut loc_paths = DS::new();
     for (env, package, dep) in locs {
-        loc_paths.insert(env, package, dep.unfetch_path().clone());
+        loc_paths.insert(env, package, dep.unfetched_path().clone());
     }
 
     let flav_deps_path = flavor.fetch(flav)?;

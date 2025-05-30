@@ -33,7 +33,7 @@ pub struct LocalDependency {
 
 impl LocalDependency {
     /// The path on the filesystem, relative to the location of the containing file
-    pub fn path(&self) -> &PathBuf {
+    pub fn relative_path(&self) -> &PathBuf {
         &self.local
     }
 
@@ -45,8 +45,18 @@ impl LocalDependency {
         }
     }
 
-    pub fn unfetch_path(&self) -> PathBuf {
-        self.relative_to_parent_dir.join(&self.local)
+    /// Retrieve the absolute path to [`LocalDependency`] without actually fetching it.
+    pub fn unfetched_path(&self) -> PathBuf {
+        // TODO: handle panic with a proper error.
+        self.relative_to_parent_dir
+            .join(&self.local)
+            .canonicalize()
+            .unwrap_or_else(|_| {
+                panic!(
+                    "Failed to canonicalize local dependency path: {}",
+                    self.relative_to_parent_dir.join(&self.local).display()
+                )
+            })
     }
 }
 
