@@ -13,7 +13,7 @@ use super::PackageResult;
 static FILES: AppendOnlyVec<(PathBuf, String)> = AppendOnlyVec::new();
 
 /// A cheap handle into a global collection of files
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone)]
 pub struct FileHandle {
     /// Invariant: guaranteed to be in FILES
     id: usize,

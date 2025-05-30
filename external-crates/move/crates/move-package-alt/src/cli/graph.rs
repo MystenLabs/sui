@@ -12,7 +12,6 @@ use crate::{
 };
 use clap::{Command, Parser, Subcommand};
 use petgraph::dot::{Config, Dot};
-use tracing::info;
 
 /// Build the package
 #[derive(Debug, Clone, Parser)]
@@ -30,9 +29,9 @@ impl Graph {
 
         let graph = PackageGraph::<Vanilla>::load(&package_path, &"mainnet".to_string()).await?;
 
-        info!("Package graph loaded successfully\n: {:#?}", graph);
+        println!("Package graph loaded successfully\n: {:#?}", graph);
 
-        info!(
+        println!(
             "{:?}",
             Dot::with_config(&graph.inner, &[Config::EdgeNoLabel])
         );

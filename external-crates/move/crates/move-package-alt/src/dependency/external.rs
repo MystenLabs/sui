@@ -6,29 +6,37 @@
 
 use std::{
     collections::BTreeMap,
-    ffi::OsStr,
     fmt::Debug,
+    iter::once,
     ops::Range,
-    process::{ExitStatus, Stdio},
+    path::{Path, PathBuf},
+    process::Stdio,
 };
 
-use futures::future::try_join_all;
+use anyhow::bail;
+use futures::future::{join_all, try_join_all};
 use itertools::{Itertools, izip};
-use serde::{Deserialize, Serialize};
-use thiserror::Error;
-use tokio::process::Command;
-use tracing::{debug, info};
+use serde::{
+    Deserialize, Serialize,
+    de::{MapAccess, Visitor},
+};
+use serde_spanned::Spanned;
+use tokio::{io::AsyncReadExt, process::Command};
+use tracing::{debug, info, warn};
 
 use crate::{
+    errors::{
+        self, FileHandle, Located, ManifestError, ManifestErrorKind, PackageError, PackageResult,
+        ResolverError,
+    },
     flavor::MoveFlavor,
     jsonrpc::Endpoint,
     package::{EnvironmentName, PackageName},
 };
 
-use super::{DependencySet, UnpinnedDependencyInfo};
+use super::{DependencySet, PinnedDependencyInfo, UnpinnedDependencyInfo, pin};
 
 pub type ResolverName = String;
-pub type ResolverResult<T> = Result<T, ResolverError>;
 
 pub const RESOLVE_ARG: &str = "--resolve-deps";
 pub const RESOLVE_METHOD: &str = "resolve";
@@ -45,40 +53,6 @@ pub struct ExternalDependency {
     data: toml::Value,
 }
 
-#[derive(Error, Debug)]
-pub enum ResolverError {
-    #[error("I/O Error when running external resolver `{resolver}`: {source}")]
-    IoError {
-        resolver: ResolverName,
-
-        #[source]
-        source: std::io::Error,
-    },
-
-    /// This indicates that the resolver was faulty
-    #[error("`{resolver}` did not follow the external resolver protocol ({message})")]
-    BadResolver {
-        resolver: ResolverName,
-        message: String,
-    },
-
-    /// This indicates that the resolver returned a non-successful exit code
-    #[error("`{resolver}` returned error code: {code}")]
-    ResolverUnsuccessful {
-        resolver: ResolverName,
-        code: ExitStatus,
-    },
-
-    /// This indicates that the resolver executed successfully but returned an error
-    #[error("`{resolver}` couldn't resolve `{dep}` in environment `{env_str}`: {message}")]
-    ResolverFailed {
-        resolver: ResolverName,
-        dep: PackageName,
-        env_str: String,
-        message: String,
-    },
-}
-
 /// Convenience type for serializing/deserializing external deps
 #[derive(Serialize, Deserialize)]
 struct RField {
@@ -86,6 +60,7 @@ struct RField {
 }
 
 /// Requests from the package mananger to the external resolver
+// TODO: fix typo above
 #[derive(Serialize, Debug)]
 struct ResolveRequest<F: MoveFlavor> {
     #[serde(default)]
@@ -114,7 +89,7 @@ impl ExternalDependency {
     pub async fn resolve<F: MoveFlavor>(
         deps: &mut DependencySet<UnpinnedDependencyInfo<F>>,
         envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
-    ) -> ResolverResult<()> {
+    ) -> PackageResult<()> {
         // we explode [deps] first so that we know exactly which deps are needed for each env.
         deps.explode(envs.keys().cloned());
 
@@ -155,57 +130,26 @@ impl ExternalDependency {
             deps.insert(env, pkg, dep);
         }
 
+        debug!("done resolving");
+
         Ok(())
     }
 }
 
-impl ResolverError {
-    pub fn io_error(resolver: &ResolverName, source: std::io::Error) -> Self {
-        Self::IoError {
-            resolver: resolver.clone(),
-            source,
-        }
-    }
-
-    pub fn bad_resolver(resolver: &ResolverName, message: impl AsRef<str>) -> Self {
-        Self::BadResolver {
-            resolver: resolver.clone(),
-            message: message.as_ref().to_string(),
-        }
-    }
-
-    pub fn nonzero_exit(resolver: &ResolverName, code: ExitStatus) -> Self {
-        Self::ResolverUnsuccessful {
-            resolver: resolver.clone(),
-            code,
-        }
-    }
-
-    pub fn resolver_failed(
-        resolver: ResolverName,
-        dep: PackageName,
-        env: Option<EnvironmentName>,
-        message: String,
-    ) -> Self {
-        Self::ResolverFailed {
-            resolver,
-            dep,
-            message,
-            env_str: match env {
-                Some(env_name) => format!("environment {env_name}"),
-                None => "default environment".to_string(),
-            },
-        }
-    }
-}
-
+// TODO: CLEANUP
+// Explain this conversion
 impl TryFrom<RField> for ExternalDependency {
-    type Error = String;
+    type Error = PackageError;
 
-    /// Convert from [RField] (`{r.<res> = <data>}`) to [ExternalDependency] (`{ res, data }`)
     fn try_from(value: RField) -> Result<Self, Self::Error> {
+        debug!("try_from: {:?}", value.r);
         if value.r.len() != 1 {
-            return Err("Externally resolved dependencies should have the form `{r.<resolver-name> = <resolver-data>}`".to_string());
+            return Err(PackageError::Generic("TODO".to_string()));
+            //            return Err(PackageError::Manifest(ManifestError {
+            //                kind: ManifestErrorKind::BadExternalDependency,
+            //                span: Some(value.r.span()),
+            //                handle: value.r.file(),
+            //            }));
         }
 
         let (resolver, data) = value
@@ -219,7 +163,6 @@ impl TryFrom<RField> for ExternalDependency {
 }
 
 impl From<ExternalDependency> for RField {
-    /// Translate from [ExternalDependency] `{ res, data }` to [RField] `{r.<res> = data}`
     fn from(value: ExternalDependency) -> Self {
         let ExternalDependency { resolver, data } = value;
 
@@ -235,25 +178,12 @@ impl From<ExternalDependency> for RField {
 async fn resolve_single<F: MoveFlavor>(
     resolver: ResolverName,
     requests: DependencySet<ResolveRequest<F>>,
-) -> ResolverResult<DependencySet<UnpinnedDependencyInfo<F>>> {
-    let mut command = Command::new(&resolver);
-    command
+) -> PackageResult<DependencySet<UnpinnedDependencyInfo<F>>> {
+    let mut child = Command::new(&resolver)
         .arg(RESOLVE_ARG)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    debug!(
-        "running external resolver `{} {}`",
-        command.as_std().get_program().to_string_lossy(),
-        command
-            .as_std()
-            .get_args()
-            .map(OsStr::to_string_lossy)
-            .join(" ")
-    );
-
-    let mut child = command
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| ResolverError::io_error(&resolver, e))?;
 
@@ -264,17 +194,20 @@ async fn resolve_single<F: MoveFlavor>(
 
     let (envs, pkgs, reqs): (Vec<_>, Vec<_>, Vec<_>) = requests.into_iter().multiunzip();
 
+    debug!(
+        "requests for {resolver}:\n{}",
+        serde_json::to_string_pretty(&reqs).unwrap_or("serialization error".to_string())
+    );
+
+    // TODO
     let resps = endpoint
         .batch_call("resolve", reqs)
         .await
         .map_err(|e| ResolverError::bad_resolver(&resolver, e.to_string()));
 
-    let output = child
-        .wait_with_output()
-        .await
-        .map_err(|e| ResolverError::io_error(&resolver, e))?;
-
     // dump standard error
+    let output = child.wait_with_output().await?;
+
     if !output.stderr.is_empty() {
         info!(
             "Output from {resolver}:\n{}",
@@ -286,7 +219,7 @@ async fn resolve_single<F: MoveFlavor>(
     }
 
     if !output.status.success() {
-        return Err(ResolverError::nonzero_exit(&resolver, output.status));
+        return Err(ResolverError::nonzero_exit(&resolver, output.status).into());
     }
 
     let result: DependencySet<UnpinnedDependencyInfo<F>> = izip!(envs, pkgs, resps?).collect();
@@ -297,7 +230,8 @@ async fn resolve_single<F: MoveFlavor>(
             return Err(ResolverError::bad_resolver(
                 &resolver,
                 "resolvers must return resolved dependencies",
-            ));
+            )
+            .into());
         }
     }
 
