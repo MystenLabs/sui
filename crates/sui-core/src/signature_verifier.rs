@@ -12,9 +12,12 @@ use mysten_metrics::monitored_scope;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use shared_crypto::intent::Intent;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
-use sui_types::digests::SenderSignedDataDigest;
+use sui_protocol_config::AliasedAddress;
+use sui_types::base_types::SuiAddress;
 use sui_types::digests::ZKLoginInputsDigest;
+use sui_types::digests::{SenderSignedDataDigest, TransactionDigest};
 use sui_types::signature_verification::{
     verify_sender_signed_data_message_signatures, VerifiedDigestCache,
 };
@@ -87,6 +90,7 @@ impl CertBuffer {
     }
 }
 
+pub type AliasedAddressMap = BTreeMap<SuiAddress, (SuiAddress, BTreeSet<TransactionDigest>)>;
 /// Verifies signatures in ways that faster than verifying each signature individually.
 /// - BLS signatures - caching and batch verification.
 /// - User signed data - caching.
@@ -95,6 +99,10 @@ pub struct SignatureVerifier {
     certificate_cache: VerifiedDigestCache<CertificateDigest>,
     signed_data_cache: VerifiedDigestCache<SenderSignedDataDigest>,
     zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
+
+    /// Map from original address to aliased address and the list of transaction digests for
+    /// which the aliasing is allowed to be in effect.
+    aliased_addresses: Option<Arc<AliasedAddressMap>>,
 
     /// Map from JwkId (iss, kid) to the fetched JWK for that key.
     /// We use an immutable data structure because verification of ZKLogins may be slow, so we
@@ -138,7 +146,36 @@ impl SignatureVerifier {
         accept_zklogin_in_multisig: bool,
         accept_passkey_in_multisig: bool,
         zklogin_max_epoch_upper_bound_delta: Option<u64>,
+        aliased_addresses: Vec<AliasedAddress>,
     ) -> Self {
+        let aliased_addresses: Option<Arc<BTreeMap<_, _>>> = if aliased_addresses.is_empty() {
+            None
+        } else {
+            Some(Arc::new(
+                aliased_addresses
+                    .into_iter()
+                    .map(
+                        |AliasedAddress {
+                             original,
+                             aliased,
+                             allowed_tx_digests,
+                         }| {
+                            (
+                                SuiAddress::from_bytes(original).unwrap(),
+                                (
+                                    SuiAddress::from_bytes(aliased).unwrap(),
+                                    allowed_tx_digests
+                                        .into_iter()
+                                        .map(TransactionDigest::new)
+                                        .collect(),
+                                ),
+                            )
+                        },
+                    )
+                    .collect(),
+            ))
+        };
+
         Self {
             committee,
             certificate_cache: VerifiedDigestCache::new(
@@ -167,6 +204,7 @@ impl SignatureVerifier {
                 accept_passkey_in_multisig,
                 zklogin_max_epoch_upper_bound_delta,
             },
+            aliased_addresses,
         }
     }
 
@@ -179,6 +217,7 @@ impl SignatureVerifier {
         accept_zklogin_in_multisig: bool,
         accept_passkey_in_multisig: bool,
         zklogin_max_epoch_upper_bound_delta: Option<u64>,
+        aliased_addresses: Vec<AliasedAddress>,
     ) -> Self {
         Self::new_with_batch_size(
             committee,
@@ -190,6 +229,7 @@ impl SignatureVerifier {
             accept_zklogin_in_multisig,
             accept_passkey_in_multisig,
             zklogin_max_epoch_upper_bound_delta,
+            aliased_addresses,
         )
     }
 
@@ -319,9 +359,16 @@ impl SignatureVerifier {
         let committee = self.committee.clone();
         let metrics = self.metrics.clone();
         let zklogin_inputs_cache = self.zklogin_inputs_cache.clone();
+        let aliased_addresses = self.aliased_addresses.clone();
         Handle::current()
             .spawn_blocking(move || {
-                Self::process_queue_sync(committee, metrics, buffer, zklogin_inputs_cache)
+                Self::process_queue_sync(
+                    committee,
+                    metrics,
+                    buffer,
+                    zklogin_inputs_cache,
+                    aliased_addresses.as_ref().map(|arc| arc.as_ref()),
+                )
             })
             .await
             .expect("Spawn blocking should not fail");
@@ -332,6 +379,7 @@ impl SignatureVerifier {
         metrics: Arc<SignatureVerifierMetrics>,
         buffer: CertBuffer,
         zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
+        aliased_addresses: Option<&BTreeMap<SuiAddress, (SuiAddress, BTreeSet<TransactionDigest>)>>,
     ) {
         let _scope = monitored_scope("BatchCertificateVerifier::process_queue");
 
@@ -339,6 +387,7 @@ impl SignatureVerifier {
             &committee,
             &buffer.certs.iter().collect_vec(),
             zklogin_inputs_cache,
+            aliased_addresses,
         );
         izip!(
             results.into_iter(),
@@ -403,6 +452,7 @@ impl SignatureVerifier {
                     self.committee.epoch(),
                     &verify_params,
                     self.zklogin_inputs_cache.clone(),
+                    self.aliased_addresses.as_ref().map(|arc| arc.as_ref()),
                 )
             },
             || Ok(()),
@@ -544,6 +594,7 @@ pub fn batch_verify_certificates(
     committee: &Committee,
     certs: &[&CertifiedTransaction],
     zk_login_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
+    aliased_addresses: Option<&BTreeMap<SuiAddress, (SuiAddress, BTreeSet<TransactionDigest>)>>,
 ) -> Vec<SuiResult> {
     // certs.data() is assumed to be verified already by the caller.
     let verify_params = VerifyParams::default();
@@ -556,7 +607,12 @@ pub fn batch_verify_certificates(
             // TODO: verify_signature currently checks the tx sig as well, which might be cached
             // already.
             .map(|c| {
-                c.verify_signatures_authenticated(committee, &verify_params, zk_login_cache.clone())
+                c.verify_signatures_authenticated(
+                    committee,
+                    &verify_params,
+                    zk_login_cache.clone(),
+                    aliased_addresses,
+                )
             })
             .collect(),
 

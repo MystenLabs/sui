@@ -979,6 +979,7 @@ impl AuthorityPerEpochStore {
             protocol_config.accept_zklogin_in_multisig(),
             protocol_config.accept_passkey_in_multisig(),
             protocol_config.zklogin_max_epoch_upper_bound_delta(),
+            protocol_config.get_aliased_addresses().clone(),
         );
 
         let authenticator_state_exists = epoch_start_configuration
