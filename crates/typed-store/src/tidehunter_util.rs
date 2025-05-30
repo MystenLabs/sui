@@ -140,6 +140,15 @@ impl ThConfig {
             prefix: None,
         }
     }
+    pub fn new_with_indexing(key_indexing: KeyIndexing, mutexes: usize, key_type: KeyType) -> Self {
+        Self {
+            key_indexing,
+            mutexes,
+            key_type,
+            config: KeySpaceConfig::default(),
+            prefix: None,
+        }
+    }
 
     pub fn new_with_config_indexing(
         key_indexing: KeyIndexing,
