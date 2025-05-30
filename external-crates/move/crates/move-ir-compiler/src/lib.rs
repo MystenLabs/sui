@@ -46,15 +46,6 @@ impl<'a> Compiler<'a> {
         Ok(self.compile_mod(code)?.0)
     }
 
-    /// Compiles the module into a serialized form.
-    pub fn into_module_blob(self, code: &str) -> Result<Vec<u8>> {
-        let compiled_module = self.compile_mod(code)?.0;
-
-        let mut serialized_module = Vec::<u8>::new();
-        compiled_module.serialize_with_version(compiled_module.version, &mut serialized_module)?;
-        Ok(serialized_module)
-    }
-
     fn compile_mod(self, code: &str) -> Result<(CompiledModule, SourceMap)> {
         let parsed_module = parse_module_with_named_addresses(code, &self.named_addresses)?;
         let (compiled_module, source_map) =

@@ -62,6 +62,7 @@ fn mk_module_entry(pool: &mut RcPool, vis: u8, is_entry: bool) -> NormalizedModu
     };
     let m = CompiledModule {
         version: crate::file_format_common::VERSION_4,
+        publishable: true,
         module_handles: vec![
             // only self module
             ModuleHandle {
@@ -157,6 +158,7 @@ fn mk_module_plus_code_perm(
     };
     let m = CompiledModule {
         version: crate::file_format_common::VERSION_4,
+        publishable: true,
         module_handles: vec![
             // only self module
             ModuleHandle {
@@ -266,6 +268,7 @@ fn mk_module_plus_perm(pool: &mut RcPool, vis: u8, permutation: Permutation) -> 
 fn make_complex_module_perm(pool: &mut RcPool, p: Permutation) -> NormalizedModule {
     let m = CompiledModule {
         version: crate::file_format_common::VERSION_MAX,
+        publishable: true,
         module_handles: vec![
             // only self module
             ModuleHandle {
@@ -620,6 +623,7 @@ fn mk_module_with_defs(
 
     let m = CompiledModule {
         version: crate::file_format_common::VERSION_MAX,
+        publishable: true,
         module_handles: vec![
             // only self module
             ModuleHandle {
