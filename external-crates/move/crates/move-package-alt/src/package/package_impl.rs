@@ -18,7 +18,7 @@ use super::{
     paths::PackagePath,
 };
 use crate::{
-    dependency::{DependencySet, PinnedDependencyInfo, fetch},
+    dependency::{DependencySet, PinnedDependencyInfo},
     errors::{ManifestError, PackageResult},
     flavor::MoveFlavor,
     git::GitRepo,
@@ -50,34 +50,11 @@ impl<F: MoveFlavor> Package<F> {
 
     /// Fetch [dep] and load a package from the fetched source
     /// Makes a best effort to translate old-style packages into the current format,
-    pub async fn load(dep: PinnedDependencyInfo<F>, base_path: &Path) -> PackageResult<Self> {
-        // TODO: most of this should live in [dependency]
-        use PinnedDependencyInfo as P;
+    pub async fn load(dep: PinnedDependencyInfo<F>) -> PackageResult<Self> {
+        let path = PackagePath::new(dep.fetch().await?)?;
+        let manifest = Manifest::<F>::read_from_file(path.manifest_path())?;
 
-        let package = match dep {
-            P::Git(d) => {
-                let git = GitRepo::from(&d);
-                let path = git.fetch().await?;
-                let manifest = Manifest::<F>::read_from_file(&path)?;
-                Self {
-                    manifest,
-                    path: PackagePath::new_with_base(&path, &git.path)?,
-                }
-            }
-            P::Local(d) => {
-                let local = PackagePath::new_with_base(base_path, d.path())?;
-                println!("Loading local package from {:?}", local);
-
-                let manifest = Manifest::<F>::read_from_file(&local.path().join("Move.toml"))?;
-                Self {
-                    manifest,
-                    path: local,
-                }
-            }
-            P::FlavorSpecific(dep) => todo!(),
-        };
-
-        Ok(package)
+        Ok(Self { manifest, path })
     }
 
     /// The path to the root directory of this package. This path is guaranteed to exist
