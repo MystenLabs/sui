@@ -44,7 +44,7 @@ impl<F: MoveFlavor> Package<F> {
     /// Fails if [path] does not exist, or if it doesn't contain a manifest
     pub async fn load_root(path: impl AsRef<Path>) -> PackageResult<Self> {
         let manifest = Manifest::<F>::read_from_file(path.as_ref())?;
-        let path = PackagePath::new_with_base(path.as_ref(), &PathBuf::from("."))?;
+        let path = PackagePath::new(path.as_ref().to_path_buf())?;
         Ok(Self { manifest, path })
     }
 

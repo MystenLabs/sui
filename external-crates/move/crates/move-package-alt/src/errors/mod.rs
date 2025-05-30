@@ -29,6 +29,7 @@ use thiserror::Error;
 
 use crate::dependency::external::ResolverError;
 use crate::git::errors::GitError;
+use crate::package::paths::PackagePathError;
 
 /// Result type for package operations
 pub type PackageResult<T> = Result<T, PackageError>;
@@ -62,6 +63,9 @@ pub enum PackageError {
 
     #[error(transparent)]
     Resolver(#[from] ResolverError),
+
+    #[error(transparent)]
+    PackagePath(#[from] PackagePathError),
 }
 
 impl PackageError {
