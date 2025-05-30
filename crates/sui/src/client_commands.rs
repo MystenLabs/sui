@@ -742,9 +742,9 @@ pub struct TxProcessingArgs {
     #[arg(long)]
     pub serialize_signed_transaction: bool,
     /// Override the sender for the transaction. This option must be used with
-    /// --serialize-unsigned-transaction since the custom signer's private key
-    /// is not available in the keystore. The resulting unsigned transaction
-    /// can then be signed externally using the custom signer's private key.
+    /// --serialize-unsigned-transaction since the override sender's private key
+    /// might not be available in the keystore. The resulting unsigned transaction
+    /// can then be signed externally using the override sender's private key.
     #[arg(long, required = false, value_parser)]
     pub override_sender: Option<SuiAddress>,
 }
