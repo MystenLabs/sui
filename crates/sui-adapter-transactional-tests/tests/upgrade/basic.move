@@ -9,6 +9,7 @@ module Test::M1 {
     public fun f1() { }
 }
 
+// Failing
 //# upgrade --package Test --upgrade-capability 1,1 --sender A --dry-run
 module Test::M1 {
     fun init(_ctx: &mut TxContext) { }
@@ -17,4 +18,20 @@ module Test::M1 {
 //# upgrade --package Test --upgrade-capability 1,1 --sender A
 module Test::M1 {
     fun init(_ctx: &mut TxContext) { }
+}
+
+
+// Passing
+//# upgrade --package Test --upgrade-capability 1,1 --sender A --dry-run
+module Test::M1 {
+    fun init(_ctx: &mut TxContext) { }
+    public fun f1() { }
+    public fun f2() { }
+}
+
+//# upgrade --package Test --upgrade-capability 1,1 --sender A
+module Test::M1 {
+    fun init(_ctx: &mut TxContext) { }
+    public fun f1() { }
+    public fun f2() { }
 }
