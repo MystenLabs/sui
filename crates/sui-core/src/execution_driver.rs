@@ -12,7 +12,7 @@ use tokio::sync::{mpsc::UnboundedReceiver, oneshot, Semaphore};
 use tracing::{error_span, info, trace, warn, Instrument};
 
 use crate::authority::AuthorityState;
-use crate::execution_scheduler::PendingCertificate;
+use crate::execution_scheduler::{PendingCertificate, SchedulingSource};
 
 #[cfg(test)]
 #[path = "unit_tests/execution_driver_tests.rs"]
@@ -121,6 +121,8 @@ pub async fn execution_process(
                 &certificate,
                 expected_effects_digest,
                 &epoch_store_clone,
+                // TODO: Pass the right source.
+                SchedulingSource::NonFastPath,
             ).await {
                 Err(SuiError::ValidatorHaltedAtEpochEnd) => {
                     warn!("Could not execute transaction {digest:?} because validator is halted at epoch end. certificate={certificate:?}");
