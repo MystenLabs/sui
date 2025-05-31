@@ -2,42 +2,10 @@
 source: crates/sui-display/src/v2/parser.rs
 expression: "strands(r#\"foo {{{bar} {baz}}}\"#)"
 ---
-Text(
-    "foo {",
-)
-Expr(
-    Expr {
-        alternates: [
-            Chain {
-                root: None,
-                accessors: [
-                    Field(
-                        "bar",
-                    ),
-                ],
-            },
-        ],
-        transform: None,
-    },
-)
-Text(
-    " ",
-)
-Expr(
-    Expr {
-        alternates: [
-            Chain {
-                root: None,
-                accessors: [
-                    Field(
-                        "baz",
-                    ),
-                ],
-            },
-        ],
-        transform: None,
-    },
-)
-Text(
-    "}",
-)
+"foo {"
+{ bar
+}
+" "
+{ baz
+}
+"}"

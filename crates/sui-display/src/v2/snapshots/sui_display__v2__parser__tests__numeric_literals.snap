@@ -2,131 +2,20 @@
 source: crates/sui-display/src/v2/parser.rs
 expression: "strands(\"Decimal Literals: \\\n            { 42 | 42u8 | 1_234u16 | 56_789_012_345u64 | 678_901_234_567_890_123_456u128 | 7_890_123_456_789_012_345_678_901_234_567_890_123_456u256 } \\\n            Hexadecimal literals: \\\n            { 0x42 | 0x42u8 | 0x123u16 | 0x4_5678u32 | 0x90_1234_5678u64 | 0x90_1234_5678_9012_3456u128 | 0x78_9012_3456_7890_1234_5679_0123_4567_8901u256 }\\\n            \")"
 ---
-Text(
-    "Decimal Literals: ",
-)
-Expr(
-    Expr {
-        alternates: [
-            Chain {
-                root: Some(
-                    U64(
-                        42,
-                    ),
-                ),
-                accessors: [],
-            },
-            Chain {
-                root: Some(
-                    U8(
-                        42,
-                    ),
-                ),
-                accessors: [],
-            },
-            Chain {
-                root: Some(
-                    U16(
-                        1234,
-                    ),
-                ),
-                accessors: [],
-            },
-            Chain {
-                root: Some(
-                    U64(
-                        56789012345,
-                    ),
-                ),
-                accessors: [],
-            },
-            Chain {
-                root: Some(
-                    U128(
-                        678901234567890123456,
-                    ),
-                ),
-                accessors: [],
-            },
-            Chain {
-                root: Some(
-                    U256(
-                        U256(
-                            7890123456789012345678901234567890123456,
-                        ),
-                    ),
-                ),
-                accessors: [],
-            },
-        ],
-        transform: None,
-    },
-)
-Text(
-    " Hexadecimal literals: ",
-)
-Expr(
-    Expr {
-        alternates: [
-            Chain {
-                root: Some(
-                    U64(
-                        66,
-                    ),
-                ),
-                accessors: [],
-            },
-            Chain {
-                root: Some(
-                    U8(
-                        66,
-                    ),
-                ),
-                accessors: [],
-            },
-            Chain {
-                root: Some(
-                    U16(
-                        291,
-                    ),
-                ),
-                accessors: [],
-            },
-            Chain {
-                root: Some(
-                    U32(
-                        284280,
-                    ),
-                ),
-                accessors: [],
-            },
-            Chain {
-                root: Some(
-                    U64(
-                        618780710520,
-                    ),
-                ),
-                accessors: [],
-            },
-            Chain {
-                root: Some(
-                    U128(
-                        2657642915081460266070,
-                    ),
-                ),
-                accessors: [],
-            },
-            Chain {
-                root: Some(
-                    U256(
-                        U256(
-                            41025387384785330866778654046873413191937,
-                        ),
-                    ),
-                ),
-                accessors: [],
-            },
-        ],
-        transform: None,
-    },
-)
+"Decimal Literals: "
+{ 42u64
+| 42u8
+| 1234u16
+| 56789012345u64
+| 678901234567890123456u128
+| 7890123456789012345678901234567890123456u256
+}
+" Hexadecimal literals: "
+{ 66u64
+| 66u8
+| 291u16
+| 284280u32
+| 618780710520u64
+| 2657642915081460266070u128
+| 41025387384785330866778654046873413191937u256
+}
