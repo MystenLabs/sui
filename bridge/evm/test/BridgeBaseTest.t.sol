@@ -35,7 +35,7 @@ contract BridgeBaseTest is Test {
     address USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
     address wBTC = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
 
-    address wBTCWhale = 0x6daB3bCbFb336b29d06B9C793AEF7eaA57888922;
+    address wBTCWhale = 0x5Ee5bf7ae06D1Be5997A1A72006FE6C607eC6DE8;
     address USDCWhale = 0x51eDF02152EBfb338e03E30d65C15fBf06cc9ECC;
     address USDTWhale = 0xa7C0D36c4698981FAb42a7d8c783674c6Fe2592d;
 
@@ -141,7 +141,15 @@ contract BridgeBaseTest is Test {
             "BridgeConfig.sol",
             abi.encodeCall(
                 BridgeConfig.initialize,
-                (address(committee), chainID, supportedTokens, tokenPrices, tokenIds, suiDecimals, supportedChains)
+                (
+                    address(committee),
+                    chainID,
+                    supportedTokens,
+                    tokenPrices,
+                    tokenIds,
+                    suiDecimals,
+                    supportedChains
+                )
             ),
             opts
         );
