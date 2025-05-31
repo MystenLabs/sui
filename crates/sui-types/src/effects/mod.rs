@@ -341,6 +341,7 @@ pub trait TransactionEffectsAPI {
     fn wrapped(&self) -> Vec<ObjectRef>;
     fn transferred_from_consensus(&self) -> Vec<ObjectRef>;
     fn transferred_to_consensus(&self) -> Vec<ObjectRef>;
+    fn consensus_owner_changed(&self) -> Vec<ObjectRef>;
 
     fn object_changes(&self) -> Vec<ObjectChange>;
 

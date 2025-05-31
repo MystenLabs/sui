@@ -87,7 +87,7 @@ gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 
 
 task 10, line 62:
 //# view-object 2,0
-Owner: ConsensusAddressOwner( 4, B )
+Owner: ConsensusAddressOwner( 5, B )
 Version: 5
 Contents: ex::m::A {
     id: sui::object::UID {

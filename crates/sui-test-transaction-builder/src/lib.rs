@@ -246,6 +246,45 @@ impl TestTransactionBuilder {
         )
     }
 
+    pub fn call_object_create_party(self, package_id: ObjectID) -> Self {
+        let sender = self.sender;
+        self.move_call(
+            package_id,
+            "object_basics",
+            "create_party",
+            vec![
+                CallArg::Pure(bcs::to_bytes(&1000u64).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&sender).unwrap()),
+            ],
+        )
+    }
+
+    pub fn call_object_party_transfer_single_owner(
+        self,
+        package_id: ObjectID,
+        object_arg: ObjectArg,
+        recipient: SuiAddress,
+    ) -> Self {
+        self.move_call(
+            package_id,
+            "object_basics",
+            "party_transfer_single_owner",
+            vec![
+                CallArg::Object(object_arg),
+                CallArg::Pure(bcs::to_bytes(&recipient).unwrap()),
+            ],
+        )
+    }
+
+    pub fn call_object_delete(self, package_id: ObjectID, object_arg: ObjectArg) -> Self {
+        self.move_call(
+            package_id,
+            "object_basics",
+            "delete",
+            vec![CallArg::Object(object_arg)],
+        )
+    }
+
     pub fn transfer(mut self, object: ObjectRef, recipient: SuiAddress) -> Self {
         self.test_data = TestTransactionData::Transfer(TransferData { object, recipient });
         self
@@ -615,6 +654,34 @@ pub async fn publish_basics_package_and_make_counter(
         .reference
         .to_object_ref();
     (package_ref, counter_ref)
+}
+
+/// Executes a transaction to publish the `basics` package and another one to create a party
+/// object. Returns the package object ref and the counter object ref.
+pub async fn publish_basics_package_and_make_party_object(
+    context: &WalletContext,
+) -> (ObjectRef, ObjectRef) {
+    let package_ref = publish_basics_package(context).await;
+    let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
+    let gas_price = context.get_reference_gas_price().await.unwrap();
+    let object_creation_txn = context.sign_transaction(
+        &TestTransactionBuilder::new(sender, gas_object, gas_price)
+            .call_object_create_party(package_ref.0)
+            .build(),
+    );
+    let resp = context
+        .execute_transaction_must_succeed(object_creation_txn)
+        .await;
+    let object_ref = resp
+        .effects
+        .unwrap()
+        .created()
+        .iter()
+        .find(|obj_ref| matches!(obj_ref.owner, Owner::ConsensusAddressOwner { .. }))
+        .unwrap()
+        .reference
+        .to_object_ref();
+    (package_ref, object_ref)
 }
 
 /// Executes a transaction to increment a counter object.

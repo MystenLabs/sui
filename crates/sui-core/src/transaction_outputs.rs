@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::Arc;
 use sui_types::base_types::{FullObjectID, ObjectRef};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
@@ -50,8 +50,6 @@ impl TransactionOutputs {
 
         let tx_digest = *transaction.digest();
 
-        let tombstones: HashMap<_, _> = effects.all_tombstones().into_iter().collect();
-
         // Get the actual set of objects that have been received -- any received
         // object will show up in the modified-at set.
         let modified_at: HashSet<_> = effects.modified_at_versions().into_iter().collect();
@@ -72,22 +70,25 @@ impl TransactionOutputs {
                 )
             });
 
-            let tombstones = tombstones.into_iter().map(|(object_id, version)| {
-                let consensus_key = input_objects
-                    .get(&object_id)
-                    .filter(|o| o.is_consensus())
-                    .map(|o| FullObjectKey::new(o.full_id(), version));
-                if let Some(consensus_key) = consensus_key {
-                    (consensus_key, MarkerValue::ConsensusStreamEnded(tx_digest))
-                } else {
-                    (
-                        FullObjectKey::new(FullObjectID::new(object_id, None), version),
-                        MarkerValue::FastpathStreamEnded,
-                    )
-                }
-            });
+            let tombstones = effects
+                .all_tombstones()
+                .into_iter()
+                .map(|(object_id, version)| {
+                    let consensus_key = input_objects
+                        .get(&object_id)
+                        .filter(|o| o.is_consensus())
+                        .map(|o| FullObjectKey::new(o.full_id(), version));
+                    if let Some(consensus_key) = consensus_key {
+                        (consensus_key, MarkerValue::ConsensusStreamEnded(tx_digest))
+                    } else {
+                        (
+                            FullObjectKey::new(FullObjectID::new(object_id, None), version),
+                            MarkerValue::FastpathStreamEnded,
+                        )
+                    }
+                });
 
-            let transferred_to_consensus =
+            let fastpath_stream_ended =
                 effects
                     .transferred_to_consensus()
                     .into_iter()
@@ -105,19 +106,19 @@ impl TransactionOutputs {
                         )
                     });
 
-            let transferred_from_consensus =
-                effects
-                    .transferred_from_consensus()
-                    .into_iter()
-                    .map(|(object_id, version, _)| {
-                        let object = input_objects
-                            .get(&object_id)
-                            .expect("object transferred from consensus must be in input_objects");
-                        (
-                            FullObjectKey::new(object.full_id(), version),
-                            MarkerValue::ConsensusStreamEnded(tx_digest),
-                        )
-                    });
+            let consensus_stream_ended = effects
+                .transferred_from_consensus()
+                .into_iter()
+                .chain(effects.consensus_owner_changed())
+                .map(|(object_id, version, _)| {
+                    let object = input_objects
+                        .get(&object_id)
+                        .expect("stream-ended object must be in input_objects");
+                    (
+                        FullObjectKey::new(object.full_id(), version),
+                        MarkerValue::ConsensusStreamEnded(tx_digest),
+                    )
+                });
 
             // We "smear" removed consensus objects in the marker table to allow for proper
             // sequencing of transactions that are submitted after the consensus stream ends.
@@ -143,8 +144,8 @@ impl TransactionOutputs {
 
             received
                 .chain(tombstones)
-                .chain(transferred_to_consensus)
-                .chain(transferred_from_consensus)
+                .chain(fastpath_stream_ended)
+                .chain(consensus_stream_ended)
                 .chain(consensus_smears)
                 .collect()
         };

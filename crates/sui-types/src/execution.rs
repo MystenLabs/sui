@@ -169,17 +169,26 @@ impl ExecutionResultsV2 {
             }
 
             // Record start version for ConsensusAddressOwner objects.
-            if let Owner::ConsensusAddressOwner { start_version, .. } = &mut obj.owner {
+            if let Owner::ConsensusAddressOwner {
+                start_version,
+                owner,
+            } = &mut obj.owner
+            {
                 debug_assert!(!self.deleted_object_ids.contains(id));
 
                 if let Some(Owner::ConsensusAddressOwner {
                     start_version: previous_start_version,
-                    ..
+                    owner: previous_owner,
                 }) = input_objects.get(id).map(|obj| &obj.owner)
                 {
-                    // Assign existing start_version in case a ConsensusAddressOwner object was
-                    // transferred to the same Owner type.
-                    *start_version = *previous_start_version;
+                    if owner == previous_owner {
+                        // Assign existing start_version in case a ConsensusAddressOwner object was
+                        // transferred to the same owner.
+                        *start_version = *previous_start_version;
+                    } else {
+                        // If owner changes, we need to begin a new stream.
+                        *start_version = lamport_version;
+                    }
                 } else {
                     // ConsensusAddressOwner object was created, transferred from another Owner
                     // type, or unwrapped, so we begin a new stream.
