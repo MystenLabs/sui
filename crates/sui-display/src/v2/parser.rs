@@ -351,6 +351,10 @@ impl<'s> Parser<'s> {
                 Literal::Bool(false)
             },
 
+            Tok(T::NumDec | T::NumHex, _, _) if self.lexer.peek2().is_some_and(|Lex(t, _, _)| *t == T::CColon) => {
+                self.parse_data()?
+            },
+
             Tok(T::NumDec, _, dec) => {
                 self.lexer.next();
                 self.parse_numeric_suffix(dec, 10)?
@@ -492,6 +496,153 @@ impl<'s> Parser<'s> {
         Ok(elements)
     }
 
+    fn parse_data(&mut self) -> Result<Literal<'s>, Error> {
+        let type_ = self.parse_datatype()?;
+
+        let enum_ = match_token_opt! { self.lexer;
+            Tok(T::CColon, _, _) => { self.lexer.next(); }
+        };
+
+        if let Match::Tried(offset, enum_) = enum_ {
+            self.eat_whitespace();
+            return Ok(Literal::Struct(Box::new(Struct {
+                type_,
+                fields: self
+                    .parse_fields()
+                    .map_err(|e| e.also_tried(offset, enum_))?,
+            })));
+        }
+
+        Ok(match_token! { self.lexer;
+            Tok(T::Ident, _, variant_name) => {
+                self.lexer.next();
+
+                match_token! { self.lexer; Tok(T::Pound, _, _) => self.lexer.next() };
+                let variant_index = match_token! { self.lexer; Tok(T::NumDec, _, index) => {
+                    self.lexer.next();
+                    read_u16(index, 10, "enum variant index")?
+                }};
+
+                self.eat_whitespace();
+                Literal::Enum(Box::new(Enum {
+                    type_,
+                    variant_name: Some(variant_name),
+                    variant_index,
+                    fields: self.parse_fields()?,
+                }))
+            },
+
+            Tok(T::NumDec, _, index) => {
+                self.lexer.next();
+
+                let variant_index = read_u16(index, 10, "enum variant index")?;
+
+                self.eat_whitespace();
+                Literal::Enum(Box::new(Enum {
+                    type_,
+                    variant_name: None,
+                    variant_index,
+                    fields: self.parse_fields()?,
+                }))
+            }
+        })
+    }
+
+    fn parse_fields(&mut self) -> Result<Fields<'s>, Error> {
+        let is_named = match_token! { self.lexer;
+            Tok(T::LParen, _, _) => { self.lexer.next(); false },
+            Tok(T::LBrace, _, _) => { self.lexer.next(); true }
+        };
+
+        self.eat_whitespace();
+        Ok(if is_named {
+            let mut fields = vec![];
+
+            let terminated = match_token_opt! { self.lexer;
+                Tok(T::RBrace, _, _) => { self.lexer.next(); }
+            };
+
+            let terminated = match terminated {
+                Match::Tried(_, terminated) => terminated,
+                Match::Found(_) => return Ok(Fields::Named(fields)),
+            };
+
+            loop {
+                self.eat_whitespace();
+                let name = match_token! { self.lexer, terminated;
+                    Tok(T::Ident, _, n) => { self.lexer.next(); n }
+                };
+
+                self.eat_whitespace();
+                match_token! { self.lexer; Tok(T::Colon, _, _) => self.lexer.next() };
+
+                self.eat_whitespace();
+                let value = self.parse_chain()?;
+
+                fields.push((name, value));
+
+                self.eat_whitespace();
+                let delimited = match_token_opt! { self.lexer;
+                    Tok(T::Comma, _, _) => { self.lexer.next(); }
+                };
+
+                self.eat_whitespace();
+                let terminated = match_token_opt! { self.lexer;
+                    Tok(T::RBrace, _, _) => { self.lexer.next(); }
+                };
+
+                match (delimited, terminated) {
+                    (_, Match::Found(_)) => break,
+                    (Match::Found(_), _) => continue,
+                    (Match::Tried(_, delimited), Match::Tried(_, terminated)) => {
+                        return Err(delimited.union(terminated).into_error(self.lexer.peek()))
+                    }
+                }
+            }
+
+            Fields::Named(fields)
+        } else {
+            let mut fields = vec![];
+
+            let terminated = match_token_opt! { self.lexer;
+                Tok(T::RParen, _, _) => { self.lexer.next(); }
+            };
+
+            let (offset, terminated) = match terminated {
+                Match::Tried(offset, terminated) => (offset, terminated),
+                Match::Found(_) => return Ok(Fields::Positional(fields)),
+            };
+
+            loop {
+                self.eat_whitespace();
+                fields.push(
+                    self.parse_chain()
+                        .map_err(|e| e.also_tried(offset, terminated.clone()))?,
+                );
+
+                self.eat_whitespace();
+                let delimited = match_token_opt! { self.lexer;
+                    Tok(T::Comma, _, _) => { self.lexer.next(); }
+                };
+
+                self.eat_whitespace();
+                let terminated = match_token_opt! { self.lexer;
+                    Tok(T::RParen, _, _) => { self.lexer.next(); }
+                };
+
+                match (delimited, terminated) {
+                    (_, Match::Found(_)) => break,
+                    (Match::Found(_), _) => continue,
+                    (Match::Tried(_, delimited), Match::Tried(_, terminated)) => {
+                        return Err(delimited.union(terminated).into_error(self.lexer.peek()))
+                    }
+                }
+            }
+
+            Fields::Positional(fields)
+        })
+    }
+
     fn parse_type(&mut self) -> Result<TypeTag, Error> {
         Ok(match_token! { self.lexer;
             Lit(T::Ident, _, "address") => { self.lexer.next(); TypeTag::Address },
@@ -578,12 +729,12 @@ impl<'s> Parser<'s> {
         let addr = match_token! { self.lexer;
             Tok(T::NumHex, _, slice) => {
                 self.lexer.next();
-                read_u256(slice, 16, "address")?
+                read_u256(slice, 16, "'address'")?
             },
 
             Tok(T::NumDec, _, slice) => {
                 self.lexer.next();
-                read_u256(slice, 10, "address")?
+                read_u256(slice, 10, "'address'")?
             },
         };
 
@@ -603,19 +754,19 @@ impl<'s> Parser<'s> {
 
     fn parse_numeric_suffix(&mut self, num: &'s str, radix: u32) -> Result<Literal<'s>, Error> {
         let literal = match_token_opt! { self.lexer;
-            Lit(T::Ident, _, "u8") => { self.lexer.next(); Literal::U8(read_u8(num, radix, "u8")?) },
-            Lit(T::Ident, _, "u16") => { self.lexer.next(); Literal::U16(read_u16(num, radix, "u16")?) },
-            Lit(T::Ident, _, "u32") => { self.lexer.next(); Literal::U32(read_u32(num, radix, "u32")?) },
-            Lit(T::Ident, _, "u64") => { self.lexer.next(); Literal::U64(read_u64(num, radix, "u64")?) },
-            Lit(T::Ident, _, "u128") => { self.lexer.next(); Literal::U128(read_u128(num, radix, "u128")?) },
-            Lit(T::Ident, _, "u256") => { self.lexer.next(); Literal::U256(read_u256(num, radix, "u256")?) },
+            Lit(T::Ident, _, "u8") => { self.lexer.next(); Literal::U8(read_u8(num, radix, "'u8'")?) },
+            Lit(T::Ident, _, "u16") => { self.lexer.next(); Literal::U16(read_u16(num, radix, "'u16'")?) },
+            Lit(T::Ident, _, "u32") => { self.lexer.next(); Literal::U32(read_u32(num, radix, "'u32'")?) },
+            Lit(T::Ident, _, "u64") => { self.lexer.next(); Literal::U64(read_u64(num, radix, "'u64'")?) },
+            Lit(T::Ident, _, "u128") => { self.lexer.next(); Literal::U128(read_u128(num, radix, "'u128'")?) },
+            Lit(T::Ident, _, "u256") => { self.lexer.next(); Literal::U256(read_u256(num, radix, "'u256'")?) },
         };
 
         // If there was no explicit type suffix, assume `u64`.
         Ok(if let Match::Found(lit) = literal {
             lit
         } else {
-            Literal::U64(read_u64(num, radix, "u64")?)
+            Literal::U64(read_u64(num, radix, "'u64'")?)
         })
     }
 
@@ -816,6 +967,53 @@ mod tests {
     }
 
     #[test]
+    fn test_struct_positional_literals() {
+        assert_snapshot!(strands(
+            "{ 0x1::string::String(42, 'foo', vector[1, 2, 3]) \
+             | 0x2::coin::Coin<0x2::sui::SUI> (true, 100u32,) }"
+        ));
+    }
+
+    #[test]
+    fn test_struct_named_literals() {
+        assert_snapshot!(strands(
+            "{ 0x1::string::String { length: 42, value: 'foo', data: vector[1, 2, 3], } \
+             | 0x2::coin::Coin<0x2::sui::SUI> { is_locked: true, amount: 100u32 } }"
+        ));
+    }
+
+    #[test]
+    fn test_enum_positional_literals() {
+        assert_snapshot!(strands(
+            "{ 0x1::option::Option<u64>::Some#1(42,) \
+             | 0x1::option::Option<u32>::1(43u32) \
+             | 0x1::option::Option<u16>::0() }"
+        ));
+    }
+
+    #[test]
+    fn test_enum_named_literals() {
+        assert_snapshot!(strands(
+            "{ 0x1::option::Option<u64>::Some#1 { value: 42, } \
+             | 0x1::option::Option<u32>::1 { value: 43u32 } \
+             | 0x1::option::Option<u16>::None#0 {} }"
+        ));
+    }
+
+    #[test]
+    fn test_nested_datatype() {
+        assert_snapshot!(strands(
+            r#"{
+                0x1::option::Option<0x2::coin::Coin<0x2::sui::SUI>>::Some#1(
+                    0x2::coin::Coin<0x2::sui::SUI> {
+                        balance: 100u64
+                    }
+                )
+            }"#,
+        ));
+    }
+
+    #[test]
     fn test_primitive_types() {
         assert_snapshot!(strands(
             "{ vector<address> \
@@ -893,6 +1091,11 @@ mod tests {
     #[test]
     fn test_unexpected_characters() {
         assert_snapshot!(strands(r#"anything goes {? % ! 🔥}"#));
+    }
+
+    #[test]
+    fn test_trailing_alternate() {
+        assert_snapshot!(strands(r#"{foo | bar | baz |}"#));
     }
 
     #[test]
@@ -1017,5 +1220,65 @@ mod tests {
     #[test]
     fn test_type_param_no_comma() {
         assert_snapshot!(strands(r#"{vector<0x2::table::Table<u64 u64>>}"#));
+    }
+
+    #[test]
+    fn test_datatype_whitespace() {
+        assert_snapshot!(strands(r#"{0x1 :: coin :: Coin<0x2::sui::SUI>}"#));
+    }
+
+    #[test]
+    fn test_struct_literal_positional_trailing() {
+        assert_snapshot!(strands(
+            r#"{0x1::string::String(42, 'foo', vector[1, 2, 3]"#
+        ));
+    }
+
+    #[test]
+    fn test_struct_literal_named_trailing() {
+        assert_snapshot!(strands(
+            r#"{0x1::string::String { length: 42, value: 'foo', data: vector[1, 2, 3]"#,
+        ));
+    }
+
+    #[test]
+    fn test_enum_literal_positional_trailing() {
+        assert_snapshot!(strands(r#"{0x1::option::Option<u64>::Some#1(42, 43, 44}"#));
+    }
+
+    #[test]
+    fn test_enum_literal_named_trailing() {
+        assert_snapshot!(strands(
+            r#"{0x1::option::Option<u64>::Some#1 { value: 42, other: 43,"#,
+        ));
+    }
+
+    #[test]
+    fn test_struct_hybrid_positional_named() {
+        assert_snapshot!(strands(
+            r#"{0x1::string::String(length: 42, value: 'foo', data: vector[1, 2, 3])}"#
+        ));
+    }
+
+    #[test]
+    fn test_struct_hybrid_named_positional() {
+        assert_snapshot!(strands(
+            r#"{0x1::string::String { 42, 'foo', vector[1, 2, 3] }}"#
+        ));
+    }
+
+    #[test]
+    fn test_enum_missing_index() {
+        assert_snapshot!(strands(r#"{0x1::option::Option<u64>::Some(42)}"#));
+    }
+
+    #[test]
+    fn test_enum_whitespace() {
+        assert_snapshot!(strands(r#"{0x1::option::Option<u64>::Some # 1 (42)}"#));
+    }
+
+    #[test]
+    fn test_enum_variant_overflow() {
+        assert_snapshot!(strands(r#"{0x1::option::Option<u64>::Some#70000(42)}"#));
     }
 }

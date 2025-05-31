@@ -15,7 +15,7 @@ pub enum Error {
     #[error("Invalid {0}")]
     InvalidIdentifier(OwnedLexeme),
 
-    #[error("Number literal is too large to fit into '{what}'")]
+    #[error("Number literal is too large to fit into {what}")]
     NumberOverflow { what: &'static str },
 
     #[error("Odd number of characters in hex {0}")]
