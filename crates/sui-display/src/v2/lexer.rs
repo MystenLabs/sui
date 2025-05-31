@@ -15,14 +15,9 @@ pub(crate) struct Lexer<'s> {
     /// The number of bytes (not characters) tokenized so far.
     off: usize,
 
-    /// Whether the lexer is currently inside a text strand or an expression strand.
-    mode: Mode,
-}
-
-#[derive(Debug)]
-enum Mode {
-    Text,
-    Expr,
+    /// Nesting of curly braces. At level 0, the lexer is in text mode. At all other levels, it is
+    /// in expression mode.
+    level: usize,
 }
 
 /// A lexeme is a token along with its offset in the source string, and the slice of source string
@@ -96,7 +91,7 @@ impl<'s> Lexer<'s> {
         Self {
             src,
             off: 0,
-            mode: Mode::Text,
+            level: 0,
         }
     }
 
@@ -112,7 +107,7 @@ impl<'s> Lexer<'s> {
             }
 
             b'{' => {
-                self.mode = Mode::Expr;
+                self.level += 1;
                 self.take(T::LBrace, 1)
             }
 
@@ -121,8 +116,10 @@ impl<'s> Lexer<'s> {
                 self.take(T::RRBrace, 1)
             }
 
-            // This is not a valid token within text, but recognise it so that the parser can
-            // produce a better error message.
+            // This is not a valid token within text, but is recognised so that the parser can
+            // produce a better error message. `level` is not decremenetd because we should already
+            // been in text mode, meaning the level is already 0, and a decrement would underflow
+            // it.
             b'}' => self.take(T::RBrace, 1),
 
             _ => self.take_until(T::Text, |b| b"{}".contains(&b)),
@@ -160,7 +157,10 @@ impl<'s> Lexer<'s> {
 
             b'<' => self.take(T::LAngle, 1),
 
-            b'{' => self.take(T::LBrace, 1),
+            b'{' => {
+                self.level += 1;
+                self.take(T::LBrace, 1)
+            }
 
             b'[' => self.take(T::LBracket, 1),
 
@@ -173,7 +173,7 @@ impl<'s> Lexer<'s> {
             b'>' => self.take(T::RAngle, 1),
 
             b'}' => {
-                self.mode = Mode::Text;
+                self.level -= 1;
                 self.take(T::RBrace, 1)
             }
 
@@ -266,10 +266,10 @@ impl<'s> Iterator for Lexer<'s> {
     type Item = Lexeme<'s>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        use Mode as M;
-        match self.mode {
-            M::Text => self.next_text_token(),
-            M::Expr => self.next_expr_token(),
+        if self.level == 0 {
+            self.next_text_token()
+        } else {
+            self.next_expr_token()
         }
     }
 }
@@ -444,6 +444,24 @@ mod tests {
         "###);
     }
 
+    /// Expressions can include nested curly braces. Meeting the first well-bracketed closing curly
+    /// brace should not cause the lexer to exit expression mode.
+    #[test]
+    fn test_nested_curlies() {
+        assert_snapshot!(lexemes(r#"foo {bar {baz} qux}"#), @r###"
+        L(Text, 0, "foo ")
+        L(LBrace, 4, "{")
+        L(Ident, 5, "bar")
+        L(Whitespace, 8, " ")
+        L(LBrace, 9, "{")
+        L(Ident, 10, "baz")
+        L(RBrace, 13, "}")
+        L(Whitespace, 14, " ")
+        L(Ident, 15, "qux")
+        L(RBrace, 18, "}")
+        "###);
+    }
+
     /// The lexer will still tokenize curlies even if they are not balanced.
     #[test]
     fn test_unbalanced_curlies() {
@@ -501,7 +519,8 @@ mod tests {
         L(LBrace, 27, "{")
         L(Whitespace, 28, " ")
         L(RBrace, 29, "}")
-        L(Text, 30, " qux")
+        L(Whitespace, 30, " ")
+        L(Ident, 31, "qux")
         "###);
     }
 
