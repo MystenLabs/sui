@@ -106,7 +106,13 @@ public fun extract_token_bridge_payload(message: &BridgeMessage): TokenTransferP
     let amount = peel_u64_be(&mut bcs);
 
     chain_ids::assert_valid_chain_id(target_chain);
-    assert!(bcs.into_remainder_bytes().is_empty(), ETrailingBytes);
+
+    if (message.message_version() == 2) {
+        let _timestamp = peel_u64_be(&mut bcs);
+        assert!(bcs.into_remainder_bytes().is_empty(), ETrailingBytes);
+    } else {
+        assert!(bcs.into_remainder_bytes().is_empty(), ETrailingBytes);
+    };
 
     TokenTransferPayload {
         sender_address,
@@ -115,6 +121,26 @@ public fun extract_token_bridge_payload(message: &BridgeMessage): TokenTransferP
         token_type,
         amount,
     }
+}
+
+// Note: `bcs::peel_vec_u8` *happens* to work here because
+// `sender_address` and `target_address` are no longer than 255 bytes.
+// Therefore their length can be represented by a single byte.
+// See `create_token_bridge_message` for the actual encoding rule.
+public fun extract_token_bridge_payload_v2_timestamp(
+    message: &BridgeMessage,
+): u64 {
+    let mut bcs = bcs::new(message.payload);
+    let _sender_address = bcs.peel_vec_u8();
+    let _target_chain = bcs.peel_u8();
+    let _target_address = bcs.peel_vec_u8();
+    let _token_type = bcs.peel_u8();
+    let _amount = peel_u64_be(&mut bcs);
+    let timestamp = peel_u64_be(&mut bcs);
+
+    assert!(bcs.into_remainder_bytes().is_empty(), ETrailingBytes);
+
+    timestamp
 }
 
 /// Emergency op payload is just a single byte

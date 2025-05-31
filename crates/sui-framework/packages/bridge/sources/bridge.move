@@ -496,6 +496,17 @@ fun claim_token_internal<T>(
 
     // extract token message
     let token_payload = record.message.extract_token_bridge_payload();
+    let mut bypass_limiter = false;
+    if (record.message.message_version() == 2) {
+        let timestamp = record
+            .message
+            .extract_token_bridge_payload_v2_timestamp();
+        // if token_payload.timestamp is within the last 24 hours, bypass the limiter
+        if (clock.timestamp_ms() < timestamp + 24 * 3600000) {
+            bypass_limiter = true;
+        };
+    };
+
     // get owner address
     let owner = address::from_bytes(token_payload.token_target_address());
 
@@ -523,6 +534,7 @@ fun claim_token_internal<T>(
     let amount = token_payload.token_amount();
     // Make sure transfer is within limit.
     if (
+        !bypass_limiter &&
         !inner
             .limiter
             .check_and_record_sending_transfer<T>(
