@@ -109,7 +109,7 @@ impl TransactionOutputs {
             let consensus_stream_ended = effects
                 .transferred_from_consensus()
                 .into_iter()
-                .chain(effects.consensus_owner_changed().into_iter())
+                .chain(effects.consensus_owner_changed())
                 .map(|(object_id, version, _)| {
                     let object = input_objects
                         .get(&object_id)

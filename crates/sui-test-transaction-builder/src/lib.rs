@@ -247,7 +247,7 @@ impl TestTransactionBuilder {
     }
 
     pub fn call_object_create_party(self, package_id: ObjectID) -> Self {
-        let sender = self.sender.clone();
+        let sender = self.sender;
         self.move_call(
             package_id,
             "object_basics",

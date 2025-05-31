@@ -277,7 +277,7 @@ mod tests {
     use sui_types::executable_transaction::{
         CertificateProof, ExecutableTransaction, VerifiedExecutableTransaction,
     };
-    use sui_types::object::{Object, Owner};
+    use sui_types::object::Object;
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
     use sui_types::transaction::{ObjectArg, SenderSignedData, VerifiedTransaction};
     use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
