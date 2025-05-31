@@ -229,11 +229,13 @@ async fn request_sign_bridge_action_into_certification(
     // we pass in `Some` to make sure the validators with higher voting power are requested first
     // to save gas cost.
     let preference = match action {
-        BridgeAction::SuiToEthBridgeAction(_) => Some(SigRequestPrefs {
+        BridgeAction::SuiToEthBridgeAction(_)
+        | BridgeAction::SuiToEthTokenTransfer(_)
+        | BridgeAction::SuiToEthTokenTransferV2(_) => Some(SigRequestPrefs {
             ordering_pref: BTreeSet::new(),
             prefetch_timeout,
         }),
-        BridgeAction::EthToSuiBridgeAction(_) => None,
+        BridgeAction::EthToSuiBridgeAction(_) | BridgeAction::EthToSuiTokenTransferV2(_) => None,
         _ => {
             if action.chain_id().is_sui_chain() {
                 None

@@ -14,16 +14,19 @@ import "../contracts/SuiBridge.sol";
 import "../test/mocks/MockTokens.sol";
 
 contract DeployBridge is Script {
-    function parseDeployConfig(string memory path) public returns (DeployConfig memory) {
+    function parseDeployConfig(string memory path) public view returns (DeployConfig memory) {
         string memory json = vm.readFile(path);
         DeployConfig memory config;
 
-        config.committeeMemberStake = abi.decode(vm.parseJson(json, ".committeeMemberStake"), (uint256[]));
+        config.committeeMemberStake =
+            abi.decode(vm.parseJson(json, ".committeeMemberStake"), (uint256[]));
         config.committeeMembers = abi.decode(vm.parseJson(json, ".committeeMembers"), (address[]));
-        config.minCommitteeStakeRequired = abi.decode(vm.parseJson(json, ".minCommitteeStakeRequired"), (uint256));
+        config.minCommitteeStakeRequired =
+            abi.decode(vm.parseJson(json, ".minCommitteeStakeRequired"), (uint256));
         config.sourceChainId = abi.decode(vm.parseJson(json, ".sourceChainId"), (uint256));
         config.supportedChainIds = abi.decode(vm.parseJson(json, ".supportedChainIds"), (uint256[]));
-        config.supportedChainLimitsInDollars = abi.decode(vm.parseJson(json, ".supportedChainLimitsInDollars"), (uint256[]));
+        config.supportedChainLimitsInDollars =
+            abi.decode(vm.parseJson(json, ".supportedChainLimitsInDollars"), (uint256[]));
         config.tokenPrices = abi.decode(vm.parseJson(json, ".tokenPrices"), (uint256[]));
         config.supportedTokens = abi.decode(vm.parseJson(json, ".supportedTokens"), (address[]));
         config.tokenIds = abi.decode(vm.parseJson(json, ".tokenIds"), (uint256[]));

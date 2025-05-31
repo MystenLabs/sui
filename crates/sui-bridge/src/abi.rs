@@ -7,14 +7,15 @@ use crate::encoding::{
 };
 use crate::encoding::{
     COMMITTEE_BLOCKLIST_MESSAGE_VERSION, EMERGENCY_BUTTON_MESSAGE_VERSION,
-    TOKEN_TRANSFER_MESSAGE_VERSION,
+    TOKEN_TRANSFER_MESSAGE_VERSION_V1, TOKEN_TRANSFER_MESSAGE_VERSION_V2,
 };
 use crate::error::{BridgeError, BridgeResult};
 use crate::types::ParsedTokenTransferMessage;
 use crate::types::{
     AddTokensOnEvmAction, AssetPriceUpdateAction, BlocklistCommitteeAction, BridgeAction,
-    BridgeActionType, EmergencyAction, EthLog, EthToSuiBridgeAction, EvmContractUpgradeAction,
-    LimitUpdateAction, SuiToEthBridgeAction, SuiToEthTokenTransfer,
+    BridgeActionType, EmergencyAction, EthLog, EthToSuiBridgeAction, EthToSuiTokenTransferV2,
+    EvmContractUpgradeAction, LimitUpdateAction, SuiToEthBridgeAction, SuiToEthTokenTransfer,
+    SuiToEthTokenTransferV2,
 };
 use ethers::types::Log;
 use ethers::{
@@ -132,6 +133,16 @@ impl EthBridgeEvent {
                             eth_bridge_event: bridge_event,
                         }))
                     }
+                    EthSuiBridgeEvents::TokensDepositedV2Filter(event) => {
+                        let eth_bridge_event = EthToSuiTokenBridgeV2::try_from(&event)?;
+                        Some(BridgeAction::EthToSuiTokenTransferV2(
+                            EthToSuiTokenTransferV2 {
+                                eth_tx_hash,
+                                eth_event_index,
+                                eth_bridge_event,
+                            },
+                        ))
+                    }
                     EthSuiBridgeEvents::TokensClaimedFilter(_event) => None,
                     EthSuiBridgeEvents::PausedFilter(_event) => None,
                     EthSuiBridgeEvents::UnpausedFilter(_event) => None,
@@ -202,6 +213,50 @@ impl TryFrom<&TokensDepositedFilter> for EthToSuiTokenBridgeV1 {
     }
 }
 
+/// Sanity checked version of TokensDepositedV2Filter that captures the new timestamp.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Hash)]
+pub struct EthToSuiTokenBridgeV2 {
+    pub nonce: u64,
+    pub sui_chain_id: BridgeChainId,
+    pub eth_chain_id: BridgeChainId,
+    pub sui_address: SuiAddress,
+    pub eth_address: EthAddress,
+    pub token_id: u8,
+    pub sui_adjusted_amount: u64,
+    pub timestamp_seconds: u64,
+}
+
+impl TryFrom<&TokensDepositedV2Filter> for EthToSuiTokenBridgeV2 {
+    type Error = BridgeError;
+
+    fn try_from(event: &TokensDepositedV2Filter) -> BridgeResult<Self> {
+        Ok(Self {
+            nonce: event.nonce,
+            sui_chain_id: BridgeChainId::try_from(event.destination_chain_id)?,
+            eth_chain_id: BridgeChainId::try_from(event.source_chain_id)?,
+            sui_address: SuiAddress::from_bytes(event.recipient_address.as_ref())?,
+            eth_address: event.sender_address,
+            token_id: event.token_id,
+            sui_adjusted_amount: event.sui_adjusted_amount,
+            timestamp_seconds: event.timestamp_seconds.as_u64(),
+        })
+    }
+}
+
+impl From<EthToSuiTokenBridgeV2> for EthToSuiTokenBridgeV1 {
+    fn from(value: EthToSuiTokenBridgeV2) -> Self {
+        Self {
+            nonce: value.nonce,
+            sui_chain_id: value.sui_chain_id,
+            eth_chain_id: value.eth_chain_id,
+            sui_address: value.sui_address,
+            eth_address: value.eth_address,
+            token_id: value.token_id,
+            sui_adjusted_amount: value.sui_adjusted_amount,
+        }
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////
 //                        Eth Message Conversion                      //
 ////////////////////////////////////////////////////////////////////////
@@ -212,7 +267,7 @@ impl TryFrom<SuiToEthBridgeAction> for eth_sui_bridge::Message {
     fn try_from(action: SuiToEthBridgeAction) -> BridgeResult<Self> {
         Ok(eth_sui_bridge::Message {
             message_type: BridgeActionType::TokenTransfer as u8,
-            version: TOKEN_TRANSFER_MESSAGE_VERSION,
+            version: TOKEN_TRANSFER_MESSAGE_VERSION_V1,
             nonce: action.sui_bridge_event.nonce,
             chain_id: action.sui_bridge_event.sui_chain_id as u8,
             payload: action
@@ -229,7 +284,24 @@ impl TryFrom<SuiToEthTokenTransfer> for eth_sui_bridge::Message {
     fn try_from(action: SuiToEthTokenTransfer) -> BridgeResult<Self> {
         Ok(eth_sui_bridge::Message {
             message_type: BridgeActionType::TokenTransfer as u8,
-            version: TOKEN_TRANSFER_MESSAGE_VERSION,
+            version: TOKEN_TRANSFER_MESSAGE_VERSION_V1,
+            nonce: action.nonce,
+            chain_id: action.sui_chain_id as u8,
+            payload: action
+                .as_payload_bytes()
+                .map_err(|e| BridgeError::Generic(format!("Failed to encode payload: {}", e)))?
+                .into(),
+        })
+    }
+}
+
+impl TryFrom<SuiToEthTokenTransferV2> for eth_sui_bridge::Message {
+    type Error = BridgeError;
+
+    fn try_from(action: SuiToEthTokenTransferV2) -> BridgeResult<Self> {
+        Ok(eth_sui_bridge::Message {
+            message_type: BridgeActionType::TokenTransfer as u8,
+            version: TOKEN_TRANSFER_MESSAGE_VERSION_V2,
             nonce: action.nonce,
             chain_id: action.sui_chain_id as u8,
             payload: action
@@ -546,7 +618,7 @@ mod tests {
                 transaction_log_index: None,
                 log_type: None,
                 removed: Some(false),
-            }
+            },
         };
         let event = EthBridgeEvent::try_from_eth_log(&action).unwrap();
         assert_eq!(

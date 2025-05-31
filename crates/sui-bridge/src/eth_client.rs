@@ -94,6 +94,7 @@ where
         if receipt_block_num.as_u64() > last_finalized_block_id {
             return Err(BridgeError::TxNotFinalized);
         }
+
         let log = receipt
             .logs
             .get(event_idx as usize)
@@ -292,7 +293,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use ethers::types::{Address as EthAddress, Log, TransactionReceipt, U64};
+    use ethers::types::{Address as EthAddress, Log, TransactionReceipt, U64, U256};
     use prometheus::Registry;
 
     use super::*;
@@ -344,6 +345,18 @@ mod tests {
 
         // 778 is now finalized
         mock_last_finalized_block(&mock_provider, 778);
+
+        mock_provider
+            .add_response(
+                "eth_getBlockByNumber",
+                (format!("0x{:x}", 778), false),
+                Block::<TxHash> {
+                    number: Some(778.into()),
+                    timestamp: U256::from(1),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
 
         let error = client
             .get_finalized_bridge_action_maybe(eth_tx_hash, 2)
@@ -406,6 +419,17 @@ mod tests {
                 },
             )
             .unwrap();
+        mock_provider
+            .add_response(
+                "eth_getBlockByNumber",
+                (format!("0x{:x}", 777), false),
+                Block::<TxHash> {
+                    number: Some(777.into()),
+                    timestamp: U256::from(1),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
 
         let error = client
             .get_finalized_bridge_action_maybe(eth_tx_hash, 0)
@@ -426,6 +450,17 @@ mod tests {
                 TransactionReceipt {
                     block_number: log.block_number,
                     logs: vec![log],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        mock_provider
+            .add_response(
+                "eth_getBlockByNumber",
+                (format!("0x{:x}", 777), false),
+                Block::<TxHash> {
+                    number: Some(777.into()),
+                    timestamp: U256::from(1),
                     ..Default::default()
                 },
             )

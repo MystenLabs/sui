@@ -122,6 +122,7 @@ where
 
         match event {
             SuiBridgeEvent::SuiToEthTokenBridgeV1(_) => (),
+            SuiBridgeEvent::SuiToEthTokenBridgeV2(_) => (),
             SuiBridgeEvent::TokenTransferApproved(_) => (),
             SuiBridgeEvent::TokenTransferClaimed(_) => (),
             SuiBridgeEvent::TokenTransferAlreadyApproved(_) => (),
@@ -315,6 +316,7 @@ where
             EthBridgeEvent::EthSuiBridgeEvents(event) => match event {
                 EthSuiBridgeEvents::TokensClaimedFilter(_) => (),
                 EthSuiBridgeEvents::TokensDepositedFilter(_) => (),
+                EthSuiBridgeEvents::TokensDepositedV2Filter(_) => (),
                 EthSuiBridgeEvents::PausedFilter(_) => bump_eth_counter!("bridge_paused"),
                 EthSuiBridgeEvents::UnpausedFilter(_) => bump_eth_counter!("bridge_unpaused"),
                 EthSuiBridgeEvents::UpgradedFilter(_) => {
