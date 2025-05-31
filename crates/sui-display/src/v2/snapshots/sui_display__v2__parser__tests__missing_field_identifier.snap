@@ -2,4 +2,4 @@
 source: crates/sui-display/src/v2/parser.rs
 expression: "strands(r#\"{foo..bar}\"#)"
 ---
-Error: Unexpected '.' at offset 5, expected an identifier
+Error: Unexpected '.' at offset 5, expected one of an identifier, or a decimal number

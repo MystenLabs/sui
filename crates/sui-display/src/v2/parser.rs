@@ -51,6 +51,9 @@ pub enum Accessor<'s> {
     /// Access a named field.
     Field(&'s str),
 
+    /// Access a positional field.
+    Positional(u8),
+
     /// Index into a vector, VecMap, or dynamic field.
     Index(Chain<'s>),
 
@@ -189,6 +192,7 @@ macro_rules! match_token_opt {
 ///   chain    ::= (literal | IDENT) accessor*
 ///
 ///   accessor ::= '.' IDENT
+///              | '.' NUM_DEC
 ///              | '[' chain ']'
 ///              | '[' '[' chain ']' ']'
 ///
@@ -421,10 +425,18 @@ impl<'s> Parser<'s> {
             Tok(T::Dot, _, _) => {
                 self.lexer.next();
                 self.eat_whitespace();
-                match_token! { self.lexer; Tok(T::Ident, _, f) => {
-                    self.lexer.next();
-                    Accessor::Field(f)
-                }}
+                match_token! { self.lexer;
+                    Tok(T::Ident, _, f) => {
+                        self.lexer.next();
+                        Accessor::Field(f)
+                    },
+
+                    Tok(T::NumDec, _, n) => {
+                        self.lexer.next();
+                        let index = read_u8(n, 10, "positional field index")?;
+                        Accessor::Positional(index)
+                    }
+                }
             },
 
             Tok(T::LBracket, _, _) => {
@@ -1047,6 +1059,11 @@ mod tests {
         assert_snapshot!(strands(r#"{true[[foo]][bar].baz}"#));
     }
 
+    #[test]
+    fn test_positional_field_accessor() {
+        assert_snapshot!(strands(r#"{foo.0[bar].1.baz}"#));
+    }
+
     /**
      * Error Cases
      *
@@ -1061,6 +1078,11 @@ mod tests {
     #[test]
     fn test_missing_field_identifier() {
         assert_snapshot!(strands(r#"{foo..bar}"#));
+    }
+
+    #[test]
+    fn test_positional_field_overflow() {
+        assert_snapshot!(strands(r#"{foo.500}"#));
     }
 
     #[test]
