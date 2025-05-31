@@ -1,0 +1,5 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(r#\"{0x1::option::Option<u64>::Some # 1 (42)}\"#)"
+---
+Error: Unexpected whitespace at offset 31, expected '#'

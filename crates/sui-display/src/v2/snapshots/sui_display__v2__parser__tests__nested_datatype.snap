@@ -1,0 +1,111 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(r#\"{\n                0x1::option::Option<0x2::coin::Coin<0x2::sui::SUI>>::Some#1(\n                    0x2::coin::Coin<0x2::sui::SUI> {\n                        balance: 100u64\n                    }\n                )\n            }\"#,)"
+---
+Expr(
+    Expr {
+        alternates: [
+            Chain {
+                root: Some(
+                    Enum(
+                        Enum {
+                            type_: StructTag {
+                                address: 0000000000000000000000000000000000000000000000000000000000000001,
+                                module: Identifier(
+                                    "option",
+                                ),
+                                name: Identifier(
+                                    "Option",
+                                ),
+                                type_params: [
+                                    Struct(
+                                        StructTag {
+                                            address: 0000000000000000000000000000000000000000000000000000000000000002,
+                                            module: Identifier(
+                                                "coin",
+                                            ),
+                                            name: Identifier(
+                                                "Coin",
+                                            ),
+                                            type_params: [
+                                                Struct(
+                                                    StructTag {
+                                                        address: 0000000000000000000000000000000000000000000000000000000000000002,
+                                                        module: Identifier(
+                                                            "sui",
+                                                        ),
+                                                        name: Identifier(
+                                                            "SUI",
+                                                        ),
+                                                        type_params: [],
+                                                    },
+                                                ),
+                                            ],
+                                        },
+                                    ),
+                                ],
+                            },
+                            variant_name: Some(
+                                "Some",
+                            ),
+                            variant_index: 1,
+                            fields: Positional(
+                                [
+                                    Chain {
+                                        root: Some(
+                                            Struct(
+                                                Struct {
+                                                    type_: StructTag {
+                                                        address: 0000000000000000000000000000000000000000000000000000000000000002,
+                                                        module: Identifier(
+                                                            "coin",
+                                                        ),
+                                                        name: Identifier(
+                                                            "Coin",
+                                                        ),
+                                                        type_params: [
+                                                            Struct(
+                                                                StructTag {
+                                                                    address: 0000000000000000000000000000000000000000000000000000000000000002,
+                                                                    module: Identifier(
+                                                                        "sui",
+                                                                    ),
+                                                                    name: Identifier(
+                                                                        "SUI",
+                                                                    ),
+                                                                    type_params: [],
+                                                                },
+                                                            ),
+                                                        ],
+                                                    },
+                                                    fields: Named(
+                                                        [
+                                                            (
+                                                                "balance",
+                                                                Chain {
+                                                                    root: Some(
+                                                                        U64(
+                                                                            100,
+                                                                        ),
+                                                                    ),
+                                                                    accessors: [],
+                                                                },
+                                                            ),
+                                                        ],
+                                                    ),
+                                                },
+                                            ),
+                                        ),
+                                        accessors: [],
+                                    },
+                                ],
+                            ),
+                        },
+                    ),
+                ),
+                accessors: [],
+            },
+        ],
+        transform: None,
+    },
+)

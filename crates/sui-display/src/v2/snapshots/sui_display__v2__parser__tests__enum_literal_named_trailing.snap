@@ -1,0 +1,5 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(r#\"{0x1::option::Option<u64>::Some#1 { value: 42, other: 43,\"#,)"
+---
+Error: Unexpected end-of-string, expected one of an identifier, or '}'

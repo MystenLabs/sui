@@ -1,0 +1,117 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(\"{ 0x1::option::Option<u64>::Some#1 { value: 42, } \\\n             | 0x1::option::Option<u32>::1 { value: 43u32 } \\\n             | 0x1::option::Option<u16>::None#0 {} }\")"
+---
+Expr(
+    Expr {
+        alternates: [
+            Chain {
+                root: Some(
+                    Enum(
+                        Enum {
+                            type_: StructTag {
+                                address: 0000000000000000000000000000000000000000000000000000000000000001,
+                                module: Identifier(
+                                    "option",
+                                ),
+                                name: Identifier(
+                                    "Option",
+                                ),
+                                type_params: [
+                                    U64,
+                                ],
+                            },
+                            variant_name: Some(
+                                "Some",
+                            ),
+                            variant_index: 1,
+                            fields: Named(
+                                [
+                                    (
+                                        "value",
+                                        Chain {
+                                            root: Some(
+                                                U64(
+                                                    42,
+                                                ),
+                                            ),
+                                            accessors: [],
+                                        },
+                                    ),
+                                ],
+                            ),
+                        },
+                    ),
+                ),
+                accessors: [],
+            },
+            Chain {
+                root: Some(
+                    Enum(
+                        Enum {
+                            type_: StructTag {
+                                address: 0000000000000000000000000000000000000000000000000000000000000001,
+                                module: Identifier(
+                                    "option",
+                                ),
+                                name: Identifier(
+                                    "Option",
+                                ),
+                                type_params: [
+                                    U32,
+                                ],
+                            },
+                            variant_name: None,
+                            variant_index: 1,
+                            fields: Named(
+                                [
+                                    (
+                                        "value",
+                                        Chain {
+                                            root: Some(
+                                                U32(
+                                                    43,
+                                                ),
+                                            ),
+                                            accessors: [],
+                                        },
+                                    ),
+                                ],
+                            ),
+                        },
+                    ),
+                ),
+                accessors: [],
+            },
+            Chain {
+                root: Some(
+                    Enum(
+                        Enum {
+                            type_: StructTag {
+                                address: 0000000000000000000000000000000000000000000000000000000000000001,
+                                module: Identifier(
+                                    "option",
+                                ),
+                                name: Identifier(
+                                    "Option",
+                                ),
+                                type_params: [
+                                    U16,
+                                ],
+                            },
+                            variant_name: Some(
+                                "None",
+                            ),
+                            variant_index: 0,
+                            fields: Named(
+                                [],
+                            ),
+                        },
+                    ),
+                ),
+                accessors: [],
+            },
+        ],
+        transform: None,
+    },
+)

@@ -1,0 +1,5 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(r#\"{0x1 :: coin :: Coin<0x2::sui::SUI>}\"#)"
+---
+Error: Unexpected '::' at offset 5, expected one of ':', '|', or '}'
