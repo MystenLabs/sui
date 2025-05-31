@@ -2,33 +2,6 @@
 source: crates/sui-display/src/v2/parser.rs
 expression: "strands(\"{x'1234' | x'0d0e0f'}\")"
 ---
-Expr(
-    Expr {
-        alternates: [
-            Chain {
-                root: Some(
-                    ByteArray(
-                        [
-                            18,
-                            52,
-                        ],
-                    ),
-                ),
-                accessors: [],
-            },
-            Chain {
-                root: Some(
-                    ByteArray(
-                        [
-                            13,
-                            14,
-                            15,
-                        ],
-                    ),
-                ),
-                accessors: [],
-            },
-        ],
-        transform: None,
-    },
-)
+{ x'1234'
+| x'0d0e0f'
+}

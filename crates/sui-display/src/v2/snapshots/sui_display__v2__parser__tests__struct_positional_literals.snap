@@ -1,138 +1,18 @@
 ---
 source: crates/sui-display/src/v2/parser.rs
-expression: "strands(\"{ 0x1::string::String(42, 'foo', vector[1, 2, 3]) | 0x2::coin::Coin<0x2::sui::SUI> (true, 100u32,) }\")"
+expression: "strands(\"{ 0x1::string::String(42, 'foo', vector[1, 2, 3]) \\\n             | 0x2::coin::Coin<0x2::sui::SUI> (true, 100u32,) }\")"
 ---
-Expr(
-    Expr {
-        alternates: [
-            Chain {
-                root: Some(
-                    Struct(
-                        Struct {
-                            type_: StructTag {
-                                address: 0000000000000000000000000000000000000000000000000000000000000001,
-                                module: Identifier(
-                                    "string",
-                                ),
-                                name: Identifier(
-                                    "String",
-                                ),
-                                type_params: [],
-                            },
-                            fields: Positional(
-                                [
-                                    Chain {
-                                        root: Some(
-                                            U64(
-                                                42,
-                                            ),
-                                        ),
-                                        accessors: [],
-                                    },
-                                    Chain {
-                                        root: Some(
-                                            String(
-                                                "foo",
-                                            ),
-                                        ),
-                                        accessors: [],
-                                    },
-                                    Chain {
-                                        root: Some(
-                                            Vector(
-                                                Vector {
-                                                    type_: None,
-                                                    elements: [
-                                                        Chain {
-                                                            root: Some(
-                                                                U64(
-                                                                    1,
-                                                                ),
-                                                            ),
-                                                            accessors: [],
-                                                        },
-                                                        Chain {
-                                                            root: Some(
-                                                                U64(
-                                                                    2,
-                                                                ),
-                                                            ),
-                                                            accessors: [],
-                                                        },
-                                                        Chain {
-                                                            root: Some(
-                                                                U64(
-                                                                    3,
-                                                                ),
-                                                            ),
-                                                            accessors: [],
-                                                        },
-                                                    ],
-                                                },
-                                            ),
-                                        ),
-                                        accessors: [],
-                                    },
-                                ],
-                            ),
-                        },
-                    ),
-                ),
-                accessors: [],
-            },
-            Chain {
-                root: Some(
-                    Struct(
-                        Struct {
-                            type_: StructTag {
-                                address: 0000000000000000000000000000000000000000000000000000000000000002,
-                                module: Identifier(
-                                    "coin",
-                                ),
-                                name: Identifier(
-                                    "Coin",
-                                ),
-                                type_params: [
-                                    Struct(
-                                        StructTag {
-                                            address: 0000000000000000000000000000000000000000000000000000000000000002,
-                                            module: Identifier(
-                                                "sui",
-                                            ),
-                                            name: Identifier(
-                                                "SUI",
-                                            ),
-                                            type_params: [],
-                                        },
-                                    ),
-                                ],
-                            },
-                            fields: Positional(
-                                [
-                                    Chain {
-                                        root: Some(
-                                            Bool(
-                                                true,
-                                            ),
-                                        ),
-                                        accessors: [],
-                                    },
-                                    Chain {
-                                        root: Some(
-                                            U32(
-                                                100,
-                                            ),
-                                        ),
-                                        accessors: [],
-                                    },
-                                ],
-                            ),
-                        },
-                    ),
-                ),
-                accessors: [],
-            },
-        ],
-        transform: None,
-    },
-)
+{ 0x0000000000000000000000000000000000000000000000000000000000000001::string::String(
+      42u64,
+      "foo",
+      vector[
+          1u64,
+          2u64,
+          3u64,
+      ],
+  )
+| 0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>(
+      true,
+      100u32,
+  )
+}

@@ -1,175 +1,23 @@
 ---
 source: crates/sui-display/src/v2/parser.rs
-expression: "strands(\"{ vector[1u8, 2u8, 3u8, foo.bar, baz[42]] | vector<u16>[] | vector<u32> | vector< u64 > [10, 11, 12,] | vector <u128,>[ 42u128 ] | vector<u256>[ ]}\")"
+expression: "strands(\"{ vector[1u8, 2u8, 3u8, foo.bar, baz[42]] \\\n             | vector<u16>[]\n             | vector<u32>\n             | vector< u64 > [10, 11, 12,]\n             | vector <u128,>[ 42u128 ]\n             | vector<u256>[ ] }\")"
 ---
-Expr(
-    Expr {
-        alternates: [
-            Chain {
-                root: Some(
-                    Vector(
-                        Vector {
-                            type_: None,
-                            elements: [
-                                Chain {
-                                    root: Some(
-                                        U8(
-                                            1,
-                                        ),
-                                    ),
-                                    accessors: [],
-                                },
-                                Chain {
-                                    root: Some(
-                                        U8(
-                                            2,
-                                        ),
-                                    ),
-                                    accessors: [],
-                                },
-                                Chain {
-                                    root: Some(
-                                        U8(
-                                            3,
-                                        ),
-                                    ),
-                                    accessors: [],
-                                },
-                                Chain {
-                                    root: None,
-                                    accessors: [
-                                        Field(
-                                            "foo",
-                                        ),
-                                        Field(
-                                            "bar",
-                                        ),
-                                    ],
-                                },
-                                Chain {
-                                    root: None,
-                                    accessors: [
-                                        Field(
-                                            "baz",
-                                        ),
-                                        Index(
-                                            Chain {
-                                                root: Some(
-                                                    U64(
-                                                        42,
-                                                    ),
-                                                ),
-                                                accessors: [],
-                                            },
-                                        ),
-                                    ],
-                                },
-                            ],
-                        },
-                    ),
-                ),
-                accessors: [],
-            },
-            Chain {
-                root: Some(
-                    Vector(
-                        Vector {
-                            type_: Some(
-                                U16,
-                            ),
-                            elements: [],
-                        },
-                    ),
-                ),
-                accessors: [],
-            },
-            Chain {
-                root: Some(
-                    Vector(
-                        Vector {
-                            type_: Some(
-                                U32,
-                            ),
-                            elements: [],
-                        },
-                    ),
-                ),
-                accessors: [],
-            },
-            Chain {
-                root: Some(
-                    Vector(
-                        Vector {
-                            type_: Some(
-                                U64,
-                            ),
-                            elements: [
-                                Chain {
-                                    root: Some(
-                                        U64(
-                                            10,
-                                        ),
-                                    ),
-                                    accessors: [],
-                                },
-                                Chain {
-                                    root: Some(
-                                        U64(
-                                            11,
-                                        ),
-                                    ),
-                                    accessors: [],
-                                },
-                                Chain {
-                                    root: Some(
-                                        U64(
-                                            12,
-                                        ),
-                                    ),
-                                    accessors: [],
-                                },
-                            ],
-                        },
-                    ),
-                ),
-                accessors: [],
-            },
-            Chain {
-                root: Some(
-                    Vector(
-                        Vector {
-                            type_: Some(
-                                U128,
-                            ),
-                            elements: [
-                                Chain {
-                                    root: Some(
-                                        U128(
-                                            42,
-                                        ),
-                                    ),
-                                    accessors: [],
-                                },
-                            ],
-                        },
-                    ),
-                ),
-                accessors: [],
-            },
-            Chain {
-                root: Some(
-                    Vector(
-                        Vector {
-                            type_: Some(
-                                U256,
-                            ),
-                            elements: [],
-                        },
-                    ),
-                ),
-                accessors: [],
-            },
-        ],
-        transform: None,
-    },
-)
+{ vector[
+      1u8,
+      2u8,
+      3u8,
+      foo.bar,
+      baz[42u64],
+  ]
+| vector<u16> []
+| vector<u32> []
+| vector<u64> [
+      10u64,
+      11u64,
+      12u64,
+  ]
+| vector<u128> [
+      42u128,
+  ]
+| vector<u256> []
+}

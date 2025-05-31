@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 
 use std::borrow::Cow;
+use std::fmt;
 
 use move_core_types::{
     account_address::AccountAddress,
@@ -16,7 +17,6 @@ use super::lexer::{Lexeme as Lex, Lexer, Token as T};
 use super::peek::{Peekable2, Peekable2Ext};
 
 /// A single Display string template is a sequence of strands.
-#[derive(Debug)]
 pub enum Strand<'s> {
     /// Text strands are ported literally to the output.
     Text(Cow<'s, str>),
@@ -29,14 +29,12 @@ pub enum Strand<'s> {
 /// Expressions are composed of a number of alternates and an optional transform. During
 /// evaluation, each alternate is evaluated in turn until the first one succeeds, and if a
 /// transform is provided, it is applied to the result to convert it to a string.
-#[derive(Debug)]
 pub struct Expr<'s> {
     alternates: Vec<Chain<'s>>,
     transform: Option<&'s str>,
 }
 
 /// Chains are a sequence of nested field accesses.
-#[derive(Debug)]
 pub struct Chain<'s> {
     /// An optional root expression. If not provided, the object being displayed is the root.
     root: Option<Literal<'s>>,
@@ -46,7 +44,6 @@ pub struct Chain<'s> {
 }
 
 /// Different ways to nest deeply into an object.
-#[derive(Debug)]
 pub enum Accessor<'s> {
     /// Access a named field.
     Field(&'s str),
@@ -62,7 +59,6 @@ pub enum Accessor<'s> {
 }
 
 /// Literal forms are elements whose syntax determines their (outer) type.
-#[derive(Debug)]
 pub enum Literal<'s> {
     // Primitives
     Address(AccountAddress),
@@ -85,7 +81,6 @@ pub enum Literal<'s> {
 }
 
 /// Contents of a vector literal.
-#[derive(Debug)]
 pub struct Vector<'s> {
     /// Element type, optional for non-empty vectors.
     type_: Option<TypeTag>,
@@ -93,14 +88,12 @@ pub struct Vector<'s> {
 }
 
 /// Contents of a struct literal.
-#[derive(Debug)]
 pub struct Struct<'s> {
     type_: StructTag,
     fields: Fields<'s>,
 }
 
 /// Contents of an enum literal.
-#[derive(Debug)]
 pub struct Enum<'s> {
     type_: StructTag,
     variant_name: Option<&'s str>,
@@ -787,6 +780,164 @@ impl<'s> Parser<'s> {
         // need to check for more.
         if let Some(Lex(T::Whitespace, _, _)) = self.lexer.peek() {
             self.lexer.next();
+        }
+    }
+}
+
+impl fmt::Debug for Strand<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Strand::Text(text) => write!(f, "{text:?}"),
+            Strand::Expr(expr) if f.alternate() => write!(f, "{expr:#?}"),
+            Strand::Expr(expr) => write!(f, "{expr:?}"),
+        }
+    }
+}
+
+impl fmt::Debug for Expr<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut prefix = "{ ";
+        for alternate in &self.alternates {
+            write!(f, "{prefix}")?;
+            if f.alternate() {
+                let alternate = format!("{alternate:#?}").replace('\n', "\n  ");
+                write!(f, "{alternate}")?;
+                prefix = "\n| ";
+            } else {
+                write!(f, "{alternate:?}")?;
+                prefix = " | ";
+            }
+        }
+
+        if f.alternate() {
+            writeln!(f)?;
+        }
+
+        if let Some(transform) = self.transform {
+            write!(f, ": {transform}")?;
+        }
+
+        write!(f, "}}")
+    }
+}
+
+impl fmt::Debug for Chain<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut accessors = self.accessors.iter();
+        if let Some(root) = &self.root {
+            root.fmt(f)?;
+        } else if let Some(Accessor::Field(name)) = accessors.next() {
+            // If there is no root, the first accessor is guaranteed to exist, and it must be a
+            // field accessor.
+            write!(f, "{name}")?;
+        }
+
+        for accessor in accessors {
+            use Accessor as A;
+            match accessor {
+                A::Field(name) => write!(f, ".{name}")?,
+                A::Positional(index) => write!(f, ".{index}")?,
+                A::Index(chain) => write!(f, "[{chain:?}]")?,
+                A::IIndex(chain) => write!(f, "[[{chain:?}]]")?,
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl fmt::Debug for Literal<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Literal::Address(addr) => write!(f, "@0x{addr}"),
+            Literal::Bool(b) => write!(f, "{b}"),
+            Literal::U8(n) => write!(f, "{n}u8"),
+            Literal::U16(n) => write!(f, "{n}u16"),
+            Literal::U32(n) => write!(f, "{n}u32"),
+            Literal::U64(n) => write!(f, "{n}u64"),
+            Literal::U128(n) => write!(f, "{n}u128"),
+            Literal::U256(n) => write!(f, "{n}u256"),
+            Literal::String(s) => write!(f, "{s:?}"),
+            Literal::Vector(v) => v.fmt(f),
+            Literal::Struct(s) => s.fmt(f),
+            Literal::Enum(e) => e.fmt(f),
+
+            Literal::ByteArray(bytes) => {
+                write!(f, "x'")?;
+                for byte in bytes {
+                    write!(f, "{byte:02x}")?;
+                }
+                write!(f, "'")
+            }
+        }
+    }
+}
+
+impl fmt::Debug for Vector<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "vector")?;
+        if let Some(type_) = &self.type_ {
+            write!(f, "<{}> ", type_.to_canonical_display(true))?;
+        }
+
+        let mut builder = f.debug_list();
+        for element in &self.elements {
+            builder.entry(element);
+        }
+
+        builder.finish()
+    }
+}
+
+impl fmt::Debug for Struct<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.fields {
+            Fields::Named(fields) => {
+                let mut builder = f.debug_struct(&self.type_.to_canonical_string(true));
+                for (name, chain) in fields {
+                    builder.field(name, &chain);
+                }
+
+                builder.finish()
+            }
+
+            Fields::Positional(fields) => {
+                let mut builder = f.debug_tuple(&self.type_.to_canonical_string(true));
+                for chain in fields {
+                    builder.field(&chain);
+                }
+
+                builder.finish()
+            }
+        }
+    }
+}
+
+impl fmt::Debug for Enum<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}::", self.type_.to_canonical_display(true))?;
+        if let Some(variant_name) = self.variant_name {
+            write!(f, "{variant_name}#")?;
+        }
+
+        match &self.fields {
+            Fields::Named(fields) => {
+                let mut builder = f.debug_struct(&self.variant_index.to_string());
+                for (name, chain) in fields {
+                    builder.field(name, &chain);
+                }
+
+                builder.finish()
+            }
+
+            Fields::Positional(fields) => {
+                let mut builder = f.debug_tuple(&self.variant_index.to_string());
+                for chain in fields {
+                    builder.field(&chain);
+                }
+
+                builder.finish()
+            }
         }
     }
 }
