@@ -1230,8 +1230,7 @@ impl SuiNode {
             client.clone(),
             checkpoint_store.clone(),
         ));
-        let consensus_manager =
-            ConsensusManager::new(&config, consensus_config, registry_service, client);
+        let consensus_manager = ConsensusManager::new(&config, consensus_config, registry_service);
 
         // This only gets started up once, not on every epoch. (Make call to remove every epoch.)
         let consensus_store_pruner = ConsensusStorePruner::new(

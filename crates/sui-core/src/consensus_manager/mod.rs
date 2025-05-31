@@ -79,9 +79,7 @@ impl ProtocolManager {
 pub struct ConsensusManager {
     consensus_config: ConsensusConfig,
     mysticeti_manager: ProtocolManager,
-    mysticeti_client: Arc<LazyMysticetiClient>,
     active: parking_lot::Mutex<bool>,
-    consensus_client: Arc<UpdatableConsensusClient>,
 }
 
 impl ConsensusManager {
@@ -89,7 +87,6 @@ impl ConsensusManager {
         node_config: &NodeConfig,
         consensus_config: &ConsensusConfig,
         registry_service: &RegistryService,
-        consensus_client: Arc<UpdatableConsensusClient>,
     ) -> Self {
         let metrics = Arc::new(ConsensusManagerMetrics::new(
             &registry_service.default_registry(),
@@ -105,9 +102,7 @@ impl ConsensusManager {
         Self {
             consensus_config: consensus_config.clone(),
             mysticeti_manager,
-            mysticeti_client,
             active: parking_lot::Mutex::new(false),
-            consensus_client,
         }
     }
 
@@ -130,7 +125,6 @@ impl ConsensusManagerTrait for ConsensusManager {
             assert!(!*active, "Cannot start consensus. It is already running!");
             info!("Starting consensus ...");
             *active = true;
-            self.consensus_client.set(self.mysticeti_client.clone());
             &self.mysticeti_manager
         };
 
@@ -153,7 +147,6 @@ impl ConsensusManagerTrait for ConsensusManager {
         if prev_active {
             self.mysticeti_manager.shutdown().await;
         }
-        self.consensus_client.clear();
     }
 
     async fn is_running(&self) -> bool {
