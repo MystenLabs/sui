@@ -1,5 +1,5 @@
 ---
 source: crates/sui-display/src/v2/parser.rs
-expression: "strands(r#\"{vector<u64>[1 2]}\"#)"
+expression: "strands(r#\"{vector<u64>[1u64 2u64]}\"#)"
 ---
-Error: Unexpected whitespace followed by decimal number "2" at offset 15, expected one of ',', or ']'
+Error: Unexpected whitespace followed by decimal number "2" at offset 18, expected one of ',', or ']'

@@ -1,5 +1,5 @@
 ---
 source: crates/sui-display/src/v2/parser.rs
-expression: "strands(r#\"{0x1::option::Option<u64>::Some#1(42, 43, 44}\"#)"
+expression: "strands(r#\"{0x1::option::Option<u64>::Some#1(42u64, 43u64, 44u64}\"#)"
 ---
-Error: Unexpected '}' at offset 44, expected one of ',', or ')'
+Error: Unexpected '}' at offset 53, expected one of ',', or ')'
