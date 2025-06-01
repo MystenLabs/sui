@@ -132,11 +132,11 @@ macro_rules! expected {
 macro_rules! match_token {
     (
         $lexer:expr $(, $prev:expr)?;
-        $($kind:ident($($pat:path)|+, $off:pat, $slice:tt) $(if $cond:expr)? => $expr:expr),+
+        $($kind:ident($ws:pat, $($pat:path)|+, $off:pat, $slice:tt) $(if $cond:expr)? => $expr:expr),+
         $(,)?
     ) => {{
         match $lexer.peek() {
-            $(Some(&Lex($($pat)|+, $off, $slice)) $(if $cond)? => $expr,)+
+            $(Some(&Lex($ws, $($pat)|+, $off, $slice)) $(if $cond)? => $expr,)+
             lexeme => return Err(ExpectedSet::new(&[$($(expected!($kind, $pat, $slice)),+),+])
                 $(.with_prev($prev))?
                 .into_error(lexeme)),
@@ -156,13 +156,13 @@ macro_rules! match_token {
 macro_rules! match_token_opt {
     (
         $lexer:expr $(, $prev:expr)?;
-        $($kind:ident($($pat:path)|+, $off:pat, $slice:tt) $(if $cond:expr)? => $expr:expr),+
+        $($kind:ident($ws:pat, $($pat:path)|+, $off:pat, $slice:tt) $(if $cond:expr)? => $expr:expr),+
         $(,)?
     ) => {{
         match $lexer.peek() {
-            $(Some(&Lex($($pat)|+, $off, $slice)) $(if $cond)? => Match::Found($expr),)+
+            $(Some(&Lex($ws, $($pat)|+, $off, $slice)) $(if $cond)? => Match::Found($expr),)+
             lexeme => Match::Tried(
-                lexeme.map(|l| l.1),
+                lexeme.map(|l| l.2),
                 ExpectedSet::new(&[$($(expected!($kind, $pat, $slice)),+),+])
                     $(.with_prev($prev))?
             ),
@@ -240,14 +240,14 @@ impl<'s> Parser<'s> {
 
     fn parse_strand(&mut self) -> Result<Strand<'s>, Error> {
         Ok(match_token! { self.lexer;
-            Tok(T::Text | T::LLBrace | T::RRBrace, _, _) => Strand::Text(self.parse_text()?),
-            Tok(T::LBrace, _, _) => Strand::Expr(self.parse_expr()?),
+            Tok(_, T::Text | T::LLBrace | T::RRBrace, _, _) => Strand::Text(self.parse_text()?),
+            Tok(_, T::LBrace, _, _) => Strand::Expr(self.parse_expr()?),
         })
     }
 
     fn parse_text(&mut self) -> Result<Cow<'s, str>, Error> {
         let mut text = self.parse_part()?;
-        while let Some(Lex(T::Text | T::LLBrace | T::RRBrace, _, _)) = self.lexer.peek() {
+        while let Some(Lex(_, T::Text | T::LLBrace | T::RRBrace, _, _)) = self.lexer.peek() {
             text += self.parse_part()?;
         }
 
@@ -256,7 +256,7 @@ impl<'s> Parser<'s> {
 
     fn parse_part(&mut self) -> Result<Cow<'s, str>, Error> {
         Ok(match_token! { self.lexer;
-            Tok(T::Text | T::LLBrace | T::RRBrace, _, slice) => {
+            Tok(_, T::Text | T::LLBrace | T::RRBrace, _, slice) => {
                 self.lexer.next();
                 Cow::Borrowed(slice)
             }
@@ -264,36 +264,31 @@ impl<'s> Parser<'s> {
     }
 
     fn parse_expr(&mut self) -> Result<Expr<'s>, Error> {
-        match_token! { self.lexer; Tok(T::LBrace, _, _) => self.lexer.next() };
-        self.eat_whitespace();
+        match_token! { self.lexer; Tok(_, T::LBrace, _, _) => self.lexer.next() };
         let mut alternates = vec![self.parse_chain()?];
         let mut transform = None;
 
         loop {
-            self.eat_whitespace();
             match_token! { self.lexer;
-                Tok(T::RBrace, _, _) => {
+                Tok(_, T::RBrace, _, _) => {
                     self.lexer.next();
                     break;
                 },
 
-                Tok(T::Colon, _, _) => {
+                Tok(_, T::Colon, _, _) => {
                     self.lexer.next();
-                    self.eat_whitespace();
-                    match_token! { self.lexer; Tok(T::Ident, _, t) => {
+                    match_token! { self.lexer; Tok(_, T::Ident, _, t) => {
                         self.lexer.next();
                         transform = Some(t);
                     }};
-                    self.eat_whitespace();
-                    match_token! { self.lexer; Tok(T::RBrace, _, _) => {
+                    match_token! { self.lexer; Tok(_, T::RBrace, _, _) => {
                         self.lexer.next()
                     }};
                     break;
                 },
 
-                Tok(T::Pipe, _, _) => {
+                Tok(_, T::Pipe, _, _) => {
                     self.lexer.next();
-                    self.eat_whitespace();
                     alternates.push(self.parse_chain()?);
                 }
             }
@@ -313,18 +308,17 @@ impl<'s> Parser<'s> {
         let root = match self.try_parse_literal()? {
             Match::Found(literal) => Some(literal),
             Match::Tried(_, tried) => {
-                accessors.push(match_token! { self.lexer, tried; Tok(T::Ident, _, i) => {
-                    self.lexer.next();
-                    Accessor::Field(i)
-                }});
+                accessors.push(
+                    match_token! { self.lexer, tried; Tok(_, T::Ident, _, i) => {
+                        self.lexer.next();
+                        Accessor::Field(i)
+                    }},
+                );
                 None
             }
         };
 
-        while let Match::Found(accessor) = {
-            self.eat_whitespace();
-            self.try_parse_accessor()?
-        } {
+        while let Match::Found(accessor) = self.try_parse_accessor()? {
             accessors.push(accessor);
         }
 
@@ -333,62 +327,64 @@ impl<'s> Parser<'s> {
 
     fn try_parse_literal(&mut self) -> Result<Match<Literal<'s>>, Error> {
         Ok(match_token_opt! { self.lexer;
-            Tok(T::At, _, _) => {
+            Tok(_, T::At, _, _) => {
                 self.lexer.next();
                 Literal::Address(self.parse_address()?)
             },
 
-            Lit(T::Ident, _, "true") => {
+            Lit(_, T::Ident, _, "true") => {
                 self.lexer.next();
                 Literal::Bool(true)
             },
 
-            Lit(T::Ident, _, "false") => {
+            Lit(_, T::Ident, _, "false") => {
                 self.lexer.next();
                 Literal::Bool(false)
             },
 
-            Tok(T::NumDec | T::NumHex, _, _) if self.lexer.peek2().is_some_and(|Lex(t, _, _)| *t == T::CColon) => {
+            Tok(_, T::NumDec | T::NumHex, _, _)
+            if self.lexer.peek2().is_some_and(|Lex(_, t, _, _)| *t == T::CColon) => {
                 self.parse_data()?
             },
 
-            Tok(T::NumDec, _, dec) => {
+            Tok(_, T::NumDec, _, dec) => {
                 self.lexer.next();
                 self.parse_numeric_suffix(dec, 10)?
             },
 
-            Tok(T::NumHex, _, hex) => {
+            Tok(_, T::NumHex, _, hex) => {
                 self.lexer.next();
                 self.parse_numeric_suffix(hex, 16)?
             },
 
-            Tok(T::String, _, slice) => {
+            Tok(_, T::String, _, slice) => {
                 self.lexer.next();
                 Literal::String(read_string_literal(slice))
             },
 
-            Lit(T::Ident, _, "b") if self.lexer.peek2().is_some_and(|Lex(t, _, _)| *t == T::String) => {
+            Lit(_, T::Ident, _, "b")
+            if self.lexer.peek2().is_some_and(|Lex(ws, t, _, _)| !ws && *t == T::String) => {
                 self.lexer.next();
 
                 // SAFETY: Match guard peeks ahead to this token.
-                let Lex(_, _, slice) = self.lexer.next().unwrap();
+                let Lex(_, _, _, slice) = self.lexer.next().unwrap();
                 let output = read_string_literal(slice);
                 Literal::ByteArray(output.into_owned().into_bytes())
             },
 
-            Lit(T::Ident, _, "x") if self.lexer.peek2().is_some_and(|Lex(t, _, _)| *t == T::String) => {
+            Lit(_, T::Ident, _, "x")
+            if self.lexer.peek2().is_some_and(|Lex(ws, t, _, _)| !ws && *t == T::String) => {
                 self.lexer.next();
 
                 // SAFETY: Match guard peeks ahead to this token.
-                let lex @ Lex(_, _, slice) = self.lexer.next().unwrap();
+                let lex @ Lex(_, _, _, slice) = self.lexer.next().unwrap();
                 let output = read_hex_literal(&lex, slice)?;
                 Literal::ByteArray(output)
             },
 
-            Tok(T::Ident, offset, "vector") => {
+            Tok(_, T::Ident, offset, "vector") => {
                 self.lexer.next();
 
-                self.eat_whitespace();
                 let mut type_params = self.parse_type_params()?;
                 let type_ = match type_params.len() {
                     // SAFETY: Bounds check on `type_params.len()` guarantees safety.
@@ -397,7 +393,6 @@ impl<'s> Parser<'s> {
                     arity => return Err(Error::VectorArity { offset, arity }),
                 };
 
-                self.eat_whitespace();
                 let elements = self.parse_array_elements()?;
 
                 // If the vector is empty, the type parameter becomes mandatory.
@@ -415,16 +410,15 @@ impl<'s> Parser<'s> {
 
     fn try_parse_accessor(&mut self) -> Result<Match<Accessor<'s>>, Error> {
         Ok(match_token_opt! { self.lexer;
-            Tok(T::Dot, _, _) => {
+            Tok(_, T::Dot, _, _) => {
                 self.lexer.next();
-                self.eat_whitespace();
                 match_token! { self.lexer;
-                    Tok(T::Ident, _, f) => {
+                    Tok(_, T::Ident, _, f) => {
                         self.lexer.next();
                         Accessor::Field(f)
                     },
 
-                    Tok(T::NumDec, _, n) => {
+                    Tok(_, T::NumDec, _, n) => {
                         self.lexer.next();
                         let index = read_u8(n, 10, "positional field index")?;
                         Accessor::Positional(index)
@@ -432,22 +426,23 @@ impl<'s> Parser<'s> {
                 }
             },
 
-            Tok(T::LBracket, _, _) => {
+            Tok(_, T::LBracket, _, _) => {
                 self.lexer.next();
-                if matches!(self.lexer.peek(), Some(Lex(T::LBracket, _, _))) {
-                    self.lexer.next();
-                    self.eat_whitespace();
-                    let chain = self.parse_chain()?;
-                    self.eat_whitespace();
-                    match_token! { self.lexer; Tok(T::RBracket, _, _) => self.lexer.next() };
-                    match_token! { self.lexer; Tok(T::RBracket, _, _) => self.lexer.next() };
-                    Accessor::IIndex(chain)
-                } else {
-                    self.eat_whitespace();
-                    let chain = self.parse_chain()?;
-                    self.eat_whitespace();
-                    match_token! { self.lexer; Tok(T::RBracket, _, _) => self.lexer.next() };
+
+                let doubled = match_token_opt! { self.lexer;
+                    Tok(false, T::LBracket, _, _) => { self.lexer.next(); }
+                };
+
+                if let Match::Tried(offset, doubled) = doubled {
+                    let chain = self.parse_chain()
+                        .map_err(|e| e.also_tried(offset, doubled))?;
+                    match_token! { self.lexer; Tok(_, T::RBracket, _, _) => self.lexer.next() };
                     Accessor::Index(chain)
+                } else {
+                    let chain = self.parse_chain()?;
+                    match_token! { self.lexer; Tok(_, T::RBracket, _, _) => self.lexer.next() };
+                    match_token! { self.lexer; Tok(false, T::RBracket, _, _) => self.lexer.next() };
+                    Accessor::IIndex(chain)
                 }
             },
         })
@@ -456,15 +451,14 @@ impl<'s> Parser<'s> {
     fn parse_array_elements(&mut self) -> Result<Vec<Chain<'s>>, Error> {
         let mut elements = vec![];
 
-        if match_token_opt! { self.lexer; Tok(T::LBracket, _, _) => { self.lexer.next(); } }
+        if match_token_opt! { self.lexer; Tok(_, T::LBracket, _, _) => { self.lexer.next(); } }
             .is_not_found()
         {
             return Ok(elements);
         }
 
-        self.eat_whitespace();
         let terminated = match_token_opt! { self.lexer;
-            Tok(T::RBracket, _, _) => { self.lexer.next(); }
+            Tok(_, T::RBracket, _, _) => { self.lexer.next(); }
         };
 
         let (offset, terminated) = match terminated {
@@ -473,20 +467,17 @@ impl<'s> Parser<'s> {
         };
 
         loop {
-            self.eat_whitespace();
             elements.push(
                 self.parse_chain()
                     .map_err(|e| e.also_tried(offset, terminated.clone()))?,
             );
 
-            self.eat_whitespace();
             let delimited = match_token_opt! { self.lexer;
-                Tok(T::Comma, _, _) => { self.lexer.next(); }
+                Tok(_, T::Comma, _, _) => { self.lexer.next(); }
             };
 
-            self.eat_whitespace();
             let terminated = match_token_opt! { self.lexer;
-                Tok(T::RBracket, _, _) => { self.lexer.next(); }
+                Tok(_, T::RBracket, _, _) => { self.lexer.next(); }
             };
 
             match (delimited, terminated) {
@@ -505,11 +496,10 @@ impl<'s> Parser<'s> {
         let type_ = self.parse_datatype()?;
 
         let enum_ = match_token_opt! { self.lexer;
-            Tok(T::CColon, _, _) => { self.lexer.next(); }
+            Tok(_, T::CColon, _, _) => { self.lexer.next(); }
         };
 
         if let Match::Tried(offset, enum_) = enum_ {
-            self.eat_whitespace();
             return Ok(Literal::Struct(Box::new(Struct {
                 type_,
                 fields: self
@@ -519,16 +509,15 @@ impl<'s> Parser<'s> {
         }
 
         Ok(match_token! { self.lexer;
-            Tok(T::Ident, _, variant_name) => {
+            Tok(_, T::Ident, _, variant_name) => {
                 self.lexer.next();
 
-                match_token! { self.lexer; Tok(T::Pound, _, _) => self.lexer.next() };
-                let variant_index = match_token! { self.lexer; Tok(T::NumDec, _, index) => {
+                match_token! { self.lexer; Tok(_, T::Pound, _, _) => self.lexer.next() };
+                let variant_index = match_token! { self.lexer; Tok(_, T::NumDec, _, index) => {
                     self.lexer.next();
                     read_u16(index, 10, "enum variant index")?
                 }};
 
-                self.eat_whitespace();
                 Literal::Enum(Box::new(Enum {
                     type_,
                     variant_name: Some(variant_name),
@@ -537,12 +526,11 @@ impl<'s> Parser<'s> {
                 }))
             },
 
-            Tok(T::NumDec, _, index) => {
+            Tok(_, T::NumDec, _, index) => {
                 self.lexer.next();
 
                 let variant_index = read_u16(index, 10, "enum variant index")?;
 
-                self.eat_whitespace();
                 Literal::Enum(Box::new(Enum {
                     type_,
                     variant_name: None,
@@ -555,16 +543,15 @@ impl<'s> Parser<'s> {
 
     fn parse_fields(&mut self) -> Result<Fields<'s>, Error> {
         let is_named = match_token! { self.lexer;
-            Tok(T::LParen, _, _) => { self.lexer.next(); false },
-            Tok(T::LBrace, _, _) => { self.lexer.next(); true }
+            Tok(_, T::LParen, _, _) => { self.lexer.next(); false },
+            Tok(_, T::LBrace, _, _) => { self.lexer.next(); true }
         };
 
-        self.eat_whitespace();
         Ok(if is_named {
             let mut fields = vec![];
 
             let terminated = match_token_opt! { self.lexer;
-                Tok(T::RBrace, _, _) => { self.lexer.next(); }
+                Tok(_, T::RBrace, _, _) => { self.lexer.next(); }
             };
 
             let terminated = match terminated {
@@ -573,27 +560,21 @@ impl<'s> Parser<'s> {
             };
 
             loop {
-                self.eat_whitespace();
                 let name = match_token! { self.lexer, terminated;
-                    Tok(T::Ident, _, n) => { self.lexer.next(); n }
+                    Tok(_, T::Ident, _, n) => { self.lexer.next(); n }
                 };
 
-                self.eat_whitespace();
-                match_token! { self.lexer; Tok(T::Colon, _, _) => self.lexer.next() };
+                match_token! { self.lexer; Tok(_, T::Colon, _, _) => self.lexer.next() };
 
-                self.eat_whitespace();
                 let value = self.parse_chain()?;
-
                 fields.push((name, value));
 
-                self.eat_whitespace();
                 let delimited = match_token_opt! { self.lexer;
-                    Tok(T::Comma, _, _) => { self.lexer.next(); }
+                    Tok(_, T::Comma, _, _) => { self.lexer.next(); }
                 };
 
-                self.eat_whitespace();
                 let terminated = match_token_opt! { self.lexer;
-                    Tok(T::RBrace, _, _) => { self.lexer.next(); }
+                    Tok(_, T::RBrace, _, _) => { self.lexer.next(); }
                 };
 
                 match (delimited, terminated) {
@@ -610,7 +591,7 @@ impl<'s> Parser<'s> {
             let mut fields = vec![];
 
             let terminated = match_token_opt! { self.lexer;
-                Tok(T::RParen, _, _) => { self.lexer.next(); }
+                Tok(_, T::RParen, _, _) => { self.lexer.next(); }
             };
 
             let (offset, terminated) = match terminated {
@@ -619,20 +600,17 @@ impl<'s> Parser<'s> {
             };
 
             loop {
-                self.eat_whitespace();
                 fields.push(
                     self.parse_chain()
                         .map_err(|e| e.also_tried(offset, terminated.clone()))?,
                 );
 
-                self.eat_whitespace();
                 let delimited = match_token_opt! { self.lexer;
-                    Tok(T::Comma, _, _) => { self.lexer.next(); }
+                    Tok(_, T::Comma, _, _) => { self.lexer.next(); }
                 };
 
-                self.eat_whitespace();
                 let terminated = match_token_opt! { self.lexer;
-                    Tok(T::RParen, _, _) => { self.lexer.next(); }
+                    Tok(_, T::RParen, _, _) => { self.lexer.next(); }
                 };
 
                 match (delimited, terminated) {
@@ -650,18 +628,17 @@ impl<'s> Parser<'s> {
 
     fn parse_type(&mut self) -> Result<TypeTag, Error> {
         Ok(match_token! { self.lexer;
-            Lit(T::Ident, _, "address") => { self.lexer.next(); TypeTag::Address },
-            Lit(T::Ident, _, "bool") => { self.lexer.next(); TypeTag::Bool },
-            Lit(T::Ident, _, "u8") => { self.lexer.next(); TypeTag::U8 },
-            Lit(T::Ident, _, "u16") => { self.lexer.next(); TypeTag::U16 },
-            Lit(T::Ident, _, "u32") => { self.lexer.next(); TypeTag::U32 },
-            Lit(T::Ident, _, "u64") => { self.lexer.next(); TypeTag::U64 },
-            Lit(T::Ident, _, "u128") => { self.lexer.next(); TypeTag::U128 },
-            Lit(T::Ident, _, "u256") => { self.lexer.next(); TypeTag::U256 },
+            Lit(_, T::Ident, _, "address") => { self.lexer.next(); TypeTag::Address },
+            Lit(_, T::Ident, _, "bool") => { self.lexer.next(); TypeTag::Bool },
+            Lit(_, T::Ident, _, "u8") => { self.lexer.next(); TypeTag::U8 },
+            Lit(_, T::Ident, _, "u16") => { self.lexer.next(); TypeTag::U16 },
+            Lit(_, T::Ident, _, "u32") => { self.lexer.next(); TypeTag::U32 },
+            Lit(_, T::Ident, _, "u64") => { self.lexer.next(); TypeTag::U64 },
+            Lit(_, T::Ident, _, "u128") => { self.lexer.next(); TypeTag::U128 },
+            Lit(_, T::Ident, _, "u256") => { self.lexer.next(); TypeTag::U256 },
 
-            Lit(T::Ident, offset, "vector") => {
+            Lit(_, T::Ident, offset, "vector") => {
                 self.lexer.next();
-                self.eat_whitespace();
                 let mut type_params = self.parse_type_params()?;
                 match type_params.len() {
                     // SAFETY: Bounds check on `type_params.len()` guarantees safety.
@@ -670,7 +647,7 @@ impl<'s> Parser<'s> {
                 }
             },
 
-            Tok(T::NumDec | T::NumHex, _, _) => {
+            Tok(_, T::NumDec | T::NumHex, _, _) => {
                 TypeTag::Struct(Box::new(self.parse_datatype()?))
             }
         })
@@ -679,13 +656,12 @@ impl<'s> Parser<'s> {
     fn parse_datatype(&mut self) -> Result<StructTag, Error> {
         let address = self.parse_address()?;
 
-        match_token! { self.lexer; Tok(T::CColon, _, _) => self.lexer.next() };
+        match_token! { self.lexer; Tok(_, T::CColon, _, _) => self.lexer.next() };
         let module = self.parse_identifier()?;
 
-        match_token! { self.lexer; Tok(T::CColon, _, _) => self.lexer.next() };
+        match_token! { self.lexer; Tok(_, T::CColon, _, _) => self.lexer.next() };
         let name = self.parse_identifier()?;
 
-        self.eat_whitespace();
         let type_params = self.parse_type_params()?;
 
         Ok(StructTag {
@@ -698,24 +674,21 @@ impl<'s> Parser<'s> {
 
     fn parse_type_params(&mut self) -> Result<Vec<TypeTag>, Error> {
         let mut type_params = vec![];
-        if match_token_opt! { self.lexer; Tok(T::LAngle, _, _) => { self.lexer.next(); } }
+        if match_token_opt! { self.lexer; Tok(_, T::LAngle, _, _) => { self.lexer.next(); } }
             .is_not_found()
         {
             return Ok(type_params);
         }
 
         loop {
-            self.eat_whitespace();
             type_params.push(self.parse_type()?);
 
-            self.eat_whitespace();
             let delimited = match_token_opt! { self.lexer;
-                Tok(T::Comma, _, _) => { self.lexer.next(); }
+                Tok(_, T::Comma, _, _) => { self.lexer.next(); }
             };
 
-            self.eat_whitespace();
             let terminated = match_token_opt! { self.lexer;
-                Tok(T::RAngle, _, _) => { self.lexer.next(); }
+                Tok(_, T::RAngle, _, _) => { self.lexer.next(); }
             };
 
             match (delimited, terminated) {
@@ -732,12 +705,12 @@ impl<'s> Parser<'s> {
 
     fn parse_address(&mut self) -> Result<AccountAddress, Error> {
         let addr = match_token! { self.lexer;
-            Tok(T::NumHex, _, slice) => {
+            Tok(_, T::NumHex, _, slice) => {
                 self.lexer.next();
                 read_u256(slice, 16, "'address'")?
             },
 
-            Tok(T::NumDec, _, slice) => {
+            Tok(_, T::NumDec, _, slice) => {
                 self.lexer.next();
                 read_u256(slice, 10, "'address'")?
             },
@@ -747,8 +720,8 @@ impl<'s> Parser<'s> {
     }
 
     fn parse_identifier(&mut self) -> Result<Identifier, Error> {
-        let lex @ Lex(_, _, ident) = match_token! { self.lexer;
-            Tok(T::Ident, _, _) => {
+        let lex @ Lex(_, _, _, ident) = match_token! { self.lexer;
+            Tok(_, T::Ident, _, _) => {
                 // SAFETY: Inside a match token arm, so there is guaranteed to be a next token.
                 self.lexer.next().unwrap()
             },
@@ -759,12 +732,12 @@ impl<'s> Parser<'s> {
 
     fn parse_numeric_suffix(&mut self, num: &'s str, radix: u32) -> Result<Literal<'s>, Error> {
         let literal = match_token_opt! { self.lexer;
-            Lit(T::Ident, _, "u8") => { self.lexer.next(); Literal::U8(read_u8(num, radix, "'u8'")?) },
-            Lit(T::Ident, _, "u16") => { self.lexer.next(); Literal::U16(read_u16(num, radix, "'u16'")?) },
-            Lit(T::Ident, _, "u32") => { self.lexer.next(); Literal::U32(read_u32(num, radix, "'u32'")?) },
-            Lit(T::Ident, _, "u64") => { self.lexer.next(); Literal::U64(read_u64(num, radix, "'u64'")?) },
-            Lit(T::Ident, _, "u128") => { self.lexer.next(); Literal::U128(read_u128(num, radix, "'u128'")?) },
-            Lit(T::Ident, _, "u256") => { self.lexer.next(); Literal::U256(read_u256(num, radix, "'u256'")?) },
+            Lit(false, T::Ident, _, "u8") => { self.lexer.next(); Literal::U8(read_u8(num, radix, "'u8'")?) },
+            Lit(false, T::Ident, _, "u16") => { self.lexer.next(); Literal::U16(read_u16(num, radix, "'u16'")?) },
+            Lit(false, T::Ident, _, "u32") => { self.lexer.next(); Literal::U32(read_u32(num, radix, "'u32'")?) },
+            Lit(false, T::Ident, _, "u64") => { self.lexer.next(); Literal::U64(read_u64(num, radix, "'u64'")?) },
+            Lit(false, T::Ident, _, "u128") => { self.lexer.next(); Literal::U128(read_u128(num, radix, "'u128'")?) },
+            Lit(false, T::Ident, _, "u256") => { self.lexer.next(); Literal::U256(read_u256(num, radix, "'u256'")?) },
         };
 
         // If there was no explicit type suffix, assume `u64`.
@@ -773,14 +746,6 @@ impl<'s> Parser<'s> {
         } else {
             Literal::U64(read_u64(num, radix, "'u64'")?)
         })
-    }
-
-    fn eat_whitespace(&mut self) {
-        // The lexer merges together consecutive whitespace tokens, so if one is found, there is no
-        // need to check for more.
-        if let Some(Lex(T::Whitespace, _, _)) = self.lexer.peek() {
-            self.lexer.next();
-        }
     }
 }
 
@@ -1079,7 +1044,7 @@ mod tests {
 
     #[test]
     fn test_address_literal() {
-        assert_snapshot!(strands(r#"{@0x1 | @42 | @0x12_34_56}"#));
+        assert_snapshot!(strands(r#"{@0x1 | @ 0x2 | @42 | @0x12_34_56}"#));
     }
 
     #[test]
@@ -1161,6 +1126,16 @@ mod tests {
              | 0x1::option::Option<u32>::1 { value: 43u32 } \
              | 0x1::option::Option<u16>::None#0 {} }"
         ));
+    }
+
+    #[test]
+    fn test_struct_literal_whitespace() {
+        assert_snapshot!(strands(r#"{0x1 :: coin :: Coin<0x2::sui::SUI>()}"#));
+    }
+
+    #[test]
+    fn test_enum_literal_whitespace() {
+        assert_snapshot!(strands(r#"{0x1::option::Option<u64>::Some # 1 (42)}"#));
     }
 
     #[test]
@@ -1269,11 +1244,6 @@ mod tests {
     #[test]
     fn test_trailing_alternate() {
         assert_snapshot!(strands(r#"{foo | bar | baz |}"#));
-    }
-
-    #[test]
-    fn test_address_literal_whitespace() {
-        assert_snapshot!(strands(r#"{@ 0x3}"#));
     }
 
     #[test]
@@ -1396,11 +1366,6 @@ mod tests {
     }
 
     #[test]
-    fn test_datatype_whitespace() {
-        assert_snapshot!(strands(r#"{0x1 :: coin :: Coin<0x2::sui::SUI>}"#));
-    }
-
-    #[test]
     fn test_struct_literal_positional_trailing() {
         assert_snapshot!(strands(
             r#"{0x1::string::String(42, 'foo', vector[1, 2, 3]"#
@@ -1443,11 +1408,6 @@ mod tests {
     #[test]
     fn test_enum_missing_index() {
         assert_snapshot!(strands(r#"{0x1::option::Option<u64>::Some(42)}"#));
-    }
-
-    #[test]
-    fn test_enum_whitespace() {
-        assert_snapshot!(strands(r#"{0x1::option::Option<u64>::Some # 1 (42)}"#));
     }
 
     #[test]

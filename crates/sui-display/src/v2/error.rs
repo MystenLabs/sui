@@ -67,7 +67,7 @@ impl Error {
     // tokens that were tried at the same location.
     pub(crate) fn also_tried(self, offset: Option<usize>, tried: ExpectedSet) -> Self {
         match (offset, self) {
-            (Some(offset), Error::UnexpectedToken { actual, expect }) if offset == actual.1 => {
+            (Some(offset), Error::UnexpectedToken { actual, expect }) if offset == actual.2 => {
                 Error::UnexpectedToken {
                     actual,
                     expect: expect.union(tried),

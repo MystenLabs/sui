@@ -2,4 +2,4 @@
 source: crates/sui-display/src/v2/parser.rs
 expression: "strands(r#\"{foo[[bar] ]}\"#)"
 ---
-Error: Unexpected whitespace at offset 10, expected ']'
+Error: Unexpected whitespace followed by ']' at offset 11, expected ']'

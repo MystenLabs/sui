@@ -20,15 +20,15 @@ pub(crate) struct Lexer<'s> {
     level: usize,
 }
 
-/// A lexeme is a token along with its offset in the source string, and the slice of source string
-/// that it originated from.
+/// A lexeme is a slice of the source string marked with a token. The `bool` field indicates
+/// whether the lexeme was preceded by whitespace or not.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Lexeme<'s>(pub Token, pub usize, pub &'s str);
+pub(crate) struct Lexeme<'s>(pub bool, pub Token, pub usize, pub &'s str);
 
 /// Like [Lexeme] but owns the slice of source string. Useful for capturing context in an error
 /// message.
 #[derive(Debug)]
-pub(crate) struct OwnedLexeme(pub Token, pub usize, pub String);
+pub(crate) struct OwnedLexeme(pub bool, pub Token, pub usize, pub String);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Token {
@@ -81,9 +81,6 @@ pub(crate) enum Token {
 
     /// An unexpected byte in the input string.
     Unexpected,
-
-    /// Whitespace around expressions.
-    Whitespace,
 }
 
 impl<'s> Lexer<'s> {
@@ -103,83 +100,84 @@ impl<'s> Lexer<'s> {
         Some(match bytes.first()? {
             b'{' if bytes.get(1) == Some(&b'{') => {
                 self.advance(1);
-                self.take(T::LLBrace, 1)
+                self.take(false, T::LLBrace, 1)
             }
 
             b'{' => {
                 self.level += 1;
-                self.take(T::LBrace, 1)
+                self.take(false, T::LBrace, 1)
             }
 
             b'}' if bytes.get(1) == Some(&b'}') => {
                 self.advance(1);
-                self.take(T::RRBrace, 1)
+                self.take(false, T::RRBrace, 1)
             }
 
             // This is not a valid token within text, but is recognised so that the parser can
             // produce a better error message. `level` is not decremenetd because we should already
             // been in text mode, meaning the level is already 0, and a decrement would underflow
             // it.
-            b'}' => self.take(T::RBrace, 1),
+            b'}' => self.take(false, T::RBrace, 1),
 
-            _ => self.take_until(T::Text, |b| b"{}".contains(&b)),
+            _ => self.take_until(false, T::Text, |b| b"{}".contains(&b)),
         })
     }
 
     /// Assuming the lexer is in expression mode, return the next expression token.
     fn next_expr_token(&mut self) -> Option<Lexeme<'s>> {
+        let ws = self.take_whitespace();
         let bytes = self.src.as_bytes();
 
         use Token as T;
         Some(match bytes.first()? {
-            b'@' => self.take(T::At, 1),
+            b'@' => self.take(ws, T::At, 1),
 
-            b':' if bytes.get(1) == Some(&b':') => self.take(T::CColon, 2),
+            b':' if bytes.get(1) == Some(&b':') => self.take(ws, T::CColon, 2),
 
-            b':' => self.take(T::Colon, 1),
+            b':' => self.take(ws, T::Colon, 1),
 
-            b',' => self.take(T::Comma, 1),
+            b',' => self.take(ws, T::Comma, 1),
 
-            b'.' => self.take(T::Dot, 1),
+            b'.' => self.take(ws, T::Dot, 1),
 
             b'0' if bytes.get(1) == Some(&b'x')
                 && bytes.get(2).is_some_and(|b| is_valid_hex_byte(*b)) =>
             {
                 self.advance(2);
-                self.take_until(T::NumHex, |c| !is_valid_hex_byte(c))
+                self.take_until(ws, T::NumHex, |c| !is_valid_hex_byte(c))
             }
 
-            b'0'..=b'9' => self.take_until(T::NumDec, |c| !is_valid_decimal_byte(c)),
+            b'0'..=b'9' => self.take_until(ws, T::NumDec, |c| !is_valid_decimal_byte(c)),
 
             b'a'..=b'z' | b'A'..=b'Z' => {
-                self.take_until(T::Ident, |c| !is_valid_identifier_byte(c))
+                self.take_until(ws, T::Ident, |c| !is_valid_identifier_byte(c))
             }
 
-            b'<' => self.take(T::LAngle, 1),
+            b'<' => self.take(ws, T::LAngle, 1),
 
             b'{' => {
                 self.level += 1;
-                self.take(T::LBrace, 1)
+                self.take(ws, T::LBrace, 1)
             }
 
-            b'[' => self.take(T::LBracket, 1),
+            b'[' => self.take(ws, T::LBracket, 1),
 
-            b'(' => self.take(T::LParen, 1),
+            b'(' => self.take(ws, T::LParen, 1),
 
-            b'|' => self.take(T::Pipe, 1),
+            b'|' => self.take(ws, T::Pipe, 1),
 
-            b'#' => self.take(T::Pound, 1),
+            b'#' => self.take(ws, T::Pound, 1),
 
-            b'>' => self.take(T::RAngle, 1),
+            b'>' => self.take(ws, T::RAngle, 1),
 
             b'}' => {
                 self.level -= 1;
-                self.take(T::RBrace, 1)
+                self.take(ws, T::RBrace, 1)
             }
 
-            b']' => self.take(T::RBracket, 1),
+            b']' => self.take(ws, T::RBracket, 1),
 
-            b')' => self.take(T::RParen, 1),
+            b')' => self.take(ws, T::RParen, 1),
 
             b'\'' => {
                 // Set the escaped indicator to true initially so we don't interpret the starting
@@ -192,7 +190,7 @@ impl<'s> Lexer<'s> {
                         escaped = true;
                     } else if b == b'\'' {
                         self.advance(1);
-                        let content = self.take(T::String, i - 1);
+                        let content = self.take(ws, T::String, i - 1);
                         self.advance(1);
                         return Some(content);
                     }
@@ -200,16 +198,8 @@ impl<'s> Lexer<'s> {
 
                 // Reached the end of the byte stream and didn't find a closing quote -- treat the
                 // partial string as an unexpected token.
-                self.take(T::Unexpected, self.src.len())
+                self.take(ws, T::Unexpected, self.src.len())
             }
-
-            // Explicitly tokenize whitespace.
-            _ if self.src.chars().next().is_some_and(char::is_whitespace) => self.take(
-                Token::Whitespace,
-                self.src
-                    .find(|c: char| !c.is_whitespace())
-                    .unwrap_or(self.src.len()),
-            ),
 
             // If the next byte cannot be recognized, extract the next (potentially variable
             // length) character, and indicate that it is an unexpected token.
@@ -217,16 +207,29 @@ impl<'s> Lexer<'s> {
                 let mut indices = self.src.char_indices();
                 indices.next(); // skip the first character
                 let bytes = indices.next().map(|i| i.0).unwrap_or(self.src.len());
-                self.take(T::Unexpected, bytes)
+                self.take(ws, T::Unexpected, bytes)
             }
         })
+    }
+
+    fn take_whitespace(&mut self) -> bool {
+        let Lexeme(_, _, _, slice) = self.take(
+            false,
+            Token::Unexpected,
+            self.src
+                .find(|c: char| !c.is_whitespace())
+                .unwrap_or(self.src.len()),
+        );
+
+        !slice.is_empty()
     }
 
     /// Take a prefix of bytes from `self.src` until a byte satisfying pattern `p` is found, and
     /// return it as a lexeme of type `t`. If no such byte is found, take the entire remainder of
     /// the source string.
-    fn take_until(&mut self, t: Token, p: impl FnMut(u8) -> bool) -> Lexeme<'s> {
-        self.take(t, self.src.bytes().position(p).unwrap_or(self.src.len()))
+    fn take_until(&mut self, ws: bool, t: Token, p: impl FnMut(u8) -> bool) -> Lexeme<'s> {
+        let n = self.src.bytes().position(p).unwrap_or(self.src.len());
+        self.take(ws, t, n)
     }
 
     /// Take `n` bytes from the beginning of `self.src` and return them as a lexeme of type `t`.
@@ -235,12 +238,12 @@ impl<'s> Lexer<'s> {
     ///
     /// This function assumes that there are at least `n` bytes left in `self.src`, and will panic
     /// if that is not the case.
-    fn take(&mut self, t: Token, n: usize) -> Lexeme<'s> {
+    fn take(&mut self, ws: bool, t: Token, n: usize) -> Lexeme<'s> {
         let start = self.off;
         let slice = &self.src[..n];
         self.advance(n);
 
-        Lexeme(t, start, slice)
+        Lexeme(ws, t, start, slice)
     }
 
     /// Move the cursor forward by `n` bytes.
@@ -258,7 +261,7 @@ impl<'s> Lexer<'s> {
 impl Lexeme<'_> {
     /// Return the lexeme as an owned lexeme, with the slice of source string copied.
     pub(crate) fn detach(&self) -> OwnedLexeme {
-        OwnedLexeme(self.0, self.1, self.2.to_owned())
+        OwnedLexeme(self.0, self.1, self.2, self.3.to_owned())
     }
 }
 
@@ -278,34 +281,38 @@ impl fmt::Display for OwnedLexeme {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use OwnedLexeme as L;
         use Token as T;
+
+        if self.0 {
+            write!(f, "whitespace followed by ")?;
+        }
+
         match self {
-            L(T::At, _, _) => write!(f, "'@'"),
-            L(T::Colon, _, _) => write!(f, "':'"),
-            L(T::CColon, _, _) => write!(f, "'::'"),
-            L(T::Comma, _, _) => write!(f, "','"),
-            L(T::Dot, _, _) => write!(f, "'.'"),
-            L(T::Ident, _, s) => write!(f, "identifier {s:?}"),
-            L(T::LAngle, _, _) => write!(f, "'<'"),
-            L(T::LBrace, _, _) => write!(f, "'{{'"),
-            L(T::LBracket, _, _) => write!(f, "'['"),
-            L(T::LLBrace, _, _) => write!(f, "'{{{{'"),
-            L(T::LParen, _, _) => write!(f, "'('"),
-            L(T::NumDec, _, s) => write!(f, "decimal number {s:?}"),
-            L(T::NumHex, _, s) => write!(f, "hexadecimal number {s:?}"),
-            L(T::Pipe, _, _) => write!(f, "'|'"),
-            L(T::Pound, _, _) => write!(f, "'#'"),
-            L(T::RAngle, _, _) => write!(f, "'>'"),
-            L(T::RBrace, _, _) => write!(f, "'}}'"),
-            L(T::RBracket, _, _) => write!(f, "']'"),
-            L(T::RParen, _, _) => write!(f, "')'"),
-            L(T::RRBrace, _, _) => write!(f, "'}}}}'"),
-            L(T::String, _, s) => write!(f, "string {s:?}"),
-            L(T::Text, _, s) => write!(f, "text {s:?}"),
-            L(T::Unexpected, _, s) => write!(f, "{s:?}"),
-            L(T::Whitespace, _, _) => write!(f, "whitespace"),
+            L(_, T::At, _, _) => write!(f, "'@'"),
+            L(_, T::Colon, _, _) => write!(f, "':'"),
+            L(_, T::CColon, _, _) => write!(f, "'::'"),
+            L(_, T::Comma, _, _) => write!(f, "','"),
+            L(_, T::Dot, _, _) => write!(f, "'.'"),
+            L(_, T::Ident, _, s) => write!(f, "identifier {s:?}"),
+            L(_, T::LAngle, _, _) => write!(f, "'<'"),
+            L(_, T::LBrace, _, _) => write!(f, "'{{'"),
+            L(_, T::LBracket, _, _) => write!(f, "'['"),
+            L(_, T::LLBrace, _, _) => write!(f, "'{{{{'"),
+            L(_, T::LParen, _, _) => write!(f, "'('"),
+            L(_, T::NumDec, _, s) => write!(f, "decimal number {s:?}"),
+            L(_, T::NumHex, _, s) => write!(f, "hexadecimal number {s:?}"),
+            L(_, T::Pipe, _, _) => write!(f, "'|'"),
+            L(_, T::Pound, _, _) => write!(f, "'#'"),
+            L(_, T::RAngle, _, _) => write!(f, "'>'"),
+            L(_, T::RBrace, _, _) => write!(f, "'}}'"),
+            L(_, T::RBracket, _, _) => write!(f, "']'"),
+            L(_, T::RParen, _, _) => write!(f, "')'"),
+            L(_, T::RRBrace, _, _) => write!(f, "'}}}}'"),
+            L(_, T::String, _, s) => write!(f, "string {s:?}"),
+            L(_, T::Text, _, s) => write!(f, "text {s:?}"),
+            L(_, T::Unexpected, _, s) => write!(f, "{s:?}"),
         }?;
 
-        write!(f, " at offset {}", self.1)
+        write!(f, " at offset {}", self.2)
     }
 }
 
@@ -336,7 +343,6 @@ impl fmt::Display for Token {
             T::String => write!(f, "a string"),
             T::Text => write!(f, "text"),
             T::Unexpected => write!(f, "unexpected input"),
-            T::Whitespace => write!(f, "whitespace"),
         }
     }
 }
@@ -361,7 +367,7 @@ mod tests {
 
     fn lexemes(src: &str) -> String {
         Lexer::new(src)
-            .map(|L(t, o, s)| format!("L({t:?}, {o:?}, {s:?})"))
+            .map(|L(ws, t, o, s)| format!("L({ws:?}, {t:?}, {o:?}, {s:?})"))
             .collect::<Vec<_>>()
             .join("\n")
     }
@@ -369,17 +375,17 @@ mod tests {
     /// Simple test for a  raw literal string.
     #[test]
     fn test_all_text() {
-        assert_snapshot!(lexemes("foo bar"), @r###"L(Text, 0, "foo bar")"###);
+        assert_snapshot!(lexemes("foo bar"), @r###"L(false, Text, 0, "foo bar")"###);
     }
 
     /// Escape sequences are all text, but they will be split into multiple tokens.
     #[test]
     fn test_escapes() {
         assert_snapshot!(lexemes(r#"foo {{bar}}"#), @r###"
-        L(Text, 0, "foo ")
-        L(LLBrace, 5, "{")
-        L(Text, 6, "bar")
-        L(RRBrace, 10, "}")
+        L(false, Text, 0, "foo ")
+        L(false, LLBrace, 5, "{")
+        L(false, Text, 6, "bar")
+        L(false, RRBrace, 10, "}")
         "###);
     }
 
@@ -387,10 +393,10 @@ mod tests {
     #[test]
     fn test_expressions() {
         assert_snapshot!(lexemes(r#"foo {bar}"#), @r###"
-        L(Text, 0, "foo ")
-        L(LBrace, 4, "{")
-        L(Ident, 5, "bar")
-        L(RBrace, 8, "}")
+        L(false, Text, 0, "foo ")
+        L(false, LBrace, 4, "{")
+        L(false, Ident, 5, "bar")
+        L(false, RBrace, 8, "}")
         "###);
     }
 
@@ -398,12 +404,10 @@ mod tests {
     #[test]
     fn test_expression_whitespace() {
         assert_snapshot!(lexemes(r#"foo {  bar   }"#), @r###"
-        L(Text, 0, "foo ")
-        L(LBrace, 4, "{")
-        L(Whitespace, 5, "  ")
-        L(Ident, 7, "bar")
-        L(Whitespace, 10, "   ")
-        L(RBrace, 13, "}")
+        L(false, Text, 0, "foo ")
+        L(false, LBrace, 4, "{")
+        L(true, Ident, 7, "bar")
+        L(true, RBrace, 13, "}")
         "###);
     }
 
@@ -411,17 +415,14 @@ mod tests {
     #[test]
     fn test_expression_dots() {
         assert_snapshot!(lexemes(r#"foo {bar. baz  . qux}"#), @r###"
-        L(Text, 0, "foo ")
-        L(LBrace, 4, "{")
-        L(Ident, 5, "bar")
-        L(Dot, 8, ".")
-        L(Whitespace, 9, " ")
-        L(Ident, 10, "baz")
-        L(Whitespace, 13, "  ")
-        L(Dot, 15, ".")
-        L(Whitespace, 16, " ")
-        L(Ident, 17, "qux")
-        L(RBrace, 20, "}")
+        L(false, Text, 0, "foo ")
+        L(false, LBrace, 4, "{")
+        L(false, Ident, 5, "bar")
+        L(false, Dot, 8, ".")
+        L(true, Ident, 10, "baz")
+        L(true, Dot, 15, ".")
+        L(true, Ident, 17, "qux")
+        L(false, RBrace, 20, "}")
         "###);
     }
 
@@ -429,18 +430,18 @@ mod tests {
     #[test]
     fn test_multiple_expressions() {
         assert_snapshot!(lexemes(r#"foo {bar.baz} qux {quy.quz}"#), @r###"
-        L(Text, 0, "foo ")
-        L(LBrace, 4, "{")
-        L(Ident, 5, "bar")
-        L(Dot, 8, ".")
-        L(Ident, 9, "baz")
-        L(RBrace, 12, "}")
-        L(Text, 13, " qux ")
-        L(LBrace, 18, "{")
-        L(Ident, 19, "quy")
-        L(Dot, 22, ".")
-        L(Ident, 23, "quz")
-        L(RBrace, 26, "}")
+        L(false, Text, 0, "foo ")
+        L(false, LBrace, 4, "{")
+        L(false, Ident, 5, "bar")
+        L(false, Dot, 8, ".")
+        L(false, Ident, 9, "baz")
+        L(false, RBrace, 12, "}")
+        L(false, Text, 13, " qux ")
+        L(false, LBrace, 18, "{")
+        L(false, Ident, 19, "quy")
+        L(false, Dot, 22, ".")
+        L(false, Ident, 23, "quz")
+        L(false, RBrace, 26, "}")
         "###);
     }
 
@@ -449,16 +450,14 @@ mod tests {
     #[test]
     fn test_nested_curlies() {
         assert_snapshot!(lexemes(r#"foo {bar {baz} qux}"#), @r###"
-        L(Text, 0, "foo ")
-        L(LBrace, 4, "{")
-        L(Ident, 5, "bar")
-        L(Whitespace, 8, " ")
-        L(LBrace, 9, "{")
-        L(Ident, 10, "baz")
-        L(RBrace, 13, "}")
-        L(Whitespace, 14, " ")
-        L(Ident, 15, "qux")
-        L(RBrace, 18, "}")
+        L(false, Text, 0, "foo ")
+        L(false, LBrace, 4, "{")
+        L(false, Ident, 5, "bar")
+        L(true, LBrace, 9, "{")
+        L(false, Ident, 10, "baz")
+        L(false, RBrace, 13, "}")
+        L(true, Ident, 15, "qux")
+        L(false, RBrace, 18, "}")
         "###);
     }
 
@@ -466,13 +465,13 @@ mod tests {
     #[test]
     fn test_unbalanced_curlies() {
         assert_snapshot!(lexemes(r#"foo}{bar{}}"#), @r###"
-        L(Text, 0, "foo")
-        L(RBrace, 3, "}")
-        L(LBrace, 4, "{")
-        L(Ident, 5, "bar")
-        L(LBrace, 8, "{")
-        L(RBrace, 9, "}")
-        L(RBrace, 10, "}")
+        L(false, Text, 0, "foo")
+        L(false, RBrace, 3, "}")
+        L(false, LBrace, 4, "{")
+        L(false, Ident, 5, "bar")
+        L(false, LBrace, 8, "{")
+        L(false, RBrace, 9, "}")
+        L(false, RBrace, 10, "}")
         "###);
     }
 
@@ -480,16 +479,13 @@ mod tests {
     #[test]
     fn test_unexpected_characters() {
         assert_snapshot!(lexemes(r#"anything goes {? % ! 🔥}"#), @r###"
-        L(Text, 0, "anything goes ")
-        L(LBrace, 14, "{")
-        L(Unexpected, 15, "?")
-        L(Whitespace, 16, " ")
-        L(Unexpected, 17, "%")
-        L(Whitespace, 18, " ")
-        L(Unexpected, 19, "!")
-        L(Whitespace, 20, " ")
-        L(Unexpected, 21, "🔥")
-        L(RBrace, 25, "}")
+        L(false, Text, 0, "anything goes ")
+        L(false, LBrace, 14, "{")
+        L(false, Unexpected, 15, "?")
+        L(true, Unexpected, 17, "%")
+        L(true, Unexpected, 19, "!")
+        L(true, Unexpected, 21, "🔥")
+        L(false, RBrace, 25, "}")
         "###);
     }
 
@@ -499,28 +495,25 @@ mod tests {
     #[test]
     fn test_triple_curlies() {
         assert_snapshot!(lexemes(r#"foo {{{bar} {baz}}} }}} { {{ } qux"#), @r###"
-        L(Text, 0, "foo ")
-        L(LLBrace, 5, "{")
-        L(LBrace, 6, "{")
-        L(Ident, 7, "bar")
-        L(RBrace, 10, "}")
-        L(Text, 11, " ")
-        L(LBrace, 12, "{")
-        L(Ident, 13, "baz")
-        L(RBrace, 16, "}")
-        L(RRBrace, 18, "}")
-        L(Text, 19, " ")
-        L(RRBrace, 21, "}")
-        L(RBrace, 22, "}")
-        L(Text, 23, " ")
-        L(LBrace, 24, "{")
-        L(Whitespace, 25, " ")
-        L(LBrace, 26, "{")
-        L(LBrace, 27, "{")
-        L(Whitespace, 28, " ")
-        L(RBrace, 29, "}")
-        L(Whitespace, 30, " ")
-        L(Ident, 31, "qux")
+        L(false, Text, 0, "foo ")
+        L(false, LLBrace, 5, "{")
+        L(false, LBrace, 6, "{")
+        L(false, Ident, 7, "bar")
+        L(false, RBrace, 10, "}")
+        L(false, Text, 11, " ")
+        L(false, LBrace, 12, "{")
+        L(false, Ident, 13, "baz")
+        L(false, RBrace, 16, "}")
+        L(false, RRBrace, 18, "}")
+        L(false, Text, 19, " ")
+        L(false, RRBrace, 21, "}")
+        L(false, RBrace, 22, "}")
+        L(false, Text, 23, " ")
+        L(false, LBrace, 24, "{")
+        L(true, LBrace, 26, "{")
+        L(false, LBrace, 27, "{")
+        L(true, RBrace, 29, "}")
+        L(true, Ident, 31, "qux")
         "###);
     }
 
@@ -529,17 +522,15 @@ mod tests {
     #[test]
     fn test_alternates() {
         assert_snapshot!(lexemes(r#"foo | {bar | baz.qux} | quy"#), @r###"
-        L(Text, 0, "foo | ")
-        L(LBrace, 6, "{")
-        L(Ident, 7, "bar")
-        L(Whitespace, 10, " ")
-        L(Pipe, 11, "|")
-        L(Whitespace, 12, " ")
-        L(Ident, 13, "baz")
-        L(Dot, 16, ".")
-        L(Ident, 17, "qux")
-        L(RBrace, 20, "}")
-        L(Text, 21, " | quy")
+        L(false, Text, 0, "foo | ")
+        L(false, LBrace, 6, "{")
+        L(false, Ident, 7, "bar")
+        L(true, Pipe, 11, "|")
+        L(true, Ident, 13, "baz")
+        L(false, Dot, 16, ".")
+        L(false, Ident, 17, "qux")
+        L(false, RBrace, 20, "}")
+        L(false, Text, 21, " | quy")
         "###);
     }
 
@@ -549,23 +540,23 @@ mod tests {
     #[test]
     fn test_indices() {
         assert_snapshot!(lexemes(r#"foo {bar[baz].qux[[quy]][quz]}"#), @r###"
-        L(Text, 0, "foo ")
-        L(LBrace, 4, "{")
-        L(Ident, 5, "bar")
-        L(LBracket, 8, "[")
-        L(Ident, 9, "baz")
-        L(RBracket, 12, "]")
-        L(Dot, 13, ".")
-        L(Ident, 14, "qux")
-        L(LBracket, 17, "[")
-        L(LBracket, 18, "[")
-        L(Ident, 19, "quy")
-        L(RBracket, 22, "]")
-        L(RBracket, 23, "]")
-        L(LBracket, 24, "[")
-        L(Ident, 25, "quz")
-        L(RBracket, 28, "]")
-        L(RBrace, 29, "}")
+        L(false, Text, 0, "foo ")
+        L(false, LBrace, 4, "{")
+        L(false, Ident, 5, "bar")
+        L(false, LBracket, 8, "[")
+        L(false, Ident, 9, "baz")
+        L(false, RBracket, 12, "]")
+        L(false, Dot, 13, ".")
+        L(false, Ident, 14, "qux")
+        L(false, LBracket, 17, "[")
+        L(false, LBracket, 18, "[")
+        L(false, Ident, 19, "quy")
+        L(false, RBracket, 22, "]")
+        L(false, RBracket, 23, "]")
+        L(false, LBracket, 24, "[")
+        L(false, Ident, 25, "quz")
+        L(false, RBracket, 28, "]")
+        L(false, RBrace, 29, "}")
         "###);
     }
 
@@ -573,15 +564,12 @@ mod tests {
     #[test]
     fn test_numeric_literals() {
         assert_snapshot!(lexemes(r#"{123 0x123 def 0xdef}"#), @r###"
-        L(LBrace, 0, "{")
-        L(NumDec, 1, "123")
-        L(Whitespace, 4, " ")
-        L(NumHex, 7, "123")
-        L(Whitespace, 10, " ")
-        L(Ident, 11, "def")
-        L(Whitespace, 14, " ")
-        L(NumHex, 17, "def")
-        L(RBrace, 20, "}")
+        L(false, LBrace, 0, "{")
+        L(false, NumDec, 1, "123")
+        L(true, NumHex, 7, "123")
+        L(true, Ident, 11, "def")
+        L(true, NumHex, 17, "def")
+        L(false, RBrace, 20, "}")
         "###);
     }
 
@@ -590,14 +578,12 @@ mod tests {
     #[test]
     fn test_numeric_literal_underscores() {
         assert_snapshot!(lexemes(r#"{123_456 0x12_ab_de _123}"#), @r###"
-        L(LBrace, 0, "{")
-        L(NumDec, 1, "123_456")
-        L(Whitespace, 8, " ")
-        L(NumHex, 11, "12_ab_de")
-        L(Whitespace, 19, " ")
-        L(Unexpected, 20, "_")
-        L(NumDec, 21, "123")
-        L(RBrace, 24, "}")
+        L(false, LBrace, 0, "{")
+        L(false, NumDec, 1, "123_456")
+        L(true, NumHex, 11, "12_ab_de")
+        L(true, Unexpected, 20, "_")
+        L(false, NumDec, 21, "123")
+        L(false, RBrace, 24, "}")
         "###);
     }
 
@@ -606,13 +592,12 @@ mod tests {
     #[test]
     fn test_address_literals() {
         assert_snapshot!(lexemes(r#"{@123 @0x123}"#), @r###"
-        L(LBrace, 0, "{")
-        L(At, 1, "@")
-        L(NumDec, 2, "123")
-        L(Whitespace, 5, " ")
-        L(At, 6, "@")
-        L(NumHex, 9, "123")
-        L(RBrace, 12, "}")
+        L(false, LBrace, 0, "{")
+        L(false, At, 1, "@")
+        L(false, NumDec, 2, "123")
+        L(true, At, 6, "@")
+        L(false, NumHex, 9, "123")
+        L(false, RBrace, 12, "}")
         "###);
     }
 
@@ -620,10 +605,10 @@ mod tests {
     #[test]
     fn test_incomplete_hexadecimal() {
         assert_snapshot!(lexemes(r#"{0x}"#), @r###"
-        L(LBrace, 0, "{")
-        L(NumDec, 1, "0")
-        L(Ident, 2, "x")
-        L(RBrace, 3, "}")
+        L(false, LBrace, 0, "{")
+        L(false, NumDec, 1, "0")
+        L(false, Ident, 2, "x")
+        L(false, RBrace, 3, "}")
         "###);
     }
 
@@ -632,29 +617,25 @@ mod tests {
     #[test]
     fn test_vector_literals() {
         assert_snapshot!(lexemes(r#"{vector[1, 2, 3] vector<u32> vector[4u64]}"#), @r###"
-        L(LBrace, 0, "{")
-        L(Ident, 1, "vector")
-        L(LBracket, 7, "[")
-        L(NumDec, 8, "1")
-        L(Comma, 9, ",")
-        L(Whitespace, 10, " ")
-        L(NumDec, 11, "2")
-        L(Comma, 12, ",")
-        L(Whitespace, 13, " ")
-        L(NumDec, 14, "3")
-        L(RBracket, 15, "]")
-        L(Whitespace, 16, " ")
-        L(Ident, 17, "vector")
-        L(LAngle, 23, "<")
-        L(Ident, 24, "u32")
-        L(RAngle, 27, ">")
-        L(Whitespace, 28, " ")
-        L(Ident, 29, "vector")
-        L(LBracket, 35, "[")
-        L(NumDec, 36, "4")
-        L(Ident, 37, "u64")
-        L(RBracket, 40, "]")
-        L(RBrace, 41, "}")
+        L(false, LBrace, 0, "{")
+        L(false, Ident, 1, "vector")
+        L(false, LBracket, 7, "[")
+        L(false, NumDec, 8, "1")
+        L(false, Comma, 9, ",")
+        L(true, NumDec, 11, "2")
+        L(false, Comma, 12, ",")
+        L(true, NumDec, 14, "3")
+        L(false, RBracket, 15, "]")
+        L(true, Ident, 17, "vector")
+        L(false, LAngle, 23, "<")
+        L(false, Ident, 24, "u32")
+        L(false, RAngle, 27, ">")
+        L(true, Ident, 29, "vector")
+        L(false, LBracket, 35, "[")
+        L(false, NumDec, 36, "4")
+        L(false, Ident, 37, "u64")
+        L(false, RBracket, 40, "]")
+        L(false, RBrace, 41, "}")
         "###);
     }
 
@@ -662,30 +643,29 @@ mod tests {
     #[test]
     fn test_types() {
         assert_snapshot!(lexemes(r#"{0x2::table::Table<address, 0x2::coin::Coin<0x2::sui::SUI>>}"#), @r###"
-        L(LBrace, 0, "{")
-        L(NumHex, 3, "2")
-        L(CColon, 4, "::")
-        L(Ident, 6, "table")
-        L(CColon, 11, "::")
-        L(Ident, 13, "Table")
-        L(LAngle, 18, "<")
-        L(Ident, 19, "address")
-        L(Comma, 26, ",")
-        L(Whitespace, 27, " ")
-        L(NumHex, 30, "2")
-        L(CColon, 31, "::")
-        L(Ident, 33, "coin")
-        L(CColon, 37, "::")
-        L(Ident, 39, "Coin")
-        L(LAngle, 43, "<")
-        L(NumHex, 46, "2")
-        L(CColon, 47, "::")
-        L(Ident, 49, "sui")
-        L(CColon, 52, "::")
-        L(Ident, 54, "SUI")
-        L(RAngle, 57, ">")
-        L(RAngle, 58, ">")
-        L(RBrace, 59, "}")
+        L(false, LBrace, 0, "{")
+        L(false, NumHex, 3, "2")
+        L(false, CColon, 4, "::")
+        L(false, Ident, 6, "table")
+        L(false, CColon, 11, "::")
+        L(false, Ident, 13, "Table")
+        L(false, LAngle, 18, "<")
+        L(false, Ident, 19, "address")
+        L(false, Comma, 26, ",")
+        L(true, NumHex, 30, "2")
+        L(false, CColon, 31, "::")
+        L(false, Ident, 33, "coin")
+        L(false, CColon, 37, "::")
+        L(false, Ident, 39, "Coin")
+        L(false, LAngle, 43, "<")
+        L(false, NumHex, 46, "2")
+        L(false, CColon, 47, "::")
+        L(false, Ident, 49, "sui")
+        L(false, CColon, 52, "::")
+        L(false, Ident, 54, "SUI")
+        L(false, RAngle, 57, ">")
+        L(false, RAngle, 58, ">")
+        L(false, RBrace, 59, "}")
         "###);
     }
 
@@ -694,24 +674,24 @@ mod tests {
     #[test]
     fn test_positional_struct_literals() {
         assert_snapshot!(lexemes(r#"{0x2::balance::Balance<0x2::sui::SUI>(42u64)}"#), @r###"
-        L(LBrace, 0, "{")
-        L(NumHex, 3, "2")
-        L(CColon, 4, "::")
-        L(Ident, 6, "balance")
-        L(CColon, 13, "::")
-        L(Ident, 15, "Balance")
-        L(LAngle, 22, "<")
-        L(NumHex, 25, "2")
-        L(CColon, 26, "::")
-        L(Ident, 28, "sui")
-        L(CColon, 31, "::")
-        L(Ident, 33, "SUI")
-        L(RAngle, 36, ">")
-        L(LParen, 37, "(")
-        L(NumDec, 38, "42")
-        L(Ident, 40, "u64")
-        L(RParen, 43, ")")
-        L(RBrace, 44, "}")
+        L(false, LBrace, 0, "{")
+        L(false, NumHex, 3, "2")
+        L(false, CColon, 4, "::")
+        L(false, Ident, 6, "balance")
+        L(false, CColon, 13, "::")
+        L(false, Ident, 15, "Balance")
+        L(false, LAngle, 22, "<")
+        L(false, NumHex, 25, "2")
+        L(false, CColon, 26, "::")
+        L(false, Ident, 28, "sui")
+        L(false, CColon, 31, "::")
+        L(false, Ident, 33, "SUI")
+        L(false, RAngle, 36, ">")
+        L(false, LParen, 37, "(")
+        L(false, NumDec, 38, "42")
+        L(false, Ident, 40, "u64")
+        L(false, RParen, 43, ")")
+        L(false, RBrace, 44, "}")
         "###);
     }
 
@@ -720,37 +700,31 @@ mod tests {
     #[test]
     fn test_struct_literals() {
         assert_snapshot!(lexemes(r#"{0x2::coin::Coin<0x2::sui::SUI> { id: @0x123, value: 42u64 }}"#), @r###"
-        L(LBrace, 0, "{")
-        L(NumHex, 3, "2")
-        L(CColon, 4, "::")
-        L(Ident, 6, "coin")
-        L(CColon, 10, "::")
-        L(Ident, 12, "Coin")
-        L(LAngle, 16, "<")
-        L(NumHex, 19, "2")
-        L(CColon, 20, "::")
-        L(Ident, 22, "sui")
-        L(CColon, 25, "::")
-        L(Ident, 27, "SUI")
-        L(RAngle, 30, ">")
-        L(Whitespace, 31, " ")
-        L(LBrace, 32, "{")
-        L(Whitespace, 33, " ")
-        L(Ident, 34, "id")
-        L(Colon, 36, ":")
-        L(Whitespace, 37, " ")
-        L(At, 38, "@")
-        L(NumHex, 41, "123")
-        L(Comma, 44, ",")
-        L(Whitespace, 45, " ")
-        L(Ident, 46, "value")
-        L(Colon, 51, ":")
-        L(Whitespace, 52, " ")
-        L(NumDec, 53, "42")
-        L(Ident, 55, "u64")
-        L(Whitespace, 58, " ")
-        L(RBrace, 59, "}")
-        L(RBrace, 60, "}")
+        L(false, LBrace, 0, "{")
+        L(false, NumHex, 3, "2")
+        L(false, CColon, 4, "::")
+        L(false, Ident, 6, "coin")
+        L(false, CColon, 10, "::")
+        L(false, Ident, 12, "Coin")
+        L(false, LAngle, 16, "<")
+        L(false, NumHex, 19, "2")
+        L(false, CColon, 20, "::")
+        L(false, Ident, 22, "sui")
+        L(false, CColon, 25, "::")
+        L(false, Ident, 27, "SUI")
+        L(false, RAngle, 30, ">")
+        L(true, LBrace, 32, "{")
+        L(true, Ident, 34, "id")
+        L(false, Colon, 36, ":")
+        L(true, At, 38, "@")
+        L(false, NumHex, 41, "123")
+        L(false, Comma, 44, ",")
+        L(true, Ident, 46, "value")
+        L(false, Colon, 51, ":")
+        L(true, NumDec, 53, "42")
+        L(false, Ident, 55, "u64")
+        L(true, RBrace, 59, "}")
+        L(false, RBrace, 60, "}")
         "###);
     }
 
@@ -760,37 +734,36 @@ mod tests {
     #[test]
     fn test_enum_literals() {
         assert_snapshot!(lexemes(r#"{0x2::option::Option<u64>::1(42) 0x2::option::Option<u64>::Some#1(43)}"#), @r###"
-        L(LBrace, 0, "{")
-        L(NumHex, 3, "2")
-        L(CColon, 4, "::")
-        L(Ident, 6, "option")
-        L(CColon, 12, "::")
-        L(Ident, 14, "Option")
-        L(LAngle, 20, "<")
-        L(Ident, 21, "u64")
-        L(RAngle, 24, ">")
-        L(CColon, 25, "::")
-        L(NumDec, 27, "1")
-        L(LParen, 28, "(")
-        L(NumDec, 29, "42")
-        L(RParen, 31, ")")
-        L(Whitespace, 32, " ")
-        L(NumHex, 35, "2")
-        L(CColon, 36, "::")
-        L(Ident, 38, "option")
-        L(CColon, 44, "::")
-        L(Ident, 46, "Option")
-        L(LAngle, 52, "<")
-        L(Ident, 53, "u64")
-        L(RAngle, 56, ">")
-        L(CColon, 57, "::")
-        L(Ident, 59, "Some")
-        L(Pound, 63, "#")
-        L(NumDec, 64, "1")
-        L(LParen, 65, "(")
-        L(NumDec, 66, "43")
-        L(RParen, 68, ")")
-        L(RBrace, 69, "}")
+        L(false, LBrace, 0, "{")
+        L(false, NumHex, 3, "2")
+        L(false, CColon, 4, "::")
+        L(false, Ident, 6, "option")
+        L(false, CColon, 12, "::")
+        L(false, Ident, 14, "Option")
+        L(false, LAngle, 20, "<")
+        L(false, Ident, 21, "u64")
+        L(false, RAngle, 24, ">")
+        L(false, CColon, 25, "::")
+        L(false, NumDec, 27, "1")
+        L(false, LParen, 28, "(")
+        L(false, NumDec, 29, "42")
+        L(false, RParen, 31, ")")
+        L(true, NumHex, 35, "2")
+        L(false, CColon, 36, "::")
+        L(false, Ident, 38, "option")
+        L(false, CColon, 44, "::")
+        L(false, Ident, 46, "Option")
+        L(false, LAngle, 52, "<")
+        L(false, Ident, 53, "u64")
+        L(false, RAngle, 56, ">")
+        L(false, CColon, 57, "::")
+        L(false, Ident, 59, "Some")
+        L(false, Pound, 63, "#")
+        L(false, NumDec, 64, "1")
+        L(false, LParen, 65, "(")
+        L(false, NumDec, 66, "43")
+        L(false, RParen, 68, ")")
+        L(false, RBrace, 69, "}")
         "###);
     }
 
@@ -798,15 +771,13 @@ mod tests {
     #[test]
     fn string_literals() {
         assert_snapshot!(lexemes(r#"{x'0f00' b'bar' 'baz'}"#), @r###"
-        L(LBrace, 0, "{")
-        L(Ident, 1, "x")
-        L(String, 3, "0f00")
-        L(Whitespace, 8, " ")
-        L(Ident, 9, "b")
-        L(String, 11, "bar")
-        L(Whitespace, 15, " ")
-        L(String, 17, "baz")
-        L(RBrace, 21, "}")
+        L(false, LBrace, 0, "{")
+        L(false, Ident, 1, "x")
+        L(false, String, 3, "0f00")
+        L(true, Ident, 9, "b")
+        L(false, String, 11, "bar")
+        L(true, String, 17, "baz")
+        L(false, RBrace, 21, "}")
         "###);
     }
 
@@ -815,9 +786,9 @@ mod tests {
     #[test]
     fn test_string_literal_escapes() {
         assert_snapshot!(lexemes(r#"{'\' \x \\'}"#), @r###"
-        L(LBrace, 0, "{")
-        L(String, 2, "\\' \\x \\\\")
-        L(RBrace, 11, "}")
+        L(false, LBrace, 0, "{")
+        L(false, String, 2, "\\' \\x \\\\")
+        L(false, RBrace, 11, "}")
         "###);
     }
 
@@ -826,8 +797,8 @@ mod tests {
     #[test]
     fn test_string_literal_trailing() {
         assert_snapshot!(lexemes(r#"{'foo bar}"#), @r###"
-        L(LBrace, 0, "{")
-        L(Unexpected, 1, "'foo bar}")
+        L(false, LBrace, 0, "{")
+        L(false, Unexpected, 1, "'foo bar}")
         "###);
     }
 }
