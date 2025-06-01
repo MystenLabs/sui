@@ -33,7 +33,6 @@ pub(crate) trait BlockVerifier: Send + Sync + 'static {
         &self,
         block: &VerifiedBlock,
         ancestors: &[Option<VerifiedBlock>],
-        gc_enabled: bool,
         gc_round: Round,
     ) -> ConsensusResult<()>;
 }
@@ -209,37 +208,17 @@ impl BlockVerifier for SignedBlockVerifier {
         &self,
         block: &VerifiedBlock,
         ancestors: &[Option<VerifiedBlock>],
-        gc_enabled: bool,
         gc_round: Round,
     ) -> ConsensusResult<()> {
-        if gc_enabled {
-            // TODO: will be removed with new timestamp calculation is in place as all these will be irrelevant.
-            // When gc is enabled we don't have guarantees that all ancestors will be available. We'll take into account only the passed gc_round ones
-            // for the timestamp check.
-            let mut max_timestamp_ms = BlockTimestampMs::MIN;
-            for ancestor in ancestors.iter().flatten() {
-                if ancestor.round() <= gc_round {
-                    continue;
-                }
-                max_timestamp_ms = max_timestamp_ms.max(ancestor.timestamp_ms());
-                if max_timestamp_ms > block.timestamp_ms() {
-                    return Err(ConsensusError::InvalidBlockTimestamp {
-                        max_timestamp_ms,
-                        block_timestamp_ms: block.timestamp_ms(),
-                    });
-                }
+        // TODO: will be removed with new timestamp calculation is in place as all these will be irrelevant.
+        // Due to gc we don't have guarantees that all ancestors will be available. We'll take into account only the passed gc_round ones
+        // for the timestamp check.
+        let mut max_timestamp_ms = BlockTimestampMs::MIN;
+        for ancestor in ancestors.iter().flatten() {
+            if ancestor.round() <= gc_round {
+                continue;
             }
-        } else {
-            assert_eq!(block.ancestors().len(), ancestors.len());
-            // This checks the invariant that block timestamp >= max ancestor timestamp.
-            let mut max_timestamp_ms = BlockTimestampMs::MIN;
-            for (ancestor_ref, ancestor_block) in block.ancestors().iter().zip(ancestors.iter()) {
-                let ancestor_block = ancestor_block
-                    .as_ref()
-                    .expect("There should never be an empty slot");
-                assert_eq!(ancestor_ref, &ancestor_block.reference());
-                max_timestamp_ms = max_timestamp_ms.max(ancestor_block.timestamp_ms());
-            }
+            max_timestamp_ms = max_timestamp_ms.max(ancestor.timestamp_ms());
             if max_timestamp_ms > block.timestamp_ms() {
                 return Err(ConsensusError::InvalidBlockTimestamp {
                     max_timestamp_ms,
@@ -264,7 +243,6 @@ impl BlockVerifier for NoopBlockVerifier {
         &self,
         _block: &VerifiedBlock,
         _ancestors: &[Option<VerifiedBlock>],
-        _gc_enabled: bool,
         _gc_round: Round,
     ) -> ConsensusResult<()> {
         Ok(())
@@ -274,7 +252,6 @@ impl BlockVerifier for NoopBlockVerifier {
 #[cfg(test)]
 mod test {
     use consensus_config::AuthorityIndex;
-    use rstest::rstest;
     use sui_protocol_config::ProtocolConfig;
 
     use super::*;
@@ -671,11 +648,9 @@ mod test {
         }
     }
 
-    /// Tests the block's ancestors for timestamp monotonicity. Test will run for both when gc is enabled and disabled, but
-    /// with none of the ancestors being below the gc_round.
-    #[rstest]
+    /// Tests the block's ancestors for timestamp monotonicity.
     #[tokio::test]
-    async fn test_check_ancestors(#[values(false, true)] gc_enabled: bool) {
+    async fn test_check_ancestors() {
         let num_authorities = 4;
         let (context, _keypairs) = Context::new_for_test(num_authorities);
         let context = Arc::new(context);
@@ -703,7 +678,7 @@ mod test {
                 .build();
             let verified_block = VerifiedBlock::new_for_test(block);
             assert!(verifier
-                .check_ancestors(&verified_block, &ancestor_blocks, gc_enabled, gc_round)
+                .check_ancestors(&verified_block, &ancestor_blocks, gc_round)
                 .is_ok());
         }
 
@@ -715,7 +690,7 @@ mod test {
                 .build();
             let verified_block = VerifiedBlock::new_for_test(block);
             assert!(matches!(
-                verifier.check_ancestors(&verified_block, &ancestor_blocks, gc_enabled, gc_round),
+                verifier.check_ancestors(&verified_block, &ancestor_blocks, gc_round),
                 Err(ConsensusError::InvalidBlockTimestamp {
                     max_timestamp_ms: _,
                     block_timestamp_ms: _
@@ -730,7 +705,6 @@ mod test {
         let (context, _keypairs) = Context::new_for_test(num_authorities);
         let context = Arc::new(context);
         let verifier = SignedBlockVerifier::new(context.clone(), Arc::new(TxnSizeVerifier {}));
-        let gc_enabled = true;
         let gc_round = 3;
 
         let mut ancestor_blocks = vec![];
@@ -764,7 +738,7 @@ mod test {
                 .build();
             let verified_block = VerifiedBlock::new_for_test(block);
             assert!(verifier
-                .check_ancestors(&verified_block, &ancestor_blocks, gc_enabled, gc_round)
+                .check_ancestors(&verified_block, &ancestor_blocks, gc_round)
                 .is_ok());
         }
 
@@ -777,7 +751,7 @@ mod test {
                 .build();
             let verified_block = VerifiedBlock::new_for_test(block);
             assert!(verifier
-                .check_ancestors(&verified_block, &ancestor_blocks, gc_enabled, gc_round)
+                .check_ancestors(&verified_block, &ancestor_blocks, gc_round)
                 .is_ok());
         }
 
@@ -789,7 +763,7 @@ mod test {
                 .build();
             let verified_block = VerifiedBlock::new_for_test(block);
             assert!(matches!(
-                verifier.check_ancestors(&verified_block, &ancestor_blocks, gc_enabled, gc_round),
+                verifier.check_ancestors(&verified_block, &ancestor_blocks, gc_round),
                 Err(ConsensusError::InvalidBlockTimestamp {
                     max_timestamp_ms: _,
                     block_timestamp_ms: _
