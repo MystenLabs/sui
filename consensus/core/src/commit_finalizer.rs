@@ -11,9 +11,11 @@ use mysten_metrics::{
     monitored_mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     monitored_scope, spawn_logged_monitored_task,
 };
+use parking_lot::RwLock;
 use tracing::error;
 
 use crate::{
+    commit::DEFAULT_WAVE_LENGTH,
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
@@ -65,6 +67,7 @@ impl CommitFinalizerHandle {
 /// is encountered.
 pub(crate) struct CommitFinalizer {
     context: Arc<Context>,
+    dag_state: Arc<RwLock<DagState>>,
     transaction_certifier: TransactionCertifier,
     commit_sender: UnboundedSender<CommittedSubDag>,
 
@@ -77,11 +80,13 @@ pub(crate) struct CommitFinalizer {
 impl CommitFinalizer {
     fn new(
         context: Arc<Context>,
+        dag_state: Arc<RwLock<DagState>>,
         transaction_certifier: TransactionCertifier,
         commit_sender: UnboundedSender<CommittedSubDag>,
     ) -> Self {
         Self {
             context,
+            dag_state,
             transaction_certifier,
             commit_sender,
             last_processed_commit: None,
@@ -92,22 +97,38 @@ impl CommitFinalizer {
 
     pub(crate) fn start(
         context: Arc<Context>,
+        dag_state: Arc<RwLock<DagState>>,
         transaction_certifier: TransactionCertifier,
         commit_sender: UnboundedSender<CommittedSubDag>,
     ) -> CommitFinalizerHandle {
-        let processor = Self::new(context, transaction_certifier, commit_sender);
+        let processor = Self::new(context, dag_state, transaction_certifier, commit_sender);
         let (sender, receiver) = unbounded_channel("consensus_commit_finalizer");
         let _handle =
             spawn_logged_monitored_task!(processor.run(receiver), "consensus_commit_finalizer");
         CommitFinalizerHandle { sender }
     }
 
-    async fn run(self, mut receiver: UnboundedReceiver<CommittedSubDag>) {
-        // TODO(fastpath): call process_commit() when crash recovery of rejected transactions are implemented.
+    async fn run(mut self, mut receiver: UnboundedReceiver<CommittedSubDag>) {
         while let Some(committed_sub_dag) = receiver.recv().await {
-            if let Err(e) = self.commit_sender.send(committed_sub_dag) {
-                tracing::warn!("Failed to send to commit handler, probably due to shutdown: {e:?}");
-                return;
+            let finalized_commits = if self.context.protocol_config.mysticeti_fastpath() {
+                self.process_commit(committed_sub_dag)
+            } else {
+                vec![committed_sub_dag]
+            };
+            if let Some(commit) = finalized_commits.last() {
+                // Commits and committed blocks must be persisted to storage before sending them to Sui
+                // to execute their finalized transactions.
+                // Commit metadata and uncommitted blocks can be persisted more lazily because they are recoverable.
+                // But for simplicity, all unpersisted commits and blocks are flushed to storage.
+                self.dag_state.write().flush(commit.commit_ref.index);
+            }
+            for commit in finalized_commits {
+                if let Err(e) = self.commit_sender.send(commit) {
+                    tracing::warn!(
+                        "Failed to send to commit handler, probably due to shutdown: {e:?}"
+                    );
+                    return;
+                }
             }
         }
     }
@@ -128,10 +149,41 @@ impl CommitFinalizer {
 
         let mut finalized_commits = vec![];
 
-        // Direct finalization: if the commit is direct, there are a quorum of finalization certificates to every block.
-        // If the commit is indirect, each block has a finalization certificate too.
-        // So if a transaction has no reject vote, it must be finalized.
-        self.try_direct_finalize_last_commit();
+        // Direct finalization: if the commit is produced by the committer locally,
+        // there is guaranteed a leader certificate in local DAG.
+        // The leader certificate satisfies the condition to be a finalization certificate of every committed
+        // transaction, if no block in the certificate contains reject votes for the transaction.
+        // And if the transaction will be rejected, at least one reject vote must have been
+        // observed in the local DAG for it. So running direct finalization will not finalize this transaction.
+        //
+        // If the commit is received through commit sync and processed as certified commit, the commit might
+        // not have a leader certificate in the local DAG. So a committed transaction might not observe any reject
+        // vote from local DAG, but it will eventually be rejected. So at least one additional local commit, or an additional
+        // remote commit with leader >= 3 (WAVE_LENGTH) rounds above the transaction's leader, must be buffered,
+        // to ensure there is a leader certificate of the commit, and potentially finalization certificate
+        // for every transaction in the commit.
+        for i in 0..self.pending_commits.len() {
+            let commit_state = &self.pending_commits[i];
+            if commit_state.pending_blocks.is_empty() {
+                // The commit has already been processed through direct finalization.
+                continue;
+            }
+            // Direct finalization can happen when
+            // 1. This commit is local.
+            // 2. The latest commit is less than 3 (WAVE_LENGTH) rounds above this commit.
+            //    So this commit's leader certificate is not guaranteed to be committed.
+            if !commit_state.commit.local {
+                let last_commit_state = &self.pending_commits.back().unwrap();
+                // When the latest commit is local, only 2 rounds is needed to ensure finalization certificates
+                // for current commit exists in local DAG. But this optimization seems too minor.
+                if commit_state.commit.leader.round + DEFAULT_WAVE_LENGTH
+                    > last_commit_state.commit.leader.round
+                {
+                    break;
+                }
+            }
+            self.try_direct_finalize_commit(i);
+        }
         finalized_commits.extend(self.pop_finalized_commits());
 
         // Indirect finalization: one or more commits cannot be directly finalized.
@@ -149,6 +201,12 @@ impl CommitFinalizer {
             // If only one commit remains, it cannot be indirectly finalized because there is no commit afterwards,
             // so it is excluded.
             while self.pending_commits.len() > 1 {
+                // Stop indirect finalization when the earliest commit has not been processed
+                // through direct finalization.
+                if !self.pending_commits[0].pending_blocks.is_empty() {
+                    break;
+                }
+                // Otherwise, try to indirectly finalize the earliest commit.
                 self.try_indirect_finalize_first_commit();
                 let new_finalized_commits = self.pop_finalized_commits();
                 if new_finalized_commits.is_empty() {
@@ -162,24 +220,26 @@ impl CommitFinalizer {
         // GC TransactionCertifier state only with finalized commits, to ensure unfinalized transactions
         // can access their reject votes from TransactionCertifier.
         if let Some(last_commit) = finalized_commits.last() {
-            let gc_round = DagState::calculate_gc_round(
-                last_commit.leader.round,
-                self.context.protocol_config.consensus_gc_depth(),
-            );
+            let gc_round = self
+                .dag_state
+                .read()
+                .calculate_gc_round(last_commit.leader.round);
             self.transaction_certifier.run_gc(gc_round);
         }
 
         finalized_commits
     }
 
-    // Tries directly finalizing transactions in the last commit.
-    fn try_direct_finalize_last_commit(&mut self) {
+    // Tries directly finalizing transactions in the commit.
+    fn try_direct_finalize_commit(&mut self, index: usize) {
+        let num_commits = self.pending_commits.len();
         let commit_state = self
             .pending_commits
-            .back_mut()
-            .unwrap_or_else(|| panic!("No pending commit."));
+            .get_mut(index)
+            .unwrap_or_else(|| panic!("Commit {} does not exist. len = {}", index, num_commits,));
         // Direct commit means every transaction in the commit can be considered to have a quorum of post-commit certificates,
         // unless the transaction has reject votes that do not reach quorum either.
+        assert!(!commit_state.pending_blocks.is_empty());
         let pending_blocks = std::mem::take(&mut commit_state.pending_blocks);
         for block_ref in pending_blocks {
             let reject_votes = self.transaction_certifier.get_reject_votes(&block_ref)
@@ -502,7 +562,8 @@ struct CommitState {
 
 impl CommitState {
     fn new(commit: CommittedSubDag) -> Self {
-        let pending_blocks = commit.blocks.iter().map(|b| b.reference()).collect();
+        let pending_blocks: BTreeSet<_> = commit.blocks.iter().map(|b| b.reference()).collect();
+        assert!(!pending_blocks.is_empty());
         Self {
             commit,
             pending_blocks,
@@ -579,6 +640,7 @@ mod tests {
         let (commit_sender, _commit_receiver) = unbounded_channel("consensus_commit_output");
         let commit_finalizer = CommitFinalizer::new(
             context.clone(),
+            dag_state.clone(),
             transaction_certifier.clone(),
             commit_sender,
         );
@@ -908,5 +970,92 @@ mod tests {
         for commit in finalized_commits.iter().skip(1) {
             assert!(commit.rejected_transactions_by_block.is_empty());
         }
+    }
+
+    #[tokio::test]
+    async fn test_finalize_remote_commits_with_reject_votes() {
+        let mut fixture: Fixture = create_commit_finalizer_fixture();
+        let mut all_blocks = vec![];
+
+        // Create round 1 blocks with 10 transactions each.
+        let mut dag_builder = DagBuilder::new(fixture.context.clone());
+        dag_builder.layer(1).num_transactions(10).build();
+        let round_1_blocks = dag_builder.all_blocks();
+        all_blocks.push(round_1_blocks.clone());
+
+        // Collect leaders from round 1.
+        let mut leaders = vec![round_1_blocks[0].clone()];
+
+        // Create round 2-9 blocks and set leaders until round 7.
+        let mut last_round_blocks = round_1_blocks.clone();
+        for r in 2..=9 {
+            let ancestors: Vec<BlockRef> =
+                last_round_blocks.iter().map(|b| b.reference()).collect();
+            let round_blocks: Vec<_> = (0..4)
+                .map(|i| create_block(r, i, ancestors.clone(), 0, vec![]))
+                .collect();
+            all_blocks.push(round_blocks.clone());
+            if r <= 7 && r != 5 {
+                leaders.push(round_blocks[r as usize % 4].clone());
+            }
+            last_round_blocks = round_blocks;
+        }
+
+        // Leader rounds: 1, 2, 3, 4, 6, 7.
+        assert_eq!(leaders.len(), 6);
+
+        let mut add_blocks_and_process_commit =
+            |index: usize, local: bool| -> Vec<CommittedSubDag> {
+                let leader = leaders[index].clone();
+                // Add blocks related to the commit to DagState and TransactionCertifier.
+                if local {
+                    for round_blocks in all_blocks.iter().take(leader.round() as usize + 2) {
+                        fixture.add_blocks(round_blocks.clone());
+                    }
+                } else {
+                    for round_blocks in all_blocks.iter().take(leader.round() as usize) {
+                        fixture.add_blocks(round_blocks.clone());
+                    }
+                };
+                // Generate remote commit from leader.
+                let mut committed_sub_dags = fixture.linearizer.handle_commit(vec![leader]);
+                assert_eq!(committed_sub_dags.len(), 1);
+                let mut remote_commit = committed_sub_dags.pop().unwrap();
+                remote_commit.local = local;
+                // Process the remote commit.
+                fixture
+                    .commit_finalizer
+                    .process_commit(remote_commit.clone())
+            };
+
+        // Add commit 1-3 as remote commits. There should be no finalized commits.
+        for i in 0..3 {
+            let finalized_commits = add_blocks_and_process_commit(i, false);
+            assert!(finalized_commits.is_empty());
+        }
+
+        // Buffer round 4 commit as a remote commit. This should finalize the 1st commit at round 1.
+        let finalized_commits = add_blocks_and_process_commit(3, false);
+        assert_eq!(finalized_commits.len(), 1);
+        assert_eq!(finalized_commits[0].commit_ref.index, 1);
+        assert_eq!(finalized_commits[0].leader.round, 1);
+
+        // Buffer round 6 (5th) commit as local commit. This should help finalize the commits at round 2 and 3.
+        let finalized_commits = add_blocks_and_process_commit(4, true);
+        assert_eq!(finalized_commits.len(), 2);
+        assert_eq!(finalized_commits[0].commit_ref.index, 2);
+        assert_eq!(finalized_commits[0].leader.round, 2);
+        assert_eq!(finalized_commits[1].commit_ref.index, 3);
+        assert_eq!(finalized_commits[1].leader.round, 3);
+
+        // Buffer round 7 (6th) commit as local commit. This should help finalize the commits at round 4, 6 and 7 (itself).
+        let finalized_commits = add_blocks_and_process_commit(5, true);
+        assert_eq!(finalized_commits.len(), 3);
+        assert_eq!(finalized_commits[0].commit_ref.index, 4);
+        assert_eq!(finalized_commits[0].leader.round, 4);
+        assert_eq!(finalized_commits[1].commit_ref.index, 5);
+        assert_eq!(finalized_commits[1].leader.round, 6);
+        assert_eq!(finalized_commits[2].commit_ref.index, 6);
+        assert_eq!(finalized_commits[2].leader.round, 7);
     }
 }

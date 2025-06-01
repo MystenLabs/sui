@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
 
 use consensus_config::Stake;
 use itertools::Itertools;
@@ -112,10 +112,8 @@ impl Linearizer {
         let sub_dag = CommittedSubDag::new(
             leader_block.reference(),
             to_commit,
-            BTreeMap::new(),
             timestamp_ms,
             commit.reference(),
-            vec![],
         );
 
         (sub_dag, commit)
@@ -250,13 +248,6 @@ impl Linearizer {
 
             committed_sub_dags.push(sub_dag);
         }
-
-        // Committed blocks must be persisted to storage before sending them to Sui and executing
-        // their transactions.
-        // Commit metadata can be persisted more lazily because they are recoverable. Uncommitted
-        // blocks can wait to persist too.
-        // But for simplicity, all unpersisted blocks and commits are flushed to storage.
-        self.dag_state.write().flush();
 
         committed_sub_dags
     }

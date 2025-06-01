@@ -251,10 +251,8 @@ impl DagBuilder {
             let sub_dag = CommittedSubDag::new(
                 leader_block_ref,
                 to_commit,
-                BTreeMap::new(),
                 last_timestamp_ms,
                 commit.reference(),
-                vec![],
             );
 
             self.committed_sub_dags.push((sub_dag, commit));

@@ -33,6 +33,7 @@ use crate::{
     block_manager::BlockManager,
     commit::{
         CertifiedCommit, CertifiedCommits, CommitAPI, CommittedSubDag, DecidedLeader, Decision,
+        GENESIS_COMMIT_INDEX,
     },
     commit_observer::CommitObserver,
     context::Context,
@@ -720,7 +721,9 @@ impl Core {
         assert_eq!(accepted_blocks.len(), 1);
         assert!(missing.is_empty());
 
-        // Add the block to the transaction certifier.
+        // The block must be added to transaction certifier before it is broadcasted or added to DagState.
+        // Update proposed state of blocks in local DAG.
+        // TODO(fastpath): move this logic and the logic afterwards to proposed block handler.
         if self.context.protocol_config.mysticeti_fastpath() {
             self.transaction_certifier
                 .add_voted_blocks(vec![(verified_block.clone(), vec![])]);
@@ -730,7 +733,9 @@ impl Core {
         }
 
         // Ensure the new block and its ancestors are persisted, before broadcasting it.
-        self.dag_state.write().flush();
+        // Commits cannot be persisted before being finalized. It is ok for the block to contain
+        // votes for unpersisted commits, which are fine.
+        self.dag_state.write().flush(GENESIS_COMMIT_INDEX);
 
         // Now acknowledge the transactions for their inclusion to block
         ack_transactions(verified_block.reference());
@@ -778,7 +783,7 @@ impl Core {
 
         if !certified_commits.is_empty() {
             info!(
-                "Will try to commit synced commits first : {:?}",
+                "Processing synced commits: {:?}",
                 certified_commits
                     .iter()
                     .map(|c| (c.index(), c.leader()))
@@ -824,12 +829,12 @@ impl Core {
             }
             assert!(commits_until_update > 0);
 
-            // Always try to process the synced commits first. If there are certified commits to process then the decided leaders and the commits will be returned.
-            let (mut decided_leaders, decided_certified_commits): (
+            // If there are certified commits to process, then the decided leaders and the commits will be returned.
+            let (certified_leaders, decided_certified_commits): (
                 Vec<DecidedLeader>,
                 Vec<CertifiedCommit>,
             ) = self
-                .try_decide_certified(&mut certified_commits, commits_until_update)
+                .try_select_certified_leaders(&mut certified_commits, commits_until_update)
                 .into_iter()
                 .unzip();
 
@@ -847,15 +852,17 @@ impl Core {
             self.block_manager.try_accept_committed_blocks(blocks);
 
             // If there is no certified commit to process, run the decision rule.
-            if decided_leaders.is_empty() {
-                // TODO: limit commits by commits_until_update, which may be needed when leader schedule length is reduced.
-                decided_leaders = self.committer.try_decide(self.last_decided_leader);
-
+            let (decided_leaders, local) = if certified_leaders.is_empty() {
+                // TODO: limit commits by commits_until_update for efficiency, which may be needed when leader schedule length is reduced.
+                let mut decided_leaders = self.committer.try_decide(self.last_decided_leader);
                 // Truncate the decided leaders to fit the commit schedule limit.
                 if decided_leaders.len() >= commits_until_update {
                     let _ = decided_leaders.split_off(commits_until_update);
                 }
-            }
+                (decided_leaders, true)
+            } else {
+                (certified_leaders, false)
+            };
 
             // If the decided leaders list is empty then just break the loop.
             let Some(last_decided) = decided_leaders.last().cloned() else {
@@ -889,7 +896,9 @@ impl Core {
             );
 
             // TODO: refcount subdags
-            let subdags = self.commit_observer.handle_commit(sequenced_leaders)?;
+            let subdags = self
+                .commit_observer
+                .handle_commit(sequenced_leaders, local)?;
 
             // Try to unsuspend blocks if gc_round has advanced.
             self.block_manager
@@ -1002,18 +1011,21 @@ impl Core {
         true
     }
 
-    // Try to decide which of the certified commits will have to be committed next respecting the `limit`.
+    // Try to select a prefix of certified commits to be committed next respecting the `limit`.
     // If provided `limit` is zero, it will panic.
-    // The function returns a list of commit leaders and certified commits. If empty vector is returned, it means that
-    // there are no certified commits to be committed as `certified_commits` is either empty or all of the certified
+    // The function returns a list of certified leaders and certified commits. If empty vector is returned, it means that
+    // there are no certified commits to be committed, as input `certified_commits` is either empty or all of the certified
     // commits are already committed.
     #[tracing::instrument(skip_all)]
-    fn try_decide_certified(
+    fn try_select_certified_leaders(
         &mut self,
         certified_commits: &mut Vec<CertifiedCommit>,
         limit: usize,
     ) -> Vec<(DecidedLeader, CertifiedCommit)> {
         assert!(limit > 0, "limit should be greater than 0");
+        if certified_commits.is_empty() {
+            return vec![];
+        }
 
         let to_commit = if certified_commits.len() >= limit {
             // We keep only the number of leaders as dictated by the `limit`
@@ -1024,7 +1036,7 @@ impl Core {
         };
 
         tracing::debug!(
-            "Decided {} certified leaders: {}",
+            "Selected {} certified leaders: {}",
             to_commit.len(),
             to_commit.iter().map(|c| c.leader().to_string()).join(",")
         );
@@ -1431,7 +1443,7 @@ impl CoreTextFixture {
             mysten_metrics::monitored_mpsc::unbounded_channel("consensus_block_output");
         let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
-        transaction_certifier.recover(&NoopBlockVerifier);
+        transaction_certifier.recover(&NoopBlockVerifier, 0);
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let block_receiver = signal_receivers.block_broadcast_receiver();
@@ -1585,7 +1597,7 @@ mod test {
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
-        transaction_certifier.recover(&NoopBlockVerifier);
+        transaction_certifier.recover(&NoopBlockVerifier, 0);
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
         let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
@@ -1622,14 +1634,16 @@ mod test {
             assert_eq!(ancestor.round, 4);
         }
 
-        let last_commit = store
-            .read_last_commit()
-            .unwrap()
-            .expect("last commit should be set");
+        // Flush the DAG state to storage.
+        dag_state.write().flush_all_in_test();
 
         // There were no commits prior to the core starting up but there was completed
         // rounds up to and including round 4. So we should commit leaders in round 1 & 2
         // as soon as the new block for round 5 is proposed.
+        let last_commit = store
+            .read_last_commit()
+            .unwrap()
+            .expect("last commit should be set");
         assert_eq!(last_commit.index(), 2);
         assert_eq!(dag_state.read().last_commit_index(), 2);
         let all_stored_commits = store.scan_commits((0..=CommitIndex::MAX).into()).unwrap();
@@ -1719,7 +1733,7 @@ mod test {
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
-        transaction_certifier.recover(&NoopBlockVerifier);
+        transaction_certifier.recover(&NoopBlockVerifier, 0);
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
         let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
@@ -1762,14 +1776,17 @@ mod test {
 
         // Run commit rule.
         core.try_commit(vec![]).ok();
-        let last_commit = store
-            .read_last_commit()
-            .unwrap()
-            .expect("last commit should be set");
+
+        // Flush the DAG state to storage.
+        core.dag_state.write().flush_all_in_test();
 
         // There were no commits prior to the core starting up but there was completed
         // rounds up to round 4. So we should commit leaders in round 1 & 2 as soon
         // as the new block for round 4 is proposed.
+        let last_commit = store
+            .read_last_commit()
+            .unwrap()
+            .expect("last commit should be set");
         assert_eq!(last_commit.index(), 2);
         assert_eq!(dag_state.read().last_commit_index(), 2);
         let all_stored_commits = store.scan_commits((0..=CommitIndex::MAX).into()).unwrap();
@@ -1886,6 +1903,9 @@ mod test {
         assert!(core.try_propose(false).unwrap().is_none());
         assert!(core.try_propose(true).unwrap().is_none());
 
+        // Flush the DAG state to storage.
+        dag_state.write().flush_all_in_test();
+
         // Check no commits have been persisted to dag_state & store
         let last_commit = store.read_last_commit().unwrap();
         assert!(last_commit.is_none());
@@ -1947,6 +1967,9 @@ mod test {
         let transaction_vote = transaction_votes.first().unwrap();
         assert_eq!(transaction_vote.block_ref, block_2.reference());
         assert_eq!(transaction_vote.rejects, vec![1, 4]);
+
+        // Flush the DAG state to storage.
+        dag_state.write().flush_all_in_test();
 
         // Check no commits have been persisted to dag_state & store
         let last_commit = store.read_last_commit().unwrap();
@@ -2039,6 +2062,9 @@ mod test {
             leader_schedule.clone(),
         );
 
+        // Flush the DAG state to storage.
+        dag_state.write().flush_all_in_test();
+
         // Check no commits have been persisted to dag_state or store.
         let last_commit = store.read_last_commit().unwrap();
         assert!(last_commit.is_none());
@@ -2050,7 +2076,7 @@ mod test {
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
-        transaction_certifier.recover(&NoopBlockVerifier);
+        transaction_certifier.recover(&NoopBlockVerifier, 0);
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
         let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
@@ -2068,6 +2094,9 @@ mod test {
             false,
             round_tracker,
         );
+
+        // Flush the DAG state to storage.
+        dag_state.write().flush_all_in_test();
 
         let last_commit = store
             .read_last_commit()
@@ -2195,6 +2224,9 @@ mod test {
             transaction_certifier.clone(),
             leader_schedule.clone(),
         );
+
+        // Flush the DAG state to storage.
+        dag_state.write().flush_all_in_test();
 
         // Check no commits have been persisted to dag_state or store.
         let last_commit = store.read_last_commit().unwrap();
@@ -2436,6 +2468,9 @@ mod test {
         for core_fixture in cores.iter_mut() {
             assert!(core_fixture.core.new_block(4, true).unwrap().is_some());
             assert_eq!(core_fixture.core.last_proposed_round(), 4);
+
+            // Flush the DAG state to storage.
+            core_fixture.dag_state.write().flush_all_in_test();
 
             // Check commits have been persisted to store
             let last_commit = core_fixture
@@ -3279,6 +3314,9 @@ mod test {
         }
 
         for core_fixture in cores {
+            // Flush the DAG state to storage.
+            core_fixture.dag_state.write().flush_all_in_test();
+
             // Check commits have been persisted to store
             let last_commit = core_fixture
                 .store
@@ -3471,11 +3509,8 @@ mod test {
         // We should have committed up to round 4
         assert_eq!(committed_sub_dags.len(), 4);
 
-        let last_commit = store
-            .read_last_commit()
-            .unwrap()
-            .expect("Last commit should be set");
-        assert_eq!(last_commit.reference().index, 4);
+        // Flush the DAG state to storage.
+        core.dag_state.write().flush_all_in_test();
 
         println!("Case 1. Provide no certified commits. No commit should happen.");
 
@@ -3504,6 +3539,9 @@ mod test {
         // The corresponding blocks of the certified commits should be accepted and stored before linearizing and committing the DAG.
         core.add_certified_commits(CertifiedCommits::new(certified_commits.clone(), vec![]))
             .expect("Should not fail");
+
+        // Flush the DAG state to storage.
+        core.dag_state.write().flush_all_in_test();
 
         let commits = store.scan_commits((6..=10).into()).unwrap();
 
@@ -3749,12 +3787,6 @@ mod test {
         }
 
         for core_fixture in cores {
-            // Check commits have been persisted to store
-            let last_commit = core_fixture
-                .store
-                .read_last_commit()
-                .unwrap()
-                .expect("last commit should be set");
             // There are 31 leader rounds with rounds completed up to and including
             // round 33. Round 33 blocks will only include their own blocks, so there
             // should only be 30 commits.
@@ -3770,6 +3802,16 @@ mod test {
                 Some(1) => 30,
                 _ => 31,
             };
+
+            // Flush the DAG state to storage.
+            core_fixture.dag_state.write().flush_all_in_test();
+
+            // Check commits have been persisted to store
+            let last_commit = core_fixture
+                .store
+                .read_last_commit()
+                .unwrap()
+                .expect("last commit should be set");
             assert_eq!(last_commit.index(), expected_commit_count);
             let all_stored_commits = core_fixture
                 .store
@@ -3896,6 +3938,8 @@ mod test {
         }
 
         for core_fixture in cores {
+            // Flush the DAG state to storage.
+            core_fixture.dag_state.write().flush_all_in_test();
             // Check commits have been persisted to store
             let last_commit = core_fixture
                 .store
@@ -3988,6 +4032,9 @@ mod test {
             }
         }
 
+        // Flush the DAG state to storage.
+        core_fixture.dag_state.write().flush_all_in_test();
+
         // Check commits have been persisted to store
         let last_commit = core_fixture
             .store
@@ -4006,7 +4053,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn try_decide_certified() {
+    async fn try_select_certified_leaders() {
         // GIVEN
         telemetry_subscribers::init_for_testing();
 
@@ -4034,7 +4081,7 @@ mod test {
             .map(|(_, commit)| commit)
             .collect::<Vec<_>>();
 
-        let leaders = core.try_decide_certified(&mut certified_commits, limit);
+        let leaders = core.try_select_certified_leaders(&mut certified_commits, limit);
 
         // THEN
         assert_eq!(leaders.len(), 2);

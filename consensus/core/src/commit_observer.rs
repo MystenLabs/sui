@@ -57,6 +57,7 @@ impl CommitObserver {
         let commit_interpreter = Linearizer::new(context.clone(), dag_state.clone());
         let commit_finalizer_handle = CommitFinalizer::start(
             context.clone(),
+            dag_state.clone(),
             transaction_certifier,
             commit_consumer.commit_sender,
         );
@@ -73,9 +74,14 @@ impl CommitObserver {
         observer
     }
 
+    /// From a sequence of selected leader blocks, and whether they come from local committer
+    /// or remote commit sync, creates and returns a list of committed subdags with committed blocks.
+    ///
+    /// Also, buffer the commits to DagState and forwards committed subdags to commit finalizer.
     pub(crate) fn handle_commit(
         &mut self,
         committed_leaders: Vec<VerifiedBlock>,
+        local: bool,
     ) -> ConsensusResult<Vec<CommittedSubDag>> {
         let _s = self
             .context
@@ -87,6 +93,11 @@ impl CommitObserver {
 
         let mut committed_sub_dags = self.commit_interpreter.handle_commit(committed_leaders);
         self.report_metrics(&committed_sub_dags);
+
+        // Set if the commit is produced from local DAG, or received through commit sync.
+        for subdag in committed_sub_dags.iter_mut() {
+            subdag.local = local;
+        }
 
         // Send scores as part of the first sub dag, if the leader schedule has been updated.
         let schedule_updated = self
@@ -104,7 +115,7 @@ impl CommitObserver {
 
         for commit in committed_sub_dags.iter() {
             tracing::debug!(
-                "Sending commit {} leader {} to execution.",
+                "Sending commit {} leader {} to finalization and execution.",
                 commit.commit_ref,
                 commit.leader
             );
@@ -122,15 +133,14 @@ impl CommitObserver {
 
     fn recover_and_send_commits(&mut self, last_processed_commit_index: CommitIndex) {
         let now = Instant::now();
+
         // TODO: remove this check, to allow consensus to regenerate commits?
         let last_commit = self
             .store
             .read_last_commit()
             .expect("Reading the last commit should not fail");
-
         if let Some(last_commit) = &last_commit {
             let last_commit_index = last_commit.index();
-
             assert!(last_commit_index >= last_processed_commit_index);
             if last_commit_index == last_processed_commit_index {
                 debug!("Nothing to recover for commit observer as commit index {last_commit_index} = {last_processed_commit_index} last processed index");
@@ -138,11 +148,16 @@ impl CommitObserver {
             }
         };
 
-        // We should not send the last processed commit again, so last_processed_commit_index+1
+        // We should not send the last processed commit again, so start from last_processed_commit_index+1
         let unsent_commits = self
             .store
             .scan_commits(((last_processed_commit_index + 1)..=CommitIndex::MAX).into())
             .expect("Scanning commits should not fail");
+
+        // Buffered unsent commits in DAG state which is required to contain them when they are flushed.
+        self.dag_state
+            .write()
+            .recover_commits_to_write(unsent_commits.clone());
 
         info!("Recovering commit observer after index {last_processed_commit_index} with last commit {} and {} unsent commits", last_commit.map(|c|c.index()).unwrap_or_default(), unsent_commits.len());
 
@@ -300,13 +315,15 @@ mod tests {
             .collect::<Vec<_>>();
 
         // Commit first 5 leaders.
-        let mut commits = observer.handle_commit(leaders[0..5].to_vec()).unwrap();
+        let mut commits = observer
+            .handle_commit(leaders[0..5].to_vec(), true)
+            .unwrap();
 
         // Trigger a leader schedule update.
         leader_schedule.update_leader_schedule_v2(&dag_state);
 
         // Commit the next 5 leaders.
-        commits.extend(observer.handle_commit(leaders[5..].to_vec()).unwrap());
+        commits.extend(observer.handle_commit(leaders[5..].to_vec(), true).unwrap());
 
         // Check commits are returned by CommitObserver::handle_commit is accurate
         let mut expected_stored_refs: Vec<BlockRef> = vec![];
@@ -449,7 +466,7 @@ mod tests {
         // consumer of the consensus output channel.
         let expected_last_processed_index: usize = 2;
         let mut commits = observer
-            .handle_commit(leaders[..expected_last_processed_index].to_vec())
+            .handle_commit(leaders[..expected_last_processed_index].to_vec(), true)
             .unwrap();
 
         // Check commits sent over consensus output channel is accurate
@@ -474,12 +491,12 @@ mod tests {
             expected_last_processed_index as CommitIndex
         );
 
-        // Handle next batch of leaders (1), these will be sent by consensus but not
+        // Handle next batch of leaders (10 - 2 = 8), these will be sent by consensus but not
         // "processed" by consensus output channel. Simulating something happened on
         // the consumer side where the commits were not persisted.
         commits.append(
             &mut observer
-                .handle_commit(leaders[expected_last_processed_index..].to_vec())
+                .handle_commit(leaders[expected_last_processed_index..].to_vec(), true)
                 .unwrap(),
         );
 
@@ -585,7 +602,7 @@ mod tests {
         // Commit all of the leaders and "receive" the subdags as the consumer of
         // the consensus output channel.
         let expected_last_processed_index: usize = 10;
-        let commits = observer.handle_commit(leaders.clone()).unwrap();
+        let commits = observer.handle_commit(leaders.clone(), true).unwrap();
 
         // Check commits sent over consensus output channel is accurate
         let mut processed_subdag_index = 0;
