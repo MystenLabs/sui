@@ -2,4 +2,4 @@
 source: crates/sui-display/src/v2/parser.rs
 expression: "strands(r#\"{vector<u64>[1, 2, foo . 'bar']\"#)"
 ---
-Error: Unexpected string "bar" at offset 26, expected one of an identifier, or a decimal number
+Error: Unexpected whitespace followed by string "bar" at offset 26, expected one of an identifier, or a decimal number

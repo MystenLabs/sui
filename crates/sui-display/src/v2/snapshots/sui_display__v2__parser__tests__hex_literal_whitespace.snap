@@ -2,4 +2,4 @@
 source: crates/sui-display/src/v2/parser.rs
 expression: "strands(r#\"{x '1234'}\"#)"
 ---
-Error: Unexpected string "1234" at offset 4, expected one of ':', '|', or '}'
+Error: Unexpected whitespace followed by string "1234" at offset 4, expected one of ':', '|', or '}'
