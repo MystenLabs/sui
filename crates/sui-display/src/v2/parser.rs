@@ -731,20 +731,13 @@ impl<'s> Parser<'s> {
     }
 
     fn parse_numeric_suffix(&mut self, num: &'s str, radix: u32) -> Result<Literal<'s>, Error> {
-        let literal = match_token_opt! { self.lexer;
+        Ok(match_token! { self.lexer;
             Lit(false, T::Ident, _, "u8") => { self.lexer.next(); Literal::U8(read_u8(num, radix, "'u8'")?) },
             Lit(false, T::Ident, _, "u16") => { self.lexer.next(); Literal::U16(read_u16(num, radix, "'u16'")?) },
             Lit(false, T::Ident, _, "u32") => { self.lexer.next(); Literal::U32(read_u32(num, radix, "'u32'")?) },
             Lit(false, T::Ident, _, "u64") => { self.lexer.next(); Literal::U64(read_u64(num, radix, "'u64'")?) },
             Lit(false, T::Ident, _, "u128") => { self.lexer.next(); Literal::U128(read_u128(num, radix, "'u128'")?) },
             Lit(false, T::Ident, _, "u256") => { self.lexer.next(); Literal::U256(read_u256(num, radix, "'u256'")?) },
-        };
-
-        // If there was no explicit type suffix, assume `u64`.
-        Ok(if let Match::Found(lit) = literal {
-            lit
-        } else {
-            Literal::U64(read_u64(num, radix, "'u64'")?)
         })
     }
 }
@@ -1056,9 +1049,9 @@ mod tests {
     fn test_numeric_literals() {
         assert_snapshot!(strands(
             "Decimal Literals: \
-            { 42 | 42u8 | 1_234u16 | 56_789_012_345u64 | 678_901_234_567_890_123_456u128 | 7_890_123_456_789_012_345_678_901_234_567_890_123_456u256 } \
+            { 42u8 | 1_234u16 | 56_789_012_345u64 | 678_901_234_567_890_123_456u128 | 7_890_123_456_789_012_345_678_901_234_567_890_123_456u256 } \
             Hexadecimal literals: \
-            { 0x42 | 0x42u8 | 0x123u16 | 0x4_5678u32 | 0x90_1234_5678u64 | 0x90_1234_5678_9012_3456u128 | 0x78_9012_3456_7890_1234_5679_0123_4567_8901u256 }\
+            { 0x42u8 | 0x123u16 | 0x4_5678u32 | 0x90_1234_5678u64 | 0x90_1234_5678_9012_3456u128 | 0x78_9012_3456_7890_1234_5679_0123_4567_8901u256 }\
             "
         ));
     }
@@ -1085,10 +1078,10 @@ mod tests {
     #[test]
     fn test_vector_literals() {
         assert_snapshot!(strands(
-            "{ vector[1u8, 2u8, 3u8, foo.bar, baz[42]] \
+            "{ vector[1u8, 2u8, 3u8, foo.bar, baz[42u64]] \
              | vector<u16>[]
              | vector<u32>
-             | vector< u64 > [10, 11, 12,]
+             | vector< u64 > [10u64, 11u64, 12u64,]
              | vector <u128,>[ 42u128 ]
              | vector<u256>[ ] }"
         ));
@@ -1097,7 +1090,7 @@ mod tests {
     #[test]
     fn test_struct_positional_literals() {
         assert_snapshot!(strands(
-            "{ 0x1::string::String(42, 'foo', vector[1, 2, 3]) \
+            "{ 0x1::string::String(42u64, 'foo', vector[1u256, 2u256, 3u256]) \
              | 0x2::coin::Coin<0x2::sui::SUI> (true, 100u32,) }"
         ));
     }
@@ -1105,7 +1098,7 @@ mod tests {
     #[test]
     fn test_struct_named_literals() {
         assert_snapshot!(strands(
-            "{ 0x1::string::String { length: 42, value: 'foo', data: vector[1, 2, 3], } \
+            "{ 0x1::string::String { length: 42u64, value: 'foo', data: vector[1u128, 2u128, 3u128], } \
              | 0x2::coin::Coin<0x2::sui::SUI> { is_locked: true, amount: 100u32 } }"
         ));
     }
@@ -1113,7 +1106,7 @@ mod tests {
     #[test]
     fn test_enum_positional_literals() {
         assert_snapshot!(strands(
-            "{ 0x1::option::Option<u64>::Some#1(42,) \
+            "{ 0x1::option::Option<u64>::Some#1(42u64,) \
              | 0x1::option::Option<u32>::1(43u32) \
              | 0x1::option::Option<u16>::0() }"
         ));
@@ -1122,7 +1115,7 @@ mod tests {
     #[test]
     fn test_enum_named_literals() {
         assert_snapshot!(strands(
-            "{ 0x1::option::Option<u64>::Some#1 { value: 42, } \
+            "{ 0x1::option::Option<u64>::Some#1 { value: 42u64, } \
              | 0x1::option::Option<u32>::1 { value: 43u32 } \
              | 0x1::option::Option<u16>::None#0 {} }"
         ));
@@ -1135,7 +1128,7 @@ mod tests {
 
     #[test]
     fn test_enum_literal_whitespace() {
-        assert_snapshot!(strands(r#"{0x1::option::Option<u64>::Some # 1 (42)}"#));
+        assert_snapshot!(strands(r#"{0x1::option::Option<u64>::Some # 1 (42u64)}"#));
     }
 
     #[test]
@@ -1266,12 +1259,7 @@ mod tests {
     }
 
     #[test]
-    fn test_numeric_overflow_implicit() {
-        assert_snapshot!(strands(r#"{ 678_901_234_567_890_123_456 }"#));
-    }
-
-    #[test]
-    fn test_numeric_overflow_explicit() {
+    fn test_numeric_overflow() {
         assert_snapshot!(strands(r#"{ 0x90_1234_5678u32 }"#));
     }
 
@@ -1307,12 +1295,12 @@ mod tests {
 
     #[test]
     fn test_vector_literal_trailing() {
-        assert_snapshot!(strands(r#"{vector[1, 2, 3"#));
+        assert_snapshot!(strands(r#"{vector[1u64, 2u64, 3u64"#));
     }
 
     #[test]
     fn test_vector_literal_arity() {
-        assert_snapshot!(strands(r#"{vector<u64, u8>[1, 2, 3]}"#));
+        assert_snapshot!(strands(r#"{vector<u8, u64>[1u8, 2u8, 3u8]}"#));
     }
 
     #[test]
@@ -1322,7 +1310,7 @@ mod tests {
 
     #[test]
     fn test_vector_literal_empty_angles() {
-        assert_snapshot!(strands(r#"{vector<>[1]}"#));
+        assert_snapshot!(strands(r#"{vector<>[1u8]}"#));
     }
 
     #[test]
@@ -1352,12 +1340,12 @@ mod tests {
 
     #[test]
     fn test_vector_literal_no_comma() {
-        assert_snapshot!(strands(r#"{vector<u64>[1 2]}"#));
+        assert_snapshot!(strands(r#"{vector<u64>[1u64 2u64]}"#));
     }
 
     #[test]
     fn test_vector_element_error() {
-        assert_snapshot!(strands(r#"{vector<u64>[1, 2, foo . 'bar']"#));
+        assert_snapshot!(strands(r#"{vector<u64>[1u64, 2u64, foo . 'bar']"#));
     }
 
     #[test]
@@ -1368,50 +1356,52 @@ mod tests {
     #[test]
     fn test_struct_literal_positional_trailing() {
         assert_snapshot!(strands(
-            r#"{0x1::string::String(42, 'foo', vector[1, 2, 3]"#
+            r#"{0x1::string::String(42u64, 'foo', vector[1u64, 2u64, 3u64]"#
         ));
     }
 
     #[test]
     fn test_struct_literal_named_trailing() {
         assert_snapshot!(strands(
-            r#"{0x1::string::String { length: 42, value: 'foo', data: vector[1, 2, 3]"#,
+            r#"{0x1::string::String { length: 42u64, value: 'foo', data: vector[1u64, 2u64, 3u64]"#,
         ));
     }
 
     #[test]
     fn test_enum_literal_positional_trailing() {
-        assert_snapshot!(strands(r#"{0x1::option::Option<u64>::Some#1(42, 43, 44}"#));
+        assert_snapshot!(strands(
+            r#"{0x1::option::Option<u64>::Some#1(42u64, 43u64, 44u64}"#
+        ));
     }
 
     #[test]
     fn test_enum_literal_named_trailing() {
         assert_snapshot!(strands(
-            r#"{0x1::option::Option<u64>::Some#1 { value: 42, other: 43,"#,
+            r#"{0x1::option::Option<u64>::Some#1 { value: 42u16, other: 43u32,"#,
         ));
     }
 
     #[test]
     fn test_struct_hybrid_positional_named() {
         assert_snapshot!(strands(
-            r#"{0x1::string::String(length: 42, value: 'foo', data: vector[1, 2, 3])}"#
+            r#"{0x1::string::String(length: 42u64, value: 'foo', data: vector[1u64, 2u64, 3u64])}"#
         ));
     }
 
     #[test]
     fn test_struct_hybrid_named_positional() {
         assert_snapshot!(strands(
-            r#"{0x1::string::String { 42, 'foo', vector[1, 2, 3] }}"#
+            r#"{0x1::string::String { 42u64, 'foo', vector[1u64, 2u64, 3u64] }}"#
         ));
     }
 
     #[test]
     fn test_enum_missing_index() {
-        assert_snapshot!(strands(r#"{0x1::option::Option<u64>::Some(42)}"#));
+        assert_snapshot!(strands(r#"{0x1::option::Option<u64>::Some(42u64)}"#));
     }
 
     #[test]
     fn test_enum_variant_overflow() {
-        assert_snapshot!(strands(r#"{0x1::option::Option<u64>::Some#70000(42)}"#));
+        assert_snapshot!(strands(r#"{0x1::option::Option<u64>::Some#70000(42u64)}"#));
     }
 }

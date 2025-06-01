@@ -2,4 +2,4 @@
 source: crates/sui-display/src/v2/parser.rs
 expression: "strands(r#\"{42 u64}\"#)"
 ---
-Error: Unexpected whitespace followed by identifier "u64" at offset 4, expected one of ':', '|', or '}'
+Error: Unexpected whitespace followed by identifier "u64" at offset 4, expected one of 'u128', 'u16', 'u256', 'u32', 'u64', or 'u8'

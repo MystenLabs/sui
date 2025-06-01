@@ -1,14 +1,14 @@
 ---
 source: crates/sui-display/src/v2/parser.rs
-expression: "strands(\"{ 0x1::string::String(42, 'foo', vector[1, 2, 3]) \\\n             | 0x2::coin::Coin<0x2::sui::SUI> (true, 100u32,) }\")"
+expression: "strands(\"{ 0x1::string::String(42u64, 'foo', vector[1u256, 2u256, 3u256]) \\\n             | 0x2::coin::Coin<0x2::sui::SUI> (true, 100u32,) }\")"
 ---
 { 0x0000000000000000000000000000000000000000000000000000000000000001::string::String(
       42u64,
       "foo",
       vector[
-          1u64,
-          2u64,
-          3u64,
+          1u256,
+          2u256,
+          3u256,
       ],
   )
 | 0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>(
