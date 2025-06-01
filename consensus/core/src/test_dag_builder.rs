@@ -176,10 +176,6 @@ impl DagBuilder {
                 self.gc_round
             }
 
-            fn gc_enabled(&self) -> bool {
-                self.context.protocol_config.gc_depth() > 0
-            }
-
             fn set_committed(&mut self, block_ref: &BlockRef) -> bool {
                 let Some((block, committed)) = self.blocks.get_mut(block_ref) else {
                     panic!("Block {:?} should be found in store", block_ref);
@@ -224,12 +220,8 @@ impl DagBuilder {
 
             let leader_block_ref = leader_block.reference();
 
-            let (to_commit, rejected_transactions) = Linearizer::linearize_sub_dag(
-                &self.context.clone(),
-                leader_block.clone(),
-                self.last_committed_rounds.clone(),
-                &mut storage,
-            );
+            let (to_commit, rejected_transactions) =
+                Linearizer::linearize_sub_dag(leader_block.clone(), &mut storage);
 
             last_timestamp_ms = Linearizer::calculate_commit_timestamp(
                 &self.context.clone(),

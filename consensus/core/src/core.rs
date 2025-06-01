@@ -337,41 +337,28 @@ impl Core {
     ) -> ConsensusResult<BTreeSet<BlockRef>> {
         let _scope = monitored_scope("Core::add_certified_commits");
 
-        // We want to enable the commit process logic when GC is enabled.
-        if self.dag_state.read().gc_enabled() {
-            let votes = certified_commits.votes().to_vec();
-            let commits = self
-                .filter_new_commits(certified_commits.commits().to_vec())
-                .expect("Certified commits validation failed");
+        let votes = certified_commits.votes().to_vec();
+        let commits = self
+            .filter_new_commits(certified_commits.commits().to_vec())
+            .expect("Certified commits validation failed");
 
-            // Try to accept the certified commit votes.
-            // Even if they may not be part of a future commit, these blocks are useful for certifying
-            // commits when helping peers sync commits.
-            let (_, missing_block_refs) = self.block_manager.try_accept_blocks(votes);
+        // Try to accept the certified commit votes.
+        // Even if they may not be part of a future commit, these blocks are useful for certifying
+        // commits when helping peers sync commits.
+        let (_, missing_block_refs) = self.block_manager.try_accept_blocks(votes);
 
-            // Try to commit the new blocks. Take into account the trusted commit that has been provided.
-            self.try_commit(commits)?;
+        // Try to commit the new blocks. Take into account the trusted commit that has been provided.
+        self.try_commit(commits)?;
 
-            // Try to propose now since there are new blocks accepted.
-            self.try_propose(false)?;
+        // Try to propose now since there are new blocks accepted.
+        self.try_propose(false)?;
 
-            // Now set up leader timeout if needed.
-            // This needs to be called after try_commit() and try_propose(), which may
-            // have advanced the threshold clock round.
-            self.try_signal_new_round();
+        // Now set up leader timeout if needed.
+        // This needs to be called after try_commit() and try_propose(), which may
+        // have advanced the threshold clock round.
+        self.try_signal_new_round();
 
-            return Ok(missing_block_refs);
-        }
-
-        // If GC is not enabled then process blocks as usual.
-        let blocks = certified_commits
-            .commits()
-            .iter()
-            .flat_map(|commit| commit.blocks())
-            .cloned()
-            .collect::<Vec<_>>();
-
-        self.add_blocks(blocks)
+        Ok(missing_block_refs)
     }
 
     /// Checks if provided block refs have been accepted. If not, missing block refs are kept for synchronizations.
@@ -1030,11 +1017,6 @@ impl Core {
         certified_commits: &mut Vec<CertifiedCommit>,
         limit: usize,
     ) -> Vec<(DecidedLeader, CertifiedCommit)> {
-        // If GC is disabled then should not run any of this logic.
-        if !self.dag_state.read().gc_enabled() {
-            return Vec::new();
-        }
-
         assert!(limit > 0, "limit should be greater than 0");
 
         let to_commit = if certified_commits.len() >= limit {
@@ -1513,7 +1495,6 @@ mod test {
     use consensus_config::{AuthorityIndex, Parameters};
     use futures::{stream::FuturesUnordered, StreamExt};
     use mysten_metrics::monitored_mpsc;
-    use rstest::rstest;
     use sui_protocol_config::ProtocolConfig;
     use tokio::time::sleep;
 
@@ -1964,17 +1945,15 @@ mod test {
         assert_eq!(dag_state.read().last_commit_index(), 0);
     }
 
-    #[rstest]
     #[tokio::test]
-    async fn test_commit_and_notify_for_block_status(#[values(0, 2)] gc_depth: u32) {
+    async fn test_commit_and_notify_for_block_status() {
         telemetry_subscribers::init_for_testing();
         let (mut context, mut key_pairs) = Context::new_for_test(4);
+        const GC_DEPTH: u32 = 2;
 
-        if gc_depth > 0 {
-            context
-                .protocol_config
-                .set_consensus_gc_depth_for_testing(gc_depth);
-        }
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(GC_DEPTH);
 
         let context = Arc::new(context);
 
@@ -2086,19 +2065,13 @@ mod test {
         while let Some(result) = block_status_subscriptions.next().await {
             let status = result.unwrap();
 
-            // If gc is enabled, then we expect some blocks to be garbage collected.
-            if gc_depth > 0 {
-                match status {
-                    BlockStatus::Sequenced(block_ref) => {
-                        assert!(block_ref.round == 1 || block_ref.round == 5);
-                    }
-                    BlockStatus::GarbageCollected(block_ref) => {
-                        assert!(block_ref.round == 2 || block_ref.round == 3);
-                    }
+            match status {
+                BlockStatus::Sequenced(block_ref) => {
+                    assert!(block_ref.round == 1 || block_ref.round == 5);
                 }
-            } else {
-                // otherwise all of them should be committed
-                assert!(matches!(status, BlockStatus::Sequenced(_)));
+                BlockStatus::GarbageCollected(block_ref) => {
+                    assert!(block_ref.round == 2 || block_ref.round == 3);
+                }
             }
         }
     }
