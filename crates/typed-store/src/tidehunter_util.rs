@@ -205,6 +205,11 @@ impl ThConfig {
             prefix: Some(prefix),
         }
     }
+
+    pub fn with_config(mut self, config: KeySpaceConfig) -> Self {
+        self.config = config;
+        self
+    }
 }
 
 pub fn default_cells_per_mutex() -> usize {

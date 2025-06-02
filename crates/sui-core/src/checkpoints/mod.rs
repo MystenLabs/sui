@@ -220,6 +220,11 @@ impl CheckpointStoreTables {
             KeySpaceConfig::default(),
             vec![0, 0, 0, 0, 0, 0, 0, 32],
         );
+        let watermarks_config = KeySpaceConfig::new()
+            .with_value_cache_size(10)
+            .disable_unload();
+        let lru_config = KeySpaceConfig::new().with_value_cache_size(1000);
+        let checkpoint_by_digest_config = digest_config.clone().with_config(lru_config.clone());
         let configs = vec![
             ("checkpoint_content", digest_config.clone()),
             (
@@ -228,10 +233,13 @@ impl CheckpointStoreTables {
             ),
             ("full_checkpoint_content", config_u64.clone()),
             ("certified_checkpoints", config_u64.clone()),
-            ("checkpoint_by_digest", digest_config.clone()),
+            ("checkpoint_by_digest", checkpoint_by_digest_config),
             ("locally_computed_checkpoints", config_u64.clone()),
             ("epoch_last_checkpoint_map", config_u64.clone()),
-            ("watermarks", ThConfig::new(4, 1, KeyType::uniform(1))),
+            (
+                "watermarks",
+                ThConfig::new_with_config(4, 1, KeyType::uniform(1), watermarks_config),
+            ),
         ];
         Self::open_tables_read_write(
             path.to_path_buf(),
