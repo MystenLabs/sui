@@ -48,7 +48,7 @@ use typed_store::traits::Map;
 use typed_store::DBMapUtils;
 use typed_store::TypedStoreError;
 
-const CURRENT_DB_VERSION: u64 = 1;
+const CURRENT_DB_VERSION: u64 = 2;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct MetadataInfo {
