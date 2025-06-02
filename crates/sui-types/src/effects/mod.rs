@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use self::effects_v2::TransactionEffectsV2;
+pub use self::effects_v2::TransactionEffectsV2;
 use crate::base_types::{ExecutionDigests, ObjectID, ObjectRef, SequenceNumber};
 use crate::committee::{Committee, EpochId};
 use crate::crypto::{
@@ -19,7 +19,7 @@ use crate::gas::GasCostSummary;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::object::Owner;
 use crate::storage::WriteKind;
-use effects_v1::TransactionEffectsV1;
+pub use effects_v1::TransactionEffectsV1;
 pub use effects_v2::UnchangedSharedKind;
 use enum_dispatch::enum_dispatch;
 use object_change::AccumulatorWriteV1;
