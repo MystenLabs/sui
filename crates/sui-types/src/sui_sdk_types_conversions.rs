@@ -1303,6 +1303,25 @@ impl From<crate::messages_consensus::ConsensusDeterminedVersionAssignments>
     }
 }
 
+impl From<crate::authenticator_state::ActiveJwk> for ActiveJwk {
+    fn from(value: crate::authenticator_state::ActiveJwk) -> Self {
+        let crate::authenticator_state::ActiveJwk { jwk_id, jwk, epoch } = value;
+        Self {
+            jwk_id: JwkId {
+                iss: jwk_id.iss,
+                kid: jwk_id.kid,
+            },
+            jwk: Jwk {
+                kty: jwk.kty,
+                e: jwk.e,
+                n: jwk.n,
+                alg: jwk.alg,
+            },
+            epoch,
+        }
+    }
+}
+
 // TODO remaining set of enums to add impls for to ensure new additions are caught during review
 //
 // impl From<crate::transaction::TransactionKind> for TransactionKind {
