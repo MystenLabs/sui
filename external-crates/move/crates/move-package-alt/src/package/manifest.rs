@@ -14,11 +14,12 @@ use tracing::{debug, info};
 
 use crate::{
     dependency::{DependencySet, UnpinnedDependencyInfo},
-    errors::{FileHandle, Located, ManifestError, ManifestErrorKind, PackageResult, with_file},
+    errors::{FileHandle, Located, ManifestError, ManifestErrorKind, PackageResult, TheFile},
     flavor::{MoveFlavor, Vanilla},
 };
 
 use super::*;
+use sha2::{Digest as ShaDigest, Sha256};
 
 // TODO: add 2025 edition
 const ALLOWED_EDITIONS: &[&str] = &["2024", "2024.beta", "legacy"];
@@ -91,7 +92,7 @@ impl<F: MoveFlavor> Manifest<F> {
         debug!("Reading manifest from {:?}", path.as_ref());
         let contents = std::fs::read_to_string(&path)?;
 
-        let (manifest, file_id) = with_file(&path, toml_edit::de::from_str::<Self>)?;
+        let (manifest, file_id) = TheFile::with_file(&path, toml_edit::de::from_str::<Self>)?;
 
         match manifest {
             Ok(manifest) => {
@@ -165,9 +166,9 @@ impl<F: MoveFlavor> Manifest<F> {
     pub fn environments(&self) -> &BTreeMap<EnvironmentName, F::EnvironmentID> {
         &self.environments
     }
+}
 
-    /// Compute a digest of this file
-    pub fn digest(&self) -> Digest {
-        todo!()
-    }
+/// Compute a digest of this input data using SHA-256.
+pub fn digest(data: &[u8]) -> Digest {
+    format!("{:X}", Sha256::digest(data))
 }
