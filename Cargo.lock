@@ -8210,6 +8210,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_spanned",
+ "sha2 0.9.9",
  "thiserror 1.0.69",
  "tokio",
  "toml 0.5.11",
