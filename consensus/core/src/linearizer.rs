@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
 use consensus_config::{AuthorityIndex, Stake};
 use itertools::Itertools;
@@ -23,8 +23,6 @@ pub(crate) trait BlockStoreAPI {
 
     fn gc_round(&self) -> Round;
 
-    fn gc_enabled(&self) -> bool;
-
     fn set_committed(&mut self, block_ref: &BlockRef) -> bool;
 
     fn is_committed(&self, block_ref: &BlockRef) -> bool;
@@ -39,10 +37,6 @@ impl BlockStoreAPI
 
     fn gc_round(&self) -> Round {
         DagState::gc_round(self)
-    }
-
-    fn gc_enabled(&self) -> bool {
-        DagState::gc_enabled(self)
     }
 
     fn set_committed(&mut self, block_ref: &BlockRef) -> bool {
@@ -96,15 +90,10 @@ impl Linearizer {
         let last_commit_index = dag_state.last_commit_index();
         let last_commit_digest = dag_state.last_commit_digest();
         let last_commit_timestamp_ms = dag_state.last_commit_timestamp_ms();
-        let last_committed_rounds = dag_state.last_committed_rounds();
 
         // Now linearize the sub-dag starting from the leader block
-        let (to_commit, rejected_transactions) = Self::linearize_sub_dag(
-            &self.context,
-            leader_block.clone(),
-            last_committed_rounds,
-            &mut dag_state,
-        );
+        let (to_commit, rejected_transactions) =
+            Self::linearize_sub_dag(leader_block.clone(), &mut dag_state);
 
         let timestamp_ms = Self::calculate_commit_timestamp(
             &self.context,
@@ -186,12 +175,9 @@ impl Linearizer {
     }
 
     pub(crate) fn linearize_sub_dag(
-        context: &Context,
         leader_block: VerifiedBlock,
-        last_committed_rounds: Vec<u32>,
         dag_state: &mut impl BlockStoreAPI,
     ) -> (Vec<VerifiedBlock>, Vec<Vec<TransactionIndex>>) {
-        let gc_enabled = dag_state.gc_enabled();
         // The GC round here is calculated based on the last committed round of the leader block. The algorithm will attempt to
         // commit blocks up to this GC round. Once this commit has been processed and written to DagState, then gc round will update
         // and on the processing of the next commit we'll have it already updated, so no need to do any gc_round recalculations here.
@@ -201,88 +187,50 @@ impl Linearizer {
         let mut buffer = vec![leader_block];
         let mut to_commit = Vec::new();
 
-        // The new logic will perform the recursion without stopping at the highest round round that has been committed per authority. Instead it will
+        // Perform the recursion without stopping at the highest round round that has been committed per authority. Instead it will
         // allow to commit blocks that are lower than the highest committed round for an authority but higher than gc_round.
-        if context.protocol_config.consensus_linearize_subdag_v2() {
-            assert!(
-                dag_state.set_committed(&leader_block_ref),
-                "Leader block with reference {:?} attempted to be committed twice",
-                leader_block_ref
-            );
+        assert!(
+            dag_state.set_committed(&leader_block_ref),
+            "Leader block with reference {:?} attempted to be committed twice",
+            leader_block_ref
+        );
 
-            while let Some(x) = buffer.pop() {
-                to_commit.push(x.clone());
+        while let Some(x) = buffer.pop() {
+            to_commit.push(x.clone());
 
-                let ancestors: Vec<VerifiedBlock> = dag_state
-                    .get_blocks(
-                        &x.ancestors()
-                            .iter()
-                            .copied()
-                            .filter(|ancestor| {
-                                ancestor.round > gc_round && !dag_state.is_committed(ancestor)
-                            })
-                            .collect::<Vec<_>>(),
-                    )
-                    .into_iter()
-                    .map(|ancestor_opt| {
-                        ancestor_opt.expect("We should have all uncommitted blocks in dag state.")
-                    })
-                    .collect();
+            let ancestors: Vec<VerifiedBlock> = dag_state
+                .get_blocks(
+                    &x.ancestors()
+                        .iter()
+                        .copied()
+                        .filter(|ancestor| {
+                            ancestor.round > gc_round && !dag_state.is_committed(ancestor)
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                .into_iter()
+                .map(|ancestor_opt| {
+                    ancestor_opt.expect("We should have all uncommitted blocks in dag state.")
+                })
+                .collect();
 
-                for ancestor in ancestors {
-                    buffer.push(ancestor.clone());
-                    assert!(
-                        dag_state.set_committed(&ancestor.reference()),
-                        "Block with reference {:?} attempted to be committed twice",
-                        ancestor.reference()
-                    );
-                }
-            }
-        } else {
-            let mut committed = HashSet::new();
-            assert!(committed.insert(leader_block_ref));
-
-            while let Some(x) = buffer.pop() {
-                to_commit.push(x.clone());
-
-                let ancestors: Vec<VerifiedBlock> = dag_state
-                    .get_blocks(
-                        &x.ancestors()
-                            .iter()
-                            .copied()
-                            .filter(|ancestor| {
-                                // We skip the block if we already committed it or we reached a
-                                // round that we already committed.
-                                // TODO: for Fast Path we need to ammend the recursion rule here and allow us to commit blocks all the way up to the `gc_round`.
-                                // Some additional work will be needed to make sure that we keep the uncommitted blocks up to the `gc_round` across commits.
-                                !committed.contains(ancestor)
-                                    && last_committed_rounds[ancestor.author] < ancestor.round
-                            })
-                            .filter(|ancestor| {
-                                // Keep the block if GC is not enabled or it is enabled and the block is above the gc_round. We do this
-                                // to stop the recursion early and avoid going to deep when it's unnecessary.
-                                !gc_enabled || ancestor.round > gc_round
-                            })
-                            .collect::<Vec<_>>(),
-                    )
-                    .into_iter()
-                    .map(|ancestor_opt| {
-                        ancestor_opt.expect("We should have all uncommitted blocks in dag state.")
-                    })
-                    .collect();
-
-                for ancestor in ancestors {
-                    buffer.push(ancestor.clone());
-                    assert!(committed.insert(ancestor.reference()));
-                }
+            for ancestor in ancestors {
+                buffer.push(ancestor.clone());
+                assert!(
+                    dag_state.set_committed(&ancestor.reference()),
+                    "Block with reference {:?} attempted to be committed twice",
+                    ancestor.reference()
+                );
             }
         }
 
         // The above code should have not yielded any blocks that are <= gc_round, but just to make sure that we'll never
         // commit anything that should be garbage collected we attempt to prune here as well.
-        if gc_enabled {
-            assert!(to_commit.iter().all(|block| block.round() > gc_round), "No blocks <= {gc_round} should be committed. Leader round {}, blocks {to_commit:?}.", leader_block_ref);
-        }
+        assert!(
+            to_commit.iter().all(|block| block.round() > gc_round),
+            "No blocks <= {gc_round} should be committed. Leader round {}, blocks {to_commit:?}.",
+            leader_block_ref
+        );
 
         // Sort the blocks of the sub-dag blocks
         sort_sub_dag_blocks(&mut to_commit);
@@ -730,10 +678,9 @@ mod tests {
         }
     }
 
-    /// This test will run the linearizer with GC disabled (gc_depth = 0) and gc enabled (gc_depth = 3) and make
+    /// This test will run the linearizer with gc_depth = 3 and make
     /// sure that for the exact same DAG the linearizer will commit different blocks according to the rules.
     #[rstest]
-    #[case(0, false)]
     #[case(3, false)]
     #[case(3, true)]
     #[tokio::test]
@@ -751,12 +698,6 @@ mod tests {
         context
             .protocol_config
             .set_consensus_median_based_commit_timestamp_for_testing(consensus_median_timestamp);
-
-        if gc_depth == 0 {
-            context
-                .protocol_config
-                .set_consensus_linearize_subdag_v2_for_testing(false);
-        }
 
         let context = Arc::new(context);
         let dag_state = Arc::new(RwLock::new(DagState::new(
@@ -843,32 +784,19 @@ mod tests {
                 // * 2 blocks on round 2, again as no commit happened on round 3, we commit the "sub dag" of leader of round 3, which will be another 2 blocks
                 assert_eq!(subdag.blocks.len(), 6);
             } else {
-                // GC is enabled, so we expect to see only blocks of round >= 2
-                if gc_depth > 0 {
-                    // Now it's going to be the first time that a leader will see the blocks of authority 3 and will attempt to commit
-                    // the long chain. However, due to GC it will only commit blocks of round > 1. That's because it will commit blocks
-                    // up to previous leader's round (round = 4) minus the gc_depth = 3, so that will be gc_round = 4 - 3 = 1. So we expect
-                    // to see on the sub dag committed blocks of round >= 2.
-                    assert_eq!(subdag.blocks.len(), 5);
+                // Now it's going to be the first time that a leader will see the blocks of authority 3 and will attempt to commit
+                // the long chain. However, due to GC it will only commit blocks of round > 1. That's because it will commit blocks
+                // up to previous leader's round (round = 4) minus the gc_depth = 3, so that will be gc_round = 4 - 3 = 1. So we expect
+                // to see on the sub dag committed blocks of round >= 2.
+                assert_eq!(subdag.blocks.len(), 5);
 
-                    assert!(
-                        subdag.blocks.iter().all(|block| block.round() >= 2),
-                        "Found blocks that are of round < 2."
-                    );
+                assert!(
+                    subdag.blocks.iter().all(|block| block.round() >= 2),
+                    "Found blocks that are of round < 2."
+                );
 
-                    // Also ensure that gc_round has advanced with the latest committed leader
-                    assert_eq!(dag_state.read().gc_round(), subdag.leader.round - gc_depth);
-                } else {
-                    // GC is disabled, so we expect to see all blocks of round >= 1
-                    assert_eq!(subdag.blocks.len(), 6);
-                    assert!(
-                        subdag.blocks.iter().all(|block| block.round() >= 1),
-                        "Found blocks that are of round < 1."
-                    );
-
-                    // GC round should never have moved
-                    assert_eq!(dag_state.read().gc_round(), 0);
-                }
+                // Also ensure that gc_round has advanced with the latest committed leader
+                assert_eq!(dag_state.read().gc_round(), subdag.leader.round - gc_depth);
             }
             for block in subdag.blocks.iter() {
                 assert!(block.round() <= leaders[idx].round());

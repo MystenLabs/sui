@@ -162,6 +162,10 @@ message ExecutionError {
 
     // Certificate is canceled because randomness could not be generated this epoch.
     EXECUTION_CANCELED_DUE_TO_RANDOMNESS_UNAVAILABLE = 37;
+
+    MOVE_VECTOR_ELEM_TOO_BIG = 38;
+
+    MOVE_RAW_VALUE_TOO_BIG = 39;
   }
 
   optional ExecutionErrorKind kind = 2;
@@ -272,6 +276,10 @@ message CommandArgumentError {
     // Shared object operations such as wrapping, freezing, or converting to owned are not
     // allowed.
     SHARED_OBJECT_OPERATION_NOT_ALLOWED = 12;
+
+    // Invalid argument arity. Expected a single argument but found a result that expanded to
+    // multiple arguments.
+    INVALID_ARGUMENT_ARITY = 13;
   }
 
   optional CommandArgumentErrorKind kind = 2;
