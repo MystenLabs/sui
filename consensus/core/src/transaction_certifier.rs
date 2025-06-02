@@ -74,9 +74,9 @@ impl TransactionCertifier {
     /// Own votes are not stored persistently, so blocks which have not been included in
     /// proposed blocks are verified and voted again.
     ///
-    /// Reject votes for persisted blocks need to be recovered from the lowest round of committed blocks
-    /// un-processed by the commit consumer. Without this, during transaction finalization of
-    /// recovered commits, reject votes will be missing for some blocks.
+    /// Reject votes for un-finalized transactions need to be recovered from all blocks after
+    /// the GC round of last commit processed by the commit consumer. Without this, during
+    /// transaction finalization of recovered commits, reject votes will be missing for some blocks.
     pub(crate) fn recover(
         &self,
         block_verifier: &impl BlockVerifier,
@@ -86,8 +86,8 @@ impl TransactionCertifier {
         let dag_state = self.dag_state.read();
         let store = dag_state.store().clone();
 
-        // Reads the last processed commit to where recovery starts. It can be None when consensus starts
-        // in a new epoch.
+        // Reads the last processed commit to determine where recovery starts. It can be None when
+        // consensus starts in a new epoch.
         let last_processed_commit = store
             .scan_commits((last_processed_commit_index..=last_processed_commit_index).into())
             .unwrap()
@@ -131,11 +131,11 @@ impl TransactionCertifier {
                 .map(|b| {
                     if b.round() <= dag_state_gc_round || dag_state.is_hard_linked(&b.reference()) {
                         // Own votes are unnecessary for blocks already included in own blocks,
-                        // or outside of GC bound.
+                        // or outside of local DAG GC bound.
                         (b, vec![])
                     } else {
-                        // Own votes are needed for blocks not yet included in own blocks, to be added to
-                        // proposed blocks together.
+                        // Own votes are needed for blocks not yet included in own blocks. They will be
+                        // added to proposed blocks together.
                         let reject_transaction_votes = block_verifier
                             .verify_and_vote(b.signed_block())
                             .unwrap_or_else(|e| {
@@ -226,8 +226,9 @@ impl TransactionCertifier {
     /// and updates the GC round for the certifier.
     ///
     /// IMPORTANT: the gc_round used here can trail the latest gc_round from DagState.
-    /// This is because reject votes received by transactions below gc_round still need to
-    /// be accessed from CommitFinalizer.
+    /// This is because the gc round here is determined by CommitFinalizer, which needs to process
+    /// commits before the latest commit in DagState. Reject votes received by transactions below
+    /// local DAG gc_round may still need to be accessed from CommitFinalizer.
     pub(crate) fn run_gc(&self, gc_round: Round) {
         let dag_state_gc_round = self.dag_state.read().gc_round();
         assert!(
@@ -246,8 +247,8 @@ impl TransactionCertifier {
 struct CertifierState {
     context: Arc<Context>,
 
-    // Received blocks' refs, to votes on those blocks.
-    // Even if a block has not reject votes on its transactions, it still has an entry here.
+    // Maps received blocks' refs to votes on those blocks from other blocks.
+    // Even if a block has no reject votes on its transactions, it still has an entry here.
     votes: BTreeMap<BlockRef, VoteInfo>,
 
     // Highest round where blocks are GC'ed.
@@ -272,6 +273,16 @@ impl CertifierState {
             let blocks = self.add_voted_block(voted_block, reject_txn_votes);
             certified_blocks.extend(blocks);
         }
+
+        if !certified_blocks.is_empty() {
+            self.context
+                .metrics
+                .node_metrics
+                .certifier_output_blocks
+                .with_label_values(&["voted"])
+                .inc_by(certified_blocks.len() as u64);
+        }
+
         certified_blocks
     }
 
@@ -281,10 +292,24 @@ impl CertifierState {
         reject_txn_votes: Vec<TransactionIndex>,
     ) -> Vec<CertifiedBlock> {
         if voted_block.round() <= self.gc_round {
-            // Block is outside of GC bound.
+            // Ignore the block and own votes, since they are outside of GC bound.
             return vec![];
         }
 
+        // Count own reject votes against each peer authority.
+        let peer_hostname = &self
+            .context
+            .committee
+            .authority(voted_block.author())
+            .hostname;
+        self.context
+            .metrics
+            .node_metrics
+            .certifier_own_reject_votes
+            .with_label_values(&[peer_hostname])
+            .inc_by(reject_txn_votes.len() as u64);
+
+        // Initialize the entry for the voted block.
         let vote_info = self.votes.entry(voted_block.reference()).or_default();
         if vote_info.block.is_some() {
             // Input block has already been processed and added to the state.
@@ -317,14 +342,24 @@ impl CertifierState {
             }
         }
 
+        if !certified_blocks.is_empty() {
+            self.context
+                .metrics
+                .node_metrics
+                .certifier_output_blocks
+                .with_label_values(&["proposed"])
+                .inc_by(certified_blocks.len() as u64);
+        }
+
         certified_blocks
     }
 
     fn add_proposed_block(&mut self, proposed_block: VerifiedBlock) -> Vec<CertifiedBlock> {
         if proposed_block.round() <= self.gc_round + 2 {
-            // Skip additional certification if transactions that can be certified have already been GC'ed.
-            // This also skips the rest when the proposed block has been GC'ed from the certifier state.
-            // This is possible because add_proposed_block() is async from block propagation.
+            // Skip if transactions that can be certified have already been GC'ed.
+            // Skip also when the proposed block has been GC'ed from the certifier state.
+            // This is possible because this function (add_proposed_block()) is async from
+            // commit finalization, which advances the GC round of the certifier.
             return vec![];
         }
 
@@ -392,6 +427,12 @@ impl CertifierState {
                 break;
             }
         }
+
+        self.context
+            .metrics
+            .node_metrics
+            .certifier_gc_round
+            .set(self.gc_round as i64);
     }
 }
 

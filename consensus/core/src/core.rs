@@ -734,7 +734,7 @@ impl Core {
 
         // Ensure the new block and its ancestors are persisted, before broadcasting it.
         // Commits cannot be persisted before being finalized. It is ok for the block to contain
-        // votes for unpersisted commits, which are fine.
+        // votes for unpersisted commits.
         self.dag_state.write().flush(GENESIS_COMMIT_INDEX);
 
         // Now acknowledge the transactions for their inclusion to block
@@ -829,7 +829,8 @@ impl Core {
             }
             assert!(commits_until_update > 0);
 
-            // If there are certified commits to process, then the decided leaders and the commits will be returned.
+            // If there are certified commits to process, find out which leaders and commits from them
+            // are decided and use them as the next commits.
             let (certified_leaders, decided_certified_commits): (
                 Vec<DecidedLeader>,
                 Vec<CertifiedCommit>,
@@ -1011,11 +1012,11 @@ impl Core {
         true
     }
 
-    // Try to select a prefix of certified commits to be committed next respecting the `limit`.
+    // Tries to select a prefix of certified commits to be committed next respecting the `limit`.
     // If provided `limit` is zero, it will panic.
     // The function returns a list of certified leaders and certified commits. If empty vector is returned, it means that
     // there are no certified commits to be committed, as input `certified_commits` is either empty or all of the certified
-    // commits are already committed.
+    // commits have been already committed.
     #[tracing::instrument(skip_all)]
     fn try_select_certified_leaders(
         &mut self,
@@ -1046,7 +1047,7 @@ impl Core {
             .map(|commit| {
                 let leader = commit.blocks().last().expect("Certified commit should have at least one block");
                 assert_eq!(leader.reference(), commit.leader(), "Last block of the committed sub dag should have the same digest as the leader of the commit");
-                // There is no knowledge of direct commit with certified commits, so assuming indirect commit to be safe.
+                // There is no knowledge of direct commit with certified commits, so assuming indirect commit.
                 let leader = DecidedLeader::Commit(leader.clone(), /* direct */ false);
                 UniversalCommitter::update_metrics(&self.context, &leader, Decision::Certified);
                 (leader, commit)

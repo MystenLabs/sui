@@ -74,10 +74,10 @@ impl CommitObserver {
         observer
     }
 
-    /// From a sequence of selected leader blocks, and whether they come from local committer
-    /// or remote commit sync, creates and returns a list of committed subdags with committed blocks.
+    /// Creates and returns a list of committed subdags containing committed blocks, from a sequence
+    /// of selected leader blocks, and whether they come from local committer or commit sync remotely.
     ///
-    /// Also, buffer the commits to DagState and forwards committed subdags to commit finalizer.
+    /// Also, buffers the commits to DagState and forwards committed subdags to commit finalizer.
     pub(crate) fn handle_commit(
         &mut self,
         committed_leaders: Vec<VerifiedBlock>,
@@ -154,7 +154,8 @@ impl CommitObserver {
             .scan_commits(((last_processed_commit_index + 1)..=CommitIndex::MAX).into())
             .expect("Scanning commits should not fail");
 
-        // Buffered unsent commits in DAG state which is required to contain them when they are flushed.
+        // Buffered unsent commits in DAG state which is required to contain them when they are flushed
+        // by CommitFinalizer.
         self.dag_state
             .write()
             .recover_commits_to_write(unsent_commits.clone());
@@ -185,7 +186,9 @@ impl CommitObserver {
             info!("Sending commit {} during recovery", commit.index());
             let committed_sub_dag =
                 load_committed_subdag_from_store(self.store.as_ref(), commit, reputation_scores);
-            // Assume indirect commit during recovery to be safe.
+            // committed_sub_dag has the `local` field set to true, and will be treated as from
+            // local committer. This is fine even if the commit is originally from commit sync,
+            // because only finalized commits are persisted and can be recovered.
             self.commit_finalizer_handle
                 .send(committed_sub_dag)
                 .unwrap();
