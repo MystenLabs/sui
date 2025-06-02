@@ -21,15 +21,12 @@ pub struct PackagePath(PathBuf);
 
 impl PackagePath {
     /// Create a canonical path from the given [`dir`]. This function checks that there is a
-    /// `Move.toml` file in this directory.
+    /// directory at `dir` and that it contains a valid Move package, i.e., it has a `Move.toml`
+    /// file.
     pub fn new(dir: PathBuf) -> PackagePathResult<Self> {
-        println!("Creating PackagePath from directory: {}", dir.display());
-
         let path = dir
             .canonicalize()
             .map_err(|e| PackagePathError::InvalidDirectory { path: dir.clone() })?;
-
-        println!("Canonicalized path: {}", path.display());
 
         if !dir.is_dir() {
             return Err(PackagePathError::InvalidDirectory { path: dir.clone() });
@@ -47,6 +44,7 @@ impl PackagePath {
         &self.0
     }
 
+    /// The path to the Move.toml file in this package.
     pub fn manifest_path(&self) -> PathBuf {
         self.0.join("Move.toml")
     }
