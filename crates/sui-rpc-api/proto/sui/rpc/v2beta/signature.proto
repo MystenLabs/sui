@@ -47,7 +47,7 @@ message MultisigMemberPublicKey {
   // The signature scheme of this public key.
   optional SignatureScheme scheme = 1;
 
-  // Public key bytes if scheme is ed25519 | secp256k1 | secp256r1.
+  // Public key bytes if scheme is ed25519 | secp256k1 | secp256r1 | passkey.
   optional bytes public_key = 2;
 
   // A zklogin public identifier if scheme is zklogin.
@@ -98,6 +98,9 @@ message MultisigMemberSignature {
 
   // The zklogin authenticator if scheme is `ZKLOGIN`.
   optional ZkLoginAuthenticator zklogin = 3;
+
+  // The passkey authenticator if scheme is `PASSKEY`.
+  optional PasskeyAuthenticator passkey = 4;
 }
 
 // A zklogin authenticator.
@@ -107,6 +110,7 @@ message ZkLoginAuthenticator {
   // Maximum epoch for which the proof is valid.
   optional uint64 max_epoch = 2;
   // User signature with the public key attested to by the provided proof.
+  // TODO maybe we make a SimpleSignature message type for better type-safety clarity?
   optional UserSignature signature = 3;
 }
 
@@ -180,6 +184,7 @@ message PasskeyAuthenticator {
   optional string client_data_json = 2;
 
   // A secp256r1 signature.
+  // TODO maybe we make a SimpleSignature message type for better type-safety clarity?
   optional UserSignature signature = 3;
 }
 
