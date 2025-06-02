@@ -193,7 +193,7 @@ pub fn create_accumulator_update_transactions(
 
     let epoch_arg = builder.pure(epoch).unwrap();
     let checkpoint_height_arg = builder.pure(checkpoint_height).unwrap();
-    let idx_arg = builder.pure(0).unwrap();
+    let idx_arg = builder.pure(0u64).unwrap();
 
     builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
