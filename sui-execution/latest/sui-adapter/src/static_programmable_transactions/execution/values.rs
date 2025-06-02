@@ -16,6 +16,7 @@ use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     digests::TransactionDigest,
     error::ExecutionError,
+    move_package::UpgradeCap,
     object::Owner,
 };
 pub enum InputValue<'a> {
@@ -275,11 +276,14 @@ impl ValueView for Value {
 //**************************************************************************************************
 
 impl Value {
+    pub fn id(address: AccountAddress) -> Self {
+        // ID { address }
+        Self(VMValue::struct_(Struct::pack([VMValue::address(address)])))
+    }
+
     pub fn uid(address: AccountAddress) -> Self {
         // UID { ID { address } }
-        Self(VMValue::struct_(Struct::pack([VMValue::struct_(
-            Struct::pack([VMValue::address(address)]),
-        )])))
+        Self(VMValue::struct_(Struct::pack([Self::id(address).0])))
     }
 
     pub fn receiving(id: ObjectID, version: SequenceNumber) -> Self {
@@ -326,6 +330,27 @@ impl Value {
             VMValue::u64(0),
             VMValue::u64(0),
         ]))))
+    }
+
+    pub fn upgrade_cap(cap: UpgradeCap) -> Self {
+        // public struct UpgradeCap has key, store {
+        //     id: UID,
+        //     package: ID,
+        //     version: u64,
+        //     policy: u8,
+        // }
+        let UpgradeCap {
+            id,
+            package,
+            version,
+            policy,
+        } = cap;
+        Self(VMValue::struct_(Struct::pack([
+            Self::uid(id.id.bytes.into()).0,
+            Self::id(package.bytes.into()).0,
+            VMValue::u64(version),
+            VMValue::u8(policy),
+        ])))
     }
 }
 

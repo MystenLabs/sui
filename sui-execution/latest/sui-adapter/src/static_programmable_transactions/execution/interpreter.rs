@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    adapter::substitute_package_id,
     execution_mode::ExecutionMode,
     gas_charger::GasCharger,
     sp,
@@ -15,7 +16,7 @@ use move_core_types::account_address::AccountAddress;
 use move_trace_format::format::MoveTraceBuilder;
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Instant};
 use sui_types::{
-    base_types::TxContext,
+    base_types::{ObjectID, TxContext},
     error::{ExecutionError, ExecutionErrorKind},
     execution::{ExecutionTiming, ResultWithTimings},
     metrics::LimitsMetrics,
@@ -218,7 +219,9 @@ fn execute_command<Mode: ExecutionMode>(
             let items: Vec<CtxValue> = context.arguments(items)?;
             vec![CtxValue::vec_pack(ty, items)?]
         }
-        T::Command_::Publish(..) => todo!("RUNTIME"),
+        T::Command_::Publish(modules, dep_ids) => {
+            publish::<Mode>(context, &modules, &dep_ids, trace_builder_opt)?
+        }
         T::Command_::Upgrade(..) => todo!("RUNTIME"),
     };
     if Mode::TRACK_EXECUTION {
@@ -228,4 +231,35 @@ fn execute_command<Mode: ExecutionMode>(
     }
     context.result(result)?;
     Ok(())
+}
+
+fn publish<Mode: ExecutionMode>(
+    context: &mut Context,
+    module_bytes: &[Vec<u8>],
+    dep_ids: &[ObjectID],
+    trace_builder_opt: Option<&mut MoveTraceBuilder>,
+) -> Result<Vec<CtxValue>, ExecutionError> {
+    let mut modules = context.deserialize_modules(module_bytes)?;
+
+    // It should be fine that this does not go through ExecutionContext::fresh_id since the Move
+    // runtime does not to know about new packages created, since Move objects and Move packages
+    // cannot interact
+    let runtime_id = if Mode::packages_are_predefined() {
+        // do not calculate or substitute id for predefined packages
+        (*modules[0].self_id().address()).into()
+    } else {
+        let id = context.tx_context.borrow_mut().fresh_id();
+        substitute_package_id(&mut modules, id)?;
+        id
+    };
+
+    context.publish_and_init_package(runtime_id, modules, dep_ids, trace_builder_opt)?;
+
+    let values = if Mode::packages_are_predefined() {
+        // no upgrade cap for genesis modules
+        vec![]
+    } else {
+        vec![context.new_upgrade_cap(runtime_id)]
+    };
+    Ok(values)
 }

@@ -13,7 +13,9 @@ use crate::{
     execution_mode::ExecutionMode,
     gas_charger::GasCharger,
     gas_meter::SuiGasMeter,
-    programmable_transactions::{context::finish, data_store::SuiDataStore},
+    programmable_transactions::{
+        context::finish, data_store::SuiDataStore, execution::fetch_packages,
+    },
     sp,
     static_programmable_transactions::{
         better_todo,
@@ -26,10 +28,13 @@ use crate::{
 };
 use indexmap::IndexMap;
 use move_binary_format::{
+    CompiledModule,
     errors::{Location, PartialVMError, VMResult},
     file_format::{CodeOffset, FunctionDefinitionIndex},
+    file_format_common::VERSION_6,
 };
 use move_core_types::{
+    account_address::AccountAddress,
     identifier::IdentStr,
     language_storage::{ModuleId, StructTag},
 };
@@ -47,10 +52,13 @@ use sui_types::{
     base_types::{ObjectID, TxContext, TxContextKind},
     error::{ExecutionError, ExecutionErrorKind},
     execution::ExecutionResults,
+    execution_config_utils::to_binary_config,
     metrics::LimitsMetrics,
-    move_package::MovePackage,
+    move_package::{MovePackage, UpgradeCap},
     object::{MoveObject, Object, Owner},
+    storage::PackageObject,
 };
+use sui_verifier::INIT_FN_NAME;
 use tracing::instrument;
 
 macro_rules! unwrap {
@@ -407,6 +415,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         Ok(())
     }
 
+    //
+    // Arguments and Values
+    //
+
     /// NOTE! This does not charge gas and should not be used directly. It is exposed for
     /// dev-inspect
     fn location_value<'a>(
@@ -540,6 +552,36 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         Ok(())
     }
 
+    pub fn copy_value(&mut self, value: &CtxValue) -> Result<CtxValue, ExecutionError> {
+        Ok(CtxValue(copy_value(self.gas_charger, self.env, &value.0)?))
+    }
+
+    pub fn new_coin(&mut self, amount: u64) -> Result<CtxValue, ExecutionError> {
+        let id = self.tx_context.borrow_mut().fresh_id();
+        object_runtime_mut!(self)?
+            .new_id(id)
+            .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
+        Ok(CtxValue(Value::coin(id, amount)))
+    }
+
+    pub fn destroy_coin(&mut self, coin: CtxValue) -> Result<u64, ExecutionError> {
+        let (id, amount) = coin.0.unpack_coin()?;
+        object_runtime_mut!(self)?
+            .delete_id(id)
+            .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
+        Ok(amount)
+    }
+
+    pub fn new_upgrade_cap(&self, storage_id: ObjectID) -> CtxValue {
+        let id = self.tx_context.borrow_mut().fresh_id();
+        let cap = UpgradeCap::new(id, storage_id);
+        CtxValue(Value::upgrade_cap(cap))
+    }
+
+    //
+    // Move calls
+    //
+
     pub fn vm_move_call(
         &mut self,
         function: T::LoadedFunction,
@@ -602,6 +644,164 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         Ok(values.into_iter().map(|v| CtxValue(v.into())).collect())
     }
 
+    //
+    // Publish and Upgrade
+    //
+
+    pub fn deserialize_modules(
+        &mut self,
+        module_bytes: &[Vec<u8>],
+    ) -> Result<Vec<CompiledModule>, ExecutionError> {
+        assert_invariant!(
+            !module_bytes.is_empty(),
+            "empty package is checked in transaction input checker"
+        );
+        self.gas_charger
+            .charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
+
+        let binary_config = to_binary_config(self.env.protocol_config);
+        let modules = module_bytes
+            .iter()
+            .map(|b| {
+                CompiledModule::deserialize_with_config(b, &binary_config)
+                    .map_err(|e| e.finish(Location::Undefined))
+            })
+            .collect::<VMResult<Vec<CompiledModule>>>()
+            .map_err(|e| self.env.convert_vm_error(e))?;
+        Ok(modules)
+    }
+
+    fn fetch_packages(
+        &mut self,
+        dependency_ids: &[ObjectID],
+    ) -> Result<Vec<PackageObject>, ExecutionError> {
+        fetch_packages(&self.env.state_view, dependency_ids)
+    }
+
+    fn publish_and_verify_modules(
+        &mut self,
+        package_id: ObjectID,
+        modules: &[CompiledModule],
+    ) -> Result<(), ExecutionError> {
+        // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
+        let binary_version = self.env.protocol_config.move_binary_format_version();
+        let new_module_bytes: Vec<_> = modules
+            .iter()
+            .map(|m| {
+                let mut bytes = Vec::new();
+                let version = if binary_version > VERSION_6 {
+                    m.version
+                } else {
+                    VERSION_6
+                };
+                m.serialize_with_version(version, &mut bytes).unwrap();
+                bytes
+            })
+            .collect();
+        let mut data_store = SuiDataStore::new(&self.env.linkage_view, &self.new_packages);
+        self.env
+            .vm
+            .get_runtime()
+            .publish_module_bundle(
+                new_module_bytes,
+                AccountAddress::from(package_id),
+                &mut data_store,
+                &mut SuiGasMeter(self.gas_charger.move_gas_status_mut()),
+            )
+            .map_err(|e| self.env.convert_vm_error(e))?;
+
+        // run the Sui verifier
+        for module in modules {
+            // Run Sui bytecode verifier, which runs some additional checks that assume the Move
+            // bytecode verifier has passed.
+            sui_verifier::verifier::sui_verify_module_unmetered(
+                module,
+                &BTreeMap::new(),
+                &self
+                    .env
+                    .protocol_config
+                    .verifier_config(/* signing_limits */ None),
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn init_modules(
+        &mut self,
+        modules: &[CompiledModule],
+        mut trace_builder_opt: Option<&mut MoveTraceBuilder>,
+    ) -> Result<(), ExecutionError> {
+        let modules_to_init = modules.iter().filter_map(|module| {
+            for fdef in &module.function_defs {
+                let fhandle = module.function_handle_at(fdef.function);
+                let fname = module.identifier_at(fhandle.name);
+                if fname == INIT_FN_NAME {
+                    return Some(module.self_id());
+                }
+            }
+            None
+        });
+
+        for module_id in modules_to_init {
+            let args = vec![CtxValue(Value::tx_context(
+                self.tx_context.borrow().digest(),
+            )?)];
+            let return_values = self
+                .execute_function_bypass_visibility(
+                    &module_id,
+                    INIT_FN_NAME,
+                    vec![],
+                    args,
+                    trace_builder_opt.as_deref_mut(),
+                )
+                .map_err(|e| self.env.convert_vm_error(e))?;
+
+            assert_invariant!(
+                return_values.is_empty(),
+                "init should not have return values"
+            )
+        }
+
+        Ok(())
+    }
+
+    pub fn publish_and_init_package(
+        &mut self,
+        runtime_id: ObjectID,
+        modules: Vec<CompiledModule>,
+        dep_ids: &[ObjectID],
+        trace_builder_opt: Option<&mut MoveTraceBuilder>,
+    ) -> Result<(), ExecutionError> {
+        let dependencies = self.fetch_packages(dep_ids)?;
+        let package = MovePackage::new_initial(
+            &modules,
+            self.env.protocol_config.max_move_package_size(),
+            self.env.protocol_config.move_binary_format_version(),
+            dependencies.iter().map(|p| p.move_package()),
+        )?;
+
+        // Here we optimistically push the package that is being published/upgraded
+        // and if there is an error of any kind (verification or module init) we
+        // remove it.
+        // The call to `pop_last_package` later is fine because we cannot re-enter and
+        // the last package we pushed is the one we are verifying and running the init from
+        self.env.linkage_view.set_linkage(&package)?;
+        self.new_packages.push(package);
+        let res = self
+            .publish_and_verify_modules(runtime_id, &modules)
+            .and_then(|_| self.init_modules(&modules, trace_builder_opt));
+        self.env.linkage_view.reset_linkage()?;
+        if res.is_err() {
+            self.new_packages.pop();
+        }
+        res
+    }
+
+    //
+    // Commands
+    //
+
     pub fn transfer_object(
         &mut self,
         recipient: Owner,
@@ -619,25 +819,9 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         Ok(())
     }
 
-    pub fn copy_value(&mut self, value: &CtxValue) -> Result<CtxValue, ExecutionError> {
-        Ok(CtxValue(copy_value(self.gas_charger, self.env, &value.0)?))
-    }
-
-    pub fn new_coin(&mut self, amount: u64) -> Result<CtxValue, ExecutionError> {
-        let id = self.tx_context.borrow_mut().fresh_id();
-        object_runtime_mut!(self)?
-            .new_id(id)
-            .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
-        Ok(CtxValue(Value::coin(id, amount)))
-    }
-
-    pub fn destroy_coin(&mut self, coin: CtxValue) -> Result<u64, ExecutionError> {
-        let (id, amount) = coin.0.unpack_coin()?;
-        object_runtime_mut!(self)?
-            .delete_id(id)
-            .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
-        Ok(amount)
-    }
+    //
+    // Dev Inspect tracking
+    //
 
     pub fn location_updates(
         &mut self,

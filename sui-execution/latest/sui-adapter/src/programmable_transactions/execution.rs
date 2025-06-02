@@ -74,7 +74,7 @@ mod checked {
             MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt, UpgradeTicket,
             normalize_deserialized_modules,
         },
-        storage::{PackageObject, get_package_objects},
+        storage::{BackingPackageStore, PackageObject, get_package_objects},
         transaction::{Command, ProgrammableMoveCall, ProgrammableTransaction},
         transfer::RESOLVED_RECEIVING_STRUCT,
         type_input::{StructInput, TypeInput},
@@ -599,7 +599,7 @@ mod checked {
 
         // For newly published packages, runtime ID matches storage ID.
         let storage_id = runtime_id;
-        let dependencies = fetch_packages(context, &dep_ids)?;
+        let dependencies = fetch_packages(&context.state_view, &dep_ids)?;
         let package =
             context.new_package(&modules, dependencies.iter().map(|p| p.move_package()))?;
 
@@ -702,7 +702,7 @@ mod checked {
         }
 
         // Check that this package ID points to a package and get the package we're upgrading.
-        let current_package = fetch_package(context, &upgrade_ticket.package.bytes)?;
+        let current_package = fetch_package(&context.state_view, &upgrade_ticket.package.bytes)?;
 
         let mut modules = deserialize_modules::<Mode>(context, &module_bytes)?;
         let runtime_id = current_package.move_package().original_package_id();
@@ -711,7 +711,7 @@ mod checked {
         // Upgraded packages share their predecessor's runtime ID but get a new storage ID.
         let storage_id = context.tx_context.borrow_mut().fresh_id();
 
-        let dependencies = fetch_packages(context, &dep_ids)?;
+        let dependencies = fetch_packages(&context.state_view, &dep_ids)?;
         let package = context.upgrade_package(
             storage_id,
             current_package.move_package(),
@@ -832,11 +832,11 @@ mod checked {
         })
     }
 
-    fn fetch_package(
-        context: &ExecutionContext<'_, '_, '_>,
+    pub fn fetch_package(
+        state_view: &impl BackingPackageStore,
         package_id: &ObjectID,
     ) -> Result<PackageObject, ExecutionError> {
-        let mut fetched_packages = fetch_packages(context, vec![package_id])?;
+        let mut fetched_packages = fetch_packages(state_view, vec![package_id])?;
         assert_invariant!(
             fetched_packages.len() == 1,
             "Number of fetched packages must match the number of package object IDs if successful."
@@ -849,12 +849,12 @@ mod checked {
         }
     }
 
-    fn fetch_packages<'ctx, 'vm, 'state, 'a>(
-        context: &'ctx ExecutionContext<'vm, 'state, 'a>,
+    pub fn fetch_packages<'ctx, 'state>(
+        state_view: &'state impl BackingPackageStore,
         package_ids: impl IntoIterator<Item = &'ctx ObjectID>,
     ) -> Result<Vec<PackageObject>, ExecutionError> {
         let package_ids: BTreeSet<_> = package_ids.into_iter().collect();
-        match get_package_objects(&context.state_view, package_ids) {
+        match get_package_objects(state_view, package_ids) {
             Err(e) => Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::PublishUpgradeMissingDependency,
                 e,
