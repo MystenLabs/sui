@@ -2330,6 +2330,7 @@ pub struct Owner {
     /// Address or ObjectId of the owner
     #[prost(string, optional, tag = "2")]
     pub address: ::core::option::Option<::prost::alloc::string::String>,
+    /// The `initial_shared_version` if kind is `SHARED` or `start_version` if kind `CONSENSUS_ADDRESS`.
     #[prost(uint64, optional, tag = "3")]
     pub version: ::core::option::Option<u64>,
 }
@@ -2353,6 +2354,7 @@ pub mod owner {
         Object = 2,
         Shared = 3,
         Immutable = 4,
+        ConsensusAddress = 5,
     }
     impl OwnerKind {
         /// String value of the enum field names used in the ProtoBuf definition.
@@ -2366,6 +2368,7 @@ pub mod owner {
                 Self::Object => "OBJECT",
                 Self::Shared => "SHARED",
                 Self::Immutable => "IMMUTABLE",
+                Self::ConsensusAddress => "CONSENSUS_ADDRESS",
             }
         }
         /// Creates an enum from field names used in the ProtoBuf definition.
@@ -2376,6 +2379,7 @@ pub mod owner {
                 "OBJECT" => Some(Self::Object),
                 "SHARED" => Some(Self::Shared),
                 "IMMUTABLE" => Some(Self::Immutable),
+                "CONSENSUS_ADDRESS" => Some(Self::ConsensusAddress),
                 _ => None,
             }
         }

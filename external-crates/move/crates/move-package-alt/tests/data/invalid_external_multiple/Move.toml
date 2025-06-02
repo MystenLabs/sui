@@ -1,0 +1,2 @@
+[dependencies]
+foo = { r.mvr = "a", r.ext = "b" }

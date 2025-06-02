@@ -280,8 +280,8 @@ async fn test_sampling_time() {
     assert!(sampling_interval.sample());
 }
 
-#[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-mod tide_hunter_tests {
+#[cfg(tidehunter)]
+mod tidehunter_tests {
     use super::*;
     use std::collections::BTreeMap;
     use typed_store::tidehunter_util::ThConfig;
@@ -302,7 +302,7 @@ mod tide_hunter_tests {
         ];
         let db = ThTable::open_tables_read_write(
             primary_path.clone(),
-            MetricConf::default(),
+            MetricConf::new("test_th"),
             BTreeMap::from_iter(configs),
         );
         let (key, value) = ("key".to_string(), "value".to_string());

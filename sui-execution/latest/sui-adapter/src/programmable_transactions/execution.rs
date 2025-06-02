@@ -387,7 +387,7 @@ mod checked {
                     trace_builder_opt,
                 );
 
-                context.linkage_view.reset_linkage();
+                context.linkage_view.reset_linkage()?;
                 return_values?
             }
             Command::Publish(modules, dep_ids) => execute_move_publish::<Mode>(
@@ -593,7 +593,7 @@ mod checked {
         let res = publish_and_verify_modules(context, runtime_id, &modules).and_then(|_| {
             init_modules::<Mode>(context, argument_updates, &modules, trace_builder_opt)
         });
-        context.linkage_view.reset_linkage();
+        context.linkage_view.reset_linkage()?;
         if res.is_err() {
             context.pop_package();
         }
@@ -701,7 +701,7 @@ mod checked {
 
         context.linkage_view.set_linkage(&package)?;
         let res = publish_and_verify_modules(context, runtime_id, &modules);
-        context.linkage_view.reset_linkage();
+        context.linkage_view.reset_linkage()?;
         res?;
 
         check_compatibility(
@@ -1143,7 +1143,7 @@ mod checked {
                 check_non_entry_signature::<Mode>(context, module_id, function, &signature)?
             }
         };
-        check_private_generics(context, module_id, function, type_arguments)?;
+        check_private_generics(module_id, function)?;
         Ok(LoadedFunctionInfo {
             kind: function_kind,
             signature,
@@ -1242,11 +1242,9 @@ mod checked {
             .collect()
     }
 
-    fn check_private_generics(
-        _context: &mut ExecutionContext,
+    pub fn check_private_generics(
         module_id: &ModuleId,
         function: &IdentStr,
-        _type_arguments: &[Type],
     ) -> Result<(), ExecutionError> {
         let module_ident = (module_id.address(), module_id.name());
         if module_ident == (&SUI_FRAMEWORK_ADDRESS, EVENT_MODULE) {

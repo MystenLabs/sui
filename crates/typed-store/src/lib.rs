@@ -16,7 +16,7 @@ pub use traits::{DbIterator, Map};
 pub mod memstore;
 pub mod metrics;
 pub mod rocks;
-#[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+#[cfg(tidehunter)]
 pub mod tidehunter_util;
 mod util;
 pub use metrics::DBMetrics;

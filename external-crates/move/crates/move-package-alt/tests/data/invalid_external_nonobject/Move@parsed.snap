@@ -1,0 +1,8 @@
+---
+source: crates/move-package-alt/tests/test_runner.rs
+---
+error: TOML parse error at line 2, column 7
+  |
+2 | foo = { r = 0 }
+  |       ^^^^^^^^^
+invalid type: integer `0`, expected a map for key `r`

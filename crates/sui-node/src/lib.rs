@@ -461,7 +461,7 @@ impl SuiNode {
         );
 
         // Initialize metrics to track db usage before creating any stores
-        DBMetrics::init(&prometheus_registry);
+        DBMetrics::init(registry_service.clone());
 
         // Initialize Mysten metrics.
         mysten_metrics::init_metrics(&prometheus_registry);
@@ -1387,7 +1387,6 @@ impl SuiNode {
                     state.clone(),
                     consensus_adapter.clone(),
                     checkpoint_service.clone(),
-                    state.transaction_manager().clone(),
                     sui_tx_validator_metrics.clone(),
                 ),
             )
