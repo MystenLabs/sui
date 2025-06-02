@@ -32,6 +32,7 @@ Manifest {
             dependency_info: Local(
                 LocalDependency {
                     local: "./bar",
+                    relative_to_parent_dir: "tests/data/basic_with_bar",
                 },
             ),
             is_override: false,
@@ -65,6 +66,7 @@ Manifest {
                     data: String(
                         "@pkg/qwer",
                     ),
+                    containing_file: "tests/data/basic_with_bar/Move.toml",
                 },
             ),
             is_override: false,

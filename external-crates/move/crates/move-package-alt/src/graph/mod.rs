@@ -7,7 +7,10 @@ use crate::{
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::{
-        EnvironmentName, Package, PackageName, PackagePath, lockfile::Lockfile, manifest::Manifest,
+        EnvironmentName, Package, PackageName,
+        lockfile::Lockfile,
+        manifest::{Manifest, digest},
+        paths::PackagePath,
     },
 };
 use petgraph::graph::{DiGraph, NodeIndex};
@@ -82,8 +85,10 @@ impl<F: MoveFlavor> PackageGraph<F> {
     pub async fn load_from_lockfile_ignore_digests(
         path: &PackagePath,
         env: &EnvironmentName,
-    ) -> PackageResult<Self> {
-        todo!()
+    ) -> PackageResult<Option<Self>> {
+        PackageGraphBuilder::new()
+            .load_from_lockfile_ignore_digests(path, env)
+            .await
     }
 }
 
@@ -122,7 +127,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         env: &EnvironmentName,
         check_digests: bool,
     ) -> PackageResult<Option<PackageGraph<F>>> {
-        let lockfile = Lockfile::<F>::read_from_dir(path.as_path())?;
+        let lockfile = Lockfile::<F>::read_from_dir(path.path())?;
         let mut graph = PackageGraph {
             inner: DiGraph::new(),
         };
@@ -134,7 +139,10 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             // First pass: create nodes for all packages
             for (pkg_id, dep_info) in deps.data.iter() {
                 let package = self.cache.fetch(&dep_info.source).await?;
-                if check_digests && package.manifest().digest() != dep_info.manifest_digest {
+                let pkg_manifest_path = package.package.path().manifest_path();
+                let package_manifest_digest =
+                    digest(std::fs::read_to_string(pkg_manifest_path)?.as_bytes());
+                if check_digests && package_manifest_digest != dep_info.manifest_digest {
                     return Ok(None);
                 }
                 let index = graph.inner.add_node(package);
@@ -154,8 +162,6 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             }
         }
 
-        println!("Package graph: {:?}", graph.inner);
-
         Ok(Some(graph))
     }
 
@@ -170,7 +176,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         // TODO: this is wrong - it is ignoring `path`
         let graph = Arc::new(Mutex::new(DiGraph::new()));
         let visited = Arc::new(Mutex::new(BTreeMap::new()));
-        let root = PinnedDependencyInfo::<F>::root_dependency();
+        let root = PinnedDependencyInfo::<F>::root_dependency(path);
 
         self.add_transitive_manifest_deps(&root, env, graph.clone(), visited)
             .await?;
