@@ -56,7 +56,7 @@ async fn test_verify_signature_zklogin() -> Result<(), anyhow::Error> {
 
     let response = client
         .verify_signature(VerifySignatureRequest {
-            message: Some(message),
+            message: Some(message.clone()),
             signature: Some(UserSignature {
                 bcs: Some(signature.clone()),
                 ..Default::default()
@@ -68,6 +68,47 @@ async fn test_verify_signature_zklogin() -> Result<(), anyhow::Error> {
         .into_inner();
     assert_eq!(response.is_valid, Some(true));
     assert_eq!(response.reason, None);
+
+    // address checks pass
+    let response = client
+        .verify_signature(VerifySignatureRequest {
+            message: Some(message.clone()),
+            signature: Some(UserSignature {
+                bcs: Some(signature.clone()),
+                ..Default::default()
+            }),
+            address: Some(zklogin_addr.to_string()),
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(response.is_valid, Some(true));
+    assert_eq!(response.reason, None);
+
+    // address checks fail
+    let wrong_address = SuiAddress::random_for_testing_only();
+    let response = client
+        .verify_signature(VerifySignatureRequest {
+            message: Some(message.clone()),
+            signature: Some(UserSignature {
+                bcs: Some(signature.clone()),
+                ..Default::default()
+            }),
+            address: Some(wrong_address.to_string()),
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(response.is_valid, Some(false));
+    assert_eq!(
+        response.reason,
+        Some(format!(
+            "provided address `{}` does not match derived address `{}`",
+            wrong_address, zklogin_addr
+        ))
+    );
 
     // Use the same signature but a different message so force verification failure
     let response = client
