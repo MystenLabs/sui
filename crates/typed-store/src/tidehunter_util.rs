@@ -133,7 +133,7 @@ pub(crate) fn typed_store_error_from_th_error(err: tidehunter::db::DbError) -> T
 impl ThConfig {
     pub fn new(key_size: usize, mutexes: usize, key_type: KeyType) -> Self {
         Self {
-            key_indexing: KeyIndexing::none(key_size),
+            key_indexing: KeyIndexing::fixed(key_size),
             mutexes,
             key_type,
             config: KeySpaceConfig::default(),
@@ -171,7 +171,7 @@ impl ThConfig {
         key_type: KeyType,
         config: KeySpaceConfig,
     ) -> Self {
-        Self::new_with_config_indexing(KeyIndexing::none(key_size), mutexes, key_type, config)
+        Self::new_with_config_indexing(KeyIndexing::fixed(key_size), mutexes, key_type, config)
     }
 
     pub fn new_with_rm_prefix(
@@ -182,7 +182,7 @@ impl ThConfig {
         prefix: Vec<u8>,
     ) -> Self {
         Self::new_with_rm_prefix_indexing(
-            KeyIndexing::none(key_size),
+            KeyIndexing::fixed(key_size),
             mutexes,
             key_type,
             config,
