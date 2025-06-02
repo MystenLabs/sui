@@ -38,7 +38,7 @@ impl LocalDependency {
         &self.local
     }
 
-    /// The path on the filesystem, relative to the location of the containing file
+    /// Return a local dependency whose local variable is set to '.' (the current directory).
     pub fn root_dependency(path: &PackagePath) -> Self {
         Self {
             local: PathBuf::from("."),

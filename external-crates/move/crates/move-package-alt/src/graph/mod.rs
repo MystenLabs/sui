@@ -7,7 +7,10 @@ use crate::{
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::{
-        EnvironmentName, Package, PackageName, PackagePath, lockfile::Lockfile, manifest::Manifest,
+        EnvironmentName, Package, PackageName,
+        lockfile::Lockfile,
+        manifest::{Manifest, digest},
+        paths::PackagePath,
     },
 };
 use petgraph::graph::{DiGraph, NodeIndex};
@@ -136,8 +139,9 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             // First pass: create nodes for all packages
             for (pkg_id, dep_info) in deps.data.iter() {
                 let package = self.cache.fetch(&dep_info.source).await?;
+                let pkg_manifest_path = package.package.path().manifest_path();
                 let package_manifest_digest =
-                    digest(std::fs::read_to_string(package.path().manifest_path())?.as_bytes());
+                    digest(std::fs::read_to_string(pkg_manifest_path)?.as_bytes());
                 if check_digests && package_manifest_digest != dep_info.manifest_digest {
                     return Ok(None);
                 }
@@ -201,7 +205,6 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
     /// deadlock
     async fn add_transitive_manifest_deps(
         &self,
-        // root_pkg_path: &PackagePath,
         dep: &PinnedDependencyInfo<F>,
         env: &EnvironmentName,
         graph: Arc<Mutex<DiGraph<Option<Arc<PackageNode<F>>>, PackageName>>>,

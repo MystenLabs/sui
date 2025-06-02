@@ -145,7 +145,7 @@ impl ExternalDependency {
                     ResolveRequest {
                         env: env_id,
                         data: dep.data.clone(),
-                        containing_file: dep.containing_file.clone(),
+                        containing_file: dep.containing_file,
                     },
                 );
             }
@@ -291,7 +291,7 @@ async fn resolve_single<F: MoveFlavor>(
     // into common files, although at that point we'll probably need to replace or fix TheFile
     // anyway due to threading problems.
 
-    let parsing_file = reqs.get(0).expect("nonempty input").containing_file;
+    let parsing_file = reqs.first().expect("nonempty input").containing_file;
 
     let resps = TheFile::with_existing(parsing_file, async || {
         endpoint
