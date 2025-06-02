@@ -1,0 +1,5 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(r#\"{x'123g'}\"#)"
+---
+Error: Hex string "123g" at offset 3 contains invalid character

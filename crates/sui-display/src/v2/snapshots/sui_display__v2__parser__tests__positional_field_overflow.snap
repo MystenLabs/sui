@@ -1,0 +1,5 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(r#\"{foo.500}\"#)"
+---
+Error: Number literal is too large to fit into positional field index

@@ -1,0 +1,5 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(r#\"{@foo}\"#)"
+---
+Error: Unexpected identifier "foo" at offset 2, expected one of a decimal number, or a hexadecimal number
