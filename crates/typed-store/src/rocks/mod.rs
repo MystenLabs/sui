@@ -1290,10 +1290,10 @@ impl DBBatch {
         Ok(self)
     }
 
-    pub fn partial_merge_batch<J: Borrow<K>, K: Serialize, V: Serialize, B: AsRef<[u8]>>(
+    pub fn partial_merge_batch<J: Borrow<K>, K: Serialize, U: Borrow<V>, V: Serialize>(
         &mut self,
         db: &DBMap<K, V>,
-        new_vals: impl IntoIterator<Item = (J, B)>,
+        new_vals: impl IntoIterator<Item = (J, U)>,
     ) -> Result<&mut Self, TypedStoreError> {
         if !Arc::ptr_eq(&db.db, &self.database) {
             return Err(TypedStoreError::CrossDBBatch);
@@ -1302,10 +1302,13 @@ impl DBBatch {
             .into_iter()
             .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
                 let k_buf = be_fix_int_ser(k.borrow());
+                let v_buf = bcs::to_bytes(v.borrow()).map_err(typed_store_err_from_bcs_err)?;
                 match &mut self.batch {
-                    StorageWriteBatch::Rocks(b) => {
-                        b.merge_cf(&rocks_cf_from_db(&self.database, db.cf_name())?, k_buf, v)
-                    }
+                    StorageWriteBatch::Rocks(b) => b.merge_cf(
+                        &rocks_cf_from_db(&self.database, db.cf_name())?,
+                        k_buf,
+                        v_buf,
+                    ),
                     _ => unimplemented!("merge operator is only implemented for RocksDB"),
                 }
                 Ok(())
