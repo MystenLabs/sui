@@ -164,7 +164,7 @@ impl BalanceIndexInfo {
             self.num_coins_delta != i128::MIN,
             "Cannot invert num_coins_delta: would overflow i128"
         );
-        
+
         Self {
             balance_delta: -self.balance_delta,
             num_coins_delta: -self.num_coins_delta,
@@ -227,8 +227,10 @@ fn balance_delta_merge_operator(
             .expect("Failed to deserialize BalanceIndexInfo from RocksDB - data corruption.");
         result.merge_delta(&delta);
     }
-
-    bcs::to_bytes(&result).ok()
+    Some(
+        bcs::to_bytes(&result)
+            .expect("Failed to deserialize BalanceIndexInfo from RocksDB - data corruption."),
+    )
 }
 
 fn balance_table_options() -> typed_store::rocks::DBOptions {
