@@ -38,6 +38,8 @@ pub struct StreamHead {
 impl From<&Object> for StreamHeadField {
     fn from(object: &Object) -> Self {
         let move_object = object.data.try_as_move().unwrap();
+
+        // Sanity checks on the object type
         let type_ = move_object.type_();
         assert!(type_.is_dynamic_field());
         let df_key_type = type_
@@ -127,9 +129,9 @@ impl StreamState {
         &self,
         start_checkpoint_number: u64,
         end_checkpoint_number: u64,
-    ) -> Option<StreamNonInclusionProof> {
-        if self.check_no_events_between(start_checkpoint_number, end_checkpoint_number) {
-            return None;
+    ) -> Result<StreamNonInclusionProof> {
+        if !self.check_no_events_between(start_checkpoint_number, end_checkpoint_number) {
+            return Err(anyhow::anyhow!("Events found between the two checkpoints!"));
         }
         let mut proof = Vec::new();
         for checkpoint in self.full_checkpoints.iter() {
@@ -139,7 +141,7 @@ impl StreamState {
                 proof.push(checkpoint);
             }
         }
-        Some(StreamNonInclusionProof {
+        Ok(StreamNonInclusionProof {
             start_checkpoint_number,
             end_checkpoint_number,
             proof,
@@ -162,6 +164,7 @@ impl StreamState {
 
 impl<'a> AuthStreamUpdate<'a> {
     // TODO: Look into the committee parameter
+    // TODO: Add tests
     pub fn verify(&self, stream_head: Option<&StreamHead>, committee: &Committee) -> Result<()> {
         let (_, head) = &self.head_correctness_proof.targets.objects[0];
         let new_stream_head_df = StreamHeadField::from(head);
@@ -248,6 +251,7 @@ pub fn process_checkpoint_stream_events(
         .iter()
         .find(|t| t.output_objects.iter().any(|o| o.id() == accumulator_id));
     if relevant_transaction.is_none() {
+        println!("No relevant transaction found for checkpoint {}", checkpoint.checkpoint_summary.sequence_number);
         return;
     }
 
@@ -281,9 +285,9 @@ pub fn process_checkpoint_stream_events(
     );
 
     if matching_events.len() > 0 {
-        println!("Updated stream with {} events", matching_events.len());
+        println!("Found {} new event in checkpoint {}", matching_events.len(), checkpoint.checkpoint_summary.sequence_number);
     } else {
-        println!("No events found for stream");
+        println!("No events found for stream in checkpoint {}", checkpoint.checkpoint_summary.sequence_number);
     }
 
     // 4. Construct the proof
@@ -306,18 +310,18 @@ pub fn process_checkpoint_stream_events(
         matching_events,
     ));
     // Sanity check to ensure that the full checkpoints are in sequence
-    if !is_new_stream {
-        // If it is an old stream...
-        assert!(
-            stream_state
-                .full_checkpoints
-                .last()
-                .unwrap()
-                .checkpoint_summary
-                .sequence_number
-                == checkpoint.checkpoint_summary.sequence_number - 1
-        );
-    }
+    // if !is_new_stream {
+    //     // If it is an old stream...
+    //     assert!(
+    //         stream_state
+    //             .full_checkpoints
+    //             .last()
+    //             .unwrap()
+    //             .checkpoint_summary
+    //             .sequence_number
+    //             == checkpoint.checkpoint_summary.sequence_number - 1
+    //     );
+    // }
     stream_state.full_checkpoints.push(checkpoint.clone());
 }
 

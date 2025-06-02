@@ -7,29 +7,33 @@ use sui_types::base_types::ObjectID;
 #[tokio::main]
 async fn main() -> Result<()> {
     let stream_id = ObjectID::from_hex_literal(
-        "0xfc92e98d019918057430d2916936c63604e7bc25ac3f1ff5305c34203f6266e8",
+        "0x233d930d604029457f63c3eabff64234811fc3d9e41df932af695c746efd1342",
     )
     .unwrap();
     let accumulator_id = ObjectID::from_hex_literal(
-        "0x01ad79f1d96e21c362e6cda62beb63831ec787206957a2a1018983c45692d057",
+        "0x1f2f309d9c93b4ef6792ba4a0deb816da52f24a01224554889c5c6838eb632a2",
     )
     .unwrap();
-    let event_type = "0x29d00102a2398fb49e95ffb9066c6cff23f161ab815cab8dd3c2729de919708f::event_streams_package::AuthEvent".to_string();
+    let event_type = "0xce8459d2b6ed79d56a5f3b469fbed9dc7abcf1ecc7b0b52382b2ac817b95aa49::event_streams_package::AuthEvent".to_string();
+    println!("Stream ID: {}", stream_id);
+    println!("Accumulator ID: {}", accumulator_id);
+    println!("Event type: {}", event_type);
 
-    let test_file = "test_files/checkpoint.chk";
     let mut stream_state = StreamState::new();
     let mut checkpoints_to_be_processed = Vec::new();
+    let checkpoints = vec![191, 246, 322];
 
-    if !std::path::Path::new(test_file).exists() {
-        println!("Checkpoint not found, fetching from local network");
-        download_and_save_checkpoint(202, test_file).await?;
+    for checkpoint in &checkpoints {
+        let test_file = format!("test_files/checkpoint-{}.chk", checkpoint);
+        if !std::path::Path::new(&test_file).exists() {
+            println!("Checkpoint not found, fetching from local network");
+            download_and_save_checkpoint(*checkpoint, &test_file).await?;
+        }
+        let full_checkpoint = load_checkpoint(&test_file);
+        checkpoints_to_be_processed.push(full_checkpoint);
     }
 
-    println!("Loading checkpoint from file");
-    let full_checkpoint = load_checkpoint(test_file);
-    // TODO: Add more
-    checkpoints_to_be_processed.push(full_checkpoint);
-
+    println!("Processing {} checkpoints: {:?}", checkpoints.len(), checkpoints);
     for checkpoint in checkpoints_to_be_processed.iter() {
         process_checkpoint_stream_events(
             checkpoint,
