@@ -15390,6 +15390,7 @@ name = "sui-protocol-config"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "fastcrypto",
  "insta",
  "move-vm-config",
  "schemars",
