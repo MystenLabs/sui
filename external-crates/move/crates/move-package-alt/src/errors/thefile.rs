@@ -5,6 +5,7 @@ use std::{
 };
 
 use append_only_vec::AppendOnlyVec;
+use tracing::debug;
 
 use super::FileHandle;
 
@@ -73,9 +74,9 @@ impl TheFile {
     }
 
     /// Run `f` with `current_file` set to `file`
-    pub fn with_existing<R, F: FnOnce() -> R>(file: FileHandle, f: F) -> R {
+    pub async fn with_existing<R, F: AsyncFnOnce() -> R>(file: FileHandle, f: F) -> R {
         let guard = Guard::new(file);
-        f()
+        f().await
     }
 }
 
