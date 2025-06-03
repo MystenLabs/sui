@@ -9,12 +9,14 @@ use std::{
 };
 
 use crate::{
-    adapter::new_native_extensions,
+    adapter::{new_native_extensions, substitute_package_id},
     execution_mode::ExecutionMode,
     gas_charger::GasCharger,
     gas_meter::SuiGasMeter,
     programmable_transactions::{
-        context::finish, data_store::SuiDataStore, execution::fetch_packages,
+        context::finish,
+        data_store::SuiDataStore,
+        execution::{check_compatibility, fetch_package, fetch_packages},
     },
     sp,
     static_programmable_transactions::{
@@ -54,7 +56,7 @@ use sui_types::{
     execution::ExecutionResults,
     execution_config_utils::to_binary_config,
     metrics::LimitsMetrics,
-    move_package::{MovePackage, UpgradeCap},
+    move_package::{MovePackage, UpgradeCap, UpgradeReceipt, UpgradeTicket},
     object::{MoveObject, Object, Owner},
     storage::PackageObject,
 };
@@ -578,6 +580,15 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         CtxValue(Value::upgrade_cap(cap))
     }
 
+    pub fn upgrade_receipt(
+        &self,
+        upgrade_ticket: UpgradeTicket,
+        upgraded_package_id: ObjectID,
+    ) -> CtxValue {
+        let receipt = UpgradeReceipt::new(upgrade_ticket, upgraded_package_id);
+        CtxValue(Value::upgrade_receipt(receipt))
+    }
+
     //
     // Move calls
     //
@@ -648,16 +659,22 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     // Publish and Upgrade
     //
 
+    // is_upgrade is used for gas charging. Assumed to be a new publish if false.
     pub fn deserialize_modules(
         &mut self,
         module_bytes: &[Vec<u8>],
+        is_upgrade: bool,
     ) -> Result<Vec<CompiledModule>, ExecutionError> {
         assert_invariant!(
             !module_bytes.is_empty(),
             "empty package is checked in transaction input checker"
         );
-        self.gas_charger
-            .charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
+        let total_bytes = module_bytes.iter().map(|v| v.len()).sum();
+        if is_upgrade {
+            self.gas_charger.charge_upgrade_package(total_bytes)?
+        } else {
+            self.gas_charger.charge_publish_package(total_bytes)?
+        }
 
         let binary_config = to_binary_config(self.env.protocol_config);
         let modules = module_bytes
@@ -669,6 +686,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             .collect::<VMResult<Vec<CompiledModule>>>()
             .map_err(|e| self.env.convert_vm_error(e))?;
         Ok(modules)
+    }
+
+    fn fetch_package(&mut self, dependency_id: &ObjectID) -> Result<PackageObject, ExecutionError> {
+        fetch_package(&self.env.state_view, &dependency_id)
     }
 
     fn fetch_packages(
@@ -796,6 +817,47 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             self.new_packages.pop();
         }
         res
+    }
+
+    pub fn upgrade(
+        &mut self,
+        mut modules: Vec<CompiledModule>,
+        dep_ids: &[ObjectID],
+        current_package_id: ObjectID,
+        upgrade_ticket_policy: u8,
+    ) -> Result<ObjectID, ExecutionError> {
+        // Check that this package ID points to a package and get the package we're upgrading.
+        let current_package = self.fetch_package(&current_package_id)?;
+
+        let runtime_id = current_package.move_package().original_package_id();
+        substitute_package_id(&mut modules, runtime_id)?;
+
+        // Upgraded packages share their predecessor's runtime ID but get a new storage ID.
+        let storage_id = self.tx_context.borrow_mut().fresh_id();
+
+        let dependencies = self.fetch_packages(dep_ids)?;
+        let current_move_package = current_package.move_package();
+        let package = current_move_package.new_upgraded(
+            storage_id,
+            &modules,
+            self.env.protocol_config,
+            dependencies.iter().map(|p| p.move_package()),
+        )?;
+
+        self.env.linkage_view.set_linkage(&package)?;
+        let res = self.publish_and_verify_modules(runtime_id, &modules);
+        self.env.linkage_view.reset_linkage()?;
+        res?;
+
+        check_compatibility(
+            self.env.protocol_config,
+            current_package.move_package(),
+            &modules,
+            upgrade_ticket_policy,
+        )?;
+
+        self.new_packages.push(package);
+        Ok(storage_id)
     }
 
     //
@@ -931,6 +993,10 @@ impl CtxValue {
 
     pub fn coin_ref_add_balance(self, amount: u64) -> Result<(), ExecutionError> {
         self.0.coin_ref_add_balance(amount)
+    }
+
+    pub fn into_upgrade_ticket(self) -> Result<UpgradeTicket, ExecutionError> {
+        self.0.into_upgrade_ticket()
     }
 }
 

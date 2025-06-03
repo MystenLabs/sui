@@ -16,7 +16,7 @@ use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     digests::TransactionDigest,
     error::ExecutionError,
-    move_package::UpgradeCap,
+    move_package::{UpgradeCap, UpgradeReceipt, UpgradeTicket},
     object::Owner,
 };
 pub enum InputValue<'a> {
@@ -331,27 +331,6 @@ impl Value {
             VMValue::u64(0),
         ]))))
     }
-
-    pub fn upgrade_cap(cap: UpgradeCap) -> Self {
-        // public struct UpgradeCap has key, store {
-        //     id: UID,
-        //     package: ID,
-        //     version: u64,
-        //     policy: u8,
-        // }
-        let UpgradeCap {
-            id,
-            package,
-            version,
-            policy,
-        } = cap;
-        Self(VMValue::struct_(Struct::pack([
-            Self::uid(id.id.bytes.into()).0,
-            Self::id(package.bytes.into()).0,
-            VMValue::u64(version),
-            VMValue::u8(policy),
-        ])))
-    }
 }
 
 //**************************************************************************************************
@@ -429,6 +408,72 @@ fn borrow_coin_ref_balance_value(coin_ref: VMValue) -> Result<VMValue, Execution
     let balance = coin_ref.borrow_field(1).map_err(iv("borrow field"))?;
     let balance: values::StructRef = balance.cast().map_err(iv("cast"))?;
     balance.borrow_field(0).map_err(iv("borrow field"))
+}
+
+//**************************************************************************************************
+// Upgrades
+//**************************************************************************************************
+
+impl Value {
+    pub fn upgrade_cap(cap: UpgradeCap) -> Self {
+        // public struct UpgradeCap has key, store {
+        //     id: UID,
+        //     package: ID,
+        //     version: u64,
+        //     policy: u8,
+        // }
+        let UpgradeCap {
+            id,
+            package,
+            version,
+            policy,
+        } = cap;
+        Self(VMValue::struct_(Struct::pack([
+            Self::uid(id.id.bytes.into()).0,
+            Self::id(package.bytes.into()).0,
+            VMValue::u64(version),
+            VMValue::u8(policy),
+        ])))
+    }
+
+    pub fn upgrade_receipt(receipt: UpgradeReceipt) -> Self {
+        // public struct UpgradeReceipt {
+        //     cap: ID,
+        //     package: ID,
+        // }
+        let UpgradeReceipt { cap, package } = receipt;
+        Self(VMValue::struct_(Struct::pack([
+            Self::id(cap.bytes.into()).0,
+            Self::id(package.bytes.into()).0,
+        ])))
+    }
+
+    pub fn into_upgrade_ticket(self) -> Result<UpgradeTicket, ExecutionError> {
+        //  public struct UpgradeTicket {
+        //     cap: ID,
+        //     package: ID,
+        //     policy: u8,
+        //     digest: vector<u8>,
+        // }
+        // unpack UpgradeTicket
+        let [cap, package, policy, digest] = unpack(self.0)?;
+        // unpack cap ID
+        let [cap] = unpack(cap)?;
+        let cap: AccountAddress = cap.cast().map_err(iv("cast"))?;
+        // unpack package ID
+        let [package] = unpack(package)?;
+        let package: AccountAddress = package.cast().map_err(iv("cast"))?;
+        // unpack policy
+        let policy: u8 = policy.cast().map_err(iv("cast"))?;
+        // unpack digest
+        let digest: Vec<u8> = digest.cast().map_err(iv("cast"))?;
+        Ok(UpgradeTicket {
+            cap: sui_types::id::ID::new(cap.into()),
+            package: sui_types::id::ID::new(package.into()),
+            policy,
+            digest,
+        })
+    }
 }
 
 fn unpack<const N: usize>(value: VMValue) -> Result<[VMValue; N], ExecutionError> {

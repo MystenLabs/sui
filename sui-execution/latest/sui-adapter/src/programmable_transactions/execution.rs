@@ -725,7 +725,7 @@ mod checked {
         res?;
 
         check_compatibility(
-            context,
+            context.protocol_config,
             current_package.move_package(),
             &modules,
             upgrade_ticket.policy,
@@ -742,8 +742,8 @@ mod checked {
         )])
     }
 
-    fn check_compatibility(
-        context: &ExecutionContext,
+    pub fn check_compatibility(
+        protocol_config: &ProtocolConfig,
         existing_package: &MovePackage,
         upgrading_modules: &[CompiledModule],
         policy: u8,
@@ -758,7 +758,7 @@ mod checked {
         };
 
         let pool = &mut normalized::RcPool::new();
-        let binary_config = to_binary_config(context.protocol_config);
+        let binary_config = to_binary_config(protocol_config);
         let Ok(current_normalized) =
             existing_package.normalize(pool, &binary_config, /* include code */ true)
         else {
@@ -767,9 +767,7 @@ mod checked {
 
         let existing_modules_len = current_normalized.len();
         let upgrading_modules_len = upgrading_modules.len();
-        let disallow_new_modules = context
-            .protocol_config
-            .disallow_new_modules_in_deps_only_packages()
+        let disallow_new_modules = protocol_config.disallow_new_modules_in_deps_only_packages()
             && policy as u8 == UpgradePolicy::DEP_ONLY;
 
         if disallow_new_modules && existing_modules_len != upgrading_modules_len {
