@@ -409,6 +409,7 @@ impl CheckpointSignatureMessage {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum CheckpointContents {
     V1(CheckpointContentsV1),
+    Multi(Vec<CheckpointContentsDigest>),
 }
 
 /// CheckpointContents are the transactions included in an upcoming checkpoint.

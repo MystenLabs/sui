@@ -114,7 +114,8 @@ async fn test_authenticated_events() {
         }
     });
 
-    join!(t1, t2);
+    t1.await.unwrap();
+    t2.await.unwrap();
 }
 
 /// Delete a shared object as the object owner

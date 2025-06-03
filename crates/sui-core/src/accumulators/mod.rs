@@ -4,9 +4,9 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
-use consensus_config::Epoch;
 use fastcrypto::hash::{Blake2b256, HashFunction};
 use mysten_common::fatal;
+use serde::Serialize;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::committee::EpochId;
 use sui_types::digests::Digest;
@@ -73,11 +73,19 @@ impl From<MergedValueIntermediate> for MergedValue {
     }
 }
 
+#[derive(Debug, Serialize)]
+struct EventCommitment {
+    checkpoint_seq: u64,
+    transaction_idx: u64,
+    event_idx: u64,
+    digest: Digest,
+}
+
 #[derive(Debug)]
 enum MergedValueIntermediate {
     Sum(u128),
     SumTuple(u128, u128),
-    Events(Vec<Digest>),
+    Events(Vec<EventCommitment>),
 }
 
 impl MergedValueIntermediate {
@@ -94,12 +102,19 @@ impl MergedValueIntermediate {
         }
     }
 
-    fn init(value: AccumulatorValue) -> Self {
+    fn init(checkpoint_seq: u64, transaction_idx: u64, value: AccumulatorValue) -> Self {
         Self::assert_bounds(&value);
         match value {
             AccumulatorValue::Integer(v) => Self::Sum(v),
             AccumulatorValue::IntegerTuple(v1, v2) => Self::SumTuple(v1, v2),
-            AccumulatorValue::EventDigest(v) => Self::Events(vec![v]),
+            AccumulatorValue::EventDigest(event_idx, digest) => {
+                Self::Events(vec![EventCommitment {
+                    checkpoint_seq,
+                    transaction_idx,
+                    event_idx,
+                    digest,
+                }])
+            }
         }
     }
 
@@ -127,12 +142,17 @@ pub fn create_accumulator_update_transactions(
     checkpoint_height: u64,
     cache: Option<&dyn TransactionCacheRead>,
     ckpt_effects: &[TransactionEffects],
+    // Checkpoint sequence number currently being built.
+    checkpoint_seq: u64,
+    // Total number of transactions committed since genesis, not including the
+    // current checkpoint.
+    network_total_transactions: u64,
 ) -> Vec<TransactionKind> {
     let mut merges = HashMap::<_, MergedValueIntermediate>::new();
     let mut splits = HashMap::<_, MergedValueIntermediate>::new();
     let mut addresses = HashMap::<_, AccumulatorAddress>::new();
 
-    for effect in ckpt_effects {
+    for (i, effect) in ckpt_effects.into_iter().enumerate() {
         let tx = effect.transaction_digest();
         // TransactionEffectsAPI::accumulator_events() uses a linear scan of all
         // object changes and allocates a new vector. In the common case (on validators),
@@ -167,7 +187,11 @@ pub fn create_accumulator_update_transactions(
                     entry.get_mut().accumulate_into(value);
                 }
                 Entry::Vacant(entry) => {
-                    entry.insert(MergedValueIntermediate::init(value));
+                    entry.insert(MergedValueIntermediate::init(
+                        checkpoint_seq,
+                        network_total_transactions + i as u64,
+                        value,
+                    ));
                 }
             }
         }

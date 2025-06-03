@@ -87,7 +87,7 @@ pub enum AccumulatorOperation {
 pub enum AccumulatorValue {
     Integer(u128),
     IntegerTuple(u128, u128),
-    EventDigest(Digest),
+    EventDigest(u64 /* event index in the transaction */, Digest),
     // New accumulator types can be added here.
     // For custom or complex types, we can use a `Vec<u8>` to store the raw value.
 }

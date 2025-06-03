@@ -1004,7 +1004,7 @@ mod checked {
                         let event = &user_events[idx as usize];
 
                         let digest = event.unique_digest(tx_digest, idx as usize);
-                        let value = AccumulatorValue::EventDigest(digest);
+                        let value = AccumulatorValue::EventDigest(idx, digest);
                         let address = AccumulatorAddress::new(
                             accum_event.target_addr.into(),
                             vm.get_runtime()

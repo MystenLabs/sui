@@ -1252,12 +1252,20 @@ impl CheckpointBuilder {
             sorted_tx_effects_included_in_checkpoint.extend(txn_in_checkpoint);
         }
 
+        let last_checkpoint =
+            Self::load_last_built_checkpoint_summary(&self.epoch_store, &self.store)?;
+
+        let network_total_transactions = last_checkpoint
+            .map(|(_, summary)| summary.network_total_transactions)
+            .unwrap_or(0);
+
         let epoch = self.epoch_store.epoch();
         let settlement_txns: Vec<_> = create_accumulator_update_transactions(
             epoch,
             last_details.checkpoint_height,
             Some(self.effects_store.as_ref()),
             &sorted_tx_effects_included_in_checkpoint,
+            network_total_transactions,
         )
         .into_iter()
         .map(|tx| {
@@ -1302,7 +1310,11 @@ impl CheckpointBuilder {
         sorted_tx_effects_included_in_checkpoint.extend(settlement_effects);
 
         let new_checkpoints = self
-            .create_checkpoints(sorted_tx_effects_included_in_checkpoint, &last_details)
+            .create_checkpoints(
+                sorted_tx_effects_included_in_checkpoint,
+                &last_details,
+                last_checkpoint,
+            )
             .await?;
         let highest_sequence = *new_checkpoints.last().0.sequence_number();
         self.write_checkpoints(last_details.checkpoint_height, new_checkpoints)
@@ -1597,12 +1609,11 @@ impl CheckpointBuilder {
         &self,
         all_effects: Vec<TransactionEffects>,
         details: &PendingCheckpointInfo,
+        mut last_checkpoint: Option<(CheckpointSequenceNumber, CheckpointSummary)>,
     ) -> anyhow::Result<NonEmpty<(CheckpointSummary, CheckpointContents)>> {
         let _scope = monitored_scope("CheckpointBuilder::create_checkpoints");
 
         let total = all_effects.len();
-        let mut last_checkpoint =
-            Self::load_last_built_checkpoint_summary(&self.epoch_store, &self.store)?;
         let last_checkpoint_seq = last_checkpoint.as_ref().map(|(seq, _)| *seq);
         info!(
             next_checkpoint_seq = last_checkpoint_seq.unwrap_or_default() + 1,
@@ -1630,6 +1641,8 @@ impl CheckpointBuilder {
                 "Waiting for {:?} certificates to appear in consensus",
                 all_effects.len()
             );
+
+            let num_effects = all_effects.len();
 
             for (effects, transaction_and_size) in all_effects
                 .into_iter()
@@ -1677,6 +1690,8 @@ impl CheckpointBuilder {
                 .consensus_messages_processed_notify(transaction_keys)
                 .await?;
         }
+
+        assert_eq!(num_effects, all_effects_and_transaction_sizes.len());
 
         let signatures = self
             .epoch_store

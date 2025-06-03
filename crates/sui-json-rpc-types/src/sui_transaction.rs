@@ -872,7 +872,7 @@ impl From<AccumulatorOperation> for SuiAccumulatorOperation {
 pub enum SuiAccumulatorValue {
     Integer(u128),
     IntegerTuple(u128, u128),
-    EventDigest(Digest),
+    EventDigest(u64 /* event index in the transaction */, Digest),
 }
 
 impl From<AccumulatorValue> for SuiAccumulatorValue {
@@ -880,7 +880,7 @@ impl From<AccumulatorValue> for SuiAccumulatorValue {
         match value {
             AccumulatorValue::Integer(value) => Self::Integer(value),
             AccumulatorValue::IntegerTuple(value1, value2) => Self::IntegerTuple(value1, value2),
-            AccumulatorValue::EventDigest(value) => Self::EventDigest(value),
+            AccumulatorValue::EventDigest(idx, value) => Self::EventDigest(idx, value),
         }
     }
 }
