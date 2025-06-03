@@ -14471,6 +14471,7 @@ dependencies = [
  "sui-indexer-alt-framework",
  "sui-indexer-alt-metrics",
  "sui-indexer-alt-schema",
+ "sui-pg-db",
  "sui-protocol-config",
  "sui-synthetic-ingestion",
  "telemetry-subscribers",

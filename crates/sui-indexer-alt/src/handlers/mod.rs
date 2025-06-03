@@ -24,6 +24,7 @@ pub(crate) mod kv_packages;
 pub(crate) mod kv_protocol_configs;
 pub(crate) mod kv_transactions;
 pub(crate) mod obj_info;
+pub(crate) mod obj_info_v2;
 pub(crate) mod obj_versions;
 pub(crate) mod sum_displays;
 pub(crate) mod tx_affected_addresses;
