@@ -15127,6 +15127,7 @@ dependencies = [
  "move-ir-types",
  "move-package",
  "move-symbol-pool",
+ "mysten-common",
  "serde-reflection",
  "sui-package-management",
  "sui-protocol-config",
