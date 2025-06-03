@@ -4732,6 +4732,114 @@ async fn test_gas_estimation() -> Result<(), anyhow::Error> {
 }
 
 #[sim_test]
+async fn test_custom_sender() -> Result<(), anyhow::Error> {
+    let (mut cluster, client, rgp, o, _, a) = test_cluster_helper().await;
+
+    let custom_sender = cluster.wallet_mut().active_address().unwrap();
+    let context = &mut cluster.wallet;
+
+    // Build the transaction without running it.
+    let transfer = SuiClientCommands::Transfer {
+        to: KeyIdentity::Address(a[1]),
+        object_id: o[0],
+        payment: PaymentArgs::default(),
+        gas_data: GasDataArgs::default(),
+        processing: TxProcessingArgs {
+            serialize_unsigned_transaction: true,
+            sender: Some(custom_sender),
+            ..Default::default()
+        },
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::SerializedUnsignedTransaction(tx_data) = transfer else {
+        panic!("Expected SerializedUnsignedTransaction result");
+    };
+
+    let tx_bytes = Base64::encode(bcs::to_bytes(tx_data.kind())?);
+    let transfer_serialized = SuiClientCommands::SerializedTxKind {
+        tx_bytes,
+        payment: PaymentArgs { gas: vec![o[1]] },
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(response) = transfer_serialized else {
+        panic!("Expected TransactionBlock result");
+    };
+
+    assert_eq!(response.transaction.unwrap().data.sender(), &custom_sender);
+
+    let Some(effects) = &response.effects else {
+        panic!("TransactionBlock response should contain effects");
+    };
+
+    assert!(effects.status().is_ok());
+    assert_eq!(effects.gas_object().object_id(), o[1]);
+
+    let a1_objs = client
+        .read_api()
+        .get_owned_objects(a[1], None, None, None)
+        .await?;
+
+    assert!(!a1_objs.has_next_page);
+
+    let page = a1_objs.data;
+    assert_eq!(page.len(), 1);
+    assert_eq!(page.first().unwrap().object().unwrap().object_id, o[0]);
+
+    // set sender to another address to which we don't have keys and it should fail
+
+    let custom_sender = SuiAddress::random_for_testing_only();
+
+    // Build the transaction without running it.
+    let transfer = SuiClientCommands::Transfer {
+        to: KeyIdentity::Address(a[1]),
+        object_id: o[0],
+        payment: PaymentArgs { gas: vec![o[1]] },
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs {
+            serialize_unsigned_transaction: true,
+            sender: Some(custom_sender),
+            ..Default::default()
+        },
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::SerializedUnsignedTransaction(tx_data) = transfer else {
+        panic!("Expected SerializedUnsignedTransaction result");
+    };
+
+    let tx_bytes = Base64::encode(bcs::to_bytes(tx_data.kind())?);
+    let transfer_serialized = SuiClientCommands::SerializedTxKind {
+        tx_bytes,
+        payment: PaymentArgs { gas: vec![o[1]] },
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await;
+
+    // wrong gas objects, not owned by custom sender
+    assert!(transfer_serialized.is_err());
+
+    Ok(())
+}
+
+#[sim_test]
 async fn test_clever_errors() -> Result<(), anyhow::Error> {
     // Publish the package
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
