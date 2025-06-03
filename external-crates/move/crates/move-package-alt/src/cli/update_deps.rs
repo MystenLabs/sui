@@ -26,11 +26,8 @@ impl UpdateDeps {
         let path = PackagePath::new(self.path.clone().unwrap_or_else(|| PathBuf::from(".")))?;
         let manifest = Manifest::<Vanilla>::read_from_file(&path.manifest_path())?;
 
-        for (env, id) in manifest.environments() {
-            let package_graph = PackageGraph::<Vanilla>::load_from_manifests(&path, env).await?;
-
-            package_graph.to_lockfile(&path, env).await?;
-        }
+        let envs = manifest.environments();
+        let package_graph = PackageGraph::<Vanilla>::load(&path, envs.clone()).await?;
 
         Ok(())
     }
