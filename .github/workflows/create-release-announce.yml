@@ -11,6 +11,7 @@ on:
         required: true
         type: choice
         options:
+          - devnet
           - testnet
           - mainnet
       announce:
