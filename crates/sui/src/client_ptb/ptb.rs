@@ -473,6 +473,10 @@ pub fn ptb_description() -> clap::Command {
             "Instead of executing the transaction, print its digest."
         ))
         .arg(arg!(
+            --"sender"
+            "Set the sender to a specific address instead of the active address."
+        ))
+        .arg(arg!(
             --"serialize-unsigned-transaction"
             "Instead of executing the transaction, serialize the bcs bytes of the unsigned \
             transaction data using base64 encoding."
