@@ -686,14 +686,6 @@ impl IndexStoreTables {
             }
 
             for object in tx.created_objects() {
-                // Track balance changes for newly created coins
-                match object.owner() {
-                    Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => {
-                        Self::track_coin_balance_change(object, owner, false, &mut balance_changes);
-                    }
-                    _ => {}
-                }
-
                 // Coin metadata indexing - CoinMetadata and TreasuryCap are created in
                 // the same transaction so we don't need to worry about overriding any older value
                 // that may exist in the database (because there necessarily cannot be).
