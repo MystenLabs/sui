@@ -473,8 +473,8 @@ pub fn ptb_description() -> clap::Command {
             "Instead of executing the transaction, print its digest."
         ))
         .arg(arg!(
-            --"sender"
-            "Set the sender to a specific address instead of the active address."
+            --"sender" <SENDER>
+            "Set the sender to this address instead of the active address."
         ))
         .arg(arg!(
             --"serialize-unsigned-transaction"
