@@ -46,11 +46,11 @@ jobs:
       matrix:
         os:
           [
-            ubuntu-ghcloud, # ubuntu-x86_64
-            ubuntu-arm64, # ubuntu-arm64
+            # ubuntu-ghcloud, # ubuntu-x86_64
+            # ubuntu-arm64, # ubuntu-arm64
             windows-ghcloud, # windows-x86_64
-            macos-latest-large, # macos-x86_64
-            macos-latest-xlarge # macos-arm64
+            # macos-latest-large, # macos-x86_64
+            # macos-latest-xlarge # macos-arm64
           ]
       fail-fast: false
     runs-on: ${{ matrix.os }}
@@ -213,55 +213,55 @@ jobs:
           files: |
             ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
 
-  update-homebrew-formula:
-    name: Run brew bump-formula-pr for sui on testnet releases
-    needs: release-build
-    runs-on: ubuntu-latest
-    # releasing sui cli on testnet releases because it lags `main` less than mainnet, but is more likely to be stable than devnet
-    if: ${{ contains( inputs.sui_tag, 'testnet') || contains( github.ref, 'testnet') }}
-    steps:
-      - name: Clean up tag name ${{ env.TAG_NAME }}
-        shell: bash
-        run: |
-          echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
-          echo "versionless_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'// | sed s/'testnet\-v'//)" >> $GITHUB_ENV
-      - uses: mislav/bump-homebrew-formula-action@b3327118b2153c82da63fd9cbf58942146ee99f0 # pin@v3
-        with:
-          formula-name: sui
-          create-pullrequest: true
-          tag-name: "${{ env.sui_tag }}"
-          commit-message: |
-            {{formulaName}} ${{ env.versionless_tag }}
+  # update-homebrew-formula:
+  #   name: Run brew bump-formula-pr for sui on testnet releases
+  #   needs: release-build
+  #   runs-on: ubuntu-latest
+  #   # releasing sui cli on testnet releases because it lags `main` less than mainnet, but is more likely to be stable than devnet
+  #   if: ${{ contains( inputs.sui_tag, 'testnet') || contains( github.ref, 'testnet') }}
+  #   steps:
+  #     - name: Clean up tag name ${{ env.TAG_NAME }}
+  #       shell: bash
+  #       run: |
+  #         echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
+  #         echo "versionless_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'// | sed s/'testnet\-v'//)" >> $GITHUB_ENV
+  #     - uses: mislav/bump-homebrew-formula-action@b3327118b2153c82da63fd9cbf58942146ee99f0 # pin@v3
+  #       with:
+  #         formula-name: sui
+  #         create-pullrequest: true
+  #         tag-name: "${{ env.sui_tag }}"
+  #         commit-message: |
+  #           {{formulaName}} ${{ env.versionless_tag }}
 
-            Created by https://github.com/mislav/bump-homebrew-formula-action
+  #           Created by https://github.com/mislav/bump-homebrew-formula-action
 
-            From release: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        env:
-          # https://github.com/settings/tokens/new?scopes=public_repo,workflow
-          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_GH_FORMULA_BUMP }}
+  #           From release: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+  #       env:
+  #         # https://github.com/settings/tokens/new?scopes=public_repo,workflow
+  #         COMMITTER_TOKEN: ${{ secrets.HOMEBREW_GH_FORMULA_BUMP }}
 
-  # Tag all sui images with release tag, so that they can be easily found
-  tag-docker-hub-images:
-    name: Tag sui docker images in DockerHub
-    runs-on: ubuntu-latest
-    steps:
-      - name: Dispatch Tagging of images in DockerHub, in MystenLabs/sui-operations
-        uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
-        with:
-          repository: MystenLabs/sui-operations
-          token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
-          event-type: tag-docker-images
-          client-payload: '{"sui_commit": "${{ github.sha }}", "repo_name": "all", "tag": "${{ env.TAG_NAME }}"}'
+  # # Tag all sui images with release tag, so that they can be easily found
+  # tag-docker-hub-images:
+  #   name: Tag sui docker images in DockerHub
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Dispatch Tagging of images in DockerHub, in MystenLabs/sui-operations
+  #       uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
+  #       with:
+  #         repository: MystenLabs/sui-operations
+  #         token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
+  #         event-type: tag-docker-images
+  #         client-payload: '{"sui_commit": "${{ github.sha }}", "repo_name": "all", "tag": "${{ env.TAG_NAME }}"}'
 
-  # Tag all sui images with release tag, so that they can be easily found
-  tag-release-binaries-in-s3:
-    name: Tag sui binaries in s3
-    runs-on: ubuntu-latest
-    steps:
-      - name: Dispatch Release binaries builds in MystenLabs/sui-operations
-        uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
-        with:
-          repository: MystenLabs/sui-operations
-          token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
-          event-type: build-release-binaries
-          client-payload: '{"sui_commit": "${{ github.sha }}", "tag_name": "${{ env.TAG_NAME }}"}'
+  # # Tag all sui images with release tag, so that they can be easily found
+  # tag-release-binaries-in-s3:
+  #   name: Tag sui binaries in s3
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Dispatch Release binaries builds in MystenLabs/sui-operations
+  #       uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
+  #       with:
+  #         repository: MystenLabs/sui-operations
+  #         token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
+  #         event-type: build-release-binaries
+  #         client-payload: '{"sui_commit": "${{ github.sha }}", "tag_name": "${{ env.TAG_NAME }}"}'
