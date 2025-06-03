@@ -140,7 +140,9 @@ impl MessageMerge<&Object> for Object {
 impl MessageMerge<sui_sdk_types::Object> for Object {
     fn merge(&mut self, source: sui_sdk_types::Object, mask: &crate::field_mask::FieldMaskTree) {
         if mask.contains(Self::BCS_FIELD.name) {
-            self.bcs = Some(super::Bcs::serialize(&source).unwrap());
+            let mut bcs = super::Bcs::serialize(&source).unwrap();
+            bcs.name = Some("Object".to_owned());
+            self.bcs = Some(bcs);
         }
 
         if mask.contains(Self::DIGEST_FIELD.name) {
