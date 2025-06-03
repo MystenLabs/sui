@@ -9,9 +9,7 @@ use move_core_types::parsing::{
 };
 use move_core_types::runtime_value::MoveValue;
 use sui_types::{
-    base_types::{
-        ObjectID, SuiAddress, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR,
-    },
+    base_types::{ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
     id::RESOLVED_SUI_ID,
     Identifier, TypeTag,
 };
@@ -129,7 +127,7 @@ pub struct ProgramMetadata {
     pub gas_sponsor: Option<Spanned<NumericalAddress>>,
     pub mvr_names: BTreeMap<String, Span>,
     pub sender_set: bool,
-    pub sender: Option<Spanned<SuiAddress>>,
+    pub sender: Option<Spanned<NumericalAddress>>,
 }
 
 /// A parsed module access consisting of the address, module name, and function name.

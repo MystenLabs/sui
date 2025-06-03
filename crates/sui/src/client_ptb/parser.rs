@@ -8,10 +8,7 @@ use move_core_types::parsing::{
     parser::{parse_u128, parse_u16, parse_u256, parse_u32, parse_u64, parse_u8},
     types::{ParsedFqName, ParsedModuleId, ParsedStructType, ParsedType},
 };
-use sui_types::{
-    base_types::{ObjectID, SuiAddress},
-    Identifier,
-};
+use sui_types::{base_types::ObjectID, Identifier};
 
 use crate::{
     client_ptb::{
@@ -52,7 +49,7 @@ struct ProgramParsingState {
     gas_price: Option<Spanned<u64>>,
     gas_sponsor: Option<Spanned<NumericalAddress>>,
     sender_set: bool,
-    sender: Option<Spanned<SuiAddress>>,
+    sender: Option<Spanned<NumericalAddress>>,
 }
 
 macro_rules! mvr_ident {
@@ -182,7 +179,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
 
                 L(T::Command, A::SENDER) => {
                     flag!(sender_set);
-                    let sender = try_!(self.parse_sender());
+                    let sender = try_!(self.parse_address_literal());
                     self.state.sender = Some(sender);
                 }
 
@@ -898,14 +895,6 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
 
         let sp!(end_sp, _) = self.expect(T::RBracket)?;
         Ok(start_sp.widen(end_sp).wrap(values))
-    }
-
-    /// Parse a sender address.
-    /// The expected format is: `--sender <address>`
-    fn parse_sender(&mut self) -> PTBResult<Spanned<SuiAddress>> {
-        Ok(self
-            .parse_address_literal()?
-            .map(|a| SuiAddress::from(a.into_inner())))
     }
 }
 
