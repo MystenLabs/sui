@@ -36,9 +36,8 @@ impl VarCounter {
     }
 
     pub fn next(&mut self) -> usize {
-        let current = self.count;
         self.count += 1;
-        current
+        self.count
     }
 
     pub fn prev(&mut self) -> usize {

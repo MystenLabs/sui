@@ -67,13 +67,13 @@ impl<S: SourceKind> StacklessBytecodeGenerator<S> {
         Ok(())
     }
 
-    // TODO: Return a thing instead of printing
-    pub fn legacy_disassemble(&self) -> anyhow::Result<()> {
+    // TODO: Return something more structured than a Vec<String>?
+    pub fn legacy_disassemble(&self) -> anyhow::Result<Vec<String>> {
+        let mut disassembled = Vec::new();
         for module in &self.modules {
-            let disassembled = disassemble(module)?;
-            println!("{}", disassembled);
+            disassembled.push(disassemble(module)?);
         }
-        Ok(())
+        Ok(disassembled)
     }
 
     // TODO: At some point this should hand back a set of stackless bytecode pacakges or similar --

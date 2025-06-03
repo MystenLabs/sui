@@ -75,9 +75,17 @@ pub enum RValue {
 
 #[derive(Debug, Clone)]
 pub enum Immediate {
+    U8(u8),
+    U16(u16),
+    U32(u32),
     U64(u64),
+    U128(u128),
+    U256(move_core_types::u256::U256), // Representing as two u128s for simplicity
     True,
-    False, // TODO: The rest of these
+    False,
+    // TODO: empty added for the pop
+    Empty,
+    // TODO: The rest of these
 }
 
 #[derive(Debug, Clone)]
@@ -104,6 +112,13 @@ pub enum PrimitiveOp {
     ReadRef,
     WriteRef,
     Pack,
+    BitOr,
+    BitAnd,
+    Xor,
+    Abort,
+    NoOperation,
+    ShiftLeft,
+    ShiftRight,
     // TODO: The rest of these
 }
 
@@ -220,9 +235,15 @@ impl std::fmt::Display for Var {
 impl std::fmt::Display for Immediate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Immediate::U8(n) => write!(f, "U8({n})"),
+            Immediate::U16(n) => write!(f, "U16({n})"),
+            Immediate::U32(n) => write!(f, "U32({n})"),
             Immediate::U64(n) => write!(f, "U64({n})"),
+            Immediate::U128(n) => write!(f, "U128({n})"),
+            Immediate::U256(n) => write!(f, "U256({n})"),
             Immediate::True => write!(f, "True"),
             Immediate::False => write!(f, "False"),
+            Immediate::Empty => write!(f, "Empty"),
         }
     }
 }

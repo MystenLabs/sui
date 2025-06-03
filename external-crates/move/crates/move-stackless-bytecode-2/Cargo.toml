@@ -19,6 +19,7 @@ move-package.workspace = true
 move-stackless-bytecode.workspace = true
 move-symbol-pool.workspace = true
 move-vm-runtime.workspace = true
+move-core-types.workspace = true
 
 [dev-dependencies]
 move-stdlib.workspace = true

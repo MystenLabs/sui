@@ -57,7 +57,11 @@ impl Stackless {
         }
 
         if self.legacy_disassemble {
-            return stackless.legacy_disassemble();
+            let disassembled_modules = stackless.legacy_disassemble()?;
+            for disassembled_mod in disassembled_modules {
+                println!("{}", disassembled_mod);
+            }
+            return Ok(());
         }
 
         if self.disassemble {
