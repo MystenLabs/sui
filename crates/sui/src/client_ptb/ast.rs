@@ -42,6 +42,7 @@ pub const DRY_RUN: &str = "dry-run";
 pub const DEV_INSPECT: &str = "dev-inspect";
 pub const SERIALIZE_UNSIGNED: &str = "serialize-unsigned-transaction";
 pub const SERIALIZE_SIGNED: &str = "serialize-signed-transaction";
+pub const SENDER: &str = "sender";
 
 // Types
 pub const U8: &str = "u8";
@@ -83,6 +84,7 @@ pub const COMMANDS: &[&str] = &[
     DEV_INSPECT,
     SERIALIZE_UNSIGNED,
     SERIALIZE_SIGNED,
+    SENDER,
 ];
 
 pub fn is_keyword(s: &str) -> bool {
@@ -124,6 +126,8 @@ pub struct ProgramMetadata {
     pub gas_price: Option<Spanned<u64>>,
     pub gas_sponsor: Option<Spanned<NumericalAddress>>,
     pub mvr_names: BTreeMap<String, Span>,
+    pub sender_set: bool,
+    pub sender: Option<Spanned<NumericalAddress>>,
 }
 
 /// A parsed module access consisting of the address, module name, and function name.

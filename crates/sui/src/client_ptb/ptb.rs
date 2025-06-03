@@ -191,7 +191,11 @@ impl PTB {
             .collect();
 
         // the sender is the gas object if gas is provided, otherwise the active address
-        let sender = context.infer_sender(&gas).await?;
+        let sender = if let Some(sender) = program_metadata.sender {
+            sender.value.into_inner().into()
+        } else {
+            context.infer_sender(&gas).await?
+        };
 
         // build the tx kind
         let tx_kind = TransactionKind::ProgrammableTransaction(ProgrammableTransaction {
@@ -213,6 +217,7 @@ impl PTB {
             dev_inspect: program_metadata.dev_inspect_set,
             serialize_unsigned_transaction: program_metadata.serialize_unsigned_set,
             serialize_signed_transaction: program_metadata.serialize_signed_set,
+            sender: program_metadata.sender.map(|x| x.value.into_inner().into()),
         };
 
         let gas_payment = client.transaction_builder().input_refs(&gas).await?;

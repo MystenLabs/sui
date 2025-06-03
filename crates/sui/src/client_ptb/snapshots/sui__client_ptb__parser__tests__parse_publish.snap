@@ -46,6 +46,8 @@ expression: parsed
             gas_price: None,
             gas_sponsor: None,
             mvr_names: {},
+            sender_set: false,
+            sender: None,
         },
     ),
     (
@@ -91,6 +93,8 @@ expression: parsed
             gas_price: None,
             gas_sponsor: None,
             mvr_names: {},
+            sender_set: false,
+            sender: None,
         },
     ),
 ]

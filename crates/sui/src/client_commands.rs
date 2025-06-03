@@ -741,6 +741,13 @@ pub struct TxProcessingArgs {
     /// `sui client execute-combined-signed-tx --signed-tx-bytes <SIGNED_TX_BYTES>`.
     #[arg(long)]
     pub serialize_signed_transaction: bool,
+    /// Optional address to be used as the sender for this transaction. When not specified, the
+    /// current active account address is used. This flag should be combined with
+    /// --serialize-unsigned-transaction since the private key for this address might not be in the
+    /// keystore. The resulting transaction data can then be signed externally with the
+    /// corresponding private key.
+    #[arg(long, required = false, value_parser)]
+    pub sender: Option<SuiAddress>,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -3226,6 +3233,7 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         dev_inspect,
         serialize_unsigned_transaction,
         serialize_signed_transaction,
+        sender,
     } = processing;
 
     ensure!(
@@ -3240,6 +3248,8 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
     };
 
     let client = context.get_client().await?;
+
+    let signer = sender.unwrap_or(signer);
 
     if dev_inspect {
         return execute_dev_inspect(
