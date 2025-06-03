@@ -75,6 +75,8 @@ impl Loader<CoinMetadataKey> for PgReader {
                 module,
                 name,
                 instantiation,
+                marked_obsolete,
+                marked_predecessor,
             ))
             .filter(newer!(object_id).is_null())
             .filter(candidates!(package).eq(SUI_FRAMEWORK_ADDRESS.into_bytes()))

@@ -25,7 +25,7 @@ use url::Url;
 mod model;
 
 pub use sui_field_count::FieldCount;
-pub use sui_sql_macro::sql;
+pub use sui_sql_macro::{query as sql_query, sql};
 
 pub mod query;
 pub mod schema;

@@ -190,6 +190,8 @@ impl TryInto<StoredObjInfo> for &ProcessedObjInfo {
                 module: None,
                 name: None,
                 instantiation: None,
+                marked_obsolete: false,
+                marked_predecessor: false,
             }),
         }
     }
@@ -198,6 +200,7 @@ impl TryInto<StoredObjInfo> for &ProcessedObjInfo {
 #[cfg(test)]
 mod tests {
     use sui_indexer_alt_framework::{
+        postgres::{self},
         types::{
             base_types::{dbg_addr, SequenceNumber},
             object::Owner,
@@ -214,6 +217,98 @@ mod tests {
     async fn get_all_obj_info(conn: &mut Connection<'_>) -> Result<Vec<StoredObjInfo>> {
         let query = obj_info::table.load(conn).await?;
         Ok(query)
+    }
+
+    async fn t0(
+        conn: &mut Connection<'_>,
+        from: u64,
+        to_exclusive: u64,
+    ) -> Result<(usize, usize, usize)> {
+        let query = postgres::sql_query!(
+            "
+        WITH processing AS (
+            SELECT
+                current.object_id as current_id,
+                pred.object_id as pred_id,
+                pred.marked_predecessor,
+                pred.marked_obsolete,
+                CASE
+                WHEN pred.marked_predecessor == TRUE THEN 'DELETE'
+                ELSE 'UPDATE'
+            END as action
+        FROM obj_info current
+    LEFT JOIN LATERAL (
+        SELECT object_id, marked_predecessor, marked_obsolete
+        FROM obj_info p
+        WHERE p.object_id = current.object_id
+          AND p.cp_sequence_number < current.cp_sequence_number
+        ORDER BY p.cp_sequence_number DESC, p.object_id DESC
+        LIMIT 1
+    ) pred ON true
+    WHERE current.cp_sequence_number >= {BigInt}
+      AND current.cp_sequence_number < {BigInt}
+    )
+    , deleted AS (
+        DELETE FROM obj_info
+        WHERE object_id IN (SELECT pred_id FROM processing WHERE action = 'DELETE')
+        RETURNING object_id
+    )
+    , updated AS (
+        UPDATE obj_info
+        SET marked_obsolete = true
+        WHERE object_id IN (SELECT pred_id FROM processing WHERE action = 'UPDATE')
+        RETURNING object_id
+    )
+    , final_update AS (
+        UPDATE obj_info
+        SET marked_predecessor = true
+        WHERE cp_sequence_number >= {BigInt}
+        AND cp_sequence_number < {BigInt}
+        RETURNING object_id
+    )
+    SELECT
+        (SELECT COUNT(*)::BIGINT FROM deleted) as pred_deleted,
+        (SELECT COUNT(*)::BIGINT FROM updated) as pred_obsolete,
+        (SELECT COUNT(*)::BIGINT FROM final_update) as marked_predecessor;
+        ",
+            from as i64,
+            to_exclusive as i64,
+            from as i64,
+            to_exclusive as i64
+        );
+
+        #[derive(diesel::QueryableByName)]
+        struct CountResult {
+            #[diesel(sql_type = diesel::sql_types::BigInt)]
+            pred_deleted: i64,
+            #[diesel(sql_type = diesel::sql_types::BigInt)]
+            pred_obsolete: i64,
+            #[diesel(sql_type = diesel::sql_types::BigInt)]
+            marked_predecessor: i64,
+        }
+
+        let result: CountResult = query.get_result(conn).await?;
+        Ok((
+            result.pred_deleted as usize,
+            result.pred_obsolete as usize,
+            result.marked_predecessor as usize,
+        ))
+    }
+
+    async fn t1(conn: &mut Connection<'_>, from: u64, to_exclusive: u64) -> Result<usize> {
+        let query = postgres::sql_query!(
+            "
+            DELETE FROM obj_info
+WHERE cp_sequence_number >= {BigInt}
+  AND cp_sequence_number < {BigInt}
+  AND marked_predecessor = true
+  AND marked_obsolete = true;
+  ",
+            from as i64,
+            to_exclusive as i64
+        );
+        let rows_deleted = query.execute(conn).await?;
+        Ok(rows_deleted)
     }
 
     #[tokio::test]

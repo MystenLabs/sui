@@ -145,6 +145,8 @@ diesel::table! {
         module -> Nullable<Text>,
         name -> Nullable<Text>,
         instantiation -> Nullable<Bytea>,
+        marked_obsolete -> Bool,
+        marked_predecessor -> Bool,
     }
 }
 

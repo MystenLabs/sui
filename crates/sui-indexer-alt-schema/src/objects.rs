@@ -62,6 +62,8 @@ pub struct StoredObjInfo {
     pub module: Option<String>,
     pub name: Option<String>,
     pub instantiation: Option<Vec<u8>>,
+    pub marked_obsolete: bool,
+    pub marked_predecessor: bool,
 }
 
 #[derive(Insertable, Queryable, Debug, Clone, FieldCount, Eq, PartialEq)]
@@ -111,6 +113,8 @@ impl StoredObjInfo {
                         object.id().to_canonical_display(/* with_prefix */ true),
                     )
                 })?,
+            marked_obsolete: false,
+            marked_predecessor: false,
         })
     }
 }
