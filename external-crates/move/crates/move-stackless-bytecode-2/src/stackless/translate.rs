@@ -84,16 +84,15 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
     op: &IB<S>,
 ) -> anyhow::Result<Instruction> {
     match op {
-
         IB::Pop => {
             // TODO: how to handle Pop?
-            let inst = Instruction::Assign { 
-                lhs: vec![Register(ctxt.var_counter.next())], 
-                rhs: RValue::Immediate(Immediate::Empty)
+            let inst = Instruction::Assign {
+                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Immediate(Immediate::Empty),
             };
             Ok(inst)
         }
-        
+
         IB::Ret => {
             // TODO: This should look at the function's return arity and grab values off the
             // logical stack accordingly
@@ -106,17 +105,17 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
                 condition: Register(ctxt.get_var_counter().last()),
                 // TODO: get the instruction counter, from context maybe?
                 then_label: 0 as usize,
-                else_label: *code_offset as usize 
+                else_label: *code_offset as usize,
             };
             Ok(inst)
         }
         IB::BrFalse(code_offset) => {
-            let inst = Instruction::Branch { 
+            let inst = Instruction::Branch {
                 // TODO: should we swap the then and else labels?
                 condition: Register(ctxt.get_var_counter().last()),
                 // TODO: get the instruction counter, from context maybe?
                 then_label: 0 as usize,
-                else_label: *code_offset as usize 
+                else_label: *code_offset as usize,
             };
             Ok(inst)
         }
@@ -125,7 +124,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
                 condition: Register(ctxt.get_var_counter().last()),
                 // TODO: get the instruction counter, from context maybe?
                 then_label: *code_offset as usize,
-                else_label: *code_offset as usize 
+                else_label: *code_offset as usize,
             };
             Ok(inst)
         }
@@ -136,7 +135,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             };
             Ok(inst)
         }
-        
+
         IB::LdU64(value) => {
             let inst = Instruction::Assign {
                 lhs: vec![Register(ctxt.var_counter.next())],
@@ -154,17 +153,49 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
         }
 
         IB::CastU8 => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
+            let inst = Instruction::Assign {
+                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::CastU8,
+                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                },
+            };
+            Ok(inst)
         }
+
         IB::CastU64 => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
+            let inst = Instruction::Assign {
+                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::CastU64,
+                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                },
+            };
+            Ok(inst)
         }
+
         IB::CastU128 => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
+            let inst = Instruction::Assign {
+                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::CastU128,
+                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                },
+            };
+            Ok(inst)
         }
+
         IB::LdConst(_const_ref) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
+            let inst = Instruction::Assign {
+                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::LdConst,
+                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                },
+            };
+            Ok(inst)
         }
+
         IB::LdTrue => {
             let inst = Instruction::Assign {
                 lhs: vec![Register(ctxt.var_counter.next())],
@@ -172,6 +203,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             };
             Ok(inst)
         }
+
         IB::LdFalse => {
             let inst = Instruction::Assign {
                 lhs: vec![Register(ctxt.var_counter.next())],
@@ -185,12 +217,12 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
                 lhs: vec![Register(ctxt.var_counter.next())],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::CopyLoc,
-                    args: vec![Var(Register((*loc).into()))],
+                    args: vec![Var(Register(ctxt.var_counter.last()))],
                 },
             };
             Ok(inst)
         }
-        
+
         IB::MoveLoc(_loc) => {
             let inst = Instruction::Assign {
                 lhs: vec![Register(ctxt.var_counter.next())],
@@ -217,26 +249,46 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
         }
 
         IB::Call(_bx) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
-        }
-        
-        
-        IB::Pack(_struct_ref) => {
             let inst = Instruction::Assign {
+                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Call {
+                    // TODO get the function id from the context
+                    function: 0 as usize,
+                    args: vec![], // TODO get the args from the context
+                },
+            };
+            Ok(inst)
+        },
+
+        IB::Pack(_struct_ref) => {
+            let args = _struct_ref.struct_.fields.0.iter().enumerate().map(|(i, _)| {
+                Var(Register(ctxt.var_counter.last() - i))
+            }).collect::<Vec<_>>();
+            let inst = Instruction::Assign {
+                
                 lhs: vec![Register(ctxt.var_counter.next())],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::Pack,
-                    // TODO get how many args are needed
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args
                 },
             };
             Ok(inst)
         }
 
-        IB::Unpack(_bx) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
-        }
-        
+        IB::Unpack(bx) => {
+            let lhs = bx.struct_.fields.0.iter().enumerate().map(|(i, _)| {
+                Register(ctxt.var_counter.next() + i)
+            }).collect::<Vec<_>>();
+            let inst = Instruction::Assign {
+                lhs,
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::Unpack,
+                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                },
+            };
+            Ok(inst)
+        },
+
         IB::ReadRef => {
             let inst = Instruction::Assign {
                 lhs: vec![Register(ctxt.var_counter.next())],
@@ -264,15 +316,37 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
         }
 
         IB::FreezeRef => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
+            let inst = Instruction::Assign {
+                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::FreezeRef,
+                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                },
+            };
+            Ok(inst)
         }
+
         IB::MutBorrowLoc(_local_index) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
+            let inst = Instruction::Assign {
+                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::MutBorrowLoc,
+                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                },
+            };
+            Ok(inst)
         }
         IB::ImmBorrowLoc(_local_index) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
+            let inst = Instruction::Assign {
+                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::ImmBorrowLoc,
+                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                },
+            };
+            Ok(inst)
         }
-        
+
         IB::MutBorrowField(_field_ref) => {
             let inst = Instruction::Assign {
                 lhs: vec![Register(ctxt.var_counter.next())],
@@ -294,7 +368,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             };
             Ok(inst)
         }
-        
+
         IB::Add => {
             if ctxt.var_counter.current() < 2 {
                 panic!("Not enough variables to perform Add operation");
@@ -310,7 +384,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             };
             Ok(inst)
         }
-        
+
         IB::Sub => {
             if ctxt.var_counter.current() < 2 {
                 panic!("Not enough variables to perform Add operation");
@@ -327,8 +401,8 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             };
             Ok(inst)
         }
-        
-                // Mul
+
+        // Mul
         IB::Mul => {
             if ctxt.var_counter.current() < 2 {
                 panic!("Not enough variables to perform Mul operation");
@@ -345,7 +419,6 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             Ok(inst)
         }
 
-        
         // Mod
         IB::Mod => {
             if ctxt.var_counter.current() < 2 {
@@ -559,10 +632,12 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             Ok(inst)
         }
         IB::Abort => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
+            let inst = Instruction::Abort;
+            Ok(inst)
         }
         IB::Nop => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
+            let inst = Instruction::Nop;
+            Ok(inst)
         }
         IB::Shl => {
             if ctxt.var_counter.current() < 1 {
@@ -577,7 +652,6 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
                 },
             };
             Ok(inst)
-
         }
         IB::Shr => {
             if ctxt.var_counter.current() < 1 {
@@ -594,29 +668,23 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             Ok(inst)
         }
         IB::VecPack(_bx) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
+            let inst = Instruction::Assign {
+                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::VecPack,
+                    // TODO compute how many elements are in the vector
+                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                },
+            };
+            Ok(inst)
         }
-        IB::VecLen(_rc) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
-        }
-        IB::VecImmBorrow(_rc) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
-        }
-        IB::VecMutBorrow(_rc) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
-        }
-        IB::VecPushBack(_rc) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
-        }
-        IB::VecPopBack(_rc) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
-        }
-        IB::VecUnpack(_bx) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
-        }
-        IB::VecSwap(_rc) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
-        }
+        IB::VecLen(_rc) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
+        IB::VecImmBorrow(_rc) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
+        IB::VecMutBorrow(_rc) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
+        IB::VecPushBack(_rc) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
+        IB::VecPopBack(_rc) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
+        IB::VecUnpack(_bx) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
+        IB::VecSwap(_rc) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
         IB::LdU16(value) => {
             let inst = Instruction::Assign {
                 lhs: vec![Register(ctxt.var_counter.next())],
@@ -639,44 +707,45 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             Ok(inst)
         }
         IB::CastU16 => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
+            let inst = Instruction::Assign {
+                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::CastU16,
+                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                },
+            };
+            Ok(inst)
         }
         IB::CastU32 => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
+            let inst = Instruction::Assign {
+                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::CastU32,
+                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                },
+            };
+            Ok(inst)
         }
         IB::CastU256 => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
+            let inst = Instruction::Assign {
+                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::CastU256,
+                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                },
+            };
+            Ok(inst)
         }
-        IB::PackVariant(_bx) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
-        }
-        IB::UnpackVariant(_bx) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
-        }
-        IB::UnpackVariantImmRef(_bx) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
-        }
-        IB::UnpackVariantMutRef(_bx) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
-        }
-        IB::VariantSwitch(_jt) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
-        }
+        IB::PackVariant(_bx) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
+        IB::UnpackVariant(_bx) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
+        IB::UnpackVariantImmRef(_bx) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
+        IB::UnpackVariantMutRef(_bx) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
+        IB::VariantSwitch(_jt) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
         // ******** DEPRECATED BYTECODES ********
-        IB::MutBorrowGlobalDeprecated(_bx) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
-        }
-        IB::ImmBorrowGlobalDeprecated(_bx) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
-        }
-        IB::ExistsDeprecated(_bx) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
-        }
-        IB::MoveFromDeprecated(_bx) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
-        }
-        IB::MoveToDeprecated(_bx) => {
-            Ok(Instruction::NotImplemented(format!("{:?}", op)))
-        }
+        IB::MutBorrowGlobalDeprecated(_bx) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
+        IB::ImmBorrowGlobalDeprecated(_bx) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
+        IB::ExistsDeprecated(_bx) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
+        IB::MoveFromDeprecated(_bx) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
+        IB::MoveToDeprecated(_bx) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
     }
 }
