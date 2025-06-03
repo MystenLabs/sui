@@ -814,7 +814,7 @@ impl AuthorityEpochTables {
             ),
             (
                 "congestion_control_object_debts".to_string(),
-                ThConfig::new_with_config(32, MUTEXES, uniform_key, bloom_config.clone()),
+                ThConfig::new_with_config(32, MUTEXES, uniform_key, lru_bloom_config.clone()),
             ),
             (
                 "congestion_control_randomness_object_debts".to_string(),
