@@ -69,6 +69,8 @@ pub async fn proxy_handler(
         }
     };
 
+    debug!("Request method: {:?}, headers: {:?}", parts.method, parts.headers);
+
     if let Some(allowed_origins) = &state.allowed_origins {
         match parts.headers.get("origin") {
             Some(origin) => {
