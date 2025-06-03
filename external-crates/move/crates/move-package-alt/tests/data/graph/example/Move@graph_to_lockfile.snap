@@ -11,7 +11,7 @@ deps = {}
 
 [pinned.mainnet.baz]
 source = { local = "../baz" }
-manifest_digest = "9FC9C9816ED8512E5BD79803DCD256DBCAA2E844907360EE90402F34ACA1240D"
+manifest_digest = "9EDE82D2B59D0ECF8479E0B521F9EE9362067C9A344C551FC3B91FCF33350CA7"
 deps = { bar = "bar" }
 
 [pinned.mainnet.example]
@@ -26,7 +26,7 @@ deps = {}
 
 [pinned.testnet.baz]
 source = { local = "../baz" }
-manifest_digest = "9FC9C9816ED8512E5BD79803DCD256DBCAA2E844907360EE90402F34ACA1240D"
+manifest_digest = "9EDE82D2B59D0ECF8479E0B521F9EE9362067C9A344C551FC3B91FCF33350CA7"
 deps = { bar = "bar" }
 
 [pinned.testnet.example]

@@ -43,8 +43,8 @@ impl<F: MoveFlavor> Package<F> {
     ///
     /// Fails if [path] does not exist, or if it doesn't contain a manifest
     pub async fn load_root(path: impl AsRef<Path>) -> PackageResult<Self> {
-        let manifest = Manifest::<F>::read_from_file(path.as_ref())?;
         let path = PackagePath::new(path.as_ref().to_path_buf())?;
+        let manifest = Manifest::<F>::read_from_file(path.manifest_path())?;
         Ok(Self { manifest, path })
     }
 
@@ -81,7 +81,7 @@ impl<F: MoveFlavor> Package<F> {
         let envs: BTreeMap<_, _> = self
             .manifest()
             .environments()
-            .into_iter()
+            .iter()
             .filter(|(e, _)| *e == env)
             .map(|(env, id)| (env.clone(), id.clone()))
             .collect();

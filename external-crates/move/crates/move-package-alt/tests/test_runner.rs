@@ -13,7 +13,7 @@ use move_package_alt::{
     dependency::{self, DependencySet, UnpinnedDependencyInfo},
     flavor::Vanilla,
     graph::PackageGraph,
-    package::{lockfile::Lockfile, manifest::Manifest, paths::PackagePath},
+    package::{Package, lockfile::Lockfile, manifest::Manifest},
 };
 use std::path::Path;
 use tracing_subscriber::EnvFilter;
@@ -112,22 +112,19 @@ impl Test<'_> {
 async fn run_graph_to_lockfile_test(
     input_path: &Path,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    // move project path
-    let package_path = PackagePath::new(input_path.parent().unwrap().to_path_buf())?;
-    let manifest_path = package_path.manifest_path();
-    let manifest = Manifest::<Vanilla>::read_from_file(&manifest_path)?;
-    let package = PackageGraph::<Vanilla>::load_from_lockfile_ignore_digests(
-        &package_path,
-        &"mainnet".to_string(),
-    )
-    .await?
-    .unwrap();
+    let package =
+        Package::<Vanilla>::load_root(&input_path.parent().unwrap().to_path_buf()).await?;
+    let pkg_path = package.path();
+    let envs = package.manifest().environments();
+    let mut lockfiles = Lockfile::<Vanilla>::read_from_dir(&pkg_path.path())?;
 
-    let lockfile = package
-        .to_lockfiles(&package_path, manifest.environments().clone())
-        .await?;
+    for env in envs.keys() {
+        let pkg_graph = PackageGraph::<Vanilla>::load_from_manifests(pkg_path, env).await?;
+        let updated_pinned_deps = pkg_graph.to_pinned_deps(pkg_path, env).await?;
+        lockfiles.update_pinned_dep_env(updated_pinned_deps);
+    }
 
-    Ok(lockfile.render_as_toml().to_string())
+    Ok(lockfiles.render_as_toml().to_string())
 }
 
 fn run_graph_to_lockfile_test_wrapper(path: &Path) -> Result<String, Box<dyn std::error::Error>> {

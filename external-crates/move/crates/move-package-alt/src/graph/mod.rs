@@ -60,27 +60,24 @@ impl<F: MoveFlavor> PackageNode<F> {
 }
 
 impl<F: MoveFlavor> PackageGraph<F> {
-    // TODO: load should load for all environments and return a map
-
     /// Check to see whether the resolution graph in the lockfile inside `path` is up-to-date (i.e.
     /// whether any of the manifests digests are out of date). If the resolution graph is
     /// up-to-date, it is returned. Otherwise a new resolution graph is constructed by traversing
     /// (only) the manifest files.
-    pub async fn load(
-        path: &PackagePath,
-        envs: BTreeMap<EnvironmentName, F::EnvironmentID>,
-    ) -> PackageResult<BTreeMap<EnvironmentName, Self>> {
+    pub async fn load(path: &PackagePath) -> PackageResult<BTreeMap<EnvironmentName, Self>> {
+        let manifest = Manifest::<F>::read_from_file(path.manifest_path())?;
+        let envs = manifest.environments();
         let builder = PackageGraphBuilder::new();
         let mut output = BTreeMap::new();
 
-        for (env, _) in envs {
-            if let Some(graph) = builder.load_from_lockfile(path, &env).await? {
+        for env in envs.keys() {
+            if let Some(graph) = builder.load_from_lockfile(path, env).await? {
                 output.insert(env.clone(), graph);
             } else {
                 output.insert(
                     env.clone(),
                     PackageGraphBuilder::<F>::new()
-                        .load_from_manifests(path, &env)
+                        .load_from_manifests(path, env)
                         .await?,
                 );
             }
@@ -112,13 +109,12 @@ impl<F: MoveFlavor> PackageGraph<F> {
     }
 
     // TODO: this should provide a diff between the old lockfile and the new lockfile.
-    pub async fn update_deps(
+    /// Convert the package graph to a set of pinned dependencies for the given environment.
+    pub async fn to_pinned_deps(
         &self,
         path: &PackagePath,
         env: &EnvironmentName,
     ) -> PackageResult<BTreeMap<EnvironmentName, DependencyInfo<F>>> {
-        let mut lockfiles = Lockfile::<F>::read_from_dir(path.path())?;
-        let manifest = Manifest::<F>::read_from_file(path.manifest_path())?;
         let mut new_pinned_deps: BTreeMap<EnvironmentName, DependencyInfo<F>> = BTreeMap::new();
         let mut data: BTreeMap<String, DepInfo<F>> = BTreeMap::new();
 
@@ -183,21 +179,6 @@ impl<F: MoveFlavor> PackageGraph<F> {
         // Create the DependencyInfo for this environment
         new_pinned_deps.insert(env.clone(), DependencyInfo { data });
         Ok(new_pinned_deps)
-    }
-
-    pub async fn to_lockfiles(
-        &self,
-        path: &PackagePath,
-        envs: BTreeMap<EnvironmentName, F::EnvironmentID>,
-    ) -> PackageResult<Lockfile<F>> {
-        let mut lockfiles = Lockfile::<F>::read_from_dir(path.path())?;
-
-        for (env, _) in envs {
-            let new_pinned_deps = self.update_deps(path, &env).await?;
-            lockfiles.update_pinned_dep_env(new_pinned_deps);
-        }
-
-        Ok(lockfiles)
     }
 }
 
