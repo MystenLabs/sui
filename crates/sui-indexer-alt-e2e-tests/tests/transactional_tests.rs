@@ -137,10 +137,7 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
 
     let client_args = ClientArgs {
         local_ingestion_path: Some(config.data_ingestion_path.clone()),
-        remote_store_url: None,
-        rpc_api_url: None,
-        rpc_username: None,
-        rpc_password: None,
+        ..Default::default()
     };
 
     // The test config includes every pipeline, we configure its consistent range using the
