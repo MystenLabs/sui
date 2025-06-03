@@ -23,6 +23,7 @@ pub struct AppState {
     client: reqwest::Client,
     fullnode_address: Url,
     unsupported_methods: HashSet<String>,
+    allowed_origins: Option<HashSet<String>>,
     cursor_state: Arc<PaginationCursorState>,
     metrics: AppMetrics,
 }
@@ -32,13 +33,19 @@ impl AppState {
         client: reqwest::Client,
         fullnode_address: Url,
         unsupported_methods: HashSet<String>,
+        allowed_origins: Option<HashSet<String>>,
         cursor_state: Arc<PaginationCursorState>,
         metrics: AppMetrics,
     ) -> Self {
+        info!(
+            "Creating app state with allowed origins: {:?} and unsupported methods: {:?}",
+            allowed_origins, unsupported_methods
+        );
         Self {
             client,
             fullnode_address,
             unsupported_methods,
+            allowed_origins,
             cursor_state,
             metrics,
         }
@@ -61,6 +68,27 @@ pub async fn proxy_handler(
                 .unwrap());
         }
     };
+
+    if let Some(allowed_origins) = &state.allowed_origins {
+        match parts.headers.get("origin") {
+            Some(origin) => {
+                if !allowed_origins.contains(origin.to_str().unwrap()) {
+                    debug!("Dropping request from origin: {}", origin.to_str().unwrap());
+                    return Ok(Response::builder()
+                        .status(StatusCode::FORBIDDEN)
+                        .body(Body::from("Forbidden"))
+                        .unwrap());
+                }
+            }
+            None => {
+                debug!("Dropping request with no origin header");
+                return Ok(Response::builder()
+                    .status(StatusCode::FORBIDDEN)
+                    .body(Body::from("Forbidden"))
+                    .unwrap());
+            }
+        }
+    }
 
     match parts
         .headers

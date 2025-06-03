@@ -7,4 +7,7 @@ fullnode-address: "https://rpc-fpa.sui-mainnet.mystenlabs.com/json-rpc"
 unsupported-methods:
   - "sui_executeTransaction"
 
+allowed-origins:
+  - "https://apps-backend.sui.io"
+
 cursor-cache-size: 10000

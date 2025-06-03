@@ -20,6 +20,8 @@ pub struct ProxyConfig {
     pub fullnode_address: Url,
     /// Methods that are not proxied to the fullnode.
     pub unsupported_methods: Vec<String>,
+    /// The list of origins that are allowed to access the proxy.
+    pub allowed_origins: Option<Vec<String>>,
     /// The size of the cache for pagination cursors.
     pub cursor_cache_size: u64,
     /// Maximum number of idle connections to keep in the connection pool.
@@ -33,7 +35,6 @@ pub struct ProxyConfig {
     #[serde_as(as = "DurationSeconds")]
     #[serde(default = "default_idle_timeout")]
     pub idle_timeout_seconds: Duration,
-    // TODO: add allowed origin list
 }
 
 fn default_max_idle_connections() -> usize {

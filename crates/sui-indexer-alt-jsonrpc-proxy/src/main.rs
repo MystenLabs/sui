@@ -29,7 +29,9 @@ async fn main() {
     info!("Starting sui-indexer-alt-jsonrpc-proxy");
     let args = Args::parse();
 
-    let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new().with_env().init();
+    let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
+        .with_env()
+        .init();
     info!("Initialized telemetry");
 
     let (config, client): (ProxyConfig, Client) =
@@ -54,6 +56,9 @@ async fn main() {
         client,
         config.fullnode_address,
         config.unsupported_methods.into_iter().collect(),
+        config
+            .allowed_origins
+            .map(|origins| origins.into_iter().collect()),
         cursor_state,
         app_metrics,
     );
