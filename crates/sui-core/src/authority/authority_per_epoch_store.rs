@@ -778,11 +778,7 @@ impl AuthorityEpochTables {
             ),
             (
                 "deferred_transactions".to_string(),
-                ThConfig::new(1 + 8 + 8, MUTEXES, uniform_key),
-            ),
-            (
-                "deferred_transactions".to_string(),
-                ThConfig::new(1 + 8 + 8, MUTEXES, uniform_key),
+                ThConfig::new_with_indexing(KeyIndexing::Hash, MUTEXES, uniform_key),
             ),
             (
                 "dkg_processed_messages_v2".to_string(),
