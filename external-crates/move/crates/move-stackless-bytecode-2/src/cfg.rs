@@ -5,7 +5,7 @@
 //! This module defines the control-flow graph uses for bytecode verification.
 use move_binary_format::{
     file_format::{CodeOffset, JumpTableInner},
-    normalized::{Bytecode, VariantJumpTable}
+    normalized::{Bytecode, VariantJumpTable},
 };
 use std::{
     collections::{BTreeMap, BTreeSet, btree_map::Entry},

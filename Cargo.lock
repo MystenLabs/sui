@@ -8224,16 +8224,21 @@ name = "move-stackless-bytecode-2"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "clap",
  "move-abstract-interpreter",
  "move-binary-format",
+ "move-command-line-common",
+ "move-core-types",
  "move-disassembler",
  "move-ir-types",
  "move-model",
  "move-model-2",
+ "move-package",
  "move-stackless-bytecode",
  "move-symbol-pool",
  "move-vm-runtime",
+ "tempfile",
 ]
 
 [[package]]

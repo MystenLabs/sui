@@ -3,6 +3,7 @@
 
 use crate::utils::comma_separated;
 
+use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 
 use std::collections::BTreeMap;
@@ -13,7 +14,8 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
 pub struct Package {
-    pub name: Symbol,
+    pub name: Option<Symbol>,
+    pub address: AccountAddress,
     pub modules: BTreeMap<Symbol, Module>,
 }
 
@@ -26,7 +28,7 @@ pub struct Module {
 #[derive(Debug, Clone)]
 pub struct Function {
     pub name: Symbol,
-    pub basic_blocks: Vec<BasicBlock>,
+    pub basic_blocks: BTreeMap<Label, BasicBlock>,
 }
 
 #[derive(Debug, Clone)]
@@ -44,10 +46,15 @@ pub enum Instruction {
         rhs: RValue,
     },
     Jump(Label),
-    Branch {
+    JumpIf {
         condition: Var,
         then_label: Label,
         else_label: Label,
+    },
+    Abort,
+    Nop,
+    VariantSwitch {
+        cases: Vec<Label>,
     },
     NotImplemented(String),
 }
@@ -55,14 +62,14 @@ pub enum Instruction {
 #[derive(Debug, Clone)]
 pub enum Operand {
     Var(Var),
-    Constant(Constant),
-    Immediate(Immediate),
+    Constant(Value),
+    Immediate(Value),
 }
 
 #[derive(Debug, Clone)]
 pub enum RValue {
     Call {
-        function: FunctionId,
+        function: Symbol,
         args: Vec<Operand>,
     },
     Constant(Constant),
@@ -70,25 +77,53 @@ pub enum RValue {
         op: PrimitiveOp,
         args: Vec<Operand>,
     },
-    Immediate(Immediate),
+    Operand(Operand),
 }
 
 #[derive(Debug, Clone)]
-pub enum Immediate {
+pub enum Value {
+    U8(u8),
+    U16(u16),
+    U32(u32),
     U64(u64),
+    U128(u128),
+    U256(move_core_types::u256::U256), // Representing as two u128s for simplicity
     True,
-    False, // TODO: The rest of these
+    False,
+    Address(AccountAddress),
+    Empty, // empty added for the pop
+    NotImplemented(String),
 }
 
 #[derive(Debug, Clone)]
 pub enum PrimitiveOp {
+    CastU8,
+    CastU64,
+    CastU128,
+    LdConst,
+    CopyLoc,
+    MoveLoc,
+    StoreLoc,
+    Call,
+    Pack,
+    Unpack,
+    ReadRef,
+    WriteRef,
+    FreezeRef,
+    MutBorrowLoc,
+    ImmBorrowLoc,
+    MutBorrowField,
+    ImmBorrowField,
     Add,
     Subtract,
     Multiply,
-    Divide,
     Modulo,
-    And,
+    Divide,
+    BitOr,
+    BitAnd,
+    Xor,
     Or,
+    And,
     Not,
     Equal,
     NotEqual,
@@ -96,15 +131,34 @@ pub enum PrimitiveOp {
     GreaterThan,
     LessThanOrEqual,
     GreaterThanOrEqual,
-    MoveLoc,
-    CopyLoc,
-    StoreLoc,
-    ImmBorrowField,
-    MutBorrowField,
-    ReadRef,
-    WriteRef,
-    Pack,
-    // TODO: The rest of these
+    Abort,
+    NoOperation,
+    ShiftLeft,
+    ShiftRight,
+    VecPack,
+    VecLen,
+    VecImmBorrow,
+    VecMutBorrow,
+    VecPushBack,
+    VecPopBack,
+    VecUnpack,
+    VecSwap,
+    LdU16,
+    LdU32,
+    LdU256,
+    CastU16,
+    CastU32,
+    CastU256,
+    PackVariant,
+    UnpackVariant,
+    UnpackVariantImmRef,
+    UnpackVariantMutRef,
+    VariantSwitch,
+    // MutBorrowGlobalDeprecated,
+    // ImmBorrowGlobalDeprecated,
+    // ExistsDeprecated,
+    // MoveFromDeprecated,
+    // MoveToDeprecated,
 }
 
 #[derive(Debug, Clone)]
@@ -115,8 +169,7 @@ pub enum Var {
 }
 
 pub type Label = usize;
-pub type Constant = usize;
-pub type FunctionId = usize;
+pub type Constant = Vec<u8>;
 pub type PrimitiveOpId = usize;
 
 // -------------------------------------------------------------------------------------------------
@@ -144,7 +197,11 @@ impl BasicBlock {
 
 impl std::fmt::Display for Package {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Package: {}", self.name)?;
+        writeln!(
+            f,
+            "Package: {}",
+            self.name.unwrap_or("Name not found".into())
+        )?;
         for module in self.modules.values() {
             writeln!(f, "{}", module)?;
         }
@@ -165,8 +222,8 @@ impl std::fmt::Display for Module {
 impl std::fmt::Display for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "    Function: {}", self.name)?;
-        for (i, bb) in self.basic_blocks.iter().enumerate() {
-            writeln!(f, "      {}: {}", i, bb)?;
+        for block in self.basic_blocks.values() {
+            writeln!(f, "{}", block)?;
         }
         Ok(())
     }
@@ -174,9 +231,9 @@ impl std::fmt::Display for Function {
 
 impl std::fmt::Display for BasicBlock {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "BasicBlock {}:", self.label)?;
+        writeln!(f, "      Label LBL_{}:", self.label)?;
         for instr in &self.instructions {
-            writeln!(f, "  {}", instr)?;
+            writeln!(f, "        {}", instr)?;
         }
         Ok(())
     }
@@ -187,12 +244,24 @@ impl std::fmt::Display for Instruction {
         match self {
             Instruction::Return(vars) => write!(f, "Return({})", comma_separated(vars)),
             Instruction::Assign { lhs, rhs } => write!(f, "{} = {}", comma_separated(lhs), rhs),
-            Instruction::Jump(lbl) => write!(f, "Jump({lbl}"),
-            Instruction::Branch {
+            Instruction::Jump(lbl) => write!(f, "Jump(LBL_{lbl})"),
+            Instruction::JumpIf {
                 condition,
                 then_label,
                 else_label,
-            } => write!(f, "Branch({condition}, {then_label}, {else_label}"),
+            } => write!(f, "JumpIf({condition}, LBL_{then_label}, LBL_{else_label})"),
+            Instruction::Abort => write!(f, "Abort"),
+            Instruction::VariantSwitch { cases } => {
+                write!(f, "VariantSwitch(")?;
+                for (i, case) in cases.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "Label({case})")?;
+                }
+                write!(f, ")")
+            }
+            Instruction::Nop => write!(f, "NoOperation"),
             Instruction::NotImplemented(instr) => write!(f, "Unimplemented({instr})"),
         }
     }
@@ -202,7 +271,7 @@ impl std::fmt::Display for Operand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Operand::Var(var) => write!(f, "{}", var),
-            Operand::Constant(constant) => write!(f, "Constant({})", constant),
+            Operand::Constant(constant) => write!(f, "Constant({:?})", constant),
             Operand::Immediate(val) => write!(f, "{}", val),
         }
     }
@@ -217,12 +286,20 @@ impl std::fmt::Display for Var {
     }
 }
 
-impl std::fmt::Display for Immediate {
+impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Immediate::U64(n) => write!(f, "U64({n})"),
-            Immediate::True => write!(f, "True"),
-            Immediate::False => write!(f, "False"),
+            Value::U8(n) => write!(f, "U8({n})"),
+            Value::U16(n) => write!(f, "U16({n})"),
+            Value::U32(n) => write!(f, "U32({n})"),
+            Value::U64(n) => write!(f, "U64({n})"),
+            Value::U128(n) => write!(f, "U128({n})"),
+            Value::U256(n) => write!(f, "U256({n})"),
+            Value::True => write!(f, "True"),
+            Value::False => write!(f, "False"),
+            Value::Empty => write!(f, "Empty"),
+            Value::Address(addr) => write!(f, "Address({})", addr.to_canonical_string(true)),
+            Value::NotImplemented(msg) => write!(f, "NotImplemented({})", msg),
         }
     }
 }
@@ -231,13 +308,13 @@ impl std::fmt::Display for RValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RValue::Call { function, args } => {
-                write!(f, "Call({}, ", function)?;
+                write!(f, "Call {}(", function)?;
                 write!(f, "{}", comma_separated(args))?;
                 write!(f, ")")
             }
-            RValue::Constant(constant) => write!(f, "Constant({})", constant),
+            RValue::Constant(constant) => write!(f, "Constant({:?})", constant),
             RValue::Primitive { op, args } => write!(f, "{}({})", op, comma_separated(args)),
-            RValue::Immediate(immediate) => write!(f, "{immediate}"),
+            RValue::Operand(immediate) => write!(f, "{immediate}"),
         }
     }
 }
