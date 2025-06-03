@@ -17,7 +17,7 @@ on:
       announce:
         description: Announce the release?
         type: boolean
-        default: true
+        default: false
         required: true
 env:
   RELEASE_NOTES_FILE: './release_notes.txt'
