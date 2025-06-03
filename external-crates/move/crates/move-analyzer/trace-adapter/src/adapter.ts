@@ -14,7 +14,6 @@ import {
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import * as path from 'path';
-import snakeCase from 'lodash.snakecase';
 import {
     Runtime,
     RuntimeEvents,
@@ -24,21 +23,19 @@ import {
     IRuntimeRefValue,
     ExecutionResult,
     IMoveCallStack,
-    PTBCommandKind
 } from './runtime';
-import { PTB_START_FRAME_ID, SPLIT_COINS_FRAME_ID, TRANSFER_FRAME_ID } from './trace_utils';
-import { log } from 'console';
+import { EXT_SUMMARY_FRAME_ID, EXT_EVENT_FRAME_ID } from './trace_utils';
 
 
 /**
- * The source reference for the PTB summary frame.
+ * The source reference for the summary frame.
  */
 const SUMMARY_FRAME_SRC_REF = 42;
 
 /**
- * The source reference for the PTB command frame.
+ * The source reference for the external event frame.
  */
-const PTB_COMMAND_FRAME_SRC_REF = 7;
+const EXT_EVENT_FRAME_SRC_REF = 7;
 
 
 const enum LogLevel {
@@ -268,25 +265,25 @@ export class MoveDebugSession extends LoggingDebugSession {
         try {
             const stackFrames = [];
             let optimizedLines: number[] = [];
-            const ptbStack = this.runtime.stack();
-            if (ptbStack.summaryFrame) {
-                const name = 'PTB';
-                const tabName = 'ptb_summary';
+            const eventStack = this.runtime.stack();
+            if (eventStack.summaryFrame) {
+                const name = eventStack.summaryFrame.camel_case_name;
+                const tabName = eventStack.summaryFrame.snake_case_name;
                 let summaryFrameSrc = new Source(tabName);
                 summaryFrameSrc.sourceReference = SUMMARY_FRAME_SRC_REF;
                 const summaryFrame = new StackFrame(
-                    ptbStack.summaryFrame.id,
+                    eventStack.summaryFrame.id,
                     name,
                     summaryFrameSrc,
-                    ptbStack.summaryFrame.line
+                    eventStack.summaryFrame.line
                 );
                 stackFrames.push(summaryFrame);
             }
-            const cmdFrame = ptbStack.commandFrame;
-            if (cmdFrame) {
-                if ('frames' in cmdFrame && 'globals' in cmdFrame) {
+            const eventFrame = eventStack.eventFrame;
+            if (eventFrame) {
+                if ('frames' in eventFrame && 'globals' in eventFrame) {
                     // Move call stack
-                    const moveCallStack = cmdFrame as IMoveCallStack;
+                    const moveCallStack = eventFrame as IMoveCallStack;
                     const stack_height = moveCallStack.frames.length;
                     stackFrames.push(...moveCallStack.frames.map(frame => {
                         const fileName = frame.disassemblyModeTriggered
@@ -305,24 +302,21 @@ export class MoveDebugSession extends LoggingDebugSession {
                             ? moveCallStack.frames[stack_height - 1].optimizedBcodeLines!
                             : moveCallStack.frames[stack_height - 1].optimizedSrcLines;
                     }
-                } else if ('id' in cmdFrame && 'line' in cmdFrame && 'command' in cmdFrame) {
-                    // Native PTB commands
-                    switch (cmdFrame.command.kind) {
-                        case PTBCommandKind.TransferStart:
-                        case PTBCommandKind.SplitCoinsStart:
-                            const name = cmdFrame.command.kind;
-                            const tabName = snakeCase(name);
-                            let nativeCmdFrameSrc = new Source(tabName);
-                            nativeCmdFrameSrc.sourceReference = PTB_COMMAND_FRAME_SRC_REF;
-                            const nativeCmdFrame = new StackFrame(
-                                cmdFrame.id,
-                                name,
-                                nativeCmdFrameSrc,
-                                cmdFrame.line
-                            );
-                            stackFrames.push(nativeCmdFrame);
-                        // TODO: create and push a frame for remaining native PTB commands
-                    }
+                } else if ('id' in eventFrame && 'line' in eventFrame &&
+                    'description' in eventFrame && 'camel_case_name' in eventFrame &&
+                    'snake_case_name' in eventFrame && 'locals' in eventFrame) {
+                    // external event
+                    const name = eventFrame.camel_case_name;
+                    const tabName = eventFrame.snake_case_name;
+                    let externalEventFrameSrc = new Source(tabName);
+                    externalEventFrameSrc.sourceReference = EXT_EVENT_FRAME_SRC_REF;
+                    const extEventFrame = new StackFrame(
+                        eventFrame.id,
+                        name,
+                        externalEventFrameSrc,
+                        eventFrame.line
+                    );
+                    stackFrames.push(extEventFrame);
                 }
             }
             response.body = {
@@ -360,18 +354,14 @@ export class MoveDebugSession extends LoggingDebugSession {
                 }
 
             } else {
-                content = 'No PTB summary available';
+                content = 'No summary available';
             };
-        } else if (args.sourceReference === PTB_COMMAND_FRAME_SRC_REF) {
-            const cmdFrame = this.runtime.stack().commandFrame;
-            if (cmdFrame && 'command' in cmdFrame) {
-                switch (cmdFrame.command.kind) {
-                    case PTBCommandKind.TransferStart:
-                    case PTBCommandKind.SplitCoinsStart:
-                        content = cmdFrame.command.description + '\n';
-                }
+        } else if (args.sourceReference === EXT_EVENT_FRAME_SRC_REF) {
+            const eventFrame = this.runtime.stack().eventFrame;
+            if (eventFrame && 'description' in eventFrame) {
+                content = eventFrame.description + '\n';
             } else {
-                content = 'No PTB command available';
+                content = 'No external event available';
             }
         }
         else {
@@ -393,19 +383,19 @@ export class MoveDebugSession extends LoggingDebugSession {
      */
     private getScopes(frameID: number): DebugProtocol.Scope[] {
         const scopes: DebugProtocol.Scope[] = [];
-        if (frameID === PTB_START_FRAME_ID) {
+        if (frameID === EXT_SUMMARY_FRAME_ID) {
             // no scopes for the summary frame
             return scopes;
         }
-        const ptbStack = this.runtime.stack();
-        const cmdFrame = ptbStack.commandFrame;
-        if (!cmdFrame) {
+        const eventStack = this.runtime.stack();
+        const eventFrame = eventStack.eventFrame;
+        if (!eventFrame) {
             return scopes;
         }
 
-        if ('frames' in cmdFrame && 'globals' in cmdFrame) {
+        if ('frames' in eventFrame && 'globals' in eventFrame) {
             // Scopes for Move call
-            const frame = cmdFrame.frames.find(frame => frame.id === frameID);
+            const frame = eventFrame.frames.find(frame => frame.id === frameID);
             if (!frame) {
                 throw new Error(`No frame found for id: ${frameID} when getting scopes`);
             }
@@ -421,18 +411,14 @@ export class MoveDebugSession extends LoggingDebugSession {
             const localScopeReference = this.variableHandles.create({ locals: frame.locals[0] });
             const localScope = new Scope(`locals: ${frame.name}`, localScopeReference, false);
             scopes.push(localScope);
-        } else if (frameID === TRANSFER_FRAME_ID || frameID === SPLIT_COINS_FRAME_ID) {
-            if ('command' in cmdFrame) {
+        } else if (frameID === EXT_EVENT_FRAME_ID) {
+            if ('locals' in eventFrame && 'camel_case_name' in eventFrame) {
                 const localScopeReference =
-                    this.variableHandles.create({ locals: cmdFrame.command.locals });
-                // Command description has the following form: CommandName: input => output
-                // This is too long for the scope name, so we only take the command name
-                const name = cmdFrame.command.description.split(':')[0];
+                    this.variableHandles.create({ locals: eventFrame.locals });
+                const name = eventFrame.camel_case_name;
                 const localScope = new Scope(`locals: ${name}`, localScopeReference, false);
                 scopes.push(localScope);
             }
-        } else {
-            // TODO: return scopes for remaining native  PTB command
         }
         return scopes;
     }
@@ -479,8 +465,8 @@ export class MoveDebugSession extends LoggingDebugSession {
     ): DebugProtocol.Variable {
         const indexedLoc = value.indexedLoc;
         // Reference values are only present in Move calls when
-        // the Move call stack is present in the command frame
-        const moveCallStack = this.runtime.stack().commandFrame as IMoveCallStack;
+        // the Move call stack is present in the event frame
+        const moveCallStack = this.runtime.stack().eventFrame as IMoveCallStack;
         if ('globalIndex' in indexedLoc.loc) {
             // global location
             const globalValue = moveCallStack.globals.get(indexedLoc.loc.globalIndex);
@@ -615,15 +601,15 @@ export class MoveDebugSession extends LoggingDebugSession {
         const variables: DebugProtocol.Variable[] = [];
         const runtimeVariables = runtimeScope.locals;
         let disassemblyView = false;
-        const cmdFrame = this.runtime.stack().commandFrame;
-        if (cmdFrame) {
+        const eventFrame = this.runtime.stack().eventFrame;
+        if (eventFrame) {
             // checking for swith to disassembly only makes sense for Move calls
-            // that have Move call stack in the command frame
-            if ('frames' in cmdFrame && 'globals' in cmdFrame && runtimeVariables.length > 0) {
+            // that have Move call stack in the event frame
+            if ('frames' in eventFrame && 'globals' in eventFrame && runtimeVariables.length > 0) {
                 // there can be undefined entries in the variables array,
                 // so find any non-undefined one (they will all point to
                 // the same frame)
-                const moveCallStack = cmdFrame as IMoveCallStack;
+                const moveCallStack = eventFrame as IMoveCallStack;
                 const firstVar = runtimeVariables.find(v => v);
                 if (firstVar) {
                     const varFrame = moveCallStack.frames[firstVar.frameIdx];
@@ -663,18 +649,18 @@ export class MoveDebugSession extends LoggingDebugSession {
     ): void {
         try {
             let variables: DebugProtocol.Variable[] = [];
-            const ptbStack = this.runtime.stack();
-            const cmdFrame = ptbStack.commandFrame;
-            if (ptbStack.summaryFrame && !cmdFrame) {
+            const eventStack = this.runtime.stack();
+            const eventFrame = eventStack.eventFrame;
+            if (eventStack.summaryFrame && !eventFrame) {
                 // no variables for summary frame
                 this.sendResponse(response);
             }
-            if (cmdFrame) {
+            if (eventFrame) {
                 const variableHandle = this.variableHandles.get(args.variablesReference);
                 if (variableHandle) {
                     if ('locals' in variableHandle) {
                         // we are dealing with a scope
-                        // (either from Move call or from native PTB command)
+                        // (either from Move call or from an external event)
                         variables = this.convertRuntimeVariables(variableHandle);
                     } else {
                         // we are dealing with a compound value
@@ -689,8 +675,6 @@ export class MoveDebugSession extends LoggingDebugSession {
                             });
                         }
                     }
-                } else {
-                    // TODO: handle variables for remaining native PTB commands
                 }
             }
             if (variables.length > 0) {

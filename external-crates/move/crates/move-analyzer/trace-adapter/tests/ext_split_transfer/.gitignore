@@ -29,6 +29,7 @@
 **/object_bag.*
 **/object_table.*
 **/pay.*
+**/party.*
 **/priority_queue.*
 **/prover.*
 **/sui.*

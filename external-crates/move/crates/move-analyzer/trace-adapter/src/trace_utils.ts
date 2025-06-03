@@ -1,6 +1,24 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+
+/**
+ * This code supports two types of traces, one being a superset of the other:
+ * - a trace representing execution of a single top-level Move functtion
+ * - a trace containing traces representing external events in addtion to
+ *   traces of multiple top-level Move functions.
+ *
+ * The second, more general trace type, can interleave external events (represented
+ * in the JSON schema by `JSONTraceExt` interface) with those representing events
+ * related to Move function execution (represented in the JSON schema by
+ * `JSONTraceOpenFrame`, `JSONTraceInstruction`, `JSONTraceEffect`, and
+ * `JSONTraceCloseFrame` interfaces). In this trace, events related to
+ * Move function execution are demarcated by Move call start and end events.
+ * The first trace type will only contain events related Move function execution,
+ * with no special demarcation.
+ */
+
+
 import * as fs from 'fs';
 import { FRAME_LIFETIME, ModuleInfo } from './utils';
 import {
@@ -10,8 +28,8 @@ import {
     IRuntimeGlobalLoc,
     IRuntimeLoc,
     IRuntimeRefValue,
-    PTBCommandKind as PTBCommandKind,
-    PTBSummary,
+    ExtEventKind as ExtEventKind,
+    ExtEventSummary,
     IMoveCallInfo
 } from './runtime';
 import {
@@ -186,28 +204,51 @@ interface JSONTraceCloseFrame {
     return_: JSONTraceRuntimeValueContent[];
 }
 
-interface JSONExternalMoveCallInfo {
+interface JSONExtMoveCallSummary {
     MoveCall: IMoveCallInfo
 }
 
-interface JSONTraceExternalMoveValue {
+interface JSONExtSummary {
+    ExternalEvent: String
+}
+
+interface JSONTraceExtMoveValueInfo {
     type_: JSONTraceType;
     value: JSONTraceMoveValue;
 }
 
-interface JSONTraceExternalTransfer {
-    to_transfer: JSONTraceExternalMoveValue[];
+interface JSONTraceExtMoveValueSingle {
+    name: string;
+    info: JSONTraceExtMoveValueInfo;
 }
 
-interface JSONTraceExternalSplitCoins {
-    input: JSONTraceExternalMoveValue;
-    result: JSONTraceExternalMoveValue[];
+interface JSONTraceExtMoveValueVector {
+    name: string;
+    type_: JSONTraceType;
+    value: JSONTraceMoveValue[];
 }
 
-type JSONTraceExternal =
-    | { Summary: [JSONExternalMoveCallInfo | string][] }
-    | { TransferObjects: JSONTraceExternalTransfer }
-    | { SplitCoins: JSONTraceExternalSplitCoins }
+interface JSONTraceExtMoveValue {
+    Single: JSONTraceExtMoveValueSingle;
+    Vector: JSONTraceExtMoveValueVector
+}
+
+interface JSONTraceSummaryEvent {
+    camel_case_name: string;
+    snake_case_name: string;
+    events: [JSONExtMoveCallSummary | JSONExtSummary][]
+}
+
+interface JSONTraceExtEvent {
+    description: string;
+    camel_case_name: string;
+    snake_case_name: string;
+    values: JSONTraceExtMoveValue[];
+}
+
+type JSONTraceExt =
+    | { Summary: JSONTraceSummaryEvent }
+    | { ExternalEvent: JSONTraceExtEvent }
     | string;
 
 interface JSONTraceEvent {
@@ -215,7 +256,7 @@ interface JSONTraceEvent {
     Instruction?: JSONTraceInstruction;
     Effect?: JSONTraceEffect;
     CloseFrame?: JSONTraceCloseFrame;
-    External?: JSONTraceExternal;
+    External?: JSONTraceExt;
 }
 
 interface JSONTraceRootObject {
@@ -258,8 +299,8 @@ export enum TraceEventKind {
     CloseFrame,
     Instruction,
     Effect,
-    PTBStart,
-    PTBCommand
+    ExternalSummary,
+    ExternalEvent
 }
 
 /**
@@ -293,32 +334,32 @@ export type TraceEvent =
         kind: TraceInstructionKind
     }
     | { type: TraceEventKind.Effect, effect: EventEffect }
-    | { type: TraceEventKind.PTBStart, id: number, summary: PTBSummary[] }
-    | { type: TraceEventKind.PTBCommand, command: PTBCommandInfo };
-
-export type PTBCommandInfo =
     | {
-        kind: PTBCommandKind.MoveCallStart
-    } | {
-        kind: PTBCommandKind.MoveCallEnd
-    } | {
-        kind: PTBCommandKind.SplitCoinsStart
-        id: number
-        localsTypes: string[]
-        localsNames: string[]
-        localsValues: RuntimeValueType[]
-    } | {
-        kind: PTBCommandKind.SplitCoinsEnd
-    } | {
-        kind: PTBCommandKind.TransferStart
-        id: number
-        localsTypes: string[]
-        localsNames: string[]
-        localsValues: RuntimeValueType[]
-    } | {
-        kind: PTBCommandKind.TransferEnd
-    };
+        type: TraceEventKind.ExternalSummary,
+        id: number,
+        camel_case_name: string,
+        snake_case_name: string,
+        summary: ExtEventSummary[]
+    }
+    | { type: TraceEventKind.ExternalEvent, event: ExternalEventInfo };
 
+export type ExternalEventInfo =
+    | {
+        kind: ExtEventKind.MoveCallStart
+    } | {
+        kind: ExtEventKind.MoveCallEnd
+    } | {
+        kind: ExtEventKind.ExtEventStart
+        id: number
+        description: string
+        camel_case_name: string
+        snake_case_name: string
+        localsTypes: string[]
+        localsNames: string[]
+        localsValues: RuntimeValueType[]
+    } | {
+        kind: ExtEventKind.ExtEventEnd
+    };
 
 /**
  * Kind of an effect of an instruction.
@@ -422,19 +463,14 @@ export const INLINED_FRAME_ID_SAME_FILE = Number.MAX_SAFE_INTEGER - 1;
 export const INLINED_FRAME_ID_DIFFERENT_FILE = Number.MAX_SAFE_INTEGER - 2;
 
 /**
- * An ID of a virtual frame representing PTB start event.
+ * An ID of a virtual frame representing external events summary.
  */
-export const PTB_START_FRAME_ID = Number.MAX_SAFE_INTEGER - 3;
+export const EXT_SUMMARY_FRAME_ID = Number.MAX_SAFE_INTEGER - 3;
 
 /**
- * An ID of a virtual frame representing PTB transfer event.
+ * An ID of a virtual frame representing external event.
  */
-export const TRANSFER_FRAME_ID = Number.MAX_SAFE_INTEGER - 4;
-
-/**
- * An ID of a virtual frame representing PTB split coins event.
- */
-export const SPLIT_COINS_FRAME_ID = Number.MAX_SAFE_INTEGER - 5;
+export const EXT_EVENT_FRAME_ID = Number.MAX_SAFE_INTEGER - 4;
 
 
 /**
@@ -722,23 +758,23 @@ export async function readTrace(
         } else if (event.External) {
             const external = event.External;
             if (typeof external === 'string') {
-                if (external === PTBCommandKind.MoveCallStart) {
+                if (external === ExtEventKind.MoveCallStart) {
                     events.push({
-                        type: TraceEventKind.PTBCommand,
-                        command: {
-                            kind: PTBCommandKind.MoveCallStart
+                        type: TraceEventKind.ExternalEvent,
+                        event: {
+                            kind: ExtEventKind.MoveCallStart
                         }
                     });
-                } else if (external === PTBCommandKind.MoveCallEnd) {
+                } else if (external === ExtEventKind.MoveCallEnd) {
                     events.push({
-                        type: TraceEventKind.PTBCommand,
-                        command: {
-                            kind: PTBCommandKind.MoveCallEnd
+                        type: TraceEventKind.ExternalEvent,
+                        event: {
+                            kind: ExtEventKind.MoveCallEnd
                         }
                     });
                 }
             } else if ('Summary' in external) {
-                const summary: PTBSummary[] = external.Summary.map((s) => {
+                const summary: ExtEventSummary[] = external.Summary.events.map((s) => {
                     if (typeof s === 'object' && 'MoveCall' in s &&
                         s.MoveCall && typeof s.MoveCall === 'object' &&
                         'pkg' in s.MoveCall && 'module' in s.MoveCall && 'function' in s.MoveCall) {
@@ -749,73 +785,58 @@ export async function readTrace(
                             function: s.MoveCall.function as string
                         };
                         return info;
+                    } else if (typeof s === 'object' && 'ExternalEvent' in s && s.ExternalEvent) {
+                        return s.ExternalEvent.toString();
                     } else {
-                        return s.toString();
+                        throw new Error('Unexpected external summary event: ' + JSON.stringify(s));
                     }
                 });
                 events.push({
-                    type: TraceEventKind.PTBStart,
-                    id: PTB_START_FRAME_ID,
+                    type: TraceEventKind.ExternalSummary,
+                    id: EXT_SUMMARY_FRAME_ID,
+                    camel_case_name: external.Summary.camel_case_name,
+                    snake_case_name: external.Summary.snake_case_name,
                     summary
                 });
 
-            } else if ('TransferObjects' in external) {
+            } else if ('ExternalEvent' in external) {
                 const localsTypes: string[] = [];
                 const localsNames: string[] = [];
                 const localsValues: RuntimeValueType = [];
-                external.TransferObjects.to_transfer.forEach((v, idx) => {
-                    localsTypes.push(JSONTraceTypeToString(v.type_.type_, v.type_.ref_type));
-                    localsValues.push(traceRuntimeValueFromJSON(v.value));
-                    localsNames.push('obj' + idx);
-                });
+                for (const v of external.ExternalEvent.values) {
+                    if (v.Single) {
+                        const type_ = v.Single.info.type_;
+                        localsTypes.push(JSONTraceTypeToString(type_.type_, type_.ref_type));
+                        localsNames.push(v.Single.name);
+                        localsValues.push(traceRuntimeValueFromJSON(v.Single.info.value));
+                    } else if (v.Vector) {
+                        const type_ = v.Vector.type_;
+                        localsTypes.push(`vector<${JSONTraceTypeToString(type_.type_, type_.ref_type)}>`);
 
+                        localsNames.push(v.Vector.name);
+                        localsValues.push(v.Vector.value.map((v) => {
+                            return traceRuntimeValueFromJSON(v);
+                        }));
+                    }
+                }
                 events.push({
-                    type: TraceEventKind.PTBCommand,
-                    command: {
-                        kind: PTBCommandKind.TransferStart,
-                        id: TRANSFER_FRAME_ID,
+                    type: TraceEventKind.ExternalEvent,
+                    event: {
+                        kind: ExtEventKind.ExtEventStart,
+                        id: EXT_EVENT_FRAME_ID,
+                        description: external.ExternalEvent.description,
+                        camel_case_name: external.ExternalEvent.camel_case_name,
+                        snake_case_name: external.ExternalEvent.snake_case_name,
                         localsTypes,
                         localsNames,
                         localsValues
                     }
                 });
-                // Additional marker to make stepping through PTB frames easier
+                // Additional marker to make stepping through event frames easier
                 events.push({
-                    type: TraceEventKind.PTBCommand,
-                    command: {
-                        kind: PTBCommandKind.TransferEnd
-                    }
-                });
-            } else if ('SplitCoins' in external) {
-                const localsTypes: string[] = [];
-                const localsNames: string[] = [];
-                const localsValues: RuntimeValueType = [];
-                const input = external.SplitCoins.input;
-                const coinType = JSONTraceTypeToString(input.type_.type_, input.type_.ref_type);
-                localsTypes.push(coinType);
-                localsValues.push(traceRuntimeValueFromJSON(input.value));
-                localsNames.push('input');
-                const splitCoinValues = external.SplitCoins.result.map((v) => {
-                    return traceRuntimeValueFromJSON(v.value);
-                });
-                localsTypes.push(`vector<${coinType}>`);
-                localsValues.push(splitCoinValues);
-                localsNames.push('result');
-                events.push({
-                    type: TraceEventKind.PTBCommand,
-                    command: {
-                        kind: PTBCommandKind.SplitCoinsStart,
-                        id: SPLIT_COINS_FRAME_ID,
-                        localsTypes,
-                        localsNames,
-                        localsValues
-                    }
-                });
-                // Additional marker to make stepping through PTB frames easier
-                events.push({
-                    type: TraceEventKind.PTBCommand,
-                    command: {
-                        kind: PTBCommandKind.SplitCoinsEnd
+                    type: TraceEventKind.ExternalEvent,
+                    event: {
+                        kind: ExtEventKind.ExtEventEnd
                     }
                 });
             }
@@ -1270,23 +1291,23 @@ function eventToString(event: TraceEvent): string {
                 + event.bcodeLoc;
         case TraceEventKind.Effect:
             return `Effect ${effectToString(event.effect)}`;
-        case TraceEventKind.PTBStart:
-            let commands = '';
+        case TraceEventKind.ExternalSummary:
+            let events = '';
             for (const c of event.summary) {
                 if (typeof c === 'object' && 'pkg' in c && 'module ' in c && 'function' in c) {
-                    commands += (c.pkg
+                    events += (c.pkg
                         + '::'
                         + c.module
                         + '::'
                         + c.function);
                 } else {
-                    commands += c.toString();
+                    events += c.toString();
                 }
-                commands += '\n';
+                events += '\n';
             }
-            return commands;
-        case TraceEventKind.PTBCommand:
-            return event.command.kind;
+            return events;
+        case TraceEventKind.ExternalEvent:
+            return event.event.kind;
     }
 }
 
