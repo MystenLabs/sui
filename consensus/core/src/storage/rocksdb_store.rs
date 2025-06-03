@@ -85,13 +85,13 @@ impl RocksDBStore {
     #[cfg(tidehunter)]
     pub(crate) fn new(path: &str) -> Self {
         tracing::warn!("Consensus store using tidehunter");
-        use typed_store::tidehunter_util::{KeyIndexing, KeyType, ThConfig, KeySpaceConfig};
+        use typed_store::tidehunter_util::{KeyIndexing, KeySpaceConfig, KeyType, ThConfig};
         const MUTEXES: usize = 1024;
         let index_digest_key = KeyIndexing::key_reduction(36, 0..12);
         let index_index_digest_key = KeyIndexing::key_reduction(40, 0..24);
         let commit_vote_key = KeyIndexing::key_reduction(76, 0..60);
         let u32_prefix = KeyType::prefix_uniform(3, 4);
-        let u64_prefix = KeyType::prefix_uniform(6, 4);
+        let u64_prefix = KeyType::prefix_uniform(7, 4);
         let override_dirty_keys_config = KeySpaceConfig::new().with_max_dirty_keys(256_000);
         let configs = vec![
             (
@@ -105,10 +105,11 @@ impl RocksDBStore {
             ),
             (
                 Self::DIGESTS_BY_AUTHORITIES_CF.to_string(),
-                ThConfig::new_with_indexing(
+                ThConfig::new_with_config_indexing(
                     index_index_digest_key.clone(),
                     MUTEXES,
                     u64_prefix.clone(),
+                    override_dirty_keys_config.clone(),
                 ),
             ),
             (
