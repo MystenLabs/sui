@@ -35,7 +35,6 @@ impl MoveFlavor for Vanilla {
     type PublishedMetadata = ();
     type PackageMetadata = ();
     type EnvironmentID = String;
-    type AddressInfo = ();
 
     fn name() -> String {
         "vanilla".to_string()

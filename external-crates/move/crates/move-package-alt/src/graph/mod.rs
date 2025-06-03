@@ -3,15 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    dependency::PinnedDependencyInfo,
+    dependency::{Dependency, Pinned},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
-    package::{
-        EnvironmentName, Package, PackageName,
-        lockfile::Lockfile,
-        manifest::{Manifest, digest},
-        paths::PackagePath,
-    },
+    package::{Package, lockfile::Lockfile, paths::PackagePath},
+    schema::{EnvironmentName, PackageName},
 };
 use petgraph::graph::{DiGraph, NodeIndex};
 use std::{
@@ -22,36 +18,23 @@ use std::{
 use tokio::sync::OnceCell;
 
 #[derive(Debug)]
-pub struct PackageGraph<F: MoveFlavor> {
-    inner: DiGraph<Arc<PackageNode<F>>, PackageName>,
+pub struct PackageGraph {
+    inner: DiGraph<Arc<Package>, PackageName>,
 }
 
-/// A node in the package graph, containing a [Package] and its pinned dependency info.
-#[derive(Debug)]
-pub struct PackageNode<F: MoveFlavor> {
-    package: Package<F>,
-    pinned_dep: PinnedDependencyInfo<F>,
-}
-
-struct PackageCache<F: MoveFlavor> {
+struct PackageCache {
     // TODO: better errors; I'm using Option for now because PackageResult doesn't have clone, but
     // it's too much effort to add clone everywhere; we should do this when we update the error
     // infra
     // TODO: would dashmap simplify this?
-    cache: Mutex<BTreeMap<PathBuf, Arc<OnceCell<Option<Arc<PackageNode<F>>>>>>>,
+    cache: Mutex<BTreeMap<PathBuf, Arc<OnceCell<Option<Arc<Package>>>>>>,
 }
 
-struct PackageGraphBuilder<F: MoveFlavor> {
-    cache: PackageCache<F>,
+struct PackageGraphBuilder {
+    cache: PackageCache,
 }
 
-impl<F: MoveFlavor> PackageNode<F> {
-    fn manifest(&self) -> &Manifest<F> {
-        self.package.manifest()
-    }
-}
-
-impl<F: MoveFlavor> PackageGraph<F> {
+impl PackageGraph {
     // TODO: load should load for all environments and return a map
 
     /// Check to see whether the resolution graph in the lockfile inside `path` is up-to-date (i.e.
@@ -85,14 +68,12 @@ impl<F: MoveFlavor> PackageGraph<F> {
     pub async fn load_from_lockfile_ignore_digests(
         path: &PackagePath,
         env: &EnvironmentName,
-    ) -> PackageResult<Option<Self>> {
-        PackageGraphBuilder::new()
-            .load_from_lockfile_ignore_digests(path, env)
-            .await
+    ) -> PackageResult<Self> {
+        todo!()
     }
 }
 
-impl<F: MoveFlavor> PackageGraphBuilder<F> {
+impl PackageGraphBuilder {
     pub fn new() -> Self {
         Self {
             cache: PackageCache::new(),
@@ -106,7 +87,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         &self,
         path: &PackagePath,
         env: &EnvironmentName,
-    ) -> PackageResult<Option<PackageGraph<F>>> {
+    ) -> PackageResult<Option<PackageGraph>> {
         self.load_from_lockfile_impl(path, env, true).await
     }
 
@@ -115,7 +96,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         &self,
         path: &PackagePath,
         env: &EnvironmentName,
-    ) -> PackageResult<Option<PackageGraph<F>>> {
+    ) -> PackageResult<Option<PackageGraph>> {
         self.load_from_lockfile_impl(path, env, false).await
     }
 
@@ -126,8 +107,8 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         path: &PackagePath,
         env: &EnvironmentName,
         check_digests: bool,
-    ) -> PackageResult<Option<PackageGraph<F>>> {
-        let lockfile = Lockfile::<F>::read_from_dir(path.path())?;
+    ) -> PackageResult<Option<PackageGraph>> {
+        let lockfile = Lockfile::read_from_dir(path.path())?;
         let mut graph = PackageGraph {
             inner: DiGraph::new(),
         };
@@ -137,12 +118,9 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         let mut package_indices = BTreeMap::new();
         if let Some(deps) = deps {
             // First pass: create nodes for all packages
-            for (pkg_id, dep_info) in deps.data.iter() {
+            for (pkg_id, dep_info) in deps.iter() {
                 let package = self.cache.fetch(&dep_info.source).await?;
-                let pkg_manifest_path = package.package.path().manifest_path();
-                let package_manifest_digest =
-                    digest(std::fs::read_to_string(pkg_manifest_path)?.as_bytes());
-                if check_digests && package_manifest_digest != dep_info.manifest_digest {
+                if check_digests && package.manifest().digest() != dep_info.manifest_digest {
                     return Ok(None);
                 }
                 let index = graph.inner.add_node(package);
@@ -162,6 +140,8 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             }
         }
 
+        println!("Package graph: {:?}", graph.inner);
+
         Ok(Some(graph))
     }
 
@@ -172,11 +152,11 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         &self,
         path: &PackagePath,
         env: &EnvironmentName,
-    ) -> PackageResult<PackageGraph<F>> {
+    ) -> PackageResult<PackageGraph> {
         // TODO: this is wrong - it is ignoring `path`
         let graph = Arc::new(Mutex::new(DiGraph::new()));
         let visited = Arc::new(Mutex::new(BTreeMap::new()));
-        let root = PinnedDependencyInfo::<F>::root_dependency(path);
+        let root = PinnedDependencyInfo::root_dependency();
 
         self.add_transitive_manifest_deps(&root, env, graph.clone(), visited)
             .await?;
@@ -205,9 +185,9 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
     /// deadlock
     async fn add_transitive_manifest_deps(
         &self,
-        dep: &PinnedDependencyInfo<F>,
+        dep: &PinnedDependencyInfo,
         env: &EnvironmentName,
-        graph: Arc<Mutex<DiGraph<Option<Arc<PackageNode<F>>>, PackageName>>>,
+        graph: Arc<Mutex<DiGraph<Option<Arc<Package>>, PackageName>>>,
         visited: Arc<Mutex<BTreeMap<PathBuf, NodeIndex>>>,
     ) -> PackageResult<NodeIndex> {
         // return early if node is cached; add empty node to graph and visited list otherwise
@@ -225,7 +205,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
 
         // add outgoing edges for dependencies
         // Note: this loop could be parallel if we want parallel fetching:
-        for (name, dep) in package.package.direct_deps(env).iter() {
+        for (name, dep) in package.direct_deps(env).iter() {
             // TODO: to handle use-environment we need to traverse with a different env here
             let future =
                 self.add_transitive_manifest_deps(dep, env, graph.clone(), visited.clone());
@@ -247,7 +227,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
     }
 }
 
-impl<F: MoveFlavor> PackageCache<F> {
+impl PackageCache {
     /// Construct a new empty cache
     pub fn new() -> Self {
         Self {
@@ -256,7 +236,7 @@ impl<F: MoveFlavor> PackageCache<F> {
     }
 
     /// Return a reference to a cached [Package], loading it if necessary
-    pub async fn fetch(&self, dep: &PinnedDependencyInfo<F>) -> PackageResult<Arc<PackageNode<F>>> {
+    pub async fn fetch(&self, dep: &Dependency<Pinned>) -> PackageResult<Arc<Package>> {
         let cell = self
             .cache
             .lock()
@@ -265,18 +245,11 @@ impl<F: MoveFlavor> PackageCache<F> {
             .or_default()
             .clone();
 
-        cell.get_or_init(async || {
-            Package::load(dep.clone()).await.ok().map(|package| {
-                Arc::new(PackageNode {
-                    package,
-                    pinned_dep: dep.clone(),
-                })
-            })
-        })
-        .await
-        .clone()
-        .ok_or(PackageError::Generic(
-            "TODO: couldn't fetch package".to_string(),
-        ))
+        cell.get_or_init(async || Package::load(dep.clone()).await.ok().map(Arc::new))
+            .await
+            .clone()
+            .ok_or(PackageError::Generic(
+                "TODO: couldn't fetch package".to_string(),
+            ))
     }
 }

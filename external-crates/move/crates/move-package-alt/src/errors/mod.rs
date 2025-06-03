@@ -14,6 +14,7 @@ pub use manifest_error::ManifestErrorKind;
 mod located;
 mod thefile;
 pub use located::Located;
+pub use located::Location;
 pub use thefile::TheFile;
 
 mod files;

@@ -13,46 +13,40 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use super::manifest::Manifest;
-use super::{
-    lockfile::{Lockfile, Publication},
-    paths::PackagePath,
-};
 use crate::{
     dependency::{DependencySet, PinnedDependencyInfo},
     errors::{ManifestError, PackageResult},
     flavor::MoveFlavor,
     git::GitRepo,
 };
+use crate::{errors::PackageResult, schema::ParsedManifest};
 use move_core_types::identifier::Identifier;
 use tracing::debug;
 
-pub type EnvironmentName = String;
-pub type PackageName = Identifier;
-
 #[derive(Debug)]
-pub struct Package<F: MoveFlavor + fmt::Debug> {
+pub struct Package {
     // TODO: maybe hold a lock on the lock file? Maybe not if move-analyzer wants to hold on to a
     // Package long term?
-    manifest: Manifest<F>,
+    manifest: Manifest,
     path: PackagePath,
 }
 
-impl<F: MoveFlavor> Package<F> {
+impl Package {
     /// Load a package from the manifest and lock files in directory [path].
     /// Makes a best effort to translate old-style packages into the current format,
     ///
     /// Fails if [path] does not exist, or if it doesn't contain a manifest
     pub async fn load_root(path: impl AsRef<Path>) -> PackageResult<Self> {
-        let manifest = Manifest::<F>::read_from_file(path.as_ref())?;
-        let path = PackagePath::new(path.as_ref().to_path_buf())?;
+        let manifest = Manifest::load(path.as_ref())?;
+        let path = PackagePath(path.as_ref().to_path_buf());
         Ok(Self { manifest, path })
     }
 
     /// Fetch [dep] and load a package from the fetched source
     /// Makes a best effort to translate old-style packages into the current format,
-    pub async fn load(dep: PinnedDependencyInfo<F>) -> PackageResult<Self> {
+    pub async fn load(dep: PinnedDependencyInfo) -> PackageResult<Self> {
         let path = PackagePath::new(dep.fetch().await?)?;
-        let manifest = Manifest::<F>::read_from_file(path.manifest_path())?;
+        let manifest = Manifest::read_from_file(path.manifest_path())?;
 
         Ok(Self { manifest, path })
     }
@@ -64,7 +58,7 @@ impl<F: MoveFlavor> Package<F> {
     }
 
     /// TODO: comment
-    pub fn manifest(&self) -> &Manifest<F> {
+    pub fn manifest(&self) -> &Manifest {
         &self.manifest
     }
 
@@ -72,7 +66,7 @@ impl<F: MoveFlavor> Package<F> {
     pub fn direct_deps(
         &self,
         env: &EnvironmentName,
-    ) -> BTreeMap<PackageName, PinnedDependencyInfo<F>> {
+    ) -> BTreeMap<PackageName, PinnedDependencyInfo> {
         todo!()
     }
 }
