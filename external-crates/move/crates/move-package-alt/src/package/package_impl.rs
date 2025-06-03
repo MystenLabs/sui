@@ -23,28 +23,43 @@ use crate::{
     flavor::MoveFlavor,
     git::GitRepo,
 };
+use crate::{errors::PackageResult, schema::Manifest};
 use move_core_types::identifier::Identifier;
 use tracing::debug;
 
-pub type EnvironmentName = String;
-pub type PackageName = Identifier;
-
 #[derive(Debug)]
-pub struct Package<F: MoveFlavor + fmt::Debug> {
+pub struct Package {
     // TODO: maybe hold a lock on the lock file? Maybe not if move-analyzer wants to hold on to a
     // Package long term?
-    manifest: Manifest<F>,
+    manifest: Manifest,
     path: PackagePath,
 }
 
-impl<F: MoveFlavor> Package<F> {
+/// An absolute path to a directory containing a loaded Move package (in particular, the directory
+/// must have a Move.toml)
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+pub struct PackagePath(PathBuf);
+
+impl PackagePath {
+    /// Create a new package path from a string
+    pub fn new(path: impl AsRef<Path>) -> Self {
+        Self(path.as_ref().to_path_buf())
+    }
+
+    /// Get the underlying path
+    pub fn as_path(&self) -> &Path {
+        self.0.as_path()
+    }
+}
+
+impl Package {
     /// Load a package from the manifest and lock files in directory [path].
     /// Makes a best effort to translate old-style packages into the current format,
     ///
     /// Fails if [path] does not exist, or if it doesn't contain a manifest
     pub async fn load_root(path: impl AsRef<Path>) -> PackageResult<Self> {
-        let manifest = Manifest::<F>::read_from_file(path.as_ref())?;
-        let path = PackagePath::new(path.as_ref().to_path_buf())?;
+        let manifest = Manifest::read_from_file(path.as_ref())?;
+        let path = PackagePath(path.as_ref().to_path_buf());
         Ok(Self { manifest, path })
     }
 
@@ -64,7 +79,7 @@ impl<F: MoveFlavor> Package<F> {
     }
 
     /// TODO: comment
-    pub fn manifest(&self) -> &Manifest<F> {
+    pub fn manifest(&self) -> &Manifest {
         &self.manifest
     }
 
@@ -72,7 +87,7 @@ impl<F: MoveFlavor> Package<F> {
     pub fn direct_deps(
         &self,
         env: &EnvironmentName,
-    ) -> BTreeMap<PackageName, PinnedDependencyInfo<F>> {
+    ) -> BTreeMap<PackageName, PinnedDependencyInfo> {
         todo!()
     }
 }

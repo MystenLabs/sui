@@ -44,26 +44,6 @@ pub struct Pinned;
 #[derive(Debug, PartialEq)]
 pub struct Unpinned;
 
-/// [UnpinnedDependencyInfo]s contain the dependency-type-specific things that users write in their
-/// Move.toml files in the `dependencies` section.
-///
-/// TODO: this paragraph will change with upcoming design changes:
-/// There are additional general fields in the manifest format (like `override` or `rename-from`)
-/// that are not part of the UnpinnedDependencyInfo. We separate these partly because these things
-/// are not serialized to the Lock file. See [crate::package::manifest] for the full representation
-/// of an entry in the `dependencies` table.
-///
-// Note: there is a custom Deserializer for this type; be sure to update it if you modify this
-#[derive(Debug, Serialize)]
-#[derive_where(Clone, PartialEq)]
-#[serde(untagged)]
-pub enum UnpinnedDependencyInfo<F: MoveFlavor + ?Sized> {
-    Git(UnpinnedGitDependency),
-    External(ExternalDependency),
-    Local(LocalDependency),
-    FlavorSpecific(F::FlavorDependency<Unpinned>),
-}
-
 /// Pinned dependencies are guaranteed to always resolve to the same package source. For example,
 /// a git dependendency with a branch or tag revision may change over time (and is thus not
 /// pinned), whereas a git dependency with a sha revision is always guaranteed to produce the same
@@ -113,48 +93,6 @@ impl<F: MoveFlavor> PinnedDependencyInfo<F> {
 
 // TODO: these should be moved down.
 // UNPINNED
-impl<'de, F> Deserialize<'de> for UnpinnedDependencyInfo<F>
-where
-    F: MoveFlavor + ?Sized,
-    F::FlavorDependency<Unpinned>: Deserialize<'de>,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let data = toml::value::Value::deserialize(deserializer)?;
-
-        if let Some(tbl) = data.as_table() {
-            if tbl.is_empty() {
-                return Err(de::Error::custom("dependency has no fields"));
-            }
-            if tbl.contains_key("git") {
-                let dep = UnpinnedGitDependency::deserialize(data).map_err(de::Error::custom)?;
-                Ok(UnpinnedDependencyInfo::Git(dep))
-            } else if tbl.contains_key("r") {
-                let dep = ExternalDependency::deserialize(data).map_err(de::Error::custom)?;
-                Ok(UnpinnedDependencyInfo::External(dep))
-            } else if tbl.contains_key("local") {
-                let dep = LocalDependency::deserialize(data).map_err(de::Error::custom)?;
-                Ok(UnpinnedDependencyInfo::Local(dep))
-            } else {
-                // TODO: maybe this could be prettier. The problem is that we don't know how to
-                // tell if something is a flavor dependency. One option might be to add a method to
-                // [MoveFlavor] that gives the list of flavor dependency tags. Another approach
-                // worth considering is removing flavor dependencies entirely and just having
-                // on-chain dependencies (with the flavor being used to resolve them).
-                let dep = toml::Value::try_from(data)
-                    .map_err(de::Error::custom)?
-                    .try_into()
-                    .map_err(|_| de::Error::custom("invalid dependency format"))?;
-                Ok(UnpinnedDependencyInfo::FlavorSpecific(dep))
-            }
-        } else {
-            Err(de::Error::custom("Manifest dependency must be a table"))
-        }
-    }
-}
-
 // PINNED
 
 impl<'de, F> Deserialize<'de> for PinnedDependencyInfo<F>

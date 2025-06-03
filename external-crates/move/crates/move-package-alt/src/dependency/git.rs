@@ -18,25 +18,6 @@ use crate::{
 
 use super::DependencySet;
 
-/// TODO keep same style around all types
-///
-/// A git dependency that is unpinned. The `rev` field can be either empty, a branch, or a sha. To
-/// resolve this into a [`PinnedGitDependency`], call `pin_one` function.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct UnpinnedGitDependency {
-    /// The repository containing the dependency
-    #[serde(rename = "git")]
-    pub repo: String,
-
-    /// The git commit or branch for the dependency.
-    #[serde(default)]
-    pub rev: Option<String>,
-
-    /// The path within the repository
-    #[serde(default)]
-    pub path: PathBuf,
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct PinnedGitDependency {
     /// The repository containing the dependency

@@ -13,126 +13,47 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
 use crate::{
+    dependency::DependencySet,
     dependency::{DependencySet, UnpinnedDependencyInfo},
     errors::{FileHandle, Located, ManifestError, ManifestErrorKind, PackageResult, TheFile},
+    errors::{FileHandle, Located, ManifestError, ManifestErrorKind, PackageResult, with_file},
     flavor::{MoveFlavor, Vanilla},
+    schema::{self, Address, EnvironmentName, ManifestDependency, PackageName},
 };
 
 use super::*;
 use sha2::{Digest as ShaDigest, Sha256};
 
-// TODO: add 2025 edition
-const ALLOWED_EDITIONS: &[&str] = &["2024", "2024.beta", "legacy"];
-
 // TODO: replace this with something more strongly typed
 type Digest = String;
 
-// Note: [Manifest] objects are immutable and should not implement [serde::Serialize]; any tool
-// writing these files should use [toml_edit] to set / preserve the formatting, since these are
-// user-editable files
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-#[serde(deny_unknown_fields)]
-#[serde(bound = "")]
-pub struct Manifest<F: MoveFlavor> {
-    package: PackageMetadata<F>,
-
-    #[serde(default)]
-    environments: BTreeMap<EnvironmentName, F::EnvironmentID>,
-
-    #[serde(default)]
-    dependencies: BTreeMap<PackageName, ManifestDependency<F>>,
-    /// Replace dependencies for the given environment.
-    #[serde(default)]
-    dep_replacements:
-        BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyReplacement<F>>>,
+pub struct Manifest {
+    inner: schema::Manifest,
+    file_id: FileHandle,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(bound = "")]
-struct PackageMetadata<F: MoveFlavor> {
-    name: Located<PackageName>,
-    edition: Located<String>,
+/// The result of merging the information from the `[dependencies]` section with the
+/// `[dep-replacements]` section, specialized to a particular environment. This encapsulates the
+/// complete information about the dependency contained in the manifest.
+pub struct CombinedDependency {
+    dep_info: ManifestDependency,
 
-    #[serde(flatten)]
-    metadata: F::PackageMetadata,
-}
+    use_environment: EnvironmentName,
 
-#[derive(Deserialize, Debug)]
-#[serde(bound = "")]
-#[serde(rename_all = "kebab-case")]
-pub struct ManifestDependency<F: MoveFlavor> {
-    #[serde(flatten)]
-    dependency_info: UnpinnedDependencyInfo<F>,
-
-    #[serde(rename = "override", default)]
     is_override: bool,
 
-    #[serde(default)]
-    rename_from: Option<PackageName>,
+    published_at: Option<Address>,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(bound = "")]
-#[serde(rename_all = "kebab-case")]
-pub struct ManifestDependencyReplacement<F: MoveFlavor> {
-    #[serde(flatten, default)]
-    dependency: Option<ManifestDependency<F>>,
-
-    #[serde(flatten, default)]
-    address_info: Option<F::AddressInfo>,
-
-    #[serde(default)]
-    use_environment: Option<EnvironmentName>,
-}
-
-impl<F: MoveFlavor> Manifest<F> {
+impl Manifest {
     /// Read the manifest file at the given path, returning a [`Manifest`].
+    // TODO: PackagePath?
     pub fn read_from_file(path: impl AsRef<Path>) -> PackageResult<Self> {
         debug!("Reading manifest from {:?}", path.as_ref());
-        let contents = std::fs::read_to_string(&path)?;
 
-        let (manifest, file_id) = TheFile::with_file(&path, toml_edit::de::from_str::<Self>)?;
+        let (inner, file_id) = TheFile::with_file(&path, toml_edit::de::from_str::<Self>)?;
 
-        match manifest {
-            Ok(manifest) => {
-                manifest.validate_manifest(file_id)?;
-                Ok(manifest)
-            }
-            Err(err) => Err(err.into()),
-        }
-    }
-
-    /// Validate the manifest contents, after deserialization.
-    ///
-    // TODO: add more validation
-    pub fn validate_manifest(&self, handle: FileHandle) -> PackageResult<()> {
-        // Validate package name
-        if self.package.name.get_ref().is_empty() {
-            let err = ManifestError {
-                kind: ManifestErrorKind::EmptyPackageName,
-                span: Some(self.package.name.span()),
-                handle,
-            };
-            err.emit()?;
-            return Err(err.into());
-        }
-
-        // Validate edition
-        if !ALLOWED_EDITIONS.contains(&self.package.edition.get_ref().as_str()) {
-            let err = ManifestError {
-                kind: ManifestErrorKind::InvalidEdition {
-                    edition: self.package.edition.get_ref().clone(),
-                    valid: ALLOWED_EDITIONS.join(", ").to_string(),
-                },
-                span: Some(self.package.edition.span()),
-                handle,
-            };
-            err.emit()?;
-            return Err(err.into());
-        }
-
-        Ok(())
+        Ok(Self { inner, file_id })
     }
 
     fn write_template(path: impl AsRef<Path>, name: &PackageName) -> PackageResult<()> {

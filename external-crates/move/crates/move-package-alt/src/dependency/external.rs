@@ -35,21 +35,6 @@ pub type ResolverResult<T> = Result<T, ResolverError>;
 pub const RESOLVE_ARG: &str = "--resolve-deps";
 pub const RESOLVE_METHOD: &str = "resolve";
 
-/// An external dependency has the form `{ r.<res> = <data> }`. External
-/// dependencies are resolved by external resolvers.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(try_from = "RField", into = "RField")]
-pub struct ExternalDependency {
-    /// The `<res>` in `{ r.<res> = <data> }`
-    pub resolver: ResolverName,
-
-    /// The `<data>` in `{ r.<res> = <data> }`
-    data: toml::Value,
-
-    /// The file containing this dependency
-    containing_file: FileHandle,
-}
-
 #[derive(Error, Debug)]
 pub enum ResolverError {
     #[error("I/O Error when running external resolver `{resolver}`: {source}")]
@@ -84,15 +69,6 @@ pub enum ResolverError {
     },
 }
 
-/// Convenience type for serializing/deserializing external deps
-#[derive(Serialize, Deserialize)]
-struct RField {
-    r: BTreeMap<String, toml::Value>,
-
-    #[serde(skip, default = "TheFile::handle")]
-    containing_file: FileHandle,
-}
-
 /// Requests from the package mananger to the external resolver
 #[derive(Serialize, Debug)]
 struct ResolveRequest<F: MoveFlavor> {
@@ -107,7 +83,7 @@ struct ResolveRequest<F: MoveFlavor> {
 #[derive(Deserialize)]
 #[serde(bound = "")]
 struct ResolveResponse<F: MoveFlavor> {
-    result: UnpinnedDependencyInfo<F>,
+    result: UnpinnedDependencyInfo,
     warnings: Vec<String>,
 }
 
@@ -202,45 +178,6 @@ impl ResolverError {
                 Some(env_name) => format!("environment {env_name}"),
                 None => "default environment".to_string(),
             },
-        }
-    }
-}
-
-impl TryFrom<RField> for ExternalDependency {
-    type Error = String;
-
-    /// Convert from [RField] (`{r.<res> = <data>}`) to [ExternalDependency] (`{ res, data }`)
-    fn try_from(value: RField) -> Result<Self, Self::Error> {
-        if value.r.len() != 1 {
-            return Err("Externally resolved dependencies should have the form `{r.<resolver-name> = <resolver-data>}`".to_string());
-        }
-
-        let (resolver, data) = value
-            .r
-            .into_iter()
-            .next()
-            .expect("iterator of length 1 structure is nonempty");
-
-        Ok(Self {
-            resolver,
-            data,
-            containing_file: value.containing_file,
-        })
-    }
-}
-
-impl From<ExternalDependency> for RField {
-    /// Translate from [ExternalDependency] `{ res, data }` to [RField] `{r.<res> = data}`
-    fn from(value: ExternalDependency) -> Self {
-        let ExternalDependency {
-            resolver,
-            data,
-            containing_file: containing_dir,
-        } = value;
-
-        RField {
-            containing_file: containing_dir,
-            r: BTreeMap::from([(resolver, data)]),
         }
     }
 }
