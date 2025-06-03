@@ -742,7 +742,7 @@ pub struct TxProcessingArgs {
     #[arg(long)]
     pub serialize_signed_transaction: bool,
     /// Optional address to be used as the sender for this transaction. When not specified, the
-    /// current active account address is used. This flag must be combined with
+    /// current active account address is used. This flag should be combined with
     /// --serialize-unsigned-transaction since the private key for this address might not be in the
     /// keystore. The resulting transaction data can then be signed externally with the
     /// corresponding private key.
