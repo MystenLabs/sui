@@ -219,6 +219,61 @@ mod tests {
         Ok(query)
     }
 
+    async fn t0_debug(conn: &mut Connection<'_>, from: u64, to_exclusive: u64) -> Result<()> {
+        let query = postgres::sql_query!(
+            "
+        WITH predecessors AS (
+            SELECT
+                latest.object_id as latest_object_id,
+                latest.cp_sequence_number as latest_cp_sequence_number,
+                latest.marked_predecessor as latest_marked_predecessor,
+                pred.object_id as pred_object_id,
+                pred.cp_sequence_number as pred_cp_sequence_number,
+                pred.marked_predecessor as pred_marked_predecessor
+            FROM obj_info latest
+            LEFT JOIN LATERAL (
+                SELECT object_id, cp_sequence_number, marked_predecessor
+                FROM obj_info p
+                WHERE p.object_id = latest.object_id
+                  AND p.cp_sequence_number < latest.cp_sequence_number
+                ORDER BY p.cp_sequence_number DESC
+                LIMIT 1
+            ) pred ON true
+            WHERE latest.cp_sequence_number >= {BigInt} AND latest.cp_sequence_number < {BigInt}
+        )
+        SELECT latest_object_id, latest_cp_sequence_number, pred_object_id, pred_cp_sequence_number FROM predecessors",
+            from as i64,
+            to_exclusive as i64
+        );
+
+        #[derive(diesel::QueryableByName)]
+        struct DebugResult {
+            #[diesel(sql_type = diesel::sql_types::Binary)]
+            latest_object_id: Vec<u8>,
+            #[diesel(sql_type = diesel::sql_types::BigInt)]
+            latest_cp_sequence_number: i64,
+            #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Binary>)]
+            pred_object_id: Option<Vec<u8>>,
+            #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::BigInt>)]
+            pred_cp_sequence_number: Option<i64>,
+        }
+
+        let results: Vec<DebugResult> = query.load(conn).await?;
+
+        println!("Predecessors CTE debug results:");
+        for result in results {
+            println!(
+                "Latest: obj={:?} cp={}, Pred: obj={:?} cp={:?}",
+                result.latest_object_id[0], // Just show first byte for readability
+                result.latest_cp_sequence_number,
+                result.pred_object_id.as_ref().map(|v| v[0]),
+                result.pred_cp_sequence_number
+            );
+        }
+
+        Ok(())
+    }
+
     async fn t0(
         conn: &mut Connection<'_>,
         from: u64,
@@ -226,53 +281,73 @@ mod tests {
     ) -> Result<(usize, usize, usize)> {
         let query = postgres::sql_query!(
             "
-        WITH processing AS (
+        WITH predecessors AS (
             SELECT
-                current.object_id as current_id,
-                pred.object_id as pred_id,
-                pred.marked_predecessor,
-                pred.marked_obsolete,
-                CASE
-                WHEN pred.marked_predecessor == TRUE THEN 'DELETE'
-                ELSE 'UPDATE'
-            END as action
-        FROM obj_info current
-    LEFT JOIN LATERAL (
-        SELECT object_id, marked_predecessor, marked_obsolete
-        FROM obj_info p
-        WHERE p.object_id = current.object_id
-          AND p.cp_sequence_number < current.cp_sequence_number
-        ORDER BY p.cp_sequence_number DESC, p.object_id DESC
-        LIMIT 1
-    ) pred ON true
-    WHERE current.cp_sequence_number >= {BigInt}
-      AND current.cp_sequence_number < {BigInt}
-    )
-    , deleted AS (
-        DELETE FROM obj_info
-        WHERE object_id IN (SELECT pred_id FROM processing WHERE action = 'DELETE')
-        RETURNING object_id
-    )
-    , updated AS (
-        UPDATE obj_info
-        SET marked_obsolete = true
-        WHERE object_id IN (SELECT pred_id FROM processing WHERE action = 'UPDATE')
-        RETURNING object_id
-    )
-    , final_update AS (
-        UPDATE obj_info
-        SET marked_predecessor = true
-        WHERE cp_sequence_number >= {BigInt}
-        AND cp_sequence_number < {BigInt}
-        RETURNING object_id
-    )
-    SELECT
-        (SELECT COUNT(*)::BIGINT FROM deleted) as pred_deleted,
-        (SELECT COUNT(*)::BIGINT FROM updated) as pred_obsolete,
-        (SELECT COUNT(*)::BIGINT FROM final_update) as marked_predecessor;
+                latest.object_id as latest_object_id,
+                latest.cp_sequence_number as latest_cp_sequence_number,
+                latest.marked_predecessor as latest_marked_predecessor,
+                pred.object_id as pred_object_id,
+                pred.cp_sequence_number as pred_cp_sequence_number,
+                pred.marked_predecessor as pred_marked_predecessor
+            FROM obj_info latest
+            LEFT JOIN LATERAL (
+                SELECT object_id, cp_sequence_number, marked_predecessor
+                FROM obj_info p
+                WHERE p.object_id = latest.object_id
+                  AND p.cp_sequence_number < latest.cp_sequence_number
+                ORDER BY p.cp_sequence_number DESC
+                LIMIT 1
+            ) pred ON true
+            WHERE latest.cp_sequence_number >= {BigInt} AND latest.cp_sequence_number < {BigInt}
+        )
+        -- Delete preds that already marked their own immediate predecessors
+        -- And intermediate entries among 'latest' changes
+        , pred_deleted AS (
+            DELETE FROM obj_info
+            WHERE (object_id, cp_sequence_number) IN (
+                -- Original condition: preds that already marked their predecessors
+                SELECT pred_object_id, pred_cp_sequence_number
+                FROM predecessors
+                WHERE pred_object_id IS NOT NULL AND pred_marked_predecessor = true
+
+                UNION
+
+                -- New condition: rows that appear as both latest AND pred
+                SELECT latest_object_id, latest_cp_sequence_number
+                FROM predecessors p1
+                WHERE EXISTS (
+                    SELECT 1 FROM predecessors p2
+                    WHERE p2.pred_object_id = p1.latest_object_id
+                    AND p2.pred_cp_sequence_number = p1.latest_cp_sequence_number
+                )
+            )
+            RETURNING object_id
+        )
+        -- Otherwise, flag them for later deletion
+        , pred_obsolete AS (
+            UPDATE obj_info
+            SET marked_obsolete = true
+            WHERE (object_id, cp_sequence_number) IN (
+                SELECT pred_object_id, pred_cp_sequence_number
+                FROM predecessors
+                WHERE pred_object_id IS NOT NULL AND pred_marked_predecessor = false
+            )
+            RETURNING object_id
+        )
+        -- Finally, mark 'latest' rows to have marked their own immediate predecessors
+        , marked_predecessor AS (
+            UPDATE obj_info
+            SET marked_predecessor = true
+            WHERE (object_id, cp_sequence_number) IN (
+                SELECT latest_object_id, latest_cp_sequence_number FROM predecessors
+            )
+            RETURNING object_id
+        )
+        SELECT
+            (SELECT COUNT(*)::BIGINT FROM pred_deleted) as pred_deleted,
+            (SELECT COUNT(*)::BIGINT FROM pred_obsolete) as pred_obsolete,
+            (SELECT COUNT(*)::BIGINT FROM marked_predecessor) as marked_predecessor;
         ",
-            from as i64,
-            to_exclusive as i64,
             from as i64,
             to_exclusive as i64
         );
@@ -309,6 +384,41 @@ WHERE cp_sequence_number >= {BigInt}
         );
         let rows_deleted = query.execute(conn).await?;
         Ok(rows_deleted)
+    }
+
+    async fn test_just_marked_predecessor(
+        conn: &mut Connection<'_>,
+        from: u64,
+        to_exclusive: u64,
+    ) -> Result<usize> {
+        let query = postgres::sql_query!(
+            "
+        WITH predecessors AS (
+            SELECT
+                latest.object_id as latest_object_id,
+                latest.cp_sequence_number as latest_cp_sequence_number
+            FROM obj_info latest
+            LEFT JOIN LATERAL (
+                SELECT object_id, cp_sequence_number, marked_predecessor
+                FROM obj_info p
+                WHERE p.object_id = latest.object_id
+                  AND p.cp_sequence_number < latest.cp_sequence_number
+                ORDER BY p.cp_sequence_number DESC
+                LIMIT 1
+            ) pred ON true
+            WHERE latest.cp_sequence_number >= {BigInt} AND latest.cp_sequence_number < {BigInt}
+        )
+        UPDATE obj_info
+        SET marked_predecessor = true
+        WHERE (object_id, cp_sequence_number) IN (
+            SELECT latest_object_id, latest_cp_sequence_number FROM predecessors
+        )",
+            from as i64,
+            to_exclusive as i64
+        );
+
+        let rows_updated = query.execute(conn).await?;
+        Ok(rows_updated)
     }
 
     #[tokio::test]
@@ -800,5 +910,69 @@ WHERE cp_sequence_number >= {BigInt}
         let checkpoint = builder.build_checkpoint();
         let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
         assert!(result.is_empty());
+    }
+
+    /// C1T0 -> C1T1 -> C2T0 -> C2T1 In this scenario, C1T0 loads C1 rows as "latest", and marks
+    /// predecessors as `marked_obsolete``, then marks those "latest" rows as `marked_predecessor`.
+    /// Then C1T1 occurs. No rows from C1 are deleted at this time. At C2T0, rows from C1 are deleted.
+    #[tokio::test]
+    async fn test_scenario_one() {
+        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
+        let obj_info = ObjInfo::default();
+        let mut builder = TestCheckpointDataBuilder::new(0);
+
+        builder = builder
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction();
+        builder = builder
+            .start_transaction(0)
+            .create_owned_object(1)
+            .finish_transaction();
+        let checkpoint1 = builder.build_checkpoint();
+        let result = obj_info.process(&Arc::new(checkpoint1)).unwrap();
+        ObjInfo::commit(&result, &mut conn).await.unwrap();
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 1)
+            .finish_transaction();
+        let checkpoint2 = builder.build_checkpoint();
+        let result = obj_info.process(&Arc::new(checkpoint2)).unwrap();
+        ObjInfo::commit(&result, &mut conn).await.unwrap();
+
+        builder = builder
+            .start_transaction(1)
+            .create_owned_object(2)
+            .finish_transaction();
+        builder = builder
+            .start_transaction(1)
+            .transfer_object(0, 0)
+            .finish_transaction();
+        let checkpoint3 = builder.build_checkpoint();
+        let result = obj_info.process(&Arc::new(checkpoint3)).unwrap();
+        ObjInfo::commit(&result, &mut conn).await.unwrap();
+
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        for obj in all_obj_info {
+            println!("object_id: {:?}, cp_sequence_number: {}, marked_predecessor: {}, marked_obsolete: {}", obj.object_id, obj.cp_sequence_number, obj.marked_predecessor, obj.marked_obsolete);
+        }
+
+        t0_debug(&mut conn, 0, 2).await.unwrap();
+
+        // let rows_modified = test_just_marked_predecessor(&mut conn, 0, 2).await.unwrap();
+        // println!("rows_modified: {}", rows_modified);
+
+        let (pred_deleted, pred_obsolete, marked_predecessor) = t0(&mut conn, 1, 3).await.unwrap();
+        println!(
+            "pred_deleted: {}, pred_obsolete: {}, marked_predecessor: {}",
+            pred_deleted, pred_obsolete, marked_predecessor
+        );
+
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        for obj in all_obj_info {
+            println!("object_id: {:?}, cp_sequence_number: {}, marked_predecessor: {}, marked_obsolete: {}", obj.object_id, obj.cp_sequence_number, obj.marked_predecessor, obj.marked_obsolete);
+        }
     }
 }
