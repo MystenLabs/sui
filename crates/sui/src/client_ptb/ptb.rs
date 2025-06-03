@@ -191,7 +191,11 @@ impl PTB {
             .collect();
 
         // the sender is the gas object if gas is provided, otherwise the active address
-        let sender = context.infer_sender(&gas).await?;
+        let sender = if let Some(sender) = program_metadata.sender {
+            sender.value
+        } else {
+            context.infer_sender(&gas).await?
+        };
 
         // build the tx kind
         let tx_kind = TransactionKind::ProgrammableTransaction(ProgrammableTransaction {
