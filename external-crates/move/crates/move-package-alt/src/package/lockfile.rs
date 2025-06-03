@@ -192,6 +192,11 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
     pub fn pinned_deps(&self) -> &BTreeMap<EnvironmentName, DependencyInfo<F>> {
         &self.pinned
     }
+
+    /// Update the pinned dependencies for the given environment.
+    pub fn update_pinned_dep_env(&mut self, pinned: BTreeMap<EnvironmentName, DependencyInfo<F>>) {
+        self.pinned.extend(pinned);
+    }
 }
 
 impl<F: MoveFlavor + fmt::Debug> Publication<F> {

@@ -102,15 +102,13 @@ impl<F: MoveFlavor> PackageGraph<F> {
             .await
     }
 
-    // TODO: a package graph cannot recreate the whole lockfile? What happens with the published
-    // information, when re-pinning or update deps happens? That is now an invalid lockfile, so it
-    // should not contain much from the previous lockfile? Should it simply replace the lockfile
-    // and remove the published information?
+    // TODO: this should provide a diff between the old lockfile and the new lockfile.
     pub async fn to_lockfile(
         &self,
         path: &PackagePath,
         env: &EnvironmentName,
     ) -> PackageResult<()> {
+        let mut lockfiles = Lockfile::<F>::read_from_dir(path.path())?;
         let manifest = Manifest::<F>::read_from_file(path.manifest_path())?;
         let mut new_pinned_deps: BTreeMap<EnvironmentName, DependencyInfo<F>> = BTreeMap::new();
         let mut data: BTreeMap<String, DepInfo<F>> = BTreeMap::new();
@@ -161,43 +159,24 @@ impl<F: MoveFlavor> PackageGraph<F> {
                 deps.insert(dep_name.clone(), dep_name.to_string());
             }
 
-            // Get the pinned dependencies for this package
-            let pkg_deps = package.package.direct_deps(env).await?;
-            for (dep_name, pinned_dep) in pkg_deps.iter() {
-                // Create a new pinned dependency with the correct relative path
-                let mut source = pinned_dep.clone();
-                let path = source.unfetched_path();
-                // Calculate the relative path from the root package to this package
-
-                // Update the local path to be relative to the root package
-
-                let dep_info = DepInfo {
-                    source,
+            data.insert(
+                package.name().to_string(),
+                DepInfo {
+                    source: package.pinned_dep.clone(),
                     manifest_digest: digest(
                         std::fs::read_to_string(package.package.path().manifest_path())?.as_bytes(),
                     ),
-                    deps: deps.clone(),
-                };
-
-                // Use the package name as the key
-                data.insert(package.name().to_string(), dep_info);
-            }
+                    deps,
+                },
+            );
         }
 
         // Create the DependencyInfo for this environment
         new_pinned_deps.insert(env.clone(), DependencyInfo { data });
 
-        // Get the environment ID from the manifest
-        let envs = manifest
-            .environments()
-            .iter()
-            .filter(|(e, _)| *e == env)
-            .map(|(e, id)| (e.clone(), id.clone()))
-            .collect();
+        lockfiles.update_pinned_dep_env(new_pinned_deps);
 
-        // Create and write the lockfile
-        let lockfile = Lockfile::new(new_pinned_deps, BTreeMap::new());
-        lockfile.write_to(path.path(), envs)?;
+        lockfiles.write_to(path.path(), BTreeMap::new())?;
 
         Ok(())
     }

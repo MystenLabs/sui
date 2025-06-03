@@ -29,7 +29,6 @@ impl UpdateDeps {
         for (env, id) in manifest.environments() {
             let package_graph = PackageGraph::<Vanilla>::load_from_manifests(&path, env).await?;
 
-            // println!("Package Graph for {}: {:?}", env, package_graph);
             package_graph.to_lockfile(&path, env).await?;
         }
 
