@@ -12,7 +12,6 @@ use mysten_metrics::{
     monitored_scope, spawn_logged_monitored_task,
 };
 use parking_lot::RwLock;
-use tracing::error;
 
 use crate::{
     commit::DEFAULT_WAVE_LENGTH,
@@ -149,33 +148,36 @@ impl CommitFinalizer {
 
         let mut finalized_commits = vec![];
 
-        // Direct finalization: if the commit is produced by the committer locally,
-        // there is guaranteed a leader certificate in local DAG.
-        // The leader certificate satisfies the condition to be a finalization certificate of every committed
-        // transaction, if no block in the certificate contains reject votes for the transaction.
-        // And if the transaction will be rejected, at least one reject vote must have been
-        // observed in the local DAG for it. So running direct finalization will not finalize this transaction.
+        // The prerequisite for running direct finalization on a commit is that the commit must
+        // have either a quorum of leader certificates in the local DAG, or a committed leader certificate.
         //
-        // If the commit is received through commit sync and processed as certified commit, the commit might
+        // A leader certificate is a finalization certificate for every block in the commit.
+        // When the prerequisite holds, all blocks in the current commit can be considered finalized.
+        // And any transaction in the current commit that has not observed reject votes will never be rejected.
+        // So these transactions are directly finalized.
+        //
+        // When a commit is direct, there are a quorum of its leader certificates in the local DAG.
+        //
+        // When a commit is indirect, it implies one of its leader certificates is in the committed blocks.
+        // So a leader certificate must exist in the local DAG as well.
+        //
+        // When a commit is received through commit sync and processed as certified commit, the commit might
         // not have a leader certificate in the local DAG. So a committed transaction might not observe any reject
-        // vote from local DAG, but it will eventually be rejected. So at least one additional local commit, or an additional
-        // remote commit with leader >= 3 (WAVE_LENGTH) rounds above the transaction's leader, must be buffered,
-        // to ensure there is a leader certificate of the commit, and potentially finalization certificate
-        // for every transaction in the commit.
+        // vote from local DAG, although it will eventually get rejected. To finalize blocks in this commit,
+        // there must be another commit with leader round >= 3 (WAVE_LENGTH) rounds above the commit leader.
+        // From the indirect commit rule, a leader certificate must exist in committed blocks for the earliest commit.
         for i in 0..self.pending_commits.len() {
             let commit_state = &self.pending_commits[i];
             if commit_state.pending_blocks.is_empty() {
                 // The commit has already been processed through direct finalization.
                 continue;
             }
-            // Direct finalization can happen when
-            // 1. This commit is local.
-            // 2. The latest commit is less than 3 (WAVE_LENGTH) rounds above this commit.
-            //    So this commit's leader certificate is not guaranteed to be committed.
+            // Direct finalization cannot happen when
+            // -  This commit is remote.
+            // -  And the latest commit is less than 3 (WAVE_LENGTH) rounds above this commit.
+            // In this case, this commit's leader certificate is not guaranteed to be in local DAG.
             if !commit_state.commit.local {
-                let last_commit_state = &self.pending_commits.back().unwrap();
-                // When the latest commit is local, only 2 rounds is needed to ensure finalization certificates
-                // for current commit exists in local DAG. But this optimization seems too minor.
+                let last_commit_state = self.pending_commits.back().unwrap();
                 if commit_state.commit.leader.round + DEFAULT_WAVE_LENGTH
                     > last_commit_state.commit.leader.round
                 {
@@ -308,8 +310,10 @@ impl CommitFinalizer {
         blocks.sort_by_key(|b| b.round());
 
         for block in blocks {
+            let block_ref = block.reference();
+
             // Initialize the block state with the reject votes contained in the block.
-            let block_state = self.blocks.entry(block.reference()).or_default();
+            let block_state = self.blocks.entry(block_ref).or_default();
             for votes in block.transaction_votes() {
                 block_state
                     .reject_votes
@@ -319,7 +323,6 @@ impl CommitFinalizer {
             }
 
             // Link its ancestors to the block.
-            let block_ref = block.reference();
             for ancestor in block.ancestors() {
                 // Ancestor may not exist in the blocks map if it has been finalized or gc'ed.
                 // So skip linking if the ancestor does not exist.
@@ -402,64 +405,75 @@ impl CommitFinalizer {
     }
 
     fn check_pending_transactions_in_first_commit(&mut self) {
-        let blocks_with_pending_transactions = self.pending_commits[0].pending_transactions.clone();
-        for (block_ref, pending_transactions) in blocks_with_pending_transactions {
+        let mut all_rejected_transactions: Vec<(BlockRef, Vec<TransactionIndex>)> = vec![];
+
+        // Collect all rejected transactions without modifying state
+        for (block_ref, pending_transactions) in &self.pending_commits[0].pending_transactions {
             let reject_votes: BTreeMap<TransactionIndex, Stake> = self
                 .transaction_certifier
-                .get_reject_votes(&block_ref)
+                .get_reject_votes(block_ref)
                 .unwrap_or_else(|| panic!("No vote info found for {block_ref}. It is incorrectly gc'ed or failed to be recovered after crash."))
                 .into_iter()
                 .collect();
             let mut rejected_transactions = vec![];
-            for transaction_index in pending_transactions {
+            for &transaction_index in pending_transactions {
                 // Pending transactions should always have reject votes.
                 let reject_stake = reject_votes.get(&transaction_index).copied().unwrap();
                 if reject_stake < self.context.committee.quorum_threshold() {
                     // The transaction cannot be rejected yet.
                     continue;
                 }
-                // Otherwise, move the rejected transaction from pending_transactions to rejected_transactions.
+                // Otherwise, mark the transaction for rejection.
                 rejected_transactions.push(transaction_index);
             }
-            // Remove rejected transactions from pending_transactions to rejected_transactions.
             if !rejected_transactions.is_empty() {
-                self.context
-                    .metrics
-                    .node_metrics
-                    .finalizer_transaction_status
-                    .with_label_values(&["direct_late_reject"])
-                    .inc_by(rejected_transactions.len() as u64);
-                let curr_commit_state = &mut self.pending_commits[0];
-                curr_commit_state.remove_pending_transactions(&block_ref, &rejected_transactions);
-                curr_commit_state
-                    .rejected_transactions
-                    .entry(block_ref)
-                    .or_default()
-                    .extend(rejected_transactions);
+                all_rejected_transactions.push((*block_ref, rejected_transactions));
             }
+        }
+
+        // Move rejected transactions from pending_transactions.
+        for (block_ref, rejected_transactions) in all_rejected_transactions {
+            self.context
+                .metrics
+                .node_metrics
+                .finalizer_transaction_status
+                .with_label_values(&["direct_late_reject"])
+                .inc_by(rejected_transactions.len() as u64);
+            let curr_commit_state = &mut self.pending_commits[0];
+            curr_commit_state.remove_pending_transactions(&block_ref, &rejected_transactions);
+            curr_commit_state
+                .rejected_transactions
+                .entry(block_ref)
+                .or_default()
+                .extend(rejected_transactions);
         }
     }
 
     fn try_indirect_finalize_pending_transactions_in_first_commit(&mut self) {
-        for (block_ref, pending_transactions) in
-            self.pending_commits[0].pending_transactions.clone()
-        {
-            // Try finalizing the pending transactions in the block.
+        let mut all_finalized_transactions: Vec<(BlockRef, Vec<TransactionIndex>)> = vec![];
+
+        // Collect all finalized transactions without modifying state
+        for (block_ref, pending_transactions) in &self.pending_commits[0].pending_transactions {
             let finalized_transactions = self.try_indirect_finalize_pending_transactions_in_block(
-                block_ref,
-                pending_transactions,
+                *block_ref,
+                pending_transactions.clone(),
             );
             if !finalized_transactions.is_empty() {
-                self.context
-                    .metrics
-                    .node_metrics
-                    .finalizer_transaction_status
-                    .with_label_values(&["indirect_finalize"])
-                    .inc_by(finalized_transactions.len() as u64);
-                // Indicate transactions are indirectly finalized by removing them from pending transactions.
-                self.pending_commits[0]
-                    .remove_pending_transactions(&block_ref, &finalized_transactions);
+                all_finalized_transactions.push((*block_ref, finalized_transactions));
             }
+        }
+
+        // Apply all changes to remove finalized transactions
+        for (block_ref, finalized_transactions) in all_finalized_transactions {
+            self.context
+                .metrics
+                .node_metrics
+                .finalizer_transaction_status
+                .with_label_values(&["indirect_finalize"])
+                .inc_by(finalized_transactions.len() as u64);
+            // Remove finalized transactions from pending transactions.
+            self.pending_commits[0]
+                .remove_pending_transactions(&block_ref, &finalized_transactions);
         }
     }
 
@@ -516,14 +530,11 @@ impl CommitFinalizer {
             .children
             .clone();
         let mut visited = BTreeSet::new();
-        // Aggregates the total stake supporting the block, for sanity check.
-        let mut visited_stake = StakeAggregator::<QuorumThreshold>::new();
         // Traverse children blocks breadth-first and accumulate accept votes for pending transactions.
         while let Some(curr_block_ref) = to_visit_blocks.pop_first() {
             if !visited.insert(curr_block_ref) {
                 continue;
             }
-            visited_stake.add(curr_block_ref.author, &self.context.committee);
             // Gets the reject votes from current block to the pending block.
             let curr_block_state = self.blocks.get(&curr_block_ref).unwrap_or_else(|| panic!("Block {curr_block_ref} is either incorrectly gc'ed or failed to be recovered after crash."));
             let curr_block_reject_votes = curr_block_state
@@ -563,9 +574,6 @@ impl CommitFinalizer {
                     .filter(|b| !visited.contains(*b)),
             );
         }
-        if !visited_stake.reached_threshold(&self.context.committee) {
-            error!("Did not reach quorum of stake for {pending_block_ref} in indirect finalization. Either indirect finalization is called on the last commit, or the block is not committed.");
-        }
         finalized_transactions
     }
 
@@ -576,14 +584,22 @@ impl CommitFinalizer {
             if !commit_state.pending_blocks.is_empty()
                 || !commit_state.pending_transactions.is_empty()
             {
+                // The commit is not finalized yet.
                 break;
             }
+
+            // Pop the finalized commit and set its rejected transactions.
             let commit_state = self.pending_commits.pop_front().unwrap();
             let mut commit = commit_state.commit;
             for (block_ref, rejected_transactions) in commit_state.rejected_transactions {
                 commit
                     .rejected_transactions_by_block
                     .insert(block_ref, rejected_transactions.into_iter().collect());
+            }
+
+            // Clean up committed blocks.
+            for block in commit.blocks.iter() {
+                self.blocks.remove(&block.reference());
             }
 
             let round_delay = if let Some(last_commit_state) = self.pending_commits.back() {
@@ -601,6 +617,11 @@ impl CommitFinalizer {
         }
 
         finalized_commits
+    }
+
+    #[cfg(test)]
+    fn is_empty(&self) -> bool {
+        self.pending_commits.is_empty() && self.blocks.is_empty()
     }
 }
 
@@ -770,6 +791,9 @@ mod tests {
         assert_eq!(finalized_commits.len(), 1);
         let finalized_commit = &finalized_commits[0];
         assert_eq!(committed_sub_dag, finalized_commit);
+
+        // CommitFinalizer should be empty.
+        assert!(fixture.commit_finalizer.is_empty());
     }
 
     // Commits can be directly finalized if when they are added to commit finalizer,
@@ -875,6 +899,9 @@ mod tests {
                 .clone(),
             vec![0, 3],
         );
+
+        // CommitFinalizer should be empty.
+        assert!(fixture.commit_finalizer.is_empty());
     }
 
     // Test indirect finalization when:
@@ -1033,6 +1060,9 @@ mod tests {
         for commit in finalized_commits.iter().skip(1) {
             assert!(commit.rejected_transactions_by_block.is_empty());
         }
+
+        // CommitFinalizer should be empty.
+        assert!(fixture.commit_finalizer.is_empty());
     }
 
     #[tokio::test]
@@ -1120,5 +1150,8 @@ mod tests {
         assert_eq!(finalized_commits[1].leader.round, 6);
         assert_eq!(finalized_commits[2].commit_ref.index, 6);
         assert_eq!(finalized_commits[2].leader.round, 7);
+
+        // CommitFinalizer should be empty.
+        assert!(fixture.commit_finalizer.is_empty());
     }
 }
