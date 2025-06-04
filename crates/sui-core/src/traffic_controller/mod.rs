@@ -221,7 +221,7 @@ impl TrafficController {
                 (false, false) => {
                     debug!("Blocked request from client {:?}", client);
                     self.metrics.requests_blocked_at_protocol.inc();
-                    true
+                    false
                 }
             }
         };
