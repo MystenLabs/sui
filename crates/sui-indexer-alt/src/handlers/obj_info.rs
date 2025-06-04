@@ -278,6 +278,10 @@ mod tests {
         conn: &mut Connection<'_>,
         from: u64,
         to_exclusive: u64,
+        predecessors_sleep: Option<u64>,
+        pred_deleted_sleep: Option<u64>,
+        pred_obsolete_sleep: Option<u64>,
+        marked_predecessor_sleep: Option<u64>,
     ) -> Result<(usize, usize, usize)> {
         let query = postgres::sql_query!(
             "
@@ -288,7 +292,8 @@ mod tests {
                 latest.marked_predecessor as latest_marked_predecessor,
                 pred.object_id as pred_object_id,
                 pred.cp_sequence_number as pred_cp_sequence_number,
-                pred.marked_predecessor as pred_marked_predecessor
+                pred.marked_predecessor as pred_marked_predecessor,
+                pg_sleep({BigInt}) as predecessors_sleep
             FROM obj_info latest
             LEFT JOIN LATERAL (
                 SELECT object_id, cp_sequence_number, marked_predecessor
@@ -308,7 +313,7 @@ mod tests {
                 -- Original condition: preds that already marked their predecessors
                 SELECT pred_object_id, pred_cp_sequence_number
                 FROM predecessors
-                WHERE pred_object_id IS NOT NULL AND pred_marked_predecessor = true
+                WHERE pred_marked_predecessor = true
 
                 UNION
 
@@ -323,6 +328,9 @@ mod tests {
             )
             RETURNING object_id
         )
+        , pred_deleted_sleep AS (
+            SELECT pg_sleep({BigInt}) as dummy
+        )
         -- Otherwise, flag them for later deletion
         , pred_obsolete AS (
             UPDATE obj_info
@@ -330,9 +338,12 @@ mod tests {
             WHERE (object_id, cp_sequence_number) IN (
                 SELECT pred_object_id, pred_cp_sequence_number
                 FROM predecessors
-                WHERE pred_object_id IS NOT NULL AND pred_marked_predecessor = false
+                WHERE pred_marked_predecessor = false
             )
             RETURNING object_id
+        )
+        , pred_obsolete_sleep AS (
+            SELECT pg_sleep({BigInt}) as dummy
         )
         -- Finally, mark 'latest' rows to have marked their own immediate predecessors
         , marked_predecessor AS (
@@ -343,13 +354,20 @@ mod tests {
             )
             RETURNING object_id
         )
+        , marked_predecessor_sleep AS (
+            SELECT pg_sleep({BigInt}) as dummy
+        )
         SELECT
             (SELECT COUNT(*)::BIGINT FROM pred_deleted) as pred_deleted,
             (SELECT COUNT(*)::BIGINT FROM pred_obsolete) as pred_obsolete,
             (SELECT COUNT(*)::BIGINT FROM marked_predecessor) as marked_predecessor;
         ",
+            predecessors_sleep.unwrap_or(0) as i64,
             from as i64,
-            to_exclusive as i64
+            to_exclusive as i64,
+            pred_deleted_sleep.unwrap_or(0) as i64,
+            pred_obsolete_sleep.unwrap_or(0) as i64,
+            marked_predecessor_sleep.unwrap_or(0) as i64,
         );
 
         #[derive(diesel::QueryableByName)]
@@ -373,7 +391,7 @@ mod tests {
     async fn t1(conn: &mut Connection<'_>, from: u64, to_exclusive: u64) -> Result<usize> {
         let query = postgres::sql_query!(
             "
-            DELETE FROM obj_info
+DELETE FROM obj_info
 WHERE cp_sequence_number >= {BigInt}
   AND cp_sequence_number < {BigInt}
   AND marked_predecessor = true
@@ -386,39 +404,32 @@ WHERE cp_sequence_number >= {BigInt}
         Ok(rows_deleted)
     }
 
-    async fn test_just_marked_predecessor(
+    async fn t0_t1(
         conn: &mut Connection<'_>,
         from: u64,
         to_exclusive: u64,
-    ) -> Result<usize> {
-        let query = postgres::sql_query!(
-            "
-        WITH predecessors AS (
-            SELECT
-                latest.object_id as latest_object_id,
-                latest.cp_sequence_number as latest_cp_sequence_number
-            FROM obj_info latest
-            LEFT JOIN LATERAL (
-                SELECT object_id, cp_sequence_number, marked_predecessor
-                FROM obj_info p
-                WHERE p.object_id = latest.object_id
-                  AND p.cp_sequence_number < latest.cp_sequence_number
-                ORDER BY p.cp_sequence_number DESC
-                LIMIT 1
-            ) pred ON true
-            WHERE latest.cp_sequence_number >= {BigInt} AND latest.cp_sequence_number < {BigInt}
+        predecessors_sleep: Option<u64>,
+        pred_deleted_sleep: Option<u64>,
+        pred_obsolete_sleep: Option<u64>,
+        marked_predecessor_sleep: Option<u64>,
+    ) -> Result<(usize, usize, usize, usize)> {
+        let (pred_deleted, pred_obsolete, marked_predecessor) = t0(
+            conn,
+            from,
+            to_exclusive,
+            predecessors_sleep,
+            pred_deleted_sleep,
+            pred_obsolete_sleep,
+            marked_predecessor_sleep,
         )
-        UPDATE obj_info
-        SET marked_predecessor = true
-        WHERE (object_id, cp_sequence_number) IN (
-            SELECT latest_object_id, latest_cp_sequence_number FROM predecessors
-        )",
-            from as i64,
-            to_exclusive as i64
-        );
-
-        let rows_updated = query.execute(conn).await?;
-        Ok(rows_updated)
+        .await?;
+        let rows_deleted = t1(conn, from, to_exclusive).await?;
+        Ok((
+            pred_deleted,
+            pred_obsolete,
+            marked_predecessor,
+            rows_deleted,
+        ))
     }
 
     #[tokio::test]
@@ -964,7 +975,13 @@ WHERE cp_sequence_number >= {BigInt}
         // let rows_modified = test_just_marked_predecessor(&mut conn, 0, 2).await.unwrap();
         // println!("rows_modified: {}", rows_modified);
 
-        let (pred_deleted, pred_obsolete, marked_predecessor) = t0(&mut conn, 1, 3).await.unwrap();
+        // t0(2, 3)
+        // t1(2, 3)
+        // t0(1, 2)
+        // t1(1, 2)
+
+        let (pred_deleted, pred_obsolete, marked_predecessor) =
+            t0(&mut conn, 2, 3, None, None, None, None).await.unwrap();
         println!(
             "pred_deleted: {}, pred_obsolete: {}, marked_predecessor: {}",
             pred_deleted, pred_obsolete, marked_predecessor
@@ -973,6 +990,104 @@ WHERE cp_sequence_number >= {BigInt}
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
         for obj in all_obj_info {
             println!("object_id: {:?}, cp_sequence_number: {}, marked_predecessor: {}, marked_obsolete: {}", obj.object_id, obj.cp_sequence_number, obj.marked_predecessor, obj.marked_obsolete);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_cit0_cjt0_cit0_first() {
+        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
+        let obj_info = ObjInfo::default();
+        let mut builder = TestCheckpointDataBuilder::new(0);
+
+        builder = builder
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction();
+        builder = builder
+            .start_transaction(0)
+            .create_owned_object(1)
+            .finish_transaction();
+        let checkpoint0 = builder.build_checkpoint();
+        let result = obj_info.process(&Arc::new(checkpoint0)).unwrap();
+        ObjInfo::commit(&result, &mut conn).await.unwrap();
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 1)
+            .finish_transaction();
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(1, 1)
+            .finish_transaction();
+        let checkpoint1 = builder.build_checkpoint();
+        let result = obj_info.process(&Arc::new(checkpoint1)).unwrap();
+        ObjInfo::commit(&result, &mut conn).await.unwrap();
+
+        builder = builder
+            .start_transaction(1)
+            .transfer_object(0, 0)
+            .finish_transaction();
+        builder = builder
+            .start_transaction(1)
+            .transfer_object(1, 0)
+            .finish_transaction();
+        let checkpoint2 = builder.build_checkpoint();
+        let result = obj_info.process(&Arc::new(checkpoint2)).unwrap();
+        ObjInfo::commit(&result, &mut conn).await.unwrap();
+
+        // Run cit0 and cjt0 concurrently, giving cjt0 additional sleep so that it'll terminate after cit0
+
+        let db = indexer.store().clone();
+
+        let cit0 = tokio::spawn(async move {
+            let mut conn1 = db.connect().await.unwrap();
+            let cit0_sleep = 0;
+            let result = t0(
+                &mut conn1,
+                0,
+                2,
+                Some(cit0_sleep),
+                Some(cit0_sleep),
+                Some(cit0_sleep),
+                Some(cit0_sleep),
+            )
+            .await
+            .unwrap();
+            let t1_deleted = t1(&mut conn1, 0, 2).await.unwrap();
+            println!(
+                "cit0 result: pred_deleted: {}, pred_obsolete: {}, marked_predecessor: {}, t1_deleted: {}",
+                result.0, result.1, result.2, t1_deleted
+            );
+        });
+
+        let db = indexer.store().clone();
+        let cjt0 = tokio::spawn(async move {
+            let mut conn2 = db.connect().await.unwrap();
+            let cjt0_sleep = 0;
+            let result = t0(
+                &mut conn2,
+                2,
+                3,
+                Some(cjt0_sleep),
+                Some(cjt0_sleep),
+                Some(cjt0_sleep),
+                Some(cjt0_sleep),
+            )
+            .await
+            .unwrap();
+            println!(
+                "cjt0 result: pred_deleted: {}, pred_obsolete: {}, marked_predecessor: {}",
+                result.0, result.1, result.2
+            );
+        });
+
+        let _ = tokio::join!(cit0, cjt0);
+
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        for obj in all_obj_info {
+            println!("object_id: {:?}, cp_sequence_number: {}, marked_predecessor: {}, marked_obsolete: {}",
+            obj.object_id, obj.cp_sequence_number, obj.marked_predecessor, obj.marked_obsolete);
         }
     }
 }
