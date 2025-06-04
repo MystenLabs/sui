@@ -395,7 +395,7 @@ fn parse_mode(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribut
                 if let Some(mode_name) = expect_name_attr(context, mode_attr) {
                     if let Err((_, prev_loc)) = modes.add(mode_name) {
                         let msg = format!("Duplicate mode '{}'", mode_name);
-                        let prev_msg = format!("Previously defined here");
+                        let prev_msg = "Previously defined here".to_string();
                         context.add_diag(diag!(
                             Declarations::InvalidAttribute,
                             (attr_loc, msg),
