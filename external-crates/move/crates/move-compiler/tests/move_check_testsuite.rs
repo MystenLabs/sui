@@ -24,6 +24,7 @@ use move_compiler::{
     shared::{Flags, NumericalAddress, PackageConfig, PackagePaths},
     sui_mode,
 };
+use move_symbol_pool::Symbol;
 use serde::{Deserialize, Serialize};
 
 /// Shared flag to keep any temporary results of the test
@@ -33,6 +34,7 @@ const TEST_EXT: &str = "unit_test";
 const UNUSED_EXT: &str = "unused";
 const MIGRATION_EXT: &str = "migration";
 const IDE_EXT: &str = "ide";
+const MODE_EXT: &str = "mode";
 
 const LINTER_DIR: &str = "linter";
 const SUI_MODE_DIR: &str = "sui_mode";
@@ -46,7 +48,7 @@ struct TestInfo {
     lint: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum TestKind {
     // Normal test
     Normal,
@@ -58,6 +60,8 @@ enum TestKind {
     Migration,
     // Tests additional generation for the IDE
     IDE,
+    // Tests with a mode enabled
+    Mode(Vec<Symbol>),
 }
 
 impl TestKind {
@@ -68,17 +72,34 @@ impl TestKind {
             _ if path_extension == UNUSED_EXT => TestKind::Unused,
             _ if path_extension == MIGRATION_EXT => TestKind::Migration,
             _ if path_extension == IDE_EXT => TestKind::IDE,
+            _ if path_extension.to_string_lossy().starts_with(MODE_EXT) => {
+                let pe_str = path_extension.to_string_lossy();
+                let mode_str = pe_str.strip_prefix(MODE_EXT).unwrap();
+                let modes = mode_str
+                    .split('-')
+                    .map(|str| str.into())
+                    .collect::<Vec<_>>();
+                TestKind::Mode(modes)
+            }
             _ => panic!("Unknown extension: {}", path_extension.to_string_lossy()),
         }
     }
 
-    fn snap_suffix(&self) -> Option<&'static str> {
+    fn snap_suffix(&self) -> Option<String> {
         match self {
             TestKind::Normal => None,
-            TestKind::Test => Some(TEST_EXT),
-            TestKind::Unused => Some(UNUSED_EXT),
-            TestKind::Migration => Some(MIGRATION_EXT),
-            TestKind::IDE => Some(IDE_EXT),
+            TestKind::Test => Some(TEST_EXT.to_string()),
+            TestKind::Unused => Some(UNUSED_EXT.to_string()),
+            TestKind::Migration => Some(MIGRATION_EXT.to_string()),
+            TestKind::IDE => Some(IDE_EXT.to_string()),
+            TestKind::Mode(modes) => Some(format!(
+                "{MODE_EXT}{}",
+                modes
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+                    .join("-")
+            )),
         }
     }
 }
@@ -153,18 +174,20 @@ fn test_config(path: &Path) -> (TestKind, TestInfo, PackageConfig, Flags) {
         lint,
     };
     // flags
-    let flags = match test_kind {
+    let flags = match &test_kind {
         // no flags for normal tests
         TestKind::Normal => Flags::empty(),
         // we want to be able to see test/test_only elements in these modes
         TestKind::Test | TestKind::Unused | TestKind::Migration => Flags::testing(),
         // additional flags for IDE
         TestKind::IDE => Flags::testing().set_ide_test_mode(true).set_ide_mode(true),
+        // Setting a mode flag
+        TestKind::Mode(modes) => Flags::empty().set_modes(modes.clone()),
     };
     (test_kind, test_info, config, flags)
 }
 
-fn out_path(path: &Path, test_name: &str, test_kind: Option<&str>) -> PathBuf {
+fn out_path(path: &Path, test_name: &str, test_kind: &Option<String>) -> PathBuf {
     let n;
     let file_name = match test_kind {
         Some(c) => {
@@ -184,7 +207,7 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     let test_name = path.file_stem().unwrap().to_string_lossy();
     let test_name: &str = test_name.as_ref();
     let move_path = path.with_extension(MOVE_EXTENSION);
-    let out_path = out_path(path, test_name, suffix);
+    let out_path = out_path(path, test_name, &suffix);
     let flavor = package_config.flavor;
     let targets: Vec<String> = vec![move_path.to_str().unwrap().to_owned()];
     let named_address_map = default_testing_addresses(flavor);
@@ -274,4 +297,7 @@ datatest_stable::harness!(
     run_test,
     "tests/",
     r".*\.ide$",
+    run_test,
+    "tests/",
+    r".*\.mode-.*$",
 );

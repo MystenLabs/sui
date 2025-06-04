@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_2024/expansion/disjoint_multi_modes.move:3:12
+  │
+2 │     #[mode(a)]
+  │            - Previously annotated here
+3 │     #[mode(a)]
+  │            ^ function annotated with duplicate mode 'a'
