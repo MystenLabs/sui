@@ -2112,22 +2112,27 @@ impl<'a, 'b> VersionedBinary<'a, 'b> {
         let binary_len = binary.len();
         let mut cursor = Cursor::<&'a [u8]>::new(binary);
         // check magic
-        let mut magic = [0u8; BinaryConstants::MOVE_MAGIC_SIZE];
         let publishable = {
+            let mut magic = [0u8; BinaryConstants::MOVE_MAGIC_SIZE];
             let Ok(count) = cursor.read(&mut magic) else {
                 return Err(PartialVMError::new(StatusCode::MALFORMED)
                     .with_message("Bad binary header".to_string()));
             };
-            if count != BinaryConstants::MOVE_MAGIC_SIZE {
-                return Err(PartialVMError::new(StatusCode::BAD_MAGIC));
-            };
-            if binary_config.valid_magic(&magic) {
-                true
-            } else if binary_config.valid_unpublishable_magic(&magic) {
-                false
-            } else {
-                return Err(PartialVMError::new(StatusCode::BAD_MAGIC)
-                    .with_message("Bad binary header".to_string()));
+            match BinaryConstants::decode_magic(magic, count) {
+                Ok(MagicKind::MoveMagic) => true,
+                Ok(MagicKind::UnpublishableMagic) if binary_config.allow_unpublishable() => false,
+                Ok(MagicKind::UnpublishableMagic) => {
+                    return Err(PartialVMError::new(StatusCode::BAD_MAGIC)
+                        .with_message("Binary header not allowed".to_string()));
+                }
+                Err(MagicError::BadSize) => {
+                    return Err(PartialVMError::new(StatusCode::BAD_MAGIC)
+                        .with_message("Binary header too short".to_string()));
+                }
+                Err(MagicError::BadNumber) => {
+                    return Err(PartialVMError::new(StatusCode::BAD_MAGIC)
+                        .with_message("Unexpected binary header".to_string()));
+                }
             }
         };
 

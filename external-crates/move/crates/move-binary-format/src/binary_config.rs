@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::file_format_common::{BinaryConstants, VERSION_1, VERSION_MAX};
+use crate::file_format_common::{VERSION_1, VERSION_MAX};
 
 /// Configuration for the binary format related to table size.
 /// Maps to all tables in the binary format.
@@ -112,17 +112,13 @@ impl BinaryConfig {
         Self {
             max_binary_format_version: VERSION_MAX,
             min_binary_format_version: VERSION_1,
-            check_no_extraneous_bytes: false,
+            check_no_extraneous_bytes: true,
             table_config: TableConfig::legacy(),
             allow_unpublishable: true,
         }
     }
 
-    pub fn valid_magic(&self, magic: &[u8]) -> bool {
-        magic == BinaryConstants::MOVE_MAGIC
-    }
-
-    pub fn valid_unpublishable_magic(&self, magic: &[u8]) -> bool {
-        self.allow_unpublishable && magic == BinaryConstants::UNPUBLISHABLE_MAGIC
+    pub fn allow_unpublishable(&self) -> bool {
+        self.allow_unpublishable
     }
 }
