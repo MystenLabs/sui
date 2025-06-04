@@ -59,13 +59,19 @@ impl StateReader {
     }
 
     #[tracing::instrument(skip(self))]
+    pub fn get_system_state(&self) -> Result<sui_types::sui_system_state::SuiSystemState> {
+        sui_types::sui_system_state::get_sui_system_state(self.inner())
+            .map_err(StorageError::custom)
+            .map_err(StorageError::custom)
+    }
+
+    #[tracing::instrument(skip(self))]
     pub fn get_system_state_summary(
         &self,
     ) -> Result<sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary> {
         use sui_types::sui_system_state::SuiSystemStateTrait;
 
-        let system_state = sui_types::sui_system_state::get_sui_system_state(self.inner())
-            .map_err(StorageError::custom)?;
+        let system_state = self.get_system_state()?;
         let summary = system_state.into_sui_system_state_summary();
 
         Ok(summary)
