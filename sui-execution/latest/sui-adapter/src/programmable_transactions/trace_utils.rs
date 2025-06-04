@@ -17,12 +17,12 @@ use move_trace_format::{
 use move_vm_types::loaded_data::runtime_types::Type;
 use sui_types::coin::Coin;
 use sui_types::object::bounded_visitor::BoundedVisitor;
-use sui_types::ptb_trace::{PTBCommandInfo, PTBExternalEvent, SplitCoinsEvent, TransferEvent};
+use sui_types::ptb_trace::{ExtMoveValue, ExternalEvent, PTBCommandInfo, PTBEvent, SummaryEvent};
 use sui_types::transaction::Command;
 use sui_types::{
     base_types::ObjectID,
     error::{ExecutionError, ExecutionErrorKind},
-    ptb_trace::MoveValueInfo,
+    ptb_trace::ExtMoveValueInfo,
 };
 
 /// Inserts Move call start event into the trace. As is the case for all other public functions in this module,
@@ -30,7 +30,7 @@ use sui_types::{
 pub fn trace_move_call_start(trace_builder_opt: &mut Option<MoveTraceBuilder>) {
     if let Some(trace_builder) = trace_builder_opt {
         trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
-            PTBExternalEvent::MoveCallStart
+            PTBEvent::MoveCallStart
         ))));
     }
 }
@@ -40,7 +40,7 @@ pub fn trace_move_call_start(trace_builder_opt: &mut Option<MoveTraceBuilder>) {
 pub fn trace_move_call_end(trace_builder_opt: &mut Option<MoveTraceBuilder>) {
     if let Some(trace_builder) = trace_builder_opt {
         trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
-            PTBExternalEvent::MoveCallEnd
+            PTBEvent::MoveCallEnd
         ))));
     }
 }
@@ -53,12 +53,21 @@ pub fn trace_transfer(
     obj_values: &[ObjectValue],
 ) -> Result<(), ExecutionError> {
     if let Some(trace_builder) = trace_builder_opt {
-        let to_transfer = obj_values
-            .iter()
-            .map(|v| obj_info_from_obj_value(context, v))
-            .collect::<Result<Vec<_>, _>>()?;
+        let mut to_transfer = vec![];
+        for (idx, v) in obj_values.iter().enumerate() {
+            let obj_info = obj_info_from_obj_value(context, v)?;
+            to_transfer.push(ExtMoveValue::Single {
+                name: format!("obj{idx}"),
+                info: obj_info,
+            });
+        }
         trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
-            PTBExternalEvent::TransferObjects(TransferEvent { to_transfer })
+            PTBEvent::ExternalEvent(ExternalEvent {
+                description: "TransferObjects: obj0...objN => ()".to_string(),
+                camel_case_name: "Transfer".to_string(),
+                snake_case_name: "transfer".to_string(),
+                values: to_transfer,
+            })
         ))));
     }
     Ok(())
@@ -71,30 +80,37 @@ pub fn trace_ptb_summary(
     commands: &[Command],
 ) -> Result<(), ExecutionError> {
     if let Some(trace_builder) = trace_builder_opt {
+        let events = commands
+            .iter()
+            .map(|c| match c {
+                Command::MoveCall(move_call) => {
+                    let pkg = move_call.package.to_string();
+                    let module = move_call.module.clone();
+                    let function = move_call.function.clone();
+                    PTBCommandInfo::MoveCall {
+                        pkg,
+                        module,
+                        function,
+                    }
+                }
+                Command::TransferObjects(..) => {
+                    PTBCommandInfo::ExternalEvent("TransferObjects".to_string())
+                }
+                Command::SplitCoins(..) => PTBCommandInfo::ExternalEvent("SplitCoins".to_string()),
+                Command::MergeCoins(..) => PTBCommandInfo::ExternalEvent("MergeCoins".to_string()),
+                Command::Publish(..) => PTBCommandInfo::ExternalEvent("Publish".to_string()),
+                Command::MakeMoveVec(..) => {
+                    PTBCommandInfo::ExternalEvent("MakeMoveVec".to_string())
+                }
+                Command::Upgrade(..) => PTBCommandInfo::ExternalEvent("Upgrade".to_string()),
+            })
+            .collect();
         trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
-            PTBExternalEvent::Summary(
-                commands
-                    .iter()
-                    .map(|c| match c {
-                        Command::MoveCall(move_call) => {
-                            let pkg = move_call.package.to_string();
-                            let module = move_call.module.clone();
-                            let function = move_call.function.clone();
-                            PTBCommandInfo::MoveCall {
-                                pkg,
-                                module,
-                                function,
-                            }
-                        }
-                        Command::TransferObjects(..) => PTBCommandInfo::TransferObjects,
-                        Command::SplitCoins(..) => PTBCommandInfo::SplitCoins,
-                        Command::MergeCoins(..) => PTBCommandInfo::MergeCoins,
-                        Command::Publish(..) => PTBCommandInfo::Publish,
-                        Command::MakeMoveVec(..) => PTBCommandInfo::MakeMoveVec,
-                        Command::Upgrade(..) => PTBCommandInfo::Upgrade,
-                    })
-                    .collect(),
-            )
+            PTBEvent::Summary(SummaryEvent {
+                camel_case_name: "PTB".to_string(),
+                snake_case_name: "ptb_summary".to_string(),
+                events,
+            })
         ))));
     }
 
@@ -112,23 +128,24 @@ pub fn trace_split_coins(
 ) -> Result<(), ExecutionError> {
     if let Some(trace_builder) = trace_builder_opt {
         let type_tag_with_refs = trace_type_to_type_tag_with_refs(context, coin_type)?;
-        let split_coin_infos = split_coin_values
-            .iter()
-            .map(|coin_val| {
-                let Value::Object(ObjectValue {
-                    contents: ObjectContents::Coin(split_coin),
-                    ..
-                }) = coin_val
-                else {
-                    invariant_violation!("Expected result of split coins PTB command to be a coin");
-                };
+        let mut split_coin_move_values = vec![];
+        for coin_val in split_coin_values {
+            let Value::Object(ObjectValue {
+                contents: ObjectContents::Coin(coin),
+                ..
+            }) = coin_val
+            else {
+                invariant_violation!("Expected result of split coins PTB command to be a coin");
+            };
+            split_coin_move_values.push(
                 coin_obj_info(
                     type_tag_with_refs.clone(),
-                    *split_coin.id.object_id(),
-                    split_coin.balance.value(),
-                )
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+                    *coin.id.object_id(),
+                    coin.balance.value(),
+                )?
+                .value,
+            );
+        }
 
         let input = coin_obj_info(
             type_tag_with_refs.clone(),
@@ -136,9 +153,21 @@ pub fn trace_split_coins(
             input_coin.value(),
         )?;
         trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
-            PTBExternalEvent::SplitCoins(SplitCoinsEvent {
-                input,
-                result: split_coin_infos,
+            PTBEvent::ExternalEvent(ExternalEvent {
+                description: "SplitCoins: input => result".to_string(),
+                camel_case_name: "SplitCoins".to_string(),
+                snake_case_name: "split_coins".to_string(),
+                values: vec![
+                    ExtMoveValue::Single {
+                        name: "input".to_string(),
+                        info: input
+                    },
+                    ExtMoveValue::Vector {
+                        name: "result".to_string(),
+                        type_: type_tag_with_refs.clone(),
+                        value: split_coin_move_values
+                    },
+                ],
             })
         ))));
     }
@@ -149,7 +178,7 @@ pub fn trace_split_coins(
 fn obj_info_from_obj_value(
     context: &mut ExecutionContext<'_, '_, '_>,
     obj_val: &ObjectValue,
-) -> Result<MoveValueInfo, ExecutionError> {
+) -> Result<ExtMoveValueInfo, ExecutionError> {
     let type_tag_with_refs = trace_type_to_type_tag_with_refs(context, &obj_val.type_)?;
     match &obj_val.contents {
         ObjectContents::Coin(coin) => {
@@ -167,7 +196,7 @@ fn obj_info_from_obj_value(
                 ExecutionError::new_with_source(ExecutionErrorKind::InvariantViolation, e)
             })?;
             let serialized_move_value = SerializableMoveValue::from(move_value);
-            Ok(MoveValueInfo {
+            Ok(ExtMoveValueInfo {
                 type_: type_tag_with_refs,
                 value: serialized_move_value,
             })
@@ -180,7 +209,7 @@ fn coin_obj_info(
     type_tag_with_refs: TypeTagWithRefs,
     object_id: ObjectID,
     balance: u64,
-) -> Result<MoveValueInfo, ExecutionError> {
+) -> Result<ExtMoveValueInfo, ExecutionError> {
     let coin_type_tag = match type_tag_with_refs.type_.clone() {
         TypeTag::Struct(tag) => tag,
         _ => invariant_violation!("Expected a struct type tag when creating a Move coin value"),
@@ -231,7 +260,7 @@ fn coin_obj_info(
             (Identifier::new("balance").unwrap(), serializable_balance),
         ],
     };
-    Ok(MoveValueInfo {
+    Ok(ExtMoveValueInfo {
         type_: type_tag_with_refs,
         value: SerializableMoveValue::Struct(coin_obj),
     })
