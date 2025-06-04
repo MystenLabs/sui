@@ -211,7 +211,7 @@ impl CheckpointStoreTables {
             default_cells_per_mutex, KeySpaceConfig, KeyType, ThConfig,
         };
         const MUTEXES: usize = 1024;
-        let u64_sequence_key = KeyType::prefix_uniform(7, 4);
+        let u64_sequence_key = KeyType::prefix_uniform(6, 0);
         let override_dirty_keys_config =
             KeySpaceConfig::new()
                 .with_max_dirty_keys(64_000)
