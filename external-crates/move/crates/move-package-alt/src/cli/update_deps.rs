@@ -36,7 +36,7 @@ impl UpdateDeps {
                 .environments()
                 .iter()
                 .find(|(e, _)| *e == env)
-                .ok_or_else(|| PackageError::Generic("Environment not found".to_string()))?;
+                .ok_or_else(|| PackageError::Generic(format!("Environment {env} not found")))?;
             &BTreeMap::from([(envs.0.clone(), envs.1.clone())])
         } else {
             package.manifest().environments()
