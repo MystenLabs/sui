@@ -16,12 +16,12 @@ use move_core_types::account_address::AccountAddress;
 use move_trace_format::format::MoveTraceBuilder;
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Instant};
 use sui_types::{
-    base_types::{ObjectID, TxContext},
+    base_types::TxContext,
     error::{ExecutionError, ExecutionErrorKind},
     execution::{ExecutionTiming, ResultWithTimings},
     execution_status::PackageUpgradeError,
     metrics::LimitsMetrics,
-    move_package::{MovePackage, UpgradeTicket},
+    move_package::MovePackage,
     object::Owner,
 };
 use tracing::instrument;
@@ -239,13 +239,12 @@ fn execute_command<Mode: ExecutionMode>(
 
             context.publish_and_init_package(runtime_id, modules, &dep_ids, trace_builder_opt)?;
 
-            let values = if <Mode>::packages_are_predefined() {
+            if <Mode>::packages_are_predefined() {
                 // no upgrade cap for genesis modules
                 std::vec![]
             } else {
                 std::vec![context.new_upgrade_cap(runtime_id)]
-            };
-            values
+            }
         }
         T::Command_::Upgrade(module_bytes, dep_ids, current_package_id, upgrade_ticket) => {
             let upgrade_ticket = context

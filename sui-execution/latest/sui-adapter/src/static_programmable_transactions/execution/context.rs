@@ -689,7 +689,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     }
 
     fn fetch_package(&mut self, dependency_id: &ObjectID) -> Result<PackageObject, ExecutionError> {
-        fetch_package(&self.env.state_view, &dependency_id)
+        fetch_package(&self.env.state_view, dependency_id)
     }
 
     fn fetch_packages(
@@ -719,7 +719,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 bytes
             })
             .collect();
-        let mut data_store = SuiDataStore::new(&self.env.linkage_view, &self.new_packages);
+        let mut data_store = SuiDataStore::new(self.env.linkage_view, &self.new_packages);
         self.env
             .vm
             .get_runtime()
