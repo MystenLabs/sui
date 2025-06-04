@@ -4,40 +4,19 @@
 
 //! Types and methods for external dependencies (of the form `{ git = "<repo>" }`)
 //!
-//! Git dependencies are cached in `~/.move`, which has the following structure:
-//!
-//! TODO: this doesn't match the implementation below:
-//! ```ignore
-//! .move/
-//!   git/
-//!     <remote 1>/ # a headless, sparse, and shallow git repository
-//!       <sha 1>/ # a worktree checked out to the given sha
-//!       <sha 2>/
-//!       ...
-//!     <remote 2>/
-//!       ...
-//!     ...
-//! ```
-use std::{
-    fmt,
-    marker::PhantomData,
-    path::{Path, PathBuf},
-    process::{ExitStatus, Output, Stdio},
-};
+//! Git dependencies are cached in `~/.move`. Each dependency has a sparse, shallow checkout
+//! in the directory `~/.move/<remote>_<sha>` (see [crate::git::format_repo_to_fs_path])
 
-use derive_where::derive_where;
-use serde::de::Error;
-use serde::{Deserialize, Deserializer, Serialize, de};
-use tokio::process::Command;
-use tracing::debug;
+use std::path::PathBuf;
 
-use crate::git::GitRepo;
+use serde::{Deserialize, Serialize};
+
 use crate::{
-    errors::{Located, PackageError, PackageResult},
-    git::sha::GitSha,
+    errors::PackageResult,
+    git::{GitRepo, sha::GitSha},
 };
 
-use super::{DependencySet, Pinned, Unpinned};
+use super::DependencySet;
 
 /// TODO keep same style around all types
 ///
@@ -70,6 +49,14 @@ pub struct PinnedGitDependency {
     /// The path within the repository
     #[serde(default)]
     pub path: PathBuf,
+}
+
+impl PinnedGitDependency {
+    /// Fetch the given git dependency and return the path to the checked out repo
+    pub async fn fetch(&self) -> PackageResult<PathBuf> {
+        let git_repo = GitRepo::from(self);
+        Ok(git_repo.fetch().await?)
+    }
 }
 
 impl UnpinnedGitDependency {
@@ -126,10 +113,4 @@ impl From<PinnedGitDependency> for GitRepo {
     fn from(dep: PinnedGitDependency) -> Self {
         GitRepo::new(dep.repo, Some(dep.rev.into()), dep.path)
     }
-}
-
-/// Fetch the given git dependency and return the path to the checked out repo
-pub async fn fetch_dep(dep: PinnedGitDependency) -> PackageResult<PathBuf> {
-    let git_repo = GitRepo::from(&dep);
-    Ok(git_repo.fetch().await?)
 }

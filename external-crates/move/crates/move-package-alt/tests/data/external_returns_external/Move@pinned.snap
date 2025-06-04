@@ -1,4 +1,4 @@
 ---
-source: crates/move-package-alt/tests/pinning_tests.rs
+source: crates/move-package-alt/tests/test_runner.rs
 ---
-mock-resolver did not follow the external resolver protocol: resolvers must return resolved dependencies
+`mock-resolver` did not follow the external resolver protocol (resolvers must return resolved dependencies)

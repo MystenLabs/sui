@@ -10,7 +10,7 @@ use std::{
 use itertools::Itertools as _;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
-use tracing::{debug, trace, warn};
+use tracing::{debug, warn};
 
 use crate::{
     block::{BlockAPI, BlockRef, VerifiedBlock, GENESIS_ROUND},
@@ -99,11 +99,6 @@ impl BlockManager {
         &mut self,
         blocks: Vec<VerifiedBlock>,
     ) -> Vec<VerifiedBlock> {
-        // If GC is disabled then should not run any of this logic.
-        if !self.dag_state.read().gc_enabled() {
-            return Vec::new();
-        }
-
         // Just accept the blocks
         let _s = monitored_scope("BlockManager::try_accept_committed_blocks");
         let (accepted_blocks, missing_blocks) = self.try_accept_blocks_internal(blocks, true);
@@ -310,10 +305,7 @@ impl BlockManager {
         &mut self,
         unsuspended_blocks: impl IntoIterator<Item = VerifiedBlock>,
     ) -> Vec<VerifiedBlock> {
-        let (gc_enabled, gc_round) = {
-            let dag_state = self.dag_state.read();
-            (dag_state.gc_enabled(), dag_state.gc_round())
-        };
+        let gc_round = self.dag_state.read().gc_round();
 
         // Try to verify the block and its children for timestamp, with ancestor blocks.
         let mut blocks_to_accept: BTreeMap<BlockRef, VerifiedBlock> = BTreeMap::new();
@@ -344,12 +336,9 @@ impl BlockManager {
                         continue 'block;
                     }
 
-                    // When gc is enabled it's possible that we indeed won't find any ancestors that are passed gc_round. That's ok. We don't need to panic here.
-                    // We do want to panic if gc_enabled we and have an ancestor that is > gc_round, or gc is disabled.
-                    if gc_enabled
-                        && ancestor_ref.round > GENESIS_ROUND
-                        && ancestor_ref.round <= gc_round
-                    {
+                    // It's possible that we indeed won't find any ancestors that are passed gc_round. That's ok. We don't need to panic here.
+                    // We do want to panic if we have an ancestor that is > gc_round.
+                    if ancestor_ref.round > GENESIS_ROUND && ancestor_ref.round <= gc_round {
                         debug!(
                             "Block {:?} has a missing ancestor: {:?} passed GC round {}",
                             b.reference(),
@@ -362,9 +351,9 @@ impl BlockManager {
                     }
                 }
 
-                if let Err(e) =
-                    self.block_verifier
-                        .check_ancestors(&b, &ancestor_blocks, gc_enabled, gc_round)
+                if let Err(e) = self
+                    .block_verifier
+                    .check_ancestors(&b, &ancestor_blocks, gc_round)
                 {
                     warn!("Block {:?} failed to verify ancestors: {}", b, e);
                     blocks_to_reject.insert(b.reference(), b);
@@ -412,7 +401,6 @@ impl BlockManager {
         let mut ancestors_to_fetch = BTreeSet::new();
         let dag_state = self.dag_state.read();
         let gc_round = dag_state.gc_round();
-        let gc_enabled = dag_state.gc_enabled();
 
         // If block has been already received and suspended, or already processed and stored, or is a genesis block, then skip it.
         if self.suspended_blocks.contains_key(&block_ref) || dag_state.contains_block(&block_ref) {
@@ -420,7 +408,7 @@ impl BlockManager {
         }
 
         // If the block is <= gc_round, then we simply skip its processing as there is no meaning do any action on it or even store it.
-        if gc_enabled && block.round() <= gc_round {
+        if block.round() <= gc_round {
             let hostname = self
                 .context
                 .committee
@@ -436,18 +424,13 @@ impl BlockManager {
             return TryAcceptResult::Skipped;
         }
 
-        // Keep only the ancestors that are greater than the GC round to check for their existence. Keep in mind that if GC is disabled
-        // then gc_round will be 0 and all ancestors will be considered.
-        let ancestors = if gc_enabled {
-            block
-                .ancestors()
-                .iter()
-                .filter(|ancestor| ancestor.round == GENESIS_ROUND || ancestor.round > gc_round)
-                .cloned()
-                .collect::<Vec<_>>()
-        } else {
-            block.ancestors().to_vec()
-        };
+        // Keep only the ancestors that are greater than the GC round to check for their existence.
+        let ancestors = block
+            .ancestors()
+            .iter()
+            .filter(|ancestor| ancestor.round == GENESIS_ROUND || ancestor.round > gc_round)
+            .cloned()
+            .collect::<Vec<_>>();
 
         // make sure that we have all the required ancestors in store
         for (found, ancestor) in dag_state
@@ -594,17 +577,9 @@ impl BlockManager {
     /// this action.
     pub(crate) fn try_unsuspend_blocks_for_latest_gc_round(&mut self) {
         let _s = monitored_scope("BlockManager::try_unsuspend_blocks_for_latest_gc_round");
-        let (gc_enabled, gc_round) = {
-            let dag_state = self.dag_state.read();
-            (dag_state.gc_enabled(), dag_state.gc_round())
-        };
+        let gc_round = self.dag_state.read().gc_round();
         let mut blocks_unsuspended_below_gc_round = 0;
         let mut blocks_gc_ed = 0;
-
-        if !gc_enabled {
-            trace!("GC is disabled, no blocks will attempt to get unsuspended.");
-            return;
-        }
 
         while let Some((block_ref, _children_refs)) = self.missing_ancestors.first_key_value() {
             // If the first block in the missing ancestors is higher than the gc_round, then we can't unsuspend it yet. So we just put it back
@@ -1033,20 +1008,15 @@ mod tests {
     }
 
     /// The test generate blocks for a well connected DAG and feed them to block manager in random order. In the end all the
-    /// blocks should be uniquely suspended and no missing blocks should exist. The test will run for both gc_enabled/disabled.
-    /// When gc is enabeld we set a high gc_depth value so in practice gc_round will be 0, but we'll be able to test in the common case
-    /// that this work exactly the same way as when gc is disabled.
-    #[rstest]
+    /// blocks should be uniquely suspended and no missing blocks should exist. We set a high gc_depth value so in this test gc_round will be 0.
     #[tokio::test]
-    async fn accept_blocks_unsuspend_children_blocks(#[values(false, true)] gc_enabled: bool) {
+    async fn accept_blocks_unsuspend_children_blocks() {
         // GIVEN
         let (mut context, _key_pairs) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(10);
 
-        if gc_enabled {
-            context
-                .protocol_config
-                .set_consensus_gc_depth_for_testing(10);
-        }
         let context = Arc::new(context);
 
         // create a DAG of rounds 1 ~ 3
@@ -1093,12 +1063,10 @@ mod tests {
         telemetry_subscribers::init_for_testing();
         // GIVEN
         let (mut context, _key_pairs) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(gc_depth);
 
-        if gc_depth > 0 {
-            context
-                .protocol_config
-                .set_consensus_gc_depth_for_testing(gc_depth);
-        }
         let context = Arc::new(context);
 
         // create a DAG of rounds 1 ~ gc_depth * 2
@@ -1248,7 +1216,6 @@ mod tests {
             &self,
             block: &VerifiedBlock,
             _ancestors: &[Option<VerifiedBlock>],
-            _gc_enabled: bool,
             _gc_round: Round,
         ) -> ConsensusResult<()> {
             if self.fail.contains(&block.reference()) {

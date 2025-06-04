@@ -11,8 +11,11 @@ use rand::{rngs::StdRng, SeedableRng};
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::ops::Deref;
+use sui_config::transaction_deny_config::{TransactionDenyConfig, TransactionDenyConfigBuilder};
 use sui_types::crypto::{PublicKey, SuiSignature, ToFromBytes, ZkLoginPublicIdentifier};
-use sui_types::messages_grpc::HandleSoftBundleCertificatesRequestV3;
+use sui_types::messages_grpc::{
+    HandleCertificateResponseV2, HandleSoftBundleCertificatesRequestV3,
+};
 use sui_types::utils::get_one_zklogin_inputs;
 use sui_types::{
     authenticator_state::ActiveJwk,
@@ -1269,6 +1272,218 @@ async fn zklogin_txn_fail_if_missing_jwk() {
 
     // Case 2: Submit a transaction with zklogin signature derived from a Twitch JWT with kid "1" should fail.
     execute_transaction_assert_err(authority_state, txn1, object_ids).await;
+}
+
+#[tokio::test]
+async fn test_aliased_address_success() {
+    telemetry_subscribers::init_for_testing();
+
+    let (tx, original, aliased, input_object, gas_object) = setup_aliased_address_test();
+    let digests = vec![tx.data().digest()];
+
+    let resp = do_test_aliased_address(
+        tx,
+        original,
+        aliased,
+        input_object,
+        gas_object,
+        digests,
+        None,
+    )
+    .await
+    .expect("should succeed");
+    assert!(resp.signed_effects.status().is_ok());
+}
+
+#[tokio::test]
+async fn test_aliased_address_success_with_deny_config() {
+    telemetry_subscribers::init_for_testing();
+
+    let (tx, original, aliased, input_object, gas_object) = setup_aliased_address_test();
+    let digests = vec![tx.data().digest()];
+
+    let tx_deny_config = TransactionDenyConfigBuilder::new()
+        .add_denied_address(original)
+        .build();
+
+    let resp = do_test_aliased_address(
+        tx,
+        original,
+        aliased,
+        input_object,
+        gas_object,
+        digests,
+        Some(tx_deny_config),
+    )
+    .await
+    .expect("should succeed");
+    assert!(resp.signed_effects.status().is_ok());
+}
+
+#[tokio::test]
+async fn test_aliased_address_wrong_digest() {
+    telemetry_subscribers::init_for_testing();
+
+    let (tx, original, aliased, input_object, gas_object) = setup_aliased_address_test();
+    let digests = vec![TransactionDigest::random()];
+
+    let err = do_test_aliased_address(
+        tx,
+        original,
+        aliased,
+        input_object,
+        gas_object,
+        digests,
+        None,
+    )
+    .await
+    .unwrap_err();
+    // Signer is not an allowed alias for the given transaction digest.
+    assert!(matches!(err, SuiError::SignerSignatureAbsent { .. }));
+}
+
+#[tokio::test]
+async fn test_aliased_address_wrong_signer() {
+    telemetry_subscribers::init_for_testing();
+
+    let (tx, original, _aliased, input_object, gas_object) = setup_aliased_address_test();
+    let digests = vec![tx.data().digest()];
+
+    let err = do_test_aliased_address(
+        tx,
+        original,
+        dbg_addr(3),
+        input_object,
+        gas_object,
+        digests,
+        None,
+    )
+    .await
+    .unwrap_err();
+    // Signer was not one of the allowed aliases.
+    assert!(matches!(err, SuiError::SignerSignatureAbsent { .. }));
+}
+
+#[tokio::test]
+async fn test_aliased_address_wrong_owner() {
+    telemetry_subscribers::init_for_testing();
+
+    let (tx, _original, aliased, input_object, gas_object) = setup_aliased_address_test();
+    let digests = vec![tx.data().digest()];
+
+    let err = do_test_aliased_address(
+        tx,
+        dbg_addr(3),
+        aliased,
+        input_object,
+        gas_object,
+        digests,
+        None,
+    )
+    .await
+    .unwrap_err();
+    // Signer was an allowed alias, but not of the object owner.
+    assert!(matches!(err, SuiError::SignerSignatureAbsent { .. }));
+}
+
+fn setup_aliased_address_test() -> (Transaction, SuiAddress, SuiAddress, Object, Object) {
+    let recipient = dbg_addr(2);
+
+    let (original, _original_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), original);
+    let input_object = Object::with_id_owner_for_testing(ObjectID::random(), original);
+
+    let input_object_ref = input_object.compute_full_object_reference();
+
+    let (aliased, aliased_key): (_, AccountKeyPair) = get_key_pair();
+
+    // need to construct tx before authority, so we have to hardcode rgp
+    let rgp = 1000;
+
+    let data = TransactionData::new_transfer_full(
+        recipient,
+        input_object_ref,
+        original,
+        gas_object.compute_object_reference(),
+        rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        rgp,
+    );
+
+    let tx = to_sender_signed_transaction(data, &aliased_key);
+    (tx, original, aliased, input_object, gas_object)
+}
+
+async fn do_test_aliased_address(
+    tx: Transaction,
+    original: SuiAddress,
+    aliased: SuiAddress,
+    input_object: Object,
+    gas_object: Object,
+    digests: Vec<TransactionDigest>,
+    tx_deny_config: Option<TransactionDenyConfig>,
+) -> Result<HandleCertificateResponseV2, SuiError> {
+    let input_object_id = input_object.id();
+    let gas_object_id = gas_object.id();
+
+    let authority_state = {
+        let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        protocol_config.push_aliased_addresses_for_testing(
+            original.to_inner(),
+            aliased.to_inner(),
+            digests.into_iter().map(|d| *d.inner()).collect(),
+        );
+
+        let state = TestAuthorityBuilder::new()
+            .with_protocol_config(protocol_config)
+            .with_transaction_deny_config(tx_deny_config.unwrap_or_default())
+            .build()
+            .await;
+        for (address, object_id) in [(original, input_object_id), (original, gas_object_id)] {
+            let obj = Object::with_id_owner_for_testing(object_id, address);
+            state.insert_genesis_object(obj).await;
+        }
+        state
+    };
+
+    let committee = authority_state
+        .load_epoch_store_one_call_per_task()
+        .committee()
+        .clone();
+
+    authority_state.insert_genesis_object(input_object).await;
+
+    let server = AuthorityServer::new_for_test(authority_state.clone());
+
+    let server_handle = server.spawn_for_test().await.unwrap();
+
+    let client = NetworkAuthorityClient::connect(
+        server_handle.address(),
+        Some(
+            authority_state
+                .config
+                .network_key_pair()
+                .public()
+                .to_owned(),
+        ),
+    )
+    .await
+    .unwrap();
+
+    // handle_transaction should succeed, but only because of the aliased address.
+    // if you remove the aliased address list from the protocol config, it will fail.
+    let resp = client
+        .handle_transaction(tx.clone(), Some(make_socket_addr()))
+        .await?;
+
+    let TransactionStatus::Signed(sig) = resp.status else {
+        panic!("should be signed");
+    };
+
+    let ct = CertifiedTransaction::new(tx.into_data(), vec![sig], &committee).unwrap();
+
+    client
+        .handle_certificate_v2(ct, Some(make_socket_addr()))
+        .await
 }
 
 #[tokio::test]

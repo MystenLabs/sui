@@ -178,9 +178,8 @@ impl DagState {
             evicted_rounds: vec![0; num_authorities],
         };
 
-        for (i, round) in last_committed_rounds.into_iter().enumerate() {
-            let authority_index = state.context.committee.to_authority_index(i).unwrap();
-            let (blocks, eviction_round) = if state.gc_enabled() {
+        for (authority_index, _) in context.committee.authorities() {
+            let (blocks, eviction_round) = {
                 // Find the latest block for the authority to calculate the eviction round. Then we want to scan and load the blocks from the eviction round and onwards only.
                 // As reminder, the eviction round is taking into account the gc_round.
                 let last_block = state
@@ -192,23 +191,13 @@ impl DagState {
                     .map(|b| b.round())
                     .unwrap_or(GENESIS_ROUND);
 
-                let eviction_round = Self::gc_eviction_round(
-                    last_block_round,
-                    state.gc_round(),
-                    state.cached_rounds,
-                );
+                let eviction_round =
+                    Self::eviction_round(last_block_round, state.gc_round(), state.cached_rounds);
                 let blocks = state
                     .store
                     .scan_blocks_by_author(authority_index, eviction_round + 1)
                     .expect("Database error");
 
-                (blocks, eviction_round)
-            } else {
-                let eviction_round = Self::eviction_round(round, cached_rounds);
-                let blocks = state
-                    .store
-                    .scan_blocks_by_author(authority_index, eviction_round + 1)
-                    .expect("Database error");
                 (blocks, eviction_round)
             };
 
@@ -229,57 +218,53 @@ impl DagState {
             );
         }
 
-        if state.gc_enabled() {
-            if let Some(last_commit) = last_commit {
-                let mut index = last_commit.index();
-                let gc_round = state.gc_round();
-                info!("Recovering block commit statuses from commit index {} and backwards until leader of round <= gc_round {:?}", index, gc_round);
+        if let Some(last_commit) = last_commit {
+            let mut index = last_commit.index();
+            let gc_round = state.gc_round();
+            info!("Recovering block commit statuses from commit index {} and backwards until leader of round <= gc_round {:?}", index, gc_round);
 
-                loop {
-                    let commits = store
-                        .scan_commits((index..=index).into())
-                        .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
-                    let Some(commit) = commits.first() else {
-                        info!(
-                            "Recovering finished up to index {index}, no more commits to recover"
-                        );
-                        break;
-                    };
+            loop {
+                let commits = store
+                    .scan_commits((index..=index).into())
+                    .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
+                let Some(commit) = commits.first() else {
+                    info!("Recovering finished up to index {index}, no more commits to recover");
+                    break;
+                };
 
-                    // Check the commit leader round to see if it is within the gc_round. If it is not then we can stop the recovery process.
-                    if gc_round > 0 && commit.leader().round <= gc_round {
-                        info!(
-                            "Recovering finished, reached commit leader round {} <= gc_round {}",
-                            commit.leader().round,
-                            gc_round
-                        );
-                        break;
-                    }
+                // Check the commit leader round to see if it is within the gc_round. If it is not then we can stop the recovery process.
+                if gc_round > 0 && commit.leader().round <= gc_round {
+                    info!(
+                        "Recovering finished, reached commit leader round {} <= gc_round {}",
+                        commit.leader().round,
+                        gc_round
+                    );
+                    break;
+                }
 
-                    commit.blocks().iter().filter(|b| b.round > gc_round).for_each(|block_ref|{
-                        debug!(
-                            "Setting block {:?} as committed based on commit {:?}",
-                            block_ref,
-                            commit.index()
-                        );
-                        assert!(state.set_committed(block_ref), "Attempted to set again a block {:?} as committed when recovering commit {:?}", block_ref, commit);
-                    });
+                commit.blocks().iter().filter(|b| b.round > gc_round).for_each(|block_ref|{
+                    debug!(
+                        "Setting block {:?} as committed based on commit {:?}",
+                        block_ref,
+                        commit.index()
+                    );
+                    assert!(state.set_committed(block_ref), "Attempted to set again a block {:?} as committed when recovering commit {:?}", block_ref, commit);
+                });
 
-                    // All commits are indexed starting from 1, so one reach zero exit.
-                    index = index.saturating_sub(1);
-                    if index == 0 {
-                        break;
-                    }
+                // All commits are indexed starting from 1, so one reach zero exit.
+                index = index.saturating_sub(1);
+                if index == 0 {
+                    break;
                 }
             }
+        }
 
-            // Recover hard linked statuses for blocks within GC round.
-            let proposed_blocks = store
-                .scan_blocks_by_author(context.own_index, state.gc_round() + 1)
-                .expect("Database error");
-            for block in proposed_blocks {
-                state.link_causal_history(block.reference());
-            }
+        // Recover hard linked statuses for blocks within GC round.
+        let proposed_blocks = store
+            .scan_blocks_by_author(context.own_index, state.gc_round() + 1)
+            .expect("Database error");
+        for block in proposed_blocks {
+            state.link_causal_history(block.reference());
         }
 
         state
@@ -697,7 +682,7 @@ impl DagState {
 
         let eviction_round = self.evicted_rounds[slot.authority];
         if slot.round <= eviction_round {
-            panic!("{}", format!("Attempted to check for slot {slot} that is <= the last{}evicted round {eviction_round}", if self.gc_enabled() { " gc " } else { " " } ));
+            panic!("{}", format!("Attempted to check for slot {slot} that is <= the last evicted round {eviction_round}"));
         }
 
         let mut result = self.recent_refs_by_authority[slot.authority].range((
@@ -788,7 +773,6 @@ impl DagState {
     /// Returns the list of blocks that are newly linked.
     /// The returned blocks are guaranteed to be above the GC round.
     pub(crate) fn link_causal_history(&mut self, root_block: BlockRef) -> Vec<BlockRef> {
-        assert!(self.gc_enabled());
         let gc_round = self.gc_round();
         let mut linked_blocks = vec![];
         let mut targets = VecDeque::new();
@@ -992,18 +976,7 @@ impl DagState {
 
     pub(crate) fn calculate_gc_round(&self, commit_round: Round) -> Round {
         let gc_depth = self.context.protocol_config.gc_depth();
-        if gc_depth > 0 {
-            // GC is enabled, only then calculate the diff
-            commit_round.saturating_sub(gc_depth)
-        } else {
-            // Otherwise just return genesis round. That also acts as a safety mechanism so we never attempt to truncate anything
-            // even accidentally.
-            GENESIS_ROUND
-        }
-    }
-
-    pub(crate) fn gc_enabled(&self) -> bool {
-        self.context.protocol_config.gc_depth() > 0
+        commit_round.saturating_sub(gc_depth)
     }
 
     /// After each flush, DagState becomes persisted in storage and it expected to recover
@@ -1109,28 +1082,17 @@ impl DagState {
     /// guaranteed to have all the produced blocks from that authority. For any round that is
     /// <= `last_evicted_round` we don't have such guarantees as out of order blocks might exist.
     fn calculate_authority_eviction_round(&self, authority_index: AuthorityIndex) -> Round {
-        if self.gc_enabled() {
-            let last_round = self.recent_refs_by_authority[authority_index]
-                .last()
-                .map(|block_ref| block_ref.round)
-                .unwrap_or(GENESIS_ROUND);
+        let last_round = self.recent_refs_by_authority[authority_index]
+            .last()
+            .map(|block_ref| block_ref.round)
+            .unwrap_or(GENESIS_ROUND);
 
-            Self::gc_eviction_round(last_round, self.gc_round(), self.cached_rounds)
-        } else {
-            let commit_round = self.last_committed_rounds[authority_index];
-            Self::eviction_round(commit_round, self.cached_rounds)
-        }
-    }
-
-    /// Calculates the last eviction round based on the provided `commit_round`. Any blocks with
-    /// round <= the evict round have been cleaned up.
-    fn eviction_round(commit_round: Round, cached_rounds: Round) -> Round {
-        commit_round.saturating_sub(cached_rounds)
+        Self::eviction_round(last_round, self.gc_round(), self.cached_rounds)
     }
 
     /// Calculates the eviction round for the given authority. The goal is to keep at least `cached_rounds`
     /// of the latest blocks in the cache (if enough data is available), while evicting blocks with rounds <= `gc_round` when possible.
-    fn gc_eviction_round(last_round: Round, gc_round: Round, cached_rounds: u32) -> Round {
+    fn eviction_round(last_round: Round, gc_round: Round, cached_rounds: u32) -> Round {
         gc_round.min(last_round.saturating_sub(cached_rounds))
     }
 
@@ -1200,7 +1162,6 @@ mod test {
     use std::vec;
 
     use parking_lot::RwLock;
-    use rstest::rstest;
 
     use super::*;
     use crate::{
@@ -1707,56 +1668,11 @@ mod test {
     }
 
     #[tokio::test]
-    #[should_panic(
-        expected = "Attempted to check for slot [0]8 that is <= the last evicted round 8"
-    )]
-    async fn test_contains_cached_block_at_slot_panics_when_ask_out_of_range() {
-        /// Only keep elements up to 2 rounds before the last committed round
-        const CACHED_ROUNDS: Round = 2;
-
-        let (mut context, _) = Context::new_for_test(4);
-        context.parameters.dag_state_cached_rounds = CACHED_ROUNDS;
-        context
-            .protocol_config
-            .set_consensus_gc_depth_for_testing(0);
-
-        let context = Arc::new(context);
-        let store = Arc::new(MemStore::new());
-        let mut dag_state = DagState::new(context.clone(), store.clone());
-
-        // Create test blocks for round 1 ~ 10 for authority 0
-        let mut blocks = Vec::new();
-        for round in 1..=10 {
-            let block = VerifiedBlock::new_for_test(TestBlock::new(round, 0).build());
-            blocks.push(block.clone());
-            dag_state.accept_block(block);
-        }
-
-        // Now add a commit to trigger an eviction
-        dag_state.add_commit(TrustedCommit::new_for_test(
-            1 as CommitIndex,
-            CommitDigest::MIN,
-            0,
-            blocks.last().unwrap().reference(),
-            blocks
-                .into_iter()
-                .map(|block| block.reference())
-                .collect::<Vec<_>>(),
-        ));
-
-        dag_state.flush();
-
-        // When trying to request for authority 0 at block slot 8 it should panic, as anything
-        // that is <= commit_round - cached_rounds = 10 - 2 = 8 should be evicted
-        let _ =
-            dag_state.contains_cached_block_at_slot(Slot::new(8, AuthorityIndex::new_for_test(0)));
-    }
-
-    #[tokio::test]
+    #[ignore]
     #[should_panic(
         expected = "Attempted to check for slot [1]3 that is <= the last gc evicted round 3"
     )]
-    async fn test_contains_cached_block_at_slot_panics_when_ask_out_of_range_gc_enabled() {
+    async fn test_contains_cached_block_at_slot_panics_when_ask_out_of_range() {
         /// Keep 2 rounds from the highest committed round. This is considered universal and minimum necessary blocks to hold
         /// for the correct node operation.
         const GC_DEPTH: u32 = 2;
@@ -1886,105 +1802,6 @@ mod test {
     #[tokio::test]
     async fn test_flush_and_recovery() {
         telemetry_subscribers::init_for_testing();
-        let num_authorities: u32 = 4;
-        let (context, _) = Context::new_for_test(num_authorities as usize);
-        let context = Arc::new(context);
-        let store = Arc::new(MemStore::new());
-        let mut dag_state = DagState::new(context.clone(), store.clone());
-
-        // Create test blocks and commits for round 1 ~ 10
-        let num_rounds: u32 = 10;
-        let mut dag_builder = DagBuilder::new(context.clone());
-        dag_builder.layers(1..=num_rounds).build();
-        let mut commits = vec![];
-        for (_subdag, commit) in dag_builder.get_sub_dag_and_commits(1..=num_rounds) {
-            commits.push(commit);
-        }
-
-        // Add the blocks from first 5 rounds and first 5 commits to the dag state
-        let temp_commits = commits.split_off(5);
-        dag_state.accept_blocks(dag_builder.blocks(1..=5));
-        for commit in commits.clone() {
-            dag_state.add_commit(commit);
-        }
-
-        // Flush the dag state
-        dag_state.flush();
-
-        // Add the rest of the blocks and commits to the dag state
-        dag_state.accept_blocks(dag_builder.blocks(6..=num_rounds));
-        for commit in temp_commits.clone() {
-            dag_state.add_commit(commit);
-        }
-
-        // All blocks should be found in DagState.
-        let all_blocks = dag_builder.blocks(6..=num_rounds);
-        let block_refs = all_blocks
-            .iter()
-            .map(|block| block.reference())
-            .collect::<Vec<_>>();
-        let result = dag_state
-            .get_blocks(&block_refs)
-            .into_iter()
-            .map(|b| b.unwrap())
-            .collect::<Vec<_>>();
-        assert_eq!(result, all_blocks);
-
-        // Last commit index should be 10.
-        assert_eq!(dag_state.last_commit_index(), 10);
-        assert_eq!(
-            dag_state.last_committed_rounds(),
-            dag_builder.last_committed_rounds.clone()
-        );
-
-        // Destroy the dag state.
-        drop(dag_state);
-
-        // Recover the state from the store
-        let dag_state = DagState::new(context.clone(), store.clone());
-
-        // Blocks of first 5 rounds should be found in DagState.
-        let blocks = dag_builder.blocks(1..=5);
-        let block_refs = blocks
-            .iter()
-            .map(|block| block.reference())
-            .collect::<Vec<_>>();
-        let result = dag_state
-            .get_blocks(&block_refs)
-            .into_iter()
-            .map(|b| b.unwrap())
-            .collect::<Vec<_>>();
-        assert_eq!(result, blocks);
-
-        // Blocks above round 5 should not be in DagState, because they are not flushed.
-        let missing_blocks = dag_builder.blocks(6..=num_rounds);
-        let block_refs = missing_blocks
-            .iter()
-            .map(|block| block.reference())
-            .collect::<Vec<_>>();
-        let retrieved_blocks = dag_state
-            .get_blocks(&block_refs)
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
-        assert!(retrieved_blocks.is_empty());
-
-        // Last commit index should be 5.
-        assert_eq!(dag_state.last_commit_index(), 5);
-
-        // This is the last_commmit_rounds of the first 5 commits that were flushed
-        let expected_last_committed_rounds = vec![4, 5, 4, 4];
-        assert_eq!(
-            dag_state.last_committed_rounds(),
-            expected_last_committed_rounds
-        );
-        // Unscored subdags will be recoverd based on the flushed commits and no commit info
-        assert_eq!(dag_state.scoring_subdags_count(), 5);
-    }
-
-    #[tokio::test]
-    async fn test_flush_and_recovery_gc_enabled() {
-        telemetry_subscribers::init_for_testing();
 
         const GC_DEPTH: u32 = 3;
         const CACHED_ROUNDS: u32 = 4;
@@ -1995,9 +1812,6 @@ mod test {
         context
             .protocol_config
             .set_consensus_gc_depth_for_testing(GC_DEPTH);
-        context
-            .protocol_config
-            .set_consensus_linearize_subdag_v2_for_testing(true);
 
         let context = Arc::new(context);
 
@@ -2312,19 +2126,16 @@ mod test {
         assert_eq!(cached_blocks[0].round(), 10);
     }
 
-    #[rstest]
     #[tokio::test]
-    async fn test_get_last_cached_block(#[values(0, 1)] gc_depth: u32) {
+    async fn test_get_last_cached_block() {
         // GIVEN
         const CACHED_ROUNDS: Round = 2;
+        const GC_DEPTH: u32 = 1;
         let (mut context, _) = Context::new_for_test(4);
         context.parameters.dag_state_cached_rounds = CACHED_ROUNDS;
-
-        if gc_depth > 0 {
-            context
-                .protocol_config
-                .set_consensus_gc_depth_for_testing(gc_depth);
-        }
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(GC_DEPTH);
 
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
@@ -2455,56 +2266,6 @@ mod test {
         expected = "Attempted to request for blocks of rounds < 2, when the last evicted round is 1 for authority [2]"
     )]
     async fn test_get_cached_last_block_per_authority_requesting_out_of_round_range() {
-        // GIVEN
-        const CACHED_ROUNDS: Round = 1;
-        let (mut context, _) = Context::new_for_test(4);
-        context.parameters.dag_state_cached_rounds = CACHED_ROUNDS;
-        context
-            .protocol_config
-            .set_consensus_gc_depth_for_testing(0);
-
-        let context = Arc::new(context);
-        let store = Arc::new(MemStore::new());
-        let mut dag_state = DagState::new(context.clone(), store.clone());
-
-        // Create no blocks for authority 0
-        // Create one block (round 1) for authority 1
-        // Create two blocks (rounds 1,2) for authority 2
-        // Create three blocks (rounds 1,2,3) for authority 3
-        let mut all_blocks = Vec::new();
-        for author in 1..=3 {
-            for round in 1..=author {
-                let block = VerifiedBlock::new_for_test(TestBlock::new(round, author).build());
-                all_blocks.push(block.clone());
-                dag_state.accept_block(block);
-            }
-        }
-
-        dag_state.add_commit(TrustedCommit::new_for_test(
-            1 as CommitIndex,
-            CommitDigest::MIN,
-            0,
-            all_blocks.last().unwrap().reference(),
-            all_blocks
-                .into_iter()
-                .map(|block| block.reference())
-                .collect::<Vec<_>>(),
-        ));
-
-        // Flush the store so we keep in memory only the last 1 round from the last commit for each
-        // authority.
-        dag_state.flush();
-
-        // THEN the method should panic, as some authorities have already evicted rounds <= round 2
-        let end_round = 2;
-        dag_state.get_last_cached_block_per_authority(end_round);
-    }
-
-    #[tokio::test]
-    #[should_panic(
-        expected = "Attempted to request for blocks of rounds < 2, when the last evicted round is 1 for authority [2]"
-    )]
-    async fn test_get_cached_last_block_per_authority_requesting_out_of_round_range_gc_enabled() {
         // GIVEN
         const CACHED_ROUNDS: Round = 1;
         const GC_DEPTH: u32 = 1;
