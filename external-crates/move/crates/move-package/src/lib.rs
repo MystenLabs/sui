@@ -17,6 +17,7 @@ use lock_file::LockFile;
 use move_compiler::{
     Flags,
     editions::{Edition, Flavor},
+    shared::known_attributes::ModeAttribute,
 };
 use move_core_types::account_address::AccountAddress;
 use move_model_2::source_model;
@@ -345,7 +346,7 @@ impl BuildConfig {
     }
 
     pub fn compiler_flags(&self) -> Flags {
-        let flags = if self.test_mode || self.modes.contains(&"test".into()) {
+        let flags = if self.test_mode || self.modes.contains(&ModeAttribute::TEST.into()) {
             Flags::testing()
         } else {
             Flags::empty()

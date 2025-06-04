@@ -8,7 +8,7 @@ use crate::{
     ice,
     shared::{
         Identifier, Name, NamedAddressMap, NamedAddressMapIndex, NamedAddressMaps,
-        NumericalAddress, TName, ast_debug::*, format_comma,
+        NumericalAddress, TName, ast_debug::*, format_comma, unique_set::UniqueSet,
     },
 };
 use move_command_line_common::files::FileHash;
@@ -207,7 +207,7 @@ pub enum Attribute_ {
         attrs: Spanned<Vec<ParsedAttribute>>,
     },
     Mode {
-        modes: BTreeSet<Name>,
+        modes: UniqueSet<Name>,
     },
     Syntax {
         kind: Name,
@@ -884,20 +884,21 @@ impl Attribute_ {
         }
     }
 
-    pub fn modes(&self) -> BTreeSet<Name> {
+    pub fn modes(&self) -> UniqueSet<Name> {
         match self {
             Attribute_::Mode { modes } => modes.clone(),
-            _ => BTreeSet::new(),
+            _ => UniqueSet::new(),
         }
     }
 }
 
 impl Attributes_ {
-    pub fn modes(&self) -> BTreeSet<Name> {
-        self.0
-            .iter()
-            .flat_map(|t| t.value.modes())
-            .collect::<BTreeSet<_>>()
+    pub fn modes(&self) -> UniqueSet<Name> {
+        let mut result = UniqueSet::new();
+        for set in self.0.iter().map(|attr| attr.value.modes()) {
+            result = result.union(&set);
+        }
+        result
     }
 }
 
@@ -1680,7 +1681,7 @@ impl AstDebug for Attribute_ {
             }
             A::Mode { modes: mode_set } => {
                 w.write("mode(");
-                w.comma(mode_set, |w, parsed| {
+                w.comma(mode_set, |w, (_, parsed)| {
                     w.write(format!("{}", parsed));
                 });
                 w.write(")");

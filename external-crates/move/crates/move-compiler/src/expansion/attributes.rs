@@ -1,8 +1,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
-
 use crate::{
     diag,
     expansion::{
@@ -19,12 +17,12 @@ use crate::{
             ModeAttribute, TestingAttribute,
         },
         unique_map::UniqueMap,
+        unique_set::UniqueSet,
     },
 };
 
 use move_core_types::vm_status::StatusCode;
 use move_ir_types::location::*;
-use move_symbol_pool::Symbol;
 
 pub fn expand_attributes(
     context: &mut Context,
@@ -91,7 +89,9 @@ fn validate_position(
         true
     }
 }
-/// Checks there are no mode conflicts, including duplicates or testing definitions.
+
+/// Checks there are no mode conflicts, including duplicates or testing definitions. Returns the
+/// provided attributes with the modes combined, and reports diagnostics for duplicates.
 fn collect_modes(
     context: &mut Context,
     posn: &AttributePosition,
@@ -102,7 +102,7 @@ fn collect_modes(
         attributes
             .into_iter()
             .partition(|(kind, _)| matches!(kind.value, K::Mode));
-    let mut modes: BTreeSet<Spanned<Symbol>> = BTreeSet::new();
+    let mut modes: UniqueSet<Name> = UniqueSet::new();
     let mut attr_loc = None;
     for (_, mode) in mode_attrs {
         let sp!(loc, KnownAttribute::Mode(mode_attr)) = mode else {
@@ -110,19 +110,19 @@ fn collect_modes(
         };
         let ModeAttribute { modes: new_modes } = mode_attr;
         for mode in new_modes {
-            if let Some(prev) = modes.get(&mode) {
+            if let Err((_, prev_loc)) = modes.add(mode) {
                 let msg = format!("{posn} annotated with duplicate mode '{mode}'");
                 let prev_msg = "Previously annotated here";
                 let mut diag = diag!(
                     Attributes::ValueWarning,
                     (mode.loc, msg),
-                    (prev.loc, prev_msg)
+                    (prev_loc, prev_msg)
                 );
                 let has_test_attribute = attributes
                     .iter()
                     .any(|(kind, _)| matches!(kind.value, K::Test | K::RandTest));
                 // Carve-out additional note for `test` and `random-test`
-                if mode.value.as_str() == "test" && has_test_attribute {
+                if mode.value.as_str() == ModeAttribute::TEST && has_test_attribute {
                     let msg = format!(
                         "Attributes '#[{}]' and '#[{}]' implicitly specify '#[{}({})]'",
                         A::TestingAttribute::TEST,
@@ -135,7 +135,6 @@ fn collect_modes(
                 context.add_diag(diag);
             } else {
                 attr_loc.get_or_insert(loc);
-                modes.insert(mode);
             }
         }
     }
@@ -149,7 +148,9 @@ fn collect_modes(
     attributes
 }
 
-/// Checks there are no conflicting definitions (though does not check for duplicates).
+/// Returns false if there are no conflicting definitions, or true if there are.
+/// Checks there are no conflicting definitions (though does not check for duplicates), and reports
+/// diagnostics for duplicates.
 /// This also ensures that the modes are compatible for testing definitions.
 fn check_conflicts(
     context: &mut Context,

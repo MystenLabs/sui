@@ -17,6 +17,7 @@ use crate::{
     shared::{
         Name,
         known_attributes::{self as KA, DEPRECATED_EXPECTED_KEYS, TestingAttribute},
+        unique_set::UniqueSet,
     },
 };
 
@@ -388,13 +389,18 @@ fn parse_mode(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribut
         PA::Parameterized(name, inner_attrs) => {
             let _prefix_loc = name.loc;
             let sp!(_, mode_attrs) = inner_attrs;
-            let mut modes = BTreeSet::new();
+            let mut modes = UniqueSet::new();
             for mode_attr in mode_attrs.into_iter() {
                 let attr_loc = mode_attr.loc;
                 if let Some(mode_name) = expect_name_attr(context, mode_attr) {
-                    if !modes.insert(mode_name) {
+                    if let Err((_, prev_loc)) = modes.add(mode_name) {
                         let msg = format!("Duplicate mode '{}'", mode_name);
-                        context.add_diag(diag!(Declarations::InvalidAttribute, (attr_loc, msg)));
+                        let prev_msg = format!("Previously defined here");
+                        context.add_diag(diag!(
+                            Declarations::InvalidAttribute,
+                            (attr_loc, msg),
+                            (prev_loc, prev_msg)
+                        ));
                     }
                 }
             }
@@ -440,7 +446,8 @@ fn parse_verify_only(context: &mut Context, attribute: ParsedAttribute) -> Vec<A
         // Valid: a bare identifier is required.
         PA::Name(_) => {
             let mode = Attribute_::Mode {
-                modes: BTreeSet::from([sp(loc, KA::ModeAttribute::VERIFY_ONLY.into())]),
+                modes: UniqueSet::from_elements([sp(loc, KA::ModeAttribute::VERIFY_ONLY.into())])
+                    .unwrap(),
             };
             vec![sp(loc, mode)]
         }
@@ -458,7 +465,7 @@ fn parse_verify_only(context: &mut Context, attribute: ParsedAttribute) -> Vec<A
 
 fn make_test_mode_attr(loc: Loc) -> Attribute {
     let mode = Attribute_::Mode {
-        modes: BTreeSet::from([sp(loc, "test".into())]),
+        modes: UniqueSet::from_elements([sp(loc, KA::ModeAttribute::TEST.into())]).unwrap(),
     };
     sp(loc, mode)
 }
