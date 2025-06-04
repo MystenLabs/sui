@@ -31,11 +31,15 @@ pub fn get_epoch(service: &RpcService, request: GetEpochRequest) -> Result<Epoch
 
     let mut message = Epoch::default();
 
-    let epoch = if let Some(epoch) = request.epoch {
-        epoch
-    } else {
-        service.reader.inner().get_latest_checkpoint()?.epoch()
-    };
+    let current_epoch = service.reader.inner().get_latest_checkpoint()?.epoch();
+    let epoch = request.epoch.unwrap_or(current_epoch);
+
+    let mut system_state =
+        if epoch == current_epoch && read_mask.contains(Epoch::SYSTEM_STATE_FIELD.name) {
+            Some(service.reader.get_system_state()?)
+        } else {
+            None
+        };
 
     if read_mask.contains(Epoch::EPOCH_FIELD.name) {
         message.epoch = Some(epoch);
@@ -75,6 +79,18 @@ pub fn get_epoch(service: &RpcService, request: GetEpochRequest) -> Result<Epoch
 
             message.protocol_config =
                 protocol_config.map(|config| ProtocolConfig::merge_from(config, &submask));
+        }
+
+        // If we're not loading the current epoch then grab the indexed snapshot of the system
+        // state at the start of the epoch.
+        if system_state.is_none() {
+            system_state = epoch_info.system_state;
+        }
+    }
+
+    if let Some(system_state) = system_state {
+        if read_mask.contains(Epoch::SYSTEM_STATE_FIELD.name) {
+            message.system_state = Some(Box::new(system_state.into()));
         }
     }
 
