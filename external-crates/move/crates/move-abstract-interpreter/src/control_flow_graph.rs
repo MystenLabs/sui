@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! This module defines the control-flow graph uses for bytecode verification.
-use move_binary_format::file_format::{Bytecode, CodeOffset, VariantJumpTable};
-use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, btree_map::Entry};
 
 /// A trait that specifies the basic requirements for a CFG
 pub trait ControlFlowGraph {

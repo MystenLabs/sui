@@ -9,12 +9,12 @@
 mod abstract_state;
 
 use crate::ability_cache::AbilityCache;
-use crate::absint::{analyze_function, FunctionContext, TransferFunctions};
+use crate::absint::{FunctionContext, TransferFunctions, analyze_function};
 use abstract_state::{AbstractState, LocalState, RET_COST, STEP_BASE_COST};
 use move_binary_format::{
-    errors::{PartialVMError, PartialVMResult},
-    file_format::{Bytecode, CodeOffset},
     CompiledModule,
+    errors::PartialVMResult,
+    file_format::{Bytecode, CodeOffset},
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
