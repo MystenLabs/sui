@@ -601,7 +601,9 @@ impl AuthorityEpochTables {
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
         let lru_bloom_config = bloom_config.clone().with_value_cache_size(VALUE_CACHE_SIZE);
         let lru_only_config = KeySpaceConfig::new().with_value_cache_size(VALUE_CACHE_SIZE);
-        let pending_checkpoint_signatures_config = KeySpaceConfig::new().disable_unload();
+        let pending_checkpoint_signatures_config = KeySpaceConfig::new()
+            .disable_unload()
+            .with_value_cache_size(1000);
         let builder_checkpoint_summary_v2_config = pending_checkpoint_signatures_config.clone();
         let object_ref_indexing = KeyIndexing::hash();
         let tx_digest_indexing = KeyIndexing::key_reduction(32, 0..16);
