@@ -741,11 +741,11 @@ pub struct TxProcessingArgs {
     /// `sui client execute-combined-signed-tx --signed-tx-bytes <SIGNED_TX_BYTES>`.
     #[arg(long)]
     pub serialize_signed_transaction: bool,
-    /// Optional address to be used as the sender for this transaction. When not specified, the
-    /// current active account address is used. This flag should be combined with
-    /// --serialize-unsigned-transaction since the private key for this address might not be in the
-    /// keystore. The resulting transaction data can then be signed externally with the
-    /// corresponding private key.
+    /// Set the transaction sender to this address. When not specified, the sender is inferred
+    /// by finding the owner of the gas payment. Note that when setting this field, the
+    /// transaction will fail to execute if the sender's private key is not in the keystore;
+    /// similarly, it will fail when using this with `--serialize-signed-transaction` flag if the
+    /// private key corresponding to this address is not in keystore.
     #[arg(long, required = false, value_parser)]
     pub sender: Option<SuiAddress>,
 }
