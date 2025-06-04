@@ -271,7 +271,10 @@ where
             dag_state.clone(),
             commit_consumer.block_sender.clone(),
         );
-        transaction_certifier.recover(block_verifier.as_ref());
+        transaction_certifier.recover(
+            block_verifier.as_ref(),
+            commit_consumer.last_processed_commit_index,
+        );
 
         let mut proposed_block_handler = ProposedBlockHandler::new(
             context.clone(),
@@ -307,6 +310,7 @@ where
             context.clone(),
             commit_consumer,
             dag_state.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
         );
 
