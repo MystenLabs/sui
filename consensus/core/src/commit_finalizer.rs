@@ -633,7 +633,7 @@ struct CommitState {
     pending_blocks: BTreeMap<BlockRef, usize>,
     // Transactions pending indirect finalization.
     // This field is populated after direct finalization, if pending transactions exist.
-    // Values in this field are removed as transactions are indirectly finalized.
+    // Values in this field are removed as transactions are indirectly finalized or directly rejected.
     // When both pending_blocks and pending_transactions are empty, the commit is finalized.
     pending_transactions: BTreeMap<BlockRef, BTreeSet<TransactionIndex>>,
     // Transactions rejected by a quorum or indirectly, per block.
