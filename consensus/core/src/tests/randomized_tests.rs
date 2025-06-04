@@ -61,7 +61,7 @@ async fn test_randomized_dag_all_direct_commit() {
         for (i, leader_block) in sequence.iter().enumerate() {
             // First sequenced leader should be in round 1.
             let leader_round = i as u32 + 1;
-            if let DecidedLeader::Commit(ref block) = leader_block {
+            if let DecidedLeader::Commit(ref block, _direct) = leader_block {
                 assert_eq!(block.round(), leader_round);
                 assert_eq!(
                     block.author(),
