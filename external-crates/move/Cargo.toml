@@ -155,6 +155,7 @@ move-borrow-graph = { path = "crates/move-borrow-graph" }
 move-bytecode-source-map = { path = "crates/move-bytecode-source-map" }
 move-bytecode-utils = { path = "crates/move-bytecode-utils" }
 move-bytecode-verifier = { path = "crates/move-bytecode-verifier" }
+move-bytecode-verifier-analyzer = { path = "crates/move-bytecode-verifier-analyzer" }
 move-bytecode-verifier-meter = { path = "crates/move-bytecode-verifier-meter" }
 move-bytecode-viewer = { path = "crates/move-bytecode-viewer" }
 move-cli = { path = "crates/move-cli" }
