@@ -39,15 +39,10 @@ const EBadWitness: u64 = 0;
 const EInvalidArg: u64 = 1;
 /// Trying to split a coin more times than its balance allows.
 const ENotEnough: u64 = 2;
-/// The metadata for the coin type already exists.
-const EMetadataAlreadyExists: u64 = 3;
 /// The metadata for the coin type was not found.
-const EMetadataNotFound: u64 = 4;
+const EMetadataNotFound: u64 = 3;
 /// The metadata for the coin type was not claimed.
-const EMetadataCapNotClaimed: u64 = 5;
-
-/// Invalid Publisher provided to the function.
-const ENotPublisher: u64 = 6;
+const EMetadataCapNotClaimed: u64 = 4;
 
 // #[error]
 // const EGlobalPauseNotAllowed: vector<u8> =
@@ -275,8 +270,6 @@ public fun create_registry_metadata<T>(
     registry.register_metadata(metadata);
 }
 
-// === CoinMetadataRegistry Currency Creation Functions  ===
-
 public fun create_currency_v2<T: drop>(
     witness: T,
     decimals: u8,
@@ -448,7 +441,8 @@ public fun create_currency<T: drop>(
 /// The `allow_global_pause` flag enables an additional API that will cause all addresses to
 /// be denied. Note however, that this doesn't affect per-address entries of the deny list and
 /// will not change the result of the "contains" APIs.
-#[deprecated(note = b"Use `create_currency_v3` instead")]
+#[deprecated(note = b"Use `create_regulated_currency_v3` instead")]
+#[allow(deprecated_usage)]
 public fun create_regulated_currency_v2<T: drop>(
     witness: T,
     decimals: u8,
@@ -723,6 +717,10 @@ public fun create_treasury_cap_for_testing<T>(ctx: &mut TxContext): TreasuryCap<
     }
 }
 
+public fun freeze_for_testing<T>(regulated_coin_metadata: RegulatedCoinMetadata<T>) {
+    transfer::freeze_object(regulated_coin_metadata);
+}
+
 // === Deprecated code ===
 
 // oops, wanted treasury: &TreasuryCap<T>
@@ -750,6 +748,7 @@ public struct DenyCap<phantom T> has key, store {
         note = b"For new coins, use `create_regulated_currency_v2`. To migrate existing regulated currencies, migrate with `migrate_regulated_currency_to_v2`",
     ),
 ]
+#[allow(deprecated_usage)]
 public fun create_regulated_currency<T: drop>(
     witness: T,
     decimals: u8,
