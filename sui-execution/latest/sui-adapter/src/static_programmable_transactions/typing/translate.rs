@@ -159,7 +159,7 @@ fn command(
             let address_loc = one_location(context, object_locs.len(), laddress)?;
             let objects = constrained_arguments(env, context, 0, object_locs, |ty| {
                 let abilities = ty.abilities();
-                Ok(abilities.has_copy() && abilities.has_key())
+                Ok(abilities.has_store() && abilities.has_key())
             })?;
             let address = argument(env, context, objects.len(), address_loc, Type::Address)?;
             (T::Command_::TransferObjects(objects, address), vec![])
@@ -430,26 +430,26 @@ fn check_type(
 fn check_type_impl(
     command_and_arg_idx: (u16, u16),
     fix: bool,
-    actual_ty: LocationType,
+    mut actual_ty: LocationType,
     expected_ty: &Type,
 ) -> Result<(), CommandArgumentError> {
-    match actual_ty {
+    match &mut actual_ty {
+        LocationType::Fixed(actual_ty) | LocationType::Bytes(InputType::Fixed(actual_ty), _) => {
+            if actual_ty == expected_ty {
+                Ok(())
+            } else {
+                Err(CommandArgumentError::TypeMismatch)
+            }
+        }
         LocationType::Bytes(ty, types) => {
             types
                 .entry(expected_ty.clone())
                 .or_insert(command_and_arg_idx);
             if fix {
-                *ty = InputType::Fixed(expected_ty.clone());
+                **ty = InputType::Fixed(expected_ty.clone());
             }
             // validity of pure types is checked elsewhere
             Ok(())
-        }
-        LocationType::Fixed(actual_ty) => {
-            if &actual_ty == expected_ty {
-                Ok(())
-            } else {
-                Err(CommandArgumentError::TypeMismatch)
-            }
         }
     }
 }

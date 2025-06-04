@@ -795,7 +795,8 @@ mod checked {
                         }
                     }
                 }
-            } // add transfers from TransferObjects command
+            }
+            // add transfers from TransferObjects command
             for (recipient, object_value) in additional_transfers {
                 let owner = Owner::AddressOwner(recipient);
                 add_additional_write(&mut additional_writes, owner, object_value)?;

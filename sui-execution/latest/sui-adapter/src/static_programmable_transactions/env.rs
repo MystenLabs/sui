@@ -1,6 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! This module defines the shared environment, `Env`, used for the compilation/translation and
+//! execution of programmable transactions. While the "context" for each pass might be different,
+//! the `Env` provides consistent access to shared components such as the VM or the protocol config.
+
 use super::LinkageView;
 use crate::{
     execution_value::ExecutionState,
