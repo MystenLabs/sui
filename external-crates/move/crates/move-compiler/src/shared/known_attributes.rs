@@ -13,6 +13,8 @@ use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
 use std::{collections::BTreeSet, fmt};
 
+use super::unique_set::UniqueSet;
+
 // -------------------------------------------------------------------------------------------------
 // Types
 // -------------------------------------------------------------------------------------------------
@@ -92,7 +94,7 @@ pub struct ExternalAttribute {
 // Sets a mode, such as "test" or "verify", which will only be build when compiled in that mode.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModeAttribute {
-    pub modes: BTreeSet<Name>,
+    pub modes: UniqueSet<Name>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -412,6 +414,8 @@ impl ExternalAttributeEntry_ {
 impl ModeAttribute {
     pub const TEST_ONLY: &'static str = "test_only";
     pub const VERIFY_ONLY: &'static str = "verify_only";
+    pub const IDE: &'static str = "ide";
+    pub const IDE_TEST: &'static str = "ide_test";
     pub const TEST: &'static str = "test";
     pub const MODE: &'static str = "mode";
 
@@ -750,7 +754,7 @@ impl AstDebug for ModeAttribute {
         w.write("(");
         let ModeAttribute { modes } = self;
         w.write("mode(");
-        w.comma(modes, |w, mode| {
+        w.comma(modes, |w, (_, mode)| {
             w.write(format!("{mode}"));
         });
         w.write(")");

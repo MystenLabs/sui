@@ -32,6 +32,7 @@ use crate::{
     },
 };
 use clap::*;
+use known_attributes::ModeAttribute;
 use move_command_line_common::files::FileHash;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
@@ -323,13 +324,13 @@ impl CompilationEnv {
             .into_iter()
             .collect::<BTreeSet<Symbol>>();
         if flags.test {
-            modes.insert("test".into());
+            modes.insert(ModeAttribute::TEST.into());
         }
         if flags.ide_mode {
-            modes.insert("ide".into());
+            modes.insert(ModeAttribute::IDE.into());
         }
         if flags.ide_test_mode {
-            modes.insert("ide_test".into());
+            modes.insert(ModeAttribute::IDE_TEST.into());
         }
         modes
     }
@@ -575,7 +576,11 @@ impl CompilationEnv {
     // -- Mode Information --
 
     pub fn ide_mode(&self) -> bool {
-        self.flags.ide_mode() || self.modes().contains(&"ide".into())
+        debug_assert_eq!(
+            self.flags.ide_mode(),
+            self.modes().contains(&ModeAttribute::IDE.into())
+        );
+        self.modes().contains(&ModeAttribute::IDE.into())
     }
 
     pub fn keep_testing_functions(&self) -> bool {
@@ -583,8 +588,11 @@ impl CompilationEnv {
     }
 
     pub fn test_mode(&self) -> bool {
-        // This is technically redundant, but we are better safe than sorry.
-        self.flags.is_testing() || self.modes().contains(&"test".into())
+        debug_assert_eq!(
+            self.flags.is_testing(),
+            self.modes().contains(&ModeAttribute::TEST.into())
+        );
+        self.modes().contains(&ModeAttribute::TEST.into())
     }
 
     pub fn modes(&self) -> &BTreeSet<Symbol> {
@@ -592,7 +600,7 @@ impl CompilationEnv {
     }
 
     pub fn publishable(&self) -> bool {
-        self.flags.publishable()
+        self.modes.is_empty()
     }
 
     // -- IDE Information --
@@ -838,12 +846,12 @@ impl Flags {
         self.ide_mode
     }
 
-    pub fn publishable(&self) -> bool {
-        !self.is_testing() && !self.ide_mode() && !self.ide_test_mode() && self.modes.is_empty()
-    }
-
     pub fn mode(&self, mode: Symbol) -> bool {
         self.modes.iter().any(|m| *m == mode)
+    }
+
+    pub fn publishable(&self) -> bool {
+        !self.is_testing() && !self.ide_mode() && !self.ide_test_mode() && self.modes.is_empty()
     }
 }
 
