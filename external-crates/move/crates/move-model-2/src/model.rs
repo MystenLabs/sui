@@ -48,6 +48,7 @@ pub struct Model<K: SourceKind> {
     pub(crate) has_source: bool,
     pub(crate) files: K::FromSource<MappedFiles>,
     pub(crate) root_named_address_map: BTreeMap<Symbol, AccountAddress>,
+    pub(crate) root_named_address_reverse_map: BTreeMap<AccountAddress, Symbol>,
     pub(crate) root_package_name: Option<Symbol>,
     pub(crate) info: K::FromSource<Arc<TypingProgramInfo>>,
     pub(crate) compiled: normalized::Packages,

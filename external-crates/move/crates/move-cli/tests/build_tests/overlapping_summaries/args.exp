@@ -1,0 +1,284 @@
+Command `summary`:
+INCLUDING DEPENDENCY child_pkg
+INCLUDING DEPENDENCY other_child
+BUILDING overlapping_summaries
+
+Summary generation successful. Summaries stored in 'package_summaries'
+External Command `ls -1 package_summaries/`:
+address_mapping.json
+child_pkg
+other_child
+overlapping_summaries
+External Command `cat package_summaries/child_pkg/a.json`:
+{
+  "doc": null,
+  "immediate_dependencies": [],
+  "attributes": [],
+  "functions": {
+    "f": {
+      "source_index": 0,
+      "index": 0,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [],
+      "return_": []
+    }
+  },
+  "structs": {
+    "X": {
+      "index": 0,
+      "doc": null,
+      "attributes": [],
+      "abilities": [
+        "Store"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": true,
+        "fields": {
+          "dummy_field": {
+            "index": 0,
+            "type_": "bool"
+          }
+        }
+      }
+    }
+  },
+  "enums": {}
+}External Command `cat package_summaries/other_child/a.json`:
+{
+  "doc": null,
+  "immediate_dependencies": [],
+  "attributes": [],
+  "functions": {
+    "f": {
+      "source_index": 0,
+      "index": 0,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [],
+      "return_": []
+    }
+  },
+  "structs": {
+    "X": {
+      "index": 0,
+      "doc": null,
+      "attributes": [],
+      "abilities": [
+        "Store"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": true,
+        "fields": {
+          "dummy_field": {
+            "index": 0,
+            "type_": "bool"
+          }
+        }
+      }
+    }
+  },
+  "enums": {}
+}External Command `cat package_summaries/overlapping_summaries/b.json`:
+{
+  "doc": null,
+  "immediate_dependencies": [
+    {
+      "address": "child_pkg",
+      "name": "a"
+    },
+    {
+      "address": "other_child",
+      "name": "a"
+    }
+  ],
+  "attributes": [],
+  "functions": {
+    "g": {
+      "source_index": 0,
+      "index": 0,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [],
+      "return_": []
+    }
+  },
+  "structs": {
+    "Y": {
+      "index": 0,
+      "doc": null,
+      "attributes": [
+        {
+          "Parameterized": [
+            "allow",
+            [
+              {
+                "Name": "unused"
+              }
+            ]
+          ]
+        }
+      ],
+      "abilities": [],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "x": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "child_pkg",
+                  "name": "a"
+                },
+                "name": "X",
+                "type_arguments": []
+              }
+            }
+          },
+          "y": {
+            "index": 1,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "other_child",
+                  "name": "a"
+                },
+                "name": "X",
+                "type_arguments": []
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "enums": {}
+}External Command `cat package_summaries/address_mapping.json`:
+{
+  "child_pkg": "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "other_child": "0x0000000000000000000000000000000000000000000000000000000000000001",
+  "overlapping_summaries": "0x0000000000000000000000000000000000000000000000000000000000000000"
+}Command `build`:
+INCLUDING DEPENDENCY child_pkg
+INCLUDING DEPENDENCY other_child
+BUILDING overlapping_summaries
+Command `summary --bytecode -o yaml`:
+
+Summary generation successful. Summaries stored in 'package_summaries'
+External Command `ls -1 package_summaries/`:
+0x0000000000000000000000000000000000000000000000000000000000000000
+0x0000000000000000000000000000000000000000000000000000000000000001
+address_mapping.json
+address_mapping.yaml
+child_pkg
+other_child
+overlapping_summaries
+External Command `cat package_summaries/0x0000000000000000000000000000000000000000000000000000000000000000/a.yaml`:
+---
+immediate_dependencies: []
+functions:
+  f:
+    index: 0
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters: []
+    return_: []
+structs:
+  X:
+    index: 0
+    abilities:
+      - Store
+    type_parameters: []
+    fields:
+      positional_fields: false
+      fields:
+        dummy_field:
+          index: 0
+          type_: bool
+enums: {}
+External Command `cat package_summaries/0x0000000000000000000000000000000000000000000000000000000000000000/b.yaml`:
+---
+immediate_dependencies:
+  - address: "0x0000000000000000000000000000000000000000000000000000000000000000"
+    name: a
+  - address: "0x0000000000000000000000000000000000000000000000000000000000000001"
+    name: a
+functions:
+  g:
+    index: 0
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters: []
+    return_: []
+structs:
+  Y:
+    index: 0
+    abilities: []
+    type_parameters: []
+    fields:
+      positional_fields: false
+      fields:
+        x:
+          index: 0
+          type_:
+            Datatype:
+              module:
+                address: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                name: a
+              name: X
+              type_arguments: []
+        y:
+          index: 1
+          type_:
+            Datatype:
+              module:
+                address: "0x0000000000000000000000000000000000000000000000000000000000000001"
+                name: a
+              name: X
+              type_arguments: []
+enums: {}
+External Command `cat package_summaries/0x0000000000000000000000000000000000000000000000000000000000000001/a.yaml`:
+---
+immediate_dependencies: []
+functions:
+  f:
+    index: 0
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters: []
+    return_: []
+structs:
+  X:
+    index: 0
+    abilities:
+      - Store
+    type_parameters: []
+    fields:
+      positional_fields: false
+      fields:
+        dummy_field:
+          index: 0
+          type_: bool
+enums: {}
+External Command `cat package_summaries/address_mapping.yaml`:
+---
+"0x0000000000000000000000000000000000000000000000000000000000000000": "0x0000000000000000000000000000000000000000000000000000000000000000"
+"0x0000000000000000000000000000000000000000000000000000000000000001": "0x0000000000000000000000000000000000000000000000000000000000000001"
