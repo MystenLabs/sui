@@ -51,7 +51,7 @@ pub fn expand_attributes(
 
     let mut attr_map = UniqueMap::new();
     for (kind, attr) in attributes {
-        if check_conflicts(context, &attr_position, &attr_map, &attr) {
+        if no_conflicts(context, &attr_position, &attr_map, &attr) {
             insert_attribute(context, &mut attr_map, kind, attr);
         }
     }
@@ -148,11 +148,11 @@ fn collect_modes(
     attributes
 }
 
-/// Returns false if there are no conflicting definitions, or true if there are.
+/// Returns true if there are no conflicting definitions, or false if there are.
 /// Checks there are no conflicting definitions (though does not check for duplicates), and reports
 /// diagnostics for duplicates.
 /// This also ensures that the modes are compatible for testing definitions.
-fn check_conflicts(
+fn no_conflicts(
     context: &mut Context,
     posn: &AttributePosition,
     attr_map: &E::Attributes,
