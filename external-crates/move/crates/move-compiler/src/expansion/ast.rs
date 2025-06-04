@@ -544,7 +544,7 @@ impl Attributes {
         let KnownAttribute::Mode(ModeAttribute { modes }) = &attr.value else {
             unreachable!()
         };
-        modes.contains(&sp(Loc::invalid(), ModeAttribute::TEST.into()))
+        modes.contains_(&ModeAttribute::TEST.into())
     }
 }
 

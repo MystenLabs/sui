@@ -12,10 +12,7 @@ use move_compiler::{
     expansion::ast as E,
     naming::ast as N,
     parser::ast::{self as P, DocComment},
-    shared::{
-        known_attributes::{self as KA, AttributeKind_, ModeAttribute},
-        program_info::FunctionInfo,
-    },
+    shared::{known_attributes as KA, program_info::FunctionInfo},
 };
 use move_core_types::{account_address::AccountAddress, vm_status::StatusCode};
 use move_symbol_pool::Symbol;
@@ -901,12 +898,9 @@ fn doc_comment(doc: &DocComment) -> Option<String> {
 }
 
 fn attributes(attributes: &E::Attributes) -> Vec<Attribute> {
-    let has_test_attr = attributes
-        .iter()
-        .any(|(_, kind, _)| matches!(kind, AttributeKind_::Test | AttributeKind_::RandTest));
     attributes
         .iter()
-        .map(|(_, _, a)| attribute(&has_test_attr, &a.value))
+        .map(|(_, _, a)| attribute(&a.value))
         .collect()
 }
 
@@ -931,7 +925,7 @@ fn ext_attribute(entry: &KA::ExternalAttributeEntry) -> Attribute {
     }
 }
 
-fn attribute(has_test_attr: &bool, k: &KA::KnownAttribute) -> Attribute {
+fn attribute(k: &KA::KnownAttribute) -> Attribute {
     match k {
         // --- name-only ---
         KA::KnownAttribute::BytecodeInstruction(_) => {
@@ -944,11 +938,9 @@ fn attribute(has_test_attr: &bool, k: &KA::KnownAttribute) -> Attribute {
             Attribute::Name(KA::TestingAttribute::RAND_TEST.into())
         }
         KA::KnownAttribute::Mode(KA::ModeAttribute { modes }) => {
-            // TODO: This should remove `test` if  `testing` is enabled.
             let inner = modes
                 .iter()
-                .filter(|name| !*has_test_attr || (name.value.as_str() != ModeAttribute::TEST))
-                .map(|name| Attribute::Name(name.value))
+                .map(|(_, name)| Attribute::Name(*name))
                 .collect();
             Attribute::Parameterized(KA::ModeAttribute::MODE.into(), inner)
         }
