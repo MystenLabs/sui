@@ -3,12 +3,12 @@
 
 use move_abstract_interpreter::{absint, control_flow_graph};
 use move_binary_format::{
+    CompiledModule,
     errors::{PartialVMError, PartialVMResult},
     file_format::{
         AbilitySet, Bytecode, CodeOffset, CodeUnit, FunctionDefinitionIndex, FunctionHandle,
         Signature,
     },
-    CompiledModule,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 

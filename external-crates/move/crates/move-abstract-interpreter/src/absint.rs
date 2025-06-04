@@ -61,13 +61,12 @@ pub fn analyze_function<A, CFG>(
 where
     A: AbstractInterpreter,
     CFG: ControlFlowGraph<
-        BlockId = A::BlockId,
-        InstructionIndex = A::InstructionIndex,
-        Instruction = A::Instruction,
-    >,
+            BlockId = A::BlockId,
+            InstructionIndex = A::InstructionIndex,
+            Instruction = A::Instruction,
+        >,
 {
     interpreter.start()?;
-    // meter.add(Scope::Function, ANALYZE_FUNCTION_BASE_COST)?;
     let mut inv_map = BTreeMap::new();
     let entry_block_id = cfg.entry_block_id();
     let mut next_block = Some(entry_block_id);
@@ -93,7 +92,6 @@ where
         // propagate postcondition of this block to successor blocks
         for &successor_block_id in cfg.successors(block_id) {
             interpreter.visit_successor(successor_block_id)?;
-            // meter.add(Scope::Function, PER_SUCCESSOR_COST)?;
             match inv_map.get_mut(&successor_block_id) {
                 Some(next_block_invariant) => {
                     let join_result = interpreter.join(next_block_invariant, &post_state)?;
@@ -107,7 +105,6 @@ where
                             // of the loop, instead of the normal next block
                             if cfg.is_back_edge(block_id, successor_block_id) {
                                 interpreter.visit_back_edge(block_id, successor_block_id)?;
-                                // meter.add(Scope::Function, PER_BACKEDGE_COST)?;
                                 next_block_candidate = Some(successor_block_id);
                                 break;
                             }
@@ -136,10 +133,10 @@ fn execute_block<A, CFG>(
 where
     A: AbstractInterpreter,
     CFG: ControlFlowGraph<
-        BlockId = A::BlockId,
-        InstructionIndex = A::InstructionIndex,
-        Instruction = A::Instruction,
-    >,
+            BlockId = A::BlockId,
+            InstructionIndex = A::InstructionIndex,
+            Instruction = A::Instruction,
+        >,
 {
     interpreter.visit_block_execution(block_id)?;
     let mut state_acc = pre_state.clone();

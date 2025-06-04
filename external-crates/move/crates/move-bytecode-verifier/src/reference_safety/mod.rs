@@ -10,7 +10,7 @@
 
 mod abstract_state;
 
-use crate::absint::{analyze_function, FunctionContext, TransferFunctions};
+use crate::absint::{FunctionContext, TransferFunctions, analyze_function};
 use crate::reference_safety::abstract_state::STEP_BASE_COST;
 use abstract_state::{AbstractState, AbstractValue};
 use move_abstract_stack::AbstractStack;
