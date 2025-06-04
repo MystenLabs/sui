@@ -20,6 +20,7 @@ use sui_types::{
     base_types::AuthorityName,
     crypto::{RandomnessPartialSignature, RandomnessRound, RandomnessSignature},
     error::SuiError,
+    traffic_control::TrafficControlReconfigParams,
 };
 use telemetry_subscribers::TracingHandle;
 use tokio::sync::oneshot;
@@ -68,6 +69,10 @@ use tracing::info;
 // Inject a full signature from another node, bypassing validity checks.
 //
 //  $ curl 'http://127.0.0.1:1337/randomness-inject-full-sig?round=123&sigs=base64encodedsig'
+//
+// Reconfigure traffic control policy
+//
+//  $ curl 'http://127.0.0.1:1337/traffic-control?error_threshold=100&spam_threshold=100&dry_run=true'
 
 const LOGGING_ROUTE: &str = "/logging";
 const TRACING_ROUTE: &str = "/enable-tracing";
@@ -80,6 +85,7 @@ const NODE_CONFIG: &str = "/node-config";
 const RANDOMNESS_PARTIAL_SIGS_ROUTE: &str = "/randomness-partial-sigs";
 const RANDOMNESS_INJECT_PARTIAL_SIGS_ROUTE: &str = "/randomness-inject-partial-sigs";
 const RANDOMNESS_INJECT_FULL_SIG_ROUTE: &str = "/randomness-inject-full-sig";
+const TRAFFIC_CONTROL: &str = "/traffic-control";
 
 struct AppState {
     node: Arc<SuiNode>,
@@ -119,6 +125,7 @@ pub async fn run_admin_server(node: Arc<SuiNode>, port: u16, tracing_handle: Tra
             RANDOMNESS_INJECT_FULL_SIG_ROUTE,
             post(randomness_inject_full_sig),
         )
+        .route(TRAFFIC_CONTROL, post(traffic_control))
         .with_state(Arc::new(app_state));
 
     let socket_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
@@ -441,5 +448,25 @@ async fn randomness_inject_full_sig(
         Ok(Ok(())) => (StatusCode::OK, "full signature injected\n".to_string()),
         Ok(Err(e)) => (StatusCode::BAD_REQUEST, e.to_string()),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    }
+}
+
+async fn traffic_control(
+    State(state): State<Arc<AppState>>,
+    args: Query<TrafficControlReconfigParams>,
+) -> (StatusCode, String) {
+    let Query(params) = args;
+    match state.node.state().reconfigure_traffic_control(params).await {
+        Ok(updated_state) => (
+            StatusCode::OK,
+            format!(
+                "Traffic control configured with:\n\
+                 Error threshold: {:?}\n\
+                 Spam threshold: {:?}\n\
+                 Dry run: {:?}\n",
+                updated_state.error_threshold, updated_state.spam_threshold, updated_state.dry_run
+            ),
+        ),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
     }
 }
