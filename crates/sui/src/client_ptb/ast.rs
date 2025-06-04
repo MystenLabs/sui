@@ -126,7 +126,6 @@ pub struct ProgramMetadata {
     pub gas_price: Option<Spanned<u64>>,
     pub gas_sponsor: Option<Spanned<NumericalAddress>>,
     pub mvr_names: BTreeMap<String, Span>,
-    pub sender_set: bool,
     pub sender: Option<Spanned<NumericalAddress>>,
 }
 
