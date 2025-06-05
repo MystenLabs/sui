@@ -25,6 +25,7 @@ move-ir-types.workspace = true
 move-binary-format.workspace = true
 move-bytecode-source-map.workspace = true
 move-abstract-interpreter.workspace = true
+move-bytecode-verifier.workspace = true
 indexmap.workspace = true
 
 lcov.workspace = true

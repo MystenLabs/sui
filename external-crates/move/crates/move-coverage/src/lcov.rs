@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use lcov::record::Record as LRecord;
-use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
+use move_abstract_interpreter::control_flow_graph::ControlFlowGraph;
 use move_binary_format::file_format::FunctionDefinitionIndex;
+use move_bytecode_verifier::absint::VMControlFlowGraph;
 use move_compiler::{
     compiled_unit::CompiledUnit, shared::files::MappedFiles,
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
