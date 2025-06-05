@@ -41,10 +41,14 @@ struct ProgramParsingState {
     serialize_unsigned_set: bool,
     serialize_signed_set: bool,
     json_set: bool,
+    tx_digest_set: bool,
     dry_run_set: bool,
     dev_inspect_set: bool,
-    gas_object_id: Option<Spanned<ObjectID>>,
+    gas_object_ids: Option<Vec<Spanned<ObjectID>>>,
     gas_budget: Option<Spanned<u64>>,
+    gas_price: Option<Spanned<u64>>,
+    gas_sponsor: Option<Spanned<NumericalAddress>>,
+    sender: Option<Spanned<NumericalAddress>>,
 }
 
 macro_rules! mvr_ident {
@@ -71,10 +75,14 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 serialize_unsigned_set: false,
                 serialize_signed_set: false,
                 json_set: false,
+                tx_digest_set: false,
                 dry_run_set: false,
                 dev_inspect_set: false,
-                gas_object_id: None,
+                gas_object_ids: None,
                 gas_budget: None,
+                gas_price: None,
+                gas_sponsor: None,
+                sender: None,
             },
         })
     }
@@ -119,28 +127,57 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 L(T::Command, A::SERIALIZE_SIGNED) => flag!(serialize_signed_set),
                 L(T::Command, A::SUMMARY) => flag!(summary_set),
                 L(T::Command, A::JSON) => flag!(json_set),
+                L(T::Command, A::TX_DIGEST) => flag!(tx_digest_set),
                 L(T::Command, A::DRY_RUN) => flag!(dry_run_set),
                 L(T::Command, A::DEV_INSPECT) => flag!(dev_inspect_set),
                 L(T::Command, A::PREVIEW) => flag!(preview_set),
                 L(T::Command, A::WARN_SHADOWS) => flag!(warn_shadows_set),
                 L(T::Command, A::GAS_COIN) => {
-                    let specifier = try_!(self.parse_gas_specifier());
-                    self.state.gas_object_id = Some(specifier);
+                    let coins = try_!(self.parse_gas_coins());
+                    self.state.gas_object_ids = Some(coins);
                 }
+                L(T::Command, A::GAS_SPONSOR) => {
+                    let sponsor = try_!(self.parse_address_literal());
+                    self.state.gas_sponsor = Some(sponsor);
+                }
+
                 L(T::Command, A::GAS_BUDGET) => {
-                    let budget = try_!(self.parse_gas_budget()).widen_span(sp);
+                    let budget = try_!(self.parse_gas_denomination()).widen_span(sp);
                     if let Some(other) = self.state.gas_budget.replace(budget) {
                         self.state.errors.extend([
                             err!(
                                 other.span,
                                 "Multiple gas budgets found. Gas budget first set here.",
                             ),
-                            err!(budget.span => help: {
-                                "PTBs must have exactly one gas budget set."
-                            },"Budget set again here."),
+                            err!(
+                                budget.span => help: { "PTBs must have exactly one gas budget set." },
+                                "Budget set again here."
+                            ),
                         ]);
                         self.fast_forward_to_next_command();
                     }
+                }
+
+                L(T::Command, A::GAS_PRICE) => {
+                    let price = try_!(self.parse_gas_denomination()).widen_span(sp);
+                    if let Some(other) = self.state.gas_price.replace(price) {
+                        self.state.errors.extend([
+                            err!(
+                                other.span,
+                                "Multiple gas prices found. Gas price first set here.",
+                            ),
+                            err!(
+                                price.span => help: { "PTBs must have at most one gas price set." },
+                                "Price set again here."
+                            ),
+                        ]);
+                        self.fast_forward_to_next_command();
+                    }
+                }
+
+                L(T::Command, A::SENDER) => {
+                    let sender = try_!(self.parse_address_literal());
+                    self.state.sender = Some(sender);
                 }
 
                 L(T::Command, A::TRANSFER_OBJECTS) => command!(self.parse_transfer_objects()),
@@ -215,12 +252,16 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                     summary_set: self.state.summary_set,
                     serialize_unsigned_set: self.state.serialize_unsigned_set,
                     serialize_signed_set: self.state.serialize_signed_set,
-                    gas_object_id: self.state.gas_object_id,
+                    gas_object_ids: self.state.gas_object_ids,
                     json_set: self.state.json_set,
+                    tx_digest_set: self.state.tx_digest_set,
                     dry_run_set: self.state.dry_run_set,
                     dev_inspect_set: self.state.dev_inspect_set,
                     gas_budget: self.state.gas_budget,
+                    gas_price: self.state.gas_price,
+                    gas_sponsor: self.state.gas_sponsor,
                     mvr_names: self.state.mvr_names_with_span,
+                    sender: self.state.sender,
                 },
             ))
         } else {
@@ -368,9 +409,8 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         Ok(sp.wrap(ParsedPTBCommand::MoveCall(function, ty_args, args)))
     }
 
-    /// Parse a gas-budget command.
-    /// The expected format is: `--gas-budget <u64>`
-    fn parse_gas_budget(&mut self) -> PTBResult<Spanned<u64>> {
+    /// Parse a quantity of gas, as a numeric literal that is or can be inferred to be a u64.
+    fn parse_gas_denomination(&mut self) -> PTBResult<Spanned<u64>> {
         Ok(match self.parse_argument()? {
             sp!(sp, Argument::U64(u)) => sp.wrap(u),
             sp!(sp, Argument::InferredNum(n)) => {
@@ -380,12 +420,16 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         })
     }
 
-    /// Parse a gas specifier.
-    /// The expected format is: `--gas-coin <address>`
-    fn parse_gas_specifier(&mut self) -> PTBResult<Spanned<ObjectID>> {
-        Ok(self
-            .parse_address_literal()?
-            .map(|a| ObjectID::from(a.into_inner())))
+    /// Parse the gas payment
+    /// The expected format is: `--gas-coin <address> [<address> ...]`
+    fn parse_gas_coins(&mut self) -> PTBResult<Vec<Spanned<ObjectID>>> {
+        // Need at least one gas coin.
+        let mut coins = vec![self.parse_object_id_literal()?];
+        while matches!(self.peek(), sp!(_, Lexeme(Token::At, _))) {
+            coins.push(self.parse_object_id_literal()?)
+        }
+
+        Ok(coins)
     }
 }
 
@@ -809,6 +853,11 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
         })
     }
 
+    /// Parse a numeric address literal (must be prefixed by an `@` symbol) as an ObjectID.
+    fn parse_object_id_literal(&mut self) -> PTBResult<Spanned<ObjectID>> {
+        Ok(self.parse_address_literal()?.map(|a| a.into_inner().into()))
+    }
+
     // Parse an array of arguments. Each element of the array is separated by a comma.
     fn parse_array(&mut self) -> PTBResult<Spanned<Vec<Spanned<Argument>>>> {
         use Lexeme as L;
@@ -1055,10 +1104,16 @@ mod tests {
             "--assign a vector[1, 2, 3]",
             "--assign a none",
             "--assign a some(1)",
-            // Gas-coin
+            // Gas coin
             "--gas-coin @0x1",
+            "--gas-coin @0x1 @0x2",
+            // Gas price
+            "--gas-price 1000",
+            // Gas sponsor
+            "--gas-sponsor @0x2",
             "--summary",
             "--json",
+            "--tx-digest",
             "--preview",
             "--warn-shadows",
         ];
@@ -1118,11 +1173,19 @@ mod tests {
             "--gas-budget [1]",
             "--gas-budget @0x1",
             "--gas-budget woah",
-            // Gas-coin
+            // Gas coin
             "--gas-coin nope",
             "--gas-coin",
-            "--gas-coin @0x1 @0x2",
             "--gas-coin 1",
+            // Gas price
+            "--gas-price nuhuh",
+            "--gas-price [1, 2, 3]",
+            "--gas-price @0x2",
+            "--gas-price 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            // Gas sponsor
+            "--gas-sponsor nope",
+            "--gas-sponsor",
+            "--gas-sponsor 42",
         ];
         let mut parsed = Vec::new();
         for input in inputs {

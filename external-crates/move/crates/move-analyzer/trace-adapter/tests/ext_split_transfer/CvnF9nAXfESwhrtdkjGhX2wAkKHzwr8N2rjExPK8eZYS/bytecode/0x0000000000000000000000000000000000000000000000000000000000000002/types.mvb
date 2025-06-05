@@ -1,0 +1,6 @@
+// Move bytecode v6
+module 2.types {
+
+native public is_one_time_witness<Ty0: drop>(Arg0: &Ty0): bool;
+
+}

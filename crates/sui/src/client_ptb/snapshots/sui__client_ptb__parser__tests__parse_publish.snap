@@ -29,8 +29,9 @@ expression: parsed
             summary_set: false,
             serialize_unsigned_set: false,
             serialize_signed_set: false,
-            gas_object_id: None,
+            gas_object_ids: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -42,7 +43,10 @@ expression: parsed
                     value: 1,
                 },
             ),
+            gas_price: None,
+            gas_sponsor: None,
             mvr_names: {},
+            sender: None,
         },
     ),
     (
@@ -71,8 +75,9 @@ expression: parsed
             summary_set: false,
             serialize_unsigned_set: false,
             serialize_signed_set: false,
-            gas_object_id: None,
+            gas_object_ids: None,
             json_set: false,
+            tx_digest_set: false,
             dry_run_set: false,
             dev_inspect_set: false,
             gas_budget: Some(
@@ -84,7 +89,10 @@ expression: parsed
                     value: 1,
                 },
             ),
+            gas_price: None,
+            gas_sponsor: None,
             mvr_names: {},
+            sender: None,
         },
     ),
 ]

@@ -42,6 +42,7 @@ exclude = [
   "external-crates/move/crates/move-package",
   "external-crates/move/crates/move-package-alt",
   "external-crates/move/crates/move-proc-macros",
+  "external-crates/move/crates/move-regex-borrow-graph",
   "external-crates/move/crates/move-stackless-bytecode",
   "external-crates/move/crates/move-stdlib",
   "external-crates/move/crates/move-stdlib-natives",
@@ -96,6 +97,7 @@ members = [
   "crates/sui-bridge",
   "crates/sui-bridge-cli",
   "crates/sui-bridge-indexer",
+  "crates/sui-bridge-indexer-alt",
   "crates/sui-bridge-schema",
   "crates/sui-cluster-test",
   "crates/sui-config",
@@ -519,7 +521,7 @@ sysinfo = "0.27.5"
 tabled = { version = "0.12" }
 tap = "1.0.1"
 tar = "0.4.40"
-tempfile = "3.3.0"
+tempfile = "3.20.0"
 test-fuzz = "3.0.4"
 thiserror = "1.0.40"
 tiny-bip39 = "1.0.0"
@@ -533,17 +535,16 @@ tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
 tokio-util = "0.7.10"
 toml = { version = "0.7.4", features = ["preserve_order"] }
 toml_edit = { version = "0.19.10" }
-tonic = { version = "0.13", features = [
+tonic = { version = "0.13.1", features = [
   "zstd",
   "transport",
   "tls-webpki-roots",
 ] }
-tonic-build = { version = "0.13", features = ["prost", "transport"] }
-tonic-health = "0.13"
-tonic-reflection = "0.13"
-tonic-web = { git = "https://github.com/hyperium/tonic.git", rev = "fee9c130c86a365b039f3e70a72a94ea28a9aaa9" }
-# tonic-rustls = "0.1.0"
-tonic-rustls = { git = "https://github.com/bmwill/tonic-rustls", rev = "77c3334b8aa00a982fb432d77c768c41aab1b05e" }
+tonic-build = { version = "0.13.1", features = ["prost", "transport"] }
+tonic-health = "0.13.1"
+tonic-reflection = "0.13.1"
+tonic-web = "0.13.1"
+tonic-rustls = "0.2.0"
 tower = { version = "0.5", features = [
   "full",
   "util",
@@ -646,11 +647,10 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c794
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
 
 # core-types from the new sdk for use in gRPC
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "83ff809bc11cbabda21b60130e1f5420170548bf", features = [
-  "hash",
-  "serde",
-] }
-sui-graphql-client = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "83ff809bc11cbabda21b60130e1f5420170548bf", package = "sui-graphql-client" }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "bf1875211b15bd67ce5f7a72152bf952479f1668", features = [ "hash", "serde" ] }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "bf1875211b15bd67ce5f7a72152bf952479f1668", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
+sui-graphql-client = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "bf1875211b15bd67ce5f7a72152bf952479f1668" }
+sui-graphql-client-build = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "bf1875211b15bd67ce5f7a72152bf952479f1668" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
@@ -672,7 +672,7 @@ sui-bridge = { path = "crates/sui-bridge" }
 sui-bridge-schema = { path = "crates/sui-bridge-schema" }
 sui-cluster-test = { path = "crates/sui-cluster-test" }
 sui-config = { path = "crates/sui-config" }
-sui-core = { path = "crates/sui-core", features = ["rocksdb"] }
+sui-core = { path = "crates/sui-core" }
 sui-cost = { path = "crates/sui-cost" }
 sui-data-ingestion = { path = "crates/sui-data-ingestion" }
 sui-data-ingestion-core = { path = "crates/sui-data-ingestion-core" }
@@ -772,9 +772,6 @@ sui-execution = { path = "sui-execution" }
 # move-stdlib = { path = "external-crates/move/move-stdlib" }
 # move-vm-runtime = { path = "external-crates/move/move-vm/runtime" }
 # move-bytecode-verifier = { path = "external-crates/move/move-bytecode-verifier" }
-
-[patch.'https://github.com/hyperium/tonic.git']
-tonic = "0.13"
 
 [patch.crates-io]
 async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18" }

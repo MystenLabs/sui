@@ -85,7 +85,7 @@ ouroboros = "0.17.2"
 parking_lot = "0.11.1"
 paste = "1.0.5"
 packed_struct = "0.10.1"
-petgraph = "0.5.1"
+petgraph = "0.8.1"
 phf = { version = "0.11", features = ["macros"] }
 plotters = { version = "0.3.0", default-features = false, features = ["evcxr", "line_series", "histogram"]}
 pretty = "0.10.0"
@@ -155,6 +155,7 @@ move-borrow-graph = { path = "crates/move-borrow-graph" }
 move-bytecode-source-map = { path = "crates/move-bytecode-source-map" }
 move-bytecode-utils = { path = "crates/move-bytecode-utils" }
 move-bytecode-verifier = { path = "crates/move-bytecode-verifier" }
+move-bytecode-verifier-analyzer = { path = "crates/move-bytecode-verifier-analyzer" }
 move-bytecode-verifier-meter = { path = "crates/move-bytecode-verifier-meter" }
 move-bytecode-viewer = { path = "crates/move-bytecode-viewer" }
 move-cli = { path = "crates/move-cli" }
@@ -174,6 +175,7 @@ move-model-2 = { path = "crates/move-model-2" }
 move-package = { path = "crates/move-package" }
 move-package-alt = { path = "crates/move-package-alt" }
 move-proc-macros = { path = "crates/move-proc-macros"}
+move-regex-borrow-graph = { path = "crates/move-regex-borrow-graph" }
 move-stackless-bytecode = { path = "crates/move-stackless-bytecode" }
 move-stdlib = { path = "crates/move-stdlib" }
 move-stdlib-natives = { path = "crates/move-stdlib-natives" }

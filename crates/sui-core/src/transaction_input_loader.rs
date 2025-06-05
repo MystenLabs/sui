@@ -272,7 +272,7 @@ impl TransactionInputLoader {
             // Note: the digest is checked later in check_transaction_input
             let (object_id, version, _) = objref;
 
-            // TODO: Add support for receiving ConsensusV2 objects. For now this assumes fastpath.
+            // TODO: Add support for receiving consensus objects. For now this assumes fastpath.
             if self.cache.have_received_object_at_version(
                 FullObjectKey::new(FullObjectID::new(*object_id, None), *version),
                 epoch_id,

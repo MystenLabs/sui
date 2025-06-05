@@ -64,7 +64,7 @@ task 7, lines 58-60:
 //> 0: sui::party::single_owner(Input(1));
 //> sui::transfer::public_party_transfer<ex::m::B>(Input(0), Result(0))
 mutated: object(0,0), object(2,1)
-gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 1196316, non_refundable_storage_fee: 12084
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 1196316, non_refundable_storage_fee: 12084
 
 task 8, lines 63-72:
 //# run ex::m::receive --args object(2,0) receiving(2,1)@3 @A
@@ -81,13 +81,13 @@ task 10, lines 76-78:
 //> 0: sui::party::single_owner(Input(1));
 //> sui::transfer::public_party_transfer<ex::m::B>(Input(0), Result(0))
 mutated: object(0,0), object(2,2)
-gas summary: computation_cost: 1000000, storage_cost: 2257200,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
 
 task 11, line 80:
 //# run ex::m::delete --args object(2,2) --sender A
 mutated: object(0,0)
 deleted: object(2,2)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2234628, non_refundable_storage_fee: 22572
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
 
 task 12, line 82:
 //# run ex::m::receive --args object(2,0) receiving(2,2)@3 @A

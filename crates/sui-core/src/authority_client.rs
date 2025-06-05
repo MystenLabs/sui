@@ -21,6 +21,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
     transaction::*,
 };
+use tap::TapFallible;
 
 use crate::authority_client::tonic::IntoRequest;
 use sui_network::tonic::metadata::KeyAndValueRef;
@@ -29,7 +30,8 @@ use sui_types::messages_grpc::{
     HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
     HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
     HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
-    RawSubmitTxResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+    RawSubmitTxResponse, RawWaitForEffectsRequest, RawWaitForEffectsResponse, SystemStateRequest,
+    TransactionInfoRequest, TransactionInfoResponse,
 };
 
 #[async_trait]
@@ -67,6 +69,14 @@ pub trait AuthorityAPI {
         request: HandleSoftBundleCertificatesRequestV3,
         client_addr: Option<SocketAddr>,
     ) -> Result<HandleSoftBundleCertificatesResponseV3, SuiError>;
+
+    /// Wait for effects of a transaction that has been submitted to the network
+    /// through the `submit_transaction` API.
+    async fn wait_for_effects(
+        &self,
+        request: RawWaitForEffectsRequest,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<RawWaitForEffectsResponse, SuiError>;
 
     /// Handle Object information requests for this account.
     async fn handle_object_info_request(
@@ -238,6 +248,21 @@ impl AuthorityAPI for NetworkAuthorityClient {
         response.map_err(Into::into)
     }
 
+    async fn wait_for_effects(
+        &self,
+        request: RawWaitForEffectsRequest,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<RawWaitForEffectsResponse, SuiError> {
+        let mut request = request.into_request();
+        insert_metadata(&mut request, client_addr);
+
+        self.client()?
+            .wait_for_effects(request)
+            .await
+            .map(tonic::Response::into_inner)
+            .map_err(Into::into)
+    }
+
     async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
@@ -303,25 +328,35 @@ pub fn make_network_authority_clients_with_network_config(
 ) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
     let mut authority_clients = BTreeMap::new();
     for (name, (_state, network_metadata)) in committee.validators() {
-        let address = network_metadata.network_address.clone();
-        let address = address.rewrite_udp_to_tcp();
-        // TODO: Enable TLS on this interface with below config, once support is rolled out to validators.
-        // let tls_config = network_metadata.network_public_key.as_ref().map(|key| {
-        //     sui_tls::create_rustls_client_config(
-        //         key.clone(),
-        //         sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
-        //         None,
-        //     )
-        // });
-        // TODO: Change below code to generate a SuiError if no valid TLS config is available.
-        let maybe_channel = network_config.connect_lazy(&address, None).map_err(|e| {
-            tracing::error!(
-                address = %address,
-                name = %name,
-                "unable to create authority client: {e}"
-            );
-            e.to_string().into()
-        });
+        let address = network_metadata
+            .network_address
+            .clone()
+            .rewrite_udp_to_tcp()
+            .rewrite_http_to_https();
+        let tls_config = network_metadata
+            .network_public_key
+            .as_ref()
+            .map(|key| {
+                sui_tls::create_rustls_client_config(
+                    key.clone(),
+                    sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
+                    None,
+                )
+            })
+            .ok_or(SuiError::from("network public key is not available"));
+        let maybe_channel = tls_config
+            .and_then(|tls_config| {
+                network_config
+                    .connect_lazy(&address, Some(tls_config))
+                    .map_err(|e| e.to_string().into())
+            })
+            .tap_err(|e| {
+                tracing::error!(
+                    address = %address,
+                    name = %name,
+                    "unable to create authority client: {e}"
+                )
+            });
         let client = NetworkAuthorityClient::new_lazy(maybe_channel);
         authority_clients.insert(*name, client);
     }

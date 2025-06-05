@@ -16,7 +16,6 @@ use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 pub type WrittenObjects = BTreeMap<ObjectID, Object>;
@@ -54,19 +53,17 @@ impl InnerTemporaryStore {
             })
             .collect();
 
-        let deleted: HashMap<_, _> = effects
+        // Add all stream-ended consensus objects to the outputkeys that then get sent to notify_commit
+        let deleted_output_keys = effects
             .deleted()
-            .iter()
+            .into_iter()
+            .chain(effects.transferred_from_consensus())
+            .chain(effects.consensus_owner_changed())
             .map(|oref| (oref.0, oref.1))
-            .collect();
-
-        // add deleted shared objects to the outputkeys that then get sent to notify_commit
-        let deleted_output_keys = deleted
-            .iter()
             .filter_map(|(id, seq)| {
                 self.input_objects
-                    .get(id)
-                    .and_then(|obj| obj.is_shared().then_some((obj.full_id(), *seq)))
+                    .get(&id)
+                    .and_then(|obj| obj.is_consensus().then_some((obj.full_id(), seq)))
             })
             .map(|(full_id, seq)| InputKey::VersionedObject {
                 id: full_id,
@@ -74,7 +71,7 @@ impl InnerTemporaryStore {
             });
         output_keys.extend(deleted_output_keys);
 
-        // For any previously deleted shared objects that appeared mutably in the transaction,
+        // For any previously stream-ended consensus objects that appeared mutably in the transaction,
         // synthesize a notification for the next version of the object.
         let smeared_version = self.lamport_version;
         let deleted_accessed_objects = effects.stream_ended_mutably_accessed_consensus_objects();

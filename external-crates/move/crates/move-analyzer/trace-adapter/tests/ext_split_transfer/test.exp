@@ -1,0 +1,141 @@
+current event stack:
+  summary frame (line 1): 
+    MoveCall
+    SplitCoins
+    MoveCall
+    TransferObjects
+  no active event frame
+current event stack:
+  summary frame (line 1): 
+    MoveCall
+    SplitCoins
+    MoveCall
+    TransferObjects
+  current frame stack:
+    function: mint (my_coin.mvb:40)
+      scope 0 :
+        Arg0 : (0x2::coin::TreasuryCap<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>) {
+          id : (0x2::object::UID) {
+            id : (0x2::object::ID) {
+              bytes : 98c9b813c1a6d2b7863444585ab2058b2f56399cd6dcb514c636a7fdfcf4281b
+            }
+          }
+          total_supply : (0x2::balance::Supply<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>) {
+            value : 0
+          }
+        }
+        type: &mut 0x2::coin::TreasuryCap<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>
+
+        Arg1 : 1000
+        type: u64
+
+        Arg2 : (0x2::tx_context::TxContext) {
+          sender : 0000000000000000000000000000000000000000000000000000000000000000
+          tx_hash : [
+            0 : 177
+            1 : 55
+            2 : 127
+            3 : 33
+            4 : 250
+            5 : 68
+            6 : 193
+            7 : 114
+            8 : 114
+            9 : 46
+            10 : 119
+            11 : 191
+            12 : 192
+            13 : 51
+            14 : 229
+            15 : 20
+            16 : 209
+            17 : 2
+            18 : 222
+            19 : 115
+            20 : 173
+            21 : 253
+            22 : 150
+            23 : 95
+            24 : 224
+            25 : 71
+            26 : 8
+            27 : 109
+            28 : 233
+            29 : 115
+            30 : 236
+            31 : 23
+          ]
+          epoch : 0
+          epoch_timestamp_ms : 0
+          ids_created : 0
+        }
+        type: &mut 0x2::tx_context::TxContext
+
+current event stack:
+  summary frame (line 2): 
+    MoveCall
+    SplitCoins
+    MoveCall
+    TransferObjects
+  no active event frame
+current event stack:
+  summary frame (line 2): 
+    MoveCall
+    SplitCoins
+    MoveCall
+    TransferObjects
+  event frame: 
+    SplitCoins: input => result
+      input : (0x2::coin::Coin<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>) {
+        id : (0x2::object::UID) {
+          id : (0x2::object::ID) {
+            value : cb8da0c881c16350759cd2ae37d0575de65e75cd36c313bcb96620508321a9d5
+          }
+        }
+        balance : (0x2::balance::Balance<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>) {
+          value : 500
+        }
+      }
+      type: 0x2::coin::Coin<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>
+
+      result : [
+        0 : (0x2::coin::Coin<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>) {
+          id : (0x2::object::UID) {
+            id : (0x2::object::ID) {
+              value : ddd648349c1fb33dd1739557349449abea1a436d4ed26b46f08bb990cac39054
+            }
+          }
+          balance : (0x2::balance::Balance<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>) {
+            value : 500
+          }
+        }
+      ]
+      type: vector<0x2::coin::Coin<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>>
+
+current event stack:
+  summary frame (line 4): 
+    MoveCall
+    SplitCoins
+    MoveCall
+    TransferObjects
+  no active event frame
+current event stack:
+  summary frame (line 4): 
+    MoveCall
+    SplitCoins
+    MoveCall
+    TransferObjects
+  event frame: 
+    TransferObjects: obj0...objN => ()
+      obj0 : (0x2::coin::Coin<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>) {
+        id : (0x2::object::UID) {
+          id : (0x2::object::ID) {
+            value : ddd648349c1fb33dd1739557349449abea1a436d4ed26b46f08bb990cac39054
+          }
+        }
+        balance : (0x2::balance::Balance<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>) {
+          value : 500
+        }
+      }
+      type: 0x2::coin::Coin<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>
+

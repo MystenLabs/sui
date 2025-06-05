@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::object_change::{ObjectIn, ObjectOut};
+use super::object_change::{AccumulatorWriteV1, ObjectIn, ObjectOut};
 use super::{EffectsObjectChange, IDOperation, ObjectChange};
 use crate::base_types::{
     EpochId, ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -10,7 +10,7 @@ use crate::base_types::{
 use crate::digests::{EffectsAuxDataDigest, TransactionEventsDigest};
 use crate::effects::{InputSharedObject, TransactionEffectsAPI};
 use crate::execution::SharedInput;
-use crate::execution_status::ExecutionStatus;
+use crate::execution_status::{ExecutionFailureStatus, ExecutionStatus, MoveLocation};
 use crate::gas::GasCostSummary;
 #[cfg(debug_assertions)]
 use crate::is_system_package;
@@ -45,6 +45,10 @@ pub struct TransactionEffectsV2 {
     /// Objects whose state are changed in the object store.
     /// This field should not be exposed to the public API.
     /// Otherwise it will make it harder to use effects of different versions.
+    /// Note that for accumulator writes, the ObjectID here will be the dynamic field object ID
+    /// that stores the accumulator value. However this object is not really mutated
+    /// in this transaction. We just have to use an ObjectID that is unique so that
+    /// it does not conflict with any other object IDs in the changed_objects.
     changed_objects: Vec<(ObjectID, EffectsObjectChange)>,
     /// Shared objects that are not mutated in this transaction. Unlike owned objects,
     /// read-only shared objects' version are not committed in the transaction,
@@ -83,6 +87,17 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
             .collect()
     }
 
+    fn move_abort(&self) -> Option<(MoveLocation, u64)> {
+        let ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::MoveAbort(move_location, code),
+            ..
+        } = self.status()
+        else {
+            return None;
+        };
+        Some((move_location.clone(), *code))
+    }
+
     fn lamport_version(&self) -> SequenceNumber {
         self.lamport_version
     }
@@ -104,7 +119,7 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
         self.changed_objects
             .iter()
             .filter_map(|(id, change)| match &change.input_state {
-                ObjectIn::Exist(((version, digest), Owner::Shared { .. })) => {
+                ObjectIn::Exist(((version, digest), owner)) if owner.is_consensus() => {
                     Some(InputSharedObject::Mutate((*id, *version, *digest)))
                 }
                 _ => None,
@@ -266,7 +281,7 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                     &change.id_operation,
                 ) {
                     (
-                        ObjectIn::Exist((_, Owner::ConsensusV2 { .. })),
+                        ObjectIn::Exist((_, Owner::ConsensusAddressOwner { .. })),
                         ObjectOut::ObjectWrite((
                             object_digest,
                             Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable,
@@ -290,9 +305,44 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                 ) {
                     (
                         ObjectIn::Exist((_, Owner::AddressOwner(_) | Owner::ObjectOwner(_))),
-                        ObjectOut::ObjectWrite((object_digest, Owner::ConsensusV2 { .. })),
+                        ObjectOut::ObjectWrite((
+                            object_digest,
+                            Owner::ConsensusAddressOwner { .. },
+                        )),
                         IDOperation::None,
                     ) => Some((*id, self.lamport_version, *object_digest)),
+                    _ => None,
+                }
+            })
+            .collect()
+    }
+
+    fn consensus_owner_changed(&self) -> Vec<ObjectRef> {
+        self.changed_objects
+            .iter()
+            .filter_map(|(id, change)| {
+                match (
+                    &change.input_state,
+                    &change.output_state,
+                    &change.id_operation,
+                ) {
+                    (
+                        ObjectIn::Exist((
+                            _,
+                            Owner::ConsensusAddressOwner {
+                                owner: old_owner, ..
+                            },
+                        )),
+                        ObjectOut::ObjectWrite((
+                            object_digest,
+                            Owner::ConsensusAddressOwner {
+                                owner: new_owner, ..
+                            },
+                        )),
+                        IDOperation::None,
+                    ) if old_owner != new_owner => {
+                        Some((*id, self.lamport_version, *object_digest))
+                    }
                     _ => None,
                 }
             })
@@ -302,7 +352,7 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
     fn object_changes(&self) -> Vec<ObjectChange> {
         self.changed_objects
             .iter()
-            .map(|(id, change)| {
+            .filter_map(|(id, change)| {
                 let input_version_digest = match &change.input_state {
                     ObjectIn::NotExist => None,
                     ObjectIn::Exist((vd, _)) => Some(*vd),
@@ -312,9 +362,12 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                     ObjectOut::NotExist => None,
                     ObjectOut::ObjectWrite((d, _)) => Some((self.lamport_version, *d)),
                     ObjectOut::PackageWrite(vd) => Some(*vd),
+                    ObjectOut::AccumulatorWriteV1(_) => {
+                        return None;
+                    }
                 };
 
-                ObjectChange {
+                Some(ObjectChange {
                     id: *id,
 
                     input_version: input_version_digest.map(|k| k.0),
@@ -324,7 +377,7 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                     output_digest: output_version_digest.map(|k| k.1),
 
                     id_operation: change.id_operation,
-                }
+                })
             })
             .collect()
     }
@@ -364,6 +417,16 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
 
     fn unchanged_shared_objects(&self) -> Vec<(ObjectID, UnchangedSharedKind)> {
         self.unchanged_shared_objects.clone()
+    }
+
+    fn accumulator_updates(&self) -> Vec<(ObjectID, AccumulatorWriteV1)> {
+        self.changed_objects
+            .iter()
+            .filter_map(|(id, change)| match &change.output_state {
+                ObjectOut::AccumulatorWriteV1(update) => Some((*id, update.clone())),
+                _ => None,
+            })
+            .collect()
     }
 
     fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus {
@@ -601,6 +664,9 @@ impl TransactionEffectsV2 {
                     );
                     assert_eq!(old_version.value() + 1, new_version.value());
                     assert_ne!(old_digest, new_digest);
+                }
+                (ObjectIn::NotExist, ObjectOut::AccumulatorWriteV1(_), IDOperation::None) => {
+                    // This is an accumulator write.
                 }
                 _ => {
                     panic!("Impossible object change: {:?}, {:?}", id, change);

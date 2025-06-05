@@ -23,7 +23,7 @@ use tempfile::tempdir;
 fn temp_dir() -> std::path::PathBuf {
     tempdir()
         .expect("Failed to open temporary directory")
-        .into_path()
+        .keep()
 }
 
 pub fn insert_keys(

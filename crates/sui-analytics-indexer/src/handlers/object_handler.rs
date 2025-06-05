@@ -19,7 +19,7 @@ use crate::package_store::PackageCache;
 use crate::tables::{ObjectEntry, ObjectStatus};
 use crate::{AnalyticsMetrics, FileType};
 
-use super::wait_for_cache;
+use super::{get_is_consensus, wait_for_cache};
 
 const NAME: &str = "object";
 
@@ -181,6 +181,7 @@ impl ObjectHandler {
             timestamp_ms,
             owner_type: Some(get_owner_type(object)),
             owner_address: get_owner_address(object),
+            is_consensus: get_is_consensus(object),
             object_status: object_status_tracker
                 .get_object_status(&object_id)
                 .expect("Object must be in output objects"),
@@ -271,6 +272,7 @@ impl TransactionProcessor<ObjectEntry> for ObjectHandler {
                 initial_shared_version: None,
                 previous_transaction: checkpoint_transaction.transaction.digest().base58_encode(),
                 has_public_transfer: false,
+                is_consensus: false,
                 storage_rebate: None,
                 bcs: "".to_string(),
                 coin_type: None,

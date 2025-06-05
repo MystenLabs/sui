@@ -85,6 +85,7 @@ use typed_store::DBMapUtils;
 use typed_store::Map;
 
 use super::authority_store_tables::ENV_VAR_LOCKS_BLOCK_CACHE_SIZE;
+use super::consensus_tx_status_cache::{ConsensusTxStatus, ConsensusTxStatusCache};
 use super::epoch_start_configuration::EpochStartConfigTrait;
 use super::execution_time_estimator::ExecutionTimeEstimator;
 use super::shared_object_congestion_tracker::{
@@ -119,6 +120,7 @@ use crate::module_cache_metrics::ResolverMetrics;
 use crate::post_consensus_tx_reorder::PostConsensusTxReorder;
 use crate::signature_verifier::*;
 use crate::stake_aggregator::{GenericMultiStakeAggregator, StakeAggregator};
+use crate::wait_for_effects_request::ConsensusTxPosition;
 
 /// The key where the latest consensus index is stored in the database.
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
@@ -408,10 +410,13 @@ pub struct AuthorityPerEpochStore {
     tx_object_debts: OnceCell<mpsc::Sender<Vec<ObjectID>>>,
     // Saved at end of epoch for propagating observations to the next.
     end_of_epoch_execution_time_observations: OnceCell<StoredExecutionTimeObservations>,
+
+    pub(crate) consensus_tx_status_cache: Option<ConsensusTxStatusCache>,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
 #[derive(DBMapUtils)]
+#[cfg_attr(tidehunter, tidehunter)]
 pub struct AuthorityEpochTables {
     /// This is map between the transaction digest and transactions found in the `transaction_lock`.
     #[default_options_override_fn = "signed_transactions_table_default_config"]
@@ -573,12 +578,257 @@ fn pending_consensus_transactions_table_default_config() -> DBOptions {
 }
 
 impl AuthorityEpochTables {
+    #[cfg(not(tidehunter))]
     pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
         Self::open_tables_read_write(
             Self::path(epoch, parent_path),
             MetricConf::new("epoch"),
             db_options,
             None,
+        )
+    }
+
+    #[cfg(tidehunter)]
+    pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
+        tracing::warn!("AuthorityEpochTables using tidehunter");
+        use typed_store::tidehunter_util::{
+            default_cells_per_mutex, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
+        };
+        const MUTEXES: usize = 1024;
+        let mut digest_prefix = vec![0; 8];
+        digest_prefix[7] = 32;
+        const VALUE_CACHE_SIZE: usize = 5000;
+        let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
+        let lru_bloom_config = bloom_config.clone().with_value_cache_size(VALUE_CACHE_SIZE);
+        let lru_only_config = KeySpaceConfig::new().with_value_cache_size(VALUE_CACHE_SIZE);
+        let pending_checkpoint_signatures_config = KeySpaceConfig::new().disable_unload();
+        let builder_checkpoint_summary_v2_config = pending_checkpoint_signatures_config.clone();
+        let object_ref_indexing = KeyIndexing::hash();
+        let tx_digest_indexing = KeyIndexing::key_reduction(32, 0..16);
+        let uniform_key = KeyType::uniform(default_cells_per_mutex());
+        let sequence_key = KeyType::prefix_uniform(2, 4);
+        let configs = vec![
+            (
+                "signed_transactions".to_string(),
+                ThConfig::new_with_rm_prefix_indexing(
+                    tx_digest_indexing.clone(),
+                    MUTEXES,
+                    uniform_key,
+                    lru_bloom_config.clone(),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "owned_object_locked_transactions".to_string(),
+                ThConfig::new_with_config_indexing(
+                    object_ref_indexing,
+                    MUTEXES * 2,
+                    uniform_key,
+                    bloom_config.clone(),
+                ),
+            ),
+            (
+                "effects_signatures".to_string(),
+                ThConfig::new_with_rm_prefix_indexing(
+                    tx_digest_indexing.clone(),
+                    MUTEXES,
+                    uniform_key,
+                    lru_bloom_config.clone(),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "signed_effects_digests".to_string(),
+                ThConfig::new_with_rm_prefix_indexing(
+                    tx_digest_indexing.clone(),
+                    MUTEXES,
+                    uniform_key,
+                    bloom_config.clone(),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "transaction_cert_signatures".to_string(),
+                ThConfig::new_with_rm_prefix_indexing(
+                    tx_digest_indexing.clone(),
+                    MUTEXES,
+                    uniform_key,
+                    lru_bloom_config.clone(),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "next_shared_object_versions_v2".to_string(),
+                ThConfig::new_with_config(32 + 8, MUTEXES, uniform_key, lru_only_config.clone()),
+            ),
+            (
+                "consensus_message_processed".to_string(),
+                ThConfig::new_with_config_indexing(
+                    KeyIndexing::Hash,
+                    MUTEXES,
+                    uniform_key,
+                    bloom_config.clone(),
+                ),
+            ),
+            (
+                "pending_consensus_transactions".to_string(),
+                ThConfig::new_with_config_indexing(
+                    KeyIndexing::Hash,
+                    MUTEXES,
+                    uniform_key,
+                    KeySpaceConfig::default(),
+                ),
+            ),
+            (
+                "last_consensus_stats".to_string(),
+                ThConfig::new(8, 1, KeyType::uniform(1)),
+            ),
+            (
+                "reconfig_state".to_string(),
+                ThConfig::new(8, 1, KeyType::uniform(1)),
+            ),
+            (
+                "end_of_publish".to_string(),
+                ThConfig::new(104, 1, KeyType::uniform(1)),
+            ),
+            (
+                "builder_digest_to_checkpoint".to_string(),
+                ThConfig::new_with_rm_prefix_indexing(
+                    tx_digest_indexing.clone(),
+                    MUTEXES * 4,
+                    uniform_key,
+                    lru_bloom_config.clone(),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "transaction_key_to_digest".to_string(),
+                ThConfig::new_with_config_indexing(
+                    KeyIndexing::Hash,
+                    MUTEXES,
+                    uniform_key,
+                    KeySpaceConfig::default(),
+                ),
+            ),
+            (
+                "pending_checkpoint_signatures".to_string(),
+                ThConfig::new_with_config(
+                    8 + 8,
+                    MUTEXES,
+                    uniform_key,
+                    pending_checkpoint_signatures_config,
+                ),
+            ),
+            (
+                "builder_checkpoint_summary_v2".to_string(),
+                ThConfig::new_with_config(
+                    8,
+                    MUTEXES,
+                    sequence_key,
+                    builder_checkpoint_summary_v2_config,
+                ),
+            ),
+            (
+                "state_hash_by_checkpoint".to_string(),
+                ThConfig::new_with_config(8, MUTEXES, sequence_key, bloom_config.clone()),
+            ),
+            (
+                "running_root_accumulators".to_string(),
+                ThConfig::new_with_config(8, MUTEXES, sequence_key, bloom_config.clone()),
+            ),
+            (
+                "authority_capabilities".to_string(),
+                ThConfig::new(104, MUTEXES, uniform_key),
+            ),
+            (
+                "authority_capabilities_v2".to_string(),
+                ThConfig::new(104, 1, KeyType::uniform(1)),
+            ),
+            (
+                "override_protocol_upgrade_buffer_stake".to_string(),
+                ThConfig::new(8, 1, KeyType::uniform(1)),
+            ),
+            (
+                "executed_transactions_to_checkpoint".to_string(),
+                ThConfig::new_with_rm_prefix_indexing(
+                    tx_digest_indexing.clone(),
+                    MUTEXES * 4,
+                    uniform_key,
+                    lru_bloom_config.clone(),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "pending_jwks".to_string(),
+                ThConfig::new_with_config_indexing(
+                    KeyIndexing::Hash,
+                    1,
+                    KeyType::uniform(1),
+                    KeySpaceConfig::default(),
+                ),
+            ),
+            (
+                "active_jwks".to_string(),
+                ThConfig::new_with_config_indexing(
+                    KeyIndexing::Hash,
+                    1,
+                    KeyType::uniform(1),
+                    KeySpaceConfig::default(),
+                ),
+            ),
+            (
+                "deferred_transactions".to_string(),
+                ThConfig::new(1 + 8 + 8, MUTEXES, uniform_key),
+            ),
+            (
+                "deferred_transactions".to_string(),
+                ThConfig::new(1 + 8 + 8, MUTEXES, uniform_key),
+            ),
+            (
+                "dkg_processed_messages_v2".to_string(),
+                ThConfig::new(2, 1, KeyType::uniform(1)),
+            ),
+            (
+                "dkg_used_messages_v2".to_string(),
+                ThConfig::new(8, 1, KeyType::uniform(1)),
+            ),
+            (
+                "dkg_confirmations_v2".to_string(),
+                ThConfig::new(2, 1, KeyType::uniform(1)),
+            ),
+            (
+                "dkg_output".to_string(),
+                ThConfig::new(8, 1, KeyType::uniform(1)),
+            ),
+            (
+                "randomness_next_round".to_string(),
+                ThConfig::new(8, 1, KeyType::uniform(1)),
+            ),
+            (
+                "randomness_highest_completed_round".to_string(),
+                ThConfig::new(8, 1, KeyType::uniform(1)),
+            ),
+            (
+                "randomness_last_round_timestamp".to_string(),
+                ThConfig::new(8, 1, KeyType::uniform(1)),
+            ),
+            (
+                "congestion_control_object_debts".to_string(),
+                ThConfig::new_with_config(32, MUTEXES, uniform_key, bloom_config.clone()),
+            ),
+            (
+                "congestion_control_randomness_object_debts".to_string(),
+                ThConfig::new(32, MUTEXES, uniform_key),
+            ),
+            (
+                "execution_time_observations".to_string(),
+                ThConfig::new(8 + 4, MUTEXES, uniform_key),
+            ),
+        ];
+        Self::open_tables_read_write(
+            Self::path(epoch, parent_path),
+            MetricConf::new("epoch"),
+            configs.into_iter().collect(),
         )
     }
 
@@ -781,6 +1031,7 @@ impl AuthorityPerEpochStore {
             protocol_config.accept_zklogin_in_multisig(),
             protocol_config.accept_passkey_in_multisig(),
             protocol_config.zklogin_max_epoch_upper_bound_delta(),
+            protocol_config.get_aliased_addresses().clone(),
         );
 
         let authenticator_state_exists = epoch_start_configuration
@@ -832,6 +1083,7 @@ impl AuthorityPerEpochStore {
                         &protocol_config,
                         committee.clone(),
                         &*object_store,
+                        &metrics,
                     )
                     // Load observations stored during the current epoch.
                     .chain(execution_time_observations.into_iter().flat_map(
@@ -845,6 +1097,12 @@ impl AuthorityPerEpochStore {
             } else {
                 None
             };
+
+        let consensus_tx_status_cache = if protocol_config.mysticeti_fastpath() {
+            Some(ConsensusTxStatusCache::new())
+        } else {
+            None
+        };
 
         let s = Arc::new(Self {
             name,
@@ -885,6 +1143,7 @@ impl AuthorityPerEpochStore {
             tx_local_execution_time: OnceCell::new(),
             tx_object_debts: OnceCell::new(),
             end_of_epoch_execution_time_observations: OnceCell::new(),
+            consensus_tx_status_cache,
         });
 
         s.update_buffer_stake_metric();
@@ -1196,6 +1455,7 @@ impl AuthorityPerEpochStore {
         protocol_config: &ProtocolConfig,
         committee: Arc<Committee>,
         object_store: &dyn ObjectStore,
+        metrics: &EpochMetrics,
     ) -> impl Iterator<Item = (AuthorityIndex, u64, ExecutionTimeObservationKey, Duration)> {
         if !matches!(
             protocol_config.per_object_congestion_control_mode(),
@@ -1241,6 +1501,9 @@ impl AuthorityPerEpochStore {
             "loaded stored execution time observations for {} keys",
             stored_observations.len()
         );
+        metrics
+            .epoch_execution_time_observations_loaded
+            .set(stored_observations.len() as i64);
         assert_reachable!("successfully loads stored execution time observations");
 
         // Make a single flattened iterator with every stored observation, for consumption
@@ -4408,6 +4671,16 @@ impl AuthorityPerEpochStore {
             "The following transactions were neither reverted nor checkpointed: {:?}",
             uncheckpointed_transactions
         );
+    }
+
+    pub(crate) fn set_consensus_tx_status(
+        &self,
+        position: ConsensusTxPosition,
+        status: ConsensusTxStatus,
+    ) {
+        if let Some(cache) = self.consensus_tx_status_cache.as_ref() {
+            cache.set_transaction_status(position, status);
+        }
     }
 }
 

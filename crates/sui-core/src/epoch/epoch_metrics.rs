@@ -128,6 +128,9 @@ pub struct EpochMetrics {
     /// Note: This metric is disabled by default as it may have very large cardinality.
     pub epoch_execution_time_observer_object_utilization: CounterVec,
 
+    /// The number of execution time observations loaded at start of epoch.
+    pub epoch_execution_time_observations_loaded: IntGauge,
+
     /// The number of consensus output items in the quarantine.
     pub consensus_quarantine_queue_size: IntGauge,
 
@@ -292,6 +295,12 @@ impl EpochMetrics {
                 "epoch_execution_time_observer_object_utilization",
                 "Per-object utilization for objects that were overutilized at least once at some point in their lifetime",
                 &["object_id"],
+                registry
+            )
+            .unwrap(),
+            epoch_execution_time_observations_loaded: register_int_gauge_with_registry!(
+                "epoch_execution_time_observations_loaded",
+                "The number of execution time observations loaded at start of epoch",
                 registry
             )
             .unwrap(),

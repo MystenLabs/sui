@@ -75,7 +75,7 @@ public fun priv_fastpath(obj: Priv, addr: address) {
 
 //# view-object 2,1
 
-// Transfers an existing party object to a different owner; start_version should stay the same
+// Transfers an existing party object to a different owner; start_version should update
 //# programmable --inputs object(2,1) @B --sender A
 //> 0: sui::party::single_owner(Input(1));
 //> sui::transfer::public_party_transfer<ex::m::Pub>(Input(0), Result(0))

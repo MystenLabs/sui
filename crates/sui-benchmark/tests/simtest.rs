@@ -517,6 +517,8 @@ mod test {
                         allowed_txn_cost_overage_burst_limit_us: rng.gen_range(0..500_000),
                         randomness_scalar: rng.gen_range(10..=50),
                         max_estimate_us: 1_500_000,
+                        stored_observations_num_included_checkpoints: 10,
+                        stored_observations_limit: rng.gen_range(1..=20),
                     },
                 ),
             ]
@@ -712,7 +714,7 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_data_ingestion_pipeline() {
-        let path = nondeterministic!(TempDir::new().unwrap()).into_path();
+        let path = nondeterministic!(TempDir::new().unwrap()).keep();
         let test_cluster = Arc::new(
             init_test_cluster_builder(4, 5000)
                 .with_data_ingestion_dir(path.clone())

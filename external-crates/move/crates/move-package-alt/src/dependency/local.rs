@@ -5,45 +5,58 @@
 //! Types and methods related to local dependencies (of the form `{ local = "<path>" }`)
 
 use std::{
-    fs,
+    fmt, fs,
     path::{Path, PathBuf},
 };
 
-use crate::errors::PackageResult;
+use crate::{
+    errors::{FileHandle, PackageResult, TheFile},
+    flavor::MoveFlavor,
+    package::paths::PackagePath,
+};
+use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
 use serde_spanned::Spanned;
 
 use super::PinnedDependencyInfo;
 
-// TODO: PinnedLocalDependencies should be different from UnpinnedLocalDependency - the former also
-// needs an absolute filesystem path (which doesn't get serialized to the lockfile)
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct LocalDependency {
     /// The path on the filesystem, relative to the location of the containing file (which is
     /// stored in the `Located` wrapper)
     local: PathBuf,
+
+    /// This is the directory to which this local dependency is relative to. As this is local
+    /// dependency, the directory should be the parent directory that contains this dependency.
+    #[serde(skip, default = "TheFile::parent_dir")]
+    relative_to_parent_dir: PathBuf,
 }
 
 impl LocalDependency {
-    /// Returns the path to the local dependency
-    pub fn path(&self) -> PackageResult<PathBuf> {
-        let path = fs::canonicalize(&self.local)?;
-        Ok(path)
+    /// The path on the filesystem, relative to the location of the containing file
+    pub fn relative_path(&self) -> &PathBuf {
+        &self.local
     }
 
-    // TODO
-    // /// Given a local dependency inside a manifest living at [source], return a pinned dependency
-    // pub fn pin(&self, source: &PinnedDependencyInfo<F>) -> PackageResult<PinnedDependencyInfo<F>> {
-    //     todo!()
-    // }
-}
+    /// Return a local dependency whose local variable is set to '.' (the current directory).
+    pub fn root_dependency(path: &PackagePath) -> Self {
+        Self {
+            local: PathBuf::from("."),
+            relative_to_parent_dir: path.path().to_path_buf(),
+        }
+    }
 
-// TODO: dead code
-impl TryFrom<(&Path, toml_edit::Value)> for LocalDependency {
-    type Error = anyhow::Error; // TODO
-
-    fn try_from(value: (&Path, toml_edit::Value)) -> Result<Self, Self::Error> {
-        // TODO: just deserialize
-        todo!()
+    /// Retrieve the absolute path to [`LocalDependency`] without actually fetching it.
+    pub fn unfetched_path(&self) -> PathBuf {
+        // TODO: handle panic with a proper error.
+        self.relative_to_parent_dir
+            .join(&self.local)
+            .canonicalize()
+            .unwrap_or_else(|_| {
+                panic!(
+                    "Failed to canonicalize local dependency path: {}",
+                    self.relative_to_parent_dir.join(&self.local).display()
+                )
+            })
     }
 }

@@ -2281,6 +2281,37 @@ impl Bytecode {
     }
 }
 
+impl move_abstract_interpreter::control_flow_graph::Instruction for Bytecode {
+    type Index = CodeOffset;
+    type VariantJumpTables = [VariantJumpTable];
+
+    const ENTRY_BLOCK_ID: CodeOffset = 0;
+
+    fn get_successors(
+        pc: Self::Index,
+        code: &[Self],
+        jump_tables: &Self::VariantJumpTables,
+    ) -> Vec<Self::Index> {
+        Bytecode::get_successors(pc, code, jump_tables)
+    }
+
+    fn offsets(&self, jump_tables: &Self::VariantJumpTables) -> Vec<Self::Index> {
+        self.offsets(jump_tables)
+    }
+
+    fn usize_as_index(i: usize) -> Self::Index {
+        i as CodeOffset
+    }
+
+    fn index_as_usize(i: Self::Index) -> usize {
+        i as usize
+    }
+
+    fn is_branch(&self) -> bool {
+        self.is_branch()
+    }
+}
+
 /// A `CompiledModule` defines the structure of a module which is the unit of published code.
 ///
 /// A `CompiledModule` contains a definition of types (with their fields) and functions.

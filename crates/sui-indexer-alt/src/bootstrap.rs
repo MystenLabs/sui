@@ -60,11 +60,13 @@ pub async fn bootstrap(
     //
     // - Get the Genesis system transaction from the genesis checkpoint.
     // - Get the system state object that was written out by the system transaction.
-    let genesis_checkpoint = indexer
-        .ingestion_client()
-        .wait_for(0, retry_interval, &cancel)
-        .await
-        .context("Failed to fetch genesis checkpoint")?;
+    let genesis_checkpoint = tokio::select! {
+        cp = indexer.ingestion_client().wait_for(0, retry_interval) =>
+            cp.context("Failed to fetch genesis checkpoint")?,
+        _ = cancel.cancelled() => {
+            bail!("Cancelled before genesis checkpoint was available");
+        }
+    };
 
     let CheckpointData {
         checkpoint_summary,

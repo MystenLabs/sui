@@ -56,6 +56,9 @@ pub enum ToolCommand {
         /// RPC address to provide the up-to-date committee info
         #[arg(long = "fullnode-rpc-url")]
         fullnode_rpc_url: String,
+        /// If true, uses plain HTTP to connect to validator interface
+        #[arg(long = "no-tls")]
+        no_tls: bool,
         /// Should attempt to rescue the object if it's locked but not fully locked
         #[arg(long = "rescue")]
         rescue: bool,
@@ -79,6 +82,10 @@ pub enum ToolCommand {
         // RPC address to provide the up-to-date committee info
         #[arg(long = "fullnode-rpc-url")]
         fullnode_rpc_url: String,
+
+        /// If true, uses plain HTTP to connect to validator interface
+        #[arg(long = "no-tls")]
+        no_tls: bool,
 
         /// Concise mode groups responses by results.
         /// prints tabular output suitable for processing with unix tools. For
@@ -109,6 +116,10 @@ pub enum ToolCommand {
         // RPC address to provide the up-to-date committee info
         #[arg(long = "fullnode-rpc-url")]
         fullnode_rpc_url: String,
+
+        /// If true, uses plain HTTP to connect to validator interface
+        #[arg(long = "no-tls")]
+        no_tls: bool,
 
         #[arg(long, help = "The transaction ID to fetch")]
         digest: TransactionDigest,
@@ -178,6 +189,10 @@ pub enum ToolCommand {
         // RPC address to provide the up-to-date committee info
         #[arg(long = "fullnode-rpc-url")]
         fullnode_rpc_url: String,
+
+        /// If true, uses plain HTTP to connect to validator interface
+        #[arg(long = "no-tls")]
+        no_tls: bool,
 
         #[arg(long, help = "Fetch checkpoint at a specific sequence number")]
         sequence_number: Option<CheckpointSequenceNumber>,
@@ -374,8 +389,9 @@ async fn check_locked_object(
     committee: Arc<BTreeMap<AuthorityPublicKeyBytes, u64>>,
     id: ObjectID,
     rescue: bool,
+    use_tls: bool,
 ) -> anyhow::Result<()> {
-    let clients = Arc::new(make_clients(sui_client).await?);
+    let clients = Arc::new(make_clients(sui_client, use_tls).await?);
     let output = get_object(id, None, None, clients.clone()).await?;
     let output = GroupedObjectOutput::new(output, committee);
     if output.fully_locked {
@@ -438,6 +454,7 @@ impl ToolCommand {
             ToolCommand::LockedObject {
                 id,
                 fullnode_rpc_url,
+                no_tls,
                 rescue,
                 address,
             } => {
@@ -472,6 +489,7 @@ impl ToolCommand {
                             committee.clone(),
                             *id,
                             rescue,
+                            !no_tls,
                         ))
                     }
                     join_all(tasks)
@@ -485,12 +503,13 @@ impl ToolCommand {
                 validator,
                 version,
                 fullnode_rpc_url,
+                no_tls,
                 verbosity,
                 concise_no_header,
             } => {
                 let sui_client =
                     Arc::new(SuiClientBuilder::default().build(fullnode_rpc_url).await?);
-                let clients = Arc::new(make_clients(&sui_client).await?);
+                let clients = Arc::new(make_clients(&sui_client, !no_tls).await?);
                 let output = get_object(id, version, validator, clients).await?;
 
                 match verbosity {
@@ -521,10 +540,11 @@ impl ToolCommand {
                 digest,
                 show_input_tx,
                 fullnode_rpc_url,
+                no_tls,
             } => {
                 print!(
                     "{}",
-                    get_transaction_block(digest, show_input_tx, fullnode_rpc_url).await?
+                    get_transaction_block(digest, show_input_tx, fullnode_rpc_url, !no_tls).await?
                 );
             }
             ToolCommand::DbTool { db_path, cmd } => {
@@ -573,10 +593,11 @@ impl ToolCommand {
             ToolCommand::FetchCheckpoint {
                 sequence_number,
                 fullnode_rpc_url,
+                no_tls,
             } => {
                 let sui_client =
                     Arc::new(SuiClientBuilder::default().build(fullnode_rpc_url).await?);
-                let clients = make_clients(&sui_client).await?;
+                let clients = make_clients(&sui_client, !no_tls).await?;
 
                 for (name, (_, client)) in clients {
                     let resp = client

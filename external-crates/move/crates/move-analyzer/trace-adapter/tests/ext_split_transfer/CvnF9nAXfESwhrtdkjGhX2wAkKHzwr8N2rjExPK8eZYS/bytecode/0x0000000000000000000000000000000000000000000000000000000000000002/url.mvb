@@ -1,0 +1,41 @@
+// Move bytecode v6
+module 2.url {
+use 0000000000000000000000000000000000000000000000000000000000000001::ascii;
+
+struct Url has copy, drop, store {
+	url: String
+}
+
+public new_unsafe(Arg0: String): Url {
+B0:
+	0: MoveLoc[0](Arg0: String)
+	1: Pack[0](Url)
+	2: Ret
+}
+
+public new_unsafe_from_bytes(Arg0: vector<u8>): Url {
+B0:
+	0: MoveLoc[0](Arg0: vector<u8>)
+	1: Call ascii::string(vector<u8>): String
+	2: Pack[0](Url)
+	3: Ret
+}
+
+public inner_url(Arg0: &Url): String {
+B0:
+	0: MoveLoc[0](Arg0: &Url)
+	1: ImmBorrowField[0](Url.url: String)
+	2: ReadRef
+	3: Ret
+}
+
+public update(Arg0: &mut Url, Arg1: String) {
+B0:
+	0: MoveLoc[1](Arg1: String)
+	1: MoveLoc[0](Arg0: &mut Url)
+	2: MutBorrowField[0](Url.url: String)
+	3: WriteRef
+	4: Ret
+}
+
+}

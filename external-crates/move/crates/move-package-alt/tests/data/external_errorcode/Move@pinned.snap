@@ -1,4 +1,4 @@
 ---
-source: crates/move-package-alt/tests/pinning_tests.rs
+source: crates/move-package-alt/tests/test_runner.rs
 ---
-mock-resolver returned error code: exit status: 1
+`mock-resolver` returned error code: exit status: 1

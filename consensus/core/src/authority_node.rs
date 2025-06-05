@@ -271,7 +271,10 @@ where
             dag_state.clone(),
             commit_consumer.block_sender.clone(),
         );
-        transaction_certifier.recover(block_verifier.as_ref());
+        transaction_certifier.recover(
+            block_verifier.as_ref(),
+            commit_consumer.last_processed_commit_index,
+        );
 
         let mut proposed_block_handler = ProposedBlockHandler::new(
             context.clone(),
@@ -307,6 +310,7 @@ where
             context.clone(),
             commit_consumer,
             dag_state.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
         );
 
@@ -493,6 +497,7 @@ mod tests {
 
     use consensus_config::{local_committee_and_keys, Parameters};
     use mysten_metrics::monitored_mpsc::UnboundedReceiver;
+    use mysten_metrics::RegistryService;
     use prometheus::Registry;
     use rstest::rstest;
     use sui_protocol_config::ProtocolConfig;
@@ -517,7 +522,7 @@ mod tests {
 
         let temp_dir = TempDir::new().unwrap();
         let parameters = Parameters {
-            db_path: temp_dir.into_path(),
+            db_path: temp_dir.keep(),
             ..Default::default()
         };
         let txn_verifier = NoopTransactionVerifier {};
@@ -557,22 +562,16 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn test_authority_committee(
         #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
-        #[values(0, 5, 10)] gc_depth: u32,
+        #[values(5, 10)] gc_depth: u32,
     ) {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
-        DBMetrics::init(&db_registry);
+        DBMetrics::init(RegistryService::new(db_registry));
 
         const NUM_OF_AUTHORITIES: usize = 4;
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
         let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
         protocol_config.set_consensus_gc_depth_for_testing(gc_depth);
-
-        if gc_depth == 0 {
-            protocol_config.set_consensus_linearize_subdag_v2_for_testing(false);
-            protocol_config.set_consensus_median_based_commit_timestamp_for_testing(false);
-            protocol_config.set_mysticeti_fastpath_for_testing(false);
-        }
 
         let temp_dirs = (0..NUM_OF_AUTHORITIES)
             .map(|_| TempDir::new().unwrap())
@@ -672,7 +671,7 @@ mod tests {
     ) {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
-        DBMetrics::init(&db_registry);
+        DBMetrics::init(RegistryService::new(db_registry));
 
         let (committee, keypairs) = local_committee_and_keys(0, vec![1; num_authorities]);
         let protocol_config: ProtocolConfig = ProtocolConfig::get_for_max_version_UNSAFE();
@@ -766,10 +765,10 @@ mod tests {
 
     #[rstest]
     #[tokio::test(flavor = "current_thread")]
-    async fn test_amnesia_recovery_success(#[values(0, 5, 10)] gc_depth: u32) {
+    async fn test_amnesia_recovery_success(#[values(5, 10)] gc_depth: u32) {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
-        DBMetrics::init(&db_registry);
+        DBMetrics::init(RegistryService::new(db_registry));
 
         const NUM_OF_AUTHORITIES: usize = 4;
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
@@ -781,12 +780,6 @@ mod tests {
 
         let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
         protocol_config.set_consensus_gc_depth_for_testing(gc_depth);
-
-        if gc_depth == 0 {
-            protocol_config.set_consensus_linearize_subdag_v2_for_testing(false);
-            protocol_config.set_consensus_median_based_commit_timestamp_for_testing(false);
-            protocol_config.set_mysticeti_fastpath_for_testing(false);
-        }
 
         for (index, _authority_info) in committee.authorities() {
             let dir = TempDir::new().unwrap();

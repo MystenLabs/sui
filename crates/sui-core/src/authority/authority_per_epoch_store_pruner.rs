@@ -84,7 +84,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_basic_epoch_pruner() {
-        let parent_directory = tempfile::tempdir().unwrap().into_path();
+        let parent_directory = tempfile::tempdir().unwrap().keep();
         let directories: Vec<_> = vec!["epoch_0", "epoch_1", "epoch_3", "epoch_4"]
             .into_iter()
             .map(|name| parent_directory.join(name))

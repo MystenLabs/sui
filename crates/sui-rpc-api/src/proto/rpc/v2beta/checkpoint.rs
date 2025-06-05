@@ -66,7 +66,9 @@ impl MessageMerge<sui_sdk_types::CheckpointSummary> for CheckpointSummary {
         mask: &crate::field_mask::FieldMaskTree,
     ) {
         if mask.contains(Self::BCS_FIELD.name) {
-            self.bcs = Some(Bcs::serialize(&source).unwrap());
+            let mut bcs = Bcs::serialize(&source).unwrap();
+            bcs.name = Some("CheckpointSummary".to_owned());
+            self.bcs = Some(bcs);
         }
 
         if mask.contains(Self::DIGEST_FIELD.name) {
@@ -491,7 +493,9 @@ impl MessageMerge<sui_sdk_types::CheckpointContents> for CheckpointContents {
         mask: &crate::field_mask::FieldMaskTree,
     ) {
         if mask.contains(Self::BCS_FIELD.name) {
-            self.bcs = Some(Bcs::serialize(&source).unwrap());
+            let mut bcs = Bcs::serialize(&source).unwrap();
+            bcs.name = Some("CheckpointContents".to_owned());
+            self.bcs = Some(bcs);
         }
 
         if mask.contains(Self::DIGEST_FIELD.name) {

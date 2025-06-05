@@ -1,0 +1,11 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === ERRORS AFTER PARSING INPUT COMMANDS === 
+  × Error when processing PTB
+   ╭────
+ 1 │ --sender @abcd 
+   ·          ──┬──
+   ·            ╰── Expected a numerical address but got a named address 'abcd'
+   ╰────

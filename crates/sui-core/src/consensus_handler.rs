@@ -32,6 +32,7 @@ use sui_types::{
     messages_consensus::{
         AuthorityIndex, ConsensusDeterminedVersionAssignments, ConsensusTransaction,
         ConsensusTransactionKey, ConsensusTransactionKind, ExecutionTimeObservation,
+        TransactionIndex,
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{SenderSignedData, VerifiedTransaction},
@@ -46,6 +47,7 @@ use crate::{
             ExecutionIndicesWithStats,
         },
         backpressure::{BackpressureManager, BackpressureSubscriber},
+        consensus_tx_status_cache::ConsensusTxStatus,
         epoch_start_configuration::EpochStartConfigTrait,
         AuthorityMetrics, AuthorityState,
     },
@@ -53,8 +55,9 @@ use crate::{
     consensus_throughput_calculator::ConsensusThroughputCalculator,
     consensus_types::consensus_output_api::{parse_block_transactions, ConsensusCommitAPI},
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
+    execution_scheduler::{ExecutionSchedulerAPI, ExecutionSchedulerWrapper},
     scoring_decision::update_low_scoring_authorities,
-    transaction_manager::TransactionManager,
+    wait_for_effects_request::ConsensusTxPosition,
 };
 
 pub struct ConsensusHandlerInitializer {
@@ -111,7 +114,7 @@ impl ConsensusHandlerInitializer {
         ConsensusHandler::new(
             self.epoch_store.clone(),
             self.checkpoint_service.clone(),
-            self.state.transaction_manager().clone(),
+            self.state.execution_scheduler().clone(),
             self.state.get_object_cache_reader().clone(),
             self.state.get_transaction_cache_reader().clone(),
             self.low_scoring_authorities.clone(),
@@ -419,7 +422,7 @@ mod additional_consensus_state {
             }
 
             /// Returns all accepted and rejected transactions per block in the commit in deterministic order.
-            fn transactions(&self) -> Vec<(AuthorityIndex, Vec<ParsedTransaction>)> {
+            fn transactions(&self) -> Vec<(consensus_core::BlockRef, Vec<ParsedTransaction>)> {
                 vec![]
             }
 
@@ -493,10 +496,10 @@ pub struct ConsensusHandler<C> {
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
 
 impl<C> ConsensusHandler<C> {
-    pub fn new(
+    pub(crate) fn new(
         epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint_service: Arc<C>,
-        transaction_manager: Arc<TransactionManager>,
+        execution_scheduler: Arc<ExecutionSchedulerWrapper>,
         cache_reader: Arc<dyn ObjectCacheRead>,
         tx_reader: Arc<dyn TransactionCacheRead>,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
@@ -514,7 +517,7 @@ impl<C> ConsensusHandler<C> {
             last_consensus_stats.stats = ConsensusStats::new(committee.size());
         }
         let transaction_manager_sender =
-            TransactionManagerSender::start(transaction_manager, epoch_store.clone());
+            TransactionManagerSender::start(execution_scheduler, epoch_store.clone());
         let commit_rate_estimate_window_size = epoch_store
             .protocol_config()
             .get_consensus_commit_rate_estimation_window_size();
@@ -573,6 +576,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let _scope = monitored_scope("ConsensusCommitHandler::handle_consensus_commit");
 
         let last_committed_round = self.last_consensus_stats.index.last_committed_round;
+
+        if let Some(consensus_tx_status_cache) = self.epoch_store.consensus_tx_status_cache.as_ref()
+        {
+            consensus_tx_status_cache
+                .update_last_committed_leader_round(last_committed_round)
+                .await;
+        }
 
         let commit_info = if self
             .epoch_store
@@ -703,16 +713,28 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         {
             let span = trace_span!("ConsensusHandler::HandleCommit::process_consensus_txns");
             let _guard = span.enter();
-            for (authority_index, parsed_transactions) in consensus_commit.transactions() {
+            for (block, parsed_transactions) in consensus_commit.transactions() {
+                let author = block.author.value();
                 // TODO: consider only messages within 1~3 rounds of the leader?
-                self.last_consensus_stats
-                    .stats
-                    .inc_num_messages(authority_index as usize);
-                for parsed in parsed_transactions {
-                    // Skip executing rejected transactions. Unlocking is the responsibility of the
-                    // consensus transaction handler.
+                self.last_consensus_stats.stats.inc_num_messages(author);
+                for (tx_index, parsed) in parsed_transactions.into_iter().enumerate() {
+                    let position = ConsensusTxPosition {
+                        block,
+                        index: tx_index as TransactionIndex,
+                    };
                     if parsed.rejected {
+                        // TODO(fastpath): Add metrics for rejected transactions.
+                        if parsed.transaction.kind.is_user_transaction() {
+                            self.epoch_store
+                                .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
+                        }
+                        // Skip executing rejected transactions.
+                        // TODO(fastpath): Handle unlocking.
                         continue;
+                    }
+                    if parsed.transaction.kind.is_user_transaction() {
+                        self.epoch_store
+                            .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
                     }
                     let kind = classify(&parsed.transaction);
                     self.metrics
@@ -731,7 +753,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     ) {
                         self.last_consensus_stats
                             .stats
-                            .inc_num_user_transactions(authority_index as usize);
+                            .inc_num_user_transactions(author);
                     }
                     if let ConsensusTransactionKind::RandomnessStateUpdate(randomness_round, _) =
                         &parsed.transaction.kind
@@ -745,7 +767,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     } else {
                         let transaction =
                             SequencedConsensusTransactionKind::External(parsed.transaction);
-                        transactions.push((transaction, authority_index));
+                        transactions.push((transaction, author as u32));
                     }
                 }
             }
@@ -856,11 +878,11 @@ pub(crate) struct TransactionManagerSender {
 
 impl TransactionManagerSender {
     fn start(
-        transaction_manager: Arc<TransactionManager>,
+        execution_scheduler: Arc<ExecutionSchedulerWrapper>,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) -> Self {
         let (sender, recv) = monitored_mpsc::unbounded_channel("transaction_manager_sender");
-        spawn_monitored_task!(Self::run(recv, transaction_manager, epoch_store));
+        spawn_monitored_task!(Self::run(recv, execution_scheduler, epoch_store));
         Self { sender }
     }
 
@@ -870,12 +892,12 @@ impl TransactionManagerSender {
 
     async fn run(
         mut recv: monitored_mpsc::UnboundedReceiver<Vec<VerifiedExecutableTransaction>>,
-        transaction_manager: Arc<TransactionManager>,
+        execution_scheduler: Arc<ExecutionSchedulerWrapper>,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) {
         while let Some(transactions) = recv.recv().await {
             let _guard = monitored_scope("ConsensusHandler::enqueue");
-            transaction_manager.enqueue(transactions, &epoch_store);
+            execution_scheduler.enqueue(transactions, &epoch_store);
         }
     }
 }
@@ -1236,67 +1258,57 @@ impl ConsensusBlockHandler {
         let parsed_transactions = blocks_output
             .blocks
             .into_iter()
-            .flat_map(|certified_block| {
-                parse_block_transactions(&certified_block.block, &certified_block.rejected)
+            .map(|certified_block| {
+                let block_ref = certified_block.block.reference();
+                let transactions =
+                    parse_block_transactions(&certified_block.block, &certified_block.rejected);
+                (block_ref, transactions)
             })
             .collect::<Vec<_>>();
-        let mut pending_consensus_transactions = vec![];
-        let executable_transactions: Vec<_> = parsed_transactions
-            .into_iter()
-            .filter_map(|parsed| {
-                // TODO(fastpath): unlock rejected transactions.
-                // TODO(fastpath): maybe avoid parsing blocks twice between commit and transaction handling?
+        let mut executable_transactions = vec![];
+        for (idx, (block, transactions)) in parsed_transactions.into_iter().enumerate() {
+            for parsed in transactions {
+                let position = ConsensusTxPosition {
+                    block,
+                    index: idx as TransactionIndex,
+                };
                 if parsed.rejected {
+                    // TODO(fastpath): avoid parsing blocks twice between handling commit and fastpath transactions?
+                    self.epoch_store
+                        .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
                     self.metrics
                         .consensus_block_handler_txn_processed
                         .with_label_values(&["rejected"])
                         .inc();
-                    return None;
+                    continue;
                 }
+                self.epoch_store
+                    .set_consensus_tx_status(position, ConsensusTxStatus::FastpathCertified);
+
                 self.metrics
                     .consensus_block_handler_txn_processed
                     .with_label_values(&["certified"])
                     .inc();
-                match &parsed.transaction.kind {
-                    ConsensusTransactionKind::UserTransaction(tx) => {
-                        // TODO(fastpath): use a separate function to check if a transaction should be executed in fastpath.
-                        if tx.contains_shared_object() {
-                            return None;
-                        }
-                        pending_consensus_transactions.push(parsed.transaction.clone());
-                        let tx = VerifiedTransaction::new_unchecked(*tx.clone());
-                        Some(VerifiedExecutableTransaction::new_from_consensus(
+                if let ConsensusTransactionKind::UserTransaction(tx) = parsed.transaction.kind {
+                    // TODO(fastpath): use a separate function to check if a transaction should be executed in fastpath.
+                    if tx.contains_shared_object() {
+                        continue;
+                    }
+                    let tx = VerifiedTransaction::new_unchecked(*tx);
+                    executable_transactions.push(
+                        VerifiedExecutableTransaction::new_from_consensus(
                             tx,
                             self.epoch_store.epoch(),
-                        ))
-                    }
-                    _ => None,
+                        ),
+                    );
                 }
-            })
-            .collect();
+            }
+        }
 
-        if pending_consensus_transactions.is_empty() {
+        if executable_transactions.is_empty() {
             return;
         }
-        {
-            let reconfig_state = self.epoch_store.get_reconfig_state_read_lock_guard();
-            // Stop executing fastpath transactions when epoch change starts.
-            if !reconfig_state.should_accept_user_certs() {
-                return;
-            }
-            // Otherwise, try to ensure the certified transactions get into consensus before epoch change.
-            // TODO(fastpath): avoid race with removals in consensus adapter, by waiting to handle commit after
-            // all blocks in the commit are processed via the transaction handler. Other kinds of races need to be
-            // avoided as well. Or we can track pending consensus transactions inside consensus instead.
-            self.epoch_store
-                .insert_pending_consensus_transactions(
-                    &pending_consensus_transactions,
-                    Some(&reconfig_state),
-                )
-                .unwrap_or_else(|e| {
-                    panic!("Failed to insert pending consensus transactions: {}", e)
-                });
-        }
+
         self.metrics
             .consensus_block_handler_fastpath_executions
             .inc_by(executable_transactions.len() as u64);
@@ -1427,7 +1439,7 @@ mod tests {
         let mut consensus_handler = ConsensusHandler::new(
             epoch_store,
             Arc::new(CheckpointServiceNoop {}),
-            state.transaction_manager().clone(),
+            state.execution_scheduler().clone(),
             state.get_object_cache_reader().clone(),
             state.get_transaction_cache_reader().clone(),
             Arc::new(ArcSwap::default()),
@@ -1503,10 +1515,8 @@ mod tests {
         let committed_sub_dag = CommittedSubDag::new(
             leader_block.reference(),
             blocks.clone(),
-            vec![vec![]; blocks.len()],
             leader_block.timestamp_ms(),
             CommitRef::new(10, CommitDigest::MIN),
-            vec![],
         );
 
         // Test that the consensus handler respects backpressure.
@@ -1584,7 +1594,7 @@ mod tests {
         }
 
         // THEN check for no inflight or suspended transactions.
-        state.transaction_manager().check_empty_for_testing();
+        state.execution_scheduler().check_empty_for_testing();
 
         // WHEN processing the same output multiple times
         // THEN the consensus stats do not update
@@ -1629,7 +1639,7 @@ mod tests {
             .await;
         let epoch_store = state.epoch_store_for_testing().clone();
         let transaction_manager_sender = TransactionManagerSender::start(
-            state.transaction_manager().clone(),
+            state.execution_scheduler().clone(),
             epoch_store.clone(),
         );
 
@@ -1713,7 +1723,7 @@ mod tests {
         }
 
         // THEN check for no inflight or suspended transactions.
-        state.transaction_manager().check_empty_for_testing();
+        state.execution_scheduler().check_empty_for_testing();
 
         // THEN check that rejected transactions are not executed.
         for (i, t) in transactions.iter().enumerate() {

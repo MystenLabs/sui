@@ -16,7 +16,7 @@ task 2, lines 44-46:
 //# run ex::m::mint
 created: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 8557600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 8375200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3, lines 47-49:
 //# view-object 2,0
@@ -32,7 +32,7 @@ Contents: ex::m::PubA {
 
 task 4, lines 50-52:
 //# view-object 2,1
-Owner: ConsensusV2( 3, SingleOwner(_) )
+Owner: ConsensusAddressOwner( 3, _ )
 Version: 3
 Contents: ex::m::PubA {
     id: sui::object::UID {
@@ -68,7 +68,7 @@ Contents: ex::m::PubB {
 
 task 7, lines 59-61:
 //# view-object 2,4
-Owner: ConsensusV2( 3, SingleOwner(fake(2,1)) )
+Owner: ConsensusAddressOwner( 3, fake(2,1) )
 Version: 3
 Contents: ex::m::PubB {
     id: sui::object::UID {
@@ -80,7 +80,7 @@ Contents: ex::m::PubB {
 
 task 8, lines 62-65:
 //# view-object 2,5
-Owner: ConsensusV2( 3, SingleOwner(fake(2,0)) )
+Owner: ConsensusAddressOwner( 3, fake(2,0) )
 Version: 3
 Contents: ex::m::PubB {
     id: sui::object::UID {
@@ -110,7 +110,7 @@ Contents: ex::m::PubB {
 task 11, line 72:
 //# run ex::m::receiver --args object(2,1) receiving(2,3)
 mutated: object(0,2), object(2,1), object(2,3)
-gas summary: computation_cost: 1000000, storage_cost: 3511200,  storage_rebate: 3476088, non_refundable_storage_fee: 35112
+gas summary: computation_cost: 1000000, storage_cost: 3450400,  storage_rebate: 3415896, non_refundable_storage_fee: 34504
 
 task 12, lines 74-77:
 //# view-object 2,3

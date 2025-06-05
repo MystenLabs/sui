@@ -10,14 +10,16 @@ use std::{
 
 use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
+use tracing::{debug, info};
 
 use crate::{
-    dependency::{DependencySet, ManifestDependencyInfo},
-    errors::{FileHandle, Located, ManifestError, ManifestErrorKind, PackageResult, with_file},
+    dependency::{DependencySet, UnpinnedDependencyInfo},
+    errors::{FileHandle, Located, ManifestError, ManifestErrorKind, PackageResult, TheFile},
     flavor::{MoveFlavor, Vanilla},
 };
 
 use super::*;
+use sha2::{Digest as ShaDigest, Sha256};
 
 // TODO: add 2025 edition
 const ALLOWED_EDITIONS: &[&str] = &["2024", "2024.beta", "legacy"];
@@ -61,7 +63,7 @@ struct PackageMetadata<F: MoveFlavor> {
 #[serde(rename_all = "kebab-case")]
 pub struct ManifestDependency<F: MoveFlavor> {
     #[serde(flatten)]
-    dependency_info: ManifestDependencyInfo<F>,
+    dependency_info: UnpinnedDependencyInfo<F>,
 
     #[serde(rename = "override", default)]
     is_override: bool,
@@ -85,10 +87,12 @@ pub struct ManifestDependencyReplacement<F: MoveFlavor> {
 }
 
 impl<F: MoveFlavor> Manifest<F> {
-    pub fn read_from(path: impl AsRef<Path>) -> PackageResult<Self> {
+    /// Read the manifest file at the given path, returning a [`Manifest`].
+    pub fn read_from_file(path: impl AsRef<Path>) -> PackageResult<Self> {
+        debug!("Reading manifest from {:?}", path.as_ref());
         let contents = std::fs::read_to_string(&path)?;
 
-        let (manifest, file_id) = with_file(&path, toml_edit::de::from_str::<Self>)?;
+        let (manifest, file_id) = TheFile::with_file(&path, toml_edit::de::from_str::<Self>)?;
 
         match manifest {
             Ok(manifest) => {
@@ -142,7 +146,7 @@ impl<F: MoveFlavor> Manifest<F> {
     }
 
     /// Return the dependency set of this manifest, including replacements.
-    pub fn dependencies(&self) -> DependencySet<ManifestDependencyInfo<F>> {
+    pub fn dependencies(&self) -> DependencySet<UnpinnedDependencyInfo<F>> {
         let mut deps = DependencySet::new();
 
         for (name, dep) in &self.dependencies {
@@ -162,9 +166,9 @@ impl<F: MoveFlavor> Manifest<F> {
     pub fn environments(&self) -> &BTreeMap<EnvironmentName, F::EnvironmentID> {
         &self.environments
     }
+}
 
-    /// Compute a digest of this file
-    pub fn digest(&self) -> Digest {
-        todo!()
-    }
+/// Compute a digest of this input data using SHA-256.
+pub fn digest(data: &[u8]) -> Digest {
+    format!("{:X}", Sha256::digest(data))
 }

@@ -22,15 +22,15 @@ impl BalanceChange {
         use NativeOwner as O;
 
         match self.stored.owner {
-            O::AddressOwner(addr) | O::ObjectOwner(addr) => Some(Owner {
+            O::AddressOwner(addr)
+            | O::ObjectOwner(addr)
+            | O::ConsensusAddressOwner { owner: addr, .. } => Some(Owner {
                 address: SuiAddress::from(addr),
                 checkpoint_viewed_at: self.checkpoint_viewed_at,
                 root_version: None,
             }),
 
             O::Shared { .. } | O::Immutable => None,
-            // TODO: Implement support for ConsensusV2 objects.
-            O::ConsensusV2 { .. } => todo!(),
         }
     }
 

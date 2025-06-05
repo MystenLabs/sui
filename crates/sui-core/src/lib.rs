@@ -20,6 +20,7 @@ pub mod db_checkpoint_handler;
 pub mod epoch;
 pub mod execution_cache;
 mod execution_driver;
+mod execution_scheduler;
 mod fallback_fetch;
 pub mod global_state_hasher;
 pub mod jsonrpc_index;
@@ -42,11 +43,11 @@ pub mod test_utils;
 pub mod traffic_controller;
 pub mod transaction_driver;
 mod transaction_input_loader;
-mod transaction_manager;
 pub mod transaction_orchestrator;
 mod transaction_outputs;
 pub mod validator_tx_finalizer;
 pub mod verify_indexes;
+mod wait_for_effects_request;
 
 #[cfg(test)]
 #[path = "unit_tests/congestion_control_tests.rs"]

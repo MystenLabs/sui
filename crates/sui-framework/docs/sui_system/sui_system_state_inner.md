@@ -195,7 +195,7 @@ A list of system config parameters.
 
 ## Struct `SystemParametersV2`
 
-Added min_validator_count.
+Added <code>min_validator_count</code>.
 
 
 <pre><code><b>public</b> <b>struct</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SystemParametersV2">SystemParametersV2</a> <b>has</b> store
@@ -1275,7 +1275,7 @@ Add stake to a validator's staking pool using multiple coins.
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_add_stake_mul_coin">request_add_stake_mul_coin</a>(
     self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
     stakes: vector&lt;Coin&lt;SUI&gt;&gt;,
-    stake_amount: option::Option&lt;u64&gt;,
+    stake_amount: Option&lt;u64&gt;,
     validator_address: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ): StakedSui {
@@ -1469,7 +1469,7 @@ Undo a <code><a href="../sui_system/sui_system_state_inner.md#sui_system_sui_sys
     <b>if</b> (!validator_report_records.contains(&reportee_addr)) {
         validator_report_records.insert(reportee_addr, vec_set::singleton(reporter_address));
     } <b>else</b> {
-        <b>let</b> reporters = validator_report_records.get_mut(&reportee_addr);
+        <b>let</b> reporters = &<b>mut</b> validator_report_records[&reportee_addr];
         <b>if</b> (!reporters.contains(&reporter_address)) {
             reporters.insert(reporter_address);
         }
@@ -1502,7 +1502,7 @@ Undo a <code><a href="../sui_system/sui_system_state_inner.md#sui_system_sui_sys
     validator_report_records: &<b>mut</b> VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
 ) {
     <b>assert</b>!(validator_report_records.contains(&reportee_addr), <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EReportRecordNotFound">EReportRecordNotFound</a>);
-    <b>let</b> reporters = validator_report_records.get_mut(&reportee_addr);
+    <b>let</b> reporters = &<b>mut</b> validator_report_records[&reportee_addr];
     <b>let</b> reporter_addr = *verified_cap.verified_operation_cap_address();
     <b>assert</b>!(reporters.contains(&reporter_addr), <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EReportRecordNotFound">EReportRecordNotFound</a>);
     reporters.remove(&reporter_addr);
@@ -1687,7 +1687,7 @@ The change will only take effects starting from the next epoch.
 ) {
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.validators.get_validator_mut_with_ctx(ctx);
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.update_next_epoch_network_address(network_address);
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Force immutability <b>for</b> the following call
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
 }
 </code></pre>
@@ -1750,7 +1750,7 @@ The change will only take effects starting from the next epoch.
 ) {
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.validators.get_validator_mut_with_ctx(ctx);
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.update_next_epoch_p2p_address(p2p_address);
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Force immutability <b>for</b> the following call
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
 }
 </code></pre>
@@ -1936,7 +1936,7 @@ The change will only take effects starting from the next epoch.
 ) {
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.validators.get_validator_mut_with_ctx(ctx);
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.update_next_epoch_protocol_pubkey(protocol_pubkey, proof_of_possession);
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Force immutability <b>for</b> the following call
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
 }
 </code></pre>
@@ -2000,7 +2000,7 @@ The change will only take effects starting from the next epoch.
 ) {
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.validators.get_validator_mut_with_ctx(ctx);
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.update_next_epoch_worker_pubkey(worker_pubkey);
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Force immutability <b>for</b> the following call
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
 }
 </code></pre>
@@ -2063,7 +2063,7 @@ The change will only take effects starting from the next epoch.
 ) {
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.validators.get_validator_mut_with_ctx(ctx);
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.update_next_epoch_network_pubkey(network_pubkey);
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Force immutability <b>for</b> the following call
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator = <a href="../sui_system/validator.md#sui_system_validator">validator</a>; // Avoid parallel mutable borrow.
     self.validators.assert_no_pending_or_active_duplicates(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
 }
 </code></pre>
@@ -2132,8 +2132,9 @@ gas coins.
     <b>mut</b> computation_reward: Balance&lt;SUI&gt;,
     <b>mut</b> storage_rebate_amount: u64,
     <b>mut</b> non_refundable_storage_fee_amount: u64,
-    storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
+    // share of storage fund's rewards that's reinvested
     // into storage fund, in basis point.
+    storage_fund_reinvest_rate: u64,
     reward_slashing_rate: u64, // how much rewards are slashed to punish a <a href="../sui_system/validator.md#sui_system_validator">validator</a>, in bps.
     <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch_start_timestamp_ms">epoch_start_timestamp_ms</a>: u64, // Timestamp of the <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch">epoch</a> start
     ctx: &<b>mut</b> TxContext,
@@ -2693,7 +2694,7 @@ Extract required Balance from vector of Coin<SUI>, transfer the remainder back t
 
 <pre><code><b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extract_coin_balance">extract_coin_balance</a>(
     <b>mut</b> coins: vector&lt;Coin&lt;SUI&gt;&gt;,
-    amount: option::Option&lt;u64&gt;,
+    amount: Option&lt;u64&gt;,
     ctx: &<b>mut</b> TxContext,
 ): Balance&lt;SUI&gt; {
     <b>let</b> acc = coins.pop_back();
