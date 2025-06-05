@@ -738,6 +738,180 @@ async fn party_object_grpc() {
     assert!(objects.iter().any(|o| o.object_id() == object_id_str))
 }
 
+/// Ensure that party coin objects show up in the owner index and then resolve ignored them for gas
+/// selection
+#[sim_test]
+async fn party_coin_grpc() {
+    use sui_rpc_api::field_mask::FieldMask;
+    use sui_rpc_api::field_mask::FieldMaskUtil;
+    use sui_rpc_api::proto::rpc::v2alpha::live_data_service_client::LiveDataServiceClient;
+    use sui_rpc_api::proto::rpc::v2alpha::ListOwnedObjectsRequest;
+    use sui_rpc_api::proto::rpc::v2alpha::ResolveTransactionRequest;
+    use sui_rpc_api::proto::rpc::v2beta::ledger_service_client::LedgerServiceClient;
+    use sui_rpc_api::proto::rpc::v2beta::owner::OwnerKind;
+    use sui_rpc_api::proto::rpc::v2beta::Argument;
+    use sui_rpc_api::proto::rpc::v2beta::Command;
+    use sui_rpc_api::proto::rpc::v2beta::GetObjectRequest;
+    use sui_rpc_api::proto::rpc::v2beta::Input;
+    use sui_rpc_api::proto::rpc::v2beta::MoveCall;
+    use sui_rpc_api::proto::rpc::v2beta::ProgrammableTransaction;
+    use sui_rpc_api::proto::rpc::v2beta::Transaction;
+    use sui_rpc_api::proto::rpc::v2beta::TransactionKind;
+    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+    use sui_types::transaction::{CallArg, ObjectArg, TransactionData};
+    use sui_types::Identifier;
+
+    let cluster = TestClusterBuilder::new().build().await;
+    let channel = tonic::transport::Channel::from_shared(cluster.rpc_url().to_owned())
+        .unwrap()
+        .connect()
+        .await
+        .unwrap();
+
+    let mut live_data_service_client = LiveDataServiceClient::new(channel.clone());
+    let mut ledger_service_client = LedgerServiceClient::new(channel);
+
+    // Make a transaction to transfer 1 gas coin that is Address owned and 1 gas coin that is
+    // ConsensusAddress owned
+    let (sender, gas) = cluster.wallet.get_one_account().await.unwrap();
+    let recipient = SuiAddress::ZERO;
+    let gas_coin = gas[0];
+    let party_coin = gas[1];
+    let owned_coin = gas[2];
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let recipient_arg = builder
+        .input(CallArg::Pure(bcs::to_bytes(&recipient).unwrap()))
+        .unwrap();
+    let party_owner = builder.programmable_move_call(
+        "0x2".parse().unwrap(),
+        Identifier::new("party").unwrap(),
+        Identifier::new("single_owner").unwrap(),
+        vec![],
+        vec![recipient_arg],
+    );
+    let party_coin_arg = builder
+        .input(CallArg::Object(ObjectArg::ImmOrOwnedObject(party_coin)))
+        .unwrap();
+    builder.programmable_move_call(
+        "0x2".parse().unwrap(),
+        Identifier::new("transfer").unwrap(),
+        Identifier::new("public_party_transfer").unwrap(),
+        vec!["0x2::coin::Coin<0x2::sui::SUI>".parse().unwrap()],
+        vec![party_coin_arg, party_owner],
+    );
+    builder.transfer_object(recipient, owned_coin).unwrap();
+    let ptb = builder.finish();
+
+    let gas_data = sui_types::transaction::GasData {
+        payment: vec![gas_coin],
+        owner: sender,
+        price: 1000,
+        budget: 100_000_000,
+    };
+
+    let kind = sui_types::transaction::TransactionKind::ProgrammableTransaction(ptb);
+    let tx_data = TransactionData::new_with_gas_data(kind, sender, gas_data);
+
+    cluster
+        .sign_and_execute_transaction(&tx_data)
+        .await
+        .effects
+        .unwrap();
+
+    // run a list operation to make sure the party and non-party coins show up
+    let resp = ledger_service_client
+        .get_object(GetObjectRequest {
+            object_id: Some(party_coin.0.to_canonical_string(true)),
+            read_mask: Some(FieldMask::from_paths([
+                "object_id",
+                "version",
+                "digest",
+                "owner",
+                "object_type",
+            ])),
+
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_inner();
+    let actual_owner = resp.owner.unwrap();
+    assert_eq!(actual_owner.kind(), OwnerKind::ConsensusAddress);
+    assert_eq!(actual_owner.address(), recipient.to_string());
+    assert!(actual_owner.version.is_some());
+
+    let objects = live_data_service_client
+        .list_owned_objects(ListOwnedObjectsRequest {
+            owner: Some(recipient.to_string()),
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .objects;
+
+    // We expect that we should be able to find the party coin
+    assert!(objects
+        .iter()
+        .any(|o| o.object_id() == party_coin.0.to_canonical_string(true)
+            && o.owner.as_ref().is_some_and(|owner| {
+                owner.kind() == OwnerKind::ConsensusAddress
+                    && owner.address() == recipient.to_string()
+                    && owner.version == actual_owner.version
+            })));
+    // We expect that we should be able to find the non-party coin
+    assert!(objects
+        .iter()
+        .any(|o| o.object_id() == owned_coin.0.to_canonical_string(true)
+            && o.owner.as_ref().is_some_and(|owner| {
+                owner.kind() == OwnerKind::Address
+                    && owner.address() == recipient.to_string()
+                    && owner.version.is_none()
+            })));
+
+    // Now we need to ensure that we can properly do gas selection when we have party-gas
+    let unresolved_transaction = Transaction {
+        kind: Some(TransactionKind::from(ProgrammableTransaction {
+            inputs: vec![Input {
+                object_id: Some("0x6".to_owned()),
+                ..Default::default()
+            }],
+            commands: vec![Command::from(MoveCall {
+                package: Some("0x2".to_owned()),
+                module: Some("clock".to_owned()),
+                function: Some("timestamp_ms".to_owned()),
+                type_arguments: vec![],
+                arguments: vec![Argument::new_input(0)],
+            })],
+        })),
+        sender: Some(recipient.to_string()),
+        ..Default::default()
+    };
+
+    let resolved = live_data_service_client
+        .resolve_transaction(ResolveTransactionRequest {
+            unresolved_transaction: Some(unresolved_transaction),
+            read_mask: Some(FieldMask::from_str("simulation")),
+        })
+        .await
+        .unwrap()
+        .into_inner();
+
+    // Assert that the simulation was successful
+    assert!(resolved
+        .simulation
+        .unwrap()
+        .transaction
+        .unwrap()
+        .effects
+        .unwrap()
+        .status
+        .unwrap()
+        .success
+        .unwrap());
+}
+
 /// Transfer a party object as the object owner and ensure jsonrpc properly handles updating its
 /// indexes
 #[sim_test]

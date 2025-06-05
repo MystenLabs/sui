@@ -600,6 +600,8 @@ pub trait RpcIndexes: Send + Sync {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct OwnedObjectInfo {
     pub owner: SuiAddress,
+    // Indicates if this is a normal Address or ConsensusAddress owned object
+    pub start_version: Option<SequenceNumber>,
     pub object_type: StructTag,
     pub balance: Option<u64>,
     pub object_id: ObjectID,

@@ -807,6 +807,9 @@ fn select_gas(
         .indexes()
         .ok_or_else(RpcError::not_found)?
         .owned_objects_iter(owner, Some(GasCoin::type_()), None)?
+        // filter for objects which are not ConsensusAddress owned,
+        // since only Address owned can be used for gas payments today
+        .filter_ok(|info| info.start_version.is_none())
         .filter_ok(|info| !input_objects.contains(&info.object_id))
         .filter_map_ok(|info| reader.inner().get_object(&info.object_id))
         .filter_map_ok(|object| {
