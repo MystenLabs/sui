@@ -1391,6 +1391,7 @@ impl SuiNode {
                 ),
             )
             .await;
+        let consensus_replay_waiter = consensus_manager.replay_waiter();
 
         if !epoch_store
             .epoch_start_config()
@@ -1402,7 +1403,7 @@ impl SuiNode {
         }
 
         info!("Spawning checkpoint service");
-        let checkpoint_service_tasks = checkpoint_service.spawn().await;
+        let checkpoint_service_tasks = checkpoint_service.spawn(consensus_replay_waiter).await;
 
         if epoch_store.authenticator_state_enabled() {
             Self::start_jwk_updater(
