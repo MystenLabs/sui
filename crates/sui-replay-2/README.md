@@ -19,7 +19,7 @@ Options:
       --trace [<TRACE>]              Provide a directory to collect tracing. Or defaults to `<cur_dir>/.replay/<digest>`
   -h, --help                         Print help
 ```
-digests are provided either on the command line or in a file that contains digests one per line.<br>
+Digests are provided either on the command line or in a file that contains digests one per line.<br>
 By default the tool only execute transactions. To verify that the executed transaction produces
 the same effects as the one executed by the system one must pass the `-v` flag. That is likely to be 
 the default in time but it's off for conveenience.<br>
