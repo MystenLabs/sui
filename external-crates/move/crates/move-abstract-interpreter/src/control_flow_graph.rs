@@ -3,70 +3,98 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! This module defines the control-flow graph uses for bytecode verification.
-use move_binary_format::file_format::{Bytecode, CodeOffset, VariantJumpTable};
 use std::collections::{BTreeMap, BTreeSet, btree_map::Entry};
-
-// BTree/Hash agnostic type wrappers
-type Map<K, V> = BTreeMap<K, V>;
-type Set<V> = BTreeSet<V>;
-
-pub type BlockId = CodeOffset;
 
 /// A trait that specifies the basic requirements for a CFG
 pub trait ControlFlowGraph {
+    type BlockId: Copy + Ord;
+    type InstructionIndex: Copy + Ord;
+    type Instruction;
+    type Instructions: ?Sized;
+
     /// Start index of the block ID in the bytecode vector
-    fn block_start(&self, block_id: BlockId) -> CodeOffset;
+    fn block_start(&self, block_id: Self::BlockId) -> Self::InstructionIndex;
 
     /// End index of the block ID in the bytecode vector
-    fn block_end(&self, block_id: BlockId) -> CodeOffset;
+    fn block_end(&self, block_id: Self::BlockId) -> Self::InstructionIndex;
 
     /// Successors of the block ID in the bytecode vector
-    fn successors(&self, block_id: BlockId) -> &Vec<BlockId>;
+    fn successors(&self, block_id: Self::BlockId) -> &[Self::BlockId];
 
     /// Return the next block in traversal order
-    fn next_block(&self, block_id: BlockId) -> Option<BlockId>;
+    fn next_block(&self, block_id: Self::BlockId) -> Option<Self::BlockId>;
 
     /// Iterator over the indexes of instructions in this block
-    fn instr_indexes(&self, block_id: BlockId) -> Box<dyn Iterator<Item = CodeOffset>>;
+    fn instructions<'a>(
+        &self,
+        function_code: &'a Self::Instructions,
+        block_id: Self::BlockId,
+    ) -> impl IntoIterator<Item = (Self::InstructionIndex, &'a Self::Instruction)>
+    where
+        Self::Instruction: 'a;
 
     /// Return an iterator over the blocks of the CFG
-    fn blocks(&self) -> Vec<BlockId>;
+    fn blocks(&self) -> Vec<Self::BlockId>;
 
     /// Return the number of blocks (vertices) in the control flow graph
-    fn num_blocks(&self) -> u16;
+    fn num_blocks(&self) -> usize;
 
     /// Return the id of the entry block for this control-flow graph
     /// Note: even a CFG with no instructions has an (empty) entry block.
-    fn entry_block_id(&self) -> BlockId;
+    fn entry_block_id(&self) -> Self::BlockId;
 
     /// Checks if the block ID is a loop head
-    fn is_loop_head(&self, block_id: BlockId) -> bool;
+    fn is_loop_head(&self, block_id: Self::BlockId) -> bool;
 
     /// Checks if the edge from cur->next is a back edge
     /// returns false if the edge is not in the cfg
-    fn is_back_edge(&self, cur: BlockId, next: BlockId) -> bool;
+    fn is_back_edge(&self, cur: Self::BlockId, next: Self::BlockId) -> bool;
 
     /// Return the number of back edges in the cfg
     fn num_back_edges(&self) -> usize;
 }
 
-struct BasicBlock {
-    exit: CodeOffset,
-    successors: Vec<BlockId>,
+/// Used for the VM control flow graph
+pub trait Instruction: Sized {
+    type Index: Copy + Ord;
+    type VariantJumpTables: ?Sized;
+    const ENTRY_BLOCK_ID: Self::Index;
+
+    /// Return the successors of a given instruction
+    fn get_successors(
+        pc: Self::Index,
+        code: &[Self],
+        jump_tables: &Self::VariantJumpTables,
+    ) -> Vec<Self::Index>;
+
+    /// Return the offsets of jump targets for a given instruction
+    fn offsets(&self, jump_tables: &Self::VariantJumpTables) -> Vec<Self::Index>;
+
+    fn usize_as_index(i: usize) -> Self::Index;
+    fn index_as_usize(i: Self::Index) -> usize;
+
+    fn is_branch(&self) -> bool;
+}
+
+struct BasicBlock<InstructionIndex> {
+    exit: InstructionIndex,
+    successors: Vec<InstructionIndex>,
 }
 
 /// The control flow graph that we build from the bytecode.
-pub struct VMControlFlowGraph {
+/// Assumes a list of bytecode isntructions that satisfy the invariants specified in the VM's
+/// file format.
+pub struct VMControlFlowGraph<I: Instruction> {
     /// The basic blocks
-    blocks: Map<BlockId, BasicBlock>,
+    blocks: BTreeMap<I::Index, BasicBlock<I::Index>>,
     /// Basic block ordering for traversal
-    traversal_successors: Map<BlockId, BlockId>,
+    traversal_successors: BTreeMap<I::Index, I::Index>,
     /// Map of loop heads with all of their back edges
-    loop_heads: Map<BlockId, /* back edges */ Set<BlockId>>,
+    loop_heads: BTreeMap<I::Index, /* back edges */ BTreeSet<I::Index>>,
 }
 
-impl BasicBlock {
-    pub fn display(&self, entry: BlockId) {
+impl<InstructionIndex: std::fmt::Display + std::fmt::Debug> BasicBlock<InstructionIndex> {
+    pub fn display(&self, entry: InstructionIndex) {
         println!("+=======================+");
         println!("| Enter:  {}            |", entry);
         println!("+-----------------------+");
@@ -77,39 +105,34 @@ impl BasicBlock {
     }
 }
 
-const ENTRY_BLOCK_ID: BlockId = 0;
+impl<I: Instruction> VMControlFlowGraph<I> {
+    pub fn new(code: &[I], jump_tables: &I::VariantJumpTables) -> Self {
+        use std::collections::{BTreeMap as Map, BTreeSet as Set};
 
-impl VMControlFlowGraph {
-    pub fn new(code: &[Bytecode], jump_tables: &[VariantJumpTable]) -> Self {
-        let code_len = code.len() as CodeOffset;
+        let code_len = code.len();
         // First go through and collect block ids, i.e., offsets that begin basic blocks.
         // Need to do this first in order to handle backwards edges.
-        let mut block_ids = Set::new();
-        block_ids.insert(ENTRY_BLOCK_ID);
+        let mut block_ids = BTreeSet::new();
+        block_ids.insert(I::ENTRY_BLOCK_ID);
         for pc in 0..code.len() {
-            VMControlFlowGraph::record_block_ids(
-                pc as CodeOffset,
-                code,
-                jump_tables,
-                &mut block_ids,
-            );
+            VMControlFlowGraph::record_block_ids(pc, code, jump_tables, &mut block_ids);
         }
 
         // Create basic blocks
-        let mut blocks = Map::new();
+        let mut blocks: BTreeMap<I::Index, BasicBlock<I::Index>> = Map::new();
         let mut entry = 0;
         let mut exit_to_entry = Map::new();
         for pc in 0..code.len() {
-            let co_pc = pc as CodeOffset;
+            let co_pc = I::usize_as_index(pc);
 
             // Create a basic block
-            if Self::is_end_of_block(co_pc, code, &block_ids) {
+            if Self::is_end_of_block(pc, code, &block_ids) {
                 let exit = co_pc;
                 exit_to_entry.insert(exit, entry);
-                let successors = Bytecode::get_successors(co_pc, code, jump_tables);
+                let successors = I::get_successors(co_pc, code, jump_tables);
                 let bb = BasicBlock { exit, successors };
-                blocks.insert(entry, bb);
-                entry = co_pc + 1;
+                blocks.insert(I::usize_as_index(entry), bb);
+                entry = pc + 1;
             }
         }
         let blocks = blocks;
@@ -134,8 +157,8 @@ impl VMControlFlowGraph {
             Done,
         }
 
-        let mut exploration: Map<BlockId, Exploration> = Map::new();
-        let mut stack = vec![ENTRY_BLOCK_ID];
+        let mut exploration: Map<I::Index, Exploration> = Map::new();
+        let mut stack = vec![I::ENTRY_BLOCK_ID];
 
         // For every loop in the CFG that is reachable from the entry block, there is an entry in
         // `loop_heads` mapping to all the back edges pointing to it, and vice versa.
@@ -154,7 +177,7 @@ impl VMControlFlowGraph {
         //   (including `L`) will be visited while `F` is `InProgress`.
         // - Therefore, we will process the `L -> F` edge while `F` is `InProgress`.
         // - Therefore, we will record a back edge to it.
-        let mut loop_heads: Map<BlockId, Set<BlockId>> = Map::new();
+        let mut loop_heads: Map<I::Index, Set<I::Index>> = Map::new();
 
         // Blocks appear in `post_order` after all the blocks in their (non-reflexive) sub-graph.
         let mut post_order = Vec::with_capacity(blocks.len());
@@ -228,40 +251,43 @@ impl VMControlFlowGraph {
         }
     }
 
-    pub fn display(&self) {
+    pub fn display(&self)
+    where
+        I::Index: std::fmt::Debug + std::fmt::Display,
+    {
         for (entry, block) in &self.blocks {
             block.display(*entry);
         }
         println!("Traversal: {:#?}", self.traversal_successors);
     }
 
-    fn is_end_of_block(pc: CodeOffset, code: &[Bytecode], block_ids: &Set<BlockId>) -> bool {
-        pc + 1 == (code.len() as CodeOffset) || block_ids.contains(&(pc + 1))
+    fn is_end_of_block(pc: usize, code: &[I], block_ids: &BTreeSet<I::Index>) -> bool {
+        pc + 1 == code.len() || block_ids.contains(&I::usize_as_index(pc + 1))
     }
 
     fn record_block_ids(
-        pc: CodeOffset,
-        code: &[Bytecode],
-        jump_tables: &[VariantJumpTable],
-        block_ids: &mut Set<BlockId>,
+        pc: usize,
+        code: &[I],
+        jump_tables: &I::VariantJumpTables,
+        block_ids: &mut BTreeSet<I::Index>,
     ) {
-        let bytecode = &code[pc as usize];
+        let bytecode = &code[pc];
 
         block_ids.extend(bytecode.offsets(jump_tables));
 
-        if bytecode.is_branch() && pc + 1 < (code.len() as CodeOffset) {
-            block_ids.insert(pc + 1);
+        if bytecode.is_branch() && pc + 1 < code.len() {
+            block_ids.insert(I::usize_as_index(pc + 1));
         }
     }
 
     /// A utility function that implements BFS-reachability from block_id with
     /// respect to get_targets function
-    fn traverse_by(&self, block_id: BlockId) -> Vec<BlockId> {
+    fn traverse_by(&self, block_id: I::Index) -> Vec<I::Index> {
         let mut ret = Vec::new();
         // We use this index to keep track of our frontier.
         let mut index = 0;
         // Guard against cycles
-        let mut seen = Set::new();
+        let mut seen = BTreeSet::new();
 
         ret.push(block_id);
         seen.insert(&block_id);
@@ -281,12 +307,17 @@ impl VMControlFlowGraph {
         ret
     }
 
-    pub fn reachable_from(&self, block_id: BlockId) -> Vec<BlockId> {
+    pub fn reachable_from(&self, block_id: I::Index) -> Vec<I::Index> {
         self.traverse_by(block_id)
     }
 }
 
-impl ControlFlowGraph for VMControlFlowGraph {
+impl<I: Instruction> ControlFlowGraph for VMControlFlowGraph<I> {
+    type BlockId = I::Index;
+    type InstructionIndex = I::Index;
+    type Instruction = I;
+    type Instructions = [I];
+
     // Note: in the following procedures, it's safe not to check bounds because:
     // - Every CFG (even one with no instructions) has a block at ENTRY_BLOCK_ID
     // - The only way to acquire new BlockId's is via block_successors()
@@ -294,44 +325,53 @@ impl ControlFlowGraph for VMControlFlowGraph {
     // Note: it is still possible to get a BlockId from one CFG and use it in another CFG where it
     // is not valid. The design does not attempt to prevent this abuse of the API.
 
-    fn block_start(&self, block_id: BlockId) -> CodeOffset {
+    fn block_start(&self, block_id: Self::BlockId) -> I::Index {
         block_id
     }
 
-    fn block_end(&self, block_id: BlockId) -> CodeOffset {
+    fn block_end(&self, block_id: Self::BlockId) -> I::Index {
         self.blocks[&block_id].exit
     }
 
-    fn successors(&self, block_id: BlockId) -> &Vec<BlockId> {
+    fn successors(&self, block_id: Self::BlockId) -> &[Self::BlockId] {
         &self.blocks[&block_id].successors
     }
 
-    fn next_block(&self, block_id: BlockId) -> Option<CodeOffset> {
+    fn next_block(&self, block_id: Self::BlockId) -> Option<I::Index> {
         debug_assert!(self.blocks.contains_key(&block_id));
         self.traversal_successors.get(&block_id).copied()
     }
 
-    fn instr_indexes(&self, block_id: BlockId) -> Box<dyn Iterator<Item = CodeOffset>> {
-        Box::new(self.block_start(block_id)..=self.block_end(block_id))
+    fn instructions<'a>(
+        &self,
+        function_code: &'a [I],
+        block_id: Self::BlockId,
+    ) -> impl IntoIterator<Item = (Self::BlockId, &'a I)>
+    where
+        I: 'a,
+    {
+        let start = I::index_as_usize(self.block_start(block_id));
+        let end = I::index_as_usize(self.block_end(block_id));
+        (start..=end).map(|pc| (I::usize_as_index(pc), &function_code[pc]))
     }
 
-    fn blocks(&self) -> Vec<BlockId> {
+    fn blocks(&self) -> Vec<Self::BlockId> {
         self.blocks.keys().cloned().collect()
     }
 
-    fn num_blocks(&self) -> u16 {
-        self.blocks.len() as u16
+    fn num_blocks(&self) -> usize {
+        self.blocks.len()
     }
 
-    fn entry_block_id(&self) -> BlockId {
-        ENTRY_BLOCK_ID
+    fn entry_block_id(&self) -> Self::BlockId {
+        I::ENTRY_BLOCK_ID
     }
 
-    fn is_loop_head(&self, block_id: BlockId) -> bool {
+    fn is_loop_head(&self, block_id: Self::BlockId) -> bool {
         self.loop_heads.contains_key(&block_id)
     }
 
-    fn is_back_edge(&self, cur: BlockId, next: BlockId) -> bool {
+    fn is_back_edge(&self, cur: Self::BlockId, next: Self::BlockId) -> bool {
         self.loop_heads
             .get(&next)
             .is_some_and(|back_edges| back_edges.contains(&cur))

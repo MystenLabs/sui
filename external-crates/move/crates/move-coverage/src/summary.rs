@@ -7,9 +7,7 @@
 use crate::coverage_map::{
     ExecCoverageMap, ExecCoverageMapWithModules, ModuleCoverageMap, TraceMap,
 };
-use move_abstract_interpreter::control_flow_graph::{
-    BlockId, ControlFlowGraph, VMControlFlowGraph,
-};
+use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
 use move_binary_format::{
     CompiledModule,
     file_format::{Bytecode, CodeOffset},
@@ -21,6 +19,8 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     io::{self, Write},
 };
+
+type BlockId = CodeOffset;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ModuleSummary {

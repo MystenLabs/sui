@@ -1,40 +1,8 @@
-// Copyright (c) The Diem Core Contributors
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::control_flow_graph::{BlockId, ControlFlowGraph, VMControlFlowGraph};
-use move_binary_format::{
-    CompiledModule,
-    errors::PartialVMResult,
-    file_format::{
-        AbilitySet, Bytecode, CodeOffset, CodeUnit, FunctionDefinitionIndex, FunctionHandle,
-        Signature,
-    },
-};
-use move_bytecode_verifier_meter::{Meter, Scope};
+use crate::control_flow_graph::ControlFlowGraph;
 use std::collections::BTreeMap;
-
-/// A `FunctionContext` holds all the information needed by the verifier for `FunctionDefinition`.`
-/// A control flow graph is built for a function when the `FunctionContext` is created.
-pub struct FunctionContext<'a> {
-    index: Option<FunctionDefinitionIndex>,
-    code: &'a CodeUnit,
-    parameters: &'a Signature,
-    return_: &'a Signature,
-    locals: &'a Signature,
-    type_parameters: &'a [AbilitySet],
-    cfg: VMControlFlowGraph,
-}
-
-/// Trait for finite-height abstract domains. Infinite height domains would require a more complex
-/// trait with widening and a partial order.
-pub trait AbstractDomain: Clone + Sized {
-    fn join(
-        &mut self,
-        other: &Self,
-        meter: &mut (impl Meter + ?Sized),
-    ) -> PartialVMResult<JoinResult>;
-}
 
 #[derive(Debug)]
 pub enum JoinResult {
@@ -42,187 +10,139 @@ pub enum JoinResult {
     Unchanged,
 }
 
-#[allow(dead_code)]
-#[derive(Clone)]
-pub struct BlockInvariant<State> {
-    /// Precondition of the block
-    pre: State,
-}
-
-/// A map from block id's to the pre/post of each block after a fixed point is reached.
-#[allow(dead_code)]
-pub type InvariantMap<State> = BTreeMap<BlockId, BlockInvariant<State>>;
-
-/// Costs for metered verification
-const ANALYZE_FUNCTION_BASE_COST: u128 = 10;
-const EXECUTE_BLOCK_BASE_COST: u128 = 10;
-const PER_BACKEDGE_COST: u128 = 10;
-const PER_SUCCESSOR_COST: u128 = 10;
-
-/// Take a pre-state + instruction and mutate it to produce a post-state
-/// Auxiliary data can be stored in self.
-pub trait TransferFunctions {
-    type State: AbstractDomain;
+pub trait AbstractInterpreter {
     type Error;
+    type BlockId: Copy + Ord;
+
+    type State: Clone;
+    type InstructionIndex: Copy + Ord;
+    type Instruction;
+
+    fn start(&mut self) -> Result<(), Self::Error>;
+    fn join(
+        &mut self,
+        pre: &mut Self::State,
+        post: &Self::State,
+    ) -> Result<JoinResult, Self::Error>;
+    fn visit_block_execution(&mut self, block_id: Self::BlockId) -> Result<(), Self::Error>;
+    fn visit_successor(&mut self, block_id: Self::BlockId) -> Result<(), Self::Error>;
+    fn visit_back_edge(
+        &mut self,
+        from: Self::BlockId,
+        to: Self::BlockId,
+    ) -> Result<(), Self::Error>;
 
     /// Execute local@instr found at index local@index in the current basic block from pre-state
     /// local@pre.
-    /// Should return an AnalysisError if executing the instruction is unsuccessful, and () if
-    /// the effects of successfully executing local@instr have been reflected by mutatating
+    /// Should return an Err if executing the instruction is unsuccessful, and () if
+    /// the effects of successfully executing local@instr have been reflected by mutating
     /// local@pre.
-    /// Auxilary data from the analysis that is not part of the abstract state can be collected by
+    /// Auxiliary data from the analysis that is not part of the abstract state can be collected by
     /// mutating local@self.
     /// The last instruction index in the current block is local@last_index. Knowing this
     /// information allows clients to detect the end of a basic block and special-case appropriately
     /// (e.g., normalizing the abstract state before a join).
     fn execute(
         &mut self,
-        pre: &mut Self::State,
-        instr: &Bytecode,
-        index: CodeOffset,
-        last_index: CodeOffset,
-        meter: &mut (impl Meter + ?Sized),
-    ) -> PartialVMResult<()>;
+        state: &mut Self::State,
+        bounds: (Self::InstructionIndex, Self::InstructionIndex),
+        offset: Self::InstructionIndex,
+        instr: &Self::Instruction,
+    ) -> Result<(), Self::Error>;
 }
 
-pub trait AbstractInterpreter: TransferFunctions {
-    /// Analyze procedure local@function_context starting from pre-state local@initial_state.
-    fn analyze_function(
-        &mut self,
-        initial_state: Self::State,
-        function_context: &FunctionContext,
-        meter: &mut (impl Meter + ?Sized),
-    ) -> PartialVMResult<()> {
-        meter.add(Scope::Function, ANALYZE_FUNCTION_BASE_COST)?;
-        let mut inv_map = InvariantMap::new();
-        let entry_block_id = function_context.cfg().entry_block_id();
-        let mut next_block = Some(entry_block_id);
-        inv_map.insert(entry_block_id, BlockInvariant { pre: initial_state });
+/// Analyze procedure local@function_context starting from pre-state local@initial_state.
+pub fn analyze_function<A, CFG>(
+    interpreter: &mut A,
+    cfg: &CFG,
+    code: &<CFG as ControlFlowGraph>::Instructions,
+    initial_state: A::State,
+) -> Result<(), A::Error>
+where
+    A: AbstractInterpreter,
+    CFG: ControlFlowGraph<
+            BlockId = A::BlockId,
+            InstructionIndex = A::InstructionIndex,
+            Instruction = A::Instruction,
+        >,
+{
+    interpreter.start()?;
+    let mut inv_map = BTreeMap::new();
+    let entry_block_id = cfg.entry_block_id();
+    let mut next_block = Some(entry_block_id);
+    inv_map.insert(entry_block_id, initial_state);
 
-        while let Some(block_id) = next_block {
-            let block_invariant = match inv_map.get_mut(&block_id) {
-                Some(invariant) => invariant,
-                None => {
-                    // This can only happen when all predecessors have errors,
-                    // so skip the block and move on to the next one
-                    next_block = function_context.cfg().next_block(block_id);
-                    continue;
-                }
-            };
+    while let Some(block_id) = next_block {
+        let block_invariant = match inv_map.get_mut(&block_id) {
+            Some(invariant) => invariant,
+            None => {
+                // This can only happen when all predecessors have errors,
+                // so skip the block and move on to the next one
+                next_block = cfg.next_block(block_id);
+                continue;
+            }
+        };
 
-            let pre_state = &block_invariant.pre;
-            // Note: this will stop analysis after the first error occurs, to avoid the risk of
-            // subsequent crashes
-            let post_state = self.execute_block(block_id, pre_state, function_context, meter)?;
+        let pre_state = &block_invariant;
+        // Note: this will stop analysis after the first error occurs, to avoid the risk of
+        // subsequent crashes
+        let post_state = execute_block(interpreter, cfg, code, block_id, pre_state)?;
 
-            let mut next_block_candidate = function_context.cfg().next_block(block_id);
-            // propagate postcondition of this block to successor blocks
-            for successor_block_id in function_context.cfg().successors(block_id) {
-                meter.add(Scope::Function, PER_SUCCESSOR_COST)?;
-                match inv_map.get_mut(successor_block_id) {
-                    Some(next_block_invariant) => {
-                        let join_result = {
-                            let old_pre = &mut next_block_invariant.pre;
-                            old_pre.join(&post_state, meter)
-                        }?;
-                        match join_result {
-                            JoinResult::Unchanged => {
-                                // Pre is the same after join. Reanalyzing this block would produce
-                                // the same post
-                            }
-                            JoinResult::Changed => {
-                                // If the cur->successor is a back edge, jump back to the beginning
-                                // of the loop, instead of the normal next block
-                                if function_context
-                                    .cfg()
-                                    .is_back_edge(block_id, *successor_block_id)
-                                {
-                                    meter.add(Scope::Function, PER_BACKEDGE_COST)?;
-                                    next_block_candidate = Some(*successor_block_id);
-                                    break;
-                                }
+        let mut next_block_candidate = cfg.next_block(block_id);
+        // propagate postcondition of this block to successor blocks
+        for &successor_block_id in cfg.successors(block_id) {
+            interpreter.visit_successor(successor_block_id)?;
+            match inv_map.get_mut(&successor_block_id) {
+                Some(next_block_invariant) => {
+                    let join_result = interpreter.join(next_block_invariant, &post_state)?;
+                    match join_result {
+                        JoinResult::Unchanged => {
+                            // Pre is the same after join. Reanalyzing this block would produce
+                            // the same post
+                        }
+                        JoinResult::Changed => {
+                            // If the cur->successor is a back edge, jump back to the beginning
+                            // of the loop, instead of the normal next block
+                            if cfg.is_back_edge(block_id, successor_block_id) {
+                                interpreter.visit_back_edge(block_id, successor_block_id)?;
+                                next_block_candidate = Some(successor_block_id);
+                                break;
                             }
                         }
                     }
-                    None => {
-                        // Haven't visited the next block yet. Use the post of the current block as
-                        // its pre
-                        inv_map.insert(
-                            *successor_block_id,
-                            BlockInvariant {
-                                pre: post_state.clone(),
-                            },
-                        );
-                    }
+                }
+                None => {
+                    // Haven't visited the next block yet. Use the post of the current block as
+                    // its pre
+                    inv_map.insert(successor_block_id, post_state.clone());
                 }
             }
-            next_block = next_block_candidate;
         }
-        Ok(())
+        next_block = next_block_candidate;
     }
-
-    fn execute_block(
-        &mut self,
-        block_id: BlockId,
-        pre_state: &Self::State,
-        function_context: &FunctionContext,
-        meter: &mut (impl Meter + ?Sized),
-    ) -> PartialVMResult<Self::State> {
-        meter.add(Scope::Function, EXECUTE_BLOCK_BASE_COST)?;
-        let mut state_acc = pre_state.clone();
-        let block_end = function_context.cfg().block_end(block_id);
-        for offset in function_context.cfg().instr_indexes(block_id) {
-            let instr = &function_context.code().code[offset as usize];
-            self.execute(&mut state_acc, instr, offset, block_end, meter)?
-        }
-        Ok(state_acc)
-    }
+    Ok(())
 }
 
-impl<'a> FunctionContext<'a> {
-    // Creates a `FunctionContext` for a module function.
-    pub fn new(
-        module: &'a CompiledModule,
-        index: FunctionDefinitionIndex,
-        code: &'a CodeUnit,
-        function_handle: &'a FunctionHandle,
-    ) -> Self {
-        Self {
-            index: Some(index),
-            code,
-            parameters: module.signature_at(function_handle.parameters),
-            return_: module.signature_at(function_handle.return_),
-            locals: module.signature_at(code.locals),
-            type_parameters: &function_handle.type_parameters,
-            cfg: VMControlFlowGraph::new(&code.code, &code.jump_tables),
-        }
+fn execute_block<A, CFG>(
+    interpreter: &mut A,
+    cfg: &CFG,
+    code: &<CFG as ControlFlowGraph>::Instructions,
+    block_id: A::BlockId,
+    pre_state: &A::State,
+) -> Result<A::State, A::Error>
+where
+    A: AbstractInterpreter,
+    CFG: ControlFlowGraph<
+            BlockId = A::BlockId,
+            InstructionIndex = A::InstructionIndex,
+            Instruction = A::Instruction,
+        >,
+{
+    interpreter.visit_block_execution(block_id)?;
+    let mut state_acc = pre_state.clone();
+    let bounds = (cfg.block_start(block_id), cfg.block_end(block_id));
+    for (offset, instr) in cfg.instructions(code, block_id) {
+        interpreter.execute(&mut state_acc, bounds, offset, instr)?
     }
-
-    pub fn index(&self) -> Option<FunctionDefinitionIndex> {
-        self.index
-    }
-
-    pub fn code(&self) -> &'a CodeUnit {
-        self.code
-    }
-
-    pub fn parameters(&self) -> &'a Signature {
-        self.parameters
-    }
-
-    pub fn return_(&self) -> &'a Signature {
-        self.return_
-    }
-
-    pub fn locals(&self) -> &'a Signature {
-        self.locals
-    }
-
-    pub fn type_parameters(&self) -> &'a [AbilitySet] {
-        self.type_parameters
-    }
-
-    pub fn cfg(&self) -> &VMControlFlowGraph {
-        &self.cfg
-    }
+    Ok(state_acc)
 }
