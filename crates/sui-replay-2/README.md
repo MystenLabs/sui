@@ -27,7 +27,7 @@ the default in time but it's off for convenience.<br>
 `-n` specifies the chain. Right now only mainnet and a custom chain are supported. In time a node would be
 likely one of `mainnet`, `testnet`, `devnet` or `custom(url)`.
 ### Code Organization
-A replay tool is an invocation to [`execute_transaction_to_effects`](http://github.com/MystenLabs/sui/blob/main/sui-execution/src/executor.rs#L26-L53) which contains info related to the transaction and info a node has got by being live (running). For instance, a validator does not have a store for epochs, it lives/operates in an epoch. <br>
+A replay tool is an invocation to [`execute_transaction_to_effects`](http://github.com/MystenLabs/sui/blob/main/sui-execution/src/executor.rs#L26-L53) which contains info related to the transaction and info a node obtained while being live (running). For instance, a validator does not have a store for epochs, it lives/operates in an epoch. <br>
 When replaying, however, we run into a past epoch and we need information about that epoch as in rpg, start timestamp and more.<br><p>
 `replay_interface.rs` defines the traits the replay tool uses. Those are the functions needed
 by a replay tool in order to run a transaction.
