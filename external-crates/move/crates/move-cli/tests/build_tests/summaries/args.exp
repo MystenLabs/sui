@@ -3,7 +3,6 @@ BUILDING summaries
 
 Summary generation successful. Summaries stored in 'package_summaries'
 External Command `ls -1 package_summaries/`:
-0x0000000000000000000000000000000000000000000000000000000000c0ffee
 address_mapping.json
 summary_pkg
 External Command `cat package_summaries/summary_pkg/a.json`:
@@ -11,7 +10,7 @@ External Command `cat package_summaries/summary_pkg/a.json`:
   "doc": " This is a doc comment on a module",
   "immediate_dependencies": [
     {
-      "address": "0x0000000000000000000000000000000000000000000000000000000000c0ffee",
+      "address": "summary_pkg",
       "name": "b"
     }
   ],
@@ -87,7 +86,7 @@ External Command `cat package_summaries/summary_pkg/a.json`:
             "type_": {
               "Datatype": {
                 "module": {
-                  "address": "0x0000000000000000000000000000000000000000000000000000000000c0ffee",
+                  "address": "summary_pkg",
                   "name": "b"
                 },
                 "name": "X",
@@ -101,8 +100,6 @@ External Command `cat package_summaries/summary_pkg/a.json`:
   },
   "enums": {}
 }External Command `cat package_summaries/summary_pkg/b.json`:
-cat: package_summaries/summary_pkg/b.json: No such file or directory
-External Command `cat package_summaries/0x0000000000000000000000000000000000000000000000000000000000c0ffee/b.json`:
 {
   "doc": " This is a doc comment on a module",
   "immediate_dependencies": [],
@@ -184,12 +181,11 @@ External Command `cat package_summaries/0x00000000000000000000000000000000000000
 
 Summary generation successful. Summaries stored in 'package_summaries'
 External Command `ls -1 package_summaries/`:
-0x000000000000000000000000000000000000000000000000000000000000002a
 0x0000000000000000000000000000000000000000000000000000000000c0ffee
 address_mapping.json
 address_mapping.yaml
 summary_pkg
-External Command `cat package_summaries/0x000000000000000000000000000000000000000000000000000000000000002a/a.yaml`:
+External Command `cat package_summaries/0x0000000000000000000000000000000000000000000000000000000000c0ffee/a.yaml`:
 ---
 immediate_dependencies:
   - address: "0x0000000000000000000000000000000000000000000000000000000000c0ffee"
@@ -262,5 +258,4 @@ structs:
 enums: {}
 External Command `cat package_summaries/address_mapping.yaml`:
 ---
-"0x000000000000000000000000000000000000000000000000000000000000002a": "0x000000000000000000000000000000000000000000000000000000000000002a"
 "0x0000000000000000000000000000000000000000000000000000000000c0ffee": "0x0000000000000000000000000000000000000000000000000000000000c0ffee"

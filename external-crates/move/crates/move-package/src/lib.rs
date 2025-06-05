@@ -20,7 +20,6 @@ use move_compiler::{
 };
 use move_core_types::account_address::AccountAddress;
 use move_model_2::source_model;
-use move_symbol_pool::Symbol;
 use resolution::{dependency_graph::DependencyGraphBuilder, resolution_graph::ResolvedGraph};
 use serde::{Deserialize, Serialize};
 use source_package::{
@@ -29,7 +28,7 @@ use source_package::{
     parsed_manifest::{Dependencies, DependencyKind},
 };
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     io::{BufRead, Write},
     path::{Path, PathBuf},
 };
@@ -244,6 +243,8 @@ impl BuildConfig {
         Ok(())
     }
 
+    // If a `address_derivation_fn_opt` is passed, this function will be used for changes to the
+    // address mapping in the resolution graph before compilation and model creation.
     pub fn move_model_for_package<W: Write>(
         self,
         path: &Path,
@@ -252,81 +253,15 @@ impl BuildConfig {
         // resolution graph diagnostics are only needed for CLI commands so ignore them by passing a
         // vector as the writer
         let resolved_graph = self.resolution_graph_for_package(path, None, writer)?;
-        let _mutx = PackageLock::lock(); // held until function returns
-        model_builder::build(resolved_graph, writer)
+        Self::move_model_for_resolution_graph(resolved_graph, writer)
     }
 
-    // This deterministically selects unique address names for every named address in the package.
-    // It returns the original address assignment to the caller.
-    //
-    // For `derive_address_set` we always derive an address value for any named address if `None`,
-    // otherwise only derive new address values for named addresses with existing values in this
-    // set.
-    pub fn move_model_for_package_with_derived_addresses<W: Write>(
-        self,
-        path: &Path,
-        derive_address_set: Option<&BTreeSet<AccountAddress>>,
+    pub fn move_model_for_resolution_graph<W: Write>(
+        resolved_graph: ResolvedGraph,
         writer: &mut W,
-    ) -> Result<(source_model::Model, BTreeMap<Symbol, AccountAddress>)> {
-        // resolution graph diagnostics are only needed for CLI commands so ignore them by passing a
-        // vector as the writer
-        let mut resolved_graph = self.resolution_graph_for_package(path, None, writer)?;
-        let root_pkg = resolved_graph
-            .package_table
-            .get_mut(&resolved_graph.root_package())
-            .unwrap();
-        let previous_assignment = root_pkg.resolved_table.clone();
-        let in_use_addrs = previous_assignment
-            .values()
-            .cloned()
-            .collect::<BTreeSet<_>>();
-        // Assign a unique address to each named address in the package deterministically.
-        // So start at 42 and increment until we find an address that is not in use (this should be
-        // always immediate in expectation).
-        let mut i = 42;
-        for (_, old_addr) in root_pkg.resolved_table.iter_mut() {
-            // See `old_addr` is in the caller-specific set and derive a new unique address (or always if `None`)
-            if derive_address_set.is_none()
-                || derive_address_set.is_some_and(|derive_set| derive_set.contains(old_addr))
-            {
-                loop {
-                    let random_addr = AccountAddress::from_suffix(i);
-                    i += 1;
-                    if !in_use_addrs.contains(&random_addr) {
-                        *old_addr = random_addr;
-                        break;
-                    }
-                }
-            }
-        }
-
-        let new_address_assignment = root_pkg.resolved_table.clone();
-
-        // NB: The root package is the has a global resolution of all named addresses so we are
-        // guaranteed to have all addresses in the `new_address_mapping`. If we can't find it
-        // that's an error.
-        let root_renaming = resolved_graph.root_renaming();
-        for (pkg_name, pkg) in resolved_graph.package_table.iter_mut() {
-            let package_root_renaming =
-                root_renaming.get(pkg_name).expect("Will always be present");
-            for (local_name, old_addr) in pkg.resolved_table.iter_mut() {
-                let root_name = package_root_renaming
-                    .get(local_name)
-                    .expect("Root renaming entry is present for every in-scope address");
-                let Some(new_addr) = new_address_assignment.get(root_name) else {
-                    anyhow::bail!(
-                        "IPE: Address {root_name} (local name = {local_name}) not found in new address mapping -- this shouldn't happen",
-                    );
-                };
-                *old_addr = *new_addr;
-            }
-        }
-
+    ) -> Result<source_model::Model> {
         let _mutx = PackageLock::lock(); // held until function returns
-        Ok((
-            model_builder::build(resolved_graph, writer)?,
-            previous_assignment,
-        ))
+        model_builder::build(resolved_graph, writer)
     }
 
     pub fn download_deps_for_package<W: Write>(&self, path: &Path, writer: &mut W) -> Result<()> {

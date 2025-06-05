@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 #[allow(unused)]
 /// This is a doc comment on a module
 module summary_pkg::a;
