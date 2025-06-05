@@ -1,0 +1,206 @@
+// Move bytecode v6
+module 2.address {
+use 0000000000000000000000000000000000000000000000000000000000000001::ascii;
+use 0000000000000000000000000000000000000000000000000000000000000001::bcs;
+use 0000000000000000000000000000000000000000000000000000000000000001::string;
+use 0000000000000000000000000000000000000000000000000000000000000002::hex;
+
+native public to_u256(Arg0: address): u256;
+
+native public from_u256(Arg0: u256): address;
+
+native public from_bytes(Arg0: vector<u8>): address;
+
+public to_bytes(Arg0: address): vector<u8> {
+B0:
+	0: ImmBorrowLoc[0](Arg0: address)
+	1: Call bcs::to_bytes<address>(&address): vector<u8>
+	2: Ret
+}
+
+public to_ascii_string(Arg0: address): String {
+B0:
+	0: MoveLoc[0](Arg0: address)
+	1: Call to_bytes(address): vector<u8>
+	2: Call hex::encode(vector<u8>): vector<u8>
+	3: Call ascii::string(vector<u8>): String
+	4: Ret
+}
+
+public to_string(Arg0: address): String {
+B0:
+	0: MoveLoc[0](Arg0: address)
+	1: Call to_ascii_string(address): String
+	2: Call string::from_ascii(String): String
+	3: Ret
+}
+
+public from_ascii_bytes(Arg0: &vector<u8>): address {
+L1:	loc0: vector<u8>
+L2:	loc1: u8
+L3:	loc2: u64
+L4:	loc3: u8
+B0:
+	0: CopyLoc[0](Arg0: &vector<u8>)
+	1: VecLen(6)
+	2: LdU64(64)
+	3: Eq
+	4: BrFalse(6)
+B1:
+	5: Branch(10)
+B2:
+	6: MoveLoc[0](Arg0: &vector<u8>)
+	7: Pop
+	8: LdConst[2](u64: 0)
+	9: Abort
+B3:
+	10: LdConst[3](vector<u8>: "" /..)
+	11: StLoc[1](loc0: vector<u8>)
+	12: LdU64(0)
+	13: StLoc[3](loc2: u64)
+B4:
+	14: CopyLoc[3](loc2: u64)
+	15: LdU64(64)
+	16: Lt
+	17: BrFalse(44)
+B5:
+	18: CopyLoc[0](Arg0: &vector<u8>)
+	19: CopyLoc[3](loc2: u64)
+	20: VecImmBorrow(6)
+	21: ReadRef
+	22: Call hex_char_value(u8): u8
+	23: StLoc[2](loc1: u8)
+	24: CopyLoc[0](Arg0: &vector<u8>)
+	25: CopyLoc[3](loc2: u64)
+	26: LdU64(1)
+	27: Add
+	28: VecImmBorrow(6)
+	29: ReadRef
+	30: Call hex_char_value(u8): u8
+	31: StLoc[4](loc3: u8)
+	32: MutBorrowLoc[1](loc0: vector<u8>)
+	33: MoveLoc[2](loc1: u8)
+	34: LdU8(4)
+	35: Shl
+	36: MoveLoc[4](loc3: u8)
+	37: BitOr
+	38: VecPushBack(6)
+	39: MoveLoc[3](loc2: u64)
+	40: LdU64(2)
+	41: Add
+	42: StLoc[3](loc2: u64)
+	43: Branch(14)
+B6:
+	44: MoveLoc[0](Arg0: &vector<u8>)
+	45: Pop
+	46: MoveLoc[1](loc0: vector<u8>)
+	47: Call from_bytes(vector<u8>): address
+	48: Ret
+}
+
+hex_char_value(Arg0: u8): u8 {
+L1:	loc0: bool
+L2:	loc1: bool
+L3:	loc2: bool
+L4:	loc3: u8
+L5:	loc4: u8
+B0:
+	0: CopyLoc[0](Arg0: u8)
+	1: LdU8(48)
+	2: Ge
+	3: BrFalse(9)
+B1:
+	4: CopyLoc[0](Arg0: u8)
+	5: LdU8(57)
+	6: Le
+	7: StLoc[1](loc0: bool)
+	8: Branch(11)
+B2:
+	9: LdFalse
+	10: StLoc[1](loc0: bool)
+B3:
+	11: MoveLoc[1](loc0: bool)
+	12: BrFalse(18)
+B4:
+	13: MoveLoc[0](Arg0: u8)
+	14: LdU8(48)
+	15: Sub
+	16: StLoc[5](loc4: u8)
+	17: Branch(58)
+B5:
+	18: CopyLoc[0](Arg0: u8)
+	19: LdU8(65)
+	20: Ge
+	21: BrFalse(27)
+B6:
+	22: CopyLoc[0](Arg0: u8)
+	23: LdU8(70)
+	24: Le
+	25: StLoc[2](loc1: bool)
+	26: Branch(29)
+B7:
+	27: LdFalse
+	28: StLoc[2](loc1: bool)
+B8:
+	29: MoveLoc[2](loc1: bool)
+	30: BrFalse(36)
+B9:
+	31: MoveLoc[0](Arg0: u8)
+	32: LdU8(55)
+	33: Sub
+	34: StLoc[4](loc3: u8)
+	35: Branch(56)
+B10:
+	36: CopyLoc[0](Arg0: u8)
+	37: LdU8(97)
+	38: Ge
+	39: BrFalse(45)
+B11:
+	40: CopyLoc[0](Arg0: u8)
+	41: LdU8(102)
+	42: Le
+	43: StLoc[3](loc2: bool)
+	44: Branch(47)
+B12:
+	45: LdFalse
+	46: StLoc[3](loc2: bool)
+B13:
+	47: MoveLoc[3](loc2: bool)
+	48: BrFalse(50)
+B14:
+	49: Branch(52)
+B15:
+	50: LdConst[2](u64: 0)
+	51: Abort
+B16:
+	52: MoveLoc[0](Arg0: u8)
+	53: LdU8(87)
+	54: Sub
+	55: StLoc[4](loc3: u8)
+B17:
+	56: MoveLoc[4](loc3: u8)
+	57: StLoc[5](loc4: u8)
+B18:
+	58: MoveLoc[5](loc4: u8)
+	59: Ret
+}
+
+public length(): u64 {
+B0:
+	0: LdConst[0](u64: 32)
+	1: Ret
+}
+
+public max(): u256 {
+B0:
+	0: LdConst[1](u256: 1157..)
+	1: Ret
+}
+
+Constants [
+	0 => u64: 32
+	1 => u256: 115792089237316195423570985008687907853269984665640564039457584007913129639935
+	2 => u64: 0
+	3 => vector<u8>: "" // interpreted as UTF8 string
+]
+}
