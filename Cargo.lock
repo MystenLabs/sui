@@ -14204,38 +14204,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-graphql-client"
-version = "0.0.4"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=bf1875211b15bd67ce5f7a72152bf952479f1668#bf1875211b15bd67ce5f7a72152bf952479f1668"
-dependencies = [
- "anyhow",
- "async-stream",
- "async-trait",
- "base64ct",
- "bcs",
- "chrono",
- "cynic",
- "futures",
- "reqwest 0.12.9",
- "serde",
- "serde_json",
- "sui-graphql-client-build",
- "sui-sdk-types",
- "thiserror 2.0.12",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "sui-graphql-client-build"
-version = "0.0.4"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=bf1875211b15bd67ce5f7a72152bf952479f1668#bf1875211b15bd67ce5f7a72152bf952479f1668"
-dependencies = [
- "cynic-codegen",
-]
-
-[[package]]
 name = "sui-graphql-e2e-tests"
 version = "0.1.0"
 dependencies = [
@@ -15624,12 +15592,15 @@ dependencies = [
 name = "sui-replay-2"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
  "base64ct",
  "bcs",
  "chrono",
  "clap",
  "cynic",
  "cynic-codegen",
+ "fastcrypto",
  "futures",
  "move-binary-format",
  "move-bytecode-source-map",
@@ -15639,12 +15610,11 @@ dependencies = [
  "move-ir-types",
  "move-trace-format",
  "prometheus",
+ "reqwest 0.12.9",
+ "serde",
  "similar",
  "sui-execution",
  "sui-framework",
- "sui-graphql-client",
- "sui-graphql-client-build",
- "sui-sdk-types",
  "sui-types",
  "telemetry-subscribers",
  "thiserror 1.0.69",
