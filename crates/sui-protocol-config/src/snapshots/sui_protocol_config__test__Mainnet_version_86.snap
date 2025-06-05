@@ -73,6 +73,7 @@ feature_flags:
   consensus_distributed_vote_scoring_strategy: true
   consensus_round_prober: true
   validate_identifier_inputs: true
+  disallow_self_identifier: true
   relocate_event_module: true
   uncompressed_g1_group_elements: true
   disallow_new_modules_in_deps_only_packages: true
