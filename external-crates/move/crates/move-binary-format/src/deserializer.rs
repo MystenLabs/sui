@@ -349,11 +349,13 @@ fn deserialize_compiled_module(
     binary_config: &BinaryConfig,
 ) -> BinaryLoaderResult<CompiledModule> {
     let versioned_binary = VersionedBinary::initialize(binary, binary_config, true)?;
+    let publishable = versioned_binary.publishable;
     let version = versioned_binary.version();
     let self_module_handle_idx = versioned_binary.module_idx();
     let mut module = CompiledModule {
         version,
         self_module_handle_idx,
+        publishable,
         ..Default::default()
     };
 
@@ -2087,6 +2089,7 @@ struct VersionedBinary<'a, 'b> {
     binary_config: &'b BinaryConfig,
     binary: &'a [u8],
     version: u32,
+    publishable: bool,
     tables: Vec<Table>,
     module_idx: ModuleHandleIndex,
     // index after the binary header (including table info)
@@ -2109,22 +2112,34 @@ impl<'a, 'b> VersionedBinary<'a, 'b> {
         let binary_len = binary.len();
         let mut cursor = Cursor::<&'a [u8]>::new(binary);
         // check magic
-        let mut magic = [0u8; BinaryConstants::MOVE_MAGIC_SIZE];
-        if let Ok(count) = cursor.read(&mut magic) {
-            if count != BinaryConstants::MOVE_MAGIC_SIZE || magic != BinaryConstants::MOVE_MAGIC {
-                return Err(PartialVMError::new(StatusCode::BAD_MAGIC));
-            }
-        } else {
-            return Err(PartialVMError::new(StatusCode::MALFORMED)
-                .with_message("Bad binary header".to_string()));
-        }
-        // load binary version
-        let flavored_version = match read_u32(&mut cursor) {
-            Ok(v) => v,
-            Err(_) => {
+        let publishable = {
+            let mut magic = [0u8; BinaryConstants::MOVE_MAGIC_SIZE];
+            let Ok(count) = cursor.read(&mut magic) else {
                 return Err(PartialVMError::new(StatusCode::MALFORMED)
                     .with_message("Bad binary header".to_string()));
+            };
+            match BinaryConstants::decode_magic(magic, count) {
+                Ok(MagicKind::Normal) => true,
+                Ok(MagicKind::Unpublishable) if binary_config.allow_unpublishable() => false,
+                Ok(MagicKind::Unpublishable) => {
+                    return Err(PartialVMError::new(StatusCode::BAD_MAGIC)
+                        .with_message("Binary header not allowed".to_string()));
+                }
+                Err(MagicError::BadSize) => {
+                    return Err(PartialVMError::new(StatusCode::BAD_MAGIC)
+                        .with_message("Binary header too short".to_string()));
+                }
+                Err(MagicError::BadNumber) => {
+                    return Err(PartialVMError::new(StatusCode::BAD_MAGIC)
+                        .with_message("Unexpected binary header".to_string()));
+                }
             }
+        };
+
+        // load binary version
+        let Ok(flavored_version) = read_u32(&mut cursor) else {
+            return Err(PartialVMError::new(StatusCode::MALFORMED)
+                .with_message("Bad binary header".to_string()));
         };
 
         let version = BinaryFlavor::decode_version(flavored_version);
@@ -2170,6 +2185,7 @@ impl<'a, 'b> VersionedBinary<'a, 'b> {
         let binary_end_offset = versioned_cursor.position() as usize;
         Ok(Self {
             binary_config,
+            publishable,
             binary,
             version,
             tables,
