@@ -47,6 +47,8 @@ pub struct SuiPublishArgs {
     pub dependencies: Vec<String>,
     #[clap(long = "gas-price")]
     pub gas_price: Option<u64>,
+    #[clap(long = "dry-run")]
+    pub dry_run: bool,
 }
 
 #[derive(Debug, clap::Parser)]
