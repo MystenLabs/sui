@@ -1,0 +1,101 @@
+// Move bytecode v6
+module 2.tx_context {
+use 0000000000000000000000000000000000000000000000000000000000000001::option;
+
+struct TxContext has drop {
+	sender: address,
+	tx_hash: vector<u8>,
+	epoch: u64,
+	epoch_timestamp_ms: u64,
+	ids_created: u64
+}
+
+public sender(Arg0: &TxContext): address {
+B0:
+	0: Call native_sender(): address
+	1: Ret
+}
+
+native native_sender(): address;
+
+public digest(Arg0: &TxContext): &vector<u8> {
+B0:
+	0: MoveLoc[0](Arg0: &TxContext)
+	1: ImmBorrowField[0](TxContext.tx_hash: vector<u8>)
+	2: Ret
+}
+
+public epoch(Arg0: &TxContext): u64 {
+B0:
+	0: Call native_epoch(): u64
+	1: Ret
+}
+
+native native_epoch(): u64;
+
+public epoch_timestamp_ms(Arg0: &TxContext): u64 {
+B0:
+	0: Call native_epoch_timestamp_ms(): u64
+	1: Ret
+}
+
+native native_epoch_timestamp_ms(): u64;
+
+public sponsor(Arg0: &TxContext): Option<address> {
+B0:
+	0: Call option_sponsor(): Option<address>
+	1: Ret
+}
+
+public fresh_object_address(Arg0: &mut TxContext): address {
+B0:
+	0: Call fresh_id(): address
+	1: Ret
+}
+
+native fresh_id(): address;
+
+ids_created(Arg0: &TxContext): u64 {
+B0:
+	0: Call native_ids_created(): u64
+	1: Ret
+}
+
+native native_ids_created(): u64;
+
+native native_gas_price(): u64;
+
+native native_gas_budget(): u64;
+
+option_sponsor(): Option<address> {
+L0:	loc0: Option<address>
+L1:	loc1: vector<address>
+B0:
+	0: Call native_sponsor(): vector<address>
+	1: StLoc[1](loc1: vector<address>)
+	2: ImmBorrowLoc[1](loc1: vector<address>)
+	3: VecLen(1)
+	4: LdU64(0)
+	5: Eq
+	6: BrFalse(10)
+B1:
+	7: Call option::none<address>(): Option<address>
+	8: StLoc[0](loc0: Option<address>)
+	9: Branch(16)
+B2:
+	10: ImmBorrowLoc[1](loc1: vector<address>)
+	11: LdU64(0)
+	12: VecImmBorrow(1)
+	13: ReadRef
+	14: Call option::some<address>(address): Option<address>
+	15: StLoc[0](loc0: Option<address>)
+B3:
+	16: MoveLoc[0](loc0: Option<address>)
+	17: Ret
+}
+
+native native_sponsor(): vector<address>;
+
+native derive_id(Arg0: vector<u8>, Arg1: u64): address;
+
+}
