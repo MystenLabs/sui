@@ -100,11 +100,19 @@ fn encode_page_token(page_token: PageToken) -> Bytes {
 }
 
 fn owned_object_to_proto(info: OwnedObjectInfo) -> OwnedObject {
+    let owner = if let Some(start_version) = info.start_version {
+        sui_sdk_types::Owner::ConsensusAddress {
+            start_version: start_version.value(),
+            owner: info.owner.into(),
+        }
+    } else {
+        sui_sdk_types::Owner::Address(info.owner.into())
+    };
     OwnedObject {
         object_id: Some(info.object_id.to_string()),
         version: Some(info.version.value()),
         digest: Some(info.digest.to_string()),
-        owner: Some(sui_sdk_types::Owner::Address(info.owner.into()).into()),
+        owner: Some(owner.into()),
         object_type: Some(info.object_type.to_canonical_string(true)),
         balance: info.balance,
     }
