@@ -126,6 +126,7 @@ module P0::m {
       effects {
         status
         errors
+        abortCode
       }
     }
   }
@@ -253,6 +254,7 @@ module P0::m {
       effects {
         status
         errors
+        abortCode
       }
     }
   }
