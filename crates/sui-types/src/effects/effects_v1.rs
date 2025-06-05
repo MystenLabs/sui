@@ -216,6 +216,11 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
         vec![]
     }
 
+    fn consensus_owner_changed(&self) -> Vec<ObjectRef> {
+        // Transferrable consensus objects cannot exist with effects v1
+        vec![]
+    }
+
     fn object_changes(&self) -> Vec<ObjectChange> {
         let modified_at: BTreeMap<_, _> = self.modified_at_versions.iter().copied().collect();
 
