@@ -111,6 +111,7 @@ pub fn run_cli(
             move_args.package_path.as_deref(),
             move_args.build_config,
             None,
+            None,
         ),
     }
 }

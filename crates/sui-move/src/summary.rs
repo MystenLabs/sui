@@ -3,15 +3,18 @@
 
 use clap::Parser;
 use move_cli::base::summary;
+use move_core_types::account_address::AccountAddress;
 use move_package::BuildConfig;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
 };
 use sui_types::{
     base_types::ObjectID,
     move_package::{TypeOrigin, UpgradeInfo},
 };
+
+const SUI_DERIVE_ADDRESS_SET: &[AccountAddress] = &[AccountAddress::ZERO];
 
 #[derive(Parser)]
 #[group(id = "sui-move-summary")]
@@ -50,7 +53,12 @@ impl Summary {
         build_config: BuildConfig,
         sui_package_metadata: PackageSummaryMetadata,
     ) -> anyhow::Result<()> {
-        self.summary
-            .execute(path, build_config, Some(&sui_package_metadata))
+        let derive_address_set = BTreeSet::from_iter(SUI_DERIVE_ADDRESS_SET.iter().cloned());
+        self.summary.execute(
+            path,
+            build_config,
+            Some(&sui_package_metadata),
+            Some(&derive_address_set),
+        )
     }
 }

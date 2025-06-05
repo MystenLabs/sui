@@ -53,6 +53,7 @@ impl Summary {
         path: Option<&Path>,
         config: BuildConfig,
         additional_metadata: Option<&T>,
+        derive_address_set: Option<&BTreeSet<AccountAddress>>,
     ) -> anyhow::Result<()> {
         let model_source;
         let model_compiled;
@@ -98,6 +99,7 @@ impl Summary {
             let (model, original_address_mapping) = config
                 .move_model_for_package_with_derived_addresses(
                     &reroot_path(path).unwrap(),
+                    derive_address_set,
                     &mut std::io::stdout(),
                 )?;
             model_source = model;

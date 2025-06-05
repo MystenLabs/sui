@@ -1,11 +1,14 @@
 summary
 > ls -1 package_summaries/
 > cat package_summaries/summary_pkg/a.json
+# Not there as `b` was declared with an explicit address in the module and in the Move CLI we randomize all named addresses
 > cat package_summaries/summary_pkg/b.json
+> cat package_summaries/0x0000000000000000000000000000000000000000000000000000000000c0ffee/b.json
 > cat package_summaries/address_mapping.json
 
 summary --bytecode -o yaml
 > ls -1 package_summaries/
-> cat package_summaries/0x0000000000000000000000000000000000000000000000000000000000c0ffee/a.yaml
+# `a` uses a named address so gets a derived address
+> cat package_summaries/0x000000000000000000000000000000000000000000000000000000000000002a/a.yaml
 > cat package_summaries/0x0000000000000000000000000000000000000000000000000000000000c0ffee/b.yaml
 > cat package_summaries/address_mapping.yaml

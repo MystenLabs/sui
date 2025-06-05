@@ -1,0 +1,75 @@
+{
+  "doc": " This is a doc comment on a module",
+  "immediate_dependencies": [],
+  "attributes": [
+    {
+      "Parameterized": [
+        "allow",
+        [
+          {
+            "Name": "unused"
+          }
+        ]
+      ]
+    }
+  ],
+  "functions": {
+    "f": {
+      "source_index": 0,
+      "index": 0,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [
+        {
+          "name": "Typename1",
+          "constraints": []
+        },
+        {
+          "name": "Typename2",
+          "constraints": []
+        }
+      ],
+      "parameters": [
+        {
+          "name": "_param_1",
+          "type_": {
+            "NamedTypeParameter": "Typename1"
+          }
+        },
+        {
+          "name": "_param_2",
+          "type_": {
+            "NamedTypeParameter": "Typename2"
+          }
+        }
+      ],
+      "return_": [
+        {
+          "NamedTypeParameter": "Typename1"
+        }
+      ]
+    }
+  },
+  "structs": {
+    "X": {
+      "index": 0,
+      "doc": " This is a doc comment on a struct",
+      "attributes": [],
+      "abilities": [],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "x": {
+            "index": 0,
+            "doc": " This is a doc comment on a field",
+            "type_": "u64"
+          }
+        }
+      }
+    }
+  },
+  "enums": {}
+}
