@@ -372,6 +372,55 @@ div[role="tabpanel"] {
   @apply min-[997px]:flex min-[997px]:gap-4
 }
 
+/*Full search page*/
+
+.sui-search .ais-SearchBox-form {
+  @apply my-8 flex flex-row items-center;
+}
+
+.sui-search .ais-SearchBox-form .ais-SearchBox-input {
+  @apply h-12 w-[80%] text-lg rounded-lg p-2;
+}
+
+.sui-search .ais-SearchBox-form .ais-SearchBox-submit {
+  @apply h-12 w-12 ml-2 rounded-lg;
+}
+
+.sui-search .ais-SearchBox-form .ais-SearchBox-reset {
+  @apply h-12 w-12 ml-2 rounded-lg;
+}
+
+.sui-search .search-page-wrapper main p {
+  @apply !not-italic;
+}
+.sui-search .search-page-wrapper main em {
+  @apply font-bold;
+}
+
+.sui-search .ais-RefinementList-list {
+  @apply list-none pl-2;
+}
+
+.sui-search .ais-RefinementList-list {
+  @apply pl-0;
+}
+
+.sui-search .ais-RefinementList-checkbox {
+  @apply col-span-1;
+}
+
+.sui-search .ais-RefinementList-labelText {
+  @apply col-span-3;
+}
+
+.sui-search .ais-RefinementList-count {
+  @apply col-span-2 text-xs;
+}
+
+.sui-search .ais-RefinementList-label {
+  @apply grid grid-cols-6 items-center;
+}
+
 /** Globals **/
 .button-cta {
   @apply bg-sui-blue-primary font-sans text-sui-white -tracking-[.3px] cursor-pointer border-none rounded-[2.25rem] py-3 px-[1.125rem] text-base font-medium leading-[1.125rem] inline-block transition-colors duration-300 ease-in-out

@@ -188,8 +188,10 @@ const config = {
         //searchParameters: {},
 
         // Optional: path for search page that enabled by default (`false` to disable it)
-        searchPagePath: "search",
-
+        searchPagePath: false,
+        searchParameters: {
+          facetFilters: ["language:en", ["filter1", "filter2"], "filter3"],
+        },
         //... other Algolia params
       },
       image: "img/sui-doc-og.png",
