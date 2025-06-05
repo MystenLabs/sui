@@ -79,25 +79,7 @@ impl<S: SourceKind> StacklessBytecodeGenerator<S> {
     // TODO: At some point this should hand back a set of stackless bytecode pacakges or similar --
     // look at the old interface and mirror that as a start (?)
     pub fn generate_stackless_bytecode(&self) -> anyhow::Result<Vec<stackless::ast::Package>> {
-        let packages = self.model.packages();
-
-        packages
-            .into_iter()
-            .map(|pkg| {
-                let name = pkg
-                    .name()
-                    .unwrap_or_else(|| format!("{}", pkg.address()).into());
-                let modules = pkg
-                    .modules()
-                    .map(stackless::translate::module)
-                    .collect::<Result<Vec<_>, _>>()?;
-                let modules = modules
-                    .into_iter()
-                    .map(|m| (m.name, m))
-                    .collect::<BTreeMap<_, _>>();
-                Ok(stackless::ast::Package { name, modules })
-            })
-            .collect::<Result<_, _>>()
+        stackless::translate::packages(&self.model)
     }
 
     // TODO: Return a thing instead of printing
@@ -188,20 +170,7 @@ impl<S: SourceKind> StacklessBytecodeGenerator<S> {
     // TODO: The CLI execution should be this -- so that we know printing is happening there, not
     // as part of the stackless bytecode interface itself.
     pub fn execute(&self) -> anyhow::Result<()> {
-        let m_packages = self.model.packages();
-
-        for m_package in m_packages {
-            let package_name = m_package.name().unwrap_or(Symbol::from("Name not found"));
-            let package_address = m_package.address();
-            println!("Package: {} ({})", package_name, package_address);
-
-            let m_modules = m_package.modules();
-
-            for m_module in m_modules {
-                println!("{}", stackless::translate::module(m_module)?);
-            }
-        }
-
+        let _packages = self.generate_stackless_bytecode()?;
         Ok(())
     }
 }

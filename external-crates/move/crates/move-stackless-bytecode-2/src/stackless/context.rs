@@ -1,12 +1,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use move_model_2::{model::Model as Model2, source_kind::SourceKind};
 // -------------------------------------------------------------------------------------------------
 // Types
 // -------------------------------------------------------------------------------------------------
 
-pub struct Context {
+pub struct Context<'a, K: SourceKind> {
     pub var_counter: VarCounter,
+    pub model: &'a Model2<K>,
 }
 
 pub struct VarCounter {
@@ -17,10 +19,11 @@ pub struct VarCounter {
 // Impls
 // -------------------------------------------------------------------------------------------------
 
-impl Context {
-    pub fn new() -> Self {
+impl<'a, K: SourceKind> Context<'a, K> {
+    pub fn new(model: &'a Model2<K>) -> Self {
         Self {
             var_counter: VarCounter::new(),
+            model,
         }
     }
 

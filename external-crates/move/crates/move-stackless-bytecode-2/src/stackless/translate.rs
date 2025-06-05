@@ -9,8 +9,11 @@ use crate::{
     },
 };
 
-use move_binary_format::{normalized as N, normalized::Bytecode as IB};
-use move_model_2::{model::Module, source_kind::SourceKind};
+use move_binary_format::{normalized as N, normalized::Bytecode as IB, file_format::JumpTableInner};
+use move_model_2::{
+    model::{Model as Model2, Module, Package},
+    source_kind::SourceKind,
+};
 use move_symbol_pool::Symbol;
 
 use anyhow::Ok;
@@ -18,6 +21,7 @@ use std::{
     collections::BTreeMap,
     fmt::{Debug, Display},
     hash::Hash,
+    vec,
 };
 
 use super::ast::Immediate;
@@ -25,10 +29,43 @@ use super::ast::Immediate;
 // -------------------------------------------------------------------------------------------------
 // Stackless Bytecode Translation
 // -------------------------------------------------------------------------------------------------
+pub(crate) fn packages<K: SourceKind>(model: &Model2<K>) -> anyhow::Result<Vec<ast::Package>> {
+    let mut context = Context::new(model);
+    let mut packages = vec![];
+    let m_packages = model.packages();
+    for m_package in m_packages {
+        let package = package(&mut context, m_package)?;
+        packages.push(package);
+    }
+    Ok(packages)
+}
 
-// TODO: Define a `Module` in the `AST` and fill it in (?)
-pub(crate) fn module<K: SourceKind>(module: Module<K>) -> anyhow::Result<ast::Module> {
-    let mut context = Context::new();
+pub(crate) fn package<K: SourceKind>(
+    context: &mut Context<'_, K>,
+    package: Package<K>,
+) -> anyhow::Result<ast::Package> {
+    let package_name = package.name();
+    let package_address = package.address();
+
+    let m_modules = package.modules();
+
+    let out_modules = m_modules
+        .into_iter()
+        .map(|m_module| module(context, m_module))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let package = ast::Package {
+        name: package_name,
+        address: package_address,
+        modules: out_modules.into_iter().map(|m| (m.name, m)).collect(),
+    };
+    Ok(package)
+}
+
+pub(crate) fn module<K: SourceKind>(
+    context: &mut Context<'_, K>,
+    module: Module<K>,
+) -> anyhow::Result<ast::Module> {
     let module = module.compiled();
     let name = *module.name();
     let _module_address = module.address();
@@ -39,7 +76,7 @@ pub(crate) fn module<K: SourceKind>(module: Module<K>) -> anyhow::Result<ast::Mo
     for fun in module.functions.values() {
         context.var_counter.reset();
         let function_name = fun.name;
-        functions.insert(function_name, function(&mut context, fun)?);
+        functions.insert(function_name, function(context, fun)?);
     }
 
     let module = ast::Module { name, functions };
@@ -47,29 +84,27 @@ pub(crate) fn module<K: SourceKind>(module: Module<K>) -> anyhow::Result<ast::Mo
     Ok(module)
 }
 
-pub(crate) fn function(
-    ctxt: &mut Context,
+pub(crate) fn function<K: SourceKind>(
+    ctxt: &mut Context<'_, K>,
     function: &N::Function<Symbol>,
 ) -> anyhow::Result<ast::Function> {
     let name = function.name;
     // println!("\nFunction: {}", function_name);
     let code = function.code();
-
     let cfg = StacklessControlFlowGraph::new(code, function.jump_tables());
-    let mut block_id = cfg.entry_block_id();
 
     let mut bbs = vec![];
-    while cfg.next_block(block_id).is_some() {
+    for block_id in cfg.blocks() {
         let blk_start = cfg.block_start(block_id);
         let blk_end = cfg.block_end(block_id);
-        let code_range = &code[blk_start as usize..blk_end as usize];
+        let code_range = &code[blk_start as usize..(blk_end + 1) as usize];
+        println!("Code {:?}", code_range);
         let block_instructions = code_range
             .iter()
             .map(|op| bytecode(ctxt, op))
             .collect::<Result<Vec<_>, _>>()?;
         let bb = BasicBlock::from_instructions(block_id as usize, block_instructions);
         bbs.push(bb);
-        block_id = cfg.next_block(block_id).unwrap();
     }
     let function = ast::Function {
         name,
@@ -79,8 +114,8 @@ pub(crate) fn function(
     Ok(function)
 }
 
-pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
-    ctxt: &mut Context,
+pub(crate) fn bytecode<S: Hash + Eq + Display + Debug, K: SourceKind>(
+    ctxt: &mut Context<'_, K>,
     op: &IB<S>,
 ) -> anyhow::Result<Instruction> {
     match op {
@@ -95,7 +130,8 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
 
         IB::Ret => {
             // TODO: This should look at the function's return arity and grab values off the
-            // logical stack accordingly
+            // logical stack accordingly.
+            // TODO: ok for rarity, bu then whate do we do with the values? do we assigne them to a register?
             let inst = Instruction::Return(vec![Register(ctxt.var_counter.last())]);
             Ok(inst)
         }
@@ -212,7 +248,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             Ok(inst)
         }
 
-        IB::CopyLoc(loc) => {
+        IB::CopyLoc(_loc) => {
             let inst = Instruction::Assign {
                 lhs: vec![Register(ctxt.var_counter.next())],
                 rhs: RValue::Primitive {
@@ -258,27 +294,36 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
                 },
             };
             Ok(inst)
-        },
+        }
 
         IB::Pack(_struct_ref) => {
-            let args = _struct_ref.struct_.fields.0.iter().enumerate().map(|(i, _)| {
-                Var(Register(ctxt.var_counter.last() - i))
-            }).collect::<Vec<_>>();
+            let args = _struct_ref
+                .struct_
+                .fields
+                .0
+                .iter()
+                .enumerate()
+                .map(|(i, _)| Var(Register(ctxt.var_counter.last() - i)))
+                .collect::<Vec<_>>();
             let inst = Instruction::Assign {
-                
                 lhs: vec![Register(ctxt.var_counter.next())],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::Pack,
-                    args
+                    args,
                 },
             };
             Ok(inst)
         }
 
         IB::Unpack(bx) => {
-            let lhs = bx.struct_.fields.0.iter().enumerate().map(|(i, _)| {
-                Register(ctxt.var_counter.next() + i)
-            }).collect::<Vec<_>>();
+            let lhs = bx
+                .struct_
+                .fields
+                .0
+                .iter()
+                .enumerate()
+                .map(|(i, _)| Register(ctxt.var_counter.next() + i))
+                .collect::<Vec<_>>();
             let inst = Instruction::Assign {
                 lhs,
                 rhs: RValue::Primitive {
@@ -287,7 +332,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
                 },
             };
             Ok(inst)
-        },
+        }
 
         IB::ReadRef => {
             let inst = Instruction::Assign {
@@ -402,7 +447,6 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             Ok(inst)
         }
 
-        // Mul
         IB::Mul => {
             if ctxt.var_counter.current() < 2 {
                 panic!("Not enough variables to perform Mul operation");
@@ -419,7 +463,6 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             Ok(inst)
         }
 
-        // Mod
         IB::Mod => {
             if ctxt.var_counter.current() < 2 {
                 panic!("Not enough variables to perform Mod operation");
@@ -467,6 +510,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             };
             Ok(inst)
         }
+
         IB::BitAnd => {
             if ctxt.var_counter.current() < 2 {
                 panic!("Not enough variables to perform BitAnd operation");
@@ -482,6 +526,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             };
             Ok(inst)
         }
+
         IB::Xor => {
             if ctxt.var_counter.current() < 2 {
                 panic!("Not enough variables to perform Xor operation");
@@ -497,6 +542,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             };
             Ok(inst)
         }
+
         IB::Or => {
             if ctxt.var_counter.current() < 2 {
                 panic!("Not enough variables to perform Or operation");
@@ -512,6 +558,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             };
             Ok(inst)
         }
+
         IB::And => {
             if ctxt.var_counter.current() < 2 {
                 panic!("Not enough variables to perform And operation");
@@ -527,6 +574,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             };
             Ok(inst)
         }
+
         IB::Not => {
             if ctxt.var_counter.current() < 1 {
                 panic!("Not enough variables to perform Not operation");
@@ -556,6 +604,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             };
             Ok(inst)
         }
+
         IB::Neq => {
             if ctxt.var_counter.current() < 2 {
                 panic!("Not enough variables to perform Neq operation");
@@ -571,6 +620,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             };
             Ok(inst)
         }
+
         IB::Lt => {
             if ctxt.var_counter.current() < 2 {
                 panic!("Not enough variables to perform Lt operation");
@@ -586,6 +636,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             };
             Ok(inst)
         }
+
         IB::Gt => {
             if ctxt.var_counter.current() < 2 {
                 panic!("Not enough variables to perform Gt operation");
@@ -616,6 +667,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             };
             Ok(inst)
         }
+
         IB::Ge => {
             if ctxt.var_counter.current() < 2 {
                 panic!("Not enough variables to perform Ge operation");
@@ -631,14 +683,17 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             };
             Ok(inst)
         }
+
         IB::Abort => {
             let inst = Instruction::Abort;
             Ok(inst)
         }
+
         IB::Nop => {
             let inst = Instruction::Nop;
             Ok(inst)
         }
+
         IB::Shl => {
             if ctxt.var_counter.current() < 1 {
                 panic!("Not enough variables to perform Not operation");
@@ -653,6 +708,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             };
             Ok(inst)
         }
+
         IB::Shr => {
             if ctxt.var_counter.current() < 1 {
                 panic!("Not enough variables to perform Not operation");
@@ -667,24 +723,100 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             };
             Ok(inst)
         }
+
         IB::VecPack(_bx) => {
             let inst = Instruction::Assign {
                 lhs: vec![Register(ctxt.var_counter.next())],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::VecPack,
-                    // TODO compute how many elements are in the vector
+                    // VecPack will always take one arg only
                     args: vec![Var(Register(ctxt.var_counter.last()))],
                 },
             };
             Ok(inst)
         }
-        IB::VecLen(_rc) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
-        IB::VecImmBorrow(_rc) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
-        IB::VecMutBorrow(_rc) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
-        IB::VecPushBack(_rc) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
-        IB::VecPopBack(_rc) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
-        IB::VecUnpack(_bx) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
-        IB::VecSwap(_rc) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
+
+        IB::VecLen(_rc) => {
+            let inst = Instruction::Assign {
+                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::VecLen,
+                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                },
+            };
+            Ok(inst)
+        }
+
+        IB::VecImmBorrow(_rc) => {
+            let inst = Instruction::Assign {
+                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::VecImmBorrow,
+                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                },
+            };
+            Ok(inst)
+        }
+
+        IB::VecMutBorrow(_rc) => {
+            let inst = Instruction::Assign {
+                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::VecMutBorrow,
+                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                },
+            };
+            Ok(inst)
+        }
+
+        IB::VecPushBack(_rc) => {
+            let inst = Instruction::Assign {
+                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::VecPushBack,
+                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                },
+            };
+            Ok(inst)
+        }
+
+        IB::VecPopBack(_rc) => {
+            let inst = Instruction::Assign {
+                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::VecPopBack,
+                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                },
+            };
+            Ok(inst)
+        }
+
+        IB::VecUnpack(_bx) => {
+            let inst = Instruction::Assign {
+                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::VecUnpack,
+                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                },
+            };
+            Ok(inst)
+        }
+
+        IB::VecSwap(_rc) => {
+            let args = [0,1,2].iter()
+                .map(|i| Var(Register(ctxt.var_counter.last() - i)))
+                .collect::<Vec<_>>();
+            let inst = Instruction::Assign {
+                // TODO  check order of the registers
+                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::VecSwap,
+                    args
+                },
+            };
+            Ok(inst)
+        }
+
         IB::LdU16(value) => {
             let inst = Instruction::Assign {
                 lhs: vec![Register(ctxt.var_counter.next())],
@@ -699,6 +831,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             };
             Ok(inst)
         }
+
         IB::LdU256(_bx) => {
             let inst = Instruction::Assign {
                 lhs: vec![Register(ctxt.var_counter.next())],
@@ -706,6 +839,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             };
             Ok(inst)
         }
+
         IB::CastU16 => {
             let inst = Instruction::Assign {
                 lhs: vec![Register(ctxt.var_counter.next())],
@@ -716,6 +850,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             };
             Ok(inst)
         }
+
         IB::CastU32 => {
             let inst = Instruction::Assign {
                 lhs: vec![Register(ctxt.var_counter.next())],
@@ -726,6 +861,7 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             };
             Ok(inst)
         }
+
         IB::CastU256 => {
             let inst = Instruction::Assign {
                 lhs: vec![Register(ctxt.var_counter.next())],
@@ -736,11 +872,93 @@ pub(crate) fn bytecode<S: Hash + Eq + Display + Debug>(
             };
             Ok(inst)
         }
-        IB::PackVariant(_bx) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
-        IB::UnpackVariant(_bx) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
-        IB::UnpackVariantImmRef(_bx) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
-        IB::UnpackVariantMutRef(_bx) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
-        IB::VariantSwitch(_jt) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
+
+        IB::PackVariant(bx) => {
+            let args = bx
+                .variant
+                .fields
+                .0
+                .iter()
+                .enumerate()
+                .map(|(i, _)| Var(Register(ctxt.var_counter.last() - i)))
+                .collect::<Vec<_>>();
+            let inst = Instruction::Assign {
+                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::PackVariant,
+                    args,
+                },
+            };
+            Ok(inst)
+        }
+        IB::UnpackVariant(bx) => {
+            let lhs = bx
+                .variant
+                .fields
+                .0
+                .iter()
+                .enumerate()
+                .map(|(i, _)| Register(ctxt.var_counter.next() + i))
+                .collect::<Vec<_>>();
+            let inst = Instruction::Assign {
+                lhs,
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::UnpackVariant,
+                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                },
+            };
+            Ok(inst)
+        }
+
+        IB::UnpackVariantImmRef(bx) => {
+            let lhs = bx
+                .variant
+                .fields
+                .0
+                .iter()
+                .enumerate()
+                .map(|(i, _)| Register(ctxt.var_counter.next() + i))
+                .collect::<Vec<_>>();
+            let inst = Instruction::Assign {
+                lhs,
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::UnpackVariant,
+                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                },
+            };
+            Ok(inst)
+        }
+
+        IB::UnpackVariantMutRef(bx) => {
+            let lhs = bx
+                .variant
+                .fields
+                .0
+                .iter()
+                .enumerate()
+                .map(|(i, _)| Register(ctxt.var_counter.next() + i))
+                .collect::<Vec<_>>();
+            let inst = Instruction::Assign {
+                lhs,
+                rhs: RValue::Primitive {
+                    op: PrimitiveOp::UnpackVariant,
+                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                },
+            };
+            Ok(inst)
+        }
+
+        IB::VariantSwitch(jt) => {
+            let JumpTableInner::Full(offsets) = &jt.jump_table;
+            let inst = Instruction::VariantSwitch {
+                cases: offsets
+                    .iter()
+                    .map(|offset| *offset as usize)
+                    .collect::<Vec<_>>(),
+            };
+            Ok(inst)
+        }
+
         // ******** DEPRECATED BYTECODES ********
         IB::MutBorrowGlobalDeprecated(_bx) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
         IB::ImmBorrowGlobalDeprecated(_bx) => Ok(Instruction::NotImplemented(format!("{:?}", op))),

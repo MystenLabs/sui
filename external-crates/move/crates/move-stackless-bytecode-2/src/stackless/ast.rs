@@ -3,6 +3,7 @@
 
 use crate::utils::comma_separated;
 
+use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 
 use std::collections::BTreeMap;
@@ -13,7 +14,8 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
 pub struct Package {
-    pub name: Symbol,
+    pub name: Option<Symbol>,
+    pub address: AccountAddress,
     pub modules: BTreeMap<Symbol, Module>,
 }
 
@@ -51,6 +53,9 @@ pub enum Instruction {
     },
     Abort,
     Nop,
+    VariantSwitch {
+        cases: Vec<Label>,
+    },
     NotImplemented(String),
 }
 
@@ -85,9 +90,7 @@ pub enum Immediate {
     U256(move_core_types::u256::U256), // Representing as two u128s for simplicity
     True,
     False,
-    // TODO: empty added for the pop
-    Empty,
-    // TODO: The rest of these
+    Empty, // empty added for the pop
 }
 
 #[derive(Debug, Clone)]
@@ -144,19 +147,16 @@ pub enum PrimitiveOp {
     CastU16,
     CastU32,
     CastU256,
-    // The following are not present in your original list, but are in the reference order:
-    // PackVariant,
-    // UnpackVariant,
-    // UnpackVariantImmRef,
-    // UnpackVariantMutRef,
-    // VariantSwitch,
+    PackVariant,
+    UnpackVariant,
+    UnpackVariantImmRef,
+    UnpackVariantMutRef,
+    VariantSwitch,
     // MutBorrowGlobalDeprecated,
     // ImmBorrowGlobalDeprecated,
     // ExistsDeprecated,
     // MoveFromDeprecated,
     // MoveToDeprecated,
-
-    // TODO: The rest of these
 }
 
 #[derive(Debug, Clone)]
@@ -196,7 +196,11 @@ impl BasicBlock {
 
 impl std::fmt::Display for Package {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Package: {}", self.name)?;
+        writeln!(
+            f,
+            "Package: {}",
+            self.name.unwrap_or("Name not found".into())
+        )?;
         for module in self.modules.values() {
             writeln!(f, "{}", module)?;
         }
@@ -246,6 +250,16 @@ impl std::fmt::Display for Instruction {
                 else_label,
             } => write!(f, "Branch({condition}, {then_label}, {else_label}"),
             Instruction::Abort => write!(f, "Abort"),
+            Instruction::VariantSwitch { cases } => {
+                write!(f, "VariantSwitch(")?;
+                for (i, case) in cases.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "Label({case})")?;
+                }
+                write!(f, ")")
+            }
             Instruction::Nop => write!(f, "NoOperation"),
             Instruction::NotImplemented(instr) => write!(f, "Unimplemented({instr})"),
         }
