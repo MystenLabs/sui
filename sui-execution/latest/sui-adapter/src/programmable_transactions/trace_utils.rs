@@ -64,8 +64,7 @@ pub fn trace_transfer(
         trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
             PTBEvent::ExternalEvent(ExternalEvent {
                 description: "TransferObjects: obj0...objN => ()".to_string(),
-                camel_case_name: "Transfer".to_string(),
-                snake_case_name: "transfer".to_string(),
+                name: "Transfer".to_string(),
                 values: to_transfer,
             })
         ))));
@@ -107,8 +106,7 @@ pub fn trace_ptb_summary(
             .collect();
         trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
             PTBEvent::Summary(SummaryEvent {
-                camel_case_name: "PTB".to_string(),
-                snake_case_name: "ptb_summary".to_string(),
+                name: "PTBSummary".to_string(),
                 events,
             })
         ))));
@@ -155,8 +153,7 @@ pub fn trace_split_coins(
         trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
             PTBEvent::ExternalEvent(ExternalEvent {
                 description: "SplitCoins: input => result".to_string(),
-                camel_case_name: "SplitCoins".to_string(),
-                snake_case_name: "split_coins".to_string(),
+                name: "SplitCoins".to_string(),
                 values: vec![
                     ExtMoveValue::Single {
                         name: "input".to_string(),

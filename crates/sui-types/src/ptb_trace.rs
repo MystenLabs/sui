@@ -17,8 +17,7 @@ pub enum PTBEvent {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct SummaryEvent {
-    pub camel_case_name: String,
-    pub snake_case_name: String,
+    pub name: String,
     pub events: Vec<PTBCommandInfo>,
 }
 
@@ -27,10 +26,8 @@ pub struct SummaryEvent {
 pub struct ExternalEvent {
     /// A longer description of the event
     pub description: String,
-    /// A shorter name of the even in camel case to use when needed
-    pub camel_case_name: String,
-    /// A shorter name of the event in snake case to use when needed
-    pub snake_case_name: String,
+    /// A shorter name of the event.
+    pub name: String,
     /// Values associated with the event.
     pub values: Vec<ExtMoveValue>,
 }
