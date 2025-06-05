@@ -30,7 +30,7 @@ use sui_types::{
     },
 };
 use tokio::{sync::mpsc, time::Instant};
-use tracing::{debug, info, warn};
+use tracing::{debug, info, trace, warn};
 
 // TODO: Move this into ExecutionTimeObserverConfig, if we switch to a moving average
 // implmentation without the window size in the type.
@@ -79,8 +79,8 @@ pub struct ObjectUtilization {
 }
 
 impl ObjectUtilization {
-    pub fn overutilized(&self) -> bool {
-        self.excess_execution_time > Duration::ZERO
+    pub fn overutilized(&self, config: &ExecutionTimeObserverConfig) -> bool {
+        self.excess_execution_time > config.observation_sharing_object_utilization_threshold()
     }
 }
 
@@ -219,7 +219,7 @@ impl ExecutionTimeObserver {
                             last_measured: None,
                             was_overutilized: false,
                         });
-                let overutilized_at_start = utilization.overutilized();
+                let overutilized_at_start = utilization.overutilized(&self.config);
                 utilization.excess_execution_time += total_duration;
                 utilization.excess_execution_time =
                     utilization.excess_execution_time.saturating_sub(
@@ -232,17 +232,22 @@ impl ExecutionTimeObserver {
                             .unwrap_or(Duration::MAX),
                     );
                 utilization.last_measured = Some(now);
-                if utilization.excess_execution_time > Duration::ZERO {
+                if utilization.excess_execution_time
+                    > self
+                        .config
+                        .observation_sharing_object_utilization_threshold()
+                {
                     utilization.was_overutilized = true;
                 }
 
                 // Update overutilized objects metrics.
-                if !overutilized_at_start && utilization.overutilized() {
+                if !overutilized_at_start && utilization.overutilized(&self.config) {
+                    trace!("object {id:?} is overutilized");
                     epoch_store
                         .metrics
                         .epoch_execution_time_observer_overutilized_objects
                         .inc();
-                } else if overutilized_at_start && !utilization.overutilized() {
+                } else if overutilized_at_start && !utilization.overutilized(&self.config) {
                     epoch_store
                         .metrics
                         .epoch_execution_time_observer_overutilized_objects
