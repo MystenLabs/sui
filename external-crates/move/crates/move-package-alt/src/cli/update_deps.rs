@@ -9,7 +9,7 @@ use crate::{
     errors::{PackageError, PackageResult},
     flavor::Vanilla,
     graph::PackageGraph,
-    package::{Package, lockfile::Lockfile, manifest::Manifest, paths::PackagePath},
+    package::{Package, RootPackage, lockfile::Lockfile, manifest::Manifest, paths::PackagePath},
 };
 use clap::{Command, Parser, Subcommand};
 
@@ -27,30 +27,23 @@ pub struct UpdateDeps {
 
 impl UpdateDeps {
     pub async fn execute(&self) -> PackageResult<()> {
-        let path = self.path.clone().unwrap_or_else(|| PathBuf::from("."));
-        let package = Package::<Vanilla>::load_root(&path).await?;
-        let pkg_path = package.path();
-        let envs = if let Some(ref env) = self.environment {
-            let envs = package
-                .manifest()
+        let mut root_package =
+            RootPackage::<Vanilla>::load(self.path.as_ref().unwrap_or(&PathBuf::from("."))).await?;
+        let envs = if let Some(env) = &self.environment {
+            let envs = root_package
                 .environments()
-                .iter()
-                .find(|(e, _)| *e == env)
-                .ok_or_else(|| PackageError::Generic(format!("Environment {env} not found")))?;
-            &BTreeMap::from([(envs.0.clone(), envs.1.clone())])
+                .into_iter()
+                .filter(|e| e.0 == env)
+                .map(|e| (e.0.clone(), e.1.clone()))
+                .collect::<BTreeMap<_, _>>();
+
+            Some(envs)
         } else {
-            package.manifest().environments()
+            None
         };
 
-        let mut lockfiles = Lockfile::<Vanilla>::read_from_dir(&pkg_path.path())?;
-
-        for env in envs.keys() {
-            let pkg_graph = PackageGraph::<Vanilla>::load_from_manifests(pkg_path, env).await?;
-            let updated_pinned_deps = pkg_graph.to_pinned_deps(pkg_path, env).await?;
-            lockfiles.update_pinned_dep_env(updated_pinned_deps);
-        }
-
-        lockfiles.write_to(&pkg_path.path(), envs.clone())?;
+        root_package.repin(envs.clone()).await?;
+        root_package.serialize_lockfile(envs).await?;
 
         Ok(())
     }
