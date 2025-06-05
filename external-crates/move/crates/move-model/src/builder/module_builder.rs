@@ -22,7 +22,7 @@ use crate::{
     },
     model::{
         DatatypeId, EnumData, FunId, FunctionData, Loc, ModuleId, NamedConstantData,
-        NamedConstantId, SCRIPT_BYTECODE_FUN_NAME, StructData,
+        NamedConstantId, StructData,
     },
     project_1st,
     symbol::{Symbol, SymbolPool},
@@ -485,16 +485,7 @@ impl ModuleBuilder<'_, '_> {
                 let handle_idx = module.function_def_at(def_idx).function;
                 let handle = module.function_handle_at(handle_idx);
                 let name_str = module.identifier_at(handle.name).as_str();
-                let name = if name_str == SCRIPT_BYTECODE_FUN_NAME {
-                    // This is a pseudo script module, which has exactly one function. Determine
-                    // the name of this function.
-                    self.parent.fun_table.iter().find_map(|(k, _)| {
-                        if k.module_name == self.module_name
-                        { Some(k.symbol) } else { None }
-                    }).expect("unexpected script with multiple or no functions")
-                } else {
-                    self.symbol_pool().make(name_str)
-                };
+                let name = self.symbol_pool().make(name_str);
                 if let Some(entry) = self.parent.fun_table.get(&self.qualified_by_module(name)) {
                     let arg_names = project_1st(&entry.params);
                     let type_arg_names = project_1st(&entry.type_params);

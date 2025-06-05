@@ -612,6 +612,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     validate_identifier_inputs: bool,
 
+    // Disallow self identifier
+    #[serde(skip_serializing_if = "is_false")]
+    disallow_self_identifier: bool,
+
     // Enables Mysticeti fastpath.
     #[serde(skip_serializing_if = "is_false")]
     mysticeti_fastpath: bool,
@@ -3679,6 +3683,7 @@ impl ProtocolConfig {
 
                     cfg.feature_flags
                         .record_consensus_determined_version_assignments_in_prologue_v2 = true;
+                    cfg.feature_flags.disallow_self_identifier = true;
                 }
                 // Use this template when making changes:
                 //
@@ -3729,6 +3734,7 @@ impl ProtocolConfig {
             max_back_edges_per_module,
             max_basic_blocks_in_script: None,
             max_idenfitier_len: self.max_move_identifier_len_as_option(), // Before protocol version 9, there was no limit
+            disallow_self_identifier: self.feature_flags.disallow_self_identifier,
             allow_receiving_object_id: self.allow_receiving_object_id(),
             reject_mutable_random_on_entry_functions: self
                 .reject_mutable_random_on_entry_functions(),
