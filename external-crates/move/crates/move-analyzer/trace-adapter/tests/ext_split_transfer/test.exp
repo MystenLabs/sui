@@ -85,7 +85,7 @@ current event stack:
     MoveCall
     TransferObjects
   event frame: 
-    SplitCoins: input => result'
+    SplitCoins: input => result
       input : (0x2::coin::Coin<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>) {
         id : (0x2::object::UID) {
           id : (0x2::object::ID) {

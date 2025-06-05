@@ -234,15 +234,13 @@ interface JSONTraceExtMoveValue {
 }
 
 interface JSONTraceSummaryEvent {
-    camel_case_name: string;
-    snake_case_name: string;
+    name: string;
     events: [JSONExtMoveCallSummary | JSONExtSummary][]
 }
 
 interface JSONTraceExtEvent {
     description: string;
-    camel_case_name: string;
-    snake_case_name: string;
+    name: string;
     values: JSONTraceExtMoveValue[];
 }
 
@@ -337,8 +335,7 @@ export type TraceEvent =
     | {
         type: TraceEventKind.ExternalSummary,
         id: number,
-        camel_case_name: string,
-        snake_case_name: string,
+        name: string,
         summary: ExtEventSummary[]
     }
     | { type: TraceEventKind.ExternalEvent, event: ExternalEventInfo };
@@ -352,8 +349,7 @@ export type ExternalEventInfo =
         kind: ExtEventKind.ExtEventStart
         id: number
         description: string
-        camel_case_name: string
-        snake_case_name: string
+        name: string
         localsTypes: string[]
         localsNames: string[]
         localsValues: RuntimeValueType[]
@@ -794,8 +790,7 @@ export async function readTrace(
                 events.push({
                     type: TraceEventKind.ExternalSummary,
                     id: EXT_SUMMARY_FRAME_ID,
-                    camel_case_name: external.Summary.camel_case_name,
-                    snake_case_name: external.Summary.snake_case_name,
+                    name: external.Summary.name,
                     summary
                 });
 
@@ -825,8 +820,7 @@ export async function readTrace(
                         kind: ExtEventKind.ExtEventStart,
                         id: EXT_EVENT_FRAME_ID,
                         description: external.ExternalEvent.description,
-                        camel_case_name: external.ExternalEvent.camel_case_name,
-                        snake_case_name: external.ExternalEvent.snake_case_name,
+                        name: external.ExternalEvent.name,
                         localsTypes,
                         localsNames,
                         localsValues

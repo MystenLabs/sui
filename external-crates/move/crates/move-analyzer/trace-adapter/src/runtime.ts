@@ -236,13 +236,9 @@ interface IExtEventsSummaryFrame {
      */
     line: number;
     /**
-     * Name of the summary frame in camel case.
+     * Name of the summary frame.
      */
-    camel_case_name: string;
-    /**
-     * Name of the summary frame in snake case.
-     */
-    snake_case_name: string;
+    name: string;
     /**
      * Summary itself.
      */
@@ -267,8 +263,7 @@ export interface IExtEventStackFrame {
     id: number;
     line: number;
     description: string;
-    camel_case_name: string;
-    snake_case_name: string;
+    name: string;
     locals: IRuntimeVariable[];
 }
 
@@ -503,8 +498,7 @@ export class Runtime extends EventEmitter {
             const eventsSummaryFrame: IExtEventsSummaryFrame = {
                 id: currentEvent.id,
                 line: 1,
-                camel_case_name: currentEvent.camel_case_name,
-                snake_case_name: currentEvent.snake_case_name,
+                name: currentEvent.name,
                 summary: currentEvent.summary
             };
             this.eventsStack.summaryFrame = eventsSummaryFrame;
@@ -872,8 +866,7 @@ export class Runtime extends EventEmitter {
                             id: currentEvent.event.id,
                             line: 1,
                             description: currentEvent.event.description,
-                            camel_case_name: currentEvent.event.camel_case_name,
-                            snake_case_name: currentEvent.event.snake_case_name,
+                            name: currentEvent.event.name,
                             locals,
                         };
                         this.eventsStack.eventFrame = eventFrame;

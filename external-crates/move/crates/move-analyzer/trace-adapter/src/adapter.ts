@@ -25,6 +25,7 @@ import {
     IMoveCallStack,
 } from './runtime';
 import { EXT_SUMMARY_FRAME_ID, EXT_EVENT_FRAME_ID } from './trace_utils';
+import snakeCase from 'lodash.snakecase';
 
 
 /**
@@ -267,8 +268,8 @@ export class MoveDebugSession extends LoggingDebugSession {
             let optimizedLines: number[] = [];
             const eventStack = this.runtime.stack();
             if (eventStack.summaryFrame) {
-                const name = eventStack.summaryFrame.camel_case_name;
-                const tabName = eventStack.summaryFrame.snake_case_name;
+                const name = eventStack.summaryFrame.name;
+                const tabName = snakeCase(name);
                 let summaryFrameSrc = new Source(tabName);
                 summaryFrameSrc.sourceReference = SUMMARY_FRAME_SRC_REF;
                 const summaryFrame = new StackFrame(
@@ -303,11 +304,11 @@ export class MoveDebugSession extends LoggingDebugSession {
                             : moveCallStack.frames[stack_height - 1].optimizedSrcLines;
                     }
                 } else if ('id' in eventFrame && 'line' in eventFrame &&
-                    'description' in eventFrame && 'camel_case_name' in eventFrame &&
-                    'snake_case_name' in eventFrame && 'locals' in eventFrame) {
+                    'description' in eventFrame && 'name' in eventFrame &&
+                    'locals' in eventFrame) {
                     // external event
-                    const name = eventFrame.camel_case_name;
-                    const tabName = eventFrame.snake_case_name;
+                    const name = eventFrame.name;
+                    const tabName = snakeCase(name);
                     let externalEventFrameSrc = new Source(tabName);
                     externalEventFrameSrc.sourceReference = EXT_EVENT_FRAME_SRC_REF;
                     const extEventFrame = new StackFrame(
@@ -415,7 +416,7 @@ export class MoveDebugSession extends LoggingDebugSession {
             if ('locals' in eventFrame && 'camel_case_name' in eventFrame) {
                 const localScopeReference =
                     this.variableHandles.create({ locals: eventFrame.locals });
-                const name = eventFrame.camel_case_name;
+                const name = eventFrame.name;
                 const localScope = new Scope(`locals: ${name}`, localScopeReference, false);
                 scopes.push(localScope);
             }
