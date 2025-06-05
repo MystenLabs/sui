@@ -2,9 +2,13 @@
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-if [ "$1" != "simtest" ]; then
-  echo "expected to be invoked via \`cargo simtest\`"
+die() {
+  echo "$0: $*" >&2
   exit 1
+}
+
+if [[ "$1" != "simtest" ]]; then
+  die "expected to be invoked via \`cargo simtest\`"
 fi
 
 # consume simtest arg
@@ -14,10 +18,7 @@ shift
 # ourselves.
 STARTING_DIR=$(pwd)
 MANIFEST_DIR="$STARTING_DIR"
-while true; do
-  if grep -q '^\[workspace\]$' Cargo.toml 2> /dev/null; then
-    break
-  fi
+until grep -q '^\[workspace\]$' Cargo.toml 2> /dev/null; do
   cd ..
   MANIFEST_DIR=$(pwd)
 done
@@ -27,25 +28,24 @@ done
 #   echo "Please commit or revert your changes to Cargo.lock before running cargo simtest"
 #   exit 1
 # fi
-cd "$STARTING_DIR"
+cd "$STARTING_DIR" || die "failed to cd to '$STARTING_DIR'"
 
-cleanup () {
-  cd "$MANIFEST_DIR"
-  git checkout Cargo.lock > /dev/null
-  cd "$STARTING_DIR"
-}
+cleanup () (
+  cd "$MANIFEST_DIR" || die "failed to cd to '$MANIFEST_DIR'"
+  git checkout -- Cargo.lock > /dev/null
+)
 
-trap cleanup SIGINT
+trap cleanup EXIT
 
-if [ -z "$MSIM_TEST_SEED" ]; then
+if [[ -z "$MSIM_TEST_SEED" ]]; then
   export MSIM_TEST_SEED=1
 else
   echo "Using MSIM_TEST_SEED=$MSIM_TEST_SEED from the environment"
 fi
 
-RUST_FLAGS=('"--cfg"' '"msim"')
+rust_flags=( '"--cfg"' '"msim"' )
 
-if [ -n "$LOCAL_MSIM_PATH" ]; then
+if [[ -n "$LOCAL_MSIM_PATH" ]]; then
   cargo_patch_args=(
     --config "patch.crates-io.tokio.path = \"$LOCAL_MSIM_PATH/msim-tokio\""
     --config "patch.'https://github.com/MystenLabs/mysten-sim'.msim.path = \"$LOCAL_MSIM_PATH/msim\""
@@ -63,9 +63,9 @@ fi
 # Mock out the blst crate to massively speed up the simulation.
 # You should not assume that test runs will be repeatable with and without blst mocking,
 # as blst samples from the PRNG when not mocked.
-if [ -n "$USE_MOCK_CRYPTO" ]; then
+if [[ -n "$USE_MOCK_CRYPTO" ]]; then
   echo "Using mocked crypto crates - no cryptographic verification will occur"
-  RUST_FLAGS+=(
+  rust_flags+=(
     '"--cfg"'
     '"use_mock_crypto"'
   )
@@ -74,8 +74,6 @@ if [ -n "$USE_MOCK_CRYPTO" ]; then
     --config 'patch.crates-io.blst.rev = "630ca4d55de8e199e62c5b6a695c702d95fe6498"'
   )
 fi
-
-RUST_FLAGS=$(IFS=, ; echo "${RUST_FLAGS[*]}")
 
 if ! cargo nextest --help > /dev/null 2>&1; then
   echo "nextest (https://nexte.st) does not appear to be installed. Please install before proceeding."
@@ -87,27 +85,22 @@ if ! cargo nextest --help > /dev/null 2>&1; then
   exit 1
 fi
 
-CARGO_COMMAND=(nextest run --cargo-profile simulator)
-if [ "$1" = "build" ]; then
+cargo_command=( nextest run --cargo-profile simulator )
+if [[ "$1" = "build" ]]; then
   shift
-  CARGO_COMMAND=(build --profile simulator)
+  cargo_command=( build --profile simulator )
 fi
 
 # Must supply a new temp dir - the test is deterministic and can't choose one randomly itself.
-export TMPDIR=$(mktemp -d)
+TMPDIR="$(mktemp -d)"
+export TMPDIR
 
 # Set the example move package for the simtest static initializer
 # https://github.com/MystenLabs/sui/blob/7bc276d534c6c758ac2cfefe96431c2b1318ca01/crates/sui-proc-macros/src/lib.rs#L52
 root_dir=$(git rev-parse --show-toplevel)
 export SIMTEST_STATIC_INIT_MOVE=$root_dir"/examples/move/basics"
 
-cargo ${CARGO_COMMAND[@]} \
-  --config "build.rustflags = [$RUST_FLAGS]" \
+exec cargo "${cargo_command[@]}" \
+  --config "build.rustflags = [$(IFS=, ; echo "${rust_flags[*]}")]" \
   "${cargo_patch_args[@]}" \
   "$@"
-
-STATUS=$?
-
-cleanup
-
-exit $STATUS
