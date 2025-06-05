@@ -39,6 +39,7 @@ pub trait KeyValueStoreReader {
     async fn get_latest_checkpoint_summary(&mut self) -> Result<Option<CheckpointSummary>>;
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>>;
     async fn get_epoch(&mut self, epoch_id: EpochId) -> Result<Option<EpochInfo>>;
+    async fn get_latest_epoch(&mut self) -> Result<Option<EpochInfo>>;
 }
 
 #[async_trait]
