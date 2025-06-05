@@ -1874,6 +1874,7 @@ fn parse_import_decl(
 }
 
 // pub Module : ModuleDefinition = {
+//     ["unpublishable"]
 //     "module" <n: Name> "{"
 //         <friends: (FriendDecl)*>
 //         <imports: (ImportDecl)*>
@@ -1893,6 +1894,16 @@ fn is_enum_decl(tokens: &mut Lexer) -> bool {
 }
 
 fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, anyhow::Error>> {
+    let publishable = {
+        let start_tok = tokens.peek();
+        match start_tok {
+            Tok::NameValue if tokens.content() == "unpublishable" => {
+                tokens.advance()?;
+                false
+            }
+            _ => true,
+        }
+    };
     let start_loc = tokens.start_loc();
     consume_token(tokens, Tok::Module)?;
     let identifier = parse_module_ident(tokens)?;
@@ -1925,7 +1936,6 @@ fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, 
     tokens.advance()?; // consume the RBrace
     let end_loc = tokens.previous_end_loc();
     let loc = make_loc(tokens.file_hash(), start_loc, end_loc);
-    let publishable = true;
 
     Ok(ModuleDefinition::new(
         None,

@@ -2912,7 +2912,7 @@ pub fn empty_unpublishable_module() -> CompiledModule {
             name: IdentifierIndex(0),
         }],
         self_module_handle_idx: ModuleHandleIndex(0),
-        identifiers: vec![self_module_name().to_owned()],
+        identifiers: vec![Identifier::new("dummy_module").unwrap()],
         address_identifiers: vec![AccountAddress::ZERO],
         constant_pool: vec![],
         metadata: vec![],
