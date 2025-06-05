@@ -27,9 +27,14 @@ pub struct UpdateDeps {
 
 impl UpdateDeps {
     pub async fn execute(&self) -> PackageResult<()> {
-        let mut root_package =
-            RootPackage::<Vanilla>::load(self.path.as_ref().unwrap_or(&PathBuf::from("."))).await?;
+        let mut root_package = RootPackage::<Vanilla>::load(
+            self.path.as_ref().unwrap_or(&PathBuf::from(".")),
+            self.environment.clone(),
+        )
+        .await?;
+
         let envs = if let Some(env) = &self.environment {
+            println!("Updating dependencies for environment {env}");
             let envs = root_package
                 .environments()
                 .into_iter()
@@ -39,11 +44,22 @@ impl UpdateDeps {
 
             Some(envs)
         } else {
+            let envs = root_package.environments();
+            let ending = if envs.len() == 1 {
+                format!("environment: {}", envs.keys().next().unwrap())
+            } else {
+                "environments: {}".to_string()
+            };
+            let envs = envs
+                .iter()
+                .map(|x| x.0.clone())
+                .collect::<Vec<_>>()
+                .join(", ");
+            println!("Updating dependencies for {ending} {envs}");
             None
         };
 
-        root_package.repin(envs.clone()).await?;
-        root_package.serialize_lockfile(envs).await?;
+        root_package.update_deps_and_write_to_lockfile(envs).await?;
 
         Ok(())
     }

@@ -152,6 +152,22 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
         Ok(())
     }
 
+    /// Update the lockfile to the new pinned deps and write to disk.
+    pub fn updated_deps_to_lockfile(
+        &self,
+        path: impl AsRef<Path>,
+        pinned_deps: BTreeMap<EnvironmentName, DependencyInfo<F>>,
+        envs: BTreeMap<EnvironmentName, F::EnvironmentID>,
+    ) -> PackageResult<()> {
+        let mut lockfile = self.clone();
+        lockfile.update_pinned_dep_env(pinned_deps);
+
+        // Write the updated lockfile to disk
+        lockfile.write_to(path, envs)?;
+
+        Ok(())
+    }
+
     /// Pretty-print [self] as a TOML document
     pub fn render_as_toml(&self) -> String {
         let mut toml = toml_edit::ser::to_document(self).expect("toml serialization succeeds");

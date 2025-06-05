@@ -240,10 +240,10 @@ pub fn format_repo_to_fs_path(repo: &str, sha: &GitSha, root_path: Option<PathBu
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|| (*move_command_line_common::env::MOVE_HOME).to_string());
     PathBuf::from(format!(
-        "{}/{}_{:?}",
+        "{}/{}_{}",
         root_path,
         url_to_file_name(repo),
-        sha
+        sha.as_str()
     ))
 }
 

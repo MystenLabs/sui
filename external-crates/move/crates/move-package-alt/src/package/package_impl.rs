@@ -19,7 +19,7 @@ use super::{
 };
 use crate::{
     dependency::{DependencySet, PinnedDependencyInfo, pin},
-    errors::{ManifestError, PackageError, PackageResult},
+    errors::{ManifestError, ManifestErrorKind::EnvironmentNotFound, PackageError, PackageResult},
     flavor::MoveFlavor,
     git::GitRepo,
     graph::PackageGraph,
@@ -40,50 +40,52 @@ pub struct Package<F: MoveFlavor + fmt::Debug> {
 
 /// A package that is defined as the root of a Move project.
 ///
-/// This is a special package that contains the project manifest and lockfile, and associated
-/// functions to operate on the package and its dependencies.
+/// This is a special package that contains the project manifest and dependencies' graphs,
+/// and associated functions to operate with this data.
 pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
+    /// The root package itself as a Package
     root: Package<F>,
-    /// A possible empty lockfile (if there's no lockfile in the root directory).
-    lockfile: Lockfile<F>,
-    /// The dependency graphs for this root package, keyed by environment name.
-    dep_graph: BTreeMap<EnvironmentName, PackageGraph<F>>,
+    /// A map from an environment in the manifest to its dependency graph.
+    dependencies: BTreeMap<EnvironmentName, PackageGraph<F>>,
 }
 
 impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
-    /// Loads the root package from path and builds a dependency graph from the manifest.
-    /// The lockfile is loaded from the same directory.
-    pub async fn load(path: impl AsRef<Path>) -> PackageResult<Self> {
+    /// Loads the root package from path and builds a dependency graph from the manifest. If `env`
+    /// is passed, it will check that this environment exists in the manifest.
+    // TODO: maybe we want to check multiple envs
+    pub async fn load(path: impl AsRef<Path>, env: Option<EnvironmentName>) -> PackageResult<Self> {
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
-        let package = Package::<F>::load_root(package_path.path()).await?;
-        let mut dep_graph = BTreeMap::new();
-        for e in package.manifest().environments().keys() {
-            dep_graph.insert(
-                e.to_string(),
-                PackageGraph::<F>::load_from_manifests(&package_path, e).await?,
-            );
-        }
+        let root = Package::<F>::load_root(package_path.path()).await?;
+        let dependencies = if let Some(env) = env {
+            if root.manifest().environments().get(&env).is_none() {
+                return Err(PackageError::Generic(format!(
+                    "Package {} does not have `{env}` defined as an environment in its manifest",
+                    root.name(),
+                )));
+            }
+            BTreeMap::from([(
+                env.clone(),
+                PackageGraph::<F>::load_from_manifest_by_env(&package_path, &env).await?,
+            )])
+        } else {
+            PackageGraph::load_from_manifest(&package_path).await?
+        };
 
-        let lockfile = Lockfile::<F>::read_from_dir(package_path.path())?;
-
-        Ok(Self {
-            root: package,
-            lockfile,
-            dep_graph,
-        })
+        Ok(Self { root, dependencies })
     }
 
     /// Load the root package and check if the lockfile is up-to-date. If it is not, then
-    /// transitive dependencies will be re-pinned.
+    /// all dependencies will be re-pinned.
     pub async fn load_and_repin(path: impl AsRef<Path>) -> PackageResult<Self> {
-        let package = Package::<F>::load_root(path).await?;
-        let dep_graph = PackageGraph::<F>::load(&package.path()).await?;
-        let lockfile = Lockfile::<F>::read_from_dir(&package.path().path())?;
-        Ok(Self {
-            root: package,
-            lockfile,
-            dep_graph,
-        })
+        let root = Package::<F>::load_root(path).await?;
+        let dependencies = PackageGraph::<F>::load(&root.path()).await?;
+
+        Ok(Self { root, dependencies })
+    }
+
+    /// Read the lockfile from the root directory
+    pub fn load_lockfile(&self) -> PackageResult<Lockfile<F>> {
+        Lockfile::read_from_dir(self.root_path())
     }
 
     /// The package's manifest
@@ -96,23 +98,29 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         self.manifest().environments()
     }
 
-    /// The package's lockfile(s). If the loaded package has no lockfile, this will return an
-    /// `empty` lockfile.
-    pub fn lockfile(&self) -> &Lockfile<F> {
-        &self.lockfile
-    }
-
-    /// Return a mutable reference to the lockfile for this package.
-    pub fn lockfile_mut(&mut self) -> &mut Lockfile<F> {
-        &mut self.lockfile
-    }
-
     /// Return the defined package name in the manifest
     pub fn package_name(&self) -> &PackageName {
         self.manifest().package_name()
     }
 
-    // *** GRAPH RELATED FUNCTIONS ***
+    // *** DEPENDENCIES RELATED FUNCTIONS ***
+
+    pub fn dependencies(&self) -> &BTreeMap<EnvironmentName, PackageGraph<F>> {
+        &self.dependencies
+    }
+
+    /// Create a lockfile with the current package's dependencies. These dependencies will be
+    /// rendered in the pinned section of the lockfile. The lockfile will have no published
+    /// information.
+    pub async fn dependencies_to_lockfile(&self) -> PackageResult<Lockfile<F>> {
+        let mut lockfile = Lockfile::<F>::new(BTreeMap::new(), BTreeMap::new());
+
+        for (env, graph) in self.dependencies() {
+            lockfile.update_pinned_dep_env(graph.to_pinned_deps(self.package_path(), env).await?);
+        }
+
+        Ok(lockfile)
+    }
 
     /// Build a dependency graph based on the manifest dependencies
     pub fn build_dep_graph(&self) {
@@ -125,13 +133,25 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
     // *** DEPS RELATED FUNCTIONS ***
 
-    pub fn direct_deps() {
-        todo!()
+    /// A map from an environment to the packages' direct dependencies
+    pub async fn direct_dependencies(
+        &self,
+    ) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo<F>>> {
+        let mut output = BTreeMap::new();
+        for (env, _) in self.environments() {
+            output.extend(self.root.direct_deps(env).await?);
+        }
+
+        Ok(output)
     }
 
+    /// A map from an environment to the packages' transitive dependencies
+    // TODO: do we need this?
     pub fn transitive_deps() {}
 
     /// Return the set of dependencies for the given package
+    // TODO: are package names unique? What happens when they're not?
+    // TODO: do we need this?
     pub fn package_deps(
         &self,
         package: PackageName,
@@ -139,51 +159,47 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         todo!()
     }
 
-    /// Repin dependencies, update the [`dep_graph`] and the [`lockfile]`.
+    /// Repin dependencies and update the [`dep_graph`].
+    // TODO: do we need this?
     pub async fn repin(
         &mut self,
         envs: Option<BTreeMap<EnvironmentName, F::EnvironmentID>>,
     ) -> PackageResult<()> {
-        let mut dependencies_graph = BTreeMap::new();
+        let mut dependencies = BTreeMap::new();
         let envs = envs.unwrap_or(self.manifest().environments().clone());
 
-        for e in envs.keys() {
-            dependencies_graph.insert(
-                e.to_string(),
-                PackageGraph::<F>::load_from_manifests(self.package_path(), e).await?,
+        for env in envs.keys() {
+            dependencies.insert(
+                env.to_string(),
+                PackageGraph::<F>::load_from_manifest_by_env(self.package_path(), env).await?,
             );
         }
 
-        self.dep_graph = dependencies_graph;
-
-        for e in envs.keys() {
-            let pinned_deps = self
-                .dep_graph
-                .get(e)
-                .ok_or_else(|| {
-                    PackageError::Generic(format!(
-                        "Dependency graph for environment '{e}' not found"
-                    ))
-                })?
-                .to_pinned_deps(self.package_path(), e)
-                .await?;
-            self.lockfile.update_pinned_dep_env(pinned_deps);
-        }
+        self.dependencies = dependencies;
 
         Ok(())
     }
 
-    /// Serialize the lockfile(s) to disk. This will overwrite any existing lockfile(s) in the
-    /// package directory, and create `Move.<env>.lock` files for any non-default environments.
-    // TODO: I think we don't have defaults anymore, so we might need to fix write_to
-    pub async fn serialize_lockfile(
+    /// Repin dependencies for the given environments and write back to lockfile. If `envs` is
+    /// None, it will re-pin for all environments defined in the manifest.
+    ///
+    /// Note that this will not update the [`dependencies`] field itself.
+    pub async fn update_deps_and_write_to_lockfile(
         &self,
         envs: Option<BTreeMap<EnvironmentName, F::EnvironmentID>>,
     ) -> PackageResult<()> {
-        self.lockfile.write_to(
-            &self.root_path(),
-            envs.unwrap_or(self.environments().clone()),
-        )?;
+        let envs = envs.unwrap_or(self.environments().clone());
+        let mut deps = BTreeMap::new();
+        for env in envs.keys() {
+            let graph =
+                PackageGraph::<F>::load_from_manifest_by_env(self.package_path(), env).await?;
+            let pinned_deps = graph.to_pinned_deps(self.package_path(), env).await?;
+            deps.extend(pinned_deps);
+        }
+
+        let lockfile = self.load_lockfile()?;
+        lockfile.updated_deps_to_lockfile(self.root_path(), deps, envs);
+
         Ok(())
     }
 
@@ -251,6 +267,14 @@ impl<F: MoveFlavor> Package<F> {
         env: &EnvironmentName,
     ) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo<F>>> {
         let mut deps = self.manifest.dependencies();
+
+        if self.manifest().environments().get(env).is_none() {
+            return Err(PackageError::Generic(format!(
+                "Package {} does not have `{env}` defined as an environment in its manifest",
+                self.name()
+            )));
+        }
+
         let envs: BTreeMap<_, _> = self
             .manifest()
             .environments()
