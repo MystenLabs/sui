@@ -87,7 +87,7 @@ use typed_store::Map;
 use super::authority_store_tables::ENV_VAR_LOCKS_BLOCK_CACHE_SIZE;
 use super::consensus_tx_status_cache::{ConsensusTxStatus, ConsensusTxStatusCache};
 use super::epoch_start_configuration::EpochStartConfigTrait;
-use super::execution_time_estimator::ExecutionTimeEstimator;
+use super::execution_time_estimator::{ConsensusObservations, ExecutionTimeEstimator};
 use super::shared_object_congestion_tracker::{
     CongestionPerObjectDebt, SharedObjectCongestionTracker,
 };
@@ -4681,6 +4681,26 @@ impl AuthorityPerEpochStore {
         if let Some(cache) = self.consensus_tx_status_cache.as_ref() {
             cache.set_transaction_status(position, status);
         }
+    }
+
+    /// Only used by admin API
+    pub async fn get_estimated_tx_cost(&self, tx: &TransactionData) -> Option<u64> {
+        self.execution_time_estimator
+            .lock()
+            .await
+            .as_ref()
+            .map(|estimator| estimator.get_estimate(tx).as_micros() as u64)
+    }
+
+    pub async fn get_consensus_tx_cost_estimates(
+        &self,
+    ) -> Vec<(ExecutionTimeObservationKey, ConsensusObservations)> {
+        self.execution_time_estimator
+            .lock()
+            .await
+            .as_ref()
+            .map(|estimator| estimator.get_observations())
+            .unwrap_or_default()
     }
 }
 

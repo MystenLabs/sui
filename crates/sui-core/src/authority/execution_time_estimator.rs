@@ -616,6 +616,13 @@ impl ExecutionTimeEstimator {
                 .collect(),
         )
     }
+
+    pub fn get_observations(&self) -> Vec<(ExecutionTimeObservationKey, ConsensusObservations)> {
+        self.consensus_observations
+            .iter()
+            .map(|(key, observations)| (key.clone(), observations.clone()))
+            .collect()
+    }
 }
 
 fn command_length(command: &Command) -> NonZeroUsize {
