@@ -119,7 +119,7 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
         self.changed_objects
             .iter()
             .filter_map(|(id, change)| match &change.input_state {
-                ObjectIn::Exist(((version, digest), Owner::Shared { .. })) => {
+                ObjectIn::Exist(((version, digest), owner)) if owner.is_consensus() => {
                     Some(InputSharedObject::Mutate((*id, *version, *digest)))
                 }
                 _ => None,
@@ -311,6 +311,38 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                         )),
                         IDOperation::None,
                     ) => Some((*id, self.lamport_version, *object_digest)),
+                    _ => None,
+                }
+            })
+            .collect()
+    }
+
+    fn consensus_owner_changed(&self) -> Vec<ObjectRef> {
+        self.changed_objects
+            .iter()
+            .filter_map(|(id, change)| {
+                match (
+                    &change.input_state,
+                    &change.output_state,
+                    &change.id_operation,
+                ) {
+                    (
+                        ObjectIn::Exist((
+                            _,
+                            Owner::ConsensusAddressOwner {
+                                owner: old_owner, ..
+                            },
+                        )),
+                        ObjectOut::ObjectWrite((
+                            object_digest,
+                            Owner::ConsensusAddressOwner {
+                                owner: new_owner, ..
+                            },
+                        )),
+                        IDOperation::None,
+                    ) if old_owner != new_owner => {
+                        Some((*id, self.lamport_version, *object_digest))
+                    }
                     _ => None,
                 }
             })

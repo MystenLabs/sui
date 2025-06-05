@@ -141,7 +141,7 @@ pub async fn test_user_transaction(
     let mut object_args: Vec<_> = input_objs
         .into_iter()
         .map(|obj| {
-            if obj.is_shared() {
+            if obj.is_consensus() {
                 ObjectArg::SharedObject {
                     id: obj.id(),
                     initial_shared_version: obj.version(),
