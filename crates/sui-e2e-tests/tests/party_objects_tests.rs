@@ -9,8 +9,9 @@ use sui_macros::sim_test;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_test_transaction_builder::publish_basics_package_and_make_party_object;
 use sui_types::base_types::SuiAddress;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::object::Owner;
-use sui_types::transaction::ObjectArg;
+use sui_types::transaction::{CallArg, ObjectArg};
 use test_cluster::TestClusterBuilder;
 use tracing::info;
 
@@ -451,4 +452,155 @@ async fn party_object_transfer_multi_certs() {
         .get_transaction_cache_reader()
         .notify_read_executed_effects(&[repeat_tx_a_digest, repeat_tx_b_digest])
         .await;
+}
+
+/// Use a party object immutably.
+#[sim_test]
+async fn party_object_read() {
+    telemetry_subscribers::init_for_testing();
+
+    // Create a test cluster with enough gas coins for the below.
+    let num_reads = 10;
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_accounts(vec![
+            AccountConfig {
+                address: None,
+                gas_amounts: vec![DEFAULT_GAS_AMOUNT; num_reads / 2 + 1], // First account
+            },
+            AccountConfig {
+                address: None,
+                gas_amounts: vec![DEFAULT_GAS_AMOUNT; num_reads / 2 + 1], // Second account
+            },
+        ])
+        .build()
+        .await;
+
+    let (package, object) =
+        publish_basics_package_and_make_party_object(&test_cluster.wallet).await;
+    let package_id = package.0;
+    let object_id = object.0;
+    let mut object_initial_shared_version = object.1;
+
+    let accounts_and_gas = test_cluster
+        .wallet
+        .get_all_accounts_and_gas_objects()
+        .await
+        .unwrap();
+    let sender = accounts_and_gas[0].0;
+    let gas_coins_account1 = accounts_and_gas[0].1.clone();
+    let recipient = accounts_and_gas[1].0;
+    let gas_coins_account2 = accounts_and_gas[1].1.clone();
+
+    // Make some transactions that read the party object.
+    let mut all_digests = vec![];
+    for gas_coin in gas_coins_account1.iter().take(num_reads / 2) {
+        let transaction = test_cluster
+            .test_transaction_builder_with_gas_object(sender, *gas_coin)
+            .await
+            .move_call(
+                package_id,
+                "object_basics",
+                "get_value",
+                vec![CallArg::Object(ObjectArg::SharedObject {
+                    id: object_id,
+                    initial_shared_version: object_initial_shared_version,
+                    mutable: false,
+                })],
+            )
+            .build();
+        let signed = test_cluster.sign_transaction(&transaction);
+        let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
+        test_cluster
+            .create_certificate(signed.clone(), Some(client_ip))
+            .await
+            .unwrap();
+
+        let validators = test_cluster.get_validator_pubkeys();
+        test_cluster
+            .submit_transaction_to_validators(signed.clone(), &validators)
+            .await
+            .unwrap();
+        all_digests.push(*signed.digest());
+    }
+
+    // Make a transaction to transfer the party object to a different account in the cluster.
+    let transfer_gas = gas_coins_account1[num_reads / 2];
+    let transfer_transaction = test_cluster
+        .test_transaction_builder_with_gas_object(sender, transfer_gas)
+        .await
+        .call_object_party_transfer_single_owner(
+            package_id,
+            ObjectArg::SharedObject {
+                id: object_id,
+                initial_shared_version: object_initial_shared_version,
+                mutable: true,
+            },
+            recipient,
+        )
+        .build();
+    let signed_transfer = test_cluster.sign_transaction(&transfer_transaction);
+    let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
+    test_cluster
+        .create_certificate(signed_transfer.clone(), Some(client_ip))
+        .await
+        .unwrap();
+
+    let validators = test_cluster.get_validator_pubkeys();
+    let (transfer_effects, _) = test_cluster
+        .submit_transaction_to_validators(signed_transfer.clone(), &validators)
+        .await
+        .unwrap();
+    all_digests.push(*signed_transfer.digest());
+
+    // Find the party object in the mutated objects and get its new start version
+    let mutated_party = transfer_effects
+        .mutated()
+        .into_iter()
+        .find(|obj| matches!(obj.1, Owner::ConsensusAddressOwner { .. }))
+        .expect("Party object should be mutated");
+    object_initial_shared_version = mutated_party.1.start_version().unwrap();
+
+    // Make some more transactions that read the party object from the new owner.
+    for gas_coin in gas_coins_account2.iter().take(num_reads / 2) {
+        let transaction = test_cluster
+            .test_transaction_builder_with_gas_object(recipient, *gas_coin)
+            .await
+            .move_call(
+                package_id,
+                "object_basics",
+                "get_value",
+                vec![CallArg::Object(ObjectArg::SharedObject {
+                    id: object_id,
+                    initial_shared_version: object_initial_shared_version,
+                    mutable: false,
+                })],
+            )
+            .build();
+        let signed = test_cluster.sign_transaction(&transaction);
+        let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
+        test_cluster
+            .create_certificate(signed.clone(), Some(client_ip))
+            .await
+            .unwrap();
+
+        let validators = test_cluster.get_validator_pubkeys();
+        test_cluster
+            .submit_transaction_to_validators(signed.clone(), &validators)
+            .await
+            .unwrap();
+        all_digests.push(*signed.digest());
+    }
+
+    // Start a new fullnode and let it sync from genesis and wait for us to see all the
+    // transactions.
+    let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
+    let effects = fullnode
+        .state()
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects(&all_digests)
+        .await;
+    assert_eq!(effects.len(), all_digests.len());
+    for effect in effects {
+        assert!(effect.status().is_ok(), "Transaction failed: {effect:?}");
+    }
 }

@@ -53,6 +53,10 @@ public fun set_value(o: &mut Object, value: u64) {
     o.value = value;
 }
 
+public fun get_value(o: &Object): u64 {
+    o.value
+}
+
 // test that reading o2 and updating o1 works
 public fun update(o1: &mut Object, o2: &Object) {
     o1.value = o2.value;
