@@ -94,8 +94,8 @@ impl BinaryConstants {
             return Err(MagicError::BadSize);
         }
         match magic {
-            BinaryConstants::MOVE_MAGIC => Ok(MagicKind::MoveMagic),
-            BinaryConstants::UNPUBLISHABLE_MAGIC => Ok(MagicKind::UnpublishableMagic),
+            BinaryConstants::MOVE_MAGIC => Ok(MagicKind::Normal),
+            BinaryConstants::UNPUBLISHABLE_MAGIC => Ok(MagicKind::Unpublishable),
             _ => Err(MagicError::BadNumber),
         }
     }
@@ -104,9 +104,9 @@ impl BinaryConstants {
 /// Types of magic numbers we allow.
 pub enum MagicKind {
     /// Normal move magic number
-    MoveMagic,
+    Normal,
     /// Unpublishable magic number
-    UnpublishableMagic,
+    Unpublishable,
 }
 
 /// Types of errors when checking magic number.

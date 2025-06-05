@@ -2119,9 +2119,9 @@ impl<'a, 'b> VersionedBinary<'a, 'b> {
                     .with_message("Bad binary header".to_string()));
             };
             match BinaryConstants::decode_magic(magic, count) {
-                Ok(MagicKind::MoveMagic) => true,
-                Ok(MagicKind::UnpublishableMagic) if binary_config.allow_unpublishable() => false,
-                Ok(MagicKind::UnpublishableMagic) => {
+                Ok(MagicKind::Normal) => true,
+                Ok(MagicKind::Unpublishable) if binary_config.allow_unpublishable() => false,
+                Ok(MagicKind::Unpublishable) => {
                     return Err(PartialVMError::new(StatusCode::BAD_MAGIC)
                         .with_message("Binary header not allowed".to_string()));
                 }

@@ -1894,16 +1894,13 @@ fn is_enum_decl(tokens: &mut Lexer) -> bool {
 }
 
 fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, anyhow::Error>> {
-    let publishable = {
-        let start_tok = tokens.peek();
-        match start_tok {
-            Tok::NameValue if tokens.content() == "unpublishable" => {
-                tokens.advance()?;
-                false
-            }
-            _ => true,
-        }
-    };
+    let publishable =
+        if matches!(tokens.peek(), Tok::NameValue) && tokens.content() == "unpublishable" {
+            tokens.advance()?;
+            false
+        } else {
+            true
+        };
     let start_loc = tokens.start_loc();
     consume_token(tokens, Tok::Module)?;
     let identifier = parse_module_ident(tokens)?;
