@@ -152,13 +152,13 @@ fn type_input_validity_check(
                 let next_depth = depth + 1;
                 if config.validate_identifier_inputs() {
                     fp_ensure!(
-                        identifier::is_valid(&s.module),
+                        identifier::is_valid(&s.module) && s.module != "<SELF>",
                         UserInputError::InvalidIdentifier {
                             error: s.module.clone()
                         }
                     );
                     fp_ensure!(
-                        identifier::is_valid(&s.name),
+                        identifier::is_valid(&s.name) && s.name != "<SELF>",
                         UserInputError::InvalidIdentifier {
                             error: s.name.clone()
                         }

@@ -42,7 +42,6 @@ use move_core_types::{
 };
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest::{collection::vec, prelude::*, strategy::BoxedStrategy};
-use ref_cast::RefCast;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::ops::BitOr;
@@ -245,12 +244,6 @@ pub type TypeSignaturePool = Vec<TypeSignature>;
 /// The pool of `Signature` instances. Every function definition must define the set of
 /// locals used and their types.
 pub type SignaturePool = Vec<Signature>;
-
-// TODO: "<SELF>" only passes the validator for identifiers because it is special cased. Whenever
-// "<SELF>" is removed, so should the special case in identifier.rs.
-pub fn self_module_name() -> &'static IdentStr {
-    IdentStr::ref_cast("<SELF>")
-}
 
 /// Index 0 into the LocalsSignaturePool, which is guaranteed to be an empty list.
 /// Used to represent function/struct instantiation with no type arguments -- effectively
@@ -2835,7 +2828,7 @@ pub fn empty_module() -> CompiledModule {
             name: IdentifierIndex(0),
         }],
         self_module_handle_idx: ModuleHandleIndex(0),
-        identifiers: vec![self_module_name().to_owned()],
+        identifiers: vec![move_core_types::ident_str!("DUMMY").to_owned()],
         address_identifiers: vec![AccountAddress::ZERO],
         constant_pool: vec![],
         metadata: vec![],
