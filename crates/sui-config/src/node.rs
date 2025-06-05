@@ -304,7 +304,7 @@ impl ExecutionTimeObserverConfig {
 
     pub fn observation_sharing_object_utilization_threshold(&self) -> Duration {
         self.observation_sharing_object_utilization_threshold
-            .unwrap_or(Duration::from_millis(100))
+            .unwrap_or(Duration::from_millis(500))
     }
 
     pub fn observation_sharing_diff_threshold(&self) -> f64 {

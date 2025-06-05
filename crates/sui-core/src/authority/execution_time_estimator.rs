@@ -232,11 +232,7 @@ impl ExecutionTimeObserver {
                             .unwrap_or(Duration::MAX),
                     );
                 utilization.last_measured = Some(now);
-                if utilization.excess_execution_time
-                    > self
-                        .config
-                        .observation_sharing_object_utilization_threshold()
-                {
+                if utilization.overutilized(&self.config) {
                     utilization.was_overutilized = true;
                 }
 
