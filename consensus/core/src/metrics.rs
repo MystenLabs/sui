@@ -76,6 +76,9 @@ const SIZE_BUCKETS: &[f64] = &[
     10_000_000.0,
 ]; // size in bytes
 
+// Because of indirect finalization, the round delay should be at most 3 rounds.
+const ROUND_DELAY_BUCKETS: &[f64] = &[0.0, 0.5, 1.0, 2.0, 3.0, 4.0];
+
 pub(crate) struct Metrics {
     pub(crate) node_metrics: NodeMetrics,
     pub(crate) network_metrics: NetworkMetrics,
@@ -130,7 +133,6 @@ pub(crate) struct NodeMetrics {
     pub(crate) dag_state_store_read_count: IntCounterVec,
     pub(crate) dag_state_store_write_count: IntCounter,
     pub(crate) fetch_blocks_scheduler_inflight: IntGauge,
-    pub(crate) fetch_blocks_scheduler_skipped: IntCounterVec,
     pub(crate) synchronizer_fetched_blocks_by_peer: IntCounterVec,
     pub(crate) synchronizer_missing_blocks_by_authority: IntCounterVec,
     pub(crate) synchronizer_current_missing_blocks_by_authority: IntGaugeVec,
@@ -206,6 +208,13 @@ pub(crate) struct NodeMetrics {
     pub(crate) round_tracker_propagation_delays: Histogram,
     pub(crate) round_tracker_last_propagation_delay: IntGauge,
     pub(crate) round_prober_request_errors: IntCounterVec,
+    pub(crate) certifier_gc_round: IntGauge,
+    pub(crate) certifier_own_reject_votes: IntCounterVec,
+    pub(crate) certifier_output_blocks: IntCounterVec,
+    pub(crate) finalizer_buffered_commits: IntGauge,
+    pub(crate) finalizer_round_delay: Histogram,
+    pub(crate) finalizer_transaction_status: IntCounterVec,
+    pub(crate) finalizer_output_commits: IntCounterVec,
     pub(crate) uptime: Histogram,
 }
 
@@ -402,12 +411,6 @@ impl NodeMetrics {
                 "fetch_blocks_scheduler_inflight",
                 "Designates whether the synchronizer scheduler task to fetch blocks is currently running",
                 registry,
-            ).unwrap(),
-            fetch_blocks_scheduler_skipped: register_int_counter_vec_with_registry!(
-                "fetch_blocks_scheduler_skipped",
-                "Number of times the scheduler skipped fetching blocks",
-                &["reason"],
-                registry
             ).unwrap(),
             synchronizer_fetched_blocks_by_peer: register_int_counter_vec_with_registry!(
                 "synchronizer_fetched_blocks_by_peer",
@@ -831,6 +834,46 @@ impl NodeMetrics {
                 "round_prober_request_errors",
                 "Number of errors when probing against peers per error type",
                 &["error_type"],
+                registry
+            ).unwrap(),
+            certifier_gc_round: register_int_gauge_with_registry!(
+                "certifier_gc_round",
+                "The current GC round of the certifier",
+                registry
+            ).unwrap(),
+            certifier_own_reject_votes: register_int_counter_vec_with_registry!(
+                "certifier_own_reject_votes",
+                "Number of own reject votes against each peer authority",
+                &["authority"],
+                registry
+            ).unwrap(),
+            certifier_output_blocks: register_int_counter_vec_with_registry!(
+                "certifier_output_blocks",
+                "Number of output blocks certified by the certifier, grouped by type.",
+                &["type"],
+                registry
+            ).unwrap(),
+            finalizer_buffered_commits: register_int_gauge_with_registry!(
+                "finalizer_buffered_commits",
+                "The number of commits buffered in the finalizer",
+                registry,
+            ).unwrap(),
+            finalizer_round_delay: register_histogram_with_registry!(
+                "finalizer_round_delay",
+                "The delay between the round of the last committed block and the round of the finalized commit.",
+                ROUND_DELAY_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            finalizer_transaction_status: register_int_counter_vec_with_registry!(
+                "finalizer_transaction_status",
+                "Number of transactions finalized by the finalizer, grouped by status.",
+                &["status"],
+                registry
+            ).unwrap(),
+            finalizer_output_commits: register_int_counter_vec_with_registry!(
+                "finalizer_output_commits",
+                "Number of output commits finalized by the finalizer, grouped by type.",
+                &["type"],
                 registry
             ).unwrap(),
             uptime: register_histogram_with_registry!(

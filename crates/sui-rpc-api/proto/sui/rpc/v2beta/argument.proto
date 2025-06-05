@@ -23,9 +23,13 @@ message Argument {
 
   optional ArgumentKind kind = 1;
 
-  // Index of an input or the result of another command based on `kind`.
-  optional uint32 index = 2;
+  // Index of an input when `kind` is `INPUT`.
+  optional uint32 input = 2;
 
   // Used to access a nested result when `kind` is `RESULT`.
   optional uint32 subresult = 3;
+
+  // Index of a result when `kind` is `RESULT`.
+  // TODO Fix field numbering
+  optional uint32 result = 4;
 }

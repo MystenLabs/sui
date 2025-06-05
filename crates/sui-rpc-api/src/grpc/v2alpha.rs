@@ -6,6 +6,7 @@ use std::pin::Pin;
 use crate::field_mask::FieldMaskTree;
 use crate::message::MessageMergeFrom;
 use crate::proto::rpc::v2alpha::live_data_service_server::LiveDataService;
+use crate::proto::rpc::v2alpha::signature_verification_service_server::SignatureVerificationService;
 use crate::proto::rpc::v2alpha::subscription_service_server::SubscriptionService;
 use crate::proto::rpc::v2alpha::GetCoinInfoRequest;
 use crate::proto::rpc::v2alpha::GetCoinInfoResponse;
@@ -19,6 +20,8 @@ use crate::proto::rpc::v2alpha::SimulateTransactionRequest;
 use crate::proto::rpc::v2alpha::SimulateTransactionResponse;
 use crate::proto::rpc::v2alpha::SubscribeCheckpointsRequest;
 use crate::proto::rpc::v2alpha::SubscribeCheckpointsResponse;
+use crate::proto::rpc::v2alpha::VerifySignatureRequest;
+use crate::proto::rpc::v2alpha::VerifySignatureResponse;
 use crate::proto::rpc::v2beta::Checkpoint;
 use crate::subscription::SubscriptionServiceHandle;
 use crate::RpcService;
@@ -116,6 +119,20 @@ impl LiveDataService for RpcService {
         request: tonic::Request<ResolveTransactionRequest>,
     ) -> Result<tonic::Response<ResolveTransactionResponse>, tonic::Status> {
         resolve::resolve_transaction(self, request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+}
+
+mod verify_signature;
+
+#[tonic::async_trait]
+impl SignatureVerificationService for RpcService {
+    async fn verify_signature(
+        &self,
+        request: tonic::Request<VerifySignatureRequest>,
+    ) -> Result<tonic::Response<VerifySignatureResponse>, tonic::Status> {
+        verify_signature::verify_signature(self, request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)
     }

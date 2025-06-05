@@ -2005,7 +2005,7 @@ dependencies = [
  "bitflags 2.6.0",
  "cexpr",
  "clang-sys",
- "itertools 0.12.1",
+ "itertools 0.10.5",
  "lazy_static",
  "lazycell",
  "proc-macro2",
@@ -2746,7 +2746,7 @@ dependencies = [
  "coins-core",
  "digest 0.10.7",
  "hmac",
- "k256 0.13.1",
+ "k256 0.13.4",
  "serde",
  "sha2 0.10.8",
  "thiserror 1.0.69",
@@ -4202,15 +4202,16 @@ dependencies = [
 
 [[package]]
 name = "ed25519-dalek"
-version = "2.0.0"
+version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7277392b266383ef8396db7fdeb1e77b6c52fed775f5df15bb24f35b72156980"
+checksum = "4a3daa8e81a3963a60642bcc1f90a670680bd4a77535faa384e9d1c79d620871"
 dependencies = [
  "curve25519-dalek",
  "ed25519",
  "rand_core 0.6.4",
  "serde",
  "sha2 0.10.8",
+ "subtle",
  "zeroize",
 ]
 
@@ -4307,7 +4308,7 @@ dependencies = [
  "base64 0.21.7",
  "bytes",
  "hex",
- "k256 0.13.1",
+ "k256 0.13.4",
  "log",
  "rand 0.8.5",
  "rlp",
@@ -4651,7 +4652,7 @@ dependencies = [
  "elliptic-curve 0.13.8",
  "ethabi",
  "generic-array",
- "k256 0.13.1",
+ "k256 0.13.4",
  "num_enum 0.7.3",
  "once_cell",
  "open-fastrlp",
@@ -6922,9 +6923,9 @@ dependencies = [
 
 [[package]]
 name = "k256"
-version = "0.13.1"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cadb76004ed8e97623117f3df85b17aaa6626ab0b0831e6573f104df16cd1bcc"
+checksum = "f6e3919bbaa2945715f0bb6d3934a173d1e9a59ac23767fbaaef277265a7411b"
 dependencies = [
  "cfg-if",
  "ecdsa 0.16.9",
@@ -7695,10 +7696,6 @@ checksum = "1fafa6961cabd9c63bcd77a45d7e3b7f3b552b70417831fb0f56db717e72407e"
 [[package]]
 name = "move-abstract-interpreter"
 version = "0.1.0"
-dependencies = [
- "move-binary-format",
- "move-bytecode-verifier-meter",
-]
 
 [[package]]
 name = "move-abstract-interpreter-v2"
@@ -7749,6 +7746,7 @@ dependencies = [
  "anyhow",
  "enum-compat-util",
  "indexmap 2.8.0",
+ "move-abstract-interpreter",
  "move-core-types",
  "move-proc-macros",
  "ref-cast",
@@ -8001,6 +7999,7 @@ dependencies = [
  "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
+ "move-bytecode-verifier",
  "move-command-line-common",
  "move-compiler",
  "move-core-types",
@@ -8209,6 +8208,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_spanned",
+ "sha2 0.9.9",
  "thiserror 1.0.69",
  "tokio",
  "toml 0.5.11",
@@ -13179,6 +13179,7 @@ dependencies = [
  "mysten-metrics",
  "parking_lot 0.12.3",
  "serde",
+ "serde_json",
  "sui-macros",
  "sui-move-natives-latest",
  "sui-protocol-config",
@@ -13788,6 +13789,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-crypto"
+version = "0.0.4"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=bf1875211b15bd67ce5f7a72152bf952479f1668#bf1875211b15bd67ce5f7a72152bf952479f1668"
+dependencies = [
+ "ark-bn254",
+ "ark-ff",
+ "ark-groth16",
+ "ark-snark",
+ "ark-std",
+ "base64ct",
+ "bnum",
+ "ed25519-dalek",
+ "itertools 0.13.0",
+ "k256 0.13.4",
+ "p256",
+ "rand_core 0.6.4",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "sha2 0.10.8",
+ "signature 2.2.0",
+ "sui-sdk-types",
+]
+
+[[package]]
 name = "sui-data-ingestion"
 version = "1.50.0"
 dependencies = [
@@ -14180,7 +14206,7 @@ dependencies = [
 [[package]]
 name = "sui-graphql-client"
 version = "0.0.4"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=7d485ababecf7282dc7d772316ccdb07b9b24753#7d485ababecf7282dc7d772316ccdb07b9b24753"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=bf1875211b15bd67ce5f7a72152bf952479f1668#bf1875211b15bd67ce5f7a72152bf952479f1668"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -14204,7 +14230,7 @@ dependencies = [
 [[package]]
 name = "sui-graphql-client-build"
 version = "0.0.4"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=7d485ababecf7282dc7d772316ccdb07b9b24753#7d485ababecf7282dc7d772316ccdb07b9b24753"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=bf1875211b15bd67ce5f7a72152bf952479f1668#bf1875211b15bd67ce5f7a72152bf952479f1668"
 dependencies = [
  "cynic-codegen",
 ]
@@ -15100,6 +15126,7 @@ dependencies = [
  "move-ir-types",
  "move-package",
  "move-symbol-pool",
+ "mysten-common",
  "serde-reflection",
  "sui-package-management",
  "sui-protocol-config",
@@ -15699,6 +15726,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "sui-crypto",
  "sui-protocol-config",
  "sui-sdk-types",
  "sui-types",
@@ -15813,7 +15841,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.0.4"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=7d485ababecf7282dc7d772316ccdb07b9b24753#7d485ababecf7282dc7d772316ccdb07b9b24753"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=bf1875211b15bd67ce5f7a72152bf952479f1668#bf1875211b15bd67ce5f7a72152bf952479f1668"
 dependencies = [
  "base64ct",
  "bcs",
@@ -15821,6 +15849,7 @@ dependencies = [
  "bnum",
  "bs58 0.5.1",
  "hex",
+ "itertools 0.13.0",
  "proptest",
  "roaring",
  "serde",
@@ -16381,6 +16410,7 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
+ "move-trace-format",
  "move-vm-profiler",
  "move-vm-test-utils",
  "mysten-common",
@@ -16448,10 +16478,10 @@ dependencies = [
 name = "sui-verifier-latest"
 version = "0.1.0"
 dependencies = [
- "move-abstract-interpreter",
  "move-abstract-stack",
  "move-binary-format",
  "move-bytecode-utils",
+ "move-bytecode-verifier",
  "move-bytecode-verifier-meter",
  "move-core-types",
  "move-vm-config",
@@ -17983,7 +18013,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 

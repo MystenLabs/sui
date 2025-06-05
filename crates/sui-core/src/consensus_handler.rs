@@ -1266,26 +1266,24 @@ impl ConsensusBlockHandler {
             })
             .collect::<Vec<_>>();
         let mut executable_transactions = vec![];
-        for (_block, transactions) in parsed_transactions {
+        for (idx, (block, transactions)) in parsed_transactions.into_iter().enumerate() {
             for parsed in transactions {
-                // TODO(fastpath): enable set_consensus_tx_status() after post-commit finalization is implemented.
-                // let position = ConsensusTxPosition {
-                //     block,
-                //     index: idx as TransactionIndex,
-                // };
+                let position = ConsensusTxPosition {
+                    block,
+                    index: idx as TransactionIndex,
+                };
                 if parsed.rejected {
-                    //     // TODO(fastpath): unlock rejected transactions.
-                    //     // TODO(fastpath): maybe avoid parsing blocks twice between commit and transaction handling?
-                    //     self.epoch_store
-                    //         .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
-                    //     self.metrics
-                    //         .consensus_block_handler_txn_processed
-                    //         .with_label_values(&["rejected"])
-                    //         .inc();
+                    // TODO(fastpath): avoid parsing blocks twice between handling commit and fastpath transactions?
+                    self.epoch_store
+                        .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
+                    self.metrics
+                        .consensus_block_handler_txn_processed
+                        .with_label_values(&["rejected"])
+                        .inc();
                     continue;
                 }
-                // self.epoch_store
-                //     .set_consensus_tx_status(position, ConsensusTxStatus::FastpathCertified);
+                self.epoch_store
+                    .set_consensus_tx_status(position, ConsensusTxStatus::FastpathCertified);
 
                 self.metrics
                     .consensus_block_handler_txn_processed
@@ -1293,8 +1291,6 @@ impl ConsensusBlockHandler {
                     .inc();
                 if let ConsensusTransactionKind::UserTransaction(tx) = parsed.transaction.kind {
                     // TODO(fastpath): use a separate function to check if a transaction should be executed in fastpath.
-                    // If we do schedule a fast-path transaction for execution, we also need to
-                    // track it in case we need to revert it later due to post-commit reject.
                     if tx.contains_shared_object() {
                         continue;
                     }
@@ -1519,10 +1515,8 @@ mod tests {
         let committed_sub_dag = CommittedSubDag::new(
             leader_block.reference(),
             blocks.clone(),
-            vec![vec![]; blocks.len()],
             leader_block.timestamp_ms(),
             CommitRef::new(10, CommitDigest::MIN),
-            vec![],
         );
 
         // Test that the consensus handler respects backpressure.

@@ -209,16 +209,20 @@ impl TrafficController {
     pub async fn check(&self, client: &Option<IpAddr>, proxied_client: &Option<IpAddr>) -> bool {
         let check_with_dry_run_maybe = |allowed| -> bool {
             match (allowed, self.dry_run_mode()) {
-                // check succeeded
+                // request allowed
                 (true, _) => true,
-                // check failed while in dry-run mode
+                // request blocked while in dry-run mode
                 (false, true) => {
                     debug!("Dry run mode: Blocked request from client {:?}", client);
                     self.metrics.num_dry_run_blocked_requests.inc();
                     true
                 }
-                // check failed
-                (false, false) => false,
+                // request blocked
+                (false, false) => {
+                    debug!("Blocked request from client {:?}", client);
+                    self.metrics.requests_blocked_at_protocol.inc();
+                    false
+                }
             }
         };
 
@@ -543,8 +547,7 @@ async fn handle_policy_response(
             .is_none()
         {
             // Only increment the metric if the client was not already blocked
-            debug!("Blocking client: {:?}", client);
-            metrics.requests_blocked_at_protocol.inc();
+            debug!("Adding client {:?} to blocklist", client);
             metrics.connection_ip_blocklist_len.inc();
         }
     }
@@ -558,8 +561,7 @@ async fn handle_policy_response(
             .is_none()
         {
             // Only increment the metric if the client was not already blocked
-            debug!("Blocking proxied client: {:?}", client);
-            metrics.requests_blocked_at_protocol.inc();
+            debug!("Adding proxied client {:?} to blocklist", client);
             metrics.proxy_ip_blocklist_len.inc();
         }
     }
