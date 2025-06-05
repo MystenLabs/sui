@@ -100,7 +100,7 @@ export TMPDIR
 root_dir=$(git rev-parse --show-toplevel)
 export SIMTEST_STATIC_INIT_MOVE=$root_dir"/examples/move/basics"
 
-exec cargo "${cargo_command[@]}" \
+cargo "${cargo_command[@]}" \
   --config "build.rustflags = [$(IFS=, ; echo "${rust_flags[*]}")]" \
   "${cargo_patch_args[@]}" \
   "$@"
