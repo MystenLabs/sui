@@ -14934,6 +14934,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-kv-rpc"
+version = "1.50.0"
+dependencies = [
+ "sui-kvstore",
+ "sui-protocol-config",
+ "sui-rpc-api",
+ "sui-sdk-types",
+ "sui-types",
+ "tonic 0.13.1",
+]
+
+[[package]]
 name = "sui-kvstore"
 version = "1.50.0"
 dependencies = [

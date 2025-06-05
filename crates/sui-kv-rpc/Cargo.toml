@@ -1,0 +1,15 @@
+[package]
+name = "sui-kv-rpc"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+version.workspace = true
+
+[dependencies]
+sui-kvstore.workspace = true
+sui-rpc-api.workspace = true
+sui-types.workspace = true
+sui-sdk-types.workspace = true
+tonic.workspace = true
+sui-protocol-config.workspace = true

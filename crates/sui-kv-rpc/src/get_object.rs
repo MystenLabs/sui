@@ -1,0 +1,83 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use sui_kvstore::{BigTableClient, KeyValueStoreReader};
+use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc_api::{
+    ledger_service::validate_get_object_requests,
+    message::MessageMerge,
+    proto::rpc::v2beta::{
+        BatchGetObjectsRequest, BatchGetObjectsResponse, GetObjectRequest, Object,
+    },
+    ErrorReason, ObjectNotFoundError, RpcError,
+};
+use sui_types::storage::ObjectKey;
+
+pub(crate) async fn get_object(
+    mut client: BigTableClient,
+    GetObjectRequest {
+        object_id,
+        version,
+        read_mask,
+    }: GetObjectRequest,
+) -> Result<Object, RpcError> {
+    let (requests, read_mask) =
+        validate_get_object_requests(vec![(object_id, version)], read_mask)?;
+    let (object_id, version) = requests[0];
+    let object = match version {
+        Some(version) => client
+            .get_objects(&[ObjectKey(object_id.into(), version.into())])
+            .await?
+            .pop()
+            .ok_or_else(|| ObjectNotFoundError::new_with_version(object_id, version))?,
+        None => client
+            .get_latest_object(&object_id.into())
+            .await?
+            .ok_or_else(|| ObjectNotFoundError::new(object_id))?,
+    };
+    let mut message = Object::default();
+    // TODO: support json read mask
+    message.merge(sui_sdk_types::Object::try_from(object)?, &read_mask);
+    Ok(message)
+}
+
+pub(crate) async fn batch_get_objects(
+    mut client: BigTableClient,
+    BatchGetObjectsRequest {
+        requests,
+        read_mask,
+    }: BatchGetObjectsRequest,
+) -> Result<BatchGetObjectsResponse, RpcError> {
+    // only batch requests with `object_id` and `exact_version` are supported by the KV store
+    if requests.iter().any(|r| r.version.is_none()) {
+        return Err(FieldViolation::new("version")
+            .with_reason(ErrorReason::FieldInvalid)
+            .with_description("KV store supports batch requests with exact object versioning")
+            .into());
+    }
+    let requests = requests
+        .into_iter()
+        .map(|req| (req.object_id, req.version))
+        .collect();
+    let (requests, read_mask) = validate_get_object_requests(requests, read_mask)?;
+    let object_keys: Vec<_> = requests
+        .into_iter()
+        .map(|(object_id, version)| {
+            ObjectKey(
+                object_id.into(),
+                version.expect("invariant's already checked").into(),
+            )
+        })
+        .collect();
+    let objects: Result<_, RpcError> = client
+        .get_objects(&object_keys)
+        .await?
+        .into_iter()
+        .map(|object| {
+            let mut message = Object::default();
+            message.merge(sui_sdk_types::Object::try_from(object)?, &read_mask);
+            Ok(message)
+        })
+        .collect();
+    Ok(BatchGetObjectsResponse { objects: objects? })
+}
