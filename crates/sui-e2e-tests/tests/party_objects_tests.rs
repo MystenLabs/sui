@@ -604,3 +604,239 @@ async fn party_object_read() {
         assert!(effect.status().is_ok(), "Transaction failed: {effect:?}");
     }
 }
+
+/// Transfer a party object as the object owner and ensure grpc properly handles updating its
+/// indexes
+#[sim_test]
+async fn party_object_grpc() {
+    use sui_rpc_api::field_mask::FieldMask;
+    use sui_rpc_api::field_mask::FieldMaskUtil;
+    use sui_rpc_api::proto::rpc::v2alpha::live_data_service_client::LiveDataServiceClient;
+    use sui_rpc_api::proto::rpc::v2alpha::ListOwnedObjectsRequest;
+    use sui_rpc_api::proto::rpc::v2beta::ledger_service_client::LedgerServiceClient;
+    use sui_rpc_api::proto::rpc::v2beta::owner::OwnerKind;
+    use sui_rpc_api::proto::rpc::v2beta::GetObjectRequest;
+
+    let test_cluster = TestClusterBuilder::new().build().await;
+
+    let (package, object) =
+        publish_basics_package_and_make_party_object(&test_cluster.wallet).await;
+
+    let package_id = package.0;
+    let object_id = object.0;
+    let object_id_str = object_id.to_canonical_string(true);
+    let object_initial_shared_version = object.1;
+
+    let channel = tonic::transport::Channel::from_shared(test_cluster.rpc_url().to_owned())
+        .unwrap()
+        .connect()
+        .await
+        .unwrap();
+
+    let mut live_data_service_client = LiveDataServiceClient::new(channel.clone());
+    let mut ledger_service_client = LedgerServiceClient::new(channel);
+
+    // run a list operation to make sure the party object shows up for the current owner
+    let resp = ledger_service_client
+        .get_object(GetObjectRequest {
+            object_id: Some(object_id_str.clone()),
+            read_mask: Some(FieldMask::from_paths([
+                "object_id",
+                "version",
+                "digest",
+                "owner",
+                "object_type",
+            ])),
+
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_inner();
+    let original_owner = resp.owner.unwrap();
+    assert_eq!(original_owner.kind(), OwnerKind::ConsensusAddress);
+    assert!(original_owner.address.is_some());
+
+    let objects = live_data_service_client
+        .list_owned_objects(ListOwnedObjectsRequest {
+            owner: original_owner.address.clone(),
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .objects;
+
+    // We expect that we should be able to find the consensus owned object via list
+    assert!(objects.iter().any(|o| o.object_id() == object_id_str));
+
+    // Make a transaction to transfer the party object.
+    let transaction = test_cluster
+        .test_transaction_builder()
+        .await
+        .call_object_party_transfer_single_owner(
+            package_id,
+            ObjectArg::SharedObject {
+                id: object_id,
+                initial_shared_version: object_initial_shared_version,
+                mutable: true,
+            },
+            SuiAddress::ZERO,
+        )
+        .build();
+    test_cluster
+        .sign_and_execute_transaction(&transaction)
+        .await
+        .effects
+        .unwrap();
+
+    // Once we've transfered the object to another address we need to make sure that its owner is
+    // properly updated and that the owner index correctly updated
+    let resp = ledger_service_client
+        .get_object(GetObjectRequest {
+            object_id: Some(object_id_str.clone()),
+            read_mask: Some(FieldMask::from_paths([
+                "object_id",
+                "version",
+                "digest",
+                "owner",
+                "object_type",
+            ])),
+
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_inner();
+    let new_owner = resp.owner.unwrap();
+    assert_eq!(new_owner.kind(), OwnerKind::ConsensusAddress);
+    assert_eq!(new_owner.address, Some(SuiAddress::ZERO.to_string()));
+
+    let objects = live_data_service_client
+        .list_owned_objects(ListOwnedObjectsRequest {
+            owner: original_owner.address,
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .objects;
+
+    // We expect that the old owner shouldn't have this object listed in its index anymore
+    assert!(!objects.iter().any(|o| o.object_id() == object_id_str));
+
+    // Now we need to ensure that the object properly shows up in the new owner's index
+    let objects = live_data_service_client
+        .list_owned_objects(ListOwnedObjectsRequest {
+            owner: new_owner.address,
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .objects;
+    assert!(objects.iter().any(|o| o.object_id() == object_id_str))
+}
+
+/// Transfer a party object as the object owner and ensure jsonrpc properly handles updating its
+/// indexes
+#[sim_test]
+async fn party_object_jsonrpc() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+
+    let (package, object) =
+        publish_basics_package_and_make_party_object(&test_cluster.wallet).await;
+
+    let package_id = package.0;
+    let object_id = object.0;
+    let object_initial_shared_version = object.1;
+
+    let client = test_cluster.sui_client();
+
+    let object = client
+        .read_api()
+        .get_object_with_options(
+            object_id,
+            sui_json_rpc_types::SuiObjectDataOptions::new().with_owner(),
+        )
+        .await
+        .unwrap()
+        .data
+        .unwrap();
+    let original_owner = object.owner.unwrap();
+    assert!(matches!(
+        original_owner,
+        Owner::ConsensusAddressOwner { .. }
+    ));
+    let original_owner_address = original_owner.get_owner_address().unwrap();
+
+    let objects = client
+        .read_api()
+        .get_owned_objects(original_owner_address, None, None, None)
+        .await
+        .unwrap()
+        .data;
+
+    assert!(objects
+        .into_iter()
+        .any(|o| o.data.unwrap().object_id == object_id));
+
+    // Make a transaction to transfer the party object.
+    let transaction = test_cluster
+        .test_transaction_builder()
+        .await
+        .call_object_party_transfer_single_owner(
+            package_id,
+            ObjectArg::SharedObject {
+                id: object_id,
+                initial_shared_version: object_initial_shared_version,
+                mutable: true,
+            },
+            SuiAddress::ZERO,
+        )
+        .build();
+    test_cluster
+        .sign_and_execute_transaction(&transaction)
+        .await
+        .effects
+        .unwrap();
+
+    // Once we've transfered the object to another address we need to make sure that its owner is
+    // properly updated and that the owner index correctly updated
+    let object = client
+        .read_api()
+        .get_object_with_options(
+            object_id,
+            sui_json_rpc_types::SuiObjectDataOptions::new().with_owner(),
+        )
+        .await
+        .unwrap()
+        .data
+        .unwrap();
+    let new_owner = object.owner.unwrap();
+    assert!(matches!(new_owner, Owner::ConsensusAddressOwner { .. }));
+    let new_owner_address = new_owner.get_owner_address().unwrap();
+    assert_eq!(new_owner_address, SuiAddress::ZERO);
+
+    let objects = client
+        .read_api()
+        .get_owned_objects(original_owner_address, None, None, None)
+        .await
+        .unwrap()
+        .data;
+
+    assert!(!objects
+        .into_iter()
+        .any(|o| o.data.unwrap().object_id == object_id));
+
+    let objects = client
+        .read_api()
+        .get_owned_objects(new_owner_address, None, None, None)
+        .await
+        .unwrap()
+        .data;
+
+    assert!(objects
+        .into_iter()
+        .any(|o| o.data.unwrap().object_id == object_id));
+}
