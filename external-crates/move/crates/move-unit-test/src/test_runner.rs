@@ -12,6 +12,7 @@ use anyhow::Result;
 use colored::*;
 
 use move_binary_format::{
+    binary_config::BinaryConfig,
     errors::{Location, VMResult},
     file_format::CompiledModule,
 };
@@ -260,7 +261,13 @@ impl SharedTestingConfig {
         VMResult<Vec<Vec<u8>>>,
         TestRunInfo,
     ) {
-        let move_vm = MoveVM::new(self.native_function_table.clone()).unwrap();
+        // Allow loading of unpublishable modules for the purpose of running tests.
+        let vm_config = move_vm_config::runtime::VMConfig {
+            binary_config: BinaryConfig::new_unpublishable(),
+            ..Default::default()
+        };
+        let natives = self.native_function_table.clone();
+        let move_vm = MoveVM::new_with_config(natives, vm_config).unwrap();
         let extensions = extensions::new_extensions();
 
         let mut move_tracer = MoveTraceBuilder::new();

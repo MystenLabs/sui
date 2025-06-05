@@ -225,7 +225,11 @@ impl CompiledModule {
     pub fn serialize_with_version(&self, version: u32, binary: &mut Vec<u8>) -> Result<()> {
         validate_version(version)?;
         let mut binary_data = BinaryData::from(binary.clone());
-        let mut ser = ModuleSerializer::new(version);
+        let mut ser = if self.publishable {
+            ModuleSerializer::new(version)
+        } else {
+            ModuleSerializer::new_unpublishable(version)
+        };
         let mut temp = BinaryData::new();
         ser.serialize_tables(&mut temp, self)?;
         if temp.len() > u32::MAX as usize {
@@ -264,6 +268,9 @@ impl CompiledModule {
 #[derive(Debug)]
 struct CommonSerializer {
     major_version: u32,
+    /// Indicates the thing we are serializing is not intended for publication, i.e., was compiled
+    /// with a mode enabled.
+    serialize_unpublishable: bool,
     table_count: u8,
     module_handles: (u32, u32),
     datatype_handles: (u32, u32),
@@ -322,6 +329,13 @@ fn serialize_table_index(
 
 fn serialize_magic(binary: &mut BinaryData) -> Result<()> {
     for byte in &BinaryConstants::MOVE_MAGIC {
+        binary.push(*byte)?;
+    }
+    Ok(())
+}
+
+fn serialize_unpublishable_magic(binary: &mut BinaryData) -> Result<()> {
+    for byte in &BinaryConstants::UNPUBLISHABLE_MAGIC {
         binary.push(*byte)?;
     }
     Ok(())
@@ -1093,6 +1107,7 @@ impl CommonSerializer {
     pub fn new(major_version: u32) -> CommonSerializer {
         CommonSerializer {
             major_version,
+            serialize_unpublishable: false,
             table_count: 0,
             module_handles: (0, 0),
             datatype_handles: (0, 0),
@@ -1106,8 +1121,18 @@ impl CommonSerializer {
         }
     }
 
+    pub fn new_unpublishable(major_version: u32) -> CommonSerializer {
+        let mut serializer = Self::new(major_version);
+        serializer.serialize_unpublishable = true;
+        serializer
+    }
+
     fn serialize_header(&mut self, binary: &mut BinaryData) -> Result<()> {
-        serialize_magic(binary)?;
+        if self.serialize_unpublishable {
+            serialize_unpublishable_magic(binary)?;
+        } else {
+            serialize_magic(binary)?;
+        }
         write_u32(binary, BinaryFlavor::encode_version(self.major_version))?;
         Ok(())
     }
@@ -1360,6 +1385,22 @@ impl ModuleSerializer {
     fn new(major_version: u32) -> ModuleSerializer {
         ModuleSerializer {
             common: CommonSerializer::new(major_version),
+            struct_defs: (0, 0),
+            struct_def_instantiations: (0, 0),
+            enum_defs: (0, 0),
+            enum_def_instantiations: (0, 0),
+            variant_handles: (0, 0),
+            variant_instantiation_handles: (0, 0),
+            function_defs: (0, 0),
+            field_handles: (0, 0),
+            field_instantiations: (0, 0),
+            friend_decls: (0, 0),
+        }
+    }
+
+    fn new_unpublishable(major_version: u32) -> ModuleSerializer {
+        ModuleSerializer {
+            common: CommonSerializer::new_unpublishable(major_version),
             struct_defs: (0, 0),
             struct_def_instantiations: (0, 0),
             enum_defs: (0, 0),

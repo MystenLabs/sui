@@ -364,7 +364,8 @@ pub fn compile_module<'a>(
     verify_module(&module)?;
 
     let current_module = module.identifier;
-    let mut context = Context::new(module.loc, HashMap::new(), current_module)?;
+    let publishable = module.publishable;
+    let mut context = Context::new(module.loc, publishable, HashMap::new(), current_module)?;
     for dep in dependencies {
         context.add_compiled_dependency(dep)?;
     }
@@ -459,6 +460,7 @@ pub fn compile_module<'a>(
     ) = context.materialize_pools();
     let mut compiled_module = CompiledModule {
         version: VERSION_MAX,
+        publishable,
         module_handles,
         self_module_handle_idx,
         datatype_handles,
@@ -527,6 +529,7 @@ fn compile_explicit_dependency_declarations(
     dependencies: Vec<ModuleDependency>,
 ) -> Result<()> {
     let mut dependencies_acc = outer_context.take_dependencies();
+    let publishable = outer_context.publishable();
     for dependency in dependencies {
         let ModuleDependency {
             name: mname,
@@ -536,6 +539,7 @@ fn compile_explicit_dependency_declarations(
         let current_module = outer_context.module_ident(&mname)?;
         let mut context = Context::new(
             outer_context.decl_location(),
+            outer_context.publishable(),
             dependencies_acc,
             *current_module,
         )?;
@@ -580,6 +584,7 @@ fn compile_explicit_dependency_declarations(
         ) = context.materialize_pools();
         let compiled_module = CompiledModule {
             version: VERSION_MAX,
+            publishable,
             module_handles,
             self_module_handle_idx,
             datatype_handles,

@@ -221,6 +221,7 @@ fn module(
     ) = ident;
     let ir_module = IR::ModuleDefinition {
         specified_version: compilation_env.flags().bytecode_version(),
+        publishable: compilation_env.flags().publishable(),
         loc: ident_loc,
         identifier: IR::ModuleIdent {
             address: MoveAddress::new(addr_bytes.into_bytes()),
