@@ -70,7 +70,7 @@ use tracing::info;
 //
 //  $ curl 'http://127.0.0.1:1337/randomness-inject-full-sig?round=123&sigs=base64encodedsig'
 //
-// Get the estimatd cost of a transaction
+// Get the estimated cost of a transaction
 //
 //  $ curl 'http://127.0.0.1:1337/get-tx-cost?tx=<tx_digest>'
 
@@ -479,10 +479,7 @@ async fn get_tx_cost(
         .get_estimated_tx_cost(transaction.transaction_data())
         .await
     else {
-        return (
-            StatusCode::BAD_REQUEST,
-            "No estimated available".to_string(),
-        );
+        return (StatusCode::BAD_REQUEST, "No estimate available".to_string());
     };
 
     (StatusCode::OK, cost.to_string())

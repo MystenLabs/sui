@@ -1332,12 +1332,11 @@ impl AuthorityState {
             )
             .tap_err(|e| info!("process_certificate failed: {e}"))
             .tap_ok(|(fx, _)| {
-                let elapsed = execution_start_time.elapsed().as_micros() as f64;
                 debug!(
                     ?tx_digest,
                     fx_digest=?fx.digest(),
                     "process_certificate succeeded in {:.3}ms",
-                    elapsed / 1000.0
+                    (execution_start_time.elapsed().as_micros() as f64) / 1000.0
                 )
             })?;
 
