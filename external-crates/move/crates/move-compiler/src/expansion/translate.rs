@@ -7,8 +7,8 @@ use crate::{
     diagnostics::{
         Diagnostic, DiagnosticReporter, Diagnostics,
         warning_filters::{
-            FILTER_DEPRECATED, FILTER_UNUSED_STRUCT_FIELD, WarningFilters,
-            WarningFiltersBuilder, WarningFiltersTable,
+            FILTER_DEPRECATED, FILTER_UNUSED_STRUCT_FIELD, WarningFilters, WarningFiltersBuilder,
+            WarningFiltersTable,
         },
     },
     editions::{self, Edition, FeatureGate, Flavor},
