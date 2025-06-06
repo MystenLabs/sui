@@ -30,7 +30,7 @@ use std::{
     thread::LocalKey,
 };
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     config,
     digests::{ObjectDigest, TransactionDigest},
     dynamic_field::DynamicFieldInfo,
@@ -305,14 +305,14 @@ pub fn end_transaction(
     let object_runtime_ref: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
     let mut config_settings = vec![];
     for child in object_runtime_ref.all_active_child_objects() {
-        let s: StructTag = child.move_type.clone().into();
+        let s: StructTag = child.ty.clone().into();
         let is_setting = DynamicFieldInfo::is_dynamic_field(&s)
             && matches!(&s.type_params[1], TypeTag::Struct(s) if config::is_setting(s));
         if is_setting {
             config_settings.push((
                 *child.owner,
                 *child.id,
-                child.move_type.clone(),
+                child.ty.clone(),
                 child.copied_value,
             ));
         }
@@ -378,6 +378,7 @@ pub fn take_from_address_by_id(
     let account: SuiAddress = pop_arg!(args, AccountAddress).into();
     pop_arg!(args, StructRef);
     assert!(args.is_empty());
+    let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
     let inventories = &mut object_runtime.test_inventories;
     let res = take_from_inventory(
@@ -385,7 +386,7 @@ pub fn take_from_address_by_id(
             inventories
                 .address_inventories
                 .get(&account)
-                .and_then(|inv| inv.get(&specified_ty))
+                .and_then(|inv| inv.get(&specified_obj_ty))
                 .map(|s| s.contains(x))
                 .unwrap_or(false)
         },
@@ -410,12 +411,13 @@ pub fn ids_for_address(
     let specified_ty = get_specified_ty(ty_args);
     let account: SuiAddress = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
+    let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
     let inventories = &mut object_runtime.test_inventories;
     let ids = inventories
         .address_inventories
         .get(&account)
-        .and_then(|inv| inv.get(&specified_ty))
+        .and_then(|inv| inv.get(&specified_obj_ty))
         .map(|s| s.iter().map(|id| pack_id(*id)).collect::<Vec<Value>>())
         .unwrap_or_default();
     let ids_vector = Vector::pack(VectorSpecialization::Container, ids).unwrap();
@@ -431,11 +433,12 @@ pub fn most_recent_id_for_address(
     let specified_ty = get_specified_ty(ty_args);
     let account: SuiAddress = pop_arg!(args, AccountAddress).into();
     assert!(args.is_empty());
+    let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
     let inventories = &mut object_runtime.test_inventories;
     let most_recent_id = match inventories.address_inventories.get(&account) {
         None => pack_option(vector_specialization(&specified_ty), None),
-        Some(inv) => most_recent_at_ty(&inventories.taken, inv, specified_ty),
+        Some(inv) => most_recent_at_ty(&inventories.taken, inv, &specified_ty, specified_obj_ty),
     };
     Ok(NativeResult::ok(
         legacy_test_cost(),
@@ -476,13 +479,14 @@ pub fn take_immutable_by_id(
     let id = pop_id(&mut args)?;
     pop_arg!(args, StructRef);
     assert!(args.is_empty());
+    let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
     let inventories = &mut object_runtime.test_inventories;
     let res = take_from_inventory(
         |x| {
             inventories
                 .immutable_inventory
-                .get(&specified_ty)
+                .get(&specified_obj_ty)
                 .map(|s| s.contains(x))
                 .unwrap_or(false)
         },
@@ -496,7 +500,7 @@ pub fn take_immutable_by_id(
         Ok(value) => {
             inventories
                 .taken_immutable_values
-                .entry(specified_ty)
+                .entry(specified_obj_ty)
                 .or_default()
                 .insert(id, value.copy_value().unwrap());
             NativeResult::ok(legacy_test_cost(), smallvec![value])
@@ -513,12 +517,14 @@ pub fn most_recent_immutable_id(
 ) -> PartialVMResult<NativeResult> {
     let specified_ty = get_specified_ty(ty_args);
     assert!(args.is_empty());
+    let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
     let inventories = &mut object_runtime.test_inventories;
     let most_recent_id = most_recent_at_ty(
         &inventories.taken,
         &inventories.immutable_inventory,
-        specified_ty,
+        &specified_ty,
+        specified_obj_ty,
     );
     Ok(NativeResult::ok(
         legacy_test_cost(),
@@ -558,13 +564,14 @@ pub fn take_shared_by_id(
     let id = pop_id(&mut args)?;
     pop_arg!(args, StructRef);
     assert!(args.is_empty());
+    let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
     let inventories = &mut object_runtime.test_inventories;
     let res = take_from_inventory(
         |x| {
             inventories
                 .shared_inventory
-                .get(&specified_ty)
+                .get(&specified_obj_ty)
                 .map(|s| s.contains(x))
                 .unwrap_or(false)
         },
@@ -588,12 +595,14 @@ pub fn most_recent_id_shared(
 ) -> PartialVMResult<NativeResult> {
     let specified_ty = get_specified_ty(ty_args);
     assert!(args.is_empty());
+    let specified_obj_ty = object_type_of_type(context, &specified_ty)?;
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
     let inventories = &mut object_runtime.test_inventories;
     let most_recent_id = most_recent_at_ty(
         &inventories.taken,
         &inventories.shared_inventory,
-        specified_ty,
+        &specified_ty,
+        specified_obj_ty,
     );
     Ok(NativeResult::ok(
         legacy_test_cost(),
@@ -780,19 +789,20 @@ fn vector_specialization(ty: &Type) -> VectorSpecialization {
 
 fn most_recent_at_ty(
     taken: &BTreeMap<ObjectID, Owner>,
-    inv: &BTreeMap<Type, Set<ObjectID>>,
-    ty: Type,
+    inv: &BTreeMap<MoveObjectType, Set<ObjectID>>,
+    runtime_ty: &Type,
+    ty: MoveObjectType,
 ) -> Value {
     pack_option(
-        vector_specialization(&ty),
+        vector_specialization(runtime_ty),
         most_recent_at_ty_opt(taken, inv, ty),
     )
 }
 
 fn most_recent_at_ty_opt(
     taken: &BTreeMap<ObjectID, Owner>,
-    inv: &BTreeMap<Type, Set<ObjectID>>,
-    ty: Type,
+    inv: &BTreeMap<MoveObjectType, Set<ObjectID>>,
+    ty: MoveObjectType,
 ) -> Option<Value> {
     let s = inv.get(&ty)?;
     let most_recent_id = s.iter().filter(|id| !taken.contains_key(id)).last()?;
@@ -886,6 +896,15 @@ fn transaction_effects(
     ]))
 }
 
+fn object_type_of_type(context: &NativeContext, ty: &Type) -> PartialVMResult<MoveObjectType> {
+    let TypeTag::Struct(s_tag) = context.type_to_type_tag(ty)? else {
+        return Err(PartialVMError::new(
+            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+        ));
+    };
+    Ok(MoveObjectType::from(*s_tag))
+}
+
 fn pack_option(specialization: VectorSpecialization, opt: Option<Value>) -> Value {
     let item = match opt {
         Some(v) => vec![v],
@@ -901,7 +920,7 @@ fn pack_option(specialization: VectorSpecialization, opt: Option<Value>) -> Valu
 fn find_all_wrapped_objects<'a, 'i>(
     context: &NativeContext,
     ids: &'i mut BTreeSet<ObjectID>,
-    new_object_values: impl IntoIterator<Item = (&'a ObjectID, &'a Type, impl Borrow<Value>)>,
+    new_object_values: impl IntoIterator<Item = (&'a ObjectID, &'a MoveObjectType, impl Borrow<Value>)>,
 ) {
     #[derive(Copy, Clone)]
     enum LookingFor {
@@ -977,12 +996,19 @@ fn find_all_wrapped_objects<'a, 'i>(
 
     let uid = UID::layout();
     for (_id, ty, value) in new_object_values {
-        let Ok(Some(layout)) = context.type_to_type_layout(ty) else {
+        let type_tag = TypeTag::from(ty.clone());
+        // NB: We can get the layout from the VM's cache since the types and modules
+        // associated with all of these types must be in the type/module cache in the VM -- THIS IS
+        // BECAUSE WE ARE IN TEST SCENARIO ONLY AND THIS MAY NOT GENERALLY HOLD IN A
+        // MULTI-TRANSACTION SETTING.
+        let Ok(Some(layout)) = context.type_tag_to_layout_for_test_scenario_only(&type_tag) else {
             debug_assert!(false);
             continue;
         };
 
-        let Ok(Some(annotated_layout)) = context.type_to_fully_annotated_layout(ty) else {
+        let Ok(Some(annotated_layout)) =
+            context.type_tag_to_fully_annotated_layout_for_test_scenario_only(&type_tag)
+        else {
             debug_assert!(false);
             continue;
         };
