@@ -784,7 +784,7 @@ mod tests {
 
         // Record last observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(120))];
-        let total_duration = Duration::from_millis(120);
+        let total_duration = Duration::from_millis(160);
         observer.record_local_observations(&ptb, &timings, total_duration);
 
         // Verify that moving average is the same and a new observation was shared, as
@@ -792,10 +792,10 @@ mod tests {
         let local_obs = observer.local_observations.get(&key).unwrap();
         assert_eq!(
             local_obs.moving_average.get_average(),
-            // average of [110ms, 120ms, 120ms, 130ms]
-            Duration::from_millis(120)
+            // average of [110ms, 120ms, 130ms, 160ms]
+            Duration::from_millis(130)
         );
-        assert_eq!(local_obs.last_shared.unwrap().0, Duration::from_millis(120));
+        assert_eq!(local_obs.last_shared.unwrap().0, Duration::from_millis(130));
     }
 
     #[tokio::test]
