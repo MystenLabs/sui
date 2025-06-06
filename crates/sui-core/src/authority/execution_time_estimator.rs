@@ -34,7 +34,7 @@ use tracing::{debug, info, trace, warn};
 
 // TODO: Move this into ExecutionTimeObserverConfig, if we switch to a moving average
 // implmentation without the window size in the type.
-const LOCAL_OBSERVATION_WINDOW_SIZE: usize = 10;
+const LOCAL_OBSERVATION_WINDOW_SIZE: usize = 20;
 const OBJECT_UTILIZATION_METRIC_HASH_MODULUS: u8 = 32;
 
 // Collects local execution time estimates to share via consensus.
@@ -335,6 +335,21 @@ impl ExecutionTimeObserver {
                     .observation_sharing_object_utilization_threshold();
             if diff_exceeds_threshold && (utilization_exceeds_threshold || uses_indebted_object) {
                 debug!("sharing new execution time observation for {key:?}: {new_average:?}");
+                if utilization_exceeds_threshold {
+                    epoch_store
+                        .metrics
+                        .epoch_execution_time_observations_sharing_reason
+                        .with_label_values(&["utilization"])
+                        .inc();
+                }
+                if uses_indebted_object {
+                    epoch_store
+                        .metrics
+                        .epoch_execution_time_observations_sharing_reason
+                        .with_label_values(&["indebted"])
+                        .inc();
+                }
+
                 to_share.push((key, new_average));
                 local_observation.last_shared = Some((new_average, Instant::now()));
             }
