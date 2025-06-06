@@ -39,6 +39,7 @@ use move_vm_test_utils::{
 };
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use rayon::prelude::*;
+use regex::Regex;
 use std::{collections::BTreeMap, io::Write, marker::Send, sync::Mutex, time::Instant};
 
 use move_vm_runtime::native_extensions::NativeContextExtensions;
@@ -188,7 +189,8 @@ impl TestRunner {
             })
     }
 
-    pub fn filter(&mut self, test_name_slice: &str) {
+    pub fn filter(&mut self, test_name_slice: &str) -> Result<()> {
+        let regex = Regex::new(test_name_slice)?;
         for (module_id, module_test) in self.tests.module_tests.iter_mut() {
             if module_id.name().as_str().contains(test_name_slice) {
                 continue;
@@ -197,13 +199,17 @@ impl TestRunner {
                 module_test.tests = tests
                     .into_iter()
                     .filter(|(test_name, _)| {
-                        let full_name =
-                            format!("{}::{}", module_id.name().as_str(), test_name.as_str());
-                        full_name.contains(test_name_slice)
+                        let full_name = format!(
+                            "{}::{}",
+                            format_module_id(&self.tests.module_info, module_id),
+                            test_name.as_str()
+                        );
+                        regex.is_match(&full_name)
                     })
                     .collect();
             }
         }
+        Ok(())
     }
 }
 
