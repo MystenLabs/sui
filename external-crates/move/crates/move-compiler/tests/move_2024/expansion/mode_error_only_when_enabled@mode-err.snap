@@ -1,0 +1,16 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/expansion/mode_error_only_when_enabled.move:4:16
+  │
+4 │ fun t(): u64 { false }
+  │          ---   ^^^^^
+  │          │     │
+  │          │     Invalid return expression
+  │          │     Given: 'bool'
+  │          Expected: 'u64'
