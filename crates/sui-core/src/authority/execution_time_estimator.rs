@@ -232,11 +232,7 @@ impl ExecutionTimeObserver {
                             .unwrap_or(Duration::MAX),
                     );
                 utilization.last_measured = Some(now);
-                if utilization.excess_execution_time
-                    > self
-                        .config
-                        .observation_sharing_object_utilization_threshold()
-                {
+                if utilization.overutilized(&self.config) {
                     utilization.was_overutilized = true;
                 }
 
@@ -615,6 +611,13 @@ impl ExecutionTimeEstimator {
                 })
                 .collect(),
         )
+    }
+
+    pub fn get_observations(&self) -> Vec<(ExecutionTimeObservationKey, ConsensusObservations)> {
+        self.consensus_observations
+            .iter()
+            .map(|(key, observations)| (key.clone(), observations.clone()))
+            .collect()
     }
 }
 
