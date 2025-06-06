@@ -171,8 +171,12 @@ fn get_packages(txn_data: &TransactionData) -> Result<BTreeSet<ObjectID>, anyhow
                         packages_from_type_tag(&typ, &mut packages);
                     }
                 }
-                Command::Publish(_, deps) | Command::Upgrade(_, deps, _, _) => {
+                Command::Publish(_, deps) => {
                     packages.extend(deps);
+                }
+                Command::Upgrade(_, deps, pkg_id, _) => {
+                    packages.extend(deps);
+                    packages.insert(*pkg_id);
                 }
                 Command::TransferObjects(_, _)
                 | Command::SplitCoins(_, _)
