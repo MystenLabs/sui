@@ -132,9 +132,6 @@ message Balance {
   // The type of the coin (e.g., 0x2::sui::SUI).
   optional string coin_type = 1;
 
-  // Indicates the number of coin objects associated with the queried address.
-  optional uint64 coin_object_count = 2;
-
   // Shows the total balance of the coin in its smallest unit (mist).
   optional uint64 total_balance = 3;
 }
