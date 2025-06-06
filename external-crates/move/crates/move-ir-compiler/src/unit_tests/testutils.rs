@@ -20,7 +20,7 @@ fn compile_module_string_impl(
 
     let mut serialized_module = Vec::<u8>::new();
     compiled_module.serialize_with_version(compiled_module.version, &mut serialized_module)?;
-    let config = BinaryConfig::with_extraneous_bytes_check(false);
+    let config = BinaryConfig::with_extraneous_bytes_check(true);
     let deserialized_module = CompiledModule::deserialize_with_config(&serialized_module, &config)
         .map_err(|e| e.finish(Location::Undefined))?;
     assert_eq!(compiled_module, deserialized_module);
