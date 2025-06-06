@@ -308,7 +308,7 @@ impl ExecutionTimeObserverConfig {
     }
 
     pub fn observation_sharing_diff_threshold(&self) -> f64 {
-        self.observation_sharing_diff_threshold.unwrap_or(0.05)
+        self.observation_sharing_diff_threshold.unwrap_or(0.1)
     }
 
     pub fn observation_sharing_min_interval(&self) -> Duration {
