@@ -269,41 +269,62 @@ pub mod object_query {
         pub object_bcs: Option<Base64>,
     }
 
+    // Maximum number of keys to query in a single request.
+    // REVIEW: not clear how this translate to the 5000B limit, so
+    // we are picking a "random" and conservative number.
+    const MAX_KEYS_SIZE: usize = 30;
+
     pub async fn query(
-        keys1: &[crate::replay_interface::ObjectKey],
+        keys: &[crate::replay_interface::ObjectKey],
         data_store: &DataStore,
     ) -> Result<Vec<Option<Object>>, anyhow::Error> {
-        let keys = keys1
+        let mut keys = keys
             .iter()
             .cloned()
             .map(ObjectKey::from)
             .collect::<Vec<_>>();
-        let query = MultiGetObjectsQuery::build(MultiGetObjectsVars { keys });
-        let response = data_store.run_query(&query).await?;
+        let mut key_chunks = vec![];
+        while !keys.is_empty() {
+            let chunk: Vec<_> = keys.drain(..MAX_KEYS_SIZE.min(keys.len())).collect();
+            key_chunks.push(chunk);
+        }
 
-        let list = if let Some(data) = response.data {
-            data.multi_get_objects
-        } else {
-            return Err(anyhow::anyhow!(
-                "Missing data in transaction query response. Errors: {:?}",
-                response.errors,
-            ));
-        };
+        let mut objects = vec![];
 
-        list.into_iter()
-            .map(|frag| match frag {
-                Some(frag) => {
-                    let b64 = frag
-                        .object_bcs
-                        .ok_or_else(|| anyhow::anyhow!(format!("Object bcs is None for object"),))?
-                        .0;
-                    let bytes = CryptoBase64::decode(&b64)?;
-                    let obj: Object = bcs::from_bytes(&bytes)?;
-                    Ok(Some(obj))
-                }
-                None => Ok(None),
-            })
-            .collect()
+        for keys in key_chunks {
+            let query: cynic::Operation<MultiGetObjectsQuery, MultiGetObjectsVars> =
+                MultiGetObjectsQuery::build(MultiGetObjectsVars { keys });
+            let response = data_store.run_query(&query).await?;
+
+            let list = if let Some(data) = response.data {
+                data.multi_get_objects
+            } else {
+                return Err(anyhow::anyhow!(
+                    "Missing data in transaction query response. Errors: {:?}",
+                    response.errors,
+                ));
+            };
+
+            let chunk = list
+                .into_iter()
+                .map(|frag| match frag {
+                    Some(frag) => {
+                        let b64 = frag
+                            .object_bcs
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(format!("Object bcs is None for object"),)
+                            })?
+                            .0;
+                        let bytes = CryptoBase64::decode(&b64)?;
+                        let obj: Object = bcs::from_bytes(&bytes)?;
+                        Ok::<_, anyhow::Error>(Some(obj))
+                    }
+                    None => Ok::<_, anyhow::Error>(None),
+                })
+                .collect::<Result<Vec<Option<Object>>, _>>()?;
+            objects.extend(chunk);
+        }
+        Ok(objects)
     }
 
     impl From<crate::replay_interface::ObjectKey> for ObjectKey {
