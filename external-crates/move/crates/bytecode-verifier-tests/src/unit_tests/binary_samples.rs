@@ -7,7 +7,7 @@
 //! cases which we want to continue to succeed.
 
 use crate::unit_tests::production_config;
-use move_binary_format::{errors::VMResult, CompiledModule};
+use move_binary_format::{CompiledModule, errors::VMResult};
 use move_bytecode_verifier::verifier;
 use move_bytecode_verifier_meter::bound::BoundMeter;
 
@@ -23,8 +23,7 @@ fn run_binary_test(name: &str, bytes: &str) -> VMResult<()> {
 macro_rules! do_test {
     ($name:expr) => {{
         let name = $name;
-        let code =
-            std::fs::read_to_string(format!("tests/binaries/{name}.bytes")).unwrap();
+        let code = std::fs::read_to_string(format!("tests/binaries/{name}.bytes")).unwrap();
         let res = run_binary_test(name, &code);
         assert!(res.is_ok(), "{:?}", res)
     }};
