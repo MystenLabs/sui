@@ -110,9 +110,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         &self.dependencies
     }
 
-    /// Create a lockfile with the current package's dependencies. These dependencies will be
-    /// rendered in the pinned section of the lockfile. The lockfile will have no published
-    /// information.
+    /// Create a [`Lockfile`] with the current package's dependencies. The lockfile will have no
+    /// published information.
     pub async fn dependencies_to_lockfile(&self) -> PackageResult<Lockfile<F>> {
         let mut lockfile = Lockfile::<F>::new(BTreeMap::new(), BTreeMap::new());
 
@@ -421,41 +420,6 @@ mod tests {
         let expected = root.load_lockfile().unwrap();
 
         assert_eq!(expected.render_as_toml(), lockfile_deps.render_as_toml());
-    }
-
-    #[tokio::test]
-    async fn test_lockfile_operations() {
-        let (temp_dir, root_path) = setup_test_move_project().await;
-
-        // Create a package with dependencies
-        let pkg_c_path = root_path.join("packages").join("pkg_c");
-        fs::create_dir_all(&pkg_c_path).unwrap();
-
-        let move_toml = r#"
-[package]
-name = "pkg_c"
-version = "0.0.1"
-
-[dependencies]
-pkg_a = { local = "../pkg_a" }
-
-[environments]
-testnet = "testnet"
-"#;
-        fs::write(pkg_c_path.join("Move.toml"), move_toml).unwrap();
-
-        // Load root package
-        let root = RootPackage::<Vanilla>::load(&pkg_c_path, Some("testnet".to_string()))
-            .await
-            .unwrap();
-
-        // Test creating lockfile
-        let lockfile = root.dependencies_to_lockfile().await.unwrap();
-        assert!(
-            lockfile
-                .pinned_deps_for_env(&"testnet".to_string())
-                .is_some()
-        );
     }
 
     #[tokio::test]
