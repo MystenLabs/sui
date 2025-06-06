@@ -1331,9 +1331,14 @@ impl AuthorityState {
                 epoch_store,
             )
             .tap_err(|e| info!("process_certificate failed: {e}"))
-            .tap_ok(
-            |(fx, _)| debug!(?tx_digest, fx_digest=?fx.digest(), "process_certificate succeeded"),
-        )?;
+            .tap_ok(|(fx, _)| {
+                debug!(
+                    ?tx_digest,
+                    fx_digest=?fx.digest(),
+                    "process_certificate succeeded in {:.3}ms",
+                    (execution_start_time.elapsed().as_micros() as f64) / 1000.0
+                )
+            })?;
 
         Ok((effects, execution_error_opt))
     }
