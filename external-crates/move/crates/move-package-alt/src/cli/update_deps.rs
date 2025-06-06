@@ -34,7 +34,7 @@ impl UpdateDeps {
         .await?;
 
         let envs = if let Some(env) = &self.environment {
-            println!("Updating dependencies for environment {env}");
+            println!("Updating dependencies for environment: {env}");
             let envs = root_package
                 .environments()
                 .into_iter()
@@ -46,9 +46,9 @@ impl UpdateDeps {
         } else {
             let envs = root_package.environments();
             let ending = if envs.len() == 1 {
-                format!("environment: {}", envs.keys().next().unwrap())
+                "environment:"
             } else {
-                "environments: {}".to_string()
+                "environments:"
             };
             let envs = envs
                 .iter()
