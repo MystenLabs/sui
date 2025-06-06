@@ -212,7 +212,7 @@ impl<'a> ParsingAnalysisContext<'a> {
         // we need this to avoid adding auto-imports for `use` declarations
         // in "use blocks" that follow the follow the initial one (and come
         // after other module members)
-        let mut non_use_mamber_after_use = false;
+        let mut non_use_member_after_use = false;
         for m in &mod_def.members {
             use P::ModuleMember as MM;
             match m {
@@ -221,7 +221,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                         continue;
                     }
                     if latest_use_loc.end() > 0 {
-                        non_use_mamber_after_use = true;
+                        non_use_member_after_use = true;
                     }
                     earliest_member_loc =
                         earliest_loc(earliest_member_loc, fun.doc.loc().unwrap_or(fun.loc));
@@ -262,7 +262,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                 }
                 MM::Struct(sdef) => {
                     if latest_use_loc.end() > 0 {
-                        non_use_mamber_after_use = true;
+                        non_use_member_after_use = true;
                     }
                     earliest_member_loc =
                         earliest_loc(earliest_member_loc, sdef.doc.loc().unwrap_or(sdef.loc));
@@ -295,7 +295,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                 }
                 MM::Enum(edef) => {
                     if latest_use_loc.end() > 0 {
-                        non_use_mamber_after_use = true;
+                        non_use_member_after_use = true;
                     }
                     earliest_member_loc =
                         earliest_loc(earliest_member_loc, edef.doc.loc().unwrap_or(edef.loc));
@@ -331,7 +331,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                     }
                 }
                 MM::Use(use_decl) => {
-                    if !non_use_mamber_after_use {
+                    if !non_use_member_after_use {
                         // update only if we have not seen a use that was already
                         // followed by a non-use member
                         latest_use_loc = latest_loc(latest_use_loc, use_decl.loc);
@@ -340,14 +340,14 @@ impl<'a> ParsingAnalysisContext<'a> {
                 }
                 MM::Friend(fdecl) => {
                     if latest_use_loc.end() > 0 {
-                        non_use_mamber_after_use = true;
+                        non_use_member_after_use = true;
                     }
                     earliest_member_loc = earliest_loc(earliest_member_loc, fdecl.loc);
                     self.chain_symbols(&fdecl.friend)
                 }
                 MM::Constant(c) => {
                     if latest_use_loc.end() > 0 {
-                        non_use_mamber_after_use = true;
+                        non_use_member_after_use = true;
                     }
                     earliest_member_loc =
                         earliest_loc(earliest_member_loc, c.doc.loc().unwrap_or(c.loc));
@@ -372,7 +372,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                 }
                 MM::Spec(s) => {
                     if latest_use_loc.end() > 0 {
-                        non_use_mamber_after_use = true;
+                        non_use_member_after_use = true;
                     }
                     earliest_member_loc = earliest_loc(earliest_member_loc, s.loc);
                 }
