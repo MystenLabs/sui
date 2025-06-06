@@ -116,7 +116,7 @@ pub fn emit(
 
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
 
-    obj_runtime.emit_event(ty, *tag, event_value)?;
+    obj_runtime.emit_event(*tag, event_value)?;
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }
 
@@ -147,12 +147,16 @@ pub fn get_events_by_type(
     let specialization: VectorSpecialization = (&specified_ty).try_into()?;
     assert!(args.is_empty());
     let object_runtime_ref: &ObjectRuntime = context.extensions().get()?;
+    let specified_type_tag = match context.type_to_type_tag(&specified_ty)? {
+        TypeTag::Struct(s) => *s,
+        _ => return Ok(NativeResult::ok(legacy_test_cost(), smallvec![])),
+    };
     let matched_events = object_runtime_ref
         .state
         .events()
         .iter()
-        .filter_map(|(ty, _, event)| {
-            if specified_ty == *ty {
+        .filter_map(|(tag, event)| {
+            if &specified_type_tag == tag {
                 Some(event.copy_value().unwrap())
             } else {
                 None

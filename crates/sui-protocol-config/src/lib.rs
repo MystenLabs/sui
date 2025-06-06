@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 85;
+const MAX_PROTOCOL_VERSION: u64 = 86;
 
 // Record history of protocol version allocations here:
 //
@@ -242,6 +242,7 @@ const MAX_PROTOCOL_VERSION: u64 = 85;
 //             Enable nitro attestation upgraded parsing and mainnet.
 // Version 84: Limit number of stored execution time observations between epochs.
 // Version 85: Enable party transfer in devnet.
+// Version 86: Use type tags in the object runtime and adapter instead of `Type`s.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -701,6 +702,10 @@ struct FeatureFlags {
     // Allow objects created or mutated in system transactions to exceed the max object size limit.
     #[serde(skip_serializing_if = "is_false")]
     allow_unbounded_system_objects: bool,
+
+    // Signifies the cut-over of using type tags instead of `Type`s in the object runtime.
+    #[serde(skip_serializing_if = "is_false")]
+    type_tags_in_object_runtime: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2029,6 +2034,10 @@ impl ProtocolConfig {
                 && addr.aliased == signer
                 && addr.allowed_tx_digests.contains(tx_digest)
         })
+    }
+
+    pub fn type_tags_in_object_runtime(&self) -> bool {
+        self.feature_flags.type_tags_in_object_runtime
     }
 }
 
@@ -3679,6 +3688,9 @@ impl ProtocolConfig {
 
                     cfg.feature_flags
                         .record_consensus_determined_version_assignments_in_prologue_v2 = true;
+                }
+                86 => {
+                    cfg.feature_flags.type_tags_in_object_runtime = true;
                 }
                 // Use this template when making changes:
                 //
