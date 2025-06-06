@@ -54,7 +54,6 @@ pub fn get_balance(service: &RpcService, request: GetBalanceRequest) -> Result<G
     Ok(GetBalanceResponse {
         balance: Some(Balance {
             coin_type: Some(coin_type.to_string()),
-            coin_object_count: Some(balance_info.num_coins),
             total_balance: Some(balance_info.balance),
         }),
     })

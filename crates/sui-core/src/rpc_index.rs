@@ -143,14 +143,12 @@ pub struct CoinIndexInfo {
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
 pub struct BalanceIndexInfo {
     pub balance_delta: i128,
-    pub num_coins_delta: i128,
 }
 
 impl BalanceIndexInfo {
     fn from_coin_value(coin_value: u64) -> Self {
         Self {
             balance_delta: coin_value as i128,
-            num_coins_delta: 1,
         }
     }
 
@@ -160,26 +158,20 @@ impl BalanceIndexInfo {
             self.balance_delta != i128::MIN,
             "Cannot invert balance_delta: would overflow i128"
         );
-        assert!(
-            self.num_coins_delta != i128::MIN,
-            "Cannot invert num_coins_delta: would overflow i128"
-        );
 
         Self {
             balance_delta: -self.balance_delta,
-            num_coins_delta: -self.num_coins_delta,
         }
     }
 
     fn merge_delta(&mut self, other: &Self) {
         self.balance_delta += other.balance_delta;
-        self.num_coins_delta += other.num_coins_delta;
     }
 }
 
 impl From<BalanceIndexInfo> for sui_types::storage::BalanceInfo {
     fn from(index_info: BalanceIndexInfo) -> Self {
-        // We store the balance and num_coins as an i128 because balances can be subtracted
+        // We store the balance as an i128 because balances can be subtracted
         // (negative delta), but we should never end up with a balance less than 0 or greater
         // than u64::max after the merge.
         assert!(
@@ -188,24 +180,13 @@ impl From<BalanceIndexInfo> for sui_types::storage::BalanceInfo {
             index_info.balance_delta
         );
         assert!(
-            index_info.num_coins_delta >= 0,
-            "Coin count is negative: {} - this should never happen.",
-            index_info.num_coins_delta
-        );
-        assert!(
             index_info.balance_delta <= u64::MAX as i128,
             "Balance {} exceeds u64::MAX - this should never happen.",
             index_info.balance_delta
         );
-        assert!(
-            index_info.num_coins_delta <= u64::MAX as i128,
-            "Coin count {} exceeds u64::MAX - this should never happen.",
-            index_info.num_coins_delta
-        );
 
         sui_types::storage::BalanceInfo {
             balance: index_info.balance_delta as u64,
-            num_coins: index_info.num_coins_delta as u64,
         }
     }
 }

@@ -658,7 +658,6 @@ pub struct CoinInfo {
 #[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]
 pub struct BalanceInfo {
     pub balance: u64,
-    pub num_coins: u64,
 }
 
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]

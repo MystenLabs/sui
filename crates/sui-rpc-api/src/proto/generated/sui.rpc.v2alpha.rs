@@ -127,9 +127,6 @@ pub struct Balance {
     /// The type of the coin (e.g., 0x2::sui::SUI).
     #[prost(string, optional, tag = "1")]
     pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
-    /// Indicates the number of coin objects associated with the queried address.
-    #[prost(uint64, optional, tag = "2")]
-    pub coin_object_count: ::core::option::Option<u64>,
     /// Shows the total balance of the coin in its smallest unit (mist).
     #[prost(uint64, optional, tag = "3")]
     pub total_balance: ::core::option::Option<u64>,
