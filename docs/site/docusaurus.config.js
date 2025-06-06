@@ -17,7 +17,15 @@ const config = {
   tagline:
     "Sui is a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move",
   favicon: "/img/favicon.ico",
-
+  headTags: [
+    {
+      tagName: "meta",
+      attributes: {
+        name: "algolia-site-verification",
+        content: "BCA21DA2879818D2",
+      },
+    },
+  ],
   // Set the production url of your site here
   url: "https://docs.sui.io",
   // Set the /<baseUrl>/ pathname under which your site is served
