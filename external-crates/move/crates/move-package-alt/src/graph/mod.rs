@@ -26,6 +26,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tokio::sync::OnceCell;
+use tracing::{debug, info};
 
 #[derive(Debug)]
 pub struct PackageGraph<F: MoveFlavor> {
@@ -97,6 +98,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
         let mut output = BTreeMap::new();
 
         for env in envs.keys() {
+            info!("Creating a PackageGraph for env {env}");
             output.insert(
                 env.clone(),
                 PackageGraphBuilder::<F>::new()

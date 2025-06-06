@@ -51,7 +51,8 @@ pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
 
 impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// Loads the root package from path and builds a dependency graph from the manifest. If `env`
-    /// is passed, it will check that this environment exists in the manifest.
+    /// is passed, it will check that this environment exists in the manifest, and will only load
+    /// the dependencies for that environment.
     // TODO: maybe we want to check multiple envs
     pub async fn load(path: impl AsRef<Path>, env: Option<EnvironmentName>) -> PackageResult<Self> {
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
@@ -288,5 +289,198 @@ impl<F: MoveFlavor> Package<F> {
             .into_iter()
             .map(|(_, id, dep)| (id, dep))
             .collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{flavor::Vanilla, git::GitRepo};
+    use std::fs;
+    use tempfile::TempDir;
+    use tokio::process::Command;
+
+    async fn setup_test_move_project() -> (TempDir, PathBuf) {
+        // Create a temporary directory
+        let temp_dir = tempfile::tempdir().unwrap();
+        let root_path = temp_dir.path().to_path_buf();
+
+        // Create the root directory for the Move project
+        fs::create_dir_all(&root_path).unwrap();
+
+        let packages = ["pkg_a", "pkg_b", "nodeps", "graph", "depends_a_b"];
+
+        let pkgs_paths = packages
+            .iter()
+            .map(|p| root_path.join("packages").join(p))
+            .collect::<Vec<_>>();
+
+        for idx in 0..packages.len() {
+            let name = packages[idx];
+            let path = pkgs_paths[idx].clone();
+            fs::create_dir_all(&path).unwrap();
+            fs::copy(
+                format!("tests/data/basic_move_project/{name}/Move.toml"),
+                path.join("Move.toml"),
+            )
+            .unwrap();
+
+            if name == "graph" {
+                fs::copy(
+                    format!("tests/data/basic_move_project/{name}/Move.lock"),
+                    path.join("Move.lock"),
+                )
+                .unwrap();
+            }
+        }
+
+        (temp_dir, root_path)
+    }
+
+    #[tokio::test]
+    async fn test_load_root_package() {
+        let (temp_dir, root_path) = setup_test_move_project().await;
+        let names = &["pkg_a", "pkg_b", "nodeps", "graph"];
+
+        for name in names {
+            let pkg_path = root_path.join("packages").join(name);
+            let package = Package::<Vanilla>::load_root(&pkg_path).await.unwrap();
+            assert_eq!(
+                &&package.name().to_string(),
+                name,
+                "Failed to load package: {name}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_direct_dependencies() {
+        let (temp_dir, root_path) = setup_test_move_project().await;
+
+        let pkg_path = root_path.join("packages").join("graph");
+        let package = Package::<Vanilla>::load_root(&pkg_path).await.unwrap();
+        let deps = package.direct_deps(&"testnet".to_string()).await.unwrap();
+        assert!(deps.contains_key(&Identifier::new("nodeps").unwrap()));
+        assert!(!deps.contains_key(&Identifier::new("graph").unwrap()));
+    }
+
+    #[tokio::test]
+    async fn test_direct_dependencies_no_transitive_deps() {
+        let (temp_dir, root_path) = setup_test_move_project().await;
+
+        let pkg_path = root_path.join("packages").join("graph");
+        let package = Package::<Vanilla>::load_root(&pkg_path).await.unwrap();
+        let deps = package.direct_deps(&"testnet".to_string()).await.unwrap();
+        assert!(deps.contains_key(&Identifier::new("nodeps").unwrap()));
+        assert!(deps.contains_key(&Identifier::new("depends_a_b").unwrap()));
+        assert!(!deps.contains_key(&Identifier::new("graph").unwrap()));
+        assert!(!deps.contains_key(&Identifier::new("pkg_a").unwrap()));
+        assert!(!deps.contains_key(&Identifier::new("pkg_b").unwrap()));
+    }
+
+    #[tokio::test]
+    async fn test_direct_dependencies_no_env_in_manifest() {
+        let (temp_dir, root_path) = setup_test_move_project().await;
+
+        let pkg_path = root_path.join("packages").join("graph");
+        let package = Package::<Vanilla>::load_root(&pkg_path).await.unwrap();
+        // devnet does not exist in the manifest, should error
+        let deps = package.direct_deps(&"devnet".to_string()).await;
+        assert!(deps.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_root_package_operations() {
+        let (temp_dir, root_path) = setup_test_move_project().await;
+
+        // Test loading root package with check for environment existing in manifest
+        let pkg_path = root_path.join("packages").join("graph");
+        let root = RootPackage::<Vanilla>::load(&pkg_path, Some("testnet".to_string()))
+            .await
+            .unwrap();
+
+        // Test environment operations
+        assert!(root.environments().contains_key("testnet"));
+        assert!(root.environments().contains_key("mainnet"));
+
+        // Test dependencies operations
+        let deps = root.direct_dependencies().await.unwrap();
+        assert!(!deps.is_empty());
+
+        assert_eq!(root.package_name(), &Identifier::new("graph").unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_lockfile_deps() {
+        let (temp_dir, root_path) = setup_test_move_project().await;
+
+        let pkg_path = root_path.join("packages").join("graph");
+        let root = RootPackage::<Vanilla>::load(&pkg_path, None).await.unwrap();
+
+        let lockfile_deps = root.dependencies_to_lockfile().await.unwrap();
+        let expected = root.load_lockfile().unwrap();
+
+        assert_eq!(expected.render_as_toml(), lockfile_deps.render_as_toml());
+    }
+
+    #[tokio::test]
+    async fn test_lockfile_operations() {
+        let (temp_dir, root_path) = setup_test_move_project().await;
+
+        // Create a package with dependencies
+        let pkg_c_path = root_path.join("packages").join("pkg_c");
+        fs::create_dir_all(&pkg_c_path).unwrap();
+
+        let move_toml = r#"
+[package]
+name = "pkg_c"
+version = "0.0.1"
+
+[dependencies]
+pkg_a = { local = "../pkg_a" }
+
+[environments]
+testnet = "testnet"
+"#;
+        fs::write(pkg_c_path.join("Move.toml"), move_toml).unwrap();
+
+        // Load root package
+        let root = RootPackage::<Vanilla>::load(&pkg_c_path, Some("testnet".to_string()))
+            .await
+            .unwrap();
+
+        // Test creating lockfile
+        let lockfile = root.dependencies_to_lockfile().await.unwrap();
+        assert!(
+            lockfile
+                .pinned_deps_for_env(&"testnet".to_string())
+                .is_some()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_load_and_check_for_env() {
+        let (temp_dir, root_path) = setup_test_move_project().await;
+
+        let path = root_path.join("graph");
+        // should fail as devnet does not exist in the manifest
+        assert!(
+            RootPackage::<Vanilla>::load(&path, Some("devnet".to_string()))
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_load_non_existent_package() {
+        let (temp_dir, root_path) = setup_test_move_project().await;
+
+        // Test loading non-existent package
+        let non_existent_path = root_path.join("non_existent");
+        assert!(
+            Package::<Vanilla>::load_root(&non_existent_path)
+                .await
+                .is_err()
+        );
     }
 }
