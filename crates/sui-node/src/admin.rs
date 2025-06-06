@@ -456,11 +456,16 @@ async fn randomness_inject_full_sig(
     }
 }
 
+#[derive(Deserialize)]
+struct GetTxCost {
+    tx_digest: String,
+}
+
 async fn get_tx_cost(
     State(state): State<Arc<AppState>>,
-    args: Query<String>,
+    args: Query<GetTxCost>,
 ) -> (StatusCode, String) {
-    let Query(tx_digest) = args;
+    let Query(GetTxCost { tx_digest }) = args;
     let tx_digest = TransactionDigest::from_str(tx_digest.as_str()).unwrap();
 
     let Some(transaction) = state
