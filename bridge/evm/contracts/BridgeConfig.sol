@@ -110,7 +110,8 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
         bytes[] memory signatures,
         BridgeUtils.Message memory message
     )
-        external
+        public
+        virtual
         nonReentrant
         verifyMessageAndSignatures(message, signatures, BridgeUtils.UPDATE_TOKEN_PRICE)
     {
@@ -123,7 +124,8 @@ contract BridgeConfig is IBridgeConfig, CommitteeUpgradeable {
     }
 
     function addTokensWithSignatures(bytes[] memory signatures, BridgeUtils.Message memory message)
-        external
+        public
+        virtual
         nonReentrant
         verifyMessageAndSignatures(message, signatures, BridgeUtils.ADD_EVM_TOKENS)
     {

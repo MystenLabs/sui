@@ -19,7 +19,8 @@ abstract contract CommitteeUpgradeable is
 {
     /* ========== STATE VARIABLES ========== */
 
-    bool private _upgradeAuthorized;
+    bool internal _upgradeAuthorized;
+
     // upgradeablity storage gap
     uint256[50] private __gap;
 
@@ -44,6 +45,7 @@ abstract contract CommitteeUpgradeable is
     /// @param message The BridgeUtils to be verified.
     function upgradeWithSignatures(bytes[] memory signatures, BridgeUtils.Message memory message)
         external
+        virtual
         nonReentrant
         verifyMessageAndSignatures(message, signatures, BridgeUtils.UPGRADE)
     {

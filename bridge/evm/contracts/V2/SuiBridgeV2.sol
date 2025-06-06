@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./SuiBridge.sol";
+import "../SuiBridge.sol";
 import "./utils/BridgeUtilsV2.sol";
+import "./utils/CommitteeUpgradeableV2.sol";
 
-contract SuiBridgeV2 is SuiBridge {
+contract SuiBridgeV2 is SuiBridge, CommitteeUpgradeableV2 {
     /// @notice Allows the caller to provide signatures that enable the transfer of tokens to
     /// the recipient address indicated within the message payload.
     /// @dev `message.chainID` represents the sending chain ID. Receiving chain ID needs to match
@@ -13,11 +14,12 @@ contract SuiBridgeV2 is SuiBridge {
     /// @param message The BridgeUtils containing the transfer details.
     function transferBridgedTokensWithSignaturesV2(
         bytes[] memory signatures,
+        uint8 epoch,
         BridgeUtils.Message memory message
     )
         external
         nonReentrant
-        verifyMessageAndSignatures(message, signatures, BridgeUtils.TOKEN_TRANSFER)
+        verifyMessageAndSignaturesV2(message, signatures, epoch, BridgeUtils.UPDATE_BRIDGE_LIMIT)
         onlySupportedChain(message.chainID)
     {
         // verify that message has not been processed
@@ -90,6 +92,23 @@ contract SuiBridgeV2 is SuiBridge {
             // transfer tokens from vault to target address
             vault.transferERC20(tokenAddress, recipientAddress, amount);
         }
+    }
+
+    /// @notice Enables the upgrade of the inheriting contract by verifying the provided signatures.
+    /// @dev The function will revert if the provided signatures or message is invalid.
+    /// @param signatures The array of signatures to be verified.
+    /// @param message The BridgeUtils to be verified.
+    function upgradeWithSignatures(bytes[] memory signatures, BridgeUtils.Message memory message)
+        public
+        override(CommitteeUpgradeableV2, CommitteeUpgradeable)
+        verifyMessageAndSignaturesV2(
+            message,
+            signatures,
+            committeeV2.committeeEpoch(),
+            BridgeUtils.ADD_EVM_TOKENS
+        )
+    {
+        super.upgradeWithSignatures(signatures, message);
     }
 
     /* ========== MODIFIERS ========== */

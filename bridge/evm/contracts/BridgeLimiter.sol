@@ -162,7 +162,8 @@ contract BridgeLimiter is IBridgeLimiter, CommitteeUpgradeable, OwnableUpgradeab
         bytes[] memory signatures,
         BridgeUtils.Message memory message
     )
-        external
+        public
+        virtual
         nonReentrant
         verifyMessageAndSignatures(message, signatures, BridgeUtils.UPDATE_BRIDGE_LIMIT)
     {

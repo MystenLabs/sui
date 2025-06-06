@@ -25,6 +25,11 @@ library BridgeUtilsV2 {
 
     /* ========== CONSTANTS ========== */
 
+    function convertToPercent(uint16 value, uint16 total) internal pure returns (uint16) {
+        require(total > 0, "BridgeUtils: Total must be greater than zero");
+        return (value * 100) / total;
+    }
+
     function isMatureMessage(uint256 messageTimestamp, uint256 currentTimestamp)
         internal
         pure
