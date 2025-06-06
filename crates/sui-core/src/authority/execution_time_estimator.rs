@@ -34,7 +34,7 @@ use tracing::{debug, info, trace, warn};
 
 // TODO: Move this into ExecutionTimeObserverConfig, if we switch to a moving average
 // implmentation without the window size in the type.
-const LOCAL_OBSERVATION_WINDOW_SIZE: usize = 10;
+const LOCAL_OBSERVATION_WINDOW_SIZE: usize = 20;
 const OBJECT_UTILIZATION_METRIC_HASH_MODULUS: u8 = 32;
 
 // Collects local execution time estimates to share via consensus.
@@ -335,6 +335,21 @@ impl ExecutionTimeObserver {
                     .observation_sharing_object_utilization_threshold();
             if diff_exceeds_threshold && (utilization_exceeds_threshold || uses_indebted_object) {
                 debug!("sharing new execution time observation for {key:?}: {new_average:?}");
+                if utilization_exceeds_threshold {
+                    epoch_store
+                        .metrics
+                        .epoch_execution_time_observations_sharing_reason
+                        .with_label_values(&["utilization"])
+                        .inc();
+                }
+                if uses_indebted_object {
+                    epoch_store
+                        .metrics
+                        .epoch_execution_time_observations_sharing_reason
+                        .with_label_values(&["indebted"])
+                        .inc();
+                }
+
                 to_share.push((key, new_average));
                 local_observation.last_shared = Some((new_average, Instant::now()));
             }
@@ -769,7 +784,7 @@ mod tests {
 
         // Record last observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(120))];
-        let total_duration = Duration::from_millis(120);
+        let total_duration = Duration::from_millis(160);
         observer.record_local_observations(&ptb, &timings, total_duration);
 
         // Verify that moving average is the same and a new observation was shared, as
@@ -777,10 +792,10 @@ mod tests {
         let local_obs = observer.local_observations.get(&key).unwrap();
         assert_eq!(
             local_obs.moving_average.get_average(),
-            // average of [110ms, 120ms, 120ms, 130ms]
-            Duration::from_millis(120)
+            // average of [110ms, 120ms, 130ms, 160ms]
+            Duration::from_millis(130)
         );
-        assert_eq!(local_obs.last_shared.unwrap().0, Duration::from_millis(120));
+        assert_eq!(local_obs.last_shared.unwrap().0, Duration::from_millis(130));
     }
 
     #[tokio::test]
