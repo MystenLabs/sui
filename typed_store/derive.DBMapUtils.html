@@ -1,0 +1,130 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A helper macro to simplify common operations for opening and debugging TypedStore (currently internally structs of DBMaps) It operates on a struct where all the members are DBMap&#60;K, V&#62; The main features are:"><title>DBMapUtils in typed_store - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="typed_store" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.1 (4eb161250 2025-03-15)" data-channel="1.85.1" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../static.files/storage-59e33391.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../typed_store/index.html">typed_<wbr>store</a><span class="version">0.4.0</span></h2></div><div class="sidebar-elems"><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><span class="rustdoc-breadcrumbs"><a href="index.html">typed_store</a></span><h1>Derive Macro <span class="derive">DBMapUtils</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/typed_store_derive/lib.rs.html#179">Source</a> </span></div><pre class="rust item-decl"><code>#[derive(DBMapUtils)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[default_options_override_fn]
+    #[rename]
+    #[tidehunter]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A helper macro to simplify common operations for opening and debugging TypedStore (currently internally structs of DBMaps)
+It operates on a struct where all the members are DBMap&lt;K, V&gt;
+The main features are:</p>
+<ol>
+<li>
+<p>Flexible configuration of each table (column family) via defaults and overrides</p>
+</li>
+<li>
+<p>Auto-generated <code>open</code> routine</p>
+</li>
+<li>
+<p>Auto-generated <code>read_only_mode</code> handle</p>
+</li>
+<li>
+<p>Auto-generated memory stats method</p>
+</li>
+<li>
+<p>Other convenience features</p>
+</li>
+<li>
+<p>Flexible configuration:
+a. Static options specified at struct definition</p>
+</li>
+</ol>
+<p>The definer of the struct can specify the default options for each table using annotations
+We can also supply column family options on the default ones
+A user defined function of signature () -&gt; Options can be provided for each table
+If an override function is not specified, the default in <code>typed_store::rocks::default_db_options</code> is used</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>typed_store::rocks::DBOptions;
+<span class="kw">use </span>typed_store::rocks::DBMap;
+<span class="kw">use </span>typed_store::rocks::MetricConf;
+<span class="kw">use </span>typed_store::DBMapUtils;
+<span class="kw">use </span>core::fmt::Error;
+<span class="doccomment">/// Define a struct with all members having type DBMap&lt;K, V&gt;
+
+</span><span class="kw">fn </span>custom_fn_name1() -&gt; DBOptions {DBOptions::default()}
+<span class="kw">fn </span>custom_fn_name2() -&gt; DBOptions {
+    <span class="kw">let </span><span class="kw-2">mut </span>op = custom_fn_name1();
+    op.options.set_write_buffer_size(<span class="number">123456</span>);
+    op
+}
+<span class="attr">#[derive(DBMapUtils)]
+</span><span class="kw">struct </span>Tables {
+    <span class="doccomment">/// Specify custom options function `custom_fn_name1`
+    </span><span class="attr">#[default_options_override_fn = <span class="string">"custom_fn_name1"</span>]
+    </span>table1: DBMap&lt;String, String&gt;,
+    <span class="attr">#[default_options_override_fn = <span class="string">"custom_fn_name2"</span>]
+    </span>table2: DBMap&lt;i32, String&gt;,
+    <span class="comment">// Nothing specified so `typed_store::rocks::default_db_options` is used
+    </span>table3: DBMap&lt;i32, String&gt;,
+    <span class="attr">#[default_options_override_fn = <span class="string">"custom_fn_name1"</span>]
+    </span>table4: DBMap&lt;i32, String&gt;,
+}
+
+</code></pre></div>
+<ol start="2">
+<li>
+<p>Auto-generated <code>open</code> routine
+The function <code>open_tables_read_write</code> is generated which allows for specifying DB wide options and custom table configs as mentioned above</p>
+</li>
+<li>
+<p>Auto-generated <code>read_only_mode</code> handle
+This mode provides handle struct which opens the DB in read only mode and has certain features like dumping and counting the keys in the tables</p>
+</li>
+</ol>
+<p>Use the function <code>Tables::get_read_only_handle</code> which returns a handle that only allows read only features</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code> <span class="kw">use </span>typed_store::rocks::DBOptions;
+ <span class="kw">use </span>typed_store::rocks::DBMap;
+ <span class="kw">use </span>typed_store::DBMapUtils;
+ <span class="kw">use </span>core::fmt::Error;
+ <span class="doccomment">/// Define a struct with all members having type DBMap&lt;K, V&gt;
+
+ </span><span class="kw">fn </span>custom_fn_name1() -&gt; DBOptions {DBOptions::default()}
+ <span class="kw">fn </span>custom_fn_name2() -&gt; DBOptions {
+     <span class="kw">let </span><span class="kw-2">mut </span>op = custom_fn_name1();
+     op.options.set_write_buffer_size(<span class="number">123456</span>);
+     op
+ }
+ <span class="attr">#[derive(DBMapUtils)]
+ </span><span class="kw">struct </span>Tables {
+     <span class="doccomment">/// Specify custom options function `custom_fn_name1`
+     </span><span class="attr">#[default_options_override_fn = <span class="string">"custom_fn_name1"</span>]
+     </span>table1: DBMap&lt;String, String&gt;,
+     <span class="attr">#[default_options_override_fn = <span class="string">"custom_fn_name2"</span>]
+     </span>table2: DBMap&lt;i32, String&gt;,
+     <span class="comment">// Nothing specified so `typed_store::rocks::default_db_options` is used
+     </span>table3: DBMap&lt;i32, String&gt;,
+     <span class="attr">#[default_options_override_fn = <span class="string">"custom_fn_name1"</span>]
+     </span>table4: DBMap&lt;i32, String&gt;,
+ }
+ <span class="attr">#[tokio::main]
+ </span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+
+ <span class="kw">use </span>typed_store::rocks::MetricConf;<span class="kw">let </span>primary_path = tempfile::tempdir().expect(<span class="string">"Failed to open temporary directory"</span>).keep();
+ <span class="kw">let _ </span>= Tables::open_tables_read_write(primary_path.clone(), typed_store::rocks::MetricConf::default(), <span class="prelude-val">None</span>, <span class="prelude-val">None</span>);
+
+ <span class="comment">// Get the read only handle
+ </span><span class="kw">let </span>read_only_handle = Tables::get_read_only_handle(primary_path, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, MetricConf::default());
+ <span class="comment">// Use this handle for dumping
+ </span><span class="kw">let </span>ret = read_only_handle.dump(<span class="string">"table2"</span>, <span class="number">100</span>, <span class="number">0</span>).unwrap();
+ <span class="prelude-val">Ok</span>(())
+ }</code></pre></div>
+<ol start="4">
+<li>
+<p>Auto-generated memory stats method
+<code>self.get_memory_usage</code> is derived to provide memory and cache usage</p>
+</li>
+<li>
+<p>Other convenience features
+<code>Tables::describe_tables</code> is used to get a list of the table names and key-value types as string in a BTreeMap</p>
+</li>
+</ol>
+<p>// Bad usage example
+// Structs fields most only be of type Store&lt;K, V&gt; or DMBap&lt;K, V&gt;
+// This will fail to compile with error <code>All struct members must be of type Store&lt;K, V&gt; or DMBap&lt;K, V&gt;</code>
+// #[derive(DBMapUtils)]
+// struct BadTables {
+//     table1: Store&lt;String, String&gt;,
+//     bad_field: u32,
+// #}</p>
+</div></details></section></div></main></body></html>

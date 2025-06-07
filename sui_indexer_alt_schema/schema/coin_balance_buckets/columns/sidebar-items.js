@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["coin_balance_bucket","coin_type","cp_sequence_number","object_id","owner_id","owner_kind","star"]};

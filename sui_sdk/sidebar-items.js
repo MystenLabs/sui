@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["SUI_COIN_TYPE","SUI_DEVNET_URL","SUI_LOCAL_NETWORK_GAS_URL","SUI_LOCAL_NETWORK_URL","SUI_LOCAL_NETWORK_URL_0","SUI_MAINNET_URL","SUI_TESTNET_URL"],"mod":["apis","error","json_rpc_error","sui_client_config","verify_personal_message_signature","wallet_context"],"struct":["SuiClient","SuiClientBuilder"]};

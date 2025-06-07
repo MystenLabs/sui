@@ -1,0 +1,1 @@
+searchState.loadedDescShard("x", 0, "Simple program to greet a person\nRun external crate tests\nRun lints\nReturns the argument unchanged.\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\nCalls <code>U::from(self)</code>.\nReturns the argument unchanged.\nDefine custom handler so we can skip certain lints on …\nCalls <code>U::from(self)</code>.")

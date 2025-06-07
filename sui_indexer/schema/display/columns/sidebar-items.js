@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["bcs","id","object_type","star","version"]};
