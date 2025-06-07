@@ -238,6 +238,8 @@ async fn test_consensus_then_fast_path_execution() {
 
 #[tokio::test]
 async fn test_fast_path_then_consensus_execution_e2e() {
+    telemetry_subscribers::init_for_testing();
+
     let (sender, sender_key) = get_account_key_pair();
     let gas_object = Object::with_owner_for_testing(sender);
     let gas_object_ref = gas_object.compute_object_reference();
@@ -265,12 +267,16 @@ async fn test_fast_path_then_consensus_execution_e2e() {
         SchedulingSource::MysticetiFastPath,
     );
 
-    let outputs = state
-        .get_transaction_cache_reader()
-        .notify_read_fastpath_transaction_outputs(&[*cert.digest()])
-        .await
-        .pop()
-        .unwrap();
+    let outputs = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        state
+            .get_transaction_cache_reader()
+            .notify_read_fastpath_transaction_outputs(&[*cert.digest()]),
+    )
+    .await
+    .unwrap()
+    .pop()
+    .unwrap();
     assert_eq!(outputs.transaction.digest(), &tx_digest);
 
     assert!(state
@@ -286,12 +292,16 @@ async fn test_fast_path_then_consensus_execution_e2e() {
         SchedulingSource::NonFastPath,
     );
 
-    let effects_digest = state
-        .get_transaction_cache_reader()
-        .notify_read_executed_effects_digests(&[tx_digest])
-        .await
-        .pop()
-        .unwrap();
+    let effects_digest = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        state
+            .get_transaction_cache_reader()
+            .notify_read_executed_effects_digests(&[tx_digest]),
+    )
+    .await
+    .unwrap()
+    .pop()
+    .unwrap();
 
     assert_eq!(effects_digest, outputs.effects.digest());
     assert!(!state

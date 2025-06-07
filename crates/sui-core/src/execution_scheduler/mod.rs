@@ -144,17 +144,24 @@ impl ExecutionSchedulerWrapper {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
+        // If Mysticeti fastpath is enabled, we must use ExecutionScheduler.
+        // This is because TransactionManager prohibits enqueueing the same transaction twice,
+        // which we need in Mysticeti fastpath in order to finalize a transaction that
+        // was previously executed through fastpaht certification.
         // In tests, we flip a coin to decide whether to use ExecutionScheduler or TransactionManager,
         // so that both can be tested.
         // In prod, we use ExecutionScheduler only in devnet.
-        // In other networks, we use TransactionManager by default, unless the env variable
-        // `ENABLE_EXECUTION_SCHEDULER` is set.
-        let enable_execution_scheduler = if cfg!(test) {
+        // In other networks, we use TransactionManager by default.
+        let enable_execution_scheduler = if epoch_store.protocol_config().mysticeti_fastpath()
+            || std::env::var("ENABLE_EXECUTION_SCHEDULER").is_ok()
+        {
+            true
+        } else if std::env::var("ENABLE_TRANSACTION_MANAGER").is_ok() {
+            false
+        } else if cfg!(test) {
             rand::thread_rng().gen_bool(0.5)
         } else {
-            std::env::var("ENABLE_TRANSACTION_MANAGER").is_err()
-                && (std::env::var("ENABLE_EXECUTION_SCHEDULER").is_ok()
-                    || (epoch_store.get_chain_identifier().chain() == Chain::Unknown))
+            epoch_store.get_chain_identifier().chain() == Chain::Unknown
         };
         if enable_execution_scheduler {
             Self::ExecutionScheduler(ExecutionScheduler::new(
