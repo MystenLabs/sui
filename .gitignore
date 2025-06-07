@@ -75,3 +75,8 @@ docs/content/references/framework/**
 lcov.info
 
 .sparse
+
+# nix build results
+result*
+
+.direnv
