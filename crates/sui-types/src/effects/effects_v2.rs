@@ -3,6 +3,7 @@
 
 use super::object_change::{AccumulatorWriteV1, ObjectIn, ObjectOut};
 use super::{EffectsObjectChange, IDOperation, ObjectChange};
+use crate::accumulator_event::AccumulatorEvent;
 use crate::base_types::{
     EpochId, ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
     VersionDigest,
@@ -378,6 +379,18 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
 
                     id_operation: change.id_operation,
                 })
+            })
+            .collect()
+    }
+
+    fn accumulator_events(&self) -> Vec<AccumulatorEvent> {
+        self.changed_objects
+            .iter()
+            .filter_map(|(id, change)| match &change.output_state {
+                ObjectOut::AccumulatorWriteV1(write) => {
+                    Some(AccumulatorEvent::new(*id, write.clone()))
+                }
+                _ => None,
             })
             .collect()
     }

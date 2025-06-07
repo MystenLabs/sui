@@ -49,7 +49,8 @@ mod checked {
         sync::Arc,
     };
     use sui_move_natives::object_runtime::{
-        self, LoadedRuntimeObject, ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
+        self, LoadedRuntimeObject, MoveAccumulatorEvent, MoveAccumulatorValue, ObjectRuntime,
+        RuntimeResults, get_all_uids, max_event_error,
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
@@ -837,6 +838,7 @@ mod checked {
             let RuntimeResults {
                 writes,
                 user_events: remaining_events,
+                accumulator_events,
                 loaded_child_objects,
                 mut created_object_ids,
                 deleted_object_ids,
@@ -948,6 +950,7 @@ mod checked {
                 created_object_ids,
                 deleted_object_ids,
                 user_events,
+                accumulator_events,
             )
         }
 
@@ -1250,6 +1253,7 @@ mod checked {
         created_object_ids: IndexSet<ObjectID>,
         deleted_object_ids: IndexSet<ObjectID>,
         user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
+        accumulator_events: Vec<MoveAccumulatorEvent>,
     ) -> Result<ExecutionResults, ExecutionError> {
         // Before finishing, ensure that any shared object taken by value by the transaction is either:
         // 1. Mutated (and still has a shared ownership); or
@@ -1339,6 +1343,13 @@ mod checked {
             })
             .collect();
 
+        let accumulator_events = accumulator_events
+            .into_iter()
+            .map(|accum_event| match accum_event.value {
+                MoveAccumulatorValue::MoveValue(_, _, _) => todo!(),
+            })
+            .collect();
+
         Ok(ExecutionResults::V2(ExecutionResultsV2 {
             written_objects,
             modified_objects: loaded_runtime_objects
@@ -1348,6 +1359,7 @@ mod checked {
             created_object_ids: created_object_ids.into_iter().collect(),
             deleted_object_ids: deleted_object_ids.into_iter().collect(),
             user_events,
+            accumulator_events,
         }))
     }
 

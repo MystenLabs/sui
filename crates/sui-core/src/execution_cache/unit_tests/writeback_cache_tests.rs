@@ -159,6 +159,7 @@ impl Scenario {
             transaction: Arc::new(tx),
             effects,
             events,
+            accumulator_events: vec![],
             markers: Default::default(),
             wrapped: Default::default(),
             deleted: Default::default(),

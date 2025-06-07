@@ -116,6 +116,8 @@ impl<'backing> TemporaryStore<'backing> {
             events: TransactionEvents {
                 data: results.user_events,
             },
+            // no accumulator events for v1
+            accumulator_events: vec![],
             loaded_runtime_objects: self.loaded_runtime_objects,
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
             lamport_version: self.lamport_timestamp,

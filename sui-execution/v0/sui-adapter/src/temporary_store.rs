@@ -152,6 +152,8 @@ impl<'backing> TemporaryStore<'backing> {
                 .map(|(id, (obj, _))| (id, obj))
                 .collect(),
             events: TransactionEvents { data: self.events },
+            // no accumulator events for v0
+            accumulator_events: vec![],
             loaded_runtime_objects: self.loaded_child_objects,
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
             lamport_version: self.lamport_timestamp,

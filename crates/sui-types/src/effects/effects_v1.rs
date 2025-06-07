@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::accumulator_event::AccumulatorEvent;
 use crate::base_types::{
     random_object_ref, EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
@@ -288,6 +289,11 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
             .chain(unwrapped_then_deleted)
             .chain(wrapped)
             .collect()
+    }
+
+    fn accumulator_events(&self) -> Vec<AccumulatorEvent> {
+        // v1 did not have accumulator events
+        vec![]
     }
 
     fn gas_object(&self) -> (ObjectRef, Owner) {
