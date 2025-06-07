@@ -1,0 +1,39 @@
+load("@prelude//apple/tools/defs.bzl", "meta_python_test")
+
+native.python_library(
+    name = "lib",
+    srcs = [
+        "macho.py",
+        "macho_parser.py",
+        "scrubber.py",
+        "spec.py",
+        "utils.py",
+    ],
+    deps = [
+        "prelude//apple/tools/re_compatibility_utils:re_compatibility_utils",
+    ],
+)
+
+native.python_binary(
+    name = "tool",
+    main = "main.py",
+    visibility = ["PUBLIC"],
+    deps = [
+        ":lib",
+    ],
+)
+
+meta_python_test(
+    name = "tests",
+    srcs = [
+        "scrubber_test.py",
+        "spec_test.py",
+    ],
+    resources = glob([
+        "test_resources/*",
+    ]),
+    deps = [
+        "fbsource//third-party/pypi/importlib-resources:importlib-resources",
+        ":lib",
+    ],
+)
