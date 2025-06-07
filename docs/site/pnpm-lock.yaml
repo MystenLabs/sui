@@ -84,6 +84,9 @@ importers:
       hast-util-is-element:
         specifier: ^1.1.0
         version: 1.1.0
+      js-yaml:
+        specifier: ^4.1.0
+        version: 4.1.0
       lodash:
         specifier: ^4.17.21
         version: 4.17.21
@@ -138,6 +141,9 @@ importers:
       turndown:
         specifier: ^7.2.0
         version: 7.2.0
+      unist-util-visit:
+        specifier: ^5.0.0
+        version: 5.0.0
     devDependencies:
       '@babel/plugin-transform-react-jsx':
         specifier: ^7.23.4

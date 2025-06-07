@@ -1,0 +1,4 @@
+walrus:
+  domain:
+    testnet: "walrus.site"
+    mainnet: "wal.app"
