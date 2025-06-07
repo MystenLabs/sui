@@ -92,7 +92,7 @@ impl<F: MoveFlavor> PinnedDependencyInfo<F> {
 
     pub async fn fetch(&self) -> PackageResult<PathBuf> {
         match self {
-            PinnedDependencyInfo::Git(dep) => dep.fetch().await,
+            PinnedDependencyInfo::Git(dep) => Ok(dep.fetch().await?.join(dep.path.clone())),
             PinnedDependencyInfo::Local(dep) => Ok(dep.unfetched_path().clone()),
             PinnedDependencyInfo::FlavorSpecific(dep) => todo!(),
         }

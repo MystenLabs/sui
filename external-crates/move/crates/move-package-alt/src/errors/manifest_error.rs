@@ -34,6 +34,8 @@ pub enum ManifestErrorKind {
     InvalidEdition { edition: String, valid: String },
     #[error("externally resolved dependencies must have exactly one resolver field")]
     BadExternalDependency,
+    #[error("Environment {env} does not exist in the manifest.")]
+    EnvironmentNotFound { env: String },
 }
 
 impl ManifestError {

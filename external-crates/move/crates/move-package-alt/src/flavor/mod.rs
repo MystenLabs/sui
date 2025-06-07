@@ -28,6 +28,8 @@ pub trait MoveFlavor: Debug {
     /// to parse a manifest.
     fn name() -> String;
 
+    fn new() -> Self;
+
     /// Additional flavor-specific dependency types. Currently we only support flavor-specific
     /// dependencies that are already pinned (although in principle you could use an
     /// external resolved to do resolution and pinning for flavor-specific deps)
@@ -47,6 +49,8 @@ pub trait MoveFlavor: Debug {
         &self,
         deps: DependencySet<Self::FlavorDependency<Pinned>>,
     ) -> PackageResult<DependencySet<PathBuf>>;
+
+    fn unfetched_path(&self) -> PathBuf;
 
     /// A [PublishedMetadata] should contain all of the information that is generated
     /// during publication.

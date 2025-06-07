@@ -13,6 +13,12 @@ pub struct GitSha {
     inner: String,
 }
 
+impl GitSha {
+    pub fn as_str(&self) -> &str {
+        &self.inner
+    }
+}
+
 impl TryFrom<String> for GitSha {
     type Error = ShaError;
 
