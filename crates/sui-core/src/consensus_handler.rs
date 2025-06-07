@@ -904,14 +904,7 @@ impl TransactionManagerSender {
     ) {
         while let Some((transactions, scheduling_source)) = recv.recv().await {
             let _guard = monitored_scope("ConsensusHandler::enqueue");
-            match scheduling_source {
-                SchedulingSource::MysticetiFastPath => {
-                    execution_scheduler.enqueue_fastpath(transactions, &epoch_store);
-                }
-                SchedulingSource::NonFastPath => {
-                    execution_scheduler.enqueue(transactions, &epoch_store);
-                }
-            }
+            execution_scheduler.enqueue(transactions, &epoch_store, scheduling_source);
         }
     }
 }

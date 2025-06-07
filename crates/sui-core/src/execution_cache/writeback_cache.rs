@@ -234,7 +234,7 @@ struct UncommittedData {
     // These outputs are not written to pending_transaction_writes until we are sure
     // that they will not get rejected by consensus.
     // TODO(fastpath): We need to find a way to remove entries that did not get
-    // finalized. We could use rejection status from mystticeti, but it is
+    // finalized. We could use rejection status from mysticeti, but it is
     // not 100% reliable due to data races.
     fastpath_transaction_outputs: DashMap<TransactionDigest, Arc<TransactionOutputs>>,
 

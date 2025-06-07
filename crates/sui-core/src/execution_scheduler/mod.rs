@@ -79,18 +79,10 @@ pub(crate) trait ExecutionSchedulerAPI {
         &self,
         certs: Vec<VerifiedExecutableTransaction>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        scheduling_source: SchedulingSource,
     ) {
         let certs = certs.into_iter().map(|cert| (cert, None)).collect();
-        self.enqueue_impl(certs, epoch_store, SchedulingSource::NonFastPath)
-    }
-
-    fn enqueue_fastpath(
-        &self,
-        certs: Vec<VerifiedExecutableTransaction>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
-        let certs = certs.into_iter().map(|cert| (cert, None)).collect();
-        self.enqueue_impl(certs, epoch_store, SchedulingSource::MysticetiFastPath)
+        self.enqueue_impl(certs, epoch_store, scheduling_source)
     }
 
     fn enqueue_with_expected_effects_digest(
@@ -111,6 +103,7 @@ pub(crate) trait ExecutionSchedulerAPI {
     ///
     /// REQUIRED: Shared object locks must be taken before calling enqueueing transactions
     /// with shared objects!
+    /// TODO: Cleanup this API.
     fn enqueue_certificates(
         &self,
         certs: Vec<VerifiedCertificate>,
@@ -120,7 +113,7 @@ pub(crate) trait ExecutionSchedulerAPI {
             .into_iter()
             .map(VerifiedExecutableTransaction::new_from_certificate)
             .collect();
-        self.enqueue(executable_txns, epoch_store)
+        self.enqueue(executable_txns, epoch_store, SchedulingSource::NonFastPath)
     }
 
     fn check_execution_overload(

@@ -259,9 +259,11 @@ async fn test_fast_path_then_consensus_execution_e2e() {
     );
 
     let tx_digest = *cert.digest();
-    state
-        .execution_scheduler()
-        .enqueue_fastpath(vec![cert.clone()], &state.epoch_store_for_testing());
+    state.execution_scheduler().enqueue(
+        vec![cert.clone()],
+        &state.epoch_store_for_testing(),
+        SchedulingSource::MysticetiFastPath,
+    );
 
     let outputs = state
         .get_transaction_cache_reader()
@@ -278,9 +280,11 @@ async fn test_fast_path_then_consensus_execution_e2e() {
         .get_transaction_cache_reader()
         .is_tx_already_executed(&tx_digest));
 
-    state
-        .execution_scheduler()
-        .enqueue(vec![cert.clone()], &state.epoch_store_for_testing());
+    state.execution_scheduler().enqueue(
+        vec![cert.clone()],
+        &state.epoch_store_for_testing(),
+        SchedulingSource::NonFastPath,
+    );
 
     let effects_digest = state
         .get_transaction_cache_reader()
@@ -321,9 +325,11 @@ async fn test_consensus_then_fast_path_execution_e2e() {
     );
 
     let tx_digest = *cert.digest();
-    state
-        .execution_scheduler()
-        .enqueue(vec![cert.clone()], &state.epoch_store_for_testing());
+    state.execution_scheduler().enqueue(
+        vec![cert.clone()],
+        &state.epoch_store_for_testing(),
+        SchedulingSource::NonFastPath,
+    );
 
     state
         .get_transaction_cache_reader()
@@ -337,9 +343,11 @@ async fn test_consensus_then_fast_path_execution_e2e() {
         .get_transaction_cache_reader()
         .is_tx_already_executed(&tx_digest));
 
-    state
-        .execution_scheduler()
-        .enqueue_fastpath(vec![cert.clone()], &state.epoch_store_for_testing());
+    state.execution_scheduler().enqueue(
+        vec![cert.clone()],
+        &state.epoch_store_for_testing(),
+        SchedulingSource::MysticetiFastPath,
+    );
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     assert!(!state
         .get_transaction_cache_reader()

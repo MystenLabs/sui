@@ -1559,7 +1559,6 @@ impl AuthorityState {
                 }
             }
         }
-        // commit_certificate finished, the tx is fully committed to the store.
         tx_guard.commit_tx();
 
         epoch_store.record_local_execution_time(
@@ -3141,14 +3140,17 @@ impl AuthorityState {
     }
 
     /// Adds transactions / certificates to transaction manager for ordered execution.
+    /// TODO: Cleanup this function.
     pub fn enqueue_transactions_for_execution(
         &self,
         txns: Vec<VerifiedExecutableTransaction>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
-        self.execution_scheduler.enqueue(txns, epoch_store)
+        self.execution_scheduler
+            .enqueue(txns, epoch_store, SchedulingSource::NonFastPath)
     }
 
+    /// TODO: Cleanup this function.
     pub fn enqueue_certificates_for_execution(
         &self,
         certs: Vec<VerifiedCertificate>,
@@ -5556,9 +5558,11 @@ impl RandomnessRoundReceiver {
             .get_cache_commit()
             .persist_transaction(&transaction);
 
-        self.authority_state
-            .execution_scheduler()
-            .enqueue(vec![transaction], &epoch_store);
+        self.authority_state.execution_scheduler().enqueue(
+            vec![transaction],
+            &epoch_store,
+            SchedulingSource::NonFastPath,
+        );
 
         let authority_state = self.authority_state.clone();
         spawn_monitored_task!(async move {
