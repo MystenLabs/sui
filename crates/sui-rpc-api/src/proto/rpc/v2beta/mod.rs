@@ -30,6 +30,7 @@ mod executed_transaction;
 mod execution_status;
 mod object;
 mod signatures;
+mod system_state;
 mod transaction;
 
 //

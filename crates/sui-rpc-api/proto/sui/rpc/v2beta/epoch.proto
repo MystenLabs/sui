@@ -8,6 +8,7 @@ package sui.rpc.v2beta;
 import "google/protobuf/timestamp.proto";
 import "sui/rpc/v2beta/protocol_config.proto";
 import "sui/rpc/v2beta/signature.proto";
+import "sui/rpc/v2beta/system_state.proto";
 
 message Epoch {
   optional uint64 epoch = 1;
@@ -15,8 +16,10 @@ message Epoch {
   // The committee governing this epoch.
   optional ValidatorCommittee committee = 2;
 
-  // Also want a way to get validator metadata for validators (eg network keys)
-  //optional ValidatorSet validator_set = 3;
+  // Snapshot of Sui's SystemState (`0x3::sui_system::SystemState`) at the
+  // beginning of the epoch, for past epochs, or the current state for the
+  // current epoch.
+  optional SystemState system_state = 3;
 
   optional uint64 first_checkpoint = 4;
   optional uint64 last_checkpoint = 5;
