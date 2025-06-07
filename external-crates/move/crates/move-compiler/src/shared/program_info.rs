@@ -131,9 +131,11 @@ macro_rules! program_info {
         }))
         .unwrap();
         if let Some(pre_compiled_lib) = $pre_compiled_lib {
-            for (mident, minfo) in pre_compiled_lib.$pass.info.modules.key_cloned_iter() {
-                if !modules.contains_key(&mident) {
-                    modules.add(mident, minfo.clone()).unwrap();
+            for pre_compiled_lib in pre_compiled_lib {
+                for (mident, minfo) in pre_compiled_lib.$pass.info.modules.key_cloned_iter() {
+                    if !modules.contains_key(&mident) {
+                        modules.add(mident, minfo.clone()).unwrap();
+                    }
                 }
             }
         }
@@ -147,7 +149,7 @@ macro_rules! program_info {
 impl TypingProgramInfo {
     pub fn new(
         env: &CompilationEnv,
-        pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
         modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>,
         mut module_use_funs: BTreeMap<ModuleIdent, ResolvedUseFuns>,
     ) -> Self {
@@ -172,7 +174,10 @@ impl TypingProgramInfo {
 }
 
 impl NamingProgramInfo {
-    pub fn new(pre_compiled_lib: Option<Arc<FullyCompiledProgram>>, prog: &N::Program_) -> Self {
+    pub fn new(
+        pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
+        prog: &N::Program_,
+    ) -> Self {
         // use_funs will be populated later
         let mut module_use_funs: Option<&mut BTreeMap<ModuleIdent, ResolvedUseFuns>> = None;
         program_info!(pre_compiled_lib, prog, naming, module_use_funs)

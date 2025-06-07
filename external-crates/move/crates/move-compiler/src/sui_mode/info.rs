@@ -57,7 +57,7 @@ pub struct SuiInfo {
 
 impl SuiInfo {
     pub fn new(
-        pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
         modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>,
         info: &TypingProgramInfo,
     ) -> Self {
@@ -231,7 +231,7 @@ fn all_uid_holders(info: &TypingProgramInfo) -> BTreeMap<(ModuleIdent, DatatypeN
 }
 
 fn all_transferred(
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
     modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>,
     info: &TypingProgramInfo,
 ) -> BTreeMap<(ModuleIdent, DatatypeName), TransferKind> {
@@ -252,9 +252,8 @@ fn all_transferred(
             None => pre_compiled_lib
                 .as_ref()
                 .unwrap()
-                .typing
-                .modules
-                .get(&mident)
+                .iter()
+                .find_map(|p| p.typing.modules.get(&mident))
                 .unwrap(),
         };
         for (_, _, fdef) in &mdef.functions {

@@ -59,11 +59,11 @@ pub fn run_parsing_analysis(
 
 /// Run typing analysis for either main program or dependencies
 pub fn run_typing_analysis(
-    mut computation_data: SymbolsComputationData,
+    computation_data: &mut SymbolsComputationData,
     mapped_files: &MappedFiles,
     compiler_info: &mut CompilerInfo,
     typed_program_modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
-) -> SymbolsComputationData {
+) {
     let mut typing_symbolicator = typing_analysis::TypingAnalysisContext {
         mod_outer_defs: &mut computation_data.mod_outer_defs,
         files: mapped_files,
@@ -84,7 +84,6 @@ pub fn run_typing_analysis(
         &mut typing_symbolicator,
         &mut computation_data.mod_use_defs,
     );
-    computation_data
 }
 
 pub fn find_datatype(mod_defs: &ModuleDefs, datatype_name: &Symbol) -> Option<Loc> {
