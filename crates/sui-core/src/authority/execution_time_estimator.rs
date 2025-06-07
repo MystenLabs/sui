@@ -91,12 +91,12 @@ impl LocalObservations {
             // Positive threshold requires upward change.
             new_average
                 .checked_sub(last_shared)
-                .map_or(false, |diff| diff > last_shared.mul_f64(threshold))
+                .is_some_and(|diff| diff > last_shared.mul_f64(threshold))
         } else {
             // Negative threshold requires downward change.
             last_shared
                 .checked_sub(new_average)
-                .map_or(false, |diff| diff > last_shared.mul_f64(-threshold))
+                .is_some_and(|diff| diff > last_shared.mul_f64(-threshold))
         }
     }
 }
