@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::static_programmable_transactions::{env::Env, loading::ast as L};
+use crate::static_programmable_transactions::{env::Env, linkage::Linkage, loading::ast as L};
 use move_core_types::language_storage::StructTag;
 use sui_types::{
     error::ExecutionError,
@@ -76,6 +76,9 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
 fn command(env: &Env, command: P::Command) -> Result<L::Command, ExecutionError> {
     Ok(match command {
         P::Command::MoveCall(pmc) => {
+            let resolved_linkage = env
+                .linkage_analysis
+                .compute_call_linkage(&pmc, env.linkable_store)?;
             let P::ProgrammableMoveCall {
                 package,
                 module,
@@ -83,12 +86,13 @@ fn command(env: &Env, command: P::Command) -> Result<L::Command, ExecutionError>
                 type_arguments: ptype_arguments,
                 arguments,
             } = *pmc;
+            let linkage = Linkage::new(*package, resolved_linkage);
             let type_arguments = ptype_arguments
                 .into_iter()
                 .enumerate()
                 .map(|(idx, ty)| env.load_type_input(idx, ty))
                 .collect::<Result<Vec<_>, _>>()?;
-            let function = env.load_function(package, module, name, type_arguments)?;
+            let function = env.load_function(package, module, name, type_arguments, linkage)?;
             L::Command::MoveCall(Box::new(L::MoveCall {
                 function,
                 arguments,
@@ -105,9 +109,17 @@ fn command(env: &Env, command: P::Command) -> Result<L::Command, ExecutionError>
         }
         P::Command::SplitCoins(coin, amounts) => L::Command::SplitCoins(coin, amounts),
         P::Command::MergeCoins(target, coins) => L::Command::MergeCoins(target, coins),
-        P::Command::Publish(items, object_ids) => L::Command::Publish(items, object_ids),
+        P::Command::Publish(items, object_ids) => {
+            let resolved_linkage = env
+                .linkage_analysis
+                .compute_publication_linkage(&object_ids, env.linkable_store)?;
+            L::Command::Publish(items, object_ids, resolved_linkage)
+        }
         P::Command::Upgrade(items, object_ids, object_id, argument) => {
-            L::Command::Upgrade(items, object_ids, object_id, argument)
+            let resolved_linkage = env
+                .linkage_analysis
+                .compute_publication_linkage(&object_ids, env.linkable_store)?;
+            L::Command::Upgrade(items, object_ids, object_id, argument, resolved_linkage)
         }
     })
 }

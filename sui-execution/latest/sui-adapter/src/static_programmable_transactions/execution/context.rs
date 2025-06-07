@@ -1,13 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    cell::RefCell,
-    collections::{BTreeMap, BTreeSet},
-    rc::Rc,
-    sync::Arc,
-};
-
 use crate::{
     adapter::new_native_extensions,
     execution_mode::ExecutionMode,
@@ -25,10 +18,7 @@ use crate::{
     },
 };
 use indexmap::IndexMap;
-use move_binary_format::{
-    errors::{Location, PartialVMError},
-    file_format::{CodeOffset, FunctionDefinitionIndex},
-};
+use move_binary_format::errors::{Location, PartialVMError};
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_runtime::native_extensions::NativeContextExtensions;
@@ -36,12 +26,18 @@ use move_vm_types::{
     gas::GasMeter,
     values::{VMValueCast, Value as VMValue},
 };
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet},
+    rc::Rc,
+    sync::Arc,
+};
 use sui_move_natives::object_runtime::{
     self, LoadedRuntimeObject, ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
 };
 use sui_types::{
     TypeTag,
-    base_types::{ObjectID, TxContext, TxContextKind},
+    base_types::{MoveObjectType, ObjectID, TxContext, TxContextKind},
     error::{ExecutionError, ExecutionErrorKind},
     execution::ExecutionResults,
     metrics::LimitsMetrics,
@@ -273,10 +269,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         }
 
         for (id, (recipient, ty, value)) in writes {
-            let ty: Type = {
-                let _ = ty;
-                better_todo!("OBJECT RUNTIME TYPETAG")
-            };
+            let ty: Type = env.load_type_from_struct(&ty.clone().into())?;
             let abilities = ty.abilities();
             let has_public_transfer = abilities.has_store();
             let layout = env.runtime_layout(&ty)?;
@@ -359,43 +352,24 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))
     }
 
-    pub fn take_user_events(
-        &mut self,
-        module_id: &ModuleId,
-        function: FunctionDefinitionIndex,
-        last_offset: CodeOffset,
-    ) -> Result<(), ExecutionError> {
+    pub fn take_user_events(&mut self, function: &T::LoadedFunction) -> Result<(), ExecutionError> {
         let events = object_runtime_mut!(self)?.take_user_events();
         let num_events = self.user_events.len() + events.len();
         let max_events = self.env.protocol_config.max_num_event_emit();
         if num_events as u64 > max_events {
             let err = max_event_error(max_events)
-                .at_code_offset(function, last_offset)
-                .finish(Location::Module(module_id.clone()));
-            return Err(self.env.convert_vm_error(err));
+                .at_code_offset(function.definition_index, function.instruction_length)
+                .finish(Location::Module(function.storage_id.clone()));
+            return Err(self.env.convert_linked_vm_error(err, &function.linkage));
         }
         let new_events = events
             .into_iter()
             .map(|(tag, value)| {
-                let ty = self
-                    .env
-                    .vm
-                    .get_runtime()
-                    .try_load_cached_type(&TypeTag::Struct(Box::new(tag.clone())))
-                    .map_err(|e| self.env.convert_vm_error(e))?
-                    .ok_or_else(|| {
-                        make_invariant_violation!("Failed to load type for event tag: {}", tag)
-                    })?;
-                let layout = self
-                    .env
-                    .vm
-                    .get_runtime()
-                    .type_to_type_layout(&ty)
-                    .map_err(|e| self.env.convert_vm_error(e))?;
+                let layout = self.env.type_layout_for_struct(&tag)?;
                 let Some(bytes) = value.simple_serialize(&layout) else {
                     invariant_violation!("Failed to deserialize already serialized Move value");
                 };
-                Ok((module_id.clone(), tag, bytes))
+                Ok((function.storage_id.clone(), tag, bytes))
             })
             .collect::<Result<Vec<_>, ExecutionError>>()?;
         self.user_events.extend(new_events);
@@ -547,18 +521,12 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 Value::tx_context(self.tx_context.borrow().digest())?,
             )),
         }
-        let storage_id = function.storage_id.clone();
-        let (index, last_instr) = {
-            let _ = &function;
-            // access FunctionDefinitionIndex and last instruction CodeOffset
-            better_todo!("LOADING")
-        };
         let result = {
             let _ = function;
             let _ = trace_builder_opt;
             better_todo!("RUNTIME")
         };
-        self.take_user_events(&storage_id, index, last_instr)?;
+        self.take_user_events(&function)?;
         Ok(result)
     }
 
@@ -568,11 +536,12 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         ty: Type,
         object: CtxValue,
     ) -> Result<(), ExecutionError> {
-        let ty = {
-            let _ = ty;
-            // ty to vm type
-            better_todo!("OBJECT RUNTIME TYPETAG")
+        let tag = TypeTag::try_from(ty)
+            .map_err(|_| make_invariant_violation!("Unable to convert Type to TypeTag"))?;
+        let TypeTag::Struct(tag) = tag else {
+            invariant_violation!("Expected struct type tag");
         };
+        let ty = MoveObjectType::from(*tag);
         object_runtime_mut!(self)?
             .transfer(recipient, ty, object.0.into())
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;

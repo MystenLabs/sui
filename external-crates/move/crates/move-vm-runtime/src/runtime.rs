@@ -426,6 +426,8 @@ impl VMRuntime {
             LoadedFunctionInstantiation {
                 parameters,
                 return_,
+                instruction_length: _,
+                definition_index: _,
             },
         ) = self
             .loader
@@ -492,6 +494,10 @@ impl VMRuntime {
     /// NB: the type tag _must_ be defining ID based.
     pub fn try_load_cached_type(&self, type_tag: &TypeTag) -> VMResult<Option<Type>> {
         self.loader.try_load_cached_type(type_tag)
+    }
+
+    pub fn load_type_tag(&self, type_tag: &TypeTag, data_store: &impl DataStore) -> VMResult<Type> {
+        self.loader.load_type(type_tag, data_store)
     }
 
     pub fn execute_function_bypass_visibility(
