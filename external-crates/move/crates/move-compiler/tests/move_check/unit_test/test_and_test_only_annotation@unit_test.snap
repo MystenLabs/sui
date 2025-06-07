@@ -14,13 +14,15 @@ warning[W10007]: issue with attribute value
   │       Arguments are no longer supported in `#[test]` attributes
   │       Ignoring these arguments
 
-error[E10004]: invalid usage of known attribute
+warning[W10007]: issue with attribute value
   ┌─ tests/move_check/unit_test/test_and_test_only_annotation.move:5:7
   │
 4 │     #[test(_a=@0x1, _b=@0x2)]
   │       ---------------------- Previously annotated here
 5 │     #[test_only]
-  │       ^^^^^^^^^ function annotated as both #[test_only] and #[test]. You need to declare it as either one or the other
+  │       ^^^^^^^^^ function annotated with duplicate mode 'test'
+  │
+  = Attributes '#[test]' and '#[random_test]' implicitly specify '#[mode(test)]'
 
 warning[W10007]: issue with attribute value
   ┌─ tests/move_check/unit_test/test_and_test_only_annotation.move:6:5

@@ -13,6 +13,8 @@ use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
 use std::{collections::BTreeSet, fmt};
 
+use super::unique_set::UniqueSet;
+
 // -------------------------------------------------------------------------------------------------
 // Types
 // -------------------------------------------------------------------------------------------------
@@ -25,9 +27,9 @@ pub enum KnownAttribute {
     Diagnostic(DiagnosticAttribute),
     Error(ErrorAttribute),
     External(ExternalAttribute),
+    Mode(ModeAttribute),
     Syntax(SyntaxAttribute),
     Testing(TestingAttribute),
-    Verification(VerificationAttribute),
 }
 
 /// A full summary of all attribute kinds, used for looking up an individual attribute and
@@ -42,11 +44,10 @@ pub enum AttributeKind_ {
     ExpectedFailure,
     External,
     LintAllow,
+    Mode,
     RandTest,
     Syntax,
     Test,
-    TestOnly,
-    VerifyOnly,
 }
 
 pub type AttributeKind = Spanned<AttributeKind_>;
@@ -90,6 +91,12 @@ pub struct ExternalAttribute {
     pub attrs: ExternalAttributeEntries,
 }
 
+// Sets a mode, such as "test" or "verify", which will only be build when compiled in that mode.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModeAttribute {
+    pub modes: UniqueSet<Name>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SyntaxAttribute {
     pub kind: Name,
@@ -99,8 +106,6 @@ pub struct SyntaxAttribute {
 pub enum TestingAttribute {
     // Is a test that will be run
     Test,
-    // Can be called by other testing code, and included in compilation in test mode
-    TestOnly,
     // This test is expected to fail
     ExpectedFailure(Box<ExpectedFailure>),
     // This is a test that uses randomly-generated arguments
@@ -127,12 +132,6 @@ pub enum MinorCode_ {
 }
 
 pub type MinorCode = Spanned<MinorCode_>;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum VerificationAttribute {
-    /// Deprecated spec verification annotation
-    VerifyOnly,
-}
 
 // -----------------------------------------------
 // External Attributes
@@ -204,12 +203,11 @@ impl AttributeKind_ {
             AttributeKind_::Error => ErrorAttribute::ERROR,
             AttributeKind_::ExpectedFailure => TestingAttribute::EXPECTED_FAILURE,
             AttributeKind_::External => ExternalAttribute::EXTERNAL,
+            AttributeKind_::Mode => ModeAttribute::MODE,
             AttributeKind_::LintAllow => DiagnosticAttribute::LINT_ALLOW,
             AttributeKind_::RandTest => TestingAttribute::RAND_TEST,
             AttributeKind_::Syntax => SyntaxAttribute::SYNTAX,
             AttributeKind_::Test => TestingAttribute::TEST,
-            AttributeKind_::TestOnly => TestingAttribute::TEST_ONLY,
-            AttributeKind_::VerifyOnly => VerificationAttribute::VERIFY_ONLY,
         }
     }
 }
@@ -223,8 +221,8 @@ impl KnownAttribute {
             Self::Diagnostic(attr) => attr.name(),
             Self::Error(attr) => attr.name(),
             Self::External(attr) => attr.name(),
+            Self::Mode(attr) => attr.name(),
             Self::Syntax(attr) => attr.name(),
-            Self::Verification(attr) => attr.name(),
             Self::Testing(attr) => attr.name(),
         }
     }
@@ -237,8 +235,8 @@ impl KnownAttribute {
             Self::Diagnostic(attr) => attr.expected_positions(),
             Self::Error(attr) => attr.expected_positions(),
             Self::External(attr) => attr.expected_positions(),
+            Self::Mode(attr) => attr.expected_positions(),
             Self::Syntax(attr) => attr.expected_positions(),
-            Self::Verification(attr) => attr.expected_positions(),
             Self::Testing(attr) => attr.expected_positions(),
         }
     }
@@ -251,8 +249,8 @@ impl KnownAttribute {
             Self::Diagnostic(attr) => attr.attribute_kind(),
             Self::Error(attr) => attr.attribute_kind(),
             Self::External(attr) => attr.attribute_kind(),
+            Self::Mode(attr) => attr.attribute_kind(),
             Self::Syntax(attr) => attr.attribute_kind(),
-            Self::Verification(attr) => attr.attribute_kind(),
             Self::Testing(attr) => attr.attribute_kind(),
         }
     }
@@ -413,6 +411,39 @@ impl ExternalAttributeEntry_ {
     }
 }
 
+impl ModeAttribute {
+    pub const TEST_ONLY: &'static str = "test_only";
+    pub const VERIFY_ONLY: &'static str = "verify_only";
+    pub const IDE: &'static str = "ide";
+    pub const IDE_TEST: &'static str = "ide_test";
+    pub const TEST: &'static str = "test";
+    pub const MODE: &'static str = "mode";
+
+    pub const fn name(&self) -> &str {
+        Self::MODE
+    }
+
+    pub fn expected_positions(&self) -> &'static BTreeSet<AttributePosition> {
+        static MODE_POSITIONS: Lazy<BTreeSet<AttributePosition>> = Lazy::new(|| {
+            BTreeSet::from([
+                AttributePosition::AddressBlock,
+                AttributePosition::Module,
+                AttributePosition::Use,
+                AttributePosition::Friend,
+                AttributePosition::Constant,
+                AttributePosition::Struct,
+                AttributePosition::Enum,
+                AttributePosition::Function,
+            ])
+        });
+        &MODE_POSITIONS
+    }
+
+    pub const fn attribute_kind(&self) -> AttributeKind_ {
+        AttributeKind_::Mode
+    }
+}
+
 impl SyntaxAttribute {
     pub const SYNTAX: &'static str = "syntax";
     pub const INDEX: &'static str = "index";
@@ -442,7 +473,6 @@ impl TestingAttribute {
     // Testing annotation names
     pub const TEST: &'static str = "test";
     pub const RAND_TEST: &'static str = "random_test";
-    pub const TEST_ONLY: &'static str = "test_only";
     pub const EXPECTED_FAILURE: &'static str = "expected_failure";
 
     // Failure kinds
@@ -459,31 +489,17 @@ impl TestingAttribute {
     pub const fn name(&self) -> &str {
         match self {
             Self::Test => Self::TEST,
-            Self::TestOnly => Self::TEST_ONLY,
             Self::ExpectedFailure { .. } => Self::EXPECTED_FAILURE,
             Self::RandTest => Self::RAND_TEST,
         }
     }
 
     pub fn expected_positions(&self) -> &'static BTreeSet<AttributePosition> {
-        static TEST_ONLY_POSITIONS: Lazy<BTreeSet<AttributePosition>> = Lazy::new(|| {
-            BTreeSet::from([
-                AttributePosition::AddressBlock,
-                AttributePosition::Module,
-                AttributePosition::Use,
-                AttributePosition::Friend,
-                AttributePosition::Constant,
-                AttributePosition::Struct,
-                AttributePosition::Enum,
-                AttributePosition::Function,
-            ])
-        });
         static TEST_POSITIONS: Lazy<BTreeSet<AttributePosition>> =
             Lazy::new(|| BTreeSet::from([AttributePosition::Function]));
         static EXPECTED_FAILURE_POSITIONS: Lazy<BTreeSet<AttributePosition>> =
             Lazy::new(|| BTreeSet::from([AttributePosition::Function]));
         match self {
-            TestingAttribute::TestOnly => &TEST_ONLY_POSITIONS,
             TestingAttribute::Test | TestingAttribute::RandTest => &TEST_POSITIONS,
             TestingAttribute::ExpectedFailure { .. } => &EXPECTED_FAILURE_POSITIONS,
         }
@@ -508,7 +524,6 @@ impl TestingAttribute {
     pub fn attribute_kind(&self) -> AttributeKind_ {
         match self {
             TestingAttribute::Test => AttributeKind_::Test,
-            TestingAttribute::TestOnly => AttributeKind_::TestOnly,
             TestingAttribute::ExpectedFailure(..) => AttributeKind_::ExpectedFailure,
             TestingAttribute::RandTest => AttributeKind_::RandTest,
         }
@@ -553,40 +568,6 @@ static EXPECTED_FAILURE_ALL_KEYS: Lazy<BTreeSet<String>> = Lazy::new(|| {
     keys
 });
 
-impl VerificationAttribute {
-    pub const VERIFY_ONLY: &'static str = "verify_only";
-
-    pub const fn name(&self) -> &str {
-        match self {
-            Self::VerifyOnly => Self::VERIFY_ONLY,
-        }
-    }
-
-    pub fn expected_positions(&self) -> &'static BTreeSet<AttributePosition> {
-        static VERIFY_ONLY_POSITIONS: Lazy<BTreeSet<AttributePosition>> = Lazy::new(|| {
-            BTreeSet::from([
-                AttributePosition::AddressBlock,
-                AttributePosition::Module,
-                AttributePosition::Use,
-                AttributePosition::Friend,
-                AttributePosition::Constant,
-                AttributePosition::Struct,
-                AttributePosition::Enum,
-                AttributePosition::Function,
-            ])
-        });
-        match self {
-            Self::VerifyOnly => &VERIFY_ONLY_POSITIONS,
-        }
-    }
-
-    pub fn attribute_kind(&self) -> AttributeKind_ {
-        match self {
-            VerificationAttribute::VerifyOnly => AttributeKind_::VerifyOnly,
-        }
-    }
-}
-
 //**************************************************************************************************
 // Display
 //**************************************************************************************************
@@ -616,9 +597,9 @@ impl fmt::Display for KnownAttribute {
             Self::Diagnostic(a) => a.fmt(f),
             Self::Error(a) => a.fmt(f),
             Self::External(a) => a.fmt(f),
+            Self::Mode(a) => a.fmt(f),
             Self::Syntax(a) => a.fmt(f),
             Self::Testing(a) => a.fmt(f),
-            Self::Verification(a) => a.fmt(f),
         }
     }
 }
@@ -659,6 +640,12 @@ impl fmt::Display for ExternalAttribute {
     }
 }
 
+impl fmt::Display for ModeAttribute {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
 impl fmt::Display for SyntaxAttribute {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.name())
@@ -666,12 +653,6 @@ impl fmt::Display for SyntaxAttribute {
 }
 
 impl fmt::Display for TestingAttribute {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.name())
-    }
-}
-
-impl fmt::Display for VerificationAttribute {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.name())
     }
@@ -726,7 +707,6 @@ impl_from_for_known_attribute! {
     ExternalAttribute => External,
     SyntaxAttribute => Syntax,
     TestingAttribute => Testing,
-    VerificationAttribute => Verification,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -765,6 +745,19 @@ impl AstDebug for DeprecationAttribute {
             w.write(std::str::from_utf8(note).unwrap());
             w.write(")");
         }
+    }
+}
+
+impl AstDebug for ModeAttribute {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.write(self.name());
+        w.write("(");
+        let ModeAttribute { modes } = self;
+        w.write("mode(");
+        w.comma(modes, |w, (_, mode)| {
+            w.write(format!("{mode}"));
+        });
+        w.write(")");
     }
 }
 
@@ -834,19 +827,10 @@ impl AstDebug for SyntaxAttribute {
     }
 }
 
-impl AstDebug for VerificationAttribute {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        match self {
-            VerificationAttribute::VerifyOnly => w.write("verify_only"),
-        }
-    }
-}
-
 impl AstDebug for TestingAttribute {
     fn ast_debug(&self, w: &mut AstWriter) {
         match self {
             TestingAttribute::Test => w.write("test"),
-            TestingAttribute::TestOnly => w.write("test_only"),
             TestingAttribute::ExpectedFailure(exp) => {
                 w.write("expected_failure(");
                 exp.ast_debug(w);
@@ -872,9 +856,9 @@ impl AstDebug for KnownAttribute {
             KnownAttribute::Diagnostic(attr) => attr.ast_debug(w),
             KnownAttribute::Error(attr) => attr.ast_debug(w),
             KnownAttribute::External(attr) => attr.ast_debug(w),
+            KnownAttribute::Mode(attr) => attr.ast_debug(w),
             KnownAttribute::Syntax(attr) => attr.ast_debug(w),
             KnownAttribute::Testing(attr) => attr.ast_debug(w),
-            KnownAttribute::Verification(attr) => attr.ast_debug(w),
         }
     }
 }

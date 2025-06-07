@@ -23,6 +23,16 @@ warning[W10007]: issue with attribute value
   │       Arguments are no longer supported in `#[test]` attributes
   │       Ignoring these arguments
 
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_check/unit_test/multiple_test_annotations.move:6:7
+  │
+5 │     #[test(_a=@0x1)]
+  │       ------------- Previously annotated here
+6 │     #[test(_b=@0x2)]
+  │       ^^^^^^^^^^^^^ function annotated with duplicate mode 'test'
+  │
+  = Attributes '#[test]' and '#[random_test]' implicitly specify '#[mode(test)]'
+
 error[E10001]: invalid duplicate attribute
   ┌─ tests/move_check/unit_test/multiple_test_annotations.move:6:7
   │
@@ -48,6 +58,16 @@ warning[W10007]: issue with attribute value
    │       │
    │       Arguments are no longer supported in `#[test]` attributes
    │       Ignoring these arguments
+
+warning[W10007]: issue with attribute value
+   ┌─ tests/move_check/unit_test/multiple_test_annotations.move:10:7
+   │
+ 9 │     #[test]
+   │       ---- Previously annotated here
+10 │     #[test(_a=@0x1, _b=@0x2)]
+   │       ^^^^^^^^^^^^^^^^^^^^^^ function annotated with duplicate mode 'test'
+   │
+   = Attributes '#[test]' and '#[random_test]' implicitly specify '#[mode(test)]'
 
 error[E10001]: invalid duplicate attribute
    ┌─ tests/move_check/unit_test/multiple_test_annotations.move:10:7

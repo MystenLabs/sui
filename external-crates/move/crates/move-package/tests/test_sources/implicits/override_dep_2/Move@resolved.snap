@@ -113,6 +113,7 @@ ResolvedGraph {
             no_lint: false,
             lint: false,
         },
+        modes: [],
         implicit_dependencies: {
             "I1": Internal(
                 InternalDependency {
