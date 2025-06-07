@@ -345,6 +345,71 @@ impl ResolvedGraph {
             .iter()
             .find_map(|(name, pkg)| (!pkg.renaming.is_empty()).then_some(*name))
     }
+
+    // Extract a remapping for each package from "local (in package) named address" to the "name in
+    // the root package resolve addresses table". If no renaming is performed across the package
+    // graph than the resulting mapping will be the identity mapping for each package.
+    pub fn root_renaming(
+        &self,
+    ) -> BTreeMap<PackageIdentifier, BTreeMap<NamedAddress, NamedAddress>> {
+        let mut root_mapping = BTreeMap::new();
+        let current_address_mapping = self
+            .extract_named_address_mapping()
+            .map(|(name, _)| (name, name))
+            .collect();
+
+        self.compute_root_renaming(
+            self.root_package(),
+            &current_address_mapping,
+            BTreeMap::new(),
+            &mut root_mapping,
+        );
+
+        root_mapping
+    }
+
+    fn compute_root_renaming(
+        &self,
+        current_node: PackageIdentifier,
+        // Parent name -> root name
+        parent_in_scope_names: &BTreeMap<NamedAddress, NamedAddress>,
+        // Parent name -> child name
+        remapping: BTreeMap<NamedAddress, NamedAddress>,
+        // package id -> { package local name -> root name }
+        root_renaming: &mut BTreeMap<PackageIdentifier, BTreeMap<NamedAddress, NamedAddress>>,
+    ) {
+        let pkg = self.package_table.get(&current_node).unwrap();
+        let global_rename_for_pkg: BTreeMap<_, _> = parent_in_scope_names
+            .iter()
+            .filter_map(|(parent_name, global_name)| {
+                let local_name = remapping.get(parent_name).unwrap_or(parent_name);
+                if pkg.resolved_table.contains_key(local_name) {
+                    Some((*local_name, *global_name))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let mut per_dep_renaming = BTreeMap::new();
+        for (to, (from_pkg, from_name)) in &pkg.renaming {
+            per_dep_renaming
+                .entry(*from_pkg)
+                .or_insert_with(BTreeMap::new)
+                .insert(*to, *from_name);
+        }
+
+        for dep in pkg.immediate_dependencies(self) {
+            self.compute_root_renaming(
+                dep,
+                &global_rename_for_pkg,
+                per_dep_renaming.remove(&dep).unwrap_or(BTreeMap::new()),
+                root_renaming,
+            );
+        }
+
+        root_renaming.insert(current_node, global_rename_for_pkg);
+    }
 }
 
 impl Package {

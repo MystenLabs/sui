@@ -26,6 +26,7 @@ move-ir-types.workspace = true
 move-package.workspace = true
 move-bytecode-source-map.workspace = true
 move-unit-test.workspace = true
+move-core-types.workspace = true
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full"] }
 

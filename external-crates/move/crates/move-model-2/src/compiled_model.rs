@@ -47,6 +47,7 @@ impl Model {
             files: Uninit::new(),
             root_package_name: None,
             root_named_address_map,
+            root_named_address_reverse_map: named_address_reverse_map.clone(),
             info: Uninit::new(),
             compiled,
             packages,
@@ -60,8 +61,9 @@ impl Model {
     }
 
     pub fn summary_without_source(&self) -> &summary::Packages {
-        self.summary
-            .get_or_init(|| summary::Packages::from(&self.compiled))
+        self.summary.get_or_init(|| {
+            summary::Packages::from((&self.root_named_address_reverse_map, &self.compiled))
+        })
     }
 }
 

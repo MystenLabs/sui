@@ -8,7 +8,12 @@ summary_pkg
 External Command `cat package_summaries/summary_pkg/a.json`:
 {
   "doc": " This is a doc comment on a module",
-  "immediate_dependencies": [],
+  "immediate_dependencies": [
+    {
+      "address": "summary_pkg",
+      "name": "b"
+    }
+  ],
   "attributes": [
     {
       "Parameterized": [
@@ -74,6 +79,20 @@ External Command `cat package_summaries/summary_pkg/a.json`:
             "index": 0,
             "doc": " This is a doc comment on a field",
             "type_": "u64"
+          },
+          "y": {
+            "index": 1,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "summary_pkg",
+                  "name": "b"
+                },
+                "name": "X",
+                "type_arguments": []
+              }
+            }
           }
         }
       }
@@ -157,7 +176,7 @@ External Command `cat package_summaries/summary_pkg/a.json`:
   "enums": {}
 }External Command `cat package_summaries/address_mapping.json`:
 {
-  "0x0000000000000000000000000000000000000000000000000000000000c0ffee": "summary_pkg"
+  "summary_pkg": "0x0000000000000000000000000000000000000000000000000000000000c0ffee"
 }Command `summary --bytecode -o yaml`:
 
 Summary generation successful. Summaries stored in 'package_summaries'
@@ -168,7 +187,9 @@ address_mapping.yaml
 summary_pkg
 External Command `cat package_summaries/0x0000000000000000000000000000000000000000000000000000000000c0ffee/a.yaml`:
 ---
-immediate_dependencies: []
+immediate_dependencies:
+  - address: "0x0000000000000000000000000000000000000000000000000000000000c0ffee"
+    name: b
 functions:
   f:
     index: 0
@@ -195,6 +216,15 @@ structs:
         x:
           index: 0
           type_: u64
+        y:
+          index: 1
+          type_:
+            Datatype:
+              module:
+                address: "0x0000000000000000000000000000000000000000000000000000000000c0ffee"
+                name: b
+              name: X
+              type_arguments: []
 enums: {}
 External Command `cat package_summaries/0x0000000000000000000000000000000000000000000000000000000000c0ffee/b.yaml`:
 ---

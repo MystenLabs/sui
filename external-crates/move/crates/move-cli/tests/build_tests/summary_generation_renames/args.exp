@@ -1,0 +1,86 @@
+Command `summary`:
+INCLUDING DEPENDENCY C
+INCLUDING DEPENDENCY D
+BUILDING test
+
+Summary generation successful. Summaries stored in 'package_summaries'
+External Command `ls -1 package_summaries/`:
+A
+CA
+DA
+address_mapping.json
+External Command `cat package_summaries/A/A.json`:
+{
+  "doc": null,
+  "immediate_dependencies": [
+    {
+      "address": "CA",
+      "name": "A"
+    },
+    {
+      "address": "DA",
+      "name": "A"
+    }
+  ],
+  "attributes": [],
+  "functions": {
+    "foo": {
+      "source_index": 0,
+      "index": 0,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [],
+      "return_": []
+    }
+  },
+  "structs": {},
+  "enums": {}
+}External Command `cat package_summaries/CA/A.json`:
+{
+  "doc": null,
+  "immediate_dependencies": [],
+  "attributes": [],
+  "functions": {
+    "foo": {
+      "source_index": 0,
+      "index": 0,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [],
+      "return_": []
+    }
+  },
+  "structs": {},
+  "enums": {}
+}External Command `cat package_summaries/DA/A.json`:
+{
+  "doc": null,
+  "immediate_dependencies": [],
+  "attributes": [],
+  "functions": {
+    "foo": {
+      "source_index": 0,
+      "index": 0,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [],
+      "return_": []
+    }
+  },
+  "structs": {},
+  "enums": {}
+}External Command `cat package_summaries/address_mapping.json`:
+{
+  "A": "0x0000000000000000000000000000000000000000000000000000000000000003",
+  "CA": "0x000000000000000000000000000000000000000000000000000000000000000a",
+  "DA": "0x000000000000000000000000000000000000000000000000000000000000000d"
+}

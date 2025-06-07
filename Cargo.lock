@@ -15067,6 +15067,7 @@ dependencies = [
  "move-bytecode-source-map",
  "move-cli",
  "move-compiler",
+ "move-core-types",
  "move-disassembler",
  "move-ir-types",
  "move-package",

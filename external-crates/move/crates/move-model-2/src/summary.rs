@@ -5,11 +5,7 @@
 //! source code. The summaries include the signatures of all functions (potentially macros) and
 //! datatypes (structs and enums).
 
-use crate::{
-    TModuleId,
-    normalized::{self, ModuleId},
-    source_model,
-};
+use crate::{TModuleId, normalized, source_model};
 use indexmap::IndexMap;
 use move_binary_format::file_format;
 use move_compiler::{
@@ -52,6 +48,12 @@ pub struct Module {
     pub functions: IndexMap<Symbol, Function>,
     pub structs: IndexMap<Symbol, Struct>,
     pub enums: IndexMap<Symbol, Enum>,
+}
+
+#[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct ModuleId {
+    pub address: Symbol,
+    pub name: Symbol,
 }
 
 pub type Attributes = Vec<Attribute>;
@@ -229,30 +231,33 @@ pub struct Datatype {
     pub type_arguments: Vec<Type>,
 }
 
+pub type AddressMapping = BTreeMap<AccountAddress, Symbol>;
+pub type AddressMapped<'a, T> = (&'a AddressMapping, T);
+
 //**************************************************************************************************
 // Normalized
 //**************************************************************************************************
 
-impl From<&normalized::Packages> for Packages {
-    fn from(p: &normalized::Packages) -> Self {
+impl From<AddressMapped<'_, &normalized::Packages>> for Packages {
+    fn from((mapping, p): AddressMapped<'_, &normalized::Packages>) -> Self {
         let normalized::Packages { packages } = p;
         let packages = packages
             .iter()
-            .map(|(address, package)| (*address, package.into()))
+            .map(|(address, package)| (*address, (mapping, package).into()))
             .collect();
         Self { packages }
     }
 }
 
-impl From<&normalized::Package> for Package {
-    fn from(p: &normalized::Package) -> Self {
+impl From<AddressMapped<'_, &normalized::Package>> for Package {
+    fn from((mapping, p): AddressMapped<'_, &normalized::Package>) -> Self {
         let normalized::Package {
             package: _,
             modules,
         } = p;
         let modules = modules
             .iter()
-            .map(|(name, module)| (*name, module.into()))
+            .map(|(name, module)| (*name, (mapping, module).into()))
             .collect();
         Self {
             name: None, // set by ProgramInfo
@@ -261,8 +266,8 @@ impl From<&normalized::Package> for Package {
     }
 }
 
-impl From<&normalized::Module> for Module {
-    fn from(m: &normalized::Module) -> Self {
+impl From<AddressMapped<'_, &normalized::Module>> for Module {
+    fn from((mapping, m): AddressMapped<'_, &normalized::Module>) -> Self {
         let normalized::Module {
             immediate_dependencies,
             structs,
@@ -270,21 +275,24 @@ impl From<&normalized::Module> for Module {
             functions,
             ..
         } = m;
-        let immediate_dependencies = immediate_dependencies.iter().cloned().collect();
+        let immediate_dependencies = immediate_dependencies
+            .iter()
+            .map(|id| (mapping, id).into())
+            .collect();
         let functions = functions
             .iter()
             .enumerate()
-            .map(|(index, (name, function))| (*name, (index, &**function).into()))
+            .map(|(index, (name, function))| (*name, (mapping, (index, &**function)).into()))
             .collect();
         let structs = structs
             .iter()
             .enumerate()
-            .map(|(index, (name, s))| (*name, (index, &**s).into()))
+            .map(|(index, (name, s))| (*name, (mapping, (index, &**s)).into()))
             .collect();
         let enums = enums
             .iter()
             .enumerate()
-            .map(|(index, (name, e))| (*name, (index, &**e).into()))
+            .map(|(index, (name, e))| (*name, (mapping, (index, &**e)).into()))
             .collect();
         Self {
             doc: None,        // set by ProgramInfo
@@ -297,8 +305,8 @@ impl From<&normalized::Module> for Module {
     }
 }
 
-impl From<(usize, &normalized::Function)> for Function {
-    fn from((index, f): (usize, &normalized::Function)) -> Self {
+impl From<AddressMapped<'_, (usize, &normalized::Function)>> for Function {
+    fn from((mapping, (index, f)): AddressMapped<'_, (usize, &normalized::Function)>) -> Self {
         let normalized::Function {
             visibility,
             is_entry,
@@ -323,10 +331,10 @@ impl From<(usize, &normalized::Function)> for Function {
             .iter()
             .map(|t| Parameter {
                 name: None, // set by ProgramInfo
-                type_: (&**t).into(),
+                type_: (mapping, &**t).into(),
             })
             .collect();
-        let return_ = return_.iter().map(|t| (&**t).into()).collect();
+        let return_ = return_.iter().map(|t| (mapping, &**t).into()).collect();
         Self {
             index,
             source_index: None, // set by ProgramInfo
@@ -358,8 +366,8 @@ impl From<file_format::AbilitySet> for AbilitySet {
     }
 }
 
-impl From<(usize, &normalized::Struct)> for Struct {
-    fn from((index, s): (usize, &normalized::Struct)) -> Self {
+impl From<AddressMapped<'_, (usize, &normalized::Struct)>> for Struct {
+    fn from((mapping, (index, s)): AddressMapped<'_, (usize, &normalized::Struct)>) -> Self {
         let normalized::Struct {
             abilities,
             type_parameters,
@@ -378,7 +386,7 @@ impl From<(usize, &normalized::Struct)> for Struct {
                 .0
                 .iter()
                 .enumerate()
-                .map(|(index, (n, f))| (*n, (index, &**f).into()))
+                .map(|(index, (n, f))| (*n, (mapping, (index, &**f)).into()))
                 .collect(),
         };
         Self {
@@ -392,8 +400,8 @@ impl From<(usize, &normalized::Struct)> for Struct {
     }
 }
 
-impl From<(usize, &normalized::Enum)> for Enum {
-    fn from((index, e): (usize, &normalized::Enum)) -> Self {
+impl From<AddressMapped<'_, (usize, &normalized::Enum)>> for Enum {
+    fn from((mapping, (index, e)): AddressMapped<'_, (usize, &normalized::Enum)>) -> Self {
         let normalized::Enum {
             type_parameters,
             abilities,
@@ -409,7 +417,7 @@ impl From<(usize, &normalized::Enum)> for Enum {
         let variants = variants
             .iter()
             .enumerate()
-            .map(|(index, (name, v))| (*name, (index, &**v).into()))
+            .map(|(index, (name, v))| (*name, (mapping, (index, &**v)).into()))
             .collect();
         Self {
             index,
@@ -422,8 +430,8 @@ impl From<(usize, &normalized::Enum)> for Enum {
     }
 }
 
-impl From<(usize, &normalized::Variant)> for Variant {
-    fn from((index, v): (usize, &normalized::Variant)) -> Self {
+impl From<AddressMapped<'_, (usize, &normalized::Variant)>> for Variant {
+    fn from((mapping, (index, v)): AddressMapped<(usize, &normalized::Variant)>) -> Self {
         let normalized::Variant { fields, .. } = v;
         let fields = Fields {
             positional_fields: false, // set by ProgramInfo
@@ -431,7 +439,7 @@ impl From<(usize, &normalized::Variant)> for Variant {
                 .0
                 .iter()
                 .enumerate()
-                .map(|(index, (n, f))| (*n, (index, &**f).into()))
+                .map(|(index, (n, f))| (*n, (mapping, (index, &**f)).into()))
                 .collect(),
         };
         Self {
@@ -442,13 +450,13 @@ impl From<(usize, &normalized::Variant)> for Variant {
     }
 }
 
-impl From<(usize, &normalized::Field)> for Field {
-    fn from((index, f): (usize, &normalized::Field)) -> Self {
+impl From<AddressMapped<'_, (usize, &normalized::Field)>> for Field {
+    fn from((mapping, (index, f)): AddressMapped<'_, (usize, &normalized::Field)>) -> Self {
         let normalized::Field { type_, .. } = f;
         Self {
             index,
             doc: None, // set by ProgramInfo
-            type_: Type::from(type_),
+            type_: (mapping, type_).into(),
         }
     }
 }
@@ -469,8 +477,8 @@ impl From<file_format::DatatypeTyParameter> for DatatypeTParam {
     }
 }
 
-impl From<&normalized::Type> for Type {
-    fn from(ty: &normalized::Type) -> Self {
+impl From<AddressMapped<'_, &normalized::Type>> for Type {
+    fn from((mapping, ty): AddressMapped<'_, &normalized::Type>) -> Self {
         match ty {
             normalized::Type::Bool => Type::Bool,
             normalized::Type::U8 => Type::U8,
@@ -482,15 +490,34 @@ impl From<&normalized::Type> for Type {
             normalized::Type::Address => Type::Address,
             normalized::Type::Signer => Type::Signer,
             normalized::Type::Datatype(d) => Type::Datatype(Box::new(Datatype {
-                module: d.module,
+                module: (mapping, &d.module).into(),
                 name: d.name,
-                type_arguments: d.type_arguments.iter().map(Type::from).collect(),
+                type_arguments: d
+                    .type_arguments
+                    .iter()
+                    .map(|ty| (mapping, ty).into())
+                    .collect(),
             })),
-            normalized::Type::Vector(t) => Type::Vector(Box::new((&**t).into())),
+            normalized::Type::Vector(t) => Type::Vector(Box::new((mapping, &**t).into())),
             normalized::Type::Reference(is_mut, t) => {
-                Type::Reference(*is_mut, Box::new((&**t).into()))
+                Type::Reference(*is_mut, Box::new((mapping, &**t).into()))
             }
             normalized::Type::TypeParameter(t) => Type::TypeParameter(*t),
+        }
+    }
+}
+
+impl From<AddressMapped<'_, &normalized::ModuleId>> for ModuleId {
+    fn from((mapping, id): AddressMapped<'_, &normalized::ModuleId>) -> Self {
+        let address = mapping.get(&id.address).cloned().unwrap_or_else(|| {
+            Symbol::from(format!(
+                "{}",
+                id.address.to_canonical_display(/* with_prefix */ true)
+            ))
+        });
+        Self {
+            address,
+            name: id.name,
         }
     }
 }
@@ -533,7 +560,7 @@ impl Module {
             .filter(|(_, finfo)| finfo.macro_.is_some())
         {
             self.functions
-                .insert(name.0.value, Function::from_macro(finfo));
+                .insert(name.0.value, Function::from_macro(finfo, module));
         }
 
         for (name, s) in &mut self.structs {
@@ -569,12 +596,15 @@ impl Function {
             .for_each(|(Parameter { name, type_ }, (_, param_name, param_ty))| {
                 debug_assert!(name.is_none());
                 *name = Some(param_name.value.name);
-                *type_ = param_ty.into();
+                *type_ = (&function.model().root_named_address_reverse_map, param_ty).into();
             });
-        self.return_ = compiler_multiple_types(&info.signature.return_type);
+        self.return_ = compiler_multiple_types(
+            &info.signature.return_type,
+            &function.model().root_named_address_reverse_map,
+        );
     }
 
-    pub fn from_macro(finfo: &FunctionInfo) -> Self {
+    pub fn from_macro(finfo: &FunctionInfo, module: &source_model::Module) -> Self {
         assert!(finfo.macro_.is_some());
         Self {
             source_index: Some(finfo.index),
@@ -599,10 +629,13 @@ impl Function {
                 .iter()
                 .map(|(_, param_name, type_)| Parameter {
                     name: Some(param_name.value.name),
-                    type_: type_.into(),
+                    type_: (&module.model().root_named_address_reverse_map, type_).into(),
                 })
                 .collect(),
-            return_: compiler_multiple_types(&finfo.signature.return_type),
+            return_: compiler_multiple_types(
+                &finfo.signature.return_type,
+                &module.model().root_named_address_reverse_map,
+            ),
         }
     }
 }
@@ -676,7 +709,7 @@ impl Variant {
         debug_assert!(self.doc.is_none());
         let info = v.info();
         self.doc = Some(doc_comment(&info.doc));
-        self.fields.annotate_variant(&info.fields);
+        self.fields.annotate_variant(&info.fields, v);
     }
 }
 
@@ -700,7 +733,7 @@ impl Fields {
         }
     }
 
-    pub fn annotate_variant(&mut self, fields: &N::VariantFields) {
+    pub fn annotate_variant(&mut self, fields: &N::VariantFields, variant: &source_model::Variant) {
         debug_assert!(!self.positional_fields);
         let (is_positional, fields) = match fields {
             N::VariantFields::Defined(is_positional, fields) => (*is_positional, fields),
@@ -716,28 +749,30 @@ impl Fields {
             let field = self.fields.get_mut(&pos_name_of(name.0.value)).unwrap();
             debug_assert!(field.doc.is_none());
             field.doc = Some(doc_comment(doc));
-            field.type_ = ty.into();
+            field.type_ = (&variant.model().root_named_address_reverse_map, ty).into();
         }
     }
 }
 
-impl From<&N::Type> for Type {
-    fn from(sp!(_, ty_): &N::Type) -> Self {
+impl From<AddressMapped<'_, &N::Type>> for Type {
+    fn from((mapping, sp!(_, ty_)): AddressMapped<'_, &N::Type>) -> Self {
         match ty_ {
             N::Type_::Unit => Type::Tuple(vec![]),
-            N::Type_::Ref(mut_, inner) => Type::Reference(*mut_, Box::new((&**inner).into())),
+            N::Type_::Ref(mut_, inner) => {
+                Type::Reference(*mut_, Box::new((mapping, &**inner).into()))
+            }
             N::Type_::Param(tp) => Type::NamedTypeParameter(tp.user_specified_name.value),
             N::Type_::Apply(_, sp!(_, tn_), tys) => match tn_ {
                 N::TypeName_::ModuleType(m, n) => Type::Datatype(Box::new(Datatype {
-                    module: m.value.module_id(),
+                    module: (mapping, &m.value.module_id()).into(),
                     name: n.0.value,
-                    type_arguments: tys.iter().map(Type::from).collect(),
+                    type_arguments: tys.iter().map(|ty| (mapping, ty).into()).collect(),
                 })),
                 N::TypeName_::Multiple(_) => {
                     if tys.len() == 1 {
-                        (&tys[0]).into()
+                        (mapping, &tys[0]).into()
                     } else {
-                        Type::Tuple(tys.iter().map(Type::from).collect())
+                        Type::Tuple(tys.iter().map(|ty| (mapping, ty).into()).collect())
                     }
                 }
                 N::TypeName_::Builtin(sp!(_, bt)) => match bt {
@@ -750,12 +785,14 @@ impl From<&N::Type> for Type {
                     N::BuiltinTypeName_::U256 => Type::U256,
                     N::BuiltinTypeName_::Address => Type::Address,
                     N::BuiltinTypeName_::Signer => Type::Signer,
-                    N::BuiltinTypeName_::Vector => Type::Vector(Box::new((&tys[0]).into())),
+                    N::BuiltinTypeName_::Vector => {
+                        Type::Vector(Box::new((mapping, &tys[0]).into()))
+                    }
                 },
             },
             N::Type_::Fun(params, ret_) => Type::Fun(
-                params.iter().map(Type::from).collect(),
-                Box::new((&**ret_).into()),
+                params.iter().map(|ty| (mapping, ty).into()).collect(),
+                Box::new((mapping, &**ret_).into()),
             ),
             N::Type_::Var(_) | N::Type_::Anything | N::Type_::UnresolvedError => Type::Any,
         }
@@ -766,14 +803,18 @@ impl From<&N::Type> for Type {
 // FromSource annotations
 //**************************************************************************************************
 
-fn compiler_multiple_types(ty @ sp!(_, ty_): &N::Type) -> Vec<Type> {
+fn compiler_multiple_types(
+    ty @ sp!(_, ty_): &N::Type,
+    reverse_address_mapping: &AddressMapping,
+) -> Vec<Type> {
     match ty_ {
         N::Type_::Unit => vec![],
-        N::Type_::Apply(_, sp!(_, N::TypeName_::Multiple(_)), tys) => {
-            tys.iter().map(Type::from).collect()
-        }
+        N::Type_::Apply(_, sp!(_, N::TypeName_::Multiple(_)), tys) => tys
+            .iter()
+            .map(|ty| (reverse_address_mapping, ty).into())
+            .collect(),
         _ => {
-            vec![Type::from(ty)]
+            vec![(reverse_address_mapping, ty).into()]
         }
     }
 }
