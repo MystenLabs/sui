@@ -419,9 +419,11 @@ pub async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertifica
         .await
         .unwrap();
 
-    authority
-        .execution_scheduler()
-        .enqueue(certs, &authority.epoch_store_for_testing());
+    authority.execution_scheduler().enqueue(
+        certs,
+        &authority.epoch_store_for_testing(),
+        SchedulingSource::NonFastPath,
+    );
 }
 
 pub async fn send_consensus_no_execution(authority: &AuthorityState, cert: &VerifiedCertificate) {

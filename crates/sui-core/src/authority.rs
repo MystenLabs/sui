@@ -8,6 +8,7 @@ use crate::execution_cache::ExecutionCacheTraitPointers;
 use crate::execution_cache::TransactionCacheRead;
 use crate::execution_scheduler::ExecutionSchedulerAPI;
 use crate::execution_scheduler::ExecutionSchedulerWrapper;
+use crate::execution_scheduler::SchedulingSource;
 use crate::jsonrpc_index::CoinIndexKey2;
 use crate::rpc_index::RpcIndexStore;
 use crate::transaction_outputs::TransactionOutputs;
@@ -206,6 +207,10 @@ mod batch_verification_tests;
 #[cfg(test)]
 #[path = "unit_tests/coin_deny_list_tests.rs"]
 mod coin_deny_list_tests;
+
+#[cfg(test)]
+#[path = "unit_tests/mysticeti_fastpath_execution_tests.rs"]
+mod mysticeti_fastpath_execution_tests;
 
 #[cfg(test)]
 #[path = "unit_tests/auth_unit_test_utils.rs"]
@@ -1281,6 +1286,7 @@ impl AuthorityState {
         certificate: &VerifiedExecutableTransaction,
         mut expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        scheduling_source: SchedulingSource,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let _scope = monitored_scope("Execution::try_execute_immediately");
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
@@ -1290,12 +1296,22 @@ impl AuthorityState {
         // prevent concurrent executions of the same tx.
         let tx_guard = epoch_store.acquire_tx_guard(certificate)?;
 
-        // The cert could have been processed by a concurrent attempt of the same cert, so check if
-        // the effects have already been written.
-        if let Some(effects) = self
-            .get_transaction_cache_reader()
-            .get_executed_effects(tx_digest)
+        let tx_cache_reader = self.get_transaction_cache_reader();
+        if epoch_store.protocol_config().mysticeti_fastpath()
+            && !certificate.contains_shared_object()
+            && scheduling_source == SchedulingSource::NonFastPath
         {
+            // If this transaction is not scheduled from fastpath, it must be either
+            // from consensus or from checkpoint, i.e. it must be finalized.
+            // To avoid re-executing fastpath transactions, we always attempt to flush
+            // fastpath outputs if it is already there.
+            // If it does get flushed, the effects will appear in the cache, and we will
+            // skip the execution in the next check.
+            self.get_cache_writer()
+                .flush_fastpath_transaction_outputs(*tx_digest, epoch_store.epoch());
+        }
+
+        if let Some(effects) = tx_cache_reader.get_executed_effects(tx_digest) {
             if let Some(expected_effects_digest) = expected_effects_digest {
                 assert_eq!(
                     effects.digest(),
@@ -1329,6 +1345,7 @@ impl AuthorityState {
                 input_objects,
                 expected_effects_digest,
                 epoch_store,
+                scheduling_source,
             )
             .tap_err(|e| info!("process_certificate failed: {e}"))
             .tap_ok(|(fx, _)| {
@@ -1376,6 +1393,7 @@ impl AuthorityState {
                 &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
                 None,
                 &epoch_store,
+                SchedulingSource::NonFastPath,
             )
             .await?;
         let signed_effects = self.sign_effects(effects, &epoch_store)?;
@@ -1441,6 +1459,7 @@ impl AuthorityState {
         input_objects: InputObjects,
         expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        scheduling_source: SchedulingSource,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let process_certificate_start_time = tokio::time::Instant::now();
         let tx_digest = *certificate.digest();
@@ -1498,53 +1517,54 @@ impl AuthorityState {
         fail_point!("crash");
 
         let effects = transaction_outputs.effects.clone();
-        match self.commit_certificate(
-            certificate,
-            transaction_outputs,
-            execution_guard,
-            epoch_store,
-        ) {
-            Err(err) => {
+        if scheduling_source == SchedulingSource::MysticetiFastPath {
+            self.get_cache_writer()
+                .write_fastpath_transaction_outputs(transaction_outputs.into());
+        } else {
+            let commit_result = self.commit_certificate(
+                certificate,
+                transaction_outputs,
+                execution_guard,
+                epoch_store,
+            );
+            if let Err(err) = commit_result {
                 error!(?tx_digest, "Error committing transaction: {err}");
                 tx_guard.release();
                 return Err(err);
             }
-            Ok(_) => {
-                // commit_certificate finished, the tx is fully committed to the store.
-                tx_guard.commit_tx();
+
+            if let TransactionKind::AuthenticatorStateUpdate(auth_state) =
+                certificate.data().transaction_data().kind()
+            {
+                if let Some(err) = &execution_error_opt {
+                    debug_fatal!("Authenticator state update failed: {:?}", err);
+                }
+                epoch_store.update_authenticator_state(auth_state);
+
+                // double check that the signature verifier always matches the authenticator state
+                if cfg!(debug_assertions) {
+                    let authenticator_state = get_authenticator_state(self.get_object_store())
+                        .expect("Read cannot fail")
+                        .expect("Authenticator state must exist");
+
+                    let mut sys_jwks: Vec<_> = authenticator_state
+                        .active_jwks
+                        .into_iter()
+                        .map(|jwk| (jwk.jwk_id, jwk.jwk))
+                        .collect();
+                    let mut active_jwks: Vec<_> = epoch_store
+                        .signature_verifier
+                        .get_jwks()
+                        .into_iter()
+                        .collect();
+                    sys_jwks.sort();
+                    active_jwks.sort();
+
+                    assert_eq!(sys_jwks, active_jwks);
+                }
             }
         }
-
-        if let TransactionKind::AuthenticatorStateUpdate(auth_state) =
-            certificate.data().transaction_data().kind()
-        {
-            if let Some(err) = &execution_error_opt {
-                debug_fatal!("Authenticator state update failed: {:?}", err);
-            }
-            epoch_store.update_authenticator_state(auth_state);
-
-            // double check that the signature verifier always matches the authenticator state
-            if cfg!(debug_assertions) {
-                let authenticator_state = get_authenticator_state(self.get_object_store())
-                    .expect("Read cannot fail")
-                    .expect("Authenticator state must exist");
-
-                let mut sys_jwks: Vec<_> = authenticator_state
-                    .active_jwks
-                    .into_iter()
-                    .map(|jwk| (jwk.jwk_id, jwk.jwk))
-                    .collect();
-                let mut active_jwks: Vec<_> = epoch_store
-                    .signature_verifier
-                    .get_jwks()
-                    .into_iter()
-                    .collect();
-                sys_jwks.sort();
-                active_jwks.sort();
-
-                assert_eq!(sys_jwks, active_jwks);
-            }
-        }
+        tx_guard.commit_tx();
 
         epoch_store.record_local_execution_time(
             certificate.data().transaction_data(),
@@ -3127,14 +3147,17 @@ impl AuthorityState {
     }
 
     /// Adds transactions / certificates to transaction manager for ordered execution.
+    /// TODO: Cleanup this function.
     pub fn enqueue_transactions_for_execution(
         &self,
         txns: Vec<VerifiedExecutableTransaction>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
-        self.execution_scheduler.enqueue(txns, epoch_store)
+        self.execution_scheduler
+            .enqueue(txns, epoch_store, SchedulingSource::NonFastPath)
     }
 
+    /// TODO: Cleanup this function.
     pub fn enqueue_certificates_for_execution(
         &self,
         certs: Vec<VerifiedCertificate>,
@@ -5544,9 +5567,11 @@ impl RandomnessRoundReceiver {
             .get_cache_commit()
             .persist_transaction(&transaction);
 
-        self.authority_state
-            .execution_scheduler()
-            .enqueue(vec![transaction], &epoch_store);
+        self.authority_state.execution_scheduler().enqueue(
+            vec![transaction],
+            &epoch_store,
+            SchedulingSource::NonFastPath,
+        );
 
         let authority_state = self.authority_state.clone();
         spawn_monitored_task!(async move {

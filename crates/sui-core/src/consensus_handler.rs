@@ -55,7 +55,7 @@ use crate::{
     consensus_throughput_calculator::ConsensusThroughputCalculator,
     consensus_types::consensus_output_api::{parse_block_transactions, ConsensusCommitAPI},
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
-    execution_scheduler::{ExecutionSchedulerAPI, ExecutionSchedulerWrapper},
+    execution_scheduler::{ExecutionSchedulerAPI, ExecutionSchedulerWrapper, SchedulingSource},
     scoring_decision::update_low_scoring_authorities,
     wait_for_effects_request::ConsensusTxPosition,
 };
@@ -864,7 +864,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         fail_point!("crash"); // for tests that produce random crashes
 
         self.transaction_manager_sender
-            .send(executable_transactions);
+            .send(executable_transactions, SchedulingSource::NonFastPath);
     }
 }
 
@@ -873,7 +873,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 #[derive(Clone)]
 pub(crate) struct TransactionManagerSender {
     // Using unbounded channel to avoid blocking consensus commit and transaction handler.
-    sender: monitored_mpsc::UnboundedSender<Vec<VerifiedExecutableTransaction>>,
+    sender: monitored_mpsc::UnboundedSender<(Vec<VerifiedExecutableTransaction>, SchedulingSource)>,
 }
 
 impl TransactionManagerSender {
@@ -886,18 +886,25 @@ impl TransactionManagerSender {
         Self { sender }
     }
 
-    fn send(&self, transactions: Vec<VerifiedExecutableTransaction>) {
-        let _ = self.sender.send(transactions);
+    fn send(
+        &self,
+        transactions: Vec<VerifiedExecutableTransaction>,
+        scheduling_source: SchedulingSource,
+    ) {
+        let _ = self.sender.send((transactions, scheduling_source));
     }
 
     async fn run(
-        mut recv: monitored_mpsc::UnboundedReceiver<Vec<VerifiedExecutableTransaction>>,
+        mut recv: monitored_mpsc::UnboundedReceiver<(
+            Vec<VerifiedExecutableTransaction>,
+            SchedulingSource,
+        )>,
         execution_scheduler: Arc<ExecutionSchedulerWrapper>,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) {
-        while let Some(transactions) = recv.recv().await {
+        while let Some((transactions, scheduling_source)) = recv.recv().await {
             let _guard = monitored_scope("ConsensusHandler::enqueue");
-            execution_scheduler.enqueue(transactions, &epoch_store);
+            execution_scheduler.enqueue(transactions, &epoch_store, scheduling_source);
         }
     }
 }
@@ -1313,7 +1320,7 @@ impl ConsensusBlockHandler {
             .consensus_block_handler_fastpath_executions
             .inc_by(executable_transactions.len() as u64);
         self.transaction_manager_sender
-            .send(executable_transactions);
+            .send(executable_transactions, SchedulingSource::MysticetiFastPath);
     }
 }
 
@@ -1710,14 +1717,15 @@ mod tests {
                 continue;
             }
             let digest = t.digest();
-            if let Ok(Ok(_)) = tokio::time::timeout(
+            if tokio::time::timeout(
                 std::time::Duration::from_secs(10),
-                state.notify_read_effects(*digest),
+                state
+                    .get_transaction_cache_reader()
+                    .notify_read_fastpath_transaction_outputs(&[*digest]),
             )
             .await
+            .is_err()
             {
-                // Effects exist as expected.
-            } else {
                 panic!("Transaction {} {} did not execute", i, digest);
             }
         }
