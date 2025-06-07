@@ -97,6 +97,18 @@ use sui_transaction_builder::{DataReader, TransactionBuilder};
 pub use sui_types as types;
 use sui_types::base_types::{ObjectID, ObjectInfo, SuiAddress};
 
+pub mod move_types {
+    pub use move_core_types::*;
+}
+
+pub mod keys {
+    pub use sui_keys::*;
+}
+
+pub mod crypto {
+    pub use shared_crypto::*;
+}
+
 use crate::apis::{CoinReadApi, EventApi, GovernanceApi, QuorumDriverApi, ReadApi};
 use crate::error::{Error, SuiRpcResult};
 
