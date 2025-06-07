@@ -19,22 +19,22 @@ pub trait ControlFlowGraph {
     fn block_end(&self, block_id: Self::BlockId) -> Self::InstructionIndex;
 
     /// Successors of the block ID in the bytecode vector
-    fn successors(&self, block_id: Self::BlockId) -> &[Self::BlockId];
+    fn successors(&self, block_id: Self::BlockId) -> impl Iterator<Item = Self::BlockId>;
 
     /// Return the next block in traversal order
     fn next_block(&self, block_id: Self::BlockId) -> Option<Self::BlockId>;
 
     /// Iterator over the indexes of instructions in this block
     fn instructions<'a>(
-        &self,
+        &'a self,
         function_code: &'a Self::Instructions,
         block_id: Self::BlockId,
-    ) -> impl IntoIterator<Item = (Self::InstructionIndex, &'a Self::Instruction)>
+    ) -> impl Iterator<Item = (Self::InstructionIndex, &'a Self::Instruction)>
     where
         Self::Instruction: 'a;
 
     /// Return an iterator over the blocks of the CFG
-    fn blocks(&self) -> Vec<Self::BlockId>;
+    fn blocks(&self) -> impl Iterator<Item = Self::BlockId>;
 
     /// Return the number of blocks (vertices) in the control flow graph
     fn num_blocks(&self) -> usize;
@@ -49,9 +49,6 @@ pub trait ControlFlowGraph {
     /// Checks if the edge from cur->next is a back edge
     /// returns false if the edge is not in the cfg
     fn is_back_edge(&self, cur: Self::BlockId, next: Self::BlockId) -> bool;
-
-    /// Return the number of back edges in the cfg
-    fn num_back_edges(&self) -> usize;
 }
 
 /// Used for the VM control flow graph
@@ -76,6 +73,7 @@ pub trait Instruction: Sized {
     fn is_branch(&self) -> bool;
 }
 
+#[derive(Debug, Clone)]
 struct BasicBlock<InstructionIndex> {
     exit: InstructionIndex,
     successors: Vec<InstructionIndex>,
@@ -84,6 +82,7 @@ struct BasicBlock<InstructionIndex> {
 /// The control flow graph that we build from the bytecode.
 /// Assumes a list of bytecode isntructions that satisfy the invariants specified in the VM's
 /// file format.
+#[derive(Debug, Clone)]
 pub struct VMControlFlowGraph<I: Instruction> {
     /// The basic blocks
     blocks: BTreeMap<I::Index, BasicBlock<I::Index>>,
@@ -290,15 +289,14 @@ impl<I: Instruction> VMControlFlowGraph<I> {
         let mut seen = BTreeSet::new();
 
         ret.push(block_id);
-        seen.insert(&block_id);
+        seen.insert(block_id);
 
         while index < ret.len() {
             let block_id = ret[index];
             index += 1;
-            let successors = self.successors(block_id);
-            for block_id in successors.iter() {
+            for block_id in self.successors(block_id) {
                 if !seen.contains(&block_id) {
-                    ret.push(*block_id);
+                    ret.push(block_id);
                     seen.insert(block_id);
                 }
             }
@@ -309,6 +307,12 @@ impl<I: Instruction> VMControlFlowGraph<I> {
 
     pub fn reachable_from(&self, block_id: I::Index) -> Vec<I::Index> {
         self.traverse_by(block_id)
+    }
+
+    pub fn num_back_edges(&self) -> usize {
+        self.loop_heads
+            .iter()
+            .fold(0, |acc, (_, edges)| acc + edges.len())
     }
 }
 
@@ -333,8 +337,8 @@ impl<I: Instruction> ControlFlowGraph for VMControlFlowGraph<I> {
         self.blocks[&block_id].exit
     }
 
-    fn successors(&self, block_id: Self::BlockId) -> &[Self::BlockId] {
-        &self.blocks[&block_id].successors
+    fn successors(&self, block_id: Self::BlockId) -> impl Iterator<Item = Self::BlockId> {
+        self.blocks[&block_id].successors.iter().copied()
     }
 
     fn next_block(&self, block_id: Self::BlockId) -> Option<I::Index> {
@@ -346,7 +350,7 @@ impl<I: Instruction> ControlFlowGraph for VMControlFlowGraph<I> {
         &self,
         function_code: &'a [I],
         block_id: Self::BlockId,
-    ) -> impl IntoIterator<Item = (Self::BlockId, &'a I)>
+    ) -> impl Iterator<Item = (Self::BlockId, &'a I)>
     where
         I: 'a,
     {
@@ -355,8 +359,8 @@ impl<I: Instruction> ControlFlowGraph for VMControlFlowGraph<I> {
         (start..=end).map(|pc| (I::usize_as_index(pc), &function_code[pc]))
     }
 
-    fn blocks(&self) -> Vec<Self::BlockId> {
-        self.blocks.keys().cloned().collect()
+    fn blocks(&self) -> impl Iterator<Item = Self::BlockId> {
+        self.blocks.keys().copied()
     }
 
     fn num_blocks(&self) -> usize {
@@ -375,11 +379,5 @@ impl<I: Instruction> ControlFlowGraph for VMControlFlowGraph<I> {
         self.loop_heads
             .get(&next)
             .is_some_and(|back_edges| back_edges.contains(&cur))
-    }
-
-    fn num_back_edges(&self) -> usize {
-        self.loop_heads
-            .iter()
-            .fold(0, |acc, (_, edges)| acc + edges.len())
     }
 }

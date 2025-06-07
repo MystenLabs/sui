@@ -60,12 +60,13 @@ pub fn analyze_function<TF: TransferFunctions, M: Meter + ?Sized>(
         meter,
         transfer_functions,
     };
-    absint::analyze_function(
+    let _states = absint::analyze_function(
         &mut interpreter,
         &function_context.cfg,
         &function_context.code.code,
         initial_state,
-    )
+    )?;
+    Ok(())
 }
 
 /// A `FunctionContext` holds all the information needed by the verifier for `FunctionDefinition`.`
@@ -164,8 +165,20 @@ impl<M: Meter + ?Sized, TF: TransferFunctions> absint::AbstractInterpreter
         pre.join(post, self.meter)
     }
 
-    fn visit_block_execution(&mut self, _block_id: Self::BlockId) -> Result<(), Self::Error> {
+    fn visit_block_pre_execution(
+        &mut self,
+        _block_id: Self::BlockId,
+        _invariant: &mut absint::BlockInvariant<Self::State>,
+    ) -> Result<(), Self::Error> {
         self.meter.add(Scope::Function, EXECUTE_BLOCK_BASE_COST)
+    }
+
+    fn visit_block_post_execution(
+        &mut self,
+        _block_id: Self::BlockId,
+        _invariant: &mut absint::BlockInvariant<Self::State>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
     }
 
     fn visit_successor(&mut self, _block_id: Self::BlockId) -> Result<(), Self::Error> {
@@ -182,10 +195,11 @@ impl<M: Meter + ?Sized, TF: TransferFunctions> absint::AbstractInterpreter
 
     fn execute(
         &mut self,
+        _block_id: Self::BlockId,
+        bounds: (CodeOffset, CodeOffset),
         state: &mut Self::State,
-        bounds: (Self::InstructionIndex, Self::InstructionIndex),
-        offset: Self::InstructionIndex,
-        instr: &Self::Instruction,
+        offset: CodeOffset,
+        instr: &Bytecode,
     ) -> Result<(), Self::Error> {
         self.transfer_functions
             .execute(state, instr, offset, bounds, self.meter)
