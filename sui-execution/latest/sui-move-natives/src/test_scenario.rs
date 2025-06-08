@@ -146,6 +146,7 @@ pub fn end_transaction(
         loaded_child_objects: _,
         created_object_ids,
         deleted_object_ids,
+        accumulator_events: _,
     } = match results {
         Ok(res) => res,
         Err(_) => {
@@ -363,6 +364,7 @@ pub fn end_transaction(
         deleted,
         transferred,
         user_events.len() as u64,
+        // TODO: do we need accumulator events here?
     );
     Ok(NativeResult::ok(legacy_test_cost(), smallvec![effects]))
 }
