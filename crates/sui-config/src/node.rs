@@ -251,13 +251,13 @@ pub struct ExecutionTimeObserverConfig {
     /// Unless target object utilization is exceeded by at least this amount, no observation
     /// will be shared with consensus.
     ///
-    /// If unspecified, this will default to `100` milliseconds.
+    /// If unspecified, this will default to `500` milliseconds.
     pub observation_sharing_object_utilization_threshold: Option<Duration>,
 
     /// Unless the current local observation differs from the last one we shared by at least this
     /// percentage, no observation will be shared with consensus.
     ///
-    /// If unspecified, this will default to `0.05`.
+    /// If unspecified, this will default to `0.1`.
     pub observation_sharing_diff_threshold: Option<f64>,
 
     /// Minimum interval between sharing multiple observations of the same key.
