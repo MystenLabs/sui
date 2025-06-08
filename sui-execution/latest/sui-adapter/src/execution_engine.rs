@@ -31,6 +31,7 @@ mod checked {
 
     use crate::adapter::new_move_vm;
     use crate::programmable_transactions;
+    use crate::sui_types::gas::SuiGasStatusAPI;
     use crate::type_layout_resolver::TypeLayoutResolver;
     use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
     use move_core_types::ident_str;
@@ -135,6 +136,7 @@ mod checked {
             }
         };
         let gas_price = gas_status.gas_price();
+        let rgp = gas_status.reference_gas_price();
         let mut gas_charger = GasCharger::new(
             transaction_digest,
             gas_data.payment,
@@ -147,6 +149,7 @@ mod checked {
             &transaction_digest,
             epoch_id,
             epoch_timestamp_ms,
+            rgp,
             gas_price,
             gas_data.budget,
             sponsor,
