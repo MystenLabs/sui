@@ -295,6 +295,12 @@ impl WarningFiltersBuilder {
         self.for_dependency = self.for_dependency || other.for_dependency;
     }
 
+    pub fn add_all(&mut self, filters: impl IntoIterator<Item = WarningFilter>) {
+        for filter in filters {
+            self.add(filter);
+        }
+    }
+
     pub fn add(&mut self, filter: WarningFilter) {
         let (prefix, category, code, name) = match filter {
             WarningFilter::All(prefix) => {

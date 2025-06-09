@@ -23,10 +23,15 @@ mod service;
 pub mod subscription;
 pub mod types;
 
+pub use crate::grpc::v2beta::ledger_service;
 pub use client::Client;
 pub use config::Config;
-pub use error::{ErrorDetails, ErrorReason, Result, RpcError};
+pub use error::{
+    CheckpointNotFoundError, ErrorDetails, ErrorReason, ObjectNotFoundError, Result, RpcError,
+};
 pub use metrics::RpcMetrics;
+pub use reader::TransactionNotFoundError;
+pub use service::protocol_config::config_to_proto;
 
 #[derive(Clone)]
 pub struct ServerVersion {

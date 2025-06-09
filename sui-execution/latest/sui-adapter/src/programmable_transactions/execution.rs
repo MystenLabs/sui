@@ -7,6 +7,7 @@ pub use checked::*;
 mod checked {
     use crate::{
         adapter::substitute_package_id,
+        data_store::sui_data_store::SuiDataStore,
         execution_mode::ExecutionMode,
         execution_value::{
             CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
@@ -15,7 +16,6 @@ mod checked {
         gas_charger::GasCharger,
         programmable_transactions::{
             context::*,
-            data_store::SuiDataStore,
             trace_utils::{
                 trace_move_call_end, trace_move_call_start, trace_ptb_summary, trace_split_coins,
                 trace_transfer,

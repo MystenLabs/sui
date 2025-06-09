@@ -4,6 +4,12 @@ AccountAddress:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
+AccumulatorAddress:
+  STRUCT:
+    - address:
+        TYPENAME: SuiAddress
+    - ty:
+        TYPENAME: TypeTag
 AccumulatorOperation:
   ENUM:
     0:
@@ -13,14 +19,17 @@ AccumulatorOperation:
 AccumulatorValue:
   ENUM:
     0:
-      U64:
+      Integer:
         NEWTYPE: U64
+    1:
+      IntegerTuple:
+        TUPLE:
+          - U64
+          - U64
 AccumulatorWriteV1:
   STRUCT:
-    - recipient:
-        TYPENAME: SuiAddress
-    - accumulator_type:
-        TYPENAME: StructTag
+    - address:
+        TYPENAME: AccumulatorAddress
     - operation:
         TYPENAME: AccumulatorOperation
     - value:

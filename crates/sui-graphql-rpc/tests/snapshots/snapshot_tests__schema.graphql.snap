@@ -4296,6 +4296,10 @@ type TransactionBlockEffects {
 	"""
 	errors: String
 	"""
+	The error code of the Move abort, populated if this transaction failed with a Move abort.
+	"""
+	abortCode: BigInt
+	"""
 	Transactions whose outputs this transaction depends upon.
 	"""
 	dependencies(first: Int, after: String, last: Int, before: String): DependencyConnection!

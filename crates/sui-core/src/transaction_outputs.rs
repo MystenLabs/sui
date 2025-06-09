@@ -3,6 +3,7 @@
 
 use std::collections::HashSet;
 use std::sync::Arc;
+use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::base_types::{FullObjectID, ObjectRef};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::inner_temporary_store::{InnerTemporaryStore, WrittenObjects};
@@ -10,10 +11,12 @@ use sui_types::storage::{FullObjectKey, InputKey, MarkerValue, ObjectKey};
 use sui_types::transaction::{TransactionDataAPI, VerifiedTransaction};
 
 /// TransactionOutputs
+#[derive(Debug, Clone)]
 pub struct TransactionOutputs {
     pub transaction: Arc<VerifiedTransaction>,
     pub effects: TransactionEffects,
     pub events: TransactionEvents,
+    pub accumulator_events: Vec<AccumulatorEvent>,
 
     pub markers: Vec<(FullObjectKey, MarkerValue)>,
     pub wrapped: Vec<ObjectKey>,
@@ -42,6 +45,7 @@ impl TransactionOutputs {
             mutable_inputs,
             written,
             events,
+            accumulator_events,
             loaded_runtime_objects: _,
             binary_config: _,
             runtime_packages_loaded_from_db: _,
@@ -182,6 +186,7 @@ impl TransactionOutputs {
             transaction: Arc::new(transaction),
             effects,
             events,
+            accumulator_events,
             markers,
             wrapped,
             deleted,
@@ -189,6 +194,22 @@ impl TransactionOutputs {
             new_locks_to_init,
             written,
             output_keys,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn new_for_testing(transaction: VerifiedTransaction, effects: TransactionEffects) -> Self {
+        Self {
+            transaction: Arc::new(transaction),
+            effects,
+            events: TransactionEvents { data: vec![] },
+            markers: vec![],
+            wrapped: vec![],
+            deleted: vec![],
+            locks_to_delete: vec![],
+            new_locks_to_init: vec![],
+            written: WrittenObjects::new(),
+            output_keys: vec![],
         }
     }
 }

@@ -78,11 +78,43 @@ impl BinaryConstants {
     /// The blob that must start a binary.
     pub const MOVE_MAGIC_SIZE: usize = 4;
     pub const MOVE_MAGIC: [u8; BinaryConstants::MOVE_MAGIC_SIZE] = [0xA1, 0x1C, 0xEB, 0x0B];
+    /// Used for testing and other modes, to explicitly disallow publication.
+    pub const UNPUBLISHABLE_MAGIC: [u8; BinaryConstants::MOVE_MAGIC_SIZE] =
+        [0xDE, 0xAD, 0xC0, 0xDE];
     /// The `DIEM_MAGIC` size, 4 byte for major version and 1 byte for table count.
     pub const HEADER_SIZE: usize = BinaryConstants::MOVE_MAGIC_SIZE + 5;
     /// A (Table Type, Start Offset, Byte Count) size, which is 1 byte for the type and
     /// 4 bytes for the offset/count.
     pub const TABLE_HEADER_SIZE: u8 = size_of::<u32>() as u8 * 2 + 1;
+
+    /// Given a potentail magic number, either decode it into a valid one or return an error
+    /// code to explain what went wrong.
+    pub fn decode_magic(magic: [u8; 4], count: usize) -> Result<MagicKind, MagicError> {
+        if count != BinaryConstants::MOVE_MAGIC_SIZE {
+            return Err(MagicError::BadSize);
+        }
+        match magic {
+            BinaryConstants::MOVE_MAGIC => Ok(MagicKind::Normal),
+            BinaryConstants::UNPUBLISHABLE_MAGIC => Ok(MagicKind::Unpublishable),
+            _ => Err(MagicError::BadNumber),
+        }
+    }
+}
+
+/// Types of magic numbers we allow.
+pub enum MagicKind {
+    /// Normal move magic number
+    Normal,
+    /// Unpublishable magic number
+    Unpublishable,
+}
+
+/// Types of errors when checking magic number.
+pub enum MagicError {
+    /// Bad magic number size
+    BadSize,
+    /// Bad magic number
+    BadNumber,
 }
 
 pub const TABLE_COUNT_MAX: u64 = 255;
@@ -224,7 +256,7 @@ pub enum SerializedNativeStructFlag {
 #[derive(Clone, Copy, Debug)]
 pub enum SerializedEnumFlag {
     // 0x1 is reserved for NATIVE if we ever decide to add it
-    DECLARED = 0x2, 
+    DECLARED = 0x2,
 }
 
 #[rustfmt::skip]

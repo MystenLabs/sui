@@ -9,8 +9,9 @@ use sui_macros::sim_test;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_test_transaction_builder::publish_basics_package_and_make_party_object;
 use sui_types::base_types::SuiAddress;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::object::Owner;
-use sui_types::transaction::ObjectArg;
+use sui_types::transaction::{CallArg, ObjectArg};
 use test_cluster::TestClusterBuilder;
 use tracing::info;
 
@@ -451,4 +452,565 @@ async fn party_object_transfer_multi_certs() {
         .get_transaction_cache_reader()
         .notify_read_executed_effects(&[repeat_tx_a_digest, repeat_tx_b_digest])
         .await;
+}
+
+/// Use a party object immutably.
+#[sim_test]
+async fn party_object_read() {
+    telemetry_subscribers::init_for_testing();
+
+    // Create a test cluster with enough gas coins for the below.
+    let num_reads = 10;
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_accounts(vec![
+            AccountConfig {
+                address: None,
+                gas_amounts: vec![DEFAULT_GAS_AMOUNT; num_reads / 2 + 1], // First account
+            },
+            AccountConfig {
+                address: None,
+                gas_amounts: vec![DEFAULT_GAS_AMOUNT; num_reads / 2 + 1], // Second account
+            },
+        ])
+        .build()
+        .await;
+
+    let (package, object) =
+        publish_basics_package_and_make_party_object(&test_cluster.wallet).await;
+    let package_id = package.0;
+    let object_id = object.0;
+    let mut object_initial_shared_version = object.1;
+
+    let accounts_and_gas = test_cluster
+        .wallet
+        .get_all_accounts_and_gas_objects()
+        .await
+        .unwrap();
+    let sender = accounts_and_gas[0].0;
+    let gas_coins_account1 = accounts_and_gas[0].1.clone();
+    let recipient = accounts_and_gas[1].0;
+    let gas_coins_account2 = accounts_and_gas[1].1.clone();
+
+    // Make some transactions that read the party object.
+    let mut all_digests = vec![];
+    for gas_coin in gas_coins_account1.iter().take(num_reads / 2) {
+        let transaction = test_cluster
+            .test_transaction_builder_with_gas_object(sender, *gas_coin)
+            .await
+            .move_call(
+                package_id,
+                "object_basics",
+                "get_value",
+                vec![CallArg::Object(ObjectArg::SharedObject {
+                    id: object_id,
+                    initial_shared_version: object_initial_shared_version,
+                    mutable: false,
+                })],
+            )
+            .build();
+        let signed = test_cluster.sign_transaction(&transaction);
+        let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
+        test_cluster
+            .create_certificate(signed.clone(), Some(client_ip))
+            .await
+            .unwrap();
+
+        let validators = test_cluster.get_validator_pubkeys();
+        test_cluster
+            .submit_transaction_to_validators(signed.clone(), &validators)
+            .await
+            .unwrap();
+        all_digests.push(*signed.digest());
+    }
+
+    // Make a transaction to transfer the party object to a different account in the cluster.
+    let transfer_gas = gas_coins_account1[num_reads / 2];
+    let transfer_transaction = test_cluster
+        .test_transaction_builder_with_gas_object(sender, transfer_gas)
+        .await
+        .call_object_party_transfer_single_owner(
+            package_id,
+            ObjectArg::SharedObject {
+                id: object_id,
+                initial_shared_version: object_initial_shared_version,
+                mutable: true,
+            },
+            recipient,
+        )
+        .build();
+    let signed_transfer = test_cluster.sign_transaction(&transfer_transaction);
+    let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
+    test_cluster
+        .create_certificate(signed_transfer.clone(), Some(client_ip))
+        .await
+        .unwrap();
+
+    let validators = test_cluster.get_validator_pubkeys();
+    let (transfer_effects, _) = test_cluster
+        .submit_transaction_to_validators(signed_transfer.clone(), &validators)
+        .await
+        .unwrap();
+    all_digests.push(*signed_transfer.digest());
+
+    // Find the party object in the mutated objects and get its new start version
+    let mutated_party = transfer_effects
+        .mutated()
+        .into_iter()
+        .find(|obj| matches!(obj.1, Owner::ConsensusAddressOwner { .. }))
+        .expect("Party object should be mutated");
+    object_initial_shared_version = mutated_party.1.start_version().unwrap();
+
+    // Make some more transactions that read the party object from the new owner.
+    for gas_coin in gas_coins_account2.iter().take(num_reads / 2) {
+        let transaction = test_cluster
+            .test_transaction_builder_with_gas_object(recipient, *gas_coin)
+            .await
+            .move_call(
+                package_id,
+                "object_basics",
+                "get_value",
+                vec![CallArg::Object(ObjectArg::SharedObject {
+                    id: object_id,
+                    initial_shared_version: object_initial_shared_version,
+                    mutable: false,
+                })],
+            )
+            .build();
+        let signed = test_cluster.sign_transaction(&transaction);
+        let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
+        test_cluster
+            .create_certificate(signed.clone(), Some(client_ip))
+            .await
+            .unwrap();
+
+        let validators = test_cluster.get_validator_pubkeys();
+        test_cluster
+            .submit_transaction_to_validators(signed.clone(), &validators)
+            .await
+            .unwrap();
+        all_digests.push(*signed.digest());
+    }
+
+    // Start a new fullnode and let it sync from genesis and wait for us to see all the
+    // transactions.
+    let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
+    let effects = fullnode
+        .state()
+        .get_transaction_cache_reader()
+        .notify_read_executed_effects(&all_digests)
+        .await;
+    assert_eq!(effects.len(), all_digests.len());
+    for effect in effects {
+        assert!(effect.status().is_ok(), "Transaction failed: {effect:?}");
+    }
+}
+
+/// Transfer a party object as the object owner and ensure grpc properly handles updating its
+/// indexes
+#[sim_test]
+async fn party_object_grpc() {
+    use sui_rpc_api::field_mask::FieldMask;
+    use sui_rpc_api::field_mask::FieldMaskUtil;
+    use sui_rpc_api::proto::rpc::v2alpha::live_data_service_client::LiveDataServiceClient;
+    use sui_rpc_api::proto::rpc::v2alpha::ListOwnedObjectsRequest;
+    use sui_rpc_api::proto::rpc::v2beta::ledger_service_client::LedgerServiceClient;
+    use sui_rpc_api::proto::rpc::v2beta::owner::OwnerKind;
+    use sui_rpc_api::proto::rpc::v2beta::GetObjectRequest;
+
+    let test_cluster = TestClusterBuilder::new().build().await;
+
+    let (package, object) =
+        publish_basics_package_and_make_party_object(&test_cluster.wallet).await;
+
+    let package_id = package.0;
+    let object_id = object.0;
+    let object_id_str = object_id.to_canonical_string(true);
+    let object_initial_shared_version = object.1;
+
+    let channel = tonic::transport::Channel::from_shared(test_cluster.rpc_url().to_owned())
+        .unwrap()
+        .connect()
+        .await
+        .unwrap();
+
+    let mut live_data_service_client = LiveDataServiceClient::new(channel.clone());
+    let mut ledger_service_client = LedgerServiceClient::new(channel);
+
+    // run a list operation to make sure the party object shows up for the current owner
+    let resp = ledger_service_client
+        .get_object(GetObjectRequest {
+            object_id: Some(object_id_str.clone()),
+            read_mask: Some(FieldMask::from_paths([
+                "object_id",
+                "version",
+                "digest",
+                "owner",
+                "object_type",
+            ])),
+
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_inner();
+    let original_owner = resp.owner.unwrap();
+    assert_eq!(original_owner.kind(), OwnerKind::ConsensusAddress);
+    assert!(original_owner.address.is_some());
+
+    let objects = live_data_service_client
+        .list_owned_objects(ListOwnedObjectsRequest {
+            owner: original_owner.address.clone(),
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .objects;
+
+    // We expect that we should be able to find the consensus owned object via list
+    assert!(objects.iter().any(|o| o.object_id() == object_id_str));
+
+    // Make a transaction to transfer the party object.
+    let transaction = test_cluster
+        .test_transaction_builder()
+        .await
+        .call_object_party_transfer_single_owner(
+            package_id,
+            ObjectArg::SharedObject {
+                id: object_id,
+                initial_shared_version: object_initial_shared_version,
+                mutable: true,
+            },
+            SuiAddress::ZERO,
+        )
+        .build();
+    test_cluster
+        .sign_and_execute_transaction(&transaction)
+        .await
+        .effects
+        .unwrap();
+
+    // Once we've transfered the object to another address we need to make sure that its owner is
+    // properly updated and that the owner index correctly updated
+    let resp = ledger_service_client
+        .get_object(GetObjectRequest {
+            object_id: Some(object_id_str.clone()),
+            read_mask: Some(FieldMask::from_paths([
+                "object_id",
+                "version",
+                "digest",
+                "owner",
+                "object_type",
+            ])),
+
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_inner();
+    let new_owner = resp.owner.unwrap();
+    assert_eq!(new_owner.kind(), OwnerKind::ConsensusAddress);
+    assert_eq!(new_owner.address, Some(SuiAddress::ZERO.to_string()));
+
+    let objects = live_data_service_client
+        .list_owned_objects(ListOwnedObjectsRequest {
+            owner: original_owner.address,
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .objects;
+
+    // We expect that the old owner shouldn't have this object listed in its index anymore
+    assert!(!objects.iter().any(|o| o.object_id() == object_id_str));
+
+    // Now we need to ensure that the object properly shows up in the new owner's index
+    let objects = live_data_service_client
+        .list_owned_objects(ListOwnedObjectsRequest {
+            owner: new_owner.address,
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .objects;
+    assert!(objects.iter().any(|o| o.object_id() == object_id_str))
+}
+
+/// Ensure that party coin objects show up in the owner index and then resolve ignored them for gas
+/// selection
+#[sim_test]
+async fn party_coin_grpc() {
+    use sui_rpc_api::field_mask::FieldMask;
+    use sui_rpc_api::field_mask::FieldMaskUtil;
+    use sui_rpc_api::proto::rpc::v2alpha::live_data_service_client::LiveDataServiceClient;
+    use sui_rpc_api::proto::rpc::v2alpha::ListOwnedObjectsRequest;
+    use sui_rpc_api::proto::rpc::v2alpha::ResolveTransactionRequest;
+    use sui_rpc_api::proto::rpc::v2beta::ledger_service_client::LedgerServiceClient;
+    use sui_rpc_api::proto::rpc::v2beta::owner::OwnerKind;
+    use sui_rpc_api::proto::rpc::v2beta::Argument;
+    use sui_rpc_api::proto::rpc::v2beta::Command;
+    use sui_rpc_api::proto::rpc::v2beta::GetObjectRequest;
+    use sui_rpc_api::proto::rpc::v2beta::Input;
+    use sui_rpc_api::proto::rpc::v2beta::MoveCall;
+    use sui_rpc_api::proto::rpc::v2beta::ProgrammableTransaction;
+    use sui_rpc_api::proto::rpc::v2beta::Transaction;
+    use sui_rpc_api::proto::rpc::v2beta::TransactionKind;
+    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+    use sui_types::transaction::{CallArg, ObjectArg, TransactionData};
+    use sui_types::Identifier;
+
+    let cluster = TestClusterBuilder::new().build().await;
+    let channel = tonic::transport::Channel::from_shared(cluster.rpc_url().to_owned())
+        .unwrap()
+        .connect()
+        .await
+        .unwrap();
+
+    let mut live_data_service_client = LiveDataServiceClient::new(channel.clone());
+    let mut ledger_service_client = LedgerServiceClient::new(channel);
+
+    // Make a transaction to transfer 1 gas coin that is Address owned and 1 gas coin that is
+    // ConsensusAddress owned
+    let (sender, gas) = cluster.wallet.get_one_account().await.unwrap();
+    let recipient = SuiAddress::ZERO;
+    let gas_coin = gas[0];
+    let party_coin = gas[1];
+    let owned_coin = gas[2];
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let recipient_arg = builder
+        .input(CallArg::Pure(bcs::to_bytes(&recipient).unwrap()))
+        .unwrap();
+    let party_owner = builder.programmable_move_call(
+        "0x2".parse().unwrap(),
+        Identifier::new("party").unwrap(),
+        Identifier::new("single_owner").unwrap(),
+        vec![],
+        vec![recipient_arg],
+    );
+    let party_coin_arg = builder
+        .input(CallArg::Object(ObjectArg::ImmOrOwnedObject(party_coin)))
+        .unwrap();
+    builder.programmable_move_call(
+        "0x2".parse().unwrap(),
+        Identifier::new("transfer").unwrap(),
+        Identifier::new("public_party_transfer").unwrap(),
+        vec!["0x2::coin::Coin<0x2::sui::SUI>".parse().unwrap()],
+        vec![party_coin_arg, party_owner],
+    );
+    builder.transfer_object(recipient, owned_coin).unwrap();
+    let ptb = builder.finish();
+
+    let gas_data = sui_types::transaction::GasData {
+        payment: vec![gas_coin],
+        owner: sender,
+        price: 1000,
+        budget: 100_000_000,
+    };
+
+    let kind = sui_types::transaction::TransactionKind::ProgrammableTransaction(ptb);
+    let tx_data = TransactionData::new_with_gas_data(kind, sender, gas_data);
+
+    cluster
+        .sign_and_execute_transaction(&tx_data)
+        .await
+        .effects
+        .unwrap();
+
+    // run a list operation to make sure the party and non-party coins show up
+    let resp = ledger_service_client
+        .get_object(GetObjectRequest {
+            object_id: Some(party_coin.0.to_canonical_string(true)),
+            read_mask: Some(FieldMask::from_paths([
+                "object_id",
+                "version",
+                "digest",
+                "owner",
+                "object_type",
+            ])),
+
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_inner();
+    let actual_owner = resp.owner.unwrap();
+    assert_eq!(actual_owner.kind(), OwnerKind::ConsensusAddress);
+    assert_eq!(actual_owner.address(), recipient.to_string());
+    assert!(actual_owner.version.is_some());
+
+    let objects = live_data_service_client
+        .list_owned_objects(ListOwnedObjectsRequest {
+            owner: Some(recipient.to_string()),
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .objects;
+
+    // We expect that we should be able to find the party coin
+    assert!(objects
+        .iter()
+        .any(|o| o.object_id() == party_coin.0.to_canonical_string(true)
+            && o.owner.as_ref().is_some_and(|owner| {
+                owner.kind() == OwnerKind::ConsensusAddress
+                    && owner.address() == recipient.to_string()
+                    && owner.version == actual_owner.version
+            })));
+    // We expect that we should be able to find the non-party coin
+    assert!(objects
+        .iter()
+        .any(|o| o.object_id() == owned_coin.0.to_canonical_string(true)
+            && o.owner.as_ref().is_some_and(|owner| {
+                owner.kind() == OwnerKind::Address
+                    && owner.address() == recipient.to_string()
+                    && owner.version.is_none()
+            })));
+
+    // Now we need to ensure that we can properly do gas selection when we have party-gas
+    let unresolved_transaction = Transaction {
+        kind: Some(TransactionKind::from(ProgrammableTransaction {
+            inputs: vec![Input {
+                object_id: Some("0x6".to_owned()),
+                ..Default::default()
+            }],
+            commands: vec![Command::from(MoveCall {
+                package: Some("0x2".to_owned()),
+                module: Some("clock".to_owned()),
+                function: Some("timestamp_ms".to_owned()),
+                type_arguments: vec![],
+                arguments: vec![Argument::new_input(0)],
+            })],
+        })),
+        sender: Some(recipient.to_string()),
+        ..Default::default()
+    };
+
+    let resolved = live_data_service_client
+        .resolve_transaction(ResolveTransactionRequest {
+            unresolved_transaction: Some(unresolved_transaction),
+            read_mask: Some(FieldMask::from_str("simulation")),
+        })
+        .await
+        .unwrap()
+        .into_inner();
+
+    // Assert that the simulation was successful
+    assert!(resolved
+        .simulation
+        .unwrap()
+        .transaction
+        .unwrap()
+        .effects
+        .unwrap()
+        .status
+        .unwrap()
+        .success
+        .unwrap());
+}
+
+/// Transfer a party object as the object owner and ensure jsonrpc properly handles updating its
+/// indexes
+#[sim_test]
+async fn party_object_jsonrpc() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+
+    let (package, object) =
+        publish_basics_package_and_make_party_object(&test_cluster.wallet).await;
+
+    let package_id = package.0;
+    let object_id = object.0;
+    let object_initial_shared_version = object.1;
+
+    let client = test_cluster.sui_client();
+
+    let object = client
+        .read_api()
+        .get_object_with_options(
+            object_id,
+            sui_json_rpc_types::SuiObjectDataOptions::new().with_owner(),
+        )
+        .await
+        .unwrap()
+        .data
+        .unwrap();
+    let original_owner = object.owner.unwrap();
+    assert!(matches!(
+        original_owner,
+        Owner::ConsensusAddressOwner { .. }
+    ));
+    let original_owner_address = original_owner.get_owner_address().unwrap();
+
+    let objects = client
+        .read_api()
+        .get_owned_objects(original_owner_address, None, None, None)
+        .await
+        .unwrap()
+        .data;
+
+    assert!(objects
+        .into_iter()
+        .any(|o| o.data.unwrap().object_id == object_id));
+
+    // Make a transaction to transfer the party object.
+    let transaction = test_cluster
+        .test_transaction_builder()
+        .await
+        .call_object_party_transfer_single_owner(
+            package_id,
+            ObjectArg::SharedObject {
+                id: object_id,
+                initial_shared_version: object_initial_shared_version,
+                mutable: true,
+            },
+            SuiAddress::ZERO,
+        )
+        .build();
+    test_cluster
+        .sign_and_execute_transaction(&transaction)
+        .await
+        .effects
+        .unwrap();
+
+    // Once we've transfered the object to another address we need to make sure that its owner is
+    // properly updated and that the owner index correctly updated
+    let object = client
+        .read_api()
+        .get_object_with_options(
+            object_id,
+            sui_json_rpc_types::SuiObjectDataOptions::new().with_owner(),
+        )
+        .await
+        .unwrap()
+        .data
+        .unwrap();
+    let new_owner = object.owner.unwrap();
+    assert!(matches!(new_owner, Owner::ConsensusAddressOwner { .. }));
+    let new_owner_address = new_owner.get_owner_address().unwrap();
+    assert_eq!(new_owner_address, SuiAddress::ZERO);
+
+    let objects = client
+        .read_api()
+        .get_owned_objects(original_owner_address, None, None, None)
+        .await
+        .unwrap()
+        .data;
+
+    assert!(!objects
+        .into_iter()
+        .any(|o| o.data.unwrap().object_id == object_id));
+
+    let objects = client
+        .read_api()
+        .get_owned_objects(new_owner_address, None, None, None)
+        .await
+        .unwrap()
+        .data;
+
+    assert!(objects
+        .into_iter()
+        .any(|o| o.data.unwrap().object_id == object_id));
 }

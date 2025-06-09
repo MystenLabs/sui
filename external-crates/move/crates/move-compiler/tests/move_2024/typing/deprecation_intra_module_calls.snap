@@ -14,22 +14,6 @@ warning[W04037]: deprecated usage
   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W04037]: deprecated usage
-   ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:15:26
-   │
-15 │     public fun other(y: &Y): &Y { y }
-   │                          ^ The struct '0x7::l::Y' is deprecated: Use the other struct instead.
-   │
-   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-warning[W04037]: deprecated usage
-   ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:15:31
-   │
-15 │     public fun other(y: &Y): &Y { y }
-   │                               ^ The struct '0x7::l::Y' is deprecated: Use the other struct instead.
-   │
-   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:21:9
    │
 21 │         internal();

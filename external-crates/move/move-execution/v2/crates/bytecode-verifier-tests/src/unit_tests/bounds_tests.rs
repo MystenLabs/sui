@@ -14,6 +14,7 @@ fn empty_module_no_errors() {
 fn invalid_default_module() {
     BoundsChecker::verify_module(&CompiledModule {
         version: file_format_common::VERSION_MAX,
+        publishable: true,
         ..Default::default()
     })
     .unwrap_err();

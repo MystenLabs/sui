@@ -71,6 +71,7 @@ use crate::{
     },
     checkpoints::CheckpointStore,
     mysticeti_adapter::LazyMysticetiClient,
+    transaction_outputs::TransactionOutputs,
     wait_for_effects_request::{
         ExecutedData, RejectReason, WaitForEffectsRequest, WaitForEffectsResponse,
     },
@@ -930,12 +931,17 @@ impl ValidatorService {
         include_events: bool,
         include_input_objects: bool,
         include_output_objects: bool,
+        fastpath_outputs: Option<Arc<TransactionOutputs>>,
     ) -> SuiResult<(Option<TransactionEvents>, Vec<Object>, Vec<Object>)> {
         let events = if include_events && effects.events_digest().is_some() {
-            Some(
-                self.state
-                    .get_transaction_events(effects.transaction_digest())?,
-            )
+            if let Some(fastpath_outputs) = &fastpath_outputs {
+                Some(fastpath_outputs.events.clone())
+            } else {
+                Some(
+                    self.state
+                        .get_transaction_events(effects.transaction_digest())?,
+                )
+            }
         } else {
             None
         };
@@ -947,7 +953,11 @@ impl ValidatorService {
         };
 
         let output_objects = if include_output_objects {
-            self.state.get_transaction_output_objects(effects)?
+            if let Some(fastpath_outputs) = &fastpath_outputs {
+                fastpath_outputs.written.values().cloned().collect()
+            } else {
+                self.state.get_transaction_output_objects(effects)?
+            }
         } else {
             vec![]
         };
@@ -1145,7 +1155,7 @@ impl ValidatorService {
         // In the meantime, however, if the initial status is fastpath certified,
         // it is still possible that the transaction is rejected post commit.
         // So we need to keep checking the status until it is finalized.
-        let effects = loop {
+        let (effects, fastpath_outputs) = loop {
             let transactions = [request.transaction_digest];
             tokio::select! {
                 second_status = consensus_tx_status_cache.notify_read_transaction_status(request.transaction_position, Some(cur_status)) => {
@@ -1179,8 +1189,16 @@ impl ValidatorService {
                     );
                     // unwrap is safe because notify_read_executed_effects is expected
                     // to return the same amount of effects as the provided transactions.
-                    break effects.pop().unwrap();
+                    break (effects.pop().unwrap(), None);
                 },
+                mut outputs = self.state.get_transaction_cache_reader().notify_read_fastpath_transaction_outputs(&transactions) => {
+                    debug!(
+                        tx_digest = ?request.transaction_digest,
+                        "Observed fastpath transaction outputs",
+                    );
+                    let outputs = outputs.pop().unwrap();
+                    break (outputs.effects.clone(), Some(outputs));
+                }
             }
         };
         let effects_digest = effects.digest();
@@ -1191,6 +1209,7 @@ impl ValidatorService {
                     request.include_details,
                     request.include_details,
                     request.include_details,
+                    fastpath_outputs,
                 )
                 .await?;
             Some(Box::new(ExecutedData {
