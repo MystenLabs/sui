@@ -8,6 +8,7 @@ pub mod policies;
 
 use dashmap::DashMap;
 use fs::File;
+use mysten_common::{debug_fatal, fatal};
 use prometheus::IntGauge;
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -97,7 +98,7 @@ impl TrafficController {
                     .into_iter()
                     .map(|ip_str| {
                         parse_ip(&ip_str).unwrap_or_else(|| {
-                            panic!("Failed to parse allowlist IP address: {:?}", ip_str)
+                            fatal!("Failed to parse allowlist IP address: {:?}", ip_str)
                         })
                     })
                     .collect();
@@ -162,7 +163,7 @@ impl TrafficController {
             .set(mem_drainfile_present as i64);
         let blocklists = match self.acl.clone() {
             Acl::Blocklists(blocklists) => blocklists,
-            Acl::Allowlist(_) => panic!("Allowlist ACL should not exist on spawn"),
+            Acl::Allowlist(_) => fatal!("Allowlist ACL should not exist on spawn"),
         };
         let tally_loop_blocklists = blocklists.clone();
         let clear_loop_blocklists = blocklists.clone();
@@ -322,7 +323,7 @@ impl TrafficController {
                     // that clearly the system is overloaded
                 }
                 Err(TrySendError::Closed(_)) => {
-                    panic!("TrafficController tally channel closed unexpectedly");
+                    debug_fatal!("TrafficController tally channel closed unexpectedly");
                 }
                 Ok(_) => {}
             }

@@ -1584,7 +1584,7 @@ impl ValidatorService {
                 }),
                 spam_weight,
                 timestamp: SystemTime::now(),
-            });
+            })
         }
         unwrapped_response
     }
