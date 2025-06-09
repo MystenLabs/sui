@@ -39,6 +39,7 @@ pub async fn execution_process(
         let certificate;
         let expected_effects_digest;
         let txn_ready_time;
+        let scheduling_source;
         let _executing_guard;
         tokio::select! {
             result = rx_ready_certificates.recv() => {
@@ -47,6 +48,7 @@ pub async fn execution_process(
                     expected_effects_digest = pending_cert.expected_effects_digest;
                     txn_ready_time = pending_cert.stats.ready_time.unwrap();
                     _executing_guard = pending_cert.executing_guard;
+                    scheduling_source = pending_cert.scheduling_source;
                 } else {
                     // Should only happen after the AuthorityState has shut down and tx_ready_certificate
                     // has been dropped by TransactionManager.
@@ -121,6 +123,7 @@ pub async fn execution_process(
                 &certificate,
                 expected_effects_digest,
                 &epoch_store_clone,
+                scheduling_source,
             ).await {
                 Err(SuiError::ValidatorHaltedAtEpochEnd) => {
                     warn!("Could not execute transaction {digest:?} because validator is halted at epoch end. certificate={certificate:?}");

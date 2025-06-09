@@ -5,7 +5,7 @@ use super::reroot_path;
 use crate::NativeFunctionRecord;
 use anyhow::Result;
 use clap::*;
-use move_binary_format::CompiledModule;
+use move_binary_format::{CompiledModule, binary_config::BinaryConfig};
 use move_command_line_common::files::MOVE_COVERAGE_MAP_EXTENSION;
 use move_compiler::{
     PASS_CFGIR,
@@ -171,6 +171,8 @@ pub fn run_move_unit_tests<W: Write + Send>(
         })
         .collect();
 
+    let binary_config = BinaryConfig::new_unpublishable();
+
     // Collect all the bytecode modules that are dependencies of the package. We need to do this
     // because they're not returned by the compilation result, but we need to add them in the
     // VM storage.
@@ -184,7 +186,7 @@ pub fn run_move_unit_tests<W: Write + Send>(
             continue;
         }
         for bytes in pkg.get_bytecodes_bytes()? {
-            let module = CompiledModule::deserialize_with_defaults(&bytes)?;
+            let module = CompiledModule::deserialize_with_config(&bytes, &binary_config)?;
             bytecode_deps_modules.push(module);
         }
     }

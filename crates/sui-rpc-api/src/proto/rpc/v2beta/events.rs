@@ -187,7 +187,9 @@ impl MessageMerge<sui_sdk_types::TransactionEvents> for TransactionEvents {
         mask: &crate::field_mask::FieldMaskTree,
     ) {
         if mask.contains(Self::BCS_FIELD.name) {
-            self.bcs = Some(super::Bcs::serialize(&source).unwrap());
+            let mut bcs = super::Bcs::serialize(&source).unwrap();
+            bcs.name = Some("TransactionEvents".to_owned());
+            self.bcs = Some(bcs);
         }
 
         if mask.contains(Self::DIGEST_FIELD.name) {

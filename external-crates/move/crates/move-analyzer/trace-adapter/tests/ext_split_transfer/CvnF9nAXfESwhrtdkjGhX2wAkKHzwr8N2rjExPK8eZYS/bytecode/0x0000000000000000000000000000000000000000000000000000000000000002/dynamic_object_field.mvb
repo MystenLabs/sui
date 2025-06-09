@@ -1,0 +1,312 @@
+// Move bytecode v6
+module 2.dynamic_object_field {
+use 0000000000000000000000000000000000000000000000000000000000000001::option;
+use 0000000000000000000000000000000000000000000000000000000000000002::dynamic_field;
+use 0000000000000000000000000000000000000000000000000000000000000002::object;
+
+struct Wrapper<Ty0> has copy, drop, store {
+	name: Ty0
+}
+
+public add<Ty0: copy + drop + store, Ty1: store + key>(Arg0: &mut UID, Arg1: Ty0, Arg2: Ty1) {
+L3:	loc0: ID
+L4:	loc1: Wrapper<Ty0>
+L5:	loc2: Ty0
+L6:	loc3: &mut UID
+L7:	loc4: Ty1
+B0:
+	0: MoveLoc[0](Arg0: &mut UID)
+	1: StLoc[6](loc3: &mut UID)
+	2: MoveLoc[1](Arg1: Ty0)
+	3: StLoc[5](loc2: Ty0)
+	4: MoveLoc[2](Arg2: Ty1)
+	5: StLoc[7](loc4: Ty1)
+	6: MoveLoc[5](loc2: Ty0)
+	7: PackGeneric[0](Wrapper<Ty0>)
+	8: StLoc[4](loc1: Wrapper<Ty0>)
+	9: ImmBorrowLoc[7](loc4: Ty1)
+	10: Call object::id<Ty1>(&Ty1): ID
+	11: StLoc[3](loc0: ID)
+	12: CopyLoc[6](loc3: &mut UID)
+	13: CopyLoc[4](loc1: Wrapper<Ty0>)
+	14: MoveLoc[3](loc0: ID)
+	15: Call dynamic_field::add<Wrapper<Ty0>, ID>(&mut UID, Wrapper<Ty0>, ID)
+	16: MoveLoc[6](loc3: &mut UID)
+	17: FreezeRef
+	18: MoveLoc[4](loc1: Wrapper<Ty0>)
+	19: Call dynamic_field::field_info<Wrapper<Ty0>>(&UID, Wrapper<Ty0>): &UID * address
+	20: Pop
+	21: Call object::uid_to_address(&UID): address
+	22: MoveLoc[7](loc4: Ty1)
+	23: Call dynamic_field::add_child_object<Ty1>(address, Ty1)
+	24: Ret
+}
+
+public borrow<Ty0: copy + drop + store, Ty1: store + key>(Arg0: &UID, Arg1: Ty0): &Ty1 {
+L2:	loc0: Wrapper<Ty0>
+L3:	loc1: &UID
+B0:
+	0: MoveLoc[0](Arg0: &UID)
+	1: StLoc[3](loc1: &UID)
+	2: MoveLoc[1](Arg1: Ty0)
+	3: PackGeneric[0](Wrapper<Ty0>)
+	4: StLoc[2](loc0: Wrapper<Ty0>)
+	5: MoveLoc[3](loc1: &UID)
+	6: MoveLoc[2](loc0: Wrapper<Ty0>)
+	7: Call dynamic_field::field_info<Wrapper<Ty0>>(&UID, Wrapper<Ty0>): &UID * address
+	8: Call dynamic_field::borrow_child_object<Ty1>(&UID, address): &Ty1
+	9: Ret
+}
+
+public borrow_mut<Ty0: copy + drop + store, Ty1: store + key>(Arg0: &mut UID, Arg1: Ty0): &mut Ty1 {
+L2:	loc0: Wrapper<Ty0>
+L3:	loc1: &mut UID
+B0:
+	0: MoveLoc[0](Arg0: &mut UID)
+	1: StLoc[3](loc1: &mut UID)
+	2: MoveLoc[1](Arg1: Ty0)
+	3: PackGeneric[0](Wrapper<Ty0>)
+	4: StLoc[2](loc0: Wrapper<Ty0>)
+	5: MoveLoc[3](loc1: &mut UID)
+	6: MoveLoc[2](loc0: Wrapper<Ty0>)
+	7: Call dynamic_field::field_info_mut<Wrapper<Ty0>>(&mut UID, Wrapper<Ty0>): &mut UID * address
+	8: Call dynamic_field::borrow_child_object_mut<Ty1>(&mut UID, address): &mut Ty1
+	9: Ret
+}
+
+public remove<Ty0: copy + drop + store, Ty1: store + key>(Arg0: &mut UID, Arg1: Ty0): Ty1 {
+L2:	loc0: Wrapper<Ty0>
+L3:	loc1: &mut UID
+L4:	loc2: Ty1
+L5:	loc3: address
+B0:
+	0: MoveLoc[0](Arg0: &mut UID)
+	1: StLoc[3](loc1: &mut UID)
+	2: MoveLoc[1](Arg1: Ty0)
+	3: PackGeneric[0](Wrapper<Ty0>)
+	4: StLoc[2](loc0: Wrapper<Ty0>)
+	5: CopyLoc[3](loc1: &mut UID)
+	6: FreezeRef
+	7: CopyLoc[2](loc0: Wrapper<Ty0>)
+	8: Call dynamic_field::field_info<Wrapper<Ty0>>(&UID, Wrapper<Ty0>): &UID * address
+	9: StLoc[5](loc3: address)
+	10: Call object::uid_to_address(&UID): address
+	11: MoveLoc[5](loc3: address)
+	12: Call dynamic_field::remove_child_object<Ty1>(address, address): Ty1
+	13: StLoc[4](loc2: Ty1)
+	14: MoveLoc[3](loc1: &mut UID)
+	15: MoveLoc[2](loc0: Wrapper<Ty0>)
+	16: Call dynamic_field::remove<Wrapper<Ty0>, ID>(&mut UID, Wrapper<Ty0>): ID
+	17: Pop
+	18: MoveLoc[4](loc2: Ty1)
+	19: Ret
+}
+
+public exists_<Ty0: copy + drop + store>(Arg0: &UID, Arg1: Ty0): bool {
+L2:	loc0: Wrapper<Ty0>
+B0:
+	0: MoveLoc[1](Arg1: Ty0)
+	1: PackGeneric[0](Wrapper<Ty0>)
+	2: StLoc[2](loc0: Wrapper<Ty0>)
+	3: MoveLoc[0](Arg0: &UID)
+	4: MoveLoc[2](loc0: Wrapper<Ty0>)
+	5: Call dynamic_field::exists_with_type<Wrapper<Ty0>, ID>(&UID, Wrapper<Ty0>): bool
+	6: Ret
+}
+
+public exists_with_type<Ty0: copy + drop + store, Ty1: store + key>(Arg0: &UID, Arg1: Ty0): bool {
+L2:	loc0: bool
+L3:	loc1: Wrapper<Ty0>
+L4:	loc2: &UID
+L5:	loc3: address
+B0:
+	0: MoveLoc[0](Arg0: &UID)
+	1: StLoc[4](loc2: &UID)
+	2: MoveLoc[1](Arg1: Ty0)
+	3: PackGeneric[0](Wrapper<Ty0>)
+	4: StLoc[3](loc1: Wrapper<Ty0>)
+	5: CopyLoc[4](loc2: &UID)
+	6: CopyLoc[3](loc1: Wrapper<Ty0>)
+	7: Call dynamic_field::exists_with_type<Wrapper<Ty0>, ID>(&UID, Wrapper<Ty0>): bool
+	8: Not
+	9: BrFalse(15)
+B1:
+	10: MoveLoc[4](loc2: &UID)
+	11: Pop
+	12: LdFalse
+	13: StLoc[2](loc0: bool)
+	14: Branch(23)
+B2:
+	15: MoveLoc[4](loc2: &UID)
+	16: MoveLoc[3](loc1: Wrapper<Ty0>)
+	17: Call dynamic_field::field_info<Wrapper<Ty0>>(&UID, Wrapper<Ty0>): &UID * address
+	18: StLoc[5](loc3: address)
+	19: Call object::uid_to_address(&UID): address
+	20: MoveLoc[5](loc3: address)
+	21: Call dynamic_field::has_child_object_with_ty<Ty1>(address, address): bool
+	22: StLoc[2](loc0: bool)
+B3:
+	23: MoveLoc[2](loc0: bool)
+	24: Ret
+}
+
+public id<Ty0: copy + drop + store>(Arg0: &UID, Arg1: Ty0): Option<ID> {
+L2:	loc0: Wrapper<Ty0>
+L3:	loc1: address
+B0:
+	0: MoveLoc[1](Arg1: Ty0)
+	1: PackGeneric[0](Wrapper<Ty0>)
+	2: StLoc[2](loc0: Wrapper<Ty0>)
+	3: CopyLoc[0](Arg0: &UID)
+	4: CopyLoc[2](loc0: Wrapper<Ty0>)
+	5: Call dynamic_field::exists_with_type<Wrapper<Ty0>, ID>(&UID, Wrapper<Ty0>): bool
+	6: Not
+	7: BrFalse(12)
+B1:
+	8: MoveLoc[0](Arg0: &UID)
+	9: Pop
+	10: Call option::none<ID>(): Option<ID>
+	11: Ret
+B2:
+	12: MoveLoc[0](Arg0: &UID)
+	13: MoveLoc[2](loc0: Wrapper<Ty0>)
+	14: Call dynamic_field::field_info<Wrapper<Ty0>>(&UID, Wrapper<Ty0>): &UID * address
+	15: StLoc[3](loc1: address)
+	16: Pop
+	17: MoveLoc[3](loc1: address)
+	18: Call object::id_from_address(address): ID
+	19: Call option::some<ID>(ID): Option<ID>
+	20: Ret
+}
+
+public(friend) internal_add<Ty0: copy + drop + store, Ty1: key>(Arg0: &mut UID, Arg1: Ty0, Arg2: Ty1) {
+L3:	loc0: ID
+L4:	loc1: Wrapper<Ty0>
+L5:	loc2: Ty0
+L6:	loc3: &mut UID
+L7:	loc4: Ty1
+B0:
+	0: MoveLoc[0](Arg0: &mut UID)
+	1: StLoc[6](loc3: &mut UID)
+	2: MoveLoc[1](Arg1: Ty0)
+	3: StLoc[5](loc2: Ty0)
+	4: MoveLoc[2](Arg2: Ty1)
+	5: StLoc[7](loc4: Ty1)
+	6: MoveLoc[5](loc2: Ty0)
+	7: PackGeneric[0](Wrapper<Ty0>)
+	8: StLoc[4](loc1: Wrapper<Ty0>)
+	9: ImmBorrowLoc[7](loc4: Ty1)
+	10: Call object::id<Ty1>(&Ty1): ID
+	11: StLoc[3](loc0: ID)
+	12: CopyLoc[6](loc3: &mut UID)
+	13: CopyLoc[4](loc1: Wrapper<Ty0>)
+	14: MoveLoc[3](loc0: ID)
+	15: Call dynamic_field::add<Wrapper<Ty0>, ID>(&mut UID, Wrapper<Ty0>, ID)
+	16: MoveLoc[6](loc3: &mut UID)
+	17: FreezeRef
+	18: MoveLoc[4](loc1: Wrapper<Ty0>)
+	19: Call dynamic_field::field_info<Wrapper<Ty0>>(&UID, Wrapper<Ty0>): &UID * address
+	20: Pop
+	21: Call object::uid_to_address(&UID): address
+	22: MoveLoc[7](loc4: Ty1)
+	23: Call dynamic_field::add_child_object<Ty1>(address, Ty1)
+	24: Ret
+}
+
+public(friend) internal_borrow<Ty0: copy + drop + store, Ty1: key>(Arg0: &UID, Arg1: Ty0): &Ty1 {
+L2:	loc0: Wrapper<Ty0>
+L3:	loc1: &UID
+B0:
+	0: MoveLoc[0](Arg0: &UID)
+	1: StLoc[3](loc1: &UID)
+	2: MoveLoc[1](Arg1: Ty0)
+	3: PackGeneric[0](Wrapper<Ty0>)
+	4: StLoc[2](loc0: Wrapper<Ty0>)
+	5: MoveLoc[3](loc1: &UID)
+	6: MoveLoc[2](loc0: Wrapper<Ty0>)
+	7: Call dynamic_field::field_info<Wrapper<Ty0>>(&UID, Wrapper<Ty0>): &UID * address
+	8: Call dynamic_field::borrow_child_object<Ty1>(&UID, address): &Ty1
+	9: Ret
+}
+
+public(friend) internal_borrow_mut<Ty0: copy + drop + store, Ty1: key>(Arg0: &mut UID, Arg1: Ty0): &mut Ty1 {
+L2:	loc0: Wrapper<Ty0>
+L3:	loc1: &mut UID
+B0:
+	0: MoveLoc[0](Arg0: &mut UID)
+	1: StLoc[3](loc1: &mut UID)
+	2: MoveLoc[1](Arg1: Ty0)
+	3: PackGeneric[0](Wrapper<Ty0>)
+	4: StLoc[2](loc0: Wrapper<Ty0>)
+	5: MoveLoc[3](loc1: &mut UID)
+	6: MoveLoc[2](loc0: Wrapper<Ty0>)
+	7: Call dynamic_field::field_info_mut<Wrapper<Ty0>>(&mut UID, Wrapper<Ty0>): &mut UID * address
+	8: Call dynamic_field::borrow_child_object_mut<Ty1>(&mut UID, address): &mut Ty1
+	9: Ret
+}
+
+public(friend) internal_remove<Ty0: copy + drop + store, Ty1: key>(Arg0: &mut UID, Arg1: Ty0): Ty1 {
+L2:	loc0: Wrapper<Ty0>
+L3:	loc1: &mut UID
+L4:	loc2: Ty1
+L5:	loc3: address
+B0:
+	0: MoveLoc[0](Arg0: &mut UID)
+	1: StLoc[3](loc1: &mut UID)
+	2: MoveLoc[1](Arg1: Ty0)
+	3: PackGeneric[0](Wrapper<Ty0>)
+	4: StLoc[2](loc0: Wrapper<Ty0>)
+	5: CopyLoc[3](loc1: &mut UID)
+	6: FreezeRef
+	7: CopyLoc[2](loc0: Wrapper<Ty0>)
+	8: Call dynamic_field::field_info<Wrapper<Ty0>>(&UID, Wrapper<Ty0>): &UID * address
+	9: StLoc[5](loc3: address)
+	10: Call object::uid_to_address(&UID): address
+	11: MoveLoc[5](loc3: address)
+	12: Call dynamic_field::remove_child_object<Ty1>(address, address): Ty1
+	13: StLoc[4](loc2: Ty1)
+	14: MoveLoc[3](loc1: &mut UID)
+	15: MoveLoc[2](loc0: Wrapper<Ty0>)
+	16: Call dynamic_field::remove<Wrapper<Ty0>, ID>(&mut UID, Wrapper<Ty0>): ID
+	17: Pop
+	18: MoveLoc[4](loc2: Ty1)
+	19: Ret
+}
+
+public(friend) internal_exists_with_type<Ty0: copy + drop + store, Ty1: key>(Arg0: &UID, Arg1: Ty0): bool {
+L2:	loc0: bool
+L3:	loc1: Wrapper<Ty0>
+L4:	loc2: &UID
+L5:	loc3: address
+B0:
+	0: MoveLoc[0](Arg0: &UID)
+	1: StLoc[4](loc2: &UID)
+	2: MoveLoc[1](Arg1: Ty0)
+	3: PackGeneric[0](Wrapper<Ty0>)
+	4: StLoc[3](loc1: Wrapper<Ty0>)
+	5: CopyLoc[4](loc2: &UID)
+	6: CopyLoc[3](loc1: Wrapper<Ty0>)
+	7: Call dynamic_field::exists_with_type<Wrapper<Ty0>, ID>(&UID, Wrapper<Ty0>): bool
+	8: Not
+	9: BrFalse(15)
+B1:
+	10: MoveLoc[4](loc2: &UID)
+	11: Pop
+	12: LdFalse
+	13: StLoc[2](loc0: bool)
+	14: Branch(23)
+B2:
+	15: MoveLoc[4](loc2: &UID)
+	16: MoveLoc[3](loc1: Wrapper<Ty0>)
+	17: Call dynamic_field::field_info<Wrapper<Ty0>>(&UID, Wrapper<Ty0>): &UID * address
+	18: StLoc[5](loc3: address)
+	19: Call object::uid_to_address(&UID): address
+	20: MoveLoc[5](loc3: address)
+	21: Call dynamic_field::has_child_object_with_ty<Ty1>(address, address): bool
+	22: StLoc[2](loc0: bool)
+B3:
+	23: MoveLoc[2](loc0: bool)
+	24: Ret
+}
+
+}

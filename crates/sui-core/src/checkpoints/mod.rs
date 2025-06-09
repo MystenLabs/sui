@@ -14,6 +14,7 @@ pub use crate::checkpoints::checkpoint_output::{
     LogCheckpointOutput, SendCheckpointToStateSync, SubmitCheckpointToConsensus,
 };
 pub use crate::checkpoints::metrics::CheckpointMetrics;
+use crate::consensus_manager::ReplayWaiter;
 use crate::execution_cache::TransactionCacheRead;
 use crate::global_state_hasher::GlobalStateHasher;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
@@ -207,31 +208,31 @@ impl CheckpointStoreTables {
     #[cfg(tidehunter)]
     pub fn new(path: &Path, metric_name: &'static str) -> Self {
         tracing::warn!("Checkpoint DB using tidehunter");
-        use typed_store::tidehunter_util::{default_cells_per_mutex, KeySpaceConfig, ThConfig};
+        use typed_store::tidehunter_util::{
+            default_cells_per_mutex, KeySpaceConfig, KeyType, ThConfig,
+        };
         const MUTEXES: usize = 1024;
-        let config_u64 = ThConfig::new(8, MUTEXES, default_cells_per_mutex());
-        let prefix_config = ThConfig::new_with_rm_prefix(
+        let sequence_key = KeyType::prefix_uniform(2, 4);
+        let config_u64 = ThConfig::new(8, MUTEXES, sequence_key);
+        let digest_config = ThConfig::new_with_rm_prefix(
             32,
             MUTEXES,
-            default_cells_per_mutex(),
+            KeyType::uniform(default_cells_per_mutex()),
             KeySpaceConfig::default(),
             vec![0, 0, 0, 0, 0, 0, 0, 32],
         );
         let configs = vec![
-            ("checkpoint_content", prefix_config.clone()),
+            ("checkpoint_content", digest_config.clone()),
             (
                 "checkpoint_sequence_by_contents_digest",
-                prefix_config.clone(),
+                digest_config.clone(),
             ),
             ("full_checkpoint_content", config_u64.clone()),
             ("certified_checkpoints", config_u64.clone()),
-            ("checkpoint_by_digest", prefix_config.clone()),
+            ("checkpoint_by_digest", digest_config.clone()),
             ("locally_computed_checkpoints", config_u64.clone()),
             ("epoch_last_checkpoint_map", config_u64.clone()),
-            (
-                "watermarks",
-                ThConfig::new(4, MUTEXES, default_cells_per_mutex()),
-            ),
+            ("watermarks", ThConfig::new(4, 1, KeyType::uniform(1))),
         ];
         Self::open_tables_read_write(
             path.to_path_buf(),
@@ -1173,7 +1174,19 @@ impl CheckpointBuilder {
         }
     }
 
-    async fn run(mut self) {
+    /// This function first waits for ConsensusCommitHandler to finish reprocessing
+    /// commits that have been processed before the last restart, if consensus_replay_waiter
+    /// is supplied. Then it starts building checkpoints in a loop.
+    ///
+    /// It is optional to pass in consensus_replay_waiter, to make it easier to attribute
+    /// if slow recovery of previously built checkpoints is due to consensus replay or
+    /// checkpoint building.
+    async fn run(mut self, consensus_replay_waiter: Option<ReplayWaiter>) {
+        if let Some(replay_waiter) = consensus_replay_waiter {
+            info!("Waiting for consensus commits to replay ...");
+            replay_waiter.wait_for_replay().await;
+            info!("Consensus commits finished replaying");
+        }
         info!("Starting CheckpointBuilder");
         loop {
             self.maybe_build_checkpoints().await;
@@ -2684,11 +2697,11 @@ impl CheckpointService {
     /// operation. Upon startup, we may have a number of consensus commits and resulting
     /// checkpoints that were built but not committed to disk. We want to reprocess the
     /// commits and rebuild the checkpoints before starting normal operation.
-    pub async fn spawn(&self) -> JoinSet<()> {
+    pub async fn spawn(&self, consensus_replay_waiter: Option<ReplayWaiter>) -> JoinSet<()> {
         let mut tasks = JoinSet::new();
 
         let (builder, aggregator, state_hasher) = self.state.lock().take_unstarted();
-        tasks.spawn(monitored_future!(builder.run()));
+        tasks.spawn(monitored_future!(builder.run(consensus_replay_waiter)));
         tasks.spawn(monitored_future!(aggregator.run()));
         tasks.spawn(monitored_future!(state_hasher.run()));
 
@@ -2985,7 +2998,7 @@ mod tests {
             3,
             100_000,
         );
-        let _tasks = checkpoint_service.spawn().await;
+        let _tasks = checkpoint_service.spawn(None).await;
 
         checkpoint_service
             .write_and_notify_checkpoint_for_testing(&epoch_store, p(0, vec![4], 0))
@@ -3148,6 +3161,17 @@ mod tests {
         }
 
         fn multi_get_events(&self, _: &[TransactionDigest]) -> Vec<Option<TransactionEvents>> {
+            unimplemented!()
+        }
+
+        fn is_tx_fastpath_executed(&self, _: &TransactionDigest) -> bool {
+            unimplemented!()
+        }
+
+        fn notify_read_fastpath_transaction_outputs<'a>(
+            &'a self,
+            _: &'a [TransactionDigest],
+        ) -> BoxFuture<'a, Vec<Arc<crate::transaction_outputs::TransactionOutputs>>> {
             unimplemented!()
         }
     }

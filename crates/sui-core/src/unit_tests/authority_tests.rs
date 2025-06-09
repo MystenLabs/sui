@@ -8,6 +8,7 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use insta::assert_snapshot;
 use move_binary_format::{
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
+    file_format_common::BinaryConstants,
     CompiledModule,
 };
 use move_core_types::identifier::IdentStr;
@@ -1903,6 +1904,100 @@ async fn test_package_size_limit() {
         error,
         ExecutionFailureStatus::MovePackageTooBig { .. }
     ));
+}
+
+// Test that publishing a module with "unpublishable" magic fails
+#[tokio::test]
+async fn test_publish_module_with_unpublishable_magic() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let authority = init_state_with_objects(vec![]).await;
+    let rgp = authority.reference_gas_price_for_testing().unwrap();
+    let gas_payment_object_id = ObjectID::random();
+    let epoch_store = authority.epoch_store_for_testing();
+    let protocol_config = epoch_store.protocol_config();
+    // Use the max budget to avoid running out of gas.
+    let gas_balance = protocol_config.max_tx_gas();
+    let gas_payment_object =
+        Object::with_id_owner_gas_for_testing(gas_payment_object_id, sender, gas_balance);
+    let gas_payment_object_ref = gas_payment_object.compute_object_reference();
+    authority.insert_genesis_object(gas_payment_object).await;
+
+    let module = file_format::empty_unpublishable_module();
+    let mut module_bytes = Vec::new();
+    module
+        .serialize_with_version(module.version, &mut module_bytes)
+        .unwrap();
+    let module_bytes = vec![module_bytes];
+    let dependencies = vec![]; // no dependencies
+    let gas_price = rgp;
+    let gas_budget = gas_price * TEST_ONLY_GAS_UNIT_FOR_PUBLISH;
+    let data = TransactionData::new_module(
+        sender,
+        gas_payment_object_ref,
+        module_bytes,
+        dependencies,
+        gas_budget,
+        gas_price,
+    );
+    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let signed_effects = send_and_confirm_transaction(&authority, transaction)
+        .await
+        .unwrap()
+        .1;
+    let ExecutionStatus::Failure { error, command: _ } = signed_effects.status() else {
+        panic!("expected transaction to fail")
+    };
+    assert!(matches!(
+        error,
+        ExecutionFailureStatus::VMVerificationOrDeserializationError { .. }
+    ));
+}
+
+// Test that publishing a module with "unpublishable" magic fails
+#[tokio::test]
+async fn test_publish_module_with_unpublishable_magic_swapped() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let authority = init_state_with_objects(vec![]).await;
+    let rgp = authority.reference_gas_price_for_testing().unwrap();
+    let gas_payment_object_id = ObjectID::random();
+    let epoch_store = authority.epoch_store_for_testing();
+    let protocol_config = epoch_store.protocol_config();
+    // Use the max budget to avoid running out of gas.
+    let gas_balance = protocol_config.max_tx_gas();
+    let gas_payment_object =
+        Object::with_id_owner_gas_for_testing(gas_payment_object_id, sender, gas_balance);
+    let gas_payment_object_ref = gas_payment_object.compute_object_reference();
+    authority.insert_genesis_object(gas_payment_object).await;
+
+    let module = file_format::empty_unpublishable_module();
+    let mut module_bytes = Vec::new();
+    module
+        .serialize_with_version(module.version, &mut module_bytes)
+        .unwrap();
+    module_bytes.splice(
+        0..BinaryConstants::MOVE_MAGIC_SIZE,
+        BinaryConstants::MOVE_MAGIC,
+    );
+    let module_bytes = vec![module_bytes];
+    let dependencies = vec![]; // no dependencies
+    let gas_price = rgp;
+    let gas_budget = gas_price * TEST_ONLY_GAS_UNIT_FOR_PUBLISH;
+    let data = TransactionData::new_module(
+        sender,
+        gas_payment_object_ref,
+        module_bytes,
+        dependencies,
+        gas_budget,
+        gas_price,
+    );
+    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let signed_effects = send_and_confirm_transaction(&authority, transaction)
+        .await
+        .unwrap()
+        .1;
+    let ExecutionStatus::Success { .. } = signed_effects.status() else {
+        panic!("expected transaction to succeed")
+    };
 }
 
 #[tokio::test]

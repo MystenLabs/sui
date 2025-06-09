@@ -55,7 +55,7 @@ use crate::{
     consensus_throughput_calculator::ConsensusThroughputCalculator,
     consensus_types::consensus_output_api::{parse_block_transactions, ConsensusCommitAPI},
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
-    execution_scheduler::{ExecutionSchedulerAPI, ExecutionSchedulerWrapper},
+    execution_scheduler::{ExecutionSchedulerAPI, ExecutionSchedulerWrapper, SchedulingSource},
     scoring_decision::update_low_scoring_authorities,
     wait_for_effects_request::ConsensusTxPosition,
 };
@@ -864,7 +864,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         fail_point!("crash"); // for tests that produce random crashes
 
         self.transaction_manager_sender
-            .send(executable_transactions);
+            .send(executable_transactions, SchedulingSource::NonFastPath);
     }
 }
 
@@ -873,7 +873,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 #[derive(Clone)]
 pub(crate) struct TransactionManagerSender {
     // Using unbounded channel to avoid blocking consensus commit and transaction handler.
-    sender: monitored_mpsc::UnboundedSender<Vec<VerifiedExecutableTransaction>>,
+    sender: monitored_mpsc::UnboundedSender<(Vec<VerifiedExecutableTransaction>, SchedulingSource)>,
 }
 
 impl TransactionManagerSender {
@@ -886,18 +886,25 @@ impl TransactionManagerSender {
         Self { sender }
     }
 
-    fn send(&self, transactions: Vec<VerifiedExecutableTransaction>) {
-        let _ = self.sender.send(transactions);
+    fn send(
+        &self,
+        transactions: Vec<VerifiedExecutableTransaction>,
+        scheduling_source: SchedulingSource,
+    ) {
+        let _ = self.sender.send((transactions, scheduling_source));
     }
 
     async fn run(
-        mut recv: monitored_mpsc::UnboundedReceiver<Vec<VerifiedExecutableTransaction>>,
+        mut recv: monitored_mpsc::UnboundedReceiver<(
+            Vec<VerifiedExecutableTransaction>,
+            SchedulingSource,
+        )>,
         execution_scheduler: Arc<ExecutionSchedulerWrapper>,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) {
-        while let Some(transactions) = recv.recv().await {
+        while let Some((transactions, scheduling_source)) = recv.recv().await {
             let _guard = monitored_scope("ConsensusHandler::enqueue");
-            execution_scheduler.enqueue(transactions, &epoch_store);
+            execution_scheduler.enqueue(transactions, &epoch_store, scheduling_source);
         }
     }
 }
@@ -1266,26 +1273,24 @@ impl ConsensusBlockHandler {
             })
             .collect::<Vec<_>>();
         let mut executable_transactions = vec![];
-        for (_block, transactions) in parsed_transactions {
+        for (idx, (block, transactions)) in parsed_transactions.into_iter().enumerate() {
             for parsed in transactions {
-                // TODO(fastpath): enable set_consensus_tx_status() after post-commit finalization is implemented.
-                // let position = ConsensusTxPosition {
-                //     block,
-                //     index: idx as TransactionIndex,
-                // };
+                let position = ConsensusTxPosition {
+                    block,
+                    index: idx as TransactionIndex,
+                };
                 if parsed.rejected {
-                    //     // TODO(fastpath): unlock rejected transactions.
-                    //     // TODO(fastpath): maybe avoid parsing blocks twice between commit and transaction handling?
-                    //     self.epoch_store
-                    //         .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
-                    //     self.metrics
-                    //         .consensus_block_handler_txn_processed
-                    //         .with_label_values(&["rejected"])
-                    //         .inc();
+                    // TODO(fastpath): avoid parsing blocks twice between handling commit and fastpath transactions?
+                    self.epoch_store
+                        .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
+                    self.metrics
+                        .consensus_block_handler_txn_processed
+                        .with_label_values(&["rejected"])
+                        .inc();
                     continue;
                 }
-                // self.epoch_store
-                //     .set_consensus_tx_status(position, ConsensusTxStatus::FastpathCertified);
+                self.epoch_store
+                    .set_consensus_tx_status(position, ConsensusTxStatus::FastpathCertified);
 
                 self.metrics
                     .consensus_block_handler_txn_processed
@@ -1293,8 +1298,6 @@ impl ConsensusBlockHandler {
                     .inc();
                 if let ConsensusTransactionKind::UserTransaction(tx) = parsed.transaction.kind {
                     // TODO(fastpath): use a separate function to check if a transaction should be executed in fastpath.
-                    // If we do schedule a fast-path transaction for execution, we also need to
-                    // track it in case we need to revert it later due to post-commit reject.
                     if tx.contains_shared_object() {
                         continue;
                     }
@@ -1317,7 +1320,7 @@ impl ConsensusBlockHandler {
             .consensus_block_handler_fastpath_executions
             .inc_by(executable_transactions.len() as u64);
         self.transaction_manager_sender
-            .send(executable_transactions);
+            .send(executable_transactions, SchedulingSource::MysticetiFastPath);
     }
 }
 
@@ -1519,10 +1522,8 @@ mod tests {
         let committed_sub_dag = CommittedSubDag::new(
             leader_block.reference(),
             blocks.clone(),
-            vec![vec![]; blocks.len()],
             leader_block.timestamp_ms(),
             CommitRef::new(10, CommitDigest::MIN),
-            vec![],
         );
 
         // Test that the consensus handler respects backpressure.
@@ -1716,14 +1717,15 @@ mod tests {
                 continue;
             }
             let digest = t.digest();
-            if let Ok(Ok(_)) = tokio::time::timeout(
+            if tokio::time::timeout(
                 std::time::Duration::from_secs(10),
-                state.notify_read_effects(*digest),
+                state
+                    .get_transaction_cache_reader()
+                    .notify_read_fastpath_transaction_outputs(&[*digest]),
             )
             .await
+            .is_err()
             {
-                // Effects exist as expected.
-            } else {
                 panic!("Transaction {} {} did not execute", i, digest);
             }
         }

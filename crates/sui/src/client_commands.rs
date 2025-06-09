@@ -741,6 +741,13 @@ pub struct TxProcessingArgs {
     /// `sui client execute-combined-signed-tx --signed-tx-bytes <SIGNED_TX_BYTES>`.
     #[arg(long)]
     pub serialize_signed_transaction: bool,
+    /// Set the transaction sender to this address. When not specified, the sender is inferred
+    /// by finding the owner of the gas payment. Note that when setting this field, the
+    /// transaction will fail to execute if the sender's private key is not in the keystore;
+    /// similarly, it will fail when using this with `--serialize-signed-transaction` flag if the
+    /// private key corresponding to this address is not in keystore.
+    #[arg(long, required = false, value_parser)]
+    pub sender: Option<SuiAddress>,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -3226,6 +3233,7 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         dev_inspect,
         serialize_unsigned_transaction,
         serialize_signed_transaction,
+        sender,
     } = processing;
 
     ensure!(
@@ -3240,6 +3248,8 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
     };
 
     let client = context.get_client().await?;
+
+    let signer = sender.unwrap_or(signer);
 
     if dev_inspect {
         return execute_dev_inspect(

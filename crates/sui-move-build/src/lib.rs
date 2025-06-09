@@ -116,7 +116,7 @@ pub struct BuildConfig {
 impl BuildConfig {
     pub fn new_for_testing() -> Self {
         move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-        let install_dir = tempfile::tempdir().unwrap().keep();
+        let install_dir = mysten_common::tempdir().unwrap().keep();
 
         let config = MoveBuildConfig {
             default_flavor: Some(move_compiler::editions::Flavor::Sui),

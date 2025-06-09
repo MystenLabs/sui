@@ -3,7 +3,7 @@
 
 use crate::{
     client_ptb::{
-        ast::{GAS_BUDGET, GAS_COIN, GAS_PRICE, GAS_SPONSOR, JSON, SUMMARY, WARN_SHADOWS},
+        ast::{GAS_BUDGET, GAS_COIN, GAS_PRICE, GAS_SPONSOR, JSON, SENDER, SUMMARY, WARN_SHADOWS},
         ptb::PTBPreview,
     },
     sp,
@@ -49,6 +49,16 @@ impl Display for PTBPreview<'_> {
                 prefix = "\n";
             }
             builder.push_record([GAS_COIN, &coins]);
+        }
+        if let Some(sender) = &self.program_metadata.sender {
+            builder.push_record([
+                SENDER,
+                sender
+                    .value
+                    .into_inner()
+                    .to_canonical_string(/* with_prefix */ true)
+                    .as_str(),
+            ]);
         }
         if self.program_metadata.json_set {
             builder.push_record([JSON, "true"]);

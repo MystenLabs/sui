@@ -47,7 +47,7 @@ use typed_store::traits::Map;
 use typed_store::DBMapUtils;
 use typed_store::TypedStoreError;
 
-const CURRENT_DB_VERSION: u64 = 1;
+const CURRENT_DB_VERSION: u64 = 2;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct MetadataInfo {
@@ -102,13 +102,21 @@ pub struct OwnerIndexInfo {
     // object_id and type of this object are a part of the key
     pub version: SequenceNumber,
     pub digest: ObjectDigest,
+    // If this is a ConsensusAddressOwner, this is the start version
+    pub start_version: Option<SequenceNumber>,
 }
 
 impl OwnerIndexInfo {
     pub fn new(object: &Object) -> Self {
+        let start_version = match object.owner() {
+            Owner::AddressOwner(_) => None,
+            Owner::ConsensusAddressOwner { start_version, .. } => Some(*start_version),
+            _ => panic!("cannot create OwnerIndexInfo if object is not address-owned"),
+        };
         Self {
             version: object.version(),
             digest: object.digest(),
+            start_version,
         }
     }
 }

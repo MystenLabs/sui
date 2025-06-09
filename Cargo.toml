@@ -141,6 +141,7 @@ members = [
   "crates/sui-json-rpc-tests",
   "crates/sui-json-rpc-types",
   "crates/sui-keys",
+  "crates/sui-kv-rpc",
   "crates/sui-kvstore",
   "crates/sui-light-client",
   "crates/sui-macros",
@@ -221,7 +222,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.50.0"
+version = "1.51.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -647,12 +648,10 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c794
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
 
 # core-types from the new sdk for use in gRPC
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "7d485ababecf7282dc7d772316ccdb07b9b24753", features = [
-  "hash",
-  "serde",
-] }
-sui-graphql-client = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "7d485ababecf7282dc7d772316ccdb07b9b24753" }
-sui-graphql-client-build = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "7d485ababecf7282dc7d772316ccdb07b9b24753" }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "bf1875211b15bd67ce5f7a72152bf952479f1668", features = [ "hash", "serde" ] }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "bf1875211b15bd67ce5f7a72152bf952479f1668", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
+sui-graphql-client = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "bf1875211b15bd67ce5f7a72152bf952479f1668" }
+sui-graphql-client-build = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "bf1875211b15bd67ce5f7a72152bf952479f1668" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
@@ -710,6 +709,7 @@ sui-json-rpc-api = { path = "crates/sui-json-rpc-api" }
 sui-json-rpc-types = { path = "crates/sui-json-rpc-types" }
 sui-keys = { path = "crates/sui-keys" }
 sui-kvstore = { path = "crates/sui-kvstore" }
+sui-kv-rpc = { path = "crates/sui-kv-rpc" }
 sui-macros = { path = "crates/sui-macros" }
 sui-metric-checker = { path = "crates/sui-metric-checker" }
 sui-metrics-push-client = { path = "crates/sui-metrics-push-client" }

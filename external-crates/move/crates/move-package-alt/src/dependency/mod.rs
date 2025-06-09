@@ -19,11 +19,12 @@ use tracing::debug;
 use crate::{
     errors::PackageResult,
     flavor::MoveFlavor,
-    package::{EnvironmentName, PackagePath},
+    git::format_repo_to_fs_path,
+    package::{EnvironmentName, paths::PackagePath},
 };
 
 use external::ExternalDependency;
-use git::{PinnedGitDependency, UnpinnedGitDependency, fetch_dep};
+use git::{PinnedGitDependency, UnpinnedGitDependency};
 use local::LocalDependency;
 
 // TODO (potential refactor): consider using objects for manifest dependencies (i.e. `Box<dyn UnpinnedDependency>`).
@@ -85,19 +86,28 @@ pub enum PinnedDependencyInfo<F: MoveFlavor + ?Sized> {
 
 impl<F: MoveFlavor> PinnedDependencyInfo<F> {
     /// Return a dependency representing the root package
-    pub fn root_dependency() -> Self {
-        Self::Local(LocalDependency::root_dependency())
+    pub fn root_dependency(path: &PackagePath) -> Self {
+        Self::Local(LocalDependency::root_dependency(path))
     }
 
-    pub async fn fetch(&self) -> PackagePath {
-        // TODO: take this from [Package]
-        todo!()
+    pub async fn fetch(&self) -> PackageResult<PathBuf> {
+        match self {
+            PinnedDependencyInfo::Git(dep) => dep.fetch().await,
+            PinnedDependencyInfo::Local(dep) => Ok(dep.unfetched_path().clone()),
+            PinnedDependencyInfo::FlavorSpecific(dep) => todo!(),
+        }
     }
 
     /// Return the absolute path to the directory that this package would be fetched into, without
     /// actually fetching it
     pub fn unfetched_path(&self) -> PathBuf {
-        todo!()
+        match self {
+            PinnedDependencyInfo::Git(dep) => {
+                format_repo_to_fs_path(&dep.repo, &dep.rev, Some(dep.path.clone()))
+            }
+            PinnedDependencyInfo::Local(dep) => dep.unfetched_path(),
+            PinnedDependencyInfo::FlavorSpecific(dep) => todo!(),
+        }
     }
 }
 
@@ -288,13 +298,13 @@ pub async fn fetch<F: MoveFlavor>(
 
     let mut git_paths = DS::new();
     for (env, package, dep) in gits {
-        let path = fetch_dep(dep).await?;
+        let path = dep.fetch().await?;
         git_paths.insert(env, package, path);
     }
 
     let mut loc_paths = DS::new();
     for (env, package, dep) in locs {
-        loc_paths.insert(env, package, dep.path()?);
+        loc_paths.insert(env, package, dep.unfetched_path().clone());
     }
 
     let flav_deps_path = flavor.fetch(flav)?;

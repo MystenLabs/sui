@@ -9,6 +9,7 @@ use std::{
     ffi::OsStr,
     fmt::Debug,
     ops::Range,
+    path::PathBuf,
     process::{ExitStatus, Stdio},
 };
 
@@ -20,6 +21,7 @@ use tokio::process::Command;
 use tracing::{debug, info};
 
 use crate::{
+    errors::{FileHandle, TheFile},
     flavor::MoveFlavor,
     jsonrpc::Endpoint,
     package::{EnvironmentName, PackageName},
@@ -41,8 +43,11 @@ pub struct ExternalDependency {
     /// The `<res>` in `{ r.<res> = <data> }`
     pub resolver: ResolverName,
 
-    /// the `<data>` in `{ r.<res> = <data> }`
+    /// The `<data>` in `{ r.<res> = <data> }`
     data: toml::Value,
+
+    /// The file containing this dependency
+    containing_file: FileHandle,
 }
 
 #[derive(Error, Debug)]
@@ -83,6 +88,9 @@ pub enum ResolverError {
 #[derive(Serialize, Deserialize)]
 struct RField {
     r: BTreeMap<String, toml::Value>,
+
+    #[serde(skip, default = "TheFile::handle")]
+    containing_file: FileHandle,
 }
 
 /// Requests from the package mananger to the external resolver
@@ -91,6 +99,8 @@ struct ResolveRequest<F: MoveFlavor> {
     #[serde(default)]
     env: Option<F::EnvironmentID>,
     data: toml::Value,
+    #[serde(skip)]
+    containing_file: FileHandle,
 }
 
 /// Responses from the external resolver back to the package manager
@@ -135,20 +145,17 @@ impl ExternalDependency {
                     ResolveRequest {
                         env: env_id,
                         data: dep.data.clone(),
+                        containing_file: dep.containing_file,
                     },
                 );
             }
         }
 
         // call the resolvers
-        let responses = DependencySet::merge(
-            try_join_all(
-                requests
-                    .into_iter()
-                    .map(async |(resolver, reqs)| resolve_single(resolver, reqs).await),
-            )
-            .await?,
-        );
+        let responses = requests
+            .into_iter()
+            .map(async |(resolver, reqs)| resolve_single(resolver, reqs).await);
+        let responses = DependencySet::merge(try_join_all(responses).await?);
 
         // put the responses back in (note: insert replaces the old External deps)
         for (env, pkg, dep) in responses.into_iter() {
@@ -214,16 +221,25 @@ impl TryFrom<RField> for ExternalDependency {
             .next()
             .expect("iterator of length 1 structure is nonempty");
 
-        Ok(Self { resolver, data })
+        Ok(Self {
+            resolver,
+            data,
+            containing_file: value.containing_file,
+        })
     }
 }
 
 impl From<ExternalDependency> for RField {
     /// Translate from [ExternalDependency] `{ res, data }` to [RField] `{r.<res> = data}`
     fn from(value: ExternalDependency) -> Self {
-        let ExternalDependency { resolver, data } = value;
+        let ExternalDependency {
+            resolver,
+            data,
+            containing_file: containing_dir,
+        } = value;
 
         RField {
+            containing_file: containing_dir,
             r: BTreeMap::from([(resolver, data)]),
         }
     }
@@ -232,6 +248,8 @@ impl From<ExternalDependency> for RField {
 /// Resolve the dependencies in [dep_data] with the external resolver [resolver]; requests are
 /// performed for all environments in [envs]. Ensures that the returned dependency set contains no
 /// externally resolved dependencies.
+///
+/// Assumes `requests` is nonempty
 async fn resolve_single<F: MoveFlavor>(
     resolver: ResolverName,
     requests: DependencySet<ResolveRequest<F>>,
@@ -264,10 +282,24 @@ async fn resolve_single<F: MoveFlavor>(
 
     let (envs, pkgs, reqs): (Vec<_>, Vec<_>, Vec<_>) = requests.into_iter().multiunzip();
 
-    let resps = endpoint
-        .batch_call("resolve", reqs)
-        .await
-        .map_err(|e| ResolverError::bad_resolver(&resolver, e.to_string()));
+    // TODO: There is a potential bug here: we just use the file from the first request, rather
+    // than pairing each request with its own file. This almost certainly isn't a problem in
+    // practice because we probably only care about the file if external resolvers are
+    // returning local dependencies, which they almost certainly shouldn't. Moreover, we're
+    // currently only calling `resolve` on a batch of deps from the same manifest, so there
+    // shouldn't be confusion. If this becomes a problem, we probably need to sort out requests
+    // into common files, although at that point we'll probably need to replace or fix TheFile
+    // anyway due to threading problems.
+
+    let parsing_file = reqs.first().expect("nonempty input").containing_file;
+
+    let resps = TheFile::with_existing(parsing_file, async || {
+        endpoint
+            .batch_call("resolve", reqs)
+            .await
+            .map_err(|e| ResolverError::bad_resolver(&resolver, e.to_string()))
+    })
+    .await;
 
     let output = child
         .wait_with_output()

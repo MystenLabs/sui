@@ -104,7 +104,10 @@ impl<I: AsyncRead + Unpin, O: AsyncWrite + Unpin> Endpoint<I, O> {
         let mut request_json = serde_json::to_vec(&value).expect("requests should be serializable");
         request_json.push(b'\n');
 
-        debug!("sending request: {request_json:?}");
+        debug!(
+            "sending request: {:?}",
+            String::from_utf8_lossy(request_json.as_slice())
+        );
         self.output.write_all(&request_json).await?;
         self.output.flush().await?;
         Ok(())

@@ -21,6 +21,7 @@ arbitrary = { workspace = true, optional = true, features = ["derive"] }
 enum-compat-util.workspace = true
 move-proc-macros.workspace = true
 indexmap.workspace = true
+move-abstract-interpreter.workspace = true
 
 # wasm support (requires js feature of getrandom)
 getrandom = { workspace = true, features = ["js"], optional = true }

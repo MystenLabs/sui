@@ -528,10 +528,15 @@ impl RpcIndexes for RpcIndexStore {
                         object_type,
                         inverted_balance,
                     },
-                    OwnerIndexInfo { version, digest },
+                    OwnerIndexInfo {
+                        version,
+                        digest,
+                        start_version,
+                    },
                 )| {
                     OwnedObjectInfo {
                         owner,
+                        start_version,
                         object_type,
                         balance: inverted_balance.map(std::ops::Not::not),
                         object_id,

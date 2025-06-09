@@ -5,6 +5,7 @@
 module basics::object_basics;
 
 use sui::event;
+use sui::party;
 
 public struct Object has key, store {
     id: UID,
@@ -27,8 +28,21 @@ public fun create(value: u64, recipient: address, ctx: &mut TxContext) {
     )
 }
 
+public fun create_party(value: u64, recipient: address, ctx: &mut TxContext) {
+    let party = party::single_owner(recipient);
+    transfer::public_party_transfer(
+        Object { id: object::new(ctx), value },
+        party,
+    )
+}
+
 public fun transfer(o: Object, recipient: address) {
     transfer::public_transfer(o, recipient)
+}
+
+public fun party_transfer_single_owner(o: Object, recipient: address) {
+    let party = party::single_owner(recipient);
+    transfer::public_party_transfer(o, party)
 }
 
 public fun freeze_object(o: Object) {
@@ -37,6 +51,10 @@ public fun freeze_object(o: Object) {
 
 public fun set_value(o: &mut Object, value: u64) {
     o.value = value;
+}
+
+public fun get_value(o: &Object): u64 {
+    o.value
 }
 
 // test that reading o2 and updating o1 works

@@ -487,6 +487,13 @@ impl VMRuntime {
             .load_type_by_name(struct_name, module_id, data_store)
     }
 
+    /// Attempt to load a type tag to a `Type` without loading any additional modules.
+    /// This may fail if the type tag is not already loaded in the VM.
+    /// NB: the type tag _must_ be defining ID based.
+    pub fn try_load_cached_type(&self, type_tag: &TypeTag) -> VMResult<Option<Type>> {
+        self.loader.try_load_cached_type(type_tag)
+    }
+
     pub fn execute_function_bypass_visibility(
         &self,
         module: &ModuleId,

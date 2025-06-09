@@ -11,12 +11,13 @@ on:
         required: true
         type: choice
         options:
+          - devnet
           - testnet
           - mainnet
       announce:
         description: Announce the release?
         type: boolean
-        default: true
+        default: false
         required: true
 env:
   RELEASE_NOTES_FILE: './release_notes.txt'
@@ -76,13 +77,23 @@ jobs:
           echo "{\"sha\": \"${sui_commit}\", \"force\": true}" | gh api -X PATCH /repos/MystenLabs/sui/git/refs/heads/${{ inputs.network }} \
             --header "Accept: application/vnd.github+json" --input -
 
+      - name: Update framework/${{ inputs.network }} branch
+        if: ${{ inputs.network == 'devnet' }}
+        env:
+          SUI_COMMIT: ${{ env.sui_commit }}
+        shell: bash
+        run: |
+          echo "${{ secrets.SUI_CREATE_RELEASE }}" | gh auth login --with-token
+          echo "{\"sha\": \"${{ env.SUI_COMMIT }}\", \"force\": true}" | gh api -X PATCH /repos/MystenLabs/sui/git/refs/heads/framework/${{ inputs.network }} \
+            --header "Accept: application/vnd.github+json" --input -            
+
       - name: Create ${{ inputs.network }}-v${{ env.sui_release_version }} release tag
         shell: bash
         env:
-          sui_commit: ${{ env.sui_commit }}
-          sui_release_version: ${{ env.sui_release_version }}
+          SUI_COMMIT: ${{ env.sui_commit }}
+          SUI_RELEASE_VERSION: ${{ env.sui_release_version }}
         run: |
-          export release_tag="${{ inputs.network }}-v${{ env.sui_release_version }}"
+          export release_tag="${{ inputs.network }}-v${{ env.SUI_RELEASE_VERSION }}"
           echo "release_tag=${release_tag}" >> $GITHUB_ENV
           curl -X POST \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
@@ -90,7 +101,7 @@ jobs:
             https://api.github.com/repos/MystenLabs/sui/git/refs \
             -d "{
               \"ref\": \"refs/tags/${release_tag}\",
-              \"sha\": \"${{ env.sui_commit }}\"
+              \"sha\": \"${{ env.SUI_COMMIT }}\"
             }"
 
       - name: Get commits for branches
@@ -152,7 +163,7 @@ jobs:
 
   announce-release:
     name: Announce Release in Discord
-    if: ${{ inputs.announce == true }}
+    if: ${{ inputs.announce == true && inputs.network != 'devnet' }}
     needs: create-release
     runs-on: ubuntu-latest
     steps:

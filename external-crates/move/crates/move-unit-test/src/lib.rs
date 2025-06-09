@@ -288,7 +288,7 @@ impl UnitTestingConfig {
         .unwrap();
 
         if let Some(filter_str) = &self.filter {
-            test_runner.filter(filter_str)
+            test_runner.filter(filter_str)?;
         }
 
         let test_results = test_runner.run(&shared_writer).unwrap();
