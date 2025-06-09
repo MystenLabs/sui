@@ -20,7 +20,7 @@ pub mod db_checkpoint_handler;
 pub mod epoch;
 pub mod execution_cache;
 mod execution_driver;
-mod execution_scheduler;
+pub mod execution_scheduler;
 mod fallback_fetch;
 pub mod global_state_hasher;
 pub mod jsonrpc_index;

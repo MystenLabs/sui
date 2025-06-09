@@ -24,7 +24,9 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
 use tracing::{debug, warn};
 
-use super::{overload_tracker::OverloadTracker, ExecutionSchedulerAPI, PendingCertificate};
+use super::{
+    overload_tracker::OverloadTracker, ExecutionSchedulerAPI, PendingCertificate, SchedulingSource,
+};
 
 #[derive(Clone)]
 pub(crate) struct ExecutionScheduler {
@@ -87,6 +89,7 @@ impl ExecutionScheduler {
         cert: VerifiedExecutableTransaction,
         expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        scheduling_source: SchedulingSource,
     ) {
         let enqueue_time = Instant::now();
         let tx_data = cert.transaction_data();
@@ -156,7 +159,12 @@ impl ExecutionScheduler {
                 .with_label_values(&["ready"])
                 .inc();
             debug!(?digest, "Input objects already available");
-            self.send_transaction_for_execution(&cert, expected_effects_digest, enqueue_time);
+            self.send_transaction_for_execution(
+                &cert,
+                expected_effects_digest,
+                enqueue_time,
+                scheduling_source,
+            );
             return;
         }
 
@@ -174,7 +182,7 @@ impl ExecutionScheduler {
                         .observe(enqueue_time.elapsed().as_secs_f64());
                     debug!(?digest, "Input objects available");
                     // TODO: Eventually we could fold execution_driver into the scheduler.
-                    self.send_transaction_for_execution(&cert, expected_effects_digest, enqueue_time);
+                    self.send_transaction_for_execution(&cert, expected_effects_digest, enqueue_time, scheduling_source);
                 }
             _ = self.transaction_cache_read.notify_read_executed_effects_digests(&digests) => {
                 debug!(?digests, "Transaction already executed");
@@ -187,6 +195,7 @@ impl ExecutionScheduler {
         cert: &VerifiedExecutableTransaction,
         expected_effects_digest: Option<TransactionEffectsDigest>,
         enqueue_time: Instant,
+        scheduling_source: SchedulingSource,
     ) {
         let pending_cert = PendingCertificate {
             certificate: cert.clone(),
@@ -201,6 +210,7 @@ impl ExecutionScheduler {
                     .transaction_manager_num_executing_certificates
                     .clone(),
             )),
+            scheduling_source,
         };
         let _ = self.tx_ready_certificates.send(pending_cert);
     }
@@ -214,6 +224,7 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
             Option<TransactionEffectsDigest>,
         )>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        scheduling_source: SchedulingSource,
     ) {
         // Filter out certificates from wrong epoch.
         let certs: Vec<_> = certs
@@ -255,6 +266,7 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
                     cert,
                     expected_effects_digest,
                     &epoch_store,
+                    scheduling_source,
                 ))
             );
         }
@@ -314,7 +326,9 @@ mod test {
     };
 
     use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
-    use crate::execution_scheduler::{ExecutionSchedulerAPI, ExecutionSchedulerWrapper};
+    use crate::execution_scheduler::{
+        ExecutionSchedulerAPI, ExecutionSchedulerWrapper, SchedulingSource,
+    };
 
     use super::{ExecutionScheduler, PendingCertificate};
 
@@ -379,7 +393,11 @@ mod test {
         assert_eq!(execution_scheduler.num_pending_certificates(), 0);
 
         // Enqueue empty vec should not crash.
-        execution_scheduler.enqueue(vec![], &state.epoch_store_for_testing());
+        execution_scheduler.enqueue(
+            vec![],
+            &state.epoch_store_for_testing(),
+            SchedulingSource::NonFastPath,
+        );
         // scheduler should output no transaction.
         assert!(rx_ready_certificates
             .try_recv()
@@ -388,7 +406,11 @@ mod test {
         // Enqueue a transaction with existing gas object, empty input.
         let transaction = make_transaction(gas_objects[0].clone(), vec![]);
         let tx_start_time = Instant::now();
-        execution_scheduler.enqueue(vec![transaction.clone()], &state.epoch_store_for_testing());
+        execution_scheduler.enqueue(
+            vec![transaction.clone()],
+            &state.epoch_store_for_testing(),
+            SchedulingSource::NonFastPath,
+        );
         // scheduler should output the transaction eventually.
         let pending_certificate = rx_ready_certificates.recv().await.unwrap();
 
@@ -414,7 +436,11 @@ mod test {
         );
         let transaction = make_transaction(gas_object_new.clone(), vec![]);
         let tx_start_time = Instant::now();
-        execution_scheduler.enqueue(vec![transaction.clone()], &state.epoch_store_for_testing());
+        execution_scheduler.enqueue(
+            vec![transaction.clone()],
+            &state.epoch_store_for_testing(),
+            SchedulingSource::NonFastPath,
+        );
         // scheduler should output no transaction yet.
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates
@@ -424,7 +450,11 @@ mod test {
         assert_eq!(execution_scheduler.num_pending_certificates(), 1);
 
         // Duplicated enqueue is allowed.
-        execution_scheduler.enqueue(vec![transaction.clone()], &state.epoch_store_for_testing());
+        execution_scheduler.enqueue(
+            vec![transaction.clone()],
+            &state.epoch_store_for_testing(),
+            SchedulingSource::NonFastPath,
+        );
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates
             .try_recv()
@@ -611,6 +641,7 @@ mod test {
                 transaction_read_2.clone(),
             ],
             &state.epoch_store_for_testing(),
+            SchedulingSource::NonFastPath,
         );
 
         // scheduler should output no transaction yet.
@@ -721,7 +752,11 @@ mod test {
         for (i, (_, txn)) in object_arguments.iter().enumerate() {
             // scheduler should output no transaction yet since waiting on receiving object or
             // ImmOrOwnedObject input.
-            execution_scheduler.enqueue(vec![txn.clone()], &state.epoch_store_for_testing());
+            execution_scheduler.enqueue(
+                vec![txn.clone()],
+                &state.epoch_store_for_testing(),
+                SchedulingSource::NonFastPath,
+            );
             sleep(Duration::from_secs(1)).await;
             assert!(rx_ready_certificates.try_recv().is_err());
             assert_eq!(execution_scheduler.num_pending_certificates(), i + 1);
@@ -802,6 +837,7 @@ mod test {
         execution_scheduler.enqueue(
             vec![receive_object_transaction0.clone()],
             &state.epoch_store_for_testing(),
+            SchedulingSource::NonFastPath,
         );
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates.try_recv().is_err());
@@ -811,6 +847,7 @@ mod test {
         execution_scheduler.enqueue(
             vec![receive_object_transaction1.clone()],
             &state.epoch_store_for_testing(),
+            SchedulingSource::NonFastPath,
         );
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates.try_recv().is_err());
@@ -820,6 +857,7 @@ mod test {
         execution_scheduler.enqueue(
             vec![receive_object_transaction0.clone()],
             &state.epoch_store_for_testing(),
+            SchedulingSource::NonFastPath,
         );
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates.try_recv().is_err());
@@ -901,6 +939,7 @@ mod test {
         execution_scheduler.enqueue(
             vec![receive_object_transaction0.clone()],
             &state.epoch_store_for_testing(),
+            SchedulingSource::NonFastPath,
         );
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates.try_recv().is_err());
@@ -910,6 +949,7 @@ mod test {
         execution_scheduler.enqueue(
             vec![receive_object_transaction1.clone()],
             &state.epoch_store_for_testing(),
+            SchedulingSource::NonFastPath,
         );
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates.try_recv().is_err());
@@ -920,6 +960,7 @@ mod test {
         execution_scheduler.enqueue(
             vec![receive_object_transaction01.clone()],
             &state.epoch_store_for_testing(),
+            SchedulingSource::NonFastPath,
         );
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates.try_recv().is_err());
@@ -941,7 +982,11 @@ mod test {
 
         // Enqueue a transaction with a receiving object that is available at the time it is enqueued.
         // This should be immediately available.
-        execution_scheduler.enqueue(vec![tx1.clone()], &state.epoch_store_for_testing());
+        execution_scheduler.enqueue(
+            vec![tx1.clone()],
+            &state.epoch_store_for_testing(),
+            SchedulingSource::NonFastPath,
+        );
         sleep(Duration::from_secs(1)).await;
         rx_ready_certificates.recv().await.unwrap();
 
@@ -1015,14 +1060,17 @@ mod test {
         execution_scheduler.enqueue(
             vec![receive_object_transaction0.clone()],
             &state.epoch_store_for_testing(),
+            SchedulingSource::NonFastPath,
         );
         execution_scheduler.enqueue(
             vec![receive_object_transaction01.clone()],
             &state.epoch_store_for_testing(),
+            SchedulingSource::NonFastPath,
         );
         execution_scheduler.enqueue(
             vec![receive_object_transaction1.clone()],
             &state.epoch_store_for_testing(),
+            SchedulingSource::NonFastPath,
         );
         sleep(Duration::from_secs(1)).await;
         rx_ready_certificates.recv().await.unwrap();
@@ -1110,6 +1158,7 @@ mod test {
         execution_scheduler.enqueue(
             vec![cancelled_transaction.clone()],
             &state.epoch_store_for_testing(),
+            SchedulingSource::NonFastPath,
         );
 
         // scheduler should output no transaction yet.
