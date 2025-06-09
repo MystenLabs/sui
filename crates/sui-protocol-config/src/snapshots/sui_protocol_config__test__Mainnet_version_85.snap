@@ -49,8 +49,8 @@ feature_flags:
   reject_mutable_random_on_entry_functions: true
   per_object_congestion_control_mode:
     ExecutionTimeEstimate:
-      target_utilization: 30
-      allowed_txn_cost_overage_burst_limit_us: 100000
+      target_utilization: 50
+      allowed_txn_cost_overage_burst_limit_us: 500000
       randomness_scalar: 20
       max_estimate_us: 1500000
       stored_observations_num_included_checkpoints: 10
