@@ -270,7 +270,7 @@ mod tests {
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use std::collections::{BTreeMap, HashMap};
     use sui_test_transaction_builder::TestTransactionBuilder;
-    use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
+    use sui_types::base_types::{dbg_addr, ObjectID, SequenceNumber};
     use sui_types::crypto::RandomnessRound;
     use sui_types::digests::ObjectDigest;
     use sui_types::effects::TestEffectsBuilder;
@@ -683,7 +683,7 @@ mod tests {
                 .unwrap();
         }
         let tx_data = TestTransactionBuilder::new(
-            SuiAddress::ZERO,
+            dbg_addr(1),
             (
                 ObjectID::random(),
                 SequenceNumber::from_u64(gas_object_version),
