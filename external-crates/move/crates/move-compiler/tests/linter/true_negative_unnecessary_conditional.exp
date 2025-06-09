@@ -1,0 +1,8 @@
+warning[Lint W04013]: unnecessary mutable parameters
+   ┌─ tests/linter/true_negative_unnecessary_conditional.move:13:19
+   │
+13 │     public fun t2(condition: &mut bool) {
+   │                   ^^^^^^^^^ Parameter 'condition' is marked as mutable but never modified
+   │
+   = This warning can be suppressed with '#[allow(lint(unnecessary_mut_params))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
