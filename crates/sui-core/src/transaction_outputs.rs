@@ -203,6 +203,7 @@ impl TransactionOutputs {
             transaction: Arc::new(transaction),
             effects,
             events: TransactionEvents { data: vec![] },
+            accumulator_events: vec![],
             markers: vec![],
             wrapped: vec![],
             deleted: vec![],
