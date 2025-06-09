@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(dead_code)]
+
 use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::Result;
@@ -212,66 +214,211 @@ mod tests {
 
     use super::*;
 
+    #[derive(diesel::QueryableByName)]
+    struct T0Result {
+        #[diesel(sql_type = diesel::sql_types::BigInt)]
+        pred_deleted: i64,
+        #[diesel(sql_type = diesel::sql_types::BigInt)]
+        pred_obsolete: i64,
+        #[diesel(sql_type = diesel::sql_types::BigInt)]
+        marked_predecessor: i64,
+        #[diesel(sql_type = diesel::sql_types::BigInt)]
+        start_timestamp_ms: i64,
+        #[diesel(sql_type = diesel::sql_types::BigInt)]
+        end_timestamp_ms: i64,
+    }
+
+    #[derive(diesel::QueryableByName)]
+    struct T1Result {
+        #[diesel(sql_type = diesel::sql_types::BigInt)]
+        deleted_count: i64,
+        #[diesel(sql_type = diesel::sql_types::BigInt)]
+        start_timestamp_ms: i64,
+        #[diesel(sql_type = diesel::sql_types::BigInt)]
+        end_timestamp_ms: i64,
+    }
+
+    #[derive(Debug, Clone)]
+    struct TimelineEvent {
+        timestamp_ms: i64,
+        label: String,
+        event_type: EventType,
+        details: String,
+    }
+
+    #[derive(Debug, Clone)]
+    enum EventType {
+        Start,
+        End,
+    }
+
+    struct TimelineDiagram {
+        events: Vec<TimelineEvent>,
+    }
+
+    impl TimelineDiagram {
+        fn new() -> Self {
+            Self { events: Vec::new() }
+        }
+
+        fn add_transaction_events(&mut self, result: &T0Result, tx_name: &str) {
+            self.events.push(TimelineEvent {
+                timestamp_ms: result.start_timestamp_ms,
+                label: format!("{}_START", tx_name),
+                event_type: EventType::Start,
+                details: format!("Transaction {} begins", tx_name),
+            });
+
+            self.events.push(TimelineEvent {
+                timestamp_ms: result.end_timestamp_ms,
+                label: format!("{}_END", tx_name),
+                event_type: EventType::End,
+                details: format!(
+                    "pred_deleted: {}, pred_obsolete: {}, marked_predecessor: {}",
+                    result.pred_deleted, result.pred_obsolete, result.marked_predecessor
+                ),
+            });
+        }
+
+        fn add_t1_events(&mut self, result: &T1Result) {
+            self.events.push(TimelineEvent {
+                timestamp_ms: result.start_timestamp_ms,
+                label: "CiT1_START".to_string(),
+                event_type: EventType::Start,
+                details: "T1 cleanup begins".to_string(),
+            });
+
+            self.events.push(TimelineEvent {
+                timestamp_ms: result.end_timestamp_ms,
+                label: "CiT1_END".to_string(),
+                event_type: EventType::End,
+                details: format!("rows_deleted: {}", result.deleted_count),
+            });
+        }
+
+        fn generate_timeline(&mut self) -> String {
+            // Sort events by timestamp
+            self.events.sort_by_key(|e| e.timestamp_ms);
+
+            if self.events.is_empty() {
+                return "No events recorded".to_string();
+            }
+
+            let start_time = self.events[0].timestamp_ms;
+            let mut timeline = String::new();
+
+            timeline.push_str("=== TRANSACTION TIMELINE ===\n");
+            timeline.push_str(&format!("Base timestamp: {}\n\n", start_time));
+
+            // Create visual timeline
+            let relative_times: Vec<(i64, &TimelineEvent)> = self
+                .events
+                .iter()
+                .map(|e| (e.timestamp_ms - start_time, e))
+                .collect();
+
+            // ASCII timeline representation
+            timeline.push_str("Timeline (ms from start):\n");
+            timeline.push_str("0ms ────────────────────────────────────────────────────→ time\n");
+
+            for (relative_time, event) in &relative_times {
+                let indent = " ".repeat((*relative_time as usize / 10).min(50)); // Scale for display
+                let marker = match event.event_type {
+                    EventType::Start => "┌─",
+                    EventType::End => "└─",
+                };
+
+                timeline.push_str(&format!(
+                    "{}{}{}ms: {} ({})\n",
+                    indent, marker, relative_time, event.label, event.details
+                ));
+            }
+
+            timeline.push_str("\n");
+
+            // Execution pattern analysis
+            timeline.push_str("=== EXECUTION PATTERN ===\n");
+            let pattern = self.analyze_execution_pattern();
+            timeline.push_str(&format!("Pattern: {}\n", pattern));
+
+            // Overlap analysis
+            let overlap_info = self.analyze_overlaps();
+            timeline.push_str(&format!("Overlap: {}\n\n", overlap_info));
+
+            // Event sequence
+            timeline.push_str("=== EVENT SEQUENCE ===\n");
+            for (i, event) in self.events.iter().enumerate() {
+                timeline.push_str(&format!(
+                    "{}. {}ms: {} - {}\n",
+                    i + 1,
+                    event.timestamp_ms - start_time,
+                    event.label,
+                    event.details
+                ));
+            }
+
+            timeline
+        }
+
+        fn analyze_execution_pattern(&self) -> String {
+            let events: Vec<&str> = self.events.iter().map(|e| e.label.as_str()).collect();
+
+            // Look for key patterns
+            let pattern = events.join(" → ");
+
+            // Classify the pattern
+            if pattern.contains("CiT0_END") && pattern.contains("CjT0_START") {
+                let cit0_end_pos = events.iter().position(|&x| x == "CiT0_END").unwrap_or(0);
+                let cjt0_start_pos = events.iter().position(|&x| x == "CjT0_START").unwrap_or(0);
+
+                if cit0_end_pos < cjt0_start_pos {
+                    format!("SEQUENTIAL (CiT0 → CjT0) [{}]", pattern)
+                } else {
+                    format!("CONCURRENT [{}]", pattern)
+                }
+            } else {
+                format!("CONCURRENT [{}]", pattern)
+            }
+        }
+
+        fn analyze_overlaps(&self) -> String {
+            let cit0_start = self.events.iter().find(|e| e.label == "CiT0_START");
+            let cit0_end = self.events.iter().find(|e| e.label == "CiT0_END");
+            let cjt0_start = self.events.iter().find(|e| e.label == "CjT0_START");
+            let cjt0_end = self.events.iter().find(|e| e.label == "CjT0_END");
+
+            match (cit0_start, cit0_end, cjt0_start, cjt0_end) {
+                (Some(ci_start), Some(ci_end), Some(cj_start), Some(cj_end)) => {
+                    let ci_duration = ci_end.timestamp_ms - ci_start.timestamp_ms;
+                    let cj_duration = cj_end.timestamp_ms - cj_start.timestamp_ms;
+
+                    // Check for overlap
+                    let overlap_start = ci_start.timestamp_ms.max(cj_start.timestamp_ms);
+                    let overlap_end = ci_end.timestamp_ms.min(cj_end.timestamp_ms);
+
+                    if overlap_start < overlap_end {
+                        let overlap_duration = overlap_end - overlap_start;
+                        format!(
+                            "{}ms overlap (CiT0: {}ms, CjT0: {}ms)",
+                            overlap_duration, ci_duration, cj_duration
+                        )
+                    } else {
+                        format!(
+                            "No overlap (CiT0: {}ms, CjT0: {}ms)",
+                            ci_duration, cj_duration
+                        )
+                    }
+                }
+                _ => "Incomplete timing data".to_string(),
+            }
+        }
+    }
+
     // A helper function to return all entries in the obj_info table sorted by object_id and
     // cp_sequence_number.
     async fn get_all_obj_info(conn: &mut Connection<'_>) -> Result<Vec<StoredObjInfo>> {
         let query = obj_info::table.load(conn).await?;
         Ok(query)
-    }
-
-    async fn t0_debug(conn: &mut Connection<'_>, from: u64, to_exclusive: u64) -> Result<()> {
-        let query = postgres::sql_query!(
-            "
-        WITH predecessors AS (
-            SELECT
-                latest.object_id as latest_object_id,
-                latest.cp_sequence_number as latest_cp_sequence_number,
-                latest.marked_predecessor as latest_marked_predecessor,
-                pred.object_id as pred_object_id,
-                pred.cp_sequence_number as pred_cp_sequence_number,
-                pred.marked_predecessor as pred_marked_predecessor
-            FROM obj_info latest
-            LEFT JOIN LATERAL (
-                SELECT object_id, cp_sequence_number, marked_predecessor
-                FROM obj_info p
-                WHERE p.object_id = latest.object_id
-                  AND p.cp_sequence_number < latest.cp_sequence_number
-                ORDER BY p.cp_sequence_number DESC
-                LIMIT 1
-            ) pred ON true
-            WHERE latest.cp_sequence_number >= {BigInt} AND latest.cp_sequence_number < {BigInt}
-        )
-        SELECT latest_object_id, latest_cp_sequence_number, pred_object_id, pred_cp_sequence_number FROM predecessors",
-            from as i64,
-            to_exclusive as i64
-        );
-
-        #[derive(diesel::QueryableByName)]
-        struct DebugResult {
-            #[diesel(sql_type = diesel::sql_types::Binary)]
-            latest_object_id: Vec<u8>,
-            #[diesel(sql_type = diesel::sql_types::BigInt)]
-            latest_cp_sequence_number: i64,
-            #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Binary>)]
-            pred_object_id: Option<Vec<u8>>,
-            #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::BigInt>)]
-            pred_cp_sequence_number: Option<i64>,
-        }
-
-        let results: Vec<DebugResult> = query.load(conn).await?;
-
-        println!("Predecessors CTE debug results:");
-        for result in results {
-            println!(
-                "Latest: obj={:?} cp={}, Pred: obj={:?} cp={:?}",
-                result.latest_object_id[0], // Just show first byte for readability
-                result.latest_cp_sequence_number,
-                result.pred_object_id.as_ref().map(|v| v[0]),
-                result.pred_cp_sequence_number
-            );
-        }
-
-        Ok(())
     }
 
     async fn t0(
@@ -282,10 +429,18 @@ mod tests {
         pred_deleted_sleep: Option<u64>,
         pred_obsolete_sleep: Option<u64>,
         marked_predecessor_sleep: Option<u64>,
-    ) -> Result<(usize, usize, usize)> {
+        _label: String,
+    ) -> Result<T0Result> {
+        let start = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
         let query = postgres::sql_query!(
             "
-        WITH predecessors AS (
+            WITH start_timing AS (
+                SELECT (extract(epoch from clock_timestamp()) * 1000)::BIGINT as start_ts
+            ),
+        predecessors AS (
             SELECT
                 latest.object_id as latest_object_id,
                 latest.cp_sequence_number as latest_cp_sequence_number,
@@ -304,6 +459,8 @@ mod tests {
                 LIMIT 1
             ) pred ON true
             WHERE latest.cp_sequence_number >= {BigInt} AND latest.cp_sequence_number < {BigInt}
+            ORDER BY latest.object_id, latest.cp_sequence_number
+            FOR UPDATE OF latest
         )
         -- Delete preds that already marked their own immediate predecessors
         -- And intermediate entries among 'latest' changes
@@ -311,20 +468,22 @@ mod tests {
             DELETE FROM obj_info
             WHERE (object_id, cp_sequence_number) IN (
                 -- Original condition: preds that already marked their predecessors
-                SELECT pred_object_id, pred_cp_sequence_number
+                (SELECT pred_object_id, pred_cp_sequence_number
                 FROM predecessors
                 WHERE pred_marked_predecessor = true
+                ORDER BY pred_object_id, pred_cp_sequence_number)
 
                 UNION
 
                 -- New condition: rows that appear as both latest AND pred
-                SELECT latest_object_id, latest_cp_sequence_number
+                (SELECT latest_object_id, latest_cp_sequence_number
                 FROM predecessors p1
                 WHERE EXISTS (
                     SELECT 1 FROM predecessors p2
                     WHERE p2.pred_object_id = p1.latest_object_id
                     AND p2.pred_cp_sequence_number = p1.latest_cp_sequence_number
                 )
+                ORDER BY latest_object_id, latest_cp_sequence_number)
             )
             RETURNING object_id
         )
@@ -339,6 +498,7 @@ mod tests {
                 SELECT pred_object_id, pred_cp_sequence_number
                 FROM predecessors
                 WHERE pred_marked_predecessor = false
+                ORDER BY pred_object_id, pred_cp_sequence_number
             )
             RETURNING object_id
         )
@@ -351,6 +511,7 @@ mod tests {
             SET marked_predecessor = true
             WHERE (object_id, cp_sequence_number) IN (
                 SELECT latest_object_id, latest_cp_sequence_number FROM predecessors
+                ORDER BY latest_object_id, latest_cp_sequence_number
             )
             RETURNING object_id
         )
@@ -360,7 +521,9 @@ mod tests {
         SELECT
             (SELECT COUNT(*)::BIGINT FROM pred_deleted) as pred_deleted,
             (SELECT COUNT(*)::BIGINT FROM pred_obsolete) as pred_obsolete,
-            (SELECT COUNT(*)::BIGINT FROM marked_predecessor) as marked_predecessor;
+            (SELECT COUNT(*)::BIGINT FROM marked_predecessor) as marked_predecessor,
+            (SELECT start_ts FROM start_timing) as start_timestamp_ms,
+            (SELECT extract(epoch from clock_timestamp()) * 1000)::BIGINT as end_timestamp_ms;
         ",
             predecessors_sleep.unwrap_or(0) as i64,
             from as i64,
@@ -370,41 +533,18 @@ mod tests {
             marked_predecessor_sleep.unwrap_or(0) as i64,
         );
 
-        #[derive(diesel::QueryableByName)]
-        struct CountResult {
-            #[diesel(sql_type = diesel::sql_types::BigInt)]
-            pred_deleted: i64,
-            #[diesel(sql_type = diesel::sql_types::BigInt)]
-            pred_obsolete: i64,
-            #[diesel(sql_type = diesel::sql_types::BigInt)]
-            marked_predecessor: i64,
-        }
+        let mut result: T0Result = query.get_result(conn).await?;
+        let end = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
 
-        let result: CountResult = query.get_result(conn).await?;
-        Ok((
-            result.pred_deleted as usize,
-            result.pred_obsolete as usize,
-            result.marked_predecessor as usize,
-        ))
+        result.end_timestamp_ms = end;
+        result.start_timestamp_ms = start;
+        Ok(result)
     }
 
-    async fn t1(conn: &mut Connection<'_>, from: u64, to_exclusive: u64) -> Result<usize> {
-        let query = postgres::sql_query!(
-            "
-DELETE FROM obj_info
-WHERE cp_sequence_number >= {BigInt}
-  AND cp_sequence_number < {BigInt}
-  AND marked_predecessor = true
-  AND marked_obsolete = true;
-  ",
-            from as i64,
-            to_exclusive as i64
-        );
-        let rows_deleted = query.execute(conn).await?;
-        Ok(rows_deleted)
-    }
-
-    async fn t0_t1(
+    async fn t0_v2(
         conn: &mut Connection<'_>,
         from: u64,
         to_exclusive: u64,
@@ -412,24 +552,248 @@ WHERE cp_sequence_number >= {BigInt}
         pred_deleted_sleep: Option<u64>,
         pred_obsolete_sleep: Option<u64>,
         marked_predecessor_sleep: Option<u64>,
-    ) -> Result<(usize, usize, usize, usize)> {
-        let (pred_deleted, pred_obsolete, marked_predecessor) = t0(
-            conn,
-            from,
-            to_exclusive,
-            predecessors_sleep,
-            pred_deleted_sleep,
-            pred_obsolete_sleep,
-            marked_predecessor_sleep,
+        _label: String,
+    ) -> Result<T0Result> {
+        use diesel_async::AsyncConnection;
+
+        let result = conn.transaction::<_, diesel::result::Error, _>(move | conn| {
+            Box::pin(
+            async move {
+                let start = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64;
+
+                if let Some(sleep) = predecessors_sleep {
+                    postgres::sql_query!("SELECT pg_sleep({BigInt})", sleep as i64)
+                        .execute(conn).await?;
+                }
+
+                #[derive(diesel::QueryableByName)]
+                struct PredecessorRow {
+                    #[diesel(sql_type = diesel::sql_types::Bytea)]
+                    latest_object_id: Vec<u8>,
+                    #[diesel(sql_type = diesel::sql_types::BigInt)]
+                    latest_cp_sequence_number: i64,
+                    #[diesel(sql_type = diesel::sql_types::Bool)]
+                    latest_marked_predecessor: bool,
+                    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Bytea>)]
+                    pred_object_id: Option<Vec<u8>>,
+                    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::BigInt>)]
+                    pred_cp_sequence_number: Option<i64>,
+                    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Bool>)]
+                    pred_marked_predecessor: Option<bool>,
+                }
+
+                let predecessors = postgres::sql_query!(
+                    "
+                    SELECT
+                        latest.object_id as latest_object_id,
+                        latest.cp_sequence_number as latest_cp_sequence_number,
+                        latest.marked_predecessor as latest_marked_predecessor,
+                        pred.object_id as pred_object_id,
+                        pred.cp_sequence_number as pred_cp_sequence_number,
+                        pred.marked_predecessor as pred_marked_predecessor
+                    FROM obj_info latest
+                    LEFT JOIN LATERAL (
+                        SELECT object_id, cp_sequence_number, marked_predecessor
+                        FROM obj_info p
+                        WHERE p.object_id = latest.object_id
+                          AND p.cp_sequence_number < latest.cp_sequence_number
+                        ORDER BY p.cp_sequence_number DESC
+                        LIMIT 1
+                    ) pred ON true
+                    WHERE latest.cp_sequence_number >= {BigInt} AND latest.cp_sequence_number < {BigInt}
+                    ORDER BY latest.object_id, latest.cp_sequence_number
+                    FOR UPDATE OF latest
+                    ",
+                    from as i64,
+                    to_exclusive as i64,
+                ).load::<PredecessorRow>(conn).await?;
+
+                // Step 2: Delete predecessors that already marked their predecessors
+                // AND intermediate entries
+                if let Some(sleep) = pred_deleted_sleep {
+                    postgres::sql_query!("SELECT pg_sleep({BigInt})", sleep as i64)
+                        .execute(conn).await?;
+                }
+
+
+
+
+                use std::collections::HashSet;
+
+let mut delete_set = HashSet::new();
+
+// Condition 1: Predecessors that already marked their predecessors
+for row in &predecessors {
+    if let (Some(pred_object_id), Some(pred_cp_sequence_number), Some(true)) =
+        (&row.pred_object_id, &row.pred_cp_sequence_number, &row.pred_marked_predecessor) {
+        delete_set.insert((pred_object_id.clone(), *pred_cp_sequence_number));
+    }
+}
+
+// Condition 2: Intermediate entries (latest rows that appear as predecessors)
+for p1 in &predecessors {
+    for p2 in &predecessors {
+        if let (Some(p2_pred_id), Some(p2_pred_seq)) = (&p2.pred_object_id, &p2.pred_cp_sequence_number) {
+            if p1.latest_object_id == *p2_pred_id && p1.latest_cp_sequence_number == *p2_pred_seq {
+                delete_set.insert((p1.latest_object_id.clone(), p1.latest_cp_sequence_number));
+            }
+        }
+    }
+}
+
+let values = delete_set
+    .iter()
+    .map(|(object_id, cp_sequence_number)| {
+        let object_id_hex = hex::encode(object_id);
+        format!("('\\x{}'::BYTEA, {}::BIGINT)", object_id_hex, cp_sequence_number)
+    })
+    .collect::<Vec<_>>()
+    .join(",");
+
+let pred_deleted_count = if values.is_empty() {
+    0
+} else {
+    let query = format!(
+                "
+        DELETE FROM obj_info
+        WHERE (object_id, cp_sequence_number) IN (
+            VALUES {}
         )
-        .await?;
-        let rows_deleted = t1(conn, from, to_exclusive).await?;
-        Ok((
-            pred_deleted,
-            pred_obsolete,
-            marked_predecessor,
-            rows_deleted,
-        ))
+        ",
+        values
+    );
+    sql_query(query).execute(conn).await? as i64
+};
+
+                // Step 3: Mark remaining predecessors as obsolete
+                if let Some(sleep) = pred_obsolete_sleep {
+                    postgres::sql_query!("SELECT pg_sleep({BigInt})", sleep as i64)
+                        .execute(conn).await?;
+                }
+
+                let values = predecessors
+                .iter()
+                .filter_map(|row| {
+                    // Only include rows where predecessor exists and hasn't marked its predecessor
+                    if let (Some(pred_object_id), Some(pred_cp_sequence_number), Some(false)) =
+                        (&row.pred_object_id, &row.pred_cp_sequence_number, &row.pred_marked_predecessor) {
+                        let object_id_hex = hex::encode(pred_object_id);
+                        Some(format!("('\\x{}'::BYTEA, {}::BIGINT)", object_id_hex, pred_cp_sequence_number))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(",");
+
+            // Handle empty case
+            let pred_obsolete_count = if values.is_empty() {
+                0
+            } else {
+                let query = format!(
+                    "
+                    UPDATE obj_info
+                    SET marked_obsolete = true
+                    WHERE (object_id, cp_sequence_number) IN (
+                        VALUES {}
+                    )
+                    ",
+                    values
+                );
+                sql_query(query).execute(conn).await? as i64
+            };
+
+                // Step 4: Mark latest rows as having marked their predecessors
+                if let Some(sleep) = marked_predecessor_sleep {
+                    postgres::sql_query!("SELECT pg_sleep({BigInt})", sleep as i64)
+                        .execute(conn).await?;
+                }
+
+                let values = predecessors
+                .iter()
+                .map(|row| {
+                    let object_id_hex = hex::encode(&row.latest_object_id);
+                    format!("('\\x{}'::BYTEA, {}::BIGINT)", object_id_hex, row.latest_cp_sequence_number)
+                })
+                .collect::<Vec<_>>()
+                .join(",");
+
+            let marked_predecessor_count = if values.is_empty() {
+                0
+            } else {
+                let query = format!(
+                    "
+                    UPDATE obj_info
+                    SET marked_predecessor = true
+                    WHERE (object_id, cp_sequence_number) IN (
+                        VALUES {}
+                    )
+                    ",
+                    values
+                );
+                sql_query(query).execute(conn).await? as i64
+            };
+
+                let end = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+
+                Ok(T0Result {
+                    pred_deleted: pred_deleted_count as i64,
+                    pred_obsolete: pred_obsolete_count as i64,
+                    marked_predecessor: marked_predecessor_count as i64,
+                    start_timestamp_ms: start,
+                    end_timestamp_ms: end,
+                })
+            })
+        }).await?;
+
+        Ok(result)
+    }
+
+    async fn t1(conn: &mut Connection<'_>, from: u64, to_exclusive: u64) -> Result<T1Result> {
+        let start = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+        let query = postgres::sql_query!(
+            "
+            WITH start_timing AS (
+            SELECT (extract(epoch from clock_timestamp()) * 1000)::BIGINT as start_ts
+        ),
+     deletion AS (
+        DELETE FROM obj_info
+        WHERE cp_sequence_number >= {BigInt}
+          AND cp_sequence_number < {BigInt}
+          AND marked_predecessor = true
+          AND marked_obsolete = true
+        RETURNING object_id
+    )
+    SELECT
+        COUNT(*)::BIGINT as deleted_count,
+        (SELECT start_ts FROM start_timing) as start_timestamp_ms,
+        (SELECT extract(epoch from clock_timestamp()) * 1000)::BIGINT as end_timestamp_ms
+    FROM deletion;
+    ",
+            from as i64,
+            to_exclusive as i64
+        );
+
+        let mut result: T1Result = query.get_result(conn).await?;
+
+        let end = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+
+        result.end_timestamp_ms = end;
+        result.start_timestamp_ms = start;
+
+        Ok(result)
     }
 
     #[tokio::test]
@@ -923,76 +1287,6 @@ WHERE cp_sequence_number >= {BigInt}
         assert!(result.is_empty());
     }
 
-    /// C1T0 -> C1T1 -> C2T0 -> C2T1 In this scenario, C1T0 loads C1 rows as "latest", and marks
-    /// predecessors as `marked_obsolete``, then marks those "latest" rows as `marked_predecessor`.
-    /// Then C1T1 occurs. No rows from C1 are deleted at this time. At C2T0, rows from C1 are deleted.
-    #[tokio::test]
-    async fn test_scenario_one() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.store().connect().await.unwrap();
-        let obj_info = ObjInfo::default();
-        let mut builder = TestCheckpointDataBuilder::new(0);
-
-        builder = builder
-            .start_transaction(0)
-            .create_owned_object(0)
-            .finish_transaction();
-        builder = builder
-            .start_transaction(0)
-            .create_owned_object(1)
-            .finish_transaction();
-        let checkpoint1 = builder.build_checkpoint();
-        let result = obj_info.process(&Arc::new(checkpoint1)).unwrap();
-        ObjInfo::commit(&result, &mut conn).await.unwrap();
-
-        builder = builder
-            .start_transaction(0)
-            .transfer_object(0, 1)
-            .finish_transaction();
-        let checkpoint2 = builder.build_checkpoint();
-        let result = obj_info.process(&Arc::new(checkpoint2)).unwrap();
-        ObjInfo::commit(&result, &mut conn).await.unwrap();
-
-        builder = builder
-            .start_transaction(1)
-            .create_owned_object(2)
-            .finish_transaction();
-        builder = builder
-            .start_transaction(1)
-            .transfer_object(0, 0)
-            .finish_transaction();
-        let checkpoint3 = builder.build_checkpoint();
-        let result = obj_info.process(&Arc::new(checkpoint3)).unwrap();
-        ObjInfo::commit(&result, &mut conn).await.unwrap();
-
-        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
-        for obj in all_obj_info {
-            println!("object_id: {:?}, cp_sequence_number: {}, marked_predecessor: {}, marked_obsolete: {}", obj.object_id, obj.cp_sequence_number, obj.marked_predecessor, obj.marked_obsolete);
-        }
-
-        t0_debug(&mut conn, 0, 2).await.unwrap();
-
-        // let rows_modified = test_just_marked_predecessor(&mut conn, 0, 2).await.unwrap();
-        // println!("rows_modified: {}", rows_modified);
-
-        // t0(2, 3)
-        // t1(2, 3)
-        // t0(1, 2)
-        // t1(1, 2)
-
-        let (pred_deleted, pred_obsolete, marked_predecessor) =
-            t0(&mut conn, 2, 3, None, None, None, None).await.unwrap();
-        println!(
-            "pred_deleted: {}, pred_obsolete: {}, marked_predecessor: {}",
-            pred_deleted, pred_obsolete, marked_predecessor
-        );
-
-        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
-        for obj in all_obj_info {
-            println!("object_id: {:?}, cp_sequence_number: {}, marked_predecessor: {}, marked_obsolete: {}", obj.object_id, obj.cp_sequence_number, obj.marked_predecessor, obj.marked_obsolete);
-        }
-    }
-
     #[tokio::test]
     async fn test_concurrent_cit0_cjt0_cit0_first() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
@@ -1000,41 +1294,50 @@ WHERE cp_sequence_number >= {BigInt}
         let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
 
-        builder = builder
-            .start_transaction(0)
-            .create_owned_object(0)
-            .finish_transaction();
-        builder = builder
-            .start_transaction(0)
-            .create_owned_object(1)
-            .finish_transaction();
-        let checkpoint0 = builder.build_checkpoint();
-        let result = obj_info.process(&Arc::new(checkpoint0)).unwrap();
-        ObjInfo::commit(&result, &mut conn).await.unwrap();
+        let repeats = 1;
+        let range = 1;
 
-        builder = builder
-            .start_transaction(0)
-            .transfer_object(0, 1)
-            .finish_transaction();
-        builder = builder
-            .start_transaction(0)
-            .transfer_object(1, 1)
-            .finish_transaction();
-        let checkpoint1 = builder.build_checkpoint();
-        let result = obj_info.process(&Arc::new(checkpoint1)).unwrap();
-        ObjInfo::commit(&result, &mut conn).await.unwrap();
+        // Create range * repeats objects, ie 4x1000 = 4000
+        for r in 0..repeats {
+            for i in 0..range {
+                builder = builder
+                    .start_transaction(0)
+                    .create_owned_object(i + r * range)
+                    .finish_transaction();
+            }
+            let checkpoint = builder.build_checkpoint();
+            let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
+            ObjInfo::commit(&result, &mut conn).await.unwrap();
+        }
 
-        builder = builder
-            .start_transaction(1)
-            .transfer_object(0, 0)
-            .finish_transaction();
-        builder = builder
-            .start_transaction(1)
-            .transfer_object(1, 0)
-            .finish_transaction();
-        let checkpoint2 = builder.build_checkpoint();
-        let result = obj_info.process(&Arc::new(checkpoint2)).unwrap();
-        ObjInfo::commit(&result, &mut conn).await.unwrap();
+        // Modifies all objects, ie 4x1000 = 4000
+        for r in 0..repeats {
+            for i in 0..range {
+                builder = builder
+                    .start_transaction(0)
+                    .transfer_object(i + r * range, 1)
+                    .finish_transaction();
+            }
+            let checkpoint = builder.build_checkpoint();
+            let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
+            ObjInfo::commit(&result, &mut conn).await.unwrap();
+        }
+
+        // Modifies all objects again
+        for r in 0..repeats {
+            for i in 0..range {
+                builder = builder
+                    .start_transaction(1)
+                    .transfer_object(i + r * range, 0)
+                    .finish_transaction();
+            }
+            let checkpoint = builder.build_checkpoint();
+            let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
+            ObjInfo::commit(&result, &mut conn).await.unwrap();
+        }
+
+        let total_checkpoints = repeats * 3;
+        let cit0_end_exclusive = repeats * 2;
 
         // Run cit0 and cjt0 concurrently, giving cjt0 additional sleep so that it'll terminate after cit0
 
@@ -1043,51 +1346,82 @@ WHERE cp_sequence_number >= {BigInt}
         let cit0 = tokio::spawn(async move {
             let mut conn1 = db.connect().await.unwrap();
             let cit0_sleep = 0;
-            let result = t0(
+            let t0_result = t0_v2(
                 &mut conn1,
                 0,
-                2,
+                cit0_end_exclusive,
                 Some(cit0_sleep),
                 Some(cit0_sleep),
                 Some(cit0_sleep),
                 Some(cit0_sleep),
+                "CiT0".to_string(),
             )
             .await
             .unwrap();
-            let t1_deleted = t1(&mut conn1, 0, 2).await.unwrap();
-            println!(
-                "cit0 result: pred_deleted: {}, pred_obsolete: {}, marked_predecessor: {}, t1_deleted: {}",
-                result.0, result.1, result.2, t1_deleted
-            );
+            let t1_result = t1(&mut conn1, 0, cit0_end_exclusive).await.unwrap();
+            (t0_result, t1_result)
         });
 
         let db = indexer.store().clone();
         let cjt0 = tokio::spawn(async move {
             let mut conn2 = db.connect().await.unwrap();
             let cjt0_sleep = 0;
-            let result = t0(
+            let result = t0_v2(
                 &mut conn2,
-                2,
-                3,
+                cit0_end_exclusive,
+                total_checkpoints,
                 Some(cjt0_sleep),
                 Some(cjt0_sleep),
                 Some(cjt0_sleep),
                 Some(cjt0_sleep),
+                "CjT0".to_string(),
             )
             .await
             .unwrap();
-            println!(
-                "cjt0 result: pred_deleted: {}, pred_obsolete: {}, marked_predecessor: {}",
-                result.0, result.1, result.2
-            );
+            result
         });
 
-        let _ = tokio::join!(cit0, cjt0);
+        let (ci_result, cj_result) = tokio::join!(cit0, cjt0);
+        match (&ci_result, &cj_result) {
+            (Ok(_), Ok(_)) => {
+                println!("Case: Both transactions completed successfully");
+            }
+            _ => {
+                println!("Deadlock encountered");
+                return;
+            }
+        }
+
+        let ci_result = ci_result.unwrap();
+        let cj_result = cj_result.unwrap();
+
+        // Create timeline diagram
+        let mut timeline = TimelineDiagram::new();
+        timeline.add_transaction_events(&ci_result.0, "CiT0");
+        timeline.add_t1_events(&ci_result.1);
+        timeline.add_transaction_events(&cj_result, "CjT0");
+
+        println!("{}", timeline.generate_timeline());
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        let mut orphaned = 0;
+        let mut obsoleted = 0;
+        let mut marked_predecessor = 0;
+
         for obj in all_obj_info {
-            println!("object_id: {:?}, cp_sequence_number: {}, marked_predecessor: {}, marked_obsolete: {}",
-            obj.object_id, obj.cp_sequence_number, obj.marked_predecessor, obj.marked_obsolete);
+            if obj.marked_predecessor && obj.marked_obsolete {
+                orphaned += 1;
+            }
+            if obj.marked_obsolete {
+                obsoleted += 1;
+            }
+            if obj.marked_predecessor {
+                marked_predecessor += 1;
+            }
         }
+        println!(
+            "orphaned: {}, obsoleted: {}, marked_predecessor: {}",
+            orphaned, obsoleted, marked_predecessor
+        );
     }
 }
