@@ -243,11 +243,8 @@ impl BuildConfig {
         Ok(())
     }
 
-    // NOTE: If there are no renamings, then the root package has the global resolution of all named
-    // addresses in the package graph in scope. So we can simply grab all of the source files
-    // across all packages and build the Move model from that.
-    // TODO: In the future we will need a better way to do this to support renaming in packages
-    // where we want to support building a Move model.
+    // If a `address_derivation_fn_opt` is passed, this function will be used for changes to the
+    // address mapping in the resolution graph before compilation and model creation.
     pub fn move_model_for_package<W: Write>(
         self,
         path: &Path,
@@ -256,6 +253,13 @@ impl BuildConfig {
         // resolution graph diagnostics are only needed for CLI commands so ignore them by passing a
         // vector as the writer
         let resolved_graph = self.resolution_graph_for_package(path, None, writer)?;
+        Self::move_model_for_resolution_graph(resolved_graph, writer)
+    }
+
+    pub fn move_model_for_resolution_graph<W: Write>(
+        resolved_graph: ResolvedGraph,
+        writer: &mut W,
+    ) -> Result<source_model::Model> {
         let _mutx = PackageLock::lock(); // held until function returns
         model_builder::build(resolved_graph, writer)
     }

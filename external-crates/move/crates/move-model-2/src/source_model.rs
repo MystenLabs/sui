@@ -123,6 +123,7 @@ impl Model {
             files,
             root_package_name,
             root_named_address_map,
+            root_named_address_reverse_map,
             info,
             compiled,
             packages,
@@ -141,7 +142,8 @@ impl Model {
 
     pub fn summary_with_source(&self) -> &summary::Packages {
         self.summary.get_or_init(|| {
-            let mut info = summary::Packages::from(&self.compiled);
+            let mut info =
+                summary::Packages::from((&self.root_named_address_reverse_map, &self.compiled));
             info.annotate(self);
             info
         })
