@@ -35,7 +35,7 @@ use sui_config::node::AuthorityOverloadConfig;
 use sui_types::transaction::SenderSignedData;
 use tap::TapOptional;
 
-use super::{ExecutionSchedulerAPI, PendingCertificate, PendingCertificateStats};
+use super::{ExecutionSchedulerAPI, PendingCertificate, PendingCertificateStats, SchedulingSource};
 
 /// Minimum capacity of HashMaps used in TransactionManager.
 const MIN_HASHMAP_CAPACITY: usize = 1000;
@@ -386,6 +386,7 @@ impl ExecutionSchedulerAPI for TransactionManager {
             Option<TransactionEffectsDigest>,
         )>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        scheduling_source: SchedulingSource,
     ) {
         let reconfig_lock = self.inner.read();
 
@@ -547,6 +548,7 @@ impl ExecutionSchedulerAPI for TransactionManager {
                     ready_time: None,
                 },
                 executing_guard: None,
+                scheduling_source,
             });
         }
 

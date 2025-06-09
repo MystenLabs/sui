@@ -152,6 +152,7 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
+        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -309,6 +310,7 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
+        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -466,6 +468,7 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
+        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -623,6 +626,7 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
+        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -780,6 +784,7 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
+        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -937,6 +942,7 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
+        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -1094,6 +1100,7 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
+        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:

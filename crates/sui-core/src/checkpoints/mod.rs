@@ -3163,6 +3163,17 @@ mod tests {
         fn multi_get_events(&self, _: &[TransactionDigest]) -> Vec<Option<TransactionEvents>> {
             unimplemented!()
         }
+
+        fn is_tx_fastpath_executed(&self, _: &TransactionDigest) -> bool {
+            unimplemented!()
+        }
+
+        fn notify_read_fastpath_transaction_outputs<'a>(
+            &'a self,
+            _: &'a [TransactionDigest],
+        ) -> BoxFuture<'a, Vec<Arc<crate::transaction_outputs::TransactionOutputs>>> {
+            unimplemented!()
+        }
     }
 
     #[async_trait::async_trait]
