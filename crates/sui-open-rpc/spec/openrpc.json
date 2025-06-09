@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.50.0"
+    "version": "1.51.0"
   },
   "methods": [
     {
@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "85",
+              "maxSupportedProtocolVersion": "86",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_passkey_in_multisig": false,
@@ -1376,6 +1376,7 @@
                 "soft_bundle": false,
                 "throughput_aware_consensus_submission": false,
                 "txn_base_cost_as_multiplier": false,
+                "type_tags_in_object_runtime": false,
                 "uncompressed_g1_group_elements": false,
                 "upgraded_multisig_supported": false,
                 "validate_identifier_inputs": false,
@@ -8991,6 +8992,39 @@
           }
         }
       },
+      "SuiMoveAbort": {
+        "type": "object",
+        "properties": {
+          "error_code": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "function": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "line": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "minimum": 0.0
+          },
+          "module_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "SuiMoveModuleId": {
         "type": "object",
         "required": [
@@ -10437,6 +10471,17 @@
               "transactionDigest"
             ],
             "properties": {
+              "abortError": {
+                "description": "The abort error populated if the transaction failed with an abort code.",
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SuiMoveAbort"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "created": {
                 "description": "ObjectRef and owner of new objects created.",
                 "type": "array",

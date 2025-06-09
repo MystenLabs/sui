@@ -166,9 +166,11 @@
         "@vscode/debugadapter-testsupport": "^1.56.0",
         "@vscode/debugprotocol": "1.66.0",
         "fzstd": "^0.1.1",
+        "lodash.snakecase": "^4.1.1",
         "toml": "^3.0.0"
     },
     "devDependencies": {
+        "@types/lodash.snakecase": "^4.1.9",
         "@types/node": "20.x",
         "@types/vscode": "^1.92.0",
         "@typescript-eslint/eslint-plugin": "^7.14.1",

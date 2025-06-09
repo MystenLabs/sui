@@ -140,7 +140,7 @@ impl AuthorityAPI for LocalAuthorityClient {
 
         let effects = self
             .state
-            .execute_transaction(
+            .wait_for_transaction_execution(
                 &VerifiedExecutableTransaction::new_from_consensus(
                     transaction.clone(),
                     epoch_store.epoch(),

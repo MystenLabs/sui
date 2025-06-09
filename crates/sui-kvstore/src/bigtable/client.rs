@@ -335,6 +335,19 @@ impl KeyValueStoreReader for BigTableClient {
             },
         )
     }
+
+    async fn get_latest_epoch(&mut self) -> Result<Option<EpochInfo>> {
+        let upper_limit = u64::MAX.to_be_bytes().to_vec();
+        Ok(
+            match self.reversed_scan(EPOCHS_TABLE, upper_limit).await?.pop() {
+                Some((_, mut row)) => row
+                    .pop()
+                    .map(|value| bcs::from_bytes(&value.1))
+                    .transpose()?,
+                None => None,
+            },
+        )
+    }
 }
 
 impl BigTableClient {

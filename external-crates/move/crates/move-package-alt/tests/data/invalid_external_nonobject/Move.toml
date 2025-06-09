@@ -1,0 +1,2 @@
+[dependencies]
+foo = { r = 0 }

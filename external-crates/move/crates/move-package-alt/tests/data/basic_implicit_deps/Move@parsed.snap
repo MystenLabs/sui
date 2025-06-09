@@ -31,6 +31,7 @@ Manifest {
             dependency_info: Local(
                 LocalDependency {
                     local: "../../../../../../../../../crates/sui-framework/packages/sui-framework",
+                    relative_to_parent_dir: "tests/data/basic_implicit_deps",
                 },
             ),
             is_override: false,

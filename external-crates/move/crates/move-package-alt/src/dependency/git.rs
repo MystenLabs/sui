@@ -4,49 +4,19 @@
 
 //! Types and methods for external dependencies (of the form `{ git = "<repo>" }`)
 //!
-//! Git dependencies are cached in `~/.move`, which has the following structure:
-//!
-//! TODO: this doesn't match the implementation below:
-//! ```ignore
-//! .move/
-//!   git/
-//!     <remote 1>/ # a headless, sparse, and shallow git repository
-//!       <sha 1>/ # a worktree checked out to the given sha
-//!       <sha 2>/
-//!       ...
-//!     <remote 2>/
-//!       ...
-//!     ...
-//! ```
-use std::{
-    fmt,
-    marker::PhantomData,
-    path::{Path, PathBuf},
-    process::{ExitStatus, Output, Stdio},
-};
+//! Git dependencies are cached in `~/.move`. Each dependency has a sparse, shallow checkout
+//! in the directory `~/.move/<remote>_<sha>` (see [crate::git::format_repo_to_fs_path])
 
-use derive_where::derive_where;
-use serde::de::Error;
-use serde::{Deserialize, Deserializer, Serialize, de};
-use tokio::process::Command;
-use tracing::debug;
+use std::path::PathBuf;
 
-use crate::git::GitRepo;
+use serde::{Deserialize, Serialize};
+
 use crate::{
-    errors::{GitError, GitErrorKind, Located, PackageError, PackageResult},
-    git::is_sha,
+    errors::PackageResult,
+    git::{GitRepo, sha::GitSha},
 };
 
-use super::{DependencySet, Pinned, Unpinned};
-
-// TODO: (potential refactor): it might be good to separate out a separate module that is just git
-//       stuff and another that uses that git stuff to implement the dependency operations (like
-//       the jsonrpc / dependency::external split).
-
-// TODO: curious about the benefit of using String instead of wrapping it. The advantage of
-//       wrapping it is that we have invariants (with the type alias, nothing prevents us from
-//       writing `let x : Sha = ""` (whereas `let x = Sha::new("")` can fail)
-type Sha = String;
+use super::DependencySet;
 
 /// TODO keep same style around all types
 ///
@@ -74,20 +44,19 @@ pub struct PinnedGitDependency {
     pub repo: String,
 
     /// The exact sha for the revision
-    #[serde(deserialize_with = "deserialize_sha")]
-    pub rev: Sha,
+    pub rev: GitSha,
 
     /// The path within the repository
     #[serde(default)]
     pub path: PathBuf,
 }
 
-/// Custom error type for SHA validation
-// TODO: derive(Error)?
-#[derive(Debug)]
-pub enum ShaError {
-    InvalidLength(usize),
-    InvalidCharacters,
+impl PinnedGitDependency {
+    /// Fetch the given git dependency and return the path to the checked out repo
+    pub async fn fetch(&self) -> PackageResult<PathBuf> {
+        let git_repo = GitRepo::from(self);
+        Ok(git_repo.fetch().await?)
+    }
 }
 
 impl UnpinnedGitDependency {
@@ -117,40 +86,31 @@ impl UnpinnedGitDependency {
         })
     }
 }
-// Implement std::error::Error for custom error
-impl std::error::Error for ShaError {}
 
-impl fmt::Display for ShaError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ShaError::InvalidLength(len) => {
-                write!(f, "SHA should be 40 characters long, got {}", len)
-            }
-            ShaError::InvalidCharacters => write!(
-                f,
-                "SHA should only contain hexadecimal lowercase characters (0-9, a-f)"
-            ),
-        }
+impl From<&UnpinnedGitDependency> for GitRepo {
+    fn from(dep: &UnpinnedGitDependency) -> Self {
+        GitRepo::new(dep.repo.clone(), dep.rev.clone(), dep.path.clone())
     }
 }
 
-/// Fetch the given git dependency and return the path to the checked out repo
-pub async fn fetch_dep(dep: PinnedGitDependency) -> PackageResult<PathBuf> {
-    let git_repo = GitRepo::from(&dep);
-    git_repo.fetch().await
+impl From<&PinnedGitDependency> for GitRepo {
+    fn from(dep: &PinnedGitDependency) -> Self {
+        GitRepo::new(
+            dep.repo.clone(),
+            Some(dep.rev.clone().into()),
+            dep.path.clone(),
+        )
+    }
 }
 
-/// Deserialize a SHA string to ensure it is well formed.
-pub fn deserialize_sha<'de, D>(deserializer: D) -> Result<String, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let sha = String::deserialize(deserializer)?;
-    if sha.len() != 40 {
-        Err(de::Error::custom(ShaError::InvalidLength(sha.len())))
-    } else if !is_sha(&sha) {
-        Err(de::Error::custom(ShaError::InvalidCharacters))
-    } else {
-        Ok(sha)
+impl From<UnpinnedGitDependency> for GitRepo {
+    fn from(dep: UnpinnedGitDependency) -> Self {
+        GitRepo::new(dep.repo, dep.rev, dep.path)
+    }
+}
+
+impl From<PinnedGitDependency> for GitRepo {
+    fn from(dep: PinnedGitDependency) -> Self {
+        GitRepo::new(dep.repo, Some(dep.rev.into()), dep.path)
     }
 }

@@ -23,10 +23,15 @@ mod service;
 pub mod subscription;
 pub mod types;
 
+pub use crate::grpc::v2beta::ledger_service;
 pub use client::Client;
 pub use config::Config;
-pub use error::{ErrorDetails, ErrorReason, Result, RpcError};
+pub use error::{
+    CheckpointNotFoundError, ErrorDetails, ErrorReason, ObjectNotFoundError, Result, RpcError,
+};
 pub use metrics::RpcMetrics;
+pub use reader::TransactionNotFoundError;
+pub use service::protocol_config::config_to_proto;
 
 #[derive(Clone)]
 pub struct ServerVersion {
@@ -118,6 +123,7 @@ impl RpcService {
                 crate::proto::rpc::v2alpha::live_data_service_server::LiveDataServiceServer::new(
                     self.clone(),
                 );
+            let signature_verification_service = crate::proto::rpc::v2alpha::signature_verification_service_server::SignatureVerificationServiceServer::new(self.clone());
 
             let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
@@ -163,6 +169,7 @@ impl RpcService {
                 service_name(&ledger_service),
                 service_name(&transaction_execution_service),
                 service_name(&live_data_service),
+                service_name(&signature_verification_service),
                 service_name(&reflection_v1),
                 service_name(&reflection_v1alpha),
             ] {
@@ -176,7 +183,8 @@ impl RpcService {
                 .add_service(reflection_v1alpha)
                 .add_service(ledger_service)
                 .add_service(transaction_execution_service)
-                .add_service(live_data_service);
+                .add_service(live_data_service)
+                .add_service(signature_verification_service);
 
             if let Some(subscription_service_handle) = self.subscription_service_handle.clone() {
                 let subscription_service =

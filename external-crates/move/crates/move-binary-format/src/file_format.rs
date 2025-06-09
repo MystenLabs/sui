@@ -2281,6 +2281,37 @@ impl Bytecode {
     }
 }
 
+impl move_abstract_interpreter::control_flow_graph::Instruction for Bytecode {
+    type Index = CodeOffset;
+    type VariantJumpTables = [VariantJumpTable];
+
+    const ENTRY_BLOCK_ID: CodeOffset = 0;
+
+    fn get_successors(
+        pc: Self::Index,
+        code: &[Self],
+        jump_tables: &Self::VariantJumpTables,
+    ) -> Vec<Self::Index> {
+        Bytecode::get_successors(pc, code, jump_tables)
+    }
+
+    fn offsets(&self, jump_tables: &Self::VariantJumpTables) -> Vec<Self::Index> {
+        self.offsets(jump_tables)
+    }
+
+    fn usize_as_index(i: usize) -> Self::Index {
+        i as CodeOffset
+    }
+
+    fn index_as_usize(i: Self::Index) -> usize {
+        i as usize
+    }
+
+    fn is_branch(&self) -> bool {
+        self.is_branch()
+    }
+}
+
 /// A `CompiledModule` defines the structure of a module which is the unit of published code.
 ///
 /// A `CompiledModule` contains a definition of types (with their fields) and functions.
@@ -2293,6 +2324,9 @@ impl Bytecode {
 pub struct CompiledModule {
     /// Version number found during deserialization
     pub version: u32,
+    /// Indicates if this compiled module is publishable, or if it was generated in a mode that
+    /// disqualifies it from publishability.
+    pub publishable: bool,
     /// Handle to self.
     pub self_module_handle_idx: ModuleHandleIndex,
     /// Handles to external dependency modules and self.
@@ -2377,6 +2411,7 @@ impl Arbitrary for CompiledModule {
                     // TODO actual constant generation
                     CompiledModule {
                         version: file_format_common::VERSION_MAX,
+                        publishable: true,
                         module_handles,
                         datatype_handles,
                         function_handles,
@@ -2794,6 +2829,7 @@ impl CompiledModule {
 pub fn empty_module() -> CompiledModule {
     CompiledModule {
         version: file_format_common::VERSION_MAX,
+        publishable: true,
         module_handles: vec![ModuleHandle {
             address: AddressIdentifierIndex(0),
             name: IdentifierIndex(0),
@@ -2875,6 +2911,107 @@ pub fn basic_test_module() -> CompiledModule {
 
 pub fn basic_test_module_with_enum() -> CompiledModule {
     let mut m = basic_test_module();
+    m.datatype_handles.push(DatatypeHandle {
+        module: ModuleHandleIndex(0),
+        name: IdentifierIndex(m.identifiers.len() as u16),
+        abilities: AbilitySet::EMPTY,
+        type_parameters: vec![],
+    });
+    m.identifiers
+        .push(Identifier::new("enum".to_string()).unwrap());
+    m.enum_defs.push(EnumDefinition {
+        enum_handle: DatatypeHandleIndex::new(1),
+        variants: vec![VariantDefinition {
+            variant_name: IdentifierIndex::new(0),
+            fields: vec![],
+        }],
+    });
+    m.variant_handles.push(VariantHandle {
+        enum_def: EnumDefinitionIndex::new(0),
+        variant: 0,
+    });
+    m
+}
+
+/// Return the simplest module that will pass the bounds checker
+pub fn empty_unpublishable_module() -> CompiledModule {
+    CompiledModule {
+        version: file_format_common::VERSION_MAX,
+        publishable: false,
+        module_handles: vec![ModuleHandle {
+            address: AddressIdentifierIndex(0),
+            name: IdentifierIndex(0),
+        }],
+        self_module_handle_idx: ModuleHandleIndex(0),
+        identifiers: vec![Identifier::new("dummy_module").unwrap()],
+        address_identifiers: vec![AccountAddress::ZERO],
+        constant_pool: vec![],
+        metadata: vec![],
+        function_defs: vec![],
+        struct_defs: vec![],
+        datatype_handles: vec![],
+        function_handles: vec![],
+        field_handles: vec![],
+        friend_decls: vec![],
+        struct_def_instantiations: vec![],
+        function_instantiations: vec![],
+        field_instantiations: vec![],
+        signatures: vec![Signature(vec![])],
+        enum_defs: vec![],
+        enum_def_instantiations: vec![],
+        variant_handles: vec![],
+        variant_instantiation_handles: vec![],
+    }
+}
+
+pub fn basic_unpublishable_test_module() -> CompiledModule {
+    let mut m = empty_unpublishable_module();
+
+    m.function_handles.push(FunctionHandle {
+        module: ModuleHandleIndex(0),
+        name: IdentifierIndex(m.identifiers.len() as u16),
+        parameters: SignatureIndex(0),
+        return_: SignatureIndex(0),
+        type_parameters: vec![],
+    });
+    m.identifiers
+        .push(Identifier::new("foo".to_string()).unwrap());
+
+    m.function_defs.push(FunctionDefinition {
+        function: FunctionHandleIndex(0),
+        visibility: Visibility::Private,
+        is_entry: false,
+        acquires_global_resources: vec![],
+        code: Some(CodeUnit {
+            locals: SignatureIndex(0),
+            code: vec![Bytecode::Ret],
+            jump_tables: vec![],
+        }),
+    });
+
+    m.datatype_handles.push(DatatypeHandle {
+        module: ModuleHandleIndex(0),
+        name: IdentifierIndex(m.identifiers.len() as u16),
+        abilities: AbilitySet::EMPTY,
+        type_parameters: vec![],
+    });
+    m.identifiers
+        .push(Identifier::new("Bar".to_string()).unwrap());
+
+    m.struct_defs.push(StructDefinition {
+        struct_handle: DatatypeHandleIndex(0),
+        field_information: StructFieldInformation::Declared(vec![FieldDefinition {
+            name: IdentifierIndex(m.identifiers.len() as u16),
+            signature: TypeSignature(SignatureToken::U64),
+        }]),
+    });
+    m.identifiers
+        .push(Identifier::new("x".to_string()).unwrap());
+    m
+}
+
+pub fn basic_unpublishable_test_module_with_enum() -> CompiledModule {
+    let mut m = basic_unpublishable_test_module();
     m.datatype_handles.push(DatatypeHandle {
         module: ModuleHandleIndex(0),
         name: IdentifierIndex(m.identifiers.len() as u16),

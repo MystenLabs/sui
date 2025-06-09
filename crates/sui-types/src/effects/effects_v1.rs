@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::accumulator_event::AccumulatorEvent;
 use crate::base_types::{
     random_object_ref, EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
 use crate::digests::{ObjectDigest, TransactionEventsDigest};
 use crate::effects::{InputSharedObject, TransactionEffectsAPI, UnchangedSharedKind};
-use crate::execution_status::ExecutionStatus;
+use crate::execution_status::{ExecutionFailureStatus, ExecutionStatus, MoveLocation};
 use crate::gas::GasCostSummary;
 use crate::object::Owner;
 use serde::{Deserialize, Serialize};
@@ -149,6 +150,17 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
             .collect()
     }
 
+    fn move_abort(&self) -> Option<(MoveLocation, u64)> {
+        let ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::MoveAbort(move_location, code),
+            ..
+        } = self.status()
+        else {
+            return None;
+        };
+        Some((move_location.clone(), *code))
+    }
+
     fn lamport_version(&self) -> SequenceNumber {
         SequenceNumber::lamport_increment(self.modified_at_versions.iter().map(|(_, v)| *v))
     }
@@ -201,6 +213,11 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     }
 
     fn transferred_to_consensus(&self) -> Vec<ObjectRef> {
+        // Transferrable consensus objects cannot exist with effects v1
+        vec![]
+    }
+
+    fn consensus_owner_changed(&self) -> Vec<ObjectRef> {
         // Transferrable consensus objects cannot exist with effects v1
         vec![]
     }
@@ -272,6 +289,11 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
             .chain(unwrapped_then_deleted)
             .chain(wrapped)
             .collect()
+    }
+
+    fn accumulator_events(&self) -> Vec<AccumulatorEvent> {
+        // v1 did not have accumulator events
+        vec![]
     }
 
     fn gas_object(&self) -> (ObjectRef, Owner) {

@@ -1,0 +1,267 @@
+// Move bytecode v6
+module 2.balance {
+use 0000000000000000000000000000000000000000000000000000000000000001::ascii;
+use 0000000000000000000000000000000000000000000000000000000000000001::type_name;
+use 0000000000000000000000000000000000000000000000000000000000000002::tx_context;
+
+struct Supply<phantom Ty0> has store {
+	value: u64
+}
+
+struct Balance<phantom Ty0> has store {
+	value: u64
+}
+
+public value<Ty0>(Arg0: &Balance<Ty0>): u64 {
+B0:
+	0: MoveLoc[0](Arg0: &Balance<Ty0>)
+	1: ImmBorrowFieldGeneric[0](Balance.value: u64)
+	2: ReadRef
+	3: Ret
+}
+
+public supply_value<Ty0>(Arg0: &Supply<Ty0>): u64 {
+B0:
+	0: MoveLoc[0](Arg0: &Supply<Ty0>)
+	1: ImmBorrowFieldGeneric[1](Supply.value: u64)
+	2: ReadRef
+	3: Ret
+}
+
+public create_supply<Ty0: drop>(Arg0: Ty0): Supply<Ty0> {
+B0:
+	0: LdU64(0)
+	1: PackGeneric[0](Supply<Ty0>)
+	2: Ret
+}
+
+public increase_supply<Ty0>(Arg0: &mut Supply<Ty0>, Arg1: u64): Balance<Ty0> {
+B0:
+	0: CopyLoc[1](Arg1: u64)
+	1: LdU64(18446744073709551615)
+	2: CopyLoc[0](Arg0: &mut Supply<Ty0>)
+	3: ImmBorrowFieldGeneric[1](Supply.value: u64)
+	4: ReadRef
+	5: Sub
+	6: Lt
+	7: BrFalse(9)
+B1:
+	8: Branch(13)
+B2:
+	9: MoveLoc[0](Arg0: &mut Supply<Ty0>)
+	10: Pop
+	11: LdConst[1](u64: 1)
+	12: Abort
+B3:
+	13: CopyLoc[0](Arg0: &mut Supply<Ty0>)
+	14: ImmBorrowFieldGeneric[1](Supply.value: u64)
+	15: ReadRef
+	16: CopyLoc[1](Arg1: u64)
+	17: Add
+	18: MoveLoc[0](Arg0: &mut Supply<Ty0>)
+	19: MutBorrowFieldGeneric[1](Supply.value: u64)
+	20: WriteRef
+	21: MoveLoc[1](Arg1: u64)
+	22: PackGeneric[1](Balance<Ty0>)
+	23: Ret
+}
+
+public decrease_supply<Ty0>(Arg0: &mut Supply<Ty0>, Arg1: Balance<Ty0>): u64 {
+L2:	loc0: u64
+B0:
+	0: MoveLoc[1](Arg1: Balance<Ty0>)
+	1: UnpackGeneric[1](Balance<Ty0>)
+	2: StLoc[2](loc0: u64)
+	3: CopyLoc[0](Arg0: &mut Supply<Ty0>)
+	4: ImmBorrowFieldGeneric[1](Supply.value: u64)
+	5: ReadRef
+	6: CopyLoc[2](loc0: u64)
+	7: Ge
+	8: BrFalse(10)
+B1:
+	9: Branch(14)
+B2:
+	10: MoveLoc[0](Arg0: &mut Supply<Ty0>)
+	11: Pop
+	12: LdConst[1](u64: 1)
+	13: Abort
+B3:
+	14: CopyLoc[0](Arg0: &mut Supply<Ty0>)
+	15: ImmBorrowFieldGeneric[1](Supply.value: u64)
+	16: ReadRef
+	17: CopyLoc[2](loc0: u64)
+	18: Sub
+	19: MoveLoc[0](Arg0: &mut Supply<Ty0>)
+	20: MutBorrowFieldGeneric[1](Supply.value: u64)
+	21: WriteRef
+	22: MoveLoc[2](loc0: u64)
+	23: Ret
+}
+
+public zero<Ty0>(): Balance<Ty0> {
+B0:
+	0: LdU64(0)
+	1: PackGeneric[1](Balance<Ty0>)
+	2: Ret
+}
+
+public join<Ty0>(Arg0: &mut Balance<Ty0>, Arg1: Balance<Ty0>): u64 {
+L2:	loc0: u64
+B0:
+	0: MoveLoc[1](Arg1: Balance<Ty0>)
+	1: UnpackGeneric[1](Balance<Ty0>)
+	2: StLoc[2](loc0: u64)
+	3: CopyLoc[0](Arg0: &mut Balance<Ty0>)
+	4: ImmBorrowFieldGeneric[0](Balance.value: u64)
+	5: ReadRef
+	6: MoveLoc[2](loc0: u64)
+	7: Add
+	8: CopyLoc[0](Arg0: &mut Balance<Ty0>)
+	9: MutBorrowFieldGeneric[0](Balance.value: u64)
+	10: WriteRef
+	11: MoveLoc[0](Arg0: &mut Balance<Ty0>)
+	12: ImmBorrowFieldGeneric[0](Balance.value: u64)
+	13: ReadRef
+	14: Ret
+}
+
+public split<Ty0>(Arg0: &mut Balance<Ty0>, Arg1: u64): Balance<Ty0> {
+B0:
+	0: CopyLoc[0](Arg0: &mut Balance<Ty0>)
+	1: ImmBorrowFieldGeneric[0](Balance.value: u64)
+	2: ReadRef
+	3: CopyLoc[1](Arg1: u64)
+	4: Ge
+	5: BrFalse(7)
+B1:
+	6: Branch(11)
+B2:
+	7: MoveLoc[0](Arg0: &mut Balance<Ty0>)
+	8: Pop
+	9: LdConst[2](u64: 2)
+	10: Abort
+B3:
+	11: CopyLoc[0](Arg0: &mut Balance<Ty0>)
+	12: ImmBorrowFieldGeneric[0](Balance.value: u64)
+	13: ReadRef
+	14: CopyLoc[1](Arg1: u64)
+	15: Sub
+	16: MoveLoc[0](Arg0: &mut Balance<Ty0>)
+	17: MutBorrowFieldGeneric[0](Balance.value: u64)
+	18: WriteRef
+	19: MoveLoc[1](Arg1: u64)
+	20: PackGeneric[1](Balance<Ty0>)
+	21: Ret
+}
+
+public withdraw_all<Ty0>(Arg0: &mut Balance<Ty0>): Balance<Ty0> {
+L1:	loc0: u64
+B0:
+	0: CopyLoc[0](Arg0: &mut Balance<Ty0>)
+	1: ImmBorrowFieldGeneric[0](Balance.value: u64)
+	2: ReadRef
+	3: StLoc[1](loc0: u64)
+	4: MoveLoc[0](Arg0: &mut Balance<Ty0>)
+	5: MoveLoc[1](loc0: u64)
+	6: Call split<Ty0>(&mut Balance<Ty0>, u64): Balance<Ty0>
+	7: Ret
+}
+
+public destroy_zero<Ty0>(Arg0: Balance<Ty0>) {
+B0:
+	0: ImmBorrowLoc[0](Arg0: Balance<Ty0>)
+	1: ImmBorrowFieldGeneric[0](Balance.value: u64)
+	2: ReadRef
+	3: LdU64(0)
+	4: Eq
+	5: BrFalse(7)
+B1:
+	6: Branch(9)
+B2:
+	7: LdConst[0](u64: 0)
+	8: Abort
+B3:
+	9: MoveLoc[0](Arg0: Balance<Ty0>)
+	10: UnpackGeneric[1](Balance<Ty0>)
+	11: Pop
+	12: Ret
+}
+
+create_staking_rewards<Ty0>(Arg0: u64, Arg1: &TxContext): Balance<Ty0> {
+B0:
+	0: MoveLoc[1](Arg1: &TxContext)
+	1: Call tx_context::sender(&TxContext): address
+	2: LdConst[6](address: 0x00..)
+	3: Eq
+	4: BrFalse(6)
+B1:
+	5: Branch(8)
+B2:
+	6: LdConst[3](u64: 3)
+	7: Abort
+B3:
+	8: Call type_name::get<Ty0>(): TypeName
+	9: Call type_name::into_string(TypeName): String
+	10: Call ascii::into_bytes(String): vector<u8>
+	11: LdConst[5](vector<u8>: "000..)
+	12: Eq
+	13: BrFalse(15)
+B4:
+	14: Branch(17)
+B5:
+	15: LdConst[4](u64: 4)
+	16: Abort
+B6:
+	17: MoveLoc[0](Arg0: u64)
+	18: PackGeneric[1](Balance<Ty0>)
+	19: Ret
+}
+
+destroy_storage_rebates<Ty0>(Arg0: Balance<Ty0>, Arg1: &TxContext) {
+B0:
+	0: MoveLoc[1](Arg1: &TxContext)
+	1: Call tx_context::sender(&TxContext): address
+	2: LdConst[6](address: 0x00..)
+	3: Eq
+	4: BrFalse(6)
+B1:
+	5: Branch(8)
+B2:
+	6: LdConst[3](u64: 3)
+	7: Abort
+B3:
+	8: Call type_name::get<Ty0>(): TypeName
+	9: Call type_name::into_string(TypeName): String
+	10: Call ascii::into_bytes(String): vector<u8>
+	11: LdConst[5](vector<u8>: "000..)
+	12: Eq
+	13: BrFalse(15)
+B4:
+	14: Branch(17)
+B5:
+	15: LdConst[4](u64: 4)
+	16: Abort
+B6:
+	17: MoveLoc[0](Arg0: Balance<Ty0>)
+	18: UnpackGeneric[1](Balance<Ty0>)
+	19: Pop
+	20: Ret
+}
+
+public(friend) destroy_supply<Ty0>(Arg0: Supply<Ty0>): u64 {
+B0:
+	0: MoveLoc[0](Arg0: Supply<Ty0>)
+	1: UnpackGeneric[0](Supply<Ty0>)
+	2: Ret
+}
+
+Constants [
+	0 => u64: 0
+	1 => u64: 1
+	2 => u64: 2
+	3 => u64: 3
+	4 => u64: 4
+	5 => vector<u8>: "0000000000000000000000000000000000000000000000000000000000000002::sui::SUI" // interpreted as UTF8 string
+	6 => address: 0x0000000000000000000000000000000000000000000000000000000000000000
+]
+}

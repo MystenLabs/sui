@@ -1070,9 +1070,9 @@ dependencies = [
 
 [[package]]
 name = "fixedbitset"
-version = "0.2.0"
+version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37ab347416e802de484e4d03c7316c48f1ecb56574dfd4a46a80f173ce1de04d"
+checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
 
 [[package]]
 name = "fnv"
@@ -1907,8 +1907,6 @@ name = "move-abstract-interpreter"
 version = "0.1.0"
 dependencies = [
  "itertools 0.10.5",
- "move-binary-format",
- "move-bytecode-verifier-meter",
 ]
 
 [[package]]
@@ -1963,6 +1961,7 @@ dependencies = [
  "enum-compat-util",
  "getrandom 0.2.15",
  "indexmap 2.8.0",
+ "move-abstract-interpreter",
  "move-core-types",
  "move-proc-macros",
  "proptest",
@@ -2123,6 +2122,7 @@ dependencies = [
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
+ "serde",
  "serde_json",
  "serde_yaml",
  "similar",
@@ -2238,6 +2238,7 @@ dependencies = [
  "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
+ "move-bytecode-verifier",
  "move-command-line-common",
  "move-compiler",
  "move-core-types",
@@ -2487,6 +2488,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_spanned",
+ "sha2",
  "tempfile",
  "thiserror",
  "tokio",
@@ -2503,6 +2505,16 @@ dependencies = [
  "enum-compat-util",
  "quote",
  "syn 2.0.98",
+]
+
+[[package]]
+name = "move-regex-borrow-graph"
+version = "0.0.1"
+dependencies = [
+ "itertools 0.10.5",
+ "move-binary-format",
+ "move-core-types",
+ "petgraph",
 ]
 
 [[package]]
@@ -2706,6 +2718,7 @@ dependencies = [
  "move-stdlib-natives",
  "move-symbol-pool",
  "move-trace-format",
+ "move-vm-config",
  "move-vm-profiler",
  "move-vm-runtime",
  "move-vm-test-utils",
@@ -3209,12 +3222,14 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 
 [[package]]
 name = "petgraph"
-version = "0.5.1"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "467d164a6de56270bd7c4d070df81d07beace25012d5103ced4e9ff08d6afdb7"
+checksum = "7a98c6720655620a521dcc722d0ad66cd8afd5d86e34a89ef691c50b7b24de06"
 dependencies = [
  "fixedbitset",
- "indexmap 1.9.3",
+ "hashbrown 0.15.2",
+ "indexmap 2.8.0",
+ "serde",
 ]
 
 [[package]]

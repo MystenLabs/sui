@@ -30,11 +30,11 @@ use sui_types::{
     },
 };
 use tokio::{sync::mpsc, time::Instant};
-use tracing::{debug, info, warn};
+use tracing::{debug, info, trace, warn};
 
 // TODO: Move this into ExecutionTimeObserverConfig, if we switch to a moving average
 // implmentation without the window size in the type.
-const LOCAL_OBSERVATION_WINDOW_SIZE: usize = 10;
+const LOCAL_OBSERVATION_WINDOW_SIZE: usize = 20;
 const OBJECT_UTILIZATION_METRIC_HASH_MODULUS: u8 = 32;
 
 // Collects local execution time estimates to share via consensus.
@@ -71,6 +71,36 @@ pub struct LocalObservations {
     last_shared: Option<(Duration, Instant)>,
 }
 
+impl LocalObservations {
+    fn diff_exceeds_threshold(
+        &self,
+        new_average: Duration,
+        threshold: f64,
+        min_interval: Duration,
+    ) -> bool {
+        let Some((last_shared, last_shared_timestamp)) = self.last_shared else {
+            // Diff threshold exceeded by default if we haven't shared anything yet.
+            return true;
+        };
+
+        if last_shared_timestamp.elapsed() < min_interval {
+            return false;
+        }
+
+        if threshold >= 0.0 {
+            // Positive threshold requires upward change.
+            new_average
+                .checked_sub(last_shared)
+                .is_some_and(|diff| diff > last_shared.mul_f64(threshold))
+        } else {
+            // Negative threshold requires downward change.
+            last_shared
+                .checked_sub(new_average)
+                .is_some_and(|diff| diff > last_shared.mul_f64(-threshold))
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ObjectUtilization {
     excess_execution_time: Duration,
@@ -79,8 +109,8 @@ pub struct ObjectUtilization {
 }
 
 impl ObjectUtilization {
-    pub fn overutilized(&self) -> bool {
-        self.excess_execution_time > Duration::ZERO
+    pub fn overutilized(&self, config: &ExecutionTimeObserverConfig) -> bool {
+        self.excess_execution_time > config.observation_sharing_object_utilization_threshold()
     }
 }
 
@@ -219,7 +249,7 @@ impl ExecutionTimeObserver {
                             last_measured: None,
                             was_overutilized: false,
                         });
-                let overutilized_at_start = utilization.overutilized();
+                let overutilized_at_start = utilization.overutilized(&self.config);
                 utilization.excess_execution_time += total_duration;
                 utilization.excess_execution_time =
                     utilization.excess_execution_time.saturating_sub(
@@ -232,17 +262,18 @@ impl ExecutionTimeObserver {
                             .unwrap_or(Duration::MAX),
                     );
                 utilization.last_measured = Some(now);
-                if utilization.excess_execution_time > Duration::ZERO {
+                if utilization.overutilized(&self.config) {
                     utilization.was_overutilized = true;
                 }
 
                 // Update overutilized objects metrics.
-                if !overutilized_at_start && utilization.overutilized() {
+                if !overutilized_at_start && utilization.overutilized(&self.config) {
+                    trace!("object {id:?} is overutilized");
                     epoch_store
                         .metrics
                         .epoch_execution_time_observer_overutilized_objects
                         .inc();
-                } else if overutilized_at_start && !utilization.overutilized() {
+                } else if overutilized_at_start && !utilization.overutilized(&self.config) {
                     epoch_store
                         .metrics
                         .epoch_execution_time_observer_overutilized_objects
@@ -318,21 +349,44 @@ impl ExecutionTimeObserver {
             // - the tx has at least one mutable shared object with utilization that's too high
             // TODO: Consider only sharing observations that disagree with consensus estimate.
             let new_average = local_observation.moving_average.get_average();
-            let diff_exceeds_threshold =
-                local_observation
-                    .last_shared
-                    .is_none_or(|(last_shared, last_shared_timestamp)| {
-                        let diff = last_shared.abs_diff(new_average);
-                        diff >= new_average
-                            .mul_f64(self.config.observation_sharing_diff_threshold())
-                            && last_shared_timestamp.elapsed()
-                                >= self.config.observation_sharing_min_interval()
-                    });
-            let utilization_exceeds_threshold = max_excess_per_object_execution_time
+            let mut should_share = false;
+
+            // Share upward adjustments if an object is overutilized.
+            if max_excess_per_object_execution_time
                 >= self
                     .config
-                    .observation_sharing_object_utilization_threshold();
-            if diff_exceeds_threshold && (utilization_exceeds_threshold || uses_indebted_object) {
+                    .observation_sharing_object_utilization_threshold()
+                && local_observation.diff_exceeds_threshold(
+                    new_average,
+                    self.config.observation_sharing_diff_threshold(),
+                    self.config.observation_sharing_min_interval(),
+                )
+            {
+                should_share = true;
+                epoch_store
+                    .metrics
+                    .epoch_execution_time_observations_sharing_reason
+                    .with_label_values(&["utilization"])
+                    .inc();
+            };
+
+            // Share downward adjustments if an object is indebted.
+            if uses_indebted_object
+                && local_observation.diff_exceeds_threshold(
+                    new_average,
+                    -self.config.observation_sharing_diff_threshold(),
+                    self.config.observation_sharing_min_interval(),
+                )
+            {
+                should_share = true;
+                epoch_store
+                    .metrics
+                    .epoch_execution_time_observations_sharing_reason
+                    .with_label_values(&["indebted"])
+                    .inc();
+            }
+
+            if should_share {
                 debug!("sharing new execution time observation for {key:?}: {new_average:?}");
                 to_share.push((key, new_average));
                 local_observation.last_shared = Some((new_average, Instant::now()));
@@ -611,6 +665,13 @@ impl ExecutionTimeEstimator {
                 .collect(),
         )
     }
+
+    pub fn get_observations(&self) -> Vec<(ExecutionTimeObservationKey, ConsensusObservations)> {
+        self.consensus_observations
+            .iter()
+            .map(|(key, observations)| (key.clone(), observations.clone()))
+            .collect()
+    }
 }
 
 fn command_length(command: &Command) -> NonZeroUsize {
@@ -761,7 +822,7 @@ mod tests {
 
         // Record last observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(120))];
-        let total_duration = Duration::from_millis(120);
+        let total_duration = Duration::from_millis(160);
         observer.record_local_observations(&ptb, &timings, total_duration);
 
         // Verify that moving average is the same and a new observation was shared, as
@@ -769,10 +830,10 @@ mod tests {
         let local_obs = observer.local_observations.get(&key).unwrap();
         assert_eq!(
             local_obs.moving_average.get_average(),
-            // average of [110ms, 120ms, 120ms, 130ms]
-            Duration::from_millis(120)
+            // average of [110ms, 120ms, 130ms, 160ms]
+            Duration::from_millis(130)
         );
-        assert_eq!(local_obs.last_shared.unwrap().0, Duration::from_millis(120));
+        assert_eq!(local_obs.last_shared.unwrap().0, Duration::from_millis(130));
     }
 
     #[tokio::test]
@@ -916,9 +977,10 @@ mod tests {
         let package = ObjectID::random();
         let module = "test_module".to_string();
         let function = "test_function".to_string();
+        let shared_object_id = ObjectID::random();
         let ptb = ProgrammableTransaction {
             inputs: vec![CallArg::Object(ObjectArg::SharedObject {
-                id: ObjectID::random(),
+                id: shared_object_id,
                 initial_shared_version: SequenceNumber::new(),
                 mutable: true,
             })],
@@ -949,7 +1011,7 @@ mod tests {
             .last_shared
             .is_none());
 
-        // Second observation - no time has passed, so now utilization is high; should share
+        // Second observation - no time has passed, so now utilization is high; should share upward change
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(1))];
         observer.record_local_observations(&ptb, &timings, Duration::from_secs(2));
         assert_eq!(
@@ -963,8 +1025,7 @@ mod tests {
             Duration::from_secs(2)
         );
 
-        // Third execution still with high utilization - time has passed but not enough to clear excess
-        // when accounting for the new observation; should share
+        // Third execution with significant upward diff and high utilization - should share again
         tokio::time::advance(Duration::from_secs(5)).await;
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(3))];
         observer.record_local_observations(&ptb, &timings, Duration::from_secs(5));
@@ -979,7 +1040,23 @@ mod tests {
             Duration::from_secs(3)
         );
 
-        // Fourth execution after utilization drops - should not share, even though diff still high
+        // Fourth execution with significant downward diff but still overutilized - should NOT share downward change
+        // (downward changes are only shared for indebted objects, not overutilized ones)
+        tokio::time::advance(Duration::from_millis(150)).await;
+        let timings = vec![ExecutionTiming::Success(Duration::from_millis(100))];
+        observer.record_local_observations(&ptb, &timings, Duration::from_millis(500));
+        assert_eq!(
+            observer
+                .local_observations
+                .get(&key)
+                .unwrap()
+                .last_shared
+                .unwrap()
+                .0,
+            Duration::from_secs(3) // still the old value, no sharing of downward change
+        );
+
+        // Fifth execution after utilization drops - should not share upward diff since not overutilized
         tokio::time::advance(Duration::from_secs(60)).await;
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(11))];
         observer.record_local_observations(&ptb, &timings, Duration::from_secs(11));
@@ -991,7 +1068,126 @@ mod tests {
                 .last_shared
                 .unwrap()
                 .0,
-            Duration::from_secs(3) // still the old value
+            Duration::from_secs(3) // still the old value, no sharing when not overutilized
+        );
+    }
+
+    #[tokio::test]
+    async fn test_record_local_observations_with_indebted_objects() {
+        telemetry_subscribers::init_for_testing();
+
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_per_object_congestion_control_mode_for_testing(
+                PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                    ExecutionTimeEstimateParams {
+                        target_utilization: 100,
+                        allowed_txn_cost_overage_burst_limit_us: 0,
+                        randomness_scalar: 0,
+                        max_estimate_us: u64::MAX,
+                        stored_observations_num_included_checkpoints: 10,
+                        stored_observations_limit: u64::MAX,
+                    },
+                ),
+            );
+            config
+        });
+
+        let mock_consensus_client = MockConsensusClient::new();
+        let authority = TestAuthorityBuilder::new().build().await;
+        let epoch_store = authority.epoch_store_for_testing();
+        let consensus_adapter = Arc::new(ConsensusAdapter::new(
+            Arc::new(mock_consensus_client),
+            CheckpointStore::new_for_tests(),
+            authority.name,
+            Arc::new(ConnectionMonitorStatusForTests {}),
+            100_000,
+            100_000,
+            None,
+            None,
+            ConsensusAdapterMetrics::new_test(),
+            epoch_store.protocol_config().clone(),
+        ));
+        let mut observer = ExecutionTimeObserver::new_for_testing(
+            epoch_store.clone(),
+            Box::new(consensus_adapter.clone()),
+            Duration::from_millis(500), // Low utilization threshold to enable overutilized sharing initially
+        );
+
+        // Create a simple PTB with one move call and one mutable shared input
+        let package = ObjectID::random();
+        let module = "test_module".to_string();
+        let function = "test_function".to_string();
+        let shared_object_id = ObjectID::random();
+        let ptb = ProgrammableTransaction {
+            inputs: vec![CallArg::Object(ObjectArg::SharedObject {
+                id: shared_object_id,
+                initial_shared_version: SequenceNumber::new(),
+                mutable: true,
+            })],
+            commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
+                package,
+                module: module.clone(),
+                function: function.clone(),
+                type_arguments: vec![],
+                arguments: vec![],
+            }))],
+        };
+        let key = ExecutionTimeObservationKey::MoveEntryPoint {
+            package,
+            module: module.clone(),
+            function: function.clone(),
+            type_arguments: vec![],
+        };
+
+        tokio::time::pause();
+
+        // First observation - should not share due to low utilization
+        let timings = vec![ExecutionTiming::Success(Duration::from_secs(1))];
+        observer.record_local_observations(&ptb, &timings, Duration::from_secs(1));
+        assert!(observer
+            .local_observations
+            .get(&key)
+            .unwrap()
+            .last_shared
+            .is_none());
+
+        // Second observation - no time has passed, so now utilization is high; should share upward change
+        let timings = vec![ExecutionTiming::Success(Duration::from_secs(2))];
+        observer.record_local_observations(&ptb, &timings, Duration::from_secs(2));
+        assert_eq!(
+            observer
+                .local_observations
+                .get(&key)
+                .unwrap()
+                .last_shared
+                .unwrap()
+                .0,
+            Duration::from_millis(1500) // (1s + 2s) / 2 = 1.5s
+        );
+
+        // Mark the shared object as indebted and increase utilization threshold to prevent overutilized sharing
+        observer.update_indebted_objects(vec![shared_object_id]);
+        observer
+            .config
+            .observation_sharing_object_utilization_threshold = Some(Duration::from_secs(1000));
+
+        // Wait for min interval and record a significant downward change
+        // This should share because the object is indebted
+        tokio::time::advance(Duration::from_secs(60)).await;
+        let timings = vec![ExecutionTiming::Success(Duration::from_millis(300))];
+        observer.record_local_observations(&ptb, &timings, Duration::from_millis(300));
+
+        // Moving average should be (1s + 2s + 0.3s) / 3 = 1.1s
+        // This downward change should have been shared for indebted object
+        assert_eq!(
+            observer
+                .local_observations
+                .get(&key)
+                .unwrap()
+                .last_shared
+                .unwrap()
+                .0,
+            Duration::from_millis(1100)
         );
     }
 

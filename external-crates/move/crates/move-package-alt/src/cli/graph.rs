@@ -7,11 +7,12 @@ use std::path::PathBuf;
 use crate::{
     errors::PackageResult,
     flavor::Vanilla,
-    graph::{PackageGraph, PackageGraphBuilder},
-    package::{EnvironmentName, Package, PackagePath},
+    graph::PackageGraph,
+    package::{EnvironmentName, Package, paths::PackagePath},
 };
 use clap::{Command, Parser, Subcommand};
 use petgraph::dot::{Config, Dot};
+use tracing::info;
 
 /// Build the package
 #[derive(Debug, Clone, Parser)]
@@ -25,18 +26,11 @@ impl Graph {
     pub async fn execute(&self) -> PackageResult<()> {
         let path = self.path.clone().unwrap_or_else(|| PathBuf::from("."));
         let path = path.canonicalize().unwrap();
-        let package_path = PackagePath::new(path.clone());
+        let package_path = PackagePath::new(path.clone())?;
 
-        let package = PackageGraphBuilder::<Vanilla>::new()
-            .load_from_lockfile(&package_path, &"mainnet".to_string())
-            .await?;
+        let graph = PackageGraph::<Vanilla>::load(&package_path, &"mainnet".to_string()).await?;
 
-        println!("Package graph loaded successfully\n: {:#?}", package);
-
-        println!(
-            "{:?}",
-            Dot::with_config(&package.inner, &[Config::EdgeNoLabel])
-        );
+        info!("Package graph loaded successfully\n: {:#?}", graph);
 
         Ok(())
     }

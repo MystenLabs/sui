@@ -106,6 +106,9 @@ pub struct EpochMetrics {
     /// The number of execution time observations messages shared by this node.
     pub epoch_execution_time_observations_shared: IntCounter,
 
+    /// The number of execution time observations messages intended to be shared by this node, annotated with reason.
+    pub epoch_execution_time_observations_sharing_reason: IntCounterVec,
+
     /// The number of execution time measurements dropped due to backpressure from the observer.
     pub epoch_execution_time_measurements_dropped: IntCounter,
 
@@ -257,6 +260,13 @@ impl EpochMetrics {
             epoch_execution_time_observations_shared: register_int_counter_with_registry!(
                 "epoch_execution_time_observations_shared",
                 "The number of execution time observations messages shared by this node",
+                registry
+            )
+            .unwrap(),
+            epoch_execution_time_observations_sharing_reason: register_int_counter_vec_with_registry!(
+                "epoch_execution_time_observations_sharing_reason",
+                "The number of execution time observations messages intended to be shared by this node, annotated with reason",
+                &["reason"],
                 registry
             )
             .unwrap(),

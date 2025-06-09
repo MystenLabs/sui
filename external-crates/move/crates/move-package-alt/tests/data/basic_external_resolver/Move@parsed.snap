@@ -42,6 +42,7 @@ Manifest {
                             ),
                         },
                     ),
+                    containing_file: "tests/data/basic_external_resolver/Move.toml",
                 },
             ),
             is_override: false,

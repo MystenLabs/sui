@@ -51,7 +51,7 @@ impl From<ProtocolNotFoundError> for crate::RpcError {
     }
 }
 
-fn config_to_proto(config: ProtocolConfig) -> proto::ProtocolConfig {
+pub fn config_to_proto(config: ProtocolConfig) -> proto::ProtocolConfig {
     let protocol_version = config.version.as_u64();
     let attributes = config
         .attr_map()

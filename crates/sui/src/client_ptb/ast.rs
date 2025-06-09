@@ -32,13 +32,17 @@ pub const ASSIGN: &str = "assign";
 pub const PREVIEW: &str = "preview";
 pub const WARN_SHADOWS: &str = "warn-shadows";
 pub const GAS_BUDGET: &str = "gas-budget";
+pub const GAS_PRICE: &str = "gas-price";
+pub const GAS_SPONSOR: &str = "gas-sponsor";
 pub const SUMMARY: &str = "summary";
 pub const GAS_COIN: &str = "gas-coin";
 pub const JSON: &str = "json";
+pub const TX_DIGEST: &str = "tx-digest";
 pub const DRY_RUN: &str = "dry-run";
 pub const DEV_INSPECT: &str = "dev-inspect";
 pub const SERIALIZE_UNSIGNED: &str = "serialize-unsigned-transaction";
 pub const SERIALIZE_SIGNED: &str = "serialize-signed-transaction";
+pub const SENDER: &str = "sender";
 
 // Types
 pub const U8: &str = "u8";
@@ -72,6 +76,7 @@ pub const COMMANDS: &[&str] = &[
     PREVIEW,
     WARN_SHADOWS,
     GAS_BUDGET,
+    GAS_PRICE,
     SUMMARY,
     GAS_COIN,
     JSON,
@@ -79,6 +84,7 @@ pub const COMMANDS: &[&str] = &[
     DEV_INSPECT,
     SERIALIZE_UNSIGNED,
     SERIALIZE_SIGNED,
+    SENDER,
 ];
 
 pub fn is_keyword(s: &str) -> bool {
@@ -111,12 +117,16 @@ pub struct ProgramMetadata {
     pub summary_set: bool,
     pub serialize_unsigned_set: bool,
     pub serialize_signed_set: bool,
-    pub gas_object_id: Option<Spanned<ObjectID>>,
+    pub gas_object_ids: Option<Vec<Spanned<ObjectID>>>,
     pub json_set: bool,
+    pub tx_digest_set: bool,
     pub dry_run_set: bool,
     pub dev_inspect_set: bool,
     pub gas_budget: Option<Spanned<u64>>,
+    pub gas_price: Option<Spanned<u64>>,
+    pub gas_sponsor: Option<Spanned<NumericalAddress>>,
     pub mvr_names: BTreeMap<String, Span>,
+    pub sender: Option<Spanned<NumericalAddress>>,
 }
 
 /// A parsed module access consisting of the address, module name, and function name.

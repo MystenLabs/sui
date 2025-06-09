@@ -80,8 +80,8 @@ impl<S: MoveResolver> TransactionDataCache<S> {
 
 // `DataStore` implementation for the `TransactionDataCache`
 impl<S: MoveResolver> DataStore for TransactionDataCache<S> {
-    fn link_context(&self) -> AccountAddress {
-        self.remote.link_context()
+    fn link_context(&self) -> PartialVMResult<AccountAddress> {
+        Ok(self.remote.link_context())
     }
 
     fn relocate(&self, module_id: &ModuleId) -> PartialVMResult<ModuleId> {

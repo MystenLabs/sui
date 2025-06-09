@@ -1,0 +1,8 @@
+---
+source: crates/move-package-alt/tests/test_runner.rs
+---
+error: TOML parse error at line 2, column 7
+  |
+2 | foo = { r.mvr = "a", r.ext = "b" }
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Externally resolved dependencies should have the form `{r.<resolver-name> = <resolver-data>}`

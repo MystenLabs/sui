@@ -1,0 +1,6 @@
+// Move bytecode v6
+module 2.event {
+
+native public emit<Ty0: copy + drop>(Arg0: Ty0);
+
+}

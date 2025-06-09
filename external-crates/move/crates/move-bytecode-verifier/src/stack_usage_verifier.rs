@@ -9,18 +9,20 @@
 //! the stack height by the number of values returned by the function as indicated in its
 //! signature. Additionally, the stack height must not dip below that at the beginning of the
 //! block for any basic block.
-use move_abstract_interpreter::{
-    absint::FunctionContext,
-    control_flow_graph::{BlockId, ControlFlowGraph},
-};
+use crate::absint::{FunctionContext, VMControlFlowGraph};
+use move_abstract_interpreter::control_flow_graph::ControlFlowGraph;
 use move_binary_format::{
     CompiledModule,
     errors::{PartialVMError, PartialVMResult},
-    file_format::{Bytecode, CodeUnit, FunctionDefinitionIndex, Signature, StructFieldInformation},
+    file_format::{
+        Bytecode, CodeOffset, CodeUnit, FunctionDefinitionIndex, Signature, StructFieldInformation,
+    },
 };
 use move_bytecode_verifier_meter::Meter;
 use move_core_types::vm_status::StatusCode;
 use move_vm_config::verifier::VerifierConfig;
+
+type BlockId = CodeOffset;
 
 pub(crate) struct StackUsageVerifier<'a> {
     module: &'a CompiledModule,
@@ -53,7 +55,7 @@ impl<'a> StackUsageVerifier<'a> {
         &self,
         config: &VerifierConfig,
         block_id: BlockId,
-        cfg: &dyn ControlFlowGraph,
+        cfg: &VMControlFlowGraph,
     ) -> PartialVMResult<()> {
         let code = &self.code.code;
         let mut stack_size_increment = 0;

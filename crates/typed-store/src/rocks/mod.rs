@@ -57,18 +57,6 @@ const ROCKSDB_PROPERTY_TOTAL_BLOB_FILES_SIZE: &CStr =
 #[cfg(test)]
 mod tests;
 
-// TODO: deprecate macros use
-#[macro_export]
-macro_rules! reopen {
-    ( $db:expr, $($cf:expr;<$K:ty, $V:ty>),*) => {
-        (
-            $(
-                DBMap::<$K, $V>::reopen($db, Some($cf), &ReadWriteOptions::default(), false).expect(&format!("Cannot open {} CF.", $cf)[..])
-            ),*
-        )
-    };
-}
-
 #[derive(Debug)]
 pub struct RocksDB {
     pub underlying: rocksdb::DBWithThreadMode<MultiThreaded>,

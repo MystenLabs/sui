@@ -1,0 +1,16 @@
+test
+
+## Can use the package name
+test testing
+
+## can use fully qualified names
+test testing::a::test_move
+
+## Can match substrings of the test name still (just like before)
+test a
+test move
+
+## Now test that regex matching works
+test ^move
+test move$
+test ^test

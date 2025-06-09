@@ -7,13 +7,20 @@ pub use checked::*;
 mod checked {
     use crate::{
         adapter::substitute_package_id,
+        data_store::sui_data_store::SuiDataStore,
         execution_mode::ExecutionMode,
         execution_value::{
             CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
             ensure_serialized_size,
         },
         gas_charger::GasCharger,
-        programmable_transactions::{context::*, data_store::SuiDataStore},
+        programmable_transactions::{
+            context::*,
+            trace_utils::{
+                trace_move_call_end, trace_move_call_start, trace_ptb_summary, trace_split_coins,
+                trace_transfer,
+            },
+        },
         type_resolver::TypeTagResolver,
     };
     use move_binary_format::file_format::AbilitySet;
@@ -128,6 +135,9 @@ mod checked {
             gas_charger,
             inputs,
         )?;
+
+        trace_ptb_summary(trace_builder_opt, &commands)?;
+
         // execute commands
         let mut mode_results = Mode::empty_results();
         for (idx, command) in commands.into_iter().enumerate() {
@@ -272,6 +282,9 @@ mod checked {
                     .collect::<Result<_, _>>()?;
                 let addr: SuiAddress =
                     context.by_value_arg(CommandKind::TransferObjects, objs.len(), addr_arg)?;
+
+                trace_transfer(context, trace_builder_opt, &objs)?;
+
                 for obj in objs {
                     obj.ensure_public_transfer_eligible()?;
                     context.transfer_object(obj, addr)?;
@@ -290,7 +303,7 @@ mod checked {
                     let msg = "Expected a coin but got an non coin object".to_owned();
                     return Err(ExecutionError::new_with_source(e, msg));
                 };
-                let split_coins = amount_args
+                let split_coins: Vec<Value> = amount_args
                     .into_iter()
                     .map(|amount_arg| {
                         let amount: u64 =
@@ -304,6 +317,9 @@ mod checked {
                         Ok(Value::Object(new_coin))
                     })
                     .collect::<Result<_, ExecutionError>>()?;
+
+                trace_split_coins(context, trace_builder_opt, &obj.type_, coin, &split_coins)?;
+
                 context.restore_arg::<Mode>(&mut argument_updates, coin_arg, Value::Object(obj))?;
                 split_coins
             }
@@ -357,6 +373,8 @@ mod checked {
                     type_arguments,
                     arguments,
                 } = *move_call;
+                trace_move_call_start(trace_builder_opt);
+
                 let arguments = context.splat_args(0, arguments)?;
 
                 let module = to_identifier(context, module)?;
@@ -387,7 +405,9 @@ mod checked {
                     trace_builder_opt,
                 );
 
-                context.linkage_view.reset_linkage();
+                trace_move_call_end(trace_builder_opt);
+
+                context.linkage_view.reset_linkage()?;
                 return_values?
             }
             Command::Publish(modules, dep_ids) => execute_move_publish::<Mode>(
@@ -593,7 +613,7 @@ mod checked {
         let res = publish_and_verify_modules(context, runtime_id, &modules).and_then(|_| {
             init_modules::<Mode>(context, argument_updates, &modules, trace_builder_opt)
         });
-        context.linkage_view.reset_linkage();
+        context.linkage_view.reset_linkage()?;
         if res.is_err() {
             context.pop_package();
         }
@@ -701,7 +721,7 @@ mod checked {
 
         context.linkage_view.set_linkage(&package)?;
         let res = publish_and_verify_modules(context, runtime_id, &modules);
-        context.linkage_view.reset_linkage();
+        context.linkage_view.reset_linkage()?;
         res?;
 
         check_compatibility(
@@ -1143,7 +1163,7 @@ mod checked {
                 check_non_entry_signature::<Mode>(context, module_id, function, &signature)?
             }
         };
-        check_private_generics(context, module_id, function, type_arguments)?;
+        check_private_generics(module_id, function)?;
         Ok(LoadedFunctionInfo {
             kind: function_kind,
             signature,
@@ -1242,11 +1262,9 @@ mod checked {
             .collect()
     }
 
-    fn check_private_generics(
-        _context: &mut ExecutionContext,
+    pub fn check_private_generics(
         module_id: &ModuleId,
         function: &IdentStr,
-        _type_arguments: &[Type],
     ) -> Result<(), ExecutionError> {
         let module_ident = (module_id.address(), module_id.name());
         if module_ident == (&SUI_FRAMEWORK_ADDRESS, EVENT_MODULE) {

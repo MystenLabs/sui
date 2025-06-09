@@ -12,6 +12,7 @@ use crate::checkpoints::CheckpointStore;
 use crate::consensus_adapter::ConsensusAdapter;
 use crate::consensus_adapter::ConsensusAdapterMetrics;
 use crate::consensus_adapter::{ConnectionMonitorStatusForTests, MockConsensusClient};
+use crate::execution_scheduler::ExecutionSchedulerAPI;
 use crate::safe_client::SafeClient;
 use crate::test_authority_clients::LocalAuthorityClient;
 use crate::test_utils::{make_transfer_object_move_transaction, make_transfer_object_transaction};
@@ -581,6 +582,8 @@ async fn test_per_object_overload() {
         }
         send_consensus(&authorities[3], &shared_cert).await;
     }
+    // Give enough time to schedule the transactions.
+    sleep(Duration::from_secs(3)).await;
 
     // Trying to sign a new transaction would now fail.
     let gas_ref = get_latest_ref(authority_clients[0].clone(), gas_objects[num_txns].id()).await;
@@ -592,7 +595,7 @@ async fn test_per_object_overload() {
         )
         .build_and_sign(&key);
     let res = authorities[3]
-        .transaction_manager()
+        .execution_scheduler()
         .check_execution_overload(authorities[3].overload_config(), shared_txn.data());
     let message = format!("{res:?}");
     assert!(
@@ -727,7 +730,7 @@ async fn test_txn_age_overload() {
         )
         .build_and_sign(&key);
     let res = authorities[3]
-        .transaction_manager()
+        .execution_scheduler()
         .check_execution_overload(authorities[3].overload_config(), shared_txn.data());
     let message = format!("{res:?}");
     assert!(

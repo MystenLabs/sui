@@ -1,0 +1,1603 @@
+// Move bytecode v6
+module 2.random {
+use 0000000000000000000000000000000000000000000000000000000000000001::bcs;
+use 0000000000000000000000000000000000000000000000000000000000000001::vector;
+use 0000000000000000000000000000000000000000000000000000000000000002::address;
+use 0000000000000000000000000000000000000000000000000000000000000002::hmac;
+use 0000000000000000000000000000000000000000000000000000000000000002::object;
+use 0000000000000000000000000000000000000000000000000000000000000002::transfer;
+use 0000000000000000000000000000000000000000000000000000000000000002::tx_context;
+use 0000000000000000000000000000000000000000000000000000000000000002::versioned;
+
+struct Random has key {
+	id: UID,
+	inner: Versioned
+}
+
+struct RandomInner has store {
+	version: u64,
+	epoch: u64,
+	randomness_round: u64,
+	random_bytes: vector<u8>
+}
+
+struct RandomGenerator has drop {
+	seed: vector<u8>,
+	counter: u16,
+	buffer: vector<u8>
+}
+
+create(Arg0: &mut TxContext) {
+L1:	loc0: RandomInner
+L2:	loc1: u64
+B0:
+	0: CopyLoc[0](Arg0: &mut TxContext)
+	1: FreezeRef
+	2: Call tx_context::sender(&TxContext): address
+	3: LdConst[7](address: 0x00..)
+	4: Eq
+	5: BrFalse(7)
+B1:
+	6: Branch(11)
+B2:
+	7: MoveLoc[0](Arg0: &mut TxContext)
+	8: Pop
+	9: LdConst[0](u64: 0)
+	10: Abort
+B3:
+	11: LdConst[1](u64: 1)
+	12: StLoc[2](loc1: u64)
+	13: CopyLoc[2](loc1: u64)
+	14: CopyLoc[0](Arg0: &mut TxContext)
+	15: FreezeRef
+	16: Call tx_context::epoch(&TxContext): u64
+	17: LdU64(0)
+	18: LdConst[8](vector<u8>: "" /..)
+	19: Pack[1](RandomInner)
+	20: StLoc[1](loc0: RandomInner)
+	21: Call object::randomness_state(): UID
+	22: MoveLoc[2](loc1: u64)
+	23: MoveLoc[1](loc0: RandomInner)
+	24: MoveLoc[0](Arg0: &mut TxContext)
+	25: Call versioned::create<RandomInner>(u64, RandomInner, &mut TxContext): Versioned
+	26: Pack[0](Random)
+	27: Call transfer::share_object<Random>(Random)
+	28: Ret
+}
+
+load_inner_mut(Arg0: &mut Random): &mut RandomInner {
+L1:	loc0: &mut RandomInner
+L2:	loc1: u64
+B0:
+	0: CopyLoc[0](Arg0: &mut Random)
+	1: ImmBorrowField[0](Random.inner: Versioned)
+	2: Call versioned::version(&Versioned): u64
+	3: StLoc[2](loc1: u64)
+	4: CopyLoc[2](loc1: u64)
+	5: LdConst[1](u64: 1)
+	6: Eq
+	7: BrFalse(9)
+B1:
+	8: Branch(13)
+B2:
+	9: MoveLoc[0](Arg0: &mut Random)
+	10: Pop
+	11: LdConst[1](u64: 1)
+	12: Abort
+B3:
+	13: MoveLoc[0](Arg0: &mut Random)
+	14: MutBorrowField[0](Random.inner: Versioned)
+	15: Call versioned::load_value_mut<RandomInner>(&mut Versioned): &mut RandomInner
+	16: StLoc[1](loc0: &mut RandomInner)
+	17: CopyLoc[1](loc0: &mut RandomInner)
+	18: ImmBorrowField[1](RandomInner.version: u64)
+	19: ReadRef
+	20: MoveLoc[2](loc1: u64)
+	21: Eq
+	22: BrFalse(24)
+B4:
+	23: Branch(28)
+B5:
+	24: MoveLoc[1](loc0: &mut RandomInner)
+	25: Pop
+	26: LdConst[1](u64: 1)
+	27: Abort
+B6:
+	28: MoveLoc[1](loc0: &mut RandomInner)
+	29: Ret
+}
+
+load_inner(Arg0: &Random): &RandomInner {
+L1:	loc0: &RandomInner
+L2:	loc1: u64
+B0:
+	0: CopyLoc[0](Arg0: &Random)
+	1: ImmBorrowField[0](Random.inner: Versioned)
+	2: Call versioned::version(&Versioned): u64
+	3: StLoc[2](loc1: u64)
+	4: CopyLoc[2](loc1: u64)
+	5: LdConst[1](u64: 1)
+	6: Eq
+	7: BrFalse(9)
+B1:
+	8: Branch(13)
+B2:
+	9: MoveLoc[0](Arg0: &Random)
+	10: Pop
+	11: LdConst[1](u64: 1)
+	12: Abort
+B3:
+	13: MoveLoc[0](Arg0: &Random)
+	14: ImmBorrowField[0](Random.inner: Versioned)
+	15: Call versioned::load_value<RandomInner>(&Versioned): &RandomInner
+	16: StLoc[1](loc0: &RandomInner)
+	17: CopyLoc[1](loc0: &RandomInner)
+	18: ImmBorrowField[1](RandomInner.version: u64)
+	19: ReadRef
+	20: MoveLoc[2](loc1: u64)
+	21: Eq
+	22: BrFalse(24)
+B4:
+	23: Branch(28)
+B5:
+	24: MoveLoc[1](loc0: &RandomInner)
+	25: Pop
+	26: LdConst[1](u64: 1)
+	27: Abort
+B6:
+	28: MoveLoc[1](loc0: &RandomInner)
+	29: Ret
+}
+
+update_randomness_state(Arg0: &mut Random, Arg1: u64, Arg2: vector<u8>, Arg3: &TxContext) {
+L4:	loc0: bool
+L5:	loc1: bool
+L6:	loc2: bool
+L7:	loc3: u64
+L8:	loc4: &mut RandomInner
+B0:
+	0: CopyLoc[3](Arg3: &TxContext)
+	1: Call tx_context::sender(&TxContext): address
+	2: LdConst[7](address: 0x00..)
+	3: Eq
+	4: BrFalse(6)
+B1:
+	5: Branch(12)
+B2:
+	6: MoveLoc[0](Arg0: &mut Random)
+	7: Pop
+	8: MoveLoc[3](Arg3: &TxContext)
+	9: Pop
+	10: LdConst[0](u64: 0)
+	11: Abort
+B3:
+	12: CopyLoc[3](Arg3: &TxContext)
+	13: Call tx_context::epoch(&TxContext): u64
+	14: StLoc[7](loc3: u64)
+	15: MoveLoc[0](Arg0: &mut Random)
+	16: Call load_inner_mut(&mut Random): &mut RandomInner
+	17: StLoc[8](loc4: &mut RandomInner)
+	18: CopyLoc[8](loc4: &mut RandomInner)
+	19: ImmBorrowField[2](RandomInner.randomness_round: u64)
+	20: ReadRef
+	21: LdU64(0)
+	22: Eq
+	23: BrFalse(38)
+B4:
+	24: CopyLoc[8](loc4: &mut RandomInner)
+	25: ImmBorrowField[3](RandomInner.epoch: u64)
+	26: ReadRef
+	27: LdU64(0)
+	28: Eq
+	29: BrFalse(35)
+B5:
+	30: CopyLoc[8](loc4: &mut RandomInner)
+	31: ImmBorrowField[4](RandomInner.random_bytes: vector<u8>)
+	32: Call vector::is_empty<u8>(&vector<u8>): bool
+	33: StLoc[4](loc0: bool)
+	34: Branch(40)
+B6:
+	35: LdFalse
+	36: StLoc[4](loc0: bool)
+	37: Branch(40)
+B7:
+	38: LdFalse
+	39: StLoc[4](loc0: bool)
+B8:
+	40: MoveLoc[4](loc0: bool)
+	41: BrFalse(53)
+B9:
+	42: CopyLoc[1](Arg1: u64)
+	43: LdU64(0)
+	44: Eq
+	45: BrFalse(47)
+B10:
+	46: Branch(88)
+B11:
+	47: MoveLoc[8](loc4: &mut RandomInner)
+	48: Pop
+	49: MoveLoc[3](Arg3: &TxContext)
+	50: Pop
+	51: LdConst[2](u64: 2)
+	52: Abort
+B12:
+	53: MoveLoc[7](loc3: u64)
+	54: CopyLoc[8](loc4: &mut RandomInner)
+	55: ImmBorrowField[3](RandomInner.epoch: u64)
+	56: ReadRef
+	57: Gt
+	58: BrFalse(64)
+B13:
+	59: CopyLoc[1](Arg1: u64)
+	60: LdU64(0)
+	61: Eq
+	62: StLoc[6](loc2: bool)
+	63: Branch(66)
+B14:
+	64: LdFalse
+	65: StLoc[6](loc2: bool)
+B15:
+	66: MoveLoc[6](loc2: bool)
+	67: BrFalse(71)
+B16:
+	68: LdTrue
+	69: StLoc[5](loc1: bool)
+	70: Branch(79)
+B17:
+	71: CopyLoc[1](Arg1: u64)
+	72: CopyLoc[8](loc4: &mut RandomInner)
+	73: ImmBorrowField[2](RandomInner.randomness_round: u64)
+	74: ReadRef
+	75: LdU64(1)
+	76: Add
+	77: Eq
+	78: StLoc[5](loc1: bool)
+B18:
+	79: MoveLoc[5](loc1: bool)
+	80: BrFalse(82)
+B19:
+	81: Branch(88)
+B20:
+	82: MoveLoc[8](loc4: &mut RandomInner)
+	83: Pop
+	84: MoveLoc[3](Arg3: &TxContext)
+	85: Pop
+	86: LdConst[2](u64: 2)
+	87: Abort
+B21:
+	88: MoveLoc[3](Arg3: &TxContext)
+	89: Call tx_context::epoch(&TxContext): u64
+	90: CopyLoc[8](loc4: &mut RandomInner)
+	91: MutBorrowField[3](RandomInner.epoch: u64)
+	92: WriteRef
+	93: MoveLoc[1](Arg1: u64)
+	94: CopyLoc[8](loc4: &mut RandomInner)
+	95: MutBorrowField[2](RandomInner.randomness_round: u64)
+	96: WriteRef
+	97: MoveLoc[2](Arg2: vector<u8>)
+	98: MoveLoc[8](loc4: &mut RandomInner)
+	99: MutBorrowField[4](RandomInner.random_bytes: vector<u8>)
+	100: WriteRef
+	101: Ret
+}
+
+public new_generator(Arg0: &Random, Arg1: &mut TxContext): RandomGenerator {
+L2:	loc0: vector<u8>
+L3:	loc1: &vector<u8>
+B0:
+	0: MoveLoc[0](Arg0: &Random)
+	1: Call load_inner(&Random): &RandomInner
+	2: ImmBorrowField[4](RandomInner.random_bytes: vector<u8>)
+	3: StLoc[3](loc1: &vector<u8>)
+	4: MoveLoc[1](Arg1: &mut TxContext)
+	5: Call tx_context::fresh_object_address(&mut TxContext): address
+	6: Call address::to_bytes(address): vector<u8>
+	7: StLoc[2](loc0: vector<u8>)
+	8: MoveLoc[3](loc1: &vector<u8>)
+	9: ImmBorrowLoc[2](loc0: vector<u8>)
+	10: Call hmac::hmac_sha3_256(&vector<u8>, &vector<u8>): vector<u8>
+	11: LdU16(0)
+	12: LdConst[8](vector<u8>: "" /..)
+	13: Pack[2](RandomGenerator)
+	14: Ret
+}
+
+derive_next_block(Arg0: &mut RandomGenerator): vector<u8> {
+L1:	loc0: vector<u8>
+L2:	loc1: &vector<u8>
+B0:
+	0: CopyLoc[0](Arg0: &mut RandomGenerator)
+	1: ImmBorrowField[5](RandomGenerator.counter: u16)
+	2: ReadRef
+	3: LdU16(1)
+	4: Add
+	5: CopyLoc[0](Arg0: &mut RandomGenerator)
+	6: MutBorrowField[5](RandomGenerator.counter: u16)
+	7: WriteRef
+	8: CopyLoc[0](Arg0: &mut RandomGenerator)
+	9: ImmBorrowField[6](RandomGenerator.seed: vector<u8>)
+	10: StLoc[2](loc1: &vector<u8>)
+	11: MoveLoc[0](Arg0: &mut RandomGenerator)
+	12: ImmBorrowField[5](RandomGenerator.counter: u16)
+	13: Call bcs::to_bytes<u16>(&u16): vector<u8>
+	14: StLoc[1](loc0: vector<u8>)
+	15: MoveLoc[2](loc1: &vector<u8>)
+	16: ImmBorrowLoc[1](loc0: vector<u8>)
+	17: Call hmac::hmac_sha3_256(&vector<u8>, &vector<u8>): vector<u8>
+	18: Ret
+}
+
+public generate_bytes(Arg0: &mut RandomGenerator, Arg1: u16): vector<u8> {
+L2:	loc0: u16
+L3:	loc1: u64
+L4:	loc2: u64
+L5:	loc3: u16
+L6:	loc4: vector<u8>
+L7:	loc5: u64
+L8:	loc6: vector<u8>
+L9:	loc7: u64
+L10:	loc8: u16
+B0:
+	0: LdConst[8](vector<u8>: "" /..)
+	1: StLoc[8](loc6: vector<u8>)
+	2: CopyLoc[1](Arg1: u16)
+	3: LdConst[5](u16: 32)
+	4: Div
+	5: StLoc[2](loc0: u16)
+	6: LdU16(0)
+	7: StLoc[5](loc3: u16)
+	8: MoveLoc[2](loc0: u16)
+	9: StLoc[10](loc8: u16)
+B1:
+	10: CopyLoc[5](loc3: u16)
+	11: CopyLoc[10](loc8: u16)
+	12: Lt
+	13: BrFalse(25)
+B2:
+	14: CopyLoc[5](loc3: u16)
+	15: Pop
+	16: MutBorrowLoc[8](loc6: vector<u8>)
+	17: CopyLoc[0](Arg0: &mut RandomGenerator)
+	18: Call derive_next_block(&mut RandomGenerator): vector<u8>
+	19: Call vector::append<u8>(&mut vector<u8>, vector<u8>)
+	20: MoveLoc[5](loc3: u16)
+	21: LdU16(1)
+	22: Add
+	23: StLoc[5](loc3: u16)
+	24: Branch(10)
+B3:
+	25: MoveLoc[1](Arg1: u16)
+	26: CastU64
+	27: ImmBorrowLoc[8](loc6: vector<u8>)
+	28: VecLen(17)
+	29: Sub
+	30: StLoc[7](loc5: u64)
+	31: CopyLoc[0](Arg0: &mut RandomGenerator)
+	32: ImmBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	33: VecLen(17)
+	34: CopyLoc[7](loc5: u64)
+	35: Lt
+	36: BrFalse(45)
+B4:
+	37: CopyLoc[0](Arg0: &mut RandomGenerator)
+	38: Call derive_next_block(&mut RandomGenerator): vector<u8>
+	39: StLoc[6](loc4: vector<u8>)
+	40: CopyLoc[0](Arg0: &mut RandomGenerator)
+	41: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	42: MoveLoc[6](loc4: vector<u8>)
+	43: Call vector::append<u8>(&mut vector<u8>, vector<u8>)
+	44: Branch(45)
+B5:
+	45: MoveLoc[7](loc5: u64)
+	46: StLoc[3](loc1: u64)
+	47: LdU64(0)
+	48: StLoc[4](loc2: u64)
+	49: MoveLoc[3](loc1: u64)
+	50: StLoc[9](loc7: u64)
+B6:
+	51: CopyLoc[4](loc2: u64)
+	52: CopyLoc[9](loc7: u64)
+	53: Lt
+	54: BrFalse(67)
+B7:
+	55: CopyLoc[4](loc2: u64)
+	56: Pop
+	57: MutBorrowLoc[8](loc6: vector<u8>)
+	58: CopyLoc[0](Arg0: &mut RandomGenerator)
+	59: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	60: VecPopBack(17)
+	61: VecPushBack(17)
+	62: MoveLoc[4](loc2: u64)
+	63: LdU64(1)
+	64: Add
+	65: StLoc[4](loc2: u64)
+	66: Branch(51)
+B8:
+	67: MoveLoc[0](Arg0: &mut RandomGenerator)
+	68: Pop
+	69: MoveLoc[8](loc6: vector<u8>)
+	70: Ret
+}
+
+public generate_u256(Arg0: &mut RandomGenerator): u256 {
+L1:	loc0: u8
+L2:	loc1: u256
+L3:	loc2: &mut RandomGenerator
+L4:	loc3: u8
+L5:	loc4: vector<u8>
+L6:	loc5: u8
+L7:	loc6: u256
+L8:	loc7: u8
+B0:
+	0: MoveLoc[0](Arg0: &mut RandomGenerator)
+	1: StLoc[3](loc2: &mut RandomGenerator)
+	2: LdU8(32)
+	3: StLoc[6](loc5: u8)
+	4: CopyLoc[3](loc2: &mut RandomGenerator)
+	5: ImmBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	6: VecLen(17)
+	7: CopyLoc[6](loc5: u8)
+	8: CastU64
+	9: Lt
+	10: BrFalse(18)
+B1:
+	11: CopyLoc[3](loc2: &mut RandomGenerator)
+	12: Call derive_next_block(&mut RandomGenerator): vector<u8>
+	13: StLoc[5](loc4: vector<u8>)
+	14: CopyLoc[3](loc2: &mut RandomGenerator)
+	15: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	16: MoveLoc[5](loc4: vector<u8>)
+	17: Call vector::append<u8>(&mut vector<u8>, vector<u8>)
+B2:
+	18: LdU256(0)
+	19: StLoc[7](loc6: u256)
+	20: MoveLoc[6](loc5: u8)
+	21: StLoc[1](loc0: u8)
+	22: LdU8(0)
+	23: StLoc[4](loc3: u8)
+	24: MoveLoc[1](loc0: u8)
+	25: StLoc[8](loc7: u8)
+B3:
+	26: CopyLoc[4](loc3: u8)
+	27: CopyLoc[8](loc7: u8)
+	28: Lt
+	29: BrFalse(48)
+B4:
+	30: CopyLoc[4](loc3: u8)
+	31: Pop
+	32: CopyLoc[3](loc2: &mut RandomGenerator)
+	33: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	34: VecPopBack(17)
+	35: CastU256
+	36: StLoc[2](loc1: u256)
+	37: MoveLoc[7](loc6: u256)
+	38: LdU8(8)
+	39: Shl
+	40: MoveLoc[2](loc1: u256)
+	41: Add
+	42: StLoc[7](loc6: u256)
+	43: MoveLoc[4](loc3: u8)
+	44: LdU8(1)
+	45: Add
+	46: StLoc[4](loc3: u8)
+	47: Branch(26)
+B5:
+	48: MoveLoc[3](loc2: &mut RandomGenerator)
+	49: Pop
+	50: MoveLoc[7](loc6: u256)
+	51: CastU256
+	52: Ret
+}
+
+public generate_u128(Arg0: &mut RandomGenerator): u128 {
+L1:	loc0: u8
+L2:	loc1: u256
+L3:	loc2: &mut RandomGenerator
+L4:	loc3: u8
+L5:	loc4: vector<u8>
+L6:	loc5: u8
+L7:	loc6: u256
+L8:	loc7: u8
+B0:
+	0: MoveLoc[0](Arg0: &mut RandomGenerator)
+	1: StLoc[3](loc2: &mut RandomGenerator)
+	2: LdU8(16)
+	3: StLoc[6](loc5: u8)
+	4: CopyLoc[3](loc2: &mut RandomGenerator)
+	5: ImmBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	6: VecLen(17)
+	7: CopyLoc[6](loc5: u8)
+	8: CastU64
+	9: Lt
+	10: BrFalse(18)
+B1:
+	11: CopyLoc[3](loc2: &mut RandomGenerator)
+	12: Call derive_next_block(&mut RandomGenerator): vector<u8>
+	13: StLoc[5](loc4: vector<u8>)
+	14: CopyLoc[3](loc2: &mut RandomGenerator)
+	15: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	16: MoveLoc[5](loc4: vector<u8>)
+	17: Call vector::append<u8>(&mut vector<u8>, vector<u8>)
+B2:
+	18: LdU256(0)
+	19: StLoc[7](loc6: u256)
+	20: MoveLoc[6](loc5: u8)
+	21: StLoc[1](loc0: u8)
+	22: LdU8(0)
+	23: StLoc[4](loc3: u8)
+	24: MoveLoc[1](loc0: u8)
+	25: StLoc[8](loc7: u8)
+B3:
+	26: CopyLoc[4](loc3: u8)
+	27: CopyLoc[8](loc7: u8)
+	28: Lt
+	29: BrFalse(48)
+B4:
+	30: CopyLoc[4](loc3: u8)
+	31: Pop
+	32: CopyLoc[3](loc2: &mut RandomGenerator)
+	33: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	34: VecPopBack(17)
+	35: CastU256
+	36: StLoc[2](loc1: u256)
+	37: MoveLoc[7](loc6: u256)
+	38: LdU8(8)
+	39: Shl
+	40: MoveLoc[2](loc1: u256)
+	41: Add
+	42: StLoc[7](loc6: u256)
+	43: MoveLoc[4](loc3: u8)
+	44: LdU8(1)
+	45: Add
+	46: StLoc[4](loc3: u8)
+	47: Branch(26)
+B5:
+	48: MoveLoc[3](loc2: &mut RandomGenerator)
+	49: Pop
+	50: MoveLoc[7](loc6: u256)
+	51: CastU128
+	52: Ret
+}
+
+public generate_u64(Arg0: &mut RandomGenerator): u64 {
+L1:	loc0: u8
+L2:	loc1: u256
+L3:	loc2: &mut RandomGenerator
+L4:	loc3: u8
+L5:	loc4: vector<u8>
+L6:	loc5: u8
+L7:	loc6: u256
+L8:	loc7: u8
+B0:
+	0: MoveLoc[0](Arg0: &mut RandomGenerator)
+	1: StLoc[3](loc2: &mut RandomGenerator)
+	2: LdU8(8)
+	3: StLoc[6](loc5: u8)
+	4: CopyLoc[3](loc2: &mut RandomGenerator)
+	5: ImmBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	6: VecLen(17)
+	7: CopyLoc[6](loc5: u8)
+	8: CastU64
+	9: Lt
+	10: BrFalse(18)
+B1:
+	11: CopyLoc[3](loc2: &mut RandomGenerator)
+	12: Call derive_next_block(&mut RandomGenerator): vector<u8>
+	13: StLoc[5](loc4: vector<u8>)
+	14: CopyLoc[3](loc2: &mut RandomGenerator)
+	15: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	16: MoveLoc[5](loc4: vector<u8>)
+	17: Call vector::append<u8>(&mut vector<u8>, vector<u8>)
+B2:
+	18: LdU256(0)
+	19: StLoc[7](loc6: u256)
+	20: MoveLoc[6](loc5: u8)
+	21: StLoc[1](loc0: u8)
+	22: LdU8(0)
+	23: StLoc[4](loc3: u8)
+	24: MoveLoc[1](loc0: u8)
+	25: StLoc[8](loc7: u8)
+B3:
+	26: CopyLoc[4](loc3: u8)
+	27: CopyLoc[8](loc7: u8)
+	28: Lt
+	29: BrFalse(48)
+B4:
+	30: CopyLoc[4](loc3: u8)
+	31: Pop
+	32: CopyLoc[3](loc2: &mut RandomGenerator)
+	33: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	34: VecPopBack(17)
+	35: CastU256
+	36: StLoc[2](loc1: u256)
+	37: MoveLoc[7](loc6: u256)
+	38: LdU8(8)
+	39: Shl
+	40: MoveLoc[2](loc1: u256)
+	41: Add
+	42: StLoc[7](loc6: u256)
+	43: MoveLoc[4](loc3: u8)
+	44: LdU8(1)
+	45: Add
+	46: StLoc[4](loc3: u8)
+	47: Branch(26)
+B5:
+	48: MoveLoc[3](loc2: &mut RandomGenerator)
+	49: Pop
+	50: MoveLoc[7](loc6: u256)
+	51: CastU64
+	52: Ret
+}
+
+public generate_u32(Arg0: &mut RandomGenerator): u32 {
+L1:	loc0: u8
+L2:	loc1: u256
+L3:	loc2: &mut RandomGenerator
+L4:	loc3: u8
+L5:	loc4: vector<u8>
+L6:	loc5: u8
+L7:	loc6: u256
+L8:	loc7: u8
+B0:
+	0: MoveLoc[0](Arg0: &mut RandomGenerator)
+	1: StLoc[3](loc2: &mut RandomGenerator)
+	2: LdU8(4)
+	3: StLoc[6](loc5: u8)
+	4: CopyLoc[3](loc2: &mut RandomGenerator)
+	5: ImmBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	6: VecLen(17)
+	7: CopyLoc[6](loc5: u8)
+	8: CastU64
+	9: Lt
+	10: BrFalse(18)
+B1:
+	11: CopyLoc[3](loc2: &mut RandomGenerator)
+	12: Call derive_next_block(&mut RandomGenerator): vector<u8>
+	13: StLoc[5](loc4: vector<u8>)
+	14: CopyLoc[3](loc2: &mut RandomGenerator)
+	15: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	16: MoveLoc[5](loc4: vector<u8>)
+	17: Call vector::append<u8>(&mut vector<u8>, vector<u8>)
+B2:
+	18: LdU256(0)
+	19: StLoc[7](loc6: u256)
+	20: MoveLoc[6](loc5: u8)
+	21: StLoc[1](loc0: u8)
+	22: LdU8(0)
+	23: StLoc[4](loc3: u8)
+	24: MoveLoc[1](loc0: u8)
+	25: StLoc[8](loc7: u8)
+B3:
+	26: CopyLoc[4](loc3: u8)
+	27: CopyLoc[8](loc7: u8)
+	28: Lt
+	29: BrFalse(48)
+B4:
+	30: CopyLoc[4](loc3: u8)
+	31: Pop
+	32: CopyLoc[3](loc2: &mut RandomGenerator)
+	33: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	34: VecPopBack(17)
+	35: CastU256
+	36: StLoc[2](loc1: u256)
+	37: MoveLoc[7](loc6: u256)
+	38: LdU8(8)
+	39: Shl
+	40: MoveLoc[2](loc1: u256)
+	41: Add
+	42: StLoc[7](loc6: u256)
+	43: MoveLoc[4](loc3: u8)
+	44: LdU8(1)
+	45: Add
+	46: StLoc[4](loc3: u8)
+	47: Branch(26)
+B5:
+	48: MoveLoc[3](loc2: &mut RandomGenerator)
+	49: Pop
+	50: MoveLoc[7](loc6: u256)
+	51: CastU32
+	52: Ret
+}
+
+public generate_u16(Arg0: &mut RandomGenerator): u16 {
+L1:	loc0: u8
+L2:	loc1: u256
+L3:	loc2: &mut RandomGenerator
+L4:	loc3: u8
+L5:	loc4: vector<u8>
+L6:	loc5: u8
+L7:	loc6: u256
+L8:	loc7: u8
+B0:
+	0: MoveLoc[0](Arg0: &mut RandomGenerator)
+	1: StLoc[3](loc2: &mut RandomGenerator)
+	2: LdU8(2)
+	3: StLoc[6](loc5: u8)
+	4: CopyLoc[3](loc2: &mut RandomGenerator)
+	5: ImmBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	6: VecLen(17)
+	7: CopyLoc[6](loc5: u8)
+	8: CastU64
+	9: Lt
+	10: BrFalse(18)
+B1:
+	11: CopyLoc[3](loc2: &mut RandomGenerator)
+	12: Call derive_next_block(&mut RandomGenerator): vector<u8>
+	13: StLoc[5](loc4: vector<u8>)
+	14: CopyLoc[3](loc2: &mut RandomGenerator)
+	15: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	16: MoveLoc[5](loc4: vector<u8>)
+	17: Call vector::append<u8>(&mut vector<u8>, vector<u8>)
+B2:
+	18: LdU256(0)
+	19: StLoc[7](loc6: u256)
+	20: MoveLoc[6](loc5: u8)
+	21: StLoc[1](loc0: u8)
+	22: LdU8(0)
+	23: StLoc[4](loc3: u8)
+	24: MoveLoc[1](loc0: u8)
+	25: StLoc[8](loc7: u8)
+B3:
+	26: CopyLoc[4](loc3: u8)
+	27: CopyLoc[8](loc7: u8)
+	28: Lt
+	29: BrFalse(48)
+B4:
+	30: CopyLoc[4](loc3: u8)
+	31: Pop
+	32: CopyLoc[3](loc2: &mut RandomGenerator)
+	33: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	34: VecPopBack(17)
+	35: CastU256
+	36: StLoc[2](loc1: u256)
+	37: MoveLoc[7](loc6: u256)
+	38: LdU8(8)
+	39: Shl
+	40: MoveLoc[2](loc1: u256)
+	41: Add
+	42: StLoc[7](loc6: u256)
+	43: MoveLoc[4](loc3: u8)
+	44: LdU8(1)
+	45: Add
+	46: StLoc[4](loc3: u8)
+	47: Branch(26)
+B5:
+	48: MoveLoc[3](loc2: &mut RandomGenerator)
+	49: Pop
+	50: MoveLoc[7](loc6: u256)
+	51: CastU16
+	52: Ret
+}
+
+public generate_u8(Arg0: &mut RandomGenerator): u8 {
+L1:	loc0: u8
+L2:	loc1: u256
+L3:	loc2: &mut RandomGenerator
+L4:	loc3: u8
+L5:	loc4: vector<u8>
+L6:	loc5: u8
+L7:	loc6: u256
+L8:	loc7: u8
+B0:
+	0: MoveLoc[0](Arg0: &mut RandomGenerator)
+	1: StLoc[3](loc2: &mut RandomGenerator)
+	2: LdU8(1)
+	3: StLoc[6](loc5: u8)
+	4: CopyLoc[3](loc2: &mut RandomGenerator)
+	5: ImmBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	6: VecLen(17)
+	7: CopyLoc[6](loc5: u8)
+	8: CastU64
+	9: Lt
+	10: BrFalse(18)
+B1:
+	11: CopyLoc[3](loc2: &mut RandomGenerator)
+	12: Call derive_next_block(&mut RandomGenerator): vector<u8>
+	13: StLoc[5](loc4: vector<u8>)
+	14: CopyLoc[3](loc2: &mut RandomGenerator)
+	15: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	16: MoveLoc[5](loc4: vector<u8>)
+	17: Call vector::append<u8>(&mut vector<u8>, vector<u8>)
+B2:
+	18: LdU256(0)
+	19: StLoc[7](loc6: u256)
+	20: MoveLoc[6](loc5: u8)
+	21: StLoc[1](loc0: u8)
+	22: LdU8(0)
+	23: StLoc[4](loc3: u8)
+	24: MoveLoc[1](loc0: u8)
+	25: StLoc[8](loc7: u8)
+B3:
+	26: CopyLoc[4](loc3: u8)
+	27: CopyLoc[8](loc7: u8)
+	28: Lt
+	29: BrFalse(48)
+B4:
+	30: CopyLoc[4](loc3: u8)
+	31: Pop
+	32: CopyLoc[3](loc2: &mut RandomGenerator)
+	33: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	34: VecPopBack(17)
+	35: CastU256
+	36: StLoc[2](loc1: u256)
+	37: MoveLoc[7](loc6: u256)
+	38: LdU8(8)
+	39: Shl
+	40: MoveLoc[2](loc1: u256)
+	41: Add
+	42: StLoc[7](loc6: u256)
+	43: MoveLoc[4](loc3: u8)
+	44: LdU8(1)
+	45: Add
+	46: StLoc[4](loc3: u8)
+	47: Branch(26)
+B5:
+	48: MoveLoc[3](loc2: &mut RandomGenerator)
+	49: Pop
+	50: MoveLoc[7](loc6: u256)
+	51: CastU8
+	52: Ret
+}
+
+public generate_bool(Arg0: &mut RandomGenerator): bool {
+L1:	loc0: u8
+L2:	loc1: u256
+L3:	loc2: &mut RandomGenerator
+L4:	loc3: u8
+L5:	loc4: vector<u8>
+L6:	loc5: u8
+L7:	loc6: u256
+L8:	loc7: u8
+B0:
+	0: MoveLoc[0](Arg0: &mut RandomGenerator)
+	1: StLoc[3](loc2: &mut RandomGenerator)
+	2: LdU8(1)
+	3: StLoc[6](loc5: u8)
+	4: CopyLoc[3](loc2: &mut RandomGenerator)
+	5: ImmBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	6: VecLen(17)
+	7: CopyLoc[6](loc5: u8)
+	8: CastU64
+	9: Lt
+	10: BrFalse(18)
+B1:
+	11: CopyLoc[3](loc2: &mut RandomGenerator)
+	12: Call derive_next_block(&mut RandomGenerator): vector<u8>
+	13: StLoc[5](loc4: vector<u8>)
+	14: CopyLoc[3](loc2: &mut RandomGenerator)
+	15: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	16: MoveLoc[5](loc4: vector<u8>)
+	17: Call vector::append<u8>(&mut vector<u8>, vector<u8>)
+B2:
+	18: LdU256(0)
+	19: StLoc[7](loc6: u256)
+	20: MoveLoc[6](loc5: u8)
+	21: StLoc[1](loc0: u8)
+	22: LdU8(0)
+	23: StLoc[4](loc3: u8)
+	24: MoveLoc[1](loc0: u8)
+	25: StLoc[8](loc7: u8)
+B3:
+	26: CopyLoc[4](loc3: u8)
+	27: CopyLoc[8](loc7: u8)
+	28: Lt
+	29: BrFalse(48)
+B4:
+	30: CopyLoc[4](loc3: u8)
+	31: Pop
+	32: CopyLoc[3](loc2: &mut RandomGenerator)
+	33: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	34: VecPopBack(17)
+	35: CastU256
+	36: StLoc[2](loc1: u256)
+	37: MoveLoc[7](loc6: u256)
+	38: LdU8(8)
+	39: Shl
+	40: MoveLoc[2](loc1: u256)
+	41: Add
+	42: StLoc[7](loc6: u256)
+	43: MoveLoc[4](loc3: u8)
+	44: LdU8(1)
+	45: Add
+	46: StLoc[4](loc3: u8)
+	47: Branch(26)
+B5:
+	48: MoveLoc[3](loc2: &mut RandomGenerator)
+	49: Pop
+	50: MoveLoc[7](loc6: u256)
+	51: CastU64
+	52: LdU64(1)
+	53: BitAnd
+	54: LdU64(1)
+	55: Eq
+	56: Ret
+}
+
+public generate_u128_in_range(Arg0: &mut RandomGenerator, Arg1: u128, Arg2: u128): u128 {
+L3:	loc0: u8
+L4:	loc1: u128
+L5:	loc2: u256
+L6:	loc3: &mut RandomGenerator
+L7:	loc4: u8
+L8:	loc5: u128
+L9:	loc6: u128
+L10:	loc7: vector<u8>
+L11:	loc8: u8
+L12:	loc9: u256
+L13:	loc10: u256
+L14:	loc11: u256
+L15:	loc12: u8
+B0:
+	0: MoveLoc[1](Arg1: u128)
+	1: StLoc[9](loc6: u128)
+	2: MoveLoc[2](Arg2: u128)
+	3: StLoc[8](loc5: u128)
+	4: CopyLoc[9](loc6: u128)
+	5: CopyLoc[8](loc5: u128)
+	6: Le
+	7: BrFalse(9)
+B1:
+	8: Branch(13)
+B2:
+	9: MoveLoc[0](Arg0: &mut RandomGenerator)
+	10: Pop
+	11: LdConst[3](u64: 3)
+	12: Abort
+B3:
+	13: CopyLoc[9](loc6: u128)
+	14: CopyLoc[8](loc5: u128)
+	15: Eq
+	16: BrFalse(22)
+B4:
+	17: MoveLoc[0](Arg0: &mut RandomGenerator)
+	18: Pop
+	19: MoveLoc[9](loc6: u128)
+	20: StLoc[4](loc1: u128)
+	21: Branch(89)
+B5:
+	22: MoveLoc[8](loc5: u128)
+	23: CopyLoc[9](loc6: u128)
+	24: Sub
+	25: CastU256
+	26: LdU256(1)
+	27: Add
+	28: StLoc[13](loc10: u256)
+	29: MoveLoc[0](Arg0: &mut RandomGenerator)
+	30: StLoc[6](loc3: &mut RandomGenerator)
+	31: LdU8(24)
+	32: StLoc[11](loc8: u8)
+	33: CopyLoc[6](loc3: &mut RandomGenerator)
+	34: ImmBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	35: VecLen(17)
+	36: CopyLoc[11](loc8: u8)
+	37: CastU64
+	38: Lt
+	39: BrFalse(47)
+B6:
+	40: CopyLoc[6](loc3: &mut RandomGenerator)
+	41: Call derive_next_block(&mut RandomGenerator): vector<u8>
+	42: StLoc[10](loc7: vector<u8>)
+	43: CopyLoc[6](loc3: &mut RandomGenerator)
+	44: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	45: MoveLoc[10](loc7: vector<u8>)
+	46: Call vector::append<u8>(&mut vector<u8>, vector<u8>)
+B7:
+	47: LdU256(0)
+	48: StLoc[14](loc11: u256)
+	49: MoveLoc[11](loc8: u8)
+	50: StLoc[3](loc0: u8)
+	51: LdU8(0)
+	52: StLoc[7](loc4: u8)
+	53: MoveLoc[3](loc0: u8)
+	54: StLoc[15](loc12: u8)
+B8:
+	55: CopyLoc[7](loc4: u8)
+	56: CopyLoc[15](loc12: u8)
+	57: Lt
+	58: BrFalse(77)
+B9:
+	59: CopyLoc[7](loc4: u8)
+	60: Pop
+	61: CopyLoc[6](loc3: &mut RandomGenerator)
+	62: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	63: VecPopBack(17)
+	64: CastU256
+	65: StLoc[5](loc2: u256)
+	66: MoveLoc[14](loc11: u256)
+	67: LdU8(8)
+	68: Shl
+	69: MoveLoc[5](loc2: u256)
+	70: Add
+	71: StLoc[14](loc11: u256)
+	72: MoveLoc[7](loc4: u8)
+	73: LdU8(1)
+	74: Add
+	75: StLoc[7](loc4: u8)
+	76: Branch(55)
+B10:
+	77: MoveLoc[6](loc3: &mut RandomGenerator)
+	78: Pop
+	79: MoveLoc[14](loc11: u256)
+	80: CastU256
+	81: StLoc[12](loc9: u256)
+	82: MoveLoc[9](loc6: u128)
+	83: MoveLoc[12](loc9: u256)
+	84: MoveLoc[13](loc10: u256)
+	85: Mod
+	86: CastU128
+	87: Add
+	88: StLoc[4](loc1: u128)
+B11:
+	89: MoveLoc[4](loc1: u128)
+	90: Ret
+}
+
+public generate_u64_in_range(Arg0: &mut RandomGenerator, Arg1: u64, Arg2: u64): u64 {
+L3:	loc0: u8
+L4:	loc1: u64
+L5:	loc2: u256
+L6:	loc3: &mut RandomGenerator
+L7:	loc4: u8
+L8:	loc5: u64
+L9:	loc6: u64
+L10:	loc7: vector<u8>
+L11:	loc8: u8
+L12:	loc9: u256
+L13:	loc10: u256
+L14:	loc11: u256
+L15:	loc12: u8
+B0:
+	0: MoveLoc[1](Arg1: u64)
+	1: StLoc[9](loc6: u64)
+	2: MoveLoc[2](Arg2: u64)
+	3: StLoc[8](loc5: u64)
+	4: CopyLoc[9](loc6: u64)
+	5: CopyLoc[8](loc5: u64)
+	6: Le
+	7: BrFalse(9)
+B1:
+	8: Branch(13)
+B2:
+	9: MoveLoc[0](Arg0: &mut RandomGenerator)
+	10: Pop
+	11: LdConst[3](u64: 3)
+	12: Abort
+B3:
+	13: CopyLoc[9](loc6: u64)
+	14: CopyLoc[8](loc5: u64)
+	15: Eq
+	16: BrFalse(22)
+B4:
+	17: MoveLoc[0](Arg0: &mut RandomGenerator)
+	18: Pop
+	19: MoveLoc[9](loc6: u64)
+	20: StLoc[4](loc1: u64)
+	21: Branch(89)
+B5:
+	22: MoveLoc[8](loc5: u64)
+	23: CopyLoc[9](loc6: u64)
+	24: Sub
+	25: CastU256
+	26: LdU256(1)
+	27: Add
+	28: StLoc[13](loc10: u256)
+	29: MoveLoc[0](Arg0: &mut RandomGenerator)
+	30: StLoc[6](loc3: &mut RandomGenerator)
+	31: LdU8(16)
+	32: StLoc[11](loc8: u8)
+	33: CopyLoc[6](loc3: &mut RandomGenerator)
+	34: ImmBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	35: VecLen(17)
+	36: CopyLoc[11](loc8: u8)
+	37: CastU64
+	38: Lt
+	39: BrFalse(47)
+B6:
+	40: CopyLoc[6](loc3: &mut RandomGenerator)
+	41: Call derive_next_block(&mut RandomGenerator): vector<u8>
+	42: StLoc[10](loc7: vector<u8>)
+	43: CopyLoc[6](loc3: &mut RandomGenerator)
+	44: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	45: MoveLoc[10](loc7: vector<u8>)
+	46: Call vector::append<u8>(&mut vector<u8>, vector<u8>)
+B7:
+	47: LdU256(0)
+	48: StLoc[14](loc11: u256)
+	49: MoveLoc[11](loc8: u8)
+	50: StLoc[3](loc0: u8)
+	51: LdU8(0)
+	52: StLoc[7](loc4: u8)
+	53: MoveLoc[3](loc0: u8)
+	54: StLoc[15](loc12: u8)
+B8:
+	55: CopyLoc[7](loc4: u8)
+	56: CopyLoc[15](loc12: u8)
+	57: Lt
+	58: BrFalse(77)
+B9:
+	59: CopyLoc[7](loc4: u8)
+	60: Pop
+	61: CopyLoc[6](loc3: &mut RandomGenerator)
+	62: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	63: VecPopBack(17)
+	64: CastU256
+	65: StLoc[5](loc2: u256)
+	66: MoveLoc[14](loc11: u256)
+	67: LdU8(8)
+	68: Shl
+	69: MoveLoc[5](loc2: u256)
+	70: Add
+	71: StLoc[14](loc11: u256)
+	72: MoveLoc[7](loc4: u8)
+	73: LdU8(1)
+	74: Add
+	75: StLoc[7](loc4: u8)
+	76: Branch(55)
+B10:
+	77: MoveLoc[6](loc3: &mut RandomGenerator)
+	78: Pop
+	79: MoveLoc[14](loc11: u256)
+	80: CastU256
+	81: StLoc[12](loc9: u256)
+	82: MoveLoc[9](loc6: u64)
+	83: MoveLoc[12](loc9: u256)
+	84: MoveLoc[13](loc10: u256)
+	85: Mod
+	86: CastU64
+	87: Add
+	88: StLoc[4](loc1: u64)
+B11:
+	89: MoveLoc[4](loc1: u64)
+	90: Ret
+}
+
+public generate_u32_in_range(Arg0: &mut RandomGenerator, Arg1: u32, Arg2: u32): u32 {
+L3:	loc0: u8
+L4:	loc1: u32
+L5:	loc2: u256
+L6:	loc3: &mut RandomGenerator
+L7:	loc4: u8
+L8:	loc5: u32
+L9:	loc6: u32
+L10:	loc7: vector<u8>
+L11:	loc8: u8
+L12:	loc9: u256
+L13:	loc10: u256
+L14:	loc11: u256
+L15:	loc12: u8
+B0:
+	0: MoveLoc[1](Arg1: u32)
+	1: StLoc[9](loc6: u32)
+	2: MoveLoc[2](Arg2: u32)
+	3: StLoc[8](loc5: u32)
+	4: CopyLoc[9](loc6: u32)
+	5: CopyLoc[8](loc5: u32)
+	6: Le
+	7: BrFalse(9)
+B1:
+	8: Branch(13)
+B2:
+	9: MoveLoc[0](Arg0: &mut RandomGenerator)
+	10: Pop
+	11: LdConst[3](u64: 3)
+	12: Abort
+B3:
+	13: CopyLoc[9](loc6: u32)
+	14: CopyLoc[8](loc5: u32)
+	15: Eq
+	16: BrFalse(22)
+B4:
+	17: MoveLoc[0](Arg0: &mut RandomGenerator)
+	18: Pop
+	19: MoveLoc[9](loc6: u32)
+	20: StLoc[4](loc1: u32)
+	21: Branch(89)
+B5:
+	22: MoveLoc[8](loc5: u32)
+	23: CopyLoc[9](loc6: u32)
+	24: Sub
+	25: CastU256
+	26: LdU256(1)
+	27: Add
+	28: StLoc[13](loc10: u256)
+	29: MoveLoc[0](Arg0: &mut RandomGenerator)
+	30: StLoc[6](loc3: &mut RandomGenerator)
+	31: LdU8(12)
+	32: StLoc[11](loc8: u8)
+	33: CopyLoc[6](loc3: &mut RandomGenerator)
+	34: ImmBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	35: VecLen(17)
+	36: CopyLoc[11](loc8: u8)
+	37: CastU64
+	38: Lt
+	39: BrFalse(47)
+B6:
+	40: CopyLoc[6](loc3: &mut RandomGenerator)
+	41: Call derive_next_block(&mut RandomGenerator): vector<u8>
+	42: StLoc[10](loc7: vector<u8>)
+	43: CopyLoc[6](loc3: &mut RandomGenerator)
+	44: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	45: MoveLoc[10](loc7: vector<u8>)
+	46: Call vector::append<u8>(&mut vector<u8>, vector<u8>)
+B7:
+	47: LdU256(0)
+	48: StLoc[14](loc11: u256)
+	49: MoveLoc[11](loc8: u8)
+	50: StLoc[3](loc0: u8)
+	51: LdU8(0)
+	52: StLoc[7](loc4: u8)
+	53: MoveLoc[3](loc0: u8)
+	54: StLoc[15](loc12: u8)
+B8:
+	55: CopyLoc[7](loc4: u8)
+	56: CopyLoc[15](loc12: u8)
+	57: Lt
+	58: BrFalse(77)
+B9:
+	59: CopyLoc[7](loc4: u8)
+	60: Pop
+	61: CopyLoc[6](loc3: &mut RandomGenerator)
+	62: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	63: VecPopBack(17)
+	64: CastU256
+	65: StLoc[5](loc2: u256)
+	66: MoveLoc[14](loc11: u256)
+	67: LdU8(8)
+	68: Shl
+	69: MoveLoc[5](loc2: u256)
+	70: Add
+	71: StLoc[14](loc11: u256)
+	72: MoveLoc[7](loc4: u8)
+	73: LdU8(1)
+	74: Add
+	75: StLoc[7](loc4: u8)
+	76: Branch(55)
+B10:
+	77: MoveLoc[6](loc3: &mut RandomGenerator)
+	78: Pop
+	79: MoveLoc[14](loc11: u256)
+	80: CastU256
+	81: StLoc[12](loc9: u256)
+	82: MoveLoc[9](loc6: u32)
+	83: MoveLoc[12](loc9: u256)
+	84: MoveLoc[13](loc10: u256)
+	85: Mod
+	86: CastU32
+	87: Add
+	88: StLoc[4](loc1: u32)
+B11:
+	89: MoveLoc[4](loc1: u32)
+	90: Ret
+}
+
+public generate_u16_in_range(Arg0: &mut RandomGenerator, Arg1: u16, Arg2: u16): u16 {
+L3:	loc0: u8
+L4:	loc1: u16
+L5:	loc2: u256
+L6:	loc3: &mut RandomGenerator
+L7:	loc4: u8
+L8:	loc5: u16
+L9:	loc6: u16
+L10:	loc7: vector<u8>
+L11:	loc8: u8
+L12:	loc9: u256
+L13:	loc10: u256
+L14:	loc11: u256
+L15:	loc12: u8
+B0:
+	0: MoveLoc[1](Arg1: u16)
+	1: StLoc[9](loc6: u16)
+	2: MoveLoc[2](Arg2: u16)
+	3: StLoc[8](loc5: u16)
+	4: CopyLoc[9](loc6: u16)
+	5: CopyLoc[8](loc5: u16)
+	6: Le
+	7: BrFalse(9)
+B1:
+	8: Branch(13)
+B2:
+	9: MoveLoc[0](Arg0: &mut RandomGenerator)
+	10: Pop
+	11: LdConst[3](u64: 3)
+	12: Abort
+B3:
+	13: CopyLoc[9](loc6: u16)
+	14: CopyLoc[8](loc5: u16)
+	15: Eq
+	16: BrFalse(22)
+B4:
+	17: MoveLoc[0](Arg0: &mut RandomGenerator)
+	18: Pop
+	19: MoveLoc[9](loc6: u16)
+	20: StLoc[4](loc1: u16)
+	21: Branch(89)
+B5:
+	22: MoveLoc[8](loc5: u16)
+	23: CopyLoc[9](loc6: u16)
+	24: Sub
+	25: CastU256
+	26: LdU256(1)
+	27: Add
+	28: StLoc[13](loc10: u256)
+	29: MoveLoc[0](Arg0: &mut RandomGenerator)
+	30: StLoc[6](loc3: &mut RandomGenerator)
+	31: LdU8(10)
+	32: StLoc[11](loc8: u8)
+	33: CopyLoc[6](loc3: &mut RandomGenerator)
+	34: ImmBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	35: VecLen(17)
+	36: CopyLoc[11](loc8: u8)
+	37: CastU64
+	38: Lt
+	39: BrFalse(47)
+B6:
+	40: CopyLoc[6](loc3: &mut RandomGenerator)
+	41: Call derive_next_block(&mut RandomGenerator): vector<u8>
+	42: StLoc[10](loc7: vector<u8>)
+	43: CopyLoc[6](loc3: &mut RandomGenerator)
+	44: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	45: MoveLoc[10](loc7: vector<u8>)
+	46: Call vector::append<u8>(&mut vector<u8>, vector<u8>)
+B7:
+	47: LdU256(0)
+	48: StLoc[14](loc11: u256)
+	49: MoveLoc[11](loc8: u8)
+	50: StLoc[3](loc0: u8)
+	51: LdU8(0)
+	52: StLoc[7](loc4: u8)
+	53: MoveLoc[3](loc0: u8)
+	54: StLoc[15](loc12: u8)
+B8:
+	55: CopyLoc[7](loc4: u8)
+	56: CopyLoc[15](loc12: u8)
+	57: Lt
+	58: BrFalse(77)
+B9:
+	59: CopyLoc[7](loc4: u8)
+	60: Pop
+	61: CopyLoc[6](loc3: &mut RandomGenerator)
+	62: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	63: VecPopBack(17)
+	64: CastU256
+	65: StLoc[5](loc2: u256)
+	66: MoveLoc[14](loc11: u256)
+	67: LdU8(8)
+	68: Shl
+	69: MoveLoc[5](loc2: u256)
+	70: Add
+	71: StLoc[14](loc11: u256)
+	72: MoveLoc[7](loc4: u8)
+	73: LdU8(1)
+	74: Add
+	75: StLoc[7](loc4: u8)
+	76: Branch(55)
+B10:
+	77: MoveLoc[6](loc3: &mut RandomGenerator)
+	78: Pop
+	79: MoveLoc[14](loc11: u256)
+	80: CastU256
+	81: StLoc[12](loc9: u256)
+	82: MoveLoc[9](loc6: u16)
+	83: MoveLoc[12](loc9: u256)
+	84: MoveLoc[13](loc10: u256)
+	85: Mod
+	86: CastU16
+	87: Add
+	88: StLoc[4](loc1: u16)
+B11:
+	89: MoveLoc[4](loc1: u16)
+	90: Ret
+}
+
+public generate_u8_in_range(Arg0: &mut RandomGenerator, Arg1: u8, Arg2: u8): u8 {
+L3:	loc0: u8
+L4:	loc1: u8
+L5:	loc2: u256
+L6:	loc3: &mut RandomGenerator
+L7:	loc4: u8
+L8:	loc5: u8
+L9:	loc6: u8
+L10:	loc7: vector<u8>
+L11:	loc8: u8
+L12:	loc9: u256
+L13:	loc10: u256
+L14:	loc11: u256
+L15:	loc12: u8
+B0:
+	0: MoveLoc[1](Arg1: u8)
+	1: StLoc[9](loc6: u8)
+	2: MoveLoc[2](Arg2: u8)
+	3: StLoc[8](loc5: u8)
+	4: CopyLoc[9](loc6: u8)
+	5: CopyLoc[8](loc5: u8)
+	6: Le
+	7: BrFalse(9)
+B1:
+	8: Branch(13)
+B2:
+	9: MoveLoc[0](Arg0: &mut RandomGenerator)
+	10: Pop
+	11: LdConst[3](u64: 3)
+	12: Abort
+B3:
+	13: CopyLoc[9](loc6: u8)
+	14: CopyLoc[8](loc5: u8)
+	15: Eq
+	16: BrFalse(22)
+B4:
+	17: MoveLoc[0](Arg0: &mut RandomGenerator)
+	18: Pop
+	19: MoveLoc[9](loc6: u8)
+	20: StLoc[4](loc1: u8)
+	21: Branch(89)
+B5:
+	22: MoveLoc[8](loc5: u8)
+	23: CopyLoc[9](loc6: u8)
+	24: Sub
+	25: CastU256
+	26: LdU256(1)
+	27: Add
+	28: StLoc[13](loc10: u256)
+	29: MoveLoc[0](Arg0: &mut RandomGenerator)
+	30: StLoc[6](loc3: &mut RandomGenerator)
+	31: LdU8(9)
+	32: StLoc[11](loc8: u8)
+	33: CopyLoc[6](loc3: &mut RandomGenerator)
+	34: ImmBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	35: VecLen(17)
+	36: CopyLoc[11](loc8: u8)
+	37: CastU64
+	38: Lt
+	39: BrFalse(47)
+B6:
+	40: CopyLoc[6](loc3: &mut RandomGenerator)
+	41: Call derive_next_block(&mut RandomGenerator): vector<u8>
+	42: StLoc[10](loc7: vector<u8>)
+	43: CopyLoc[6](loc3: &mut RandomGenerator)
+	44: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	45: MoveLoc[10](loc7: vector<u8>)
+	46: Call vector::append<u8>(&mut vector<u8>, vector<u8>)
+B7:
+	47: LdU256(0)
+	48: StLoc[14](loc11: u256)
+	49: MoveLoc[11](loc8: u8)
+	50: StLoc[3](loc0: u8)
+	51: LdU8(0)
+	52: StLoc[7](loc4: u8)
+	53: MoveLoc[3](loc0: u8)
+	54: StLoc[15](loc12: u8)
+B8:
+	55: CopyLoc[7](loc4: u8)
+	56: CopyLoc[15](loc12: u8)
+	57: Lt
+	58: BrFalse(77)
+B9:
+	59: CopyLoc[7](loc4: u8)
+	60: Pop
+	61: CopyLoc[6](loc3: &mut RandomGenerator)
+	62: MutBorrowField[7](RandomGenerator.buffer: vector<u8>)
+	63: VecPopBack(17)
+	64: CastU256
+	65: StLoc[5](loc2: u256)
+	66: MoveLoc[14](loc11: u256)
+	67: LdU8(8)
+	68: Shl
+	69: MoveLoc[5](loc2: u256)
+	70: Add
+	71: StLoc[14](loc11: u256)
+	72: MoveLoc[7](loc4: u8)
+	73: LdU8(1)
+	74: Add
+	75: StLoc[7](loc4: u8)
+	76: Branch(55)
+B10:
+	77: MoveLoc[6](loc3: &mut RandomGenerator)
+	78: Pop
+	79: MoveLoc[14](loc11: u256)
+	80: CastU256
+	81: StLoc[12](loc9: u256)
+	82: MoveLoc[9](loc6: u8)
+	83: MoveLoc[12](loc9: u256)
+	84: MoveLoc[13](loc10: u256)
+	85: Mod
+	86: CastU8
+	87: Add
+	88: StLoc[4](loc1: u8)
+B11:
+	89: MoveLoc[4](loc1: u8)
+	90: Ret
+}
+
+public shuffle<Ty0>(Arg0: &mut RandomGenerator, Arg1: &mut vector<Ty0>) {
+L2:	loc0: u16
+L3:	loc1: u16
+L4:	loc2: u16
+L5:	loc3: u16
+L6:	loc4: u16
+L7:	loc5: u64
+L8:	loc6: u16
+B0:
+	0: CopyLoc[1](Arg1: &mut vector<Ty0>)
+	1: FreezeRef
+	2: VecLen(33)
+	3: StLoc[7](loc5: u64)
+	4: CopyLoc[7](loc5: u64)
+	5: LdU64(0)
+	6: Eq
+	7: BrFalse(13)
+B1:
+	8: MoveLoc[1](Arg1: &mut vector<Ty0>)
+	9: Pop
+	10: MoveLoc[0](Arg0: &mut RandomGenerator)
+	11: Pop
+	12: Ret
+B2:
+	13: CopyLoc[7](loc5: u64)
+	14: LdConst[6](u64: 65535)
+	15: Le
+	16: BrFalse(18)
+B3:
+	17: Branch(24)
+B4:
+	18: MoveLoc[1](Arg1: &mut vector<Ty0>)
+	19: Pop
+	20: MoveLoc[0](Arg0: &mut RandomGenerator)
+	21: Pop
+	22: LdConst[4](u64: 4)
+	23: Abort
+B5:
+	24: MoveLoc[7](loc5: u64)
+	25: CastU16
+	26: LdU16(1)
+	27: Sub
+	28: StLoc[3](loc1: u16)
+	29: CopyLoc[3](loc1: u16)
+	30: StLoc[2](loc0: u16)
+	31: LdU16(0)
+	32: StLoc[4](loc2: u16)
+	33: MoveLoc[2](loc0: u16)
+	34: StLoc[8](loc6: u16)
+B6:
+	35: CopyLoc[4](loc2: u16)
+	36: CopyLoc[8](loc6: u16)
+	37: Lt
+	38: BrFalse(57)
+B7:
+	39: CopyLoc[4](loc2: u16)
+	40: StLoc[5](loc3: u16)
+	41: CopyLoc[0](Arg0: &mut RandomGenerator)
+	42: CopyLoc[5](loc3: u16)
+	43: CopyLoc[3](loc1: u16)
+	44: Call generate_u16_in_range(&mut RandomGenerator, u16, u16): u16
+	45: StLoc[6](loc4: u16)
+	46: CopyLoc[1](Arg1: &mut vector<Ty0>)
+	47: MoveLoc[5](loc3: u16)
+	48: CastU64
+	49: MoveLoc[6](loc4: u16)
+	50: CastU64
+	51: VecSwap(33)
+	52: MoveLoc[4](loc2: u16)
+	53: LdU16(1)
+	54: Add
+	55: StLoc[4](loc2: u16)
+	56: Branch(35)
+B8:
+	57: MoveLoc[1](Arg1: &mut vector<Ty0>)
+	58: Pop
+	59: MoveLoc[0](Arg0: &mut RandomGenerator)
+	60: Pop
+	61: Ret
+}
+
+Constants [
+	0 => u64: 0
+	1 => u64: 1
+	2 => u64: 2
+	3 => u64: 3
+	4 => u64: 4
+	5 => u16: 32
+	6 => u64: 65535
+	7 => address: 0x0000000000000000000000000000000000000000000000000000000000000000
+	8 => vector<u8>: "" // interpreted as UTF8 string
+]
+}

@@ -46,7 +46,7 @@ pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<Checkpo
         3,
         100_000,
     );
-    checkpoint_service.spawn().now_or_never().unwrap();
+    checkpoint_service.spawn(None).now_or_never().unwrap();
     checkpoint_service
 }
 
@@ -101,7 +101,6 @@ async fn test_mysticeti_manager() {
                     state.clone(),
                     Arc::new(NoopConsensusOverloadChecker {}),
                     Arc::new(CheckpointServiceNoop {}),
-                    state.transaction_manager().clone(),
                     SuiTxValidatorMetrics::new(&Registry::new()),
                 ),
             )

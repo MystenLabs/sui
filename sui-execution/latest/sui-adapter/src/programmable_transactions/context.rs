@@ -7,6 +7,10 @@ pub use checked::*;
 mod checked {
     use crate::{
         adapter::new_native_extensions,
+        data_store::{
+            PackageStore, cached_data_store::CachedPackageStore, linkage_view::LinkageView,
+            sui_data_store::SuiDataStore,
+        },
         error::convert_vm_error,
         execution_mode::ExecutionMode,
         execution_value::{
@@ -15,9 +19,9 @@ mod checked {
         },
         gas_charger::GasCharger,
         gas_meter::SuiGasMeter,
-        programmable_transactions::{data_store::SuiDataStore, linkage_view::LinkageView},
         type_resolver::TypeTagResolver,
     };
+    use indexmap::IndexSet;
     use move_binary_format::{
         CompiledModule,
         errors::{Location, PartialVMError, VMError, VMResult},
@@ -45,7 +49,8 @@ mod checked {
         sync::Arc,
     };
     use sui_move_natives::object_runtime::{
-        self, LoadedRuntimeObject, ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
+        self, LoadedRuntimeObject, MoveAccumulatorEvent, MoveAccumulatorValue, ObjectRuntime,
+        RuntimeResults, get_all_uids, max_event_error,
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
@@ -59,7 +64,7 @@ mod checked {
         metrics::LimitsMetrics,
         move_package::MovePackage,
         object::{Data, MoveObject, Object, ObjectInner, Owner},
-        storage::{BackingPackageStore, DenyListResult, PackageObject},
+        storage::DenyListResult,
         transaction::{Argument, CallArg, ObjectArg},
     };
     use tracing::instrument;
@@ -144,7 +149,9 @@ mod checked {
         where
             'a: 'state,
         {
-            let mut linkage_view = LinkageView::new(Box::new(state_view.as_sui_resolver()));
+            let mut linkage_view = LinkageView::new(Box::new(CachedPackageStore::new(Box::new(
+                state_view.as_sui_resolver(),
+            ))));
             let mut input_object_map = BTreeMap::new();
             let inputs = inputs
                 .into_iter()
@@ -277,38 +284,28 @@ mod checked {
             &mut self,
             package_id: ObjectID,
         ) -> Result<AccountAddress, ExecutionError> {
-            if self.linkage_view.has_linkage(package_id) {
+            if self.linkage_view.has_linkage(package_id)? {
                 // Setting same context again, can skip.
                 return Ok(self
                     .linkage_view
-                    .original_package_id()
+                    .original_package_id()?
                     .unwrap_or(*package_id));
             }
 
-            let package = package_for_linkage(&self.linkage_view, package_id)
+            let move_package = get_package(&self.linkage_view, package_id)
                 .map_err(|e| self.convert_vm_error(e))?;
 
-            self.linkage_view.set_linkage(package.move_package())
+            self.linkage_view.set_linkage(&move_package)
         }
 
         /// Load a type using the context's current session.
         pub fn load_type(&mut self, type_tag: &TypeTag) -> VMResult<Type> {
-            load_type(
-                self.vm,
-                &mut self.linkage_view,
-                &self.new_packages,
-                type_tag,
-            )
+            load_type(self.vm, &self.linkage_view, &self.new_packages, type_tag)
         }
 
         /// Load a type using the context's current session.
         pub fn load_type_from_struct(&mut self, struct_tag: &StructTag) -> VMResult<Type> {
-            load_type_from_struct(
-                self.vm,
-                &mut self.linkage_view,
-                &self.new_packages,
-                struct_tag,
-            )
+            load_type_from_struct(self.vm, &self.linkage_view, &self.new_packages, struct_tag)
         }
 
         pub fn get_type_abilities(&self, t: &Type) -> Result<AbilitySet, ExecutionError> {
@@ -341,7 +338,21 @@ mod checked {
             }
             let new_events = events
                 .into_iter()
-                .map(|(ty, tag, value)| {
+                .map(|(tag, value)| {
+                    let type_tag = TypeTag::Struct(Box::new(tag.clone()));
+                    let ty = unwrap_type_tag_load(
+                        self.protocol_config,
+                        self.vm
+                            .get_runtime()
+                            .try_load_cached_type(&type_tag)
+                            .map_err(|e| self.convert_vm_error(e))?
+                            .ok_or_else(|| {
+                                make_invariant_violation!(
+                                    "Failed to load type for event tag: {}",
+                                    tag
+                                )
+                            }),
+                    )?;
                     let layout = self
                         .vm
                         .get_runtime()
@@ -827,6 +838,7 @@ mod checked {
             let RuntimeResults {
                 writes,
                 user_events: remaining_events,
+                accumulator_events,
                 loaded_child_objects,
                 mut created_object_ids,
                 deleted_object_ids,
@@ -872,7 +884,23 @@ mod checked {
                 }
             }
 
-            for (id, (recipient, ty, value)) in writes {
+            for (id, (recipient, tag, value)) in writes {
+                let ty = unwrap_type_tag_load(
+                    protocol_config,
+                    vm.get_runtime()
+                        .try_load_cached_type(&TypeTag::from(tag.clone()))
+                        .map_err(|e| {
+                            convert_vm_error(
+                                e,
+                                vm,
+                                &linkage_view,
+                                protocol_config.resolve_abort_locations_to_package_id(),
+                            )
+                        })?
+                        .ok_or_else(|| {
+                            make_invariant_violation!("Failed to load type for event tag: {}", tag)
+                        }),
+                )?;
                 let abilities = vm.get_runtime().get_type_abilities(&ty).map_err(|e| {
                     convert_vm_error(
                         e,
@@ -910,104 +938,20 @@ mod checked {
                 written_objects.insert(id, object);
             }
 
-            // Before finishing, ensure that any shared object taken by value by the transaction is either:
-            // 1. Mutated (and still has a shared ownership); or
-            // 2. Deleted.
-            // Otherwise, the shared object operation is not allowed and we fail the transaction.
-            for id in &by_value_shared_objects {
-                // If it's been written it must have been reshared so must still have an ownership
-                // of `Shared`.
-                if let Some(obj) = written_objects.get(id) {
-                    if !obj.is_shared() {
-                        return Err(ExecutionError::new(
-                            ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                            Some(
-                                format!(
-                                    "Shared object operation on {} not allowed: \
-                                     cannot be frozen, transferred, or wrapped",
-                                    id
-                                )
-                                .into(),
-                            ),
-                        ));
-                    }
-                } else {
-                    // If it's not in the written objects, the object must have been deleted. Otherwise
-                    // it's an error.
-                    if !deleted_object_ids.contains(id) {
-                        return Err(ExecutionError::new(
-                            ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                            Some(
-                                format!("Shared object operation on {} not allowed: \
-                                         shared objects used by value must be re-shared if not deleted", id).into(),
-                            ),
-                        ));
-                    }
-                }
-            }
-
-            // Before finishing, enforce auth restrictions on consensus objects.
-            for (id, original_owner) in consensus_owner_objects {
-                let Owner::ConsensusAddressOwner { owner, .. } = original_owner else {
-                    panic!(
-                        "verified before adding to `consensus_owner_objects` that these are ConsensusAddressOwner"
-                    );
-                };
-                // Already verified in pre-execution checks that tx sender is the object owner.
-                // Owner is allowed to do anything with the object.
-                if ref_context.borrow().sender() != owner {
-                    debug_fatal!(
-                        "transaction with a singly owned input object where the tx sender is not the owner should never be executed"
-                    );
-                    return Err(ExecutionError::new(
-                                ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                                Some(
-                                    format!("Shared object operation on {} not allowed: \
-                                             transaction with singly owned input object must be sent by the owner", id).into(),
-                                ),
-                            ));
-                }
-                // If an Owner type is implemented with support for more fine-grained authorization,
-                // checks should be performed here. For example, transfers and wraps can be detected
-                // by comparing `original_owner` with:
-                // let new_owner = written_objects.get(&id).map(|obj| obj.owner);
-                //
-                // Deletions can be detected with:
-                // let deleted = deleted_object_ids.contains(&id);
-            }
-
-            if protocol_config.enable_coin_deny_list_v2() {
-                let DenyListResult {
-                    result,
-                    num_non_gas_coin_owners,
-                } = state_view.check_coin_deny_list(&written_objects);
-                gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
-                result?;
-            }
-
-            let user_events = user_events
-                .into_iter()
-                .map(|(module_id, tag, contents)| {
-                    Event::new(
-                        module_id.address(),
-                        module_id.name(),
-                        ref_context.borrow().sender(),
-                        tag,
-                        contents,
-                    )
-                })
-                .collect();
-
-            Ok(ExecutionResults::V2(ExecutionResultsV2 {
+            finish(
+                protocol_config,
+                state_view,
+                gas_charger,
+                &ref_context.borrow(),
+                &by_value_shared_objects,
+                &consensus_owner_objects,
+                loaded_runtime_objects,
                 written_objects,
-                modified_objects: loaded_runtime_objects
-                    .into_iter()
-                    .filter_map(|(id, loaded)| loaded.is_modified.then_some(id))
-                    .collect(),
-                created_object_ids: created_object_ids.into_iter().collect(),
-                deleted_object_ids: deleted_object_ids.into_iter().collect(),
+                created_object_ids,
+                deleted_object_ids,
                 user_events,
-            }))
+                accumulator_events,
+            )
         }
 
         /// Convert a VM Error to an execution one
@@ -1022,7 +966,6 @@ mod checked {
 
         /// Special case errors for type arguments to Move functions
         pub fn convert_type_argument_error(&self, idx: usize, error: VMError) -> ExecutionError {
-            use move_core_types::vm_status::StatusCode;
             use sui_types::execution_status::TypeArgumentError;
             match error.major_status() {
                 StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH => {
@@ -1283,29 +1226,146 @@ mod checked {
 
     /// Fetch the package at `package_id` with a view to using it as a link context.  Produces an error
     /// if the object at that ID does not exist, or is not a package.
-    fn package_for_linkage(
-        linkage_view: &LinkageView,
+    fn get_package(
+        package_store: &dyn PackageStore,
         package_id: ObjectID,
-    ) -> VMResult<PackageObject> {
-        use move_binary_format::errors::PartialVMError;
-        use move_core_types::vm_status::StatusCode;
-
-        match linkage_view.get_package_object(&package_id) {
+    ) -> VMResult<Rc<MovePackage>> {
+        match package_store.get_package(&package_id) {
             Ok(Some(package)) => Ok(package),
             Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
                 .with_message(format!("Cannot find link context {package_id} in store"))
                 .finish(Location::Undefined)),
             Err(err) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
-                .with_message(format!(
-                    "Error loading link context {package_id} from store: {err}"
-                ))
+                .with_message(format!("Error loading {package_id} from store: {err}"))
                 .finish(Location::Undefined)),
         }
     }
 
+    pub fn finish(
+        protocol_config: &ProtocolConfig,
+        state_view: &dyn ExecutionState,
+        gas_charger: &mut GasCharger,
+        tx_context: &TxContext,
+        by_value_shared_objects: &BTreeSet<ObjectID>,
+        consensus_owner_objects: &BTreeMap<ObjectID, Owner>,
+        loaded_runtime_objects: BTreeMap<ObjectID, LoadedRuntimeObject>,
+        written_objects: BTreeMap<ObjectID, Object>,
+        created_object_ids: IndexSet<ObjectID>,
+        deleted_object_ids: IndexSet<ObjectID>,
+        user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
+        accumulator_events: Vec<MoveAccumulatorEvent>,
+    ) -> Result<ExecutionResults, ExecutionError> {
+        // Before finishing, ensure that any shared object taken by value by the transaction is either:
+        // 1. Mutated (and still has a shared ownership); or
+        // 2. Deleted.
+        // Otherwise, the shared object operation is not allowed and we fail the transaction.
+        for id in by_value_shared_objects {
+            // If it's been written it must have been reshared so must still have an ownership
+            // of `Shared`.
+            if let Some(obj) = written_objects.get(id) {
+                if !obj.is_shared() {
+                    return Err(ExecutionError::new(
+                        ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                        Some(
+                            format!(
+                                "Shared object operation on {} not allowed: \
+                                     cannot be frozen, transferred, or wrapped",
+                                id
+                            )
+                            .into(),
+                        ),
+                    ));
+                }
+            } else {
+                // If it's not in the written objects, the object must have been deleted. Otherwise
+                // it's an error.
+                if !deleted_object_ids.contains(id) {
+                    return Err(ExecutionError::new(
+                            ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                            Some(
+                                format!("Shared object operation on {} not allowed: \
+                                         shared objects used by value must be re-shared if not deleted", id).into(),
+                            ),
+                        ));
+                }
+            }
+        }
+
+        // Before finishing, enforce auth restrictions on consensus objects.
+        for (id, original_owner) in consensus_owner_objects {
+            let Owner::ConsensusAddressOwner { owner, .. } = original_owner else {
+                panic!(
+                    "verified before adding to `consensus_owner_objects` that these are ConsensusAddressOwner"
+                );
+            };
+            // Already verified in pre-execution checks that tx sender is the object owner.
+            // Owner is allowed to do anything with the object.
+            if tx_context.sender() != *owner {
+                debug_fatal!(
+                    "transaction with a singly owned input object where the tx sender is not the owner should never be executed"
+                );
+                return Err(ExecutionError::new(
+                                ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                                Some(
+                                    format!("Shared object operation on {} not allowed: \
+                                             transaction with singly owned input object must be sent by the owner", id).into(),
+                                ),
+                            ));
+            }
+            // If an Owner type is implemented with support for more fine-grained authorization,
+            // checks should be performed here. For example, transfers and wraps can be detected
+            // by comparing `original_owner` with:
+            // let new_owner = written_objects.get(&id).map(|obj| obj.owner);
+            //
+            // Deletions can be detected with:
+            // let deleted = deleted_object_ids.contains(&id);
+        }
+
+        if protocol_config.enable_coin_deny_list_v2() {
+            let DenyListResult {
+                result,
+                num_non_gas_coin_owners,
+            } = state_view.check_coin_deny_list(&written_objects);
+            gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
+            result?;
+        }
+
+        let user_events = user_events
+            .into_iter()
+            .map(|(module_id, tag, contents)| {
+                Event::new(
+                    module_id.address(),
+                    module_id.name(),
+                    tx_context.sender(),
+                    tag,
+                    contents,
+                )
+            })
+            .collect();
+
+        let accumulator_events = accumulator_events
+            .into_iter()
+            .map(|accum_event| match accum_event.value {
+                MoveAccumulatorValue::MoveValue(_, _, _) => todo!(),
+            })
+            .collect();
+
+        Ok(ExecutionResults::V2(ExecutionResultsV2 {
+            written_objects,
+            modified_objects: loaded_runtime_objects
+                .into_iter()
+                .filter_map(|(id, loaded)| loaded.is_modified.then_some(id))
+                .collect(),
+            created_object_ids: created_object_ids.into_iter().collect(),
+            deleted_object_ids: deleted_object_ids.into_iter().collect(),
+            user_events,
+            accumulator_events,
+        }))
+    }
+
     pub fn load_type_from_struct(
         vm: &MoveVM,
-        linkage_view: &mut LinkageView,
+        linkage_view: &LinkageView,
         new_packages: &[MovePackage],
         struct_tag: &StructTag,
     ) -> VMResult<Type> {
@@ -1322,22 +1382,26 @@ mod checked {
 
         // Load the package that the struct is defined in, in storage
         let defining_id = ObjectID::from_address(*address);
-        let package = package_for_linkage(linkage_view, defining_id)?;
+
+        let data_store = SuiDataStore::new(linkage_view, new_packages);
+        let move_package = get_package(&data_store, defining_id)?;
 
         // Set the defining package as the link context while loading the
         // struct
-        let original_address = linkage_view
-            .set_linkage(package.move_package())
-            .map_err(|e| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(e.to_string())
-                    .finish(Location::Undefined)
-            })?;
+        let original_address = linkage_view.set_linkage(&move_package).map_err(|e| {
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message(e.to_string())
+                .finish(Location::Undefined)
+        })?;
 
         let runtime_id = ModuleId::new(original_address, module.clone());
         let data_store = SuiDataStore::new(linkage_view, new_packages);
         let res = vm.get_runtime().load_type(&runtime_id, name, &data_store);
-        linkage_view.reset_linkage();
+        linkage_view.reset_linkage().map_err(|e| {
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message(e.to_string())
+                .finish(Location::Undefined)
+        })?;
         let (idx, struct_type) = res?;
 
         // Recursively load type parameters, if necessary
@@ -1373,7 +1437,7 @@ mod checked {
     /// reset after this operation, because during the operation, it may change when loading a struct.
     pub fn load_type(
         vm: &MoveVM,
-        linkage_view: &mut LinkageView,
+        linkage_view: &LinkageView,
         new_packages: &[MovePackage],
         type_tag: &TypeTag,
     ) -> VMResult<Type> {
@@ -1710,7 +1774,18 @@ mod checked {
         }
     }
 
-    enum EitherError {
+    fn unwrap_type_tag_load(
+        protocol_config: &ProtocolConfig,
+        ty: Result<Type, ExecutionError>,
+    ) -> Result<Type, ExecutionError> {
+        if ty.is_err() && !protocol_config.type_tags_in_object_runtime() {
+            panic!("Failed to load a type tag from the object runtime -- this shouldn't happen")
+        } else {
+            ty
+        }
+    }
+
+    pub enum EitherError {
         CommandArgument(CommandArgumentError),
         Execution(ExecutionError),
     }
@@ -1728,7 +1803,7 @@ mod checked {
     }
 
     impl EitherError {
-        fn into_execution_error(self, command_index: usize) -> ExecutionError {
+        pub fn into_execution_error(self, command_index: usize) -> ExecutionError {
             match self {
                 EitherError::CommandArgument(e) => command_argument_error(e, command_index),
                 EitherError::Execution(e) => e,
