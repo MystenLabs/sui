@@ -2,10 +2,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-mod dependency_set;
-pub mod external;
-mod git;
-mod local;
+pub mod dependency_set;
+
+mod fetch;
+mod parse;
+mod resolve;
 
 pub use dependency_set::DependencySet;
 
@@ -17,15 +18,70 @@ use serde::{Deserialize, Deserializer, Serialize, de};
 use tracing::debug;
 
 use crate::{
-    errors::PackageResult,
+    errors::{FileHandle, PackageResult},
     flavor::MoveFlavor,
-    git::format_repo_to_fs_path,
-    package::{EnvironmentName, paths::PackagePath},
+    git::cache::GitTree,
+    package::paths::PackagePath,
+    schema::{
+        Address, EnvironmentID, EnvironmentName, LocalDependency, LockfileDependencyInfo,
+        ManifestDependencyInfo, OnChainDependency, ResolverDependencyInfo,
+    },
 };
 
-use external::ExternalDependency;
-use git::{PinnedGitDependency, UnpinnedGitDependency};
-use local::LocalDependency;
+pub type Parsed = ManifestDependencyInfo;
+
+pub type Resolved = ResolverDependencyInfo;
+
+pub enum Pinned {
+    Local(LocalDependency),
+    Git(GitTree),
+    OnChain(OnChainDependency),
+}
+
+pub type Fetched = PackagePath;
+
+// TODO: docs
+#[derive(Debug)]
+pub struct Dependency<DepInfo> {
+    // TODO: not sure I love pub(super) here
+    pub(super) dep_info: DepInfo,
+
+    /// The environment in the dependency's namespace to use. For example, given
+    /// ```toml
+    /// dep-replacements.mainnet.foo = { ..., use-environment = "testnet" }
+    /// ```
+    /// `use_environment` variable would be `testnet`
+    use_environment: EnvironmentName,
+
+    /// The local environment ID for this dependency. For example, given
+    /// ```toml
+    /// environments.mainnet = "0x1234"
+    /// dep-replacements.mainnet.foo = { ..., use-environment = "testnet" }
+    /// ```
+    /// `source_environment` would be "0x1234"
+    source_environment: EnvironmentID,
+
+    is_override: bool,
+
+    published_at: Option<Address>,
+
+    containing_file: FileHandle,
+}
+
+impl<T> Dependency<T> {
+    pub fn map<U, F: FnOnce(T) -> U>(self, f: F) -> Dependency<U> {
+        Dependency {
+            dep_info: f(self.dep_info),
+            use_environment: self.use_environment,
+            source_environment: self.source_environment,
+            is_override: self.is_override,
+            published_at: self.published_at,
+            containing_file: self.containing_file,
+        }
+    }
+}
+
+/*
 
 // TODO (potential refactor): consider using objects for manifest dependencies (i.e. `Box<dyn UnpinnedDependency>`).
 //      part of the complexity here would be deserialization - probably need a flavor-specific
@@ -35,14 +91,6 @@ use local::LocalDependency;
 //      trait method to return a resolver object, and then a method on the resolver object to
 //      resolve a bunch of dependencies (resolvers could implement Eq)
 //
-
-/// Phantom type to represent pinned dependencies (see [PinnedDependency])
-#[derive(Debug, PartialEq, Eq)]
-pub struct Pinned;
-
-/// Phantom type to represent unpinned dependencies (see [UnpinnedDependencyInfo])
-#[derive(Debug, PartialEq)]
-pub struct Unpinned;
 
 /// Pinned dependencies are guaranteed to always resolve to the same package source. For example,
 /// a git dependendency with a branch or tag revision may change over time (and is thus not
@@ -130,79 +178,6 @@ where
     }
 }
 
-/// Split up deps into kinds. The union of the output sets is the same as [deps]
-#[allow(clippy::type_complexity)]
-fn split<F: MoveFlavor>(
-    deps: &DependencySet<UnpinnedDependencyInfo<F>>,
-) -> (
-    DependencySet<UnpinnedGitDependency>,
-    DependencySet<ExternalDependency>,
-    DependencySet<LocalDependency>,
-    DependencySet<F::FlavorDependency<Unpinned>>,
-) {
-    use DependencySet as DS;
-    use UnpinnedDependencyInfo as U;
-
-    let mut gits = DS::new();
-    let mut exts = DS::new();
-    let mut locs = DS::new();
-    let mut flav = DS::new();
-
-    for (env, package_name, dep) in deps.clone().into_iter() {
-        match dep {
-            U::Git(info) => gits.insert(env, package_name, info),
-            U::External(info) => exts.insert(env, package_name, info),
-            U::Local(info) => locs.insert(env, package_name, info),
-            U::FlavorSpecific(info) => flav.insert(env, package_name, info),
-        }
-    }
-
-    (gits, exts, locs, flav)
-}
-
-/// Replace all dependencies with their pinned versions. The returned set may have a different set
-/// of keys than the input, for example if new implicit dependencies are added or if external
-/// resolvers resolve default deps to dep-replacements, or if dep-replacements are identical to the
-/// default deps.
-pub async fn pin<F: MoveFlavor>(
-    flavor: &F,
-    mut deps: DependencySet<UnpinnedDependencyInfo<F>>,
-    envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
-) -> PackageResult<DependencySet<PinnedDependencyInfo<F>>> {
-    use PinnedDependencyInfo as P;
-
-    // resolution
-    ExternalDependency::resolve(&mut deps, envs).await?;
-    debug!("done resolving");
-
-    // pinning
-    let (mut gits, exts, mut locs, mut flav) = split(&deps);
-    assert!(exts.is_empty(), "resolve must remove external dependencies");
-
-    let pinned_gits: DependencySet<P<F>> = UnpinnedGitDependency::pin(gits)
-        .await?
-        .into_iter()
-        .map(|(env, package, dep)| (env, package, P::Git::<F>(dep)))
-        .collect();
-
-    let pinned_locs = locs
-        .into_iter()
-        .map(|(env, package, dep)| (env, package, P::Local::<F>(dep)))
-        .collect();
-
-    let pinned_flav = flavor
-        .pin(flav)?
-        .into_iter()
-        .map(|(env, package, dep)| (env, package, P::FlavorSpecific::<F>(dep.clone())))
-        .collect();
-
-    Ok(DependencySet::merge([
-        pinned_gits,
-        pinned_locs,
-        pinned_flav,
-    ]))
-}
-
 /// For each environment, if none of the implicit dependencies are present in [deps] (or the
 /// default environment), then they are all added.
 // TODO: what's the notion of identity used here?
@@ -253,3 +228,4 @@ pub async fn fetch<F: MoveFlavor>(
 // TODO: unit tests
 #[cfg(test)]
 mod tests {}
+*/

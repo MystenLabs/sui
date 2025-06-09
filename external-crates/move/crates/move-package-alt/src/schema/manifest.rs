@@ -3,52 +3,49 @@ use std::{collections::BTreeMap, path::PathBuf};
 use serde::{Deserialize, Deserializer, de};
 use serde_spanned::Spanned;
 
-use super::{Address, EnvironmentName, PackageName};
+use crate::dependency::DependencySet;
+
+use super::{
+    Address, EnvironmentName, LocalDependency, OnChainDependency, PackageName, ResolverName,
+};
+
+// TODO: look at Brandon's serialization code (https://github.com/MystenLabs/sui-rust-sdk/blob/master/crates/sui-sdk-types/src/object.rs)
 
 /// The on-chain identifier for an environment (such as a chain ID); these are bound to environment
 /// names in the `[environments]` table of the manifest
-type EnvironmentID = String;
-
-/// The name of an external resolver
-type ResolverName = String;
+pub type EnvironmentID = String;
 
 // Note: [Manifest] objects are immutable and should not implement [serde::Serialize]; any tool
 // writing these files should use [toml_edit] to set / preserve the formatting, since these are
 // user-editable files
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 #[serde(deny_unknown_fields)]
-pub struct Manifest {
+pub struct ParsedManifest {
     pub package: PackageMetadata,
 
     #[serde(default)]
     pub environments: BTreeMap<Spanned<EnvironmentName>, Spanned<EnvironmentID>>,
 
     #[serde(default)]
-    pub dependencies: BTreeMap<PackageName, Spanned<ManifestDependency>>,
+    pub dependencies: BTreeMap<PackageName, Spanned<DefaultDependency>>,
 
     /// Replace dependencies for the given environment.
     #[serde(default)]
-    pub dep_replacements:
-        BTreeMap<EnvironmentName, BTreeMap<PackageName, Spanned<ManifestDependencyReplacement>>>,
+    pub dep_replacements: DependencySet<Spanned<ReplacementDependency>>,
 }
 
 /// The `[package]` section of a manifest
-#[derive(Debug, Deserialize)]
-struct PackageMetadata {
+#[derive(Debug, Deserialize, Clone)]
+pub struct PackageMetadata {
     pub name: Spanned<PackageName>,
-    pub edition: Spanned<ConstMove2025>,
+    pub edition: ConstMove2025,
 }
 
-/// The constant string "move2025"
-#[derive(Debug, Deserialize)]
-#[serde(try_from = "String")]
-struct ConstMove2025;
-
-/// An entry in the `[dependencies]` section of the manifest
-#[derive(Deserialize, Debug)]
+/// An entry in the `[dependencies]` section of a manifest
+#[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
-pub struct ManifestDependency {
+pub struct DefaultDependency {
     #[serde(flatten)]
     pub dependency_info: ManifestDependencyInfo,
 
@@ -59,13 +56,13 @@ pub struct ManifestDependency {
     pub rename_from: Option<String>,
 }
 
-/// An entry in the `[dep-replacements]` section of the manifest
-#[derive(Debug, Deserialize)]
+/// An entry in the `[dep-replacements]` section of a manifest
+#[derive(Debug, Deserialize, Clone, Default)]
 #[serde(bound = "")]
 #[serde(rename_all = "kebab-case")]
-pub struct ManifestDependencyReplacement {
+pub struct ReplacementDependency {
     #[serde(flatten, default)]
-    pub dependency: Option<ManifestDependency>,
+    pub dependency: Option<DefaultDependency>,
 
     #[serde(default)]
     pub published_at: Option<Address>,
@@ -74,41 +71,17 @@ pub struct ManifestDependencyReplacement {
     pub use_environment: Option<EnvironmentName>,
 }
 
-/// [UnpinnedDependencyInfo]s contain the dependency-type-specific things that users write in their
+/// [ManifestDependencyInfo]s contain the dependency-type-specific things that users write in their
 /// Move.toml files in the `dependencies` section.
 ///
-/// TODO: this paragraph will change with upcoming design changes:
-/// There are additional general fields in the manifest format (like `override` or `rename-from`)
-/// that are not part of the UnpinnedDependencyInfo. We separate these partly because these things
-/// are not serialized to the Lock file. See [crate::package::manifest] for the full representation
-/// of an entry in the `dependencies` table.
-///
-// Note: there is a custom Deserializer for this type; be sure to update it if you modify this
+/// There are additional general fields in the manifest format (like `override` or `rename-from`);
+/// these are in the [ManifestDependency] or [ManifestDependencyReplacement] types.
 #[derive(Debug, Clone)]
 pub enum ManifestDependencyInfo {
-    Git(ManifestGitDependency),
+    Git(UnpinnedGitDependency),
     External(ExternalDependency),
     Local(LocalDependency),
     OnChain(OnChainDependency),
-}
-
-/// A `{local = "<path>"}` dependency
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct LocalDependency {
-    /// The path on the filesystem, relative to the location of the containing file (which is
-    /// stored in the `Located` wrapper)
-    pub local: PathBuf,
-}
-
-/// The constant `true`
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-struct ConstTrue;
-
-/// An on-chain dependency `{on-chain = true}`
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct OnChainDependency {
-    #[serde(rename = "on-chain")]
-    pub on_chain: ConstTrue,
 }
 
 /// An external dependency has the form `{ r.<res> = <data> }`. External
@@ -125,7 +98,7 @@ pub struct ExternalDependency {
 
 /// A `{git = "..."}` dependency in a manifest
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct ManifestGitDependency {
+pub struct UnpinnedGitDependency {
     /// The repository containing the dependency
     #[serde(rename = "git")]
     pub repo: String,
@@ -139,6 +112,17 @@ pub struct ManifestGitDependency {
     pub path: PathBuf,
 }
 
+/// The constant string "move2025"
+#[derive(Debug, Deserialize, Clone)]
+#[serde(try_from = "String")]
+struct ConstMove2025;
+
+/// Convenience type for serializing/deserializing external deps
+#[derive(Deserialize)]
+struct RField {
+    r: BTreeMap<String, toml::Value>,
+}
+
 impl<'de> Deserialize<'de> for ManifestDependencyInfo {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -149,7 +133,7 @@ impl<'de> Deserialize<'de> for ManifestDependencyInfo {
 
         if let Some(tbl) = data.as_table() {
             if tbl.contains_key("git") {
-                let dep = ManifestGitDependency::deserialize(data).map_err(de::Error::custom)?;
+                let dep = UnpinnedGitDependency::deserialize(data).map_err(de::Error::custom)?;
                 Ok(ManifestDependencyInfo::Git(dep))
             } else if tbl.contains_key("r") {
                 let dep = ExternalDependency::deserialize(data).map_err(de::Error::custom)?;
@@ -181,23 +165,6 @@ impl TryFrom<String> for ConstMove2025 {
         }
         Ok(Self)
     }
-}
-
-impl TryFrom<bool> for ConstTrue {
-    type Error = &'static str;
-
-    fn try_from(value: bool) -> Result<Self, Self::Error> {
-        if value != true {
-            return Err("Expected the constant `true`");
-        }
-        Ok(Self)
-    }
-}
-
-/// Convenience type for serializing/deserializing external deps
-#[derive(Deserialize)]
-struct RField {
-    r: BTreeMap<String, toml::Value>,
 }
 
 impl TryFrom<RField> for ExternalDependency {
