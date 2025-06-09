@@ -209,12 +209,19 @@ impl<'a> ParsingAnalysisContext<'a> {
         let mut latest_use_loc = Loc::new(mod_def.loc.file_hash(), 0, 0);
         // location of the earliest member (if any)
         let mut earliest_member_loc = Loc::new(mod_def.loc.file_hash(), u32::MAX, u32::MAX);
+        // we need this to avoid adding auto-imports for `use` declarations
+        // in "use blocks" that follow the follow the initial one (and come
+        // after other module members)
+        let mut non_use_member_after_use = false;
         for m in &mod_def.members {
             use P::ModuleMember as MM;
             match m {
                 MM::Function(fun) => {
                     if ignored_function(fun.name.value()) {
                         continue;
+                    }
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
                     }
                     earliest_member_loc =
                         earliest_loc(earliest_member_loc, fun.doc.loc().unwrap_or(fun.loc));
@@ -254,6 +261,9 @@ impl<'a> ParsingAnalysisContext<'a> {
                     };
                 }
                 MM::Struct(sdef) => {
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
+                    }
                     earliest_member_loc =
                         earliest_loc(earliest_member_loc, sdef.doc.loc().unwrap_or(sdef.loc));
                     // If the cursor is in this item, mark that down.
@@ -284,6 +294,9 @@ impl<'a> ParsingAnalysisContext<'a> {
                     }
                 }
                 MM::Enum(edef) => {
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
+                    }
                     earliest_member_loc =
                         earliest_loc(earliest_member_loc, edef.doc.loc().unwrap_or(edef.loc));
                     // If the cursor is in this item, mark that down.
@@ -318,14 +331,24 @@ impl<'a> ParsingAnalysisContext<'a> {
                     }
                 }
                 MM::Use(use_decl) => {
-                    latest_use_loc = latest_loc(latest_use_loc, use_decl.loc);
+                    if !non_use_member_after_use {
+                        // update only if we have not seen a use that was already
+                        // followed by a non-use member
+                        latest_use_loc = latest_loc(latest_use_loc, use_decl.loc);
+                    }
                     self.use_decl_symbols(use_decl)
                 }
                 MM::Friend(fdecl) => {
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
+                    }
                     earliest_member_loc = earliest_loc(earliest_member_loc, fdecl.loc);
                     self.chain_symbols(&fdecl.friend)
                 }
                 MM::Constant(c) => {
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
+                    }
                     earliest_member_loc =
                         earliest_loc(earliest_member_loc, c.doc.loc().unwrap_or(c.loc));
                     // If the cursor is in this item, mark that down.
@@ -348,6 +371,9 @@ impl<'a> ParsingAnalysisContext<'a> {
                     self.exp_symbols(&c.value);
                 }
                 MM::Spec(s) => {
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
+                    }
                     earliest_member_loc = earliest_loc(earliest_member_loc, s.loc);
                 }
             }
