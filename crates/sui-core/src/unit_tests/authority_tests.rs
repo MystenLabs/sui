@@ -4625,7 +4625,7 @@ pub async fn init_state_with_ids_and_object_basics_with_fullnode<
 ) -> (Arc<AuthorityState>, Arc<AuthorityState>, ObjectRef) {
     let (validator, fullnode) = init_state_validator_with_fullnode().await;
     for (address, object_id, obj) in objects {
-        let obj = obj.unwrap_or(Object::with_id_owner_for_testing(object_id, address));
+        let obj = obj.unwrap_or_else(|| Object::with_id_owner_for_testing(object_id, address));
         validator.insert_genesis_object(obj.clone()).await;
         fullnode.insert_genesis_object(obj).await;
     }
