@@ -11,6 +11,7 @@ mod checked {
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::move_vm::MoveVM;
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
+    use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
     use sui_types::balance::{
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
         BALANCE_MODULE_NAME,
@@ -756,6 +757,10 @@ mod checked {
                             ));
                             builder = setup_store_execution_time_estimates(builder, estimates);
                         }
+                        EndOfEpochTransactionKind::AccumulatorRootCreate => {
+                            assert!(protocol_config.enable_accumulators());
+                            builder = setup_accumulator_root_create(builder);
+                        }
                     }
                 }
                 unreachable!(
@@ -1391,6 +1396,21 @@ mod checked {
             vec![],
             vec![system_state, estimates_arg],
         );
+        builder
+    }
+
+    fn setup_accumulator_root_create(
+        mut builder: ProgrammableTransactionBuilder,
+    ) -> ProgrammableTransactionBuilder {
+        builder
+            .move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                ACCUMULATOR_ROOT_MODULE.to_owned(),
+                ACCUMULATOR_ROOT_CREATE_FUNC.to_owned(),
+                vec![],
+                vec![],
+            )
+            .expect("Unable to generate accumulator_root_create transaction!");
         builder
     }
 }

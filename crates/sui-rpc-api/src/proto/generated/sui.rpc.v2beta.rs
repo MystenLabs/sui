@@ -17,17 +17,7 @@ pub struct Argument {
 }
 /// Nested message and enum types in `Argument`.
 pub mod argument {
-    #[derive(
-        Clone,
-        Copy,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash,
-        PartialOrd,
-        Ord,
-        ::prost::Enumeration
-    )]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
     pub enum ArgumentKind {
         Unknown = 0,
@@ -234,17 +224,7 @@ pub struct CheckpointCommitment {
 }
 /// Nested message and enum types in `CheckpointCommitment`.
 pub mod checkpoint_commitment {
-    #[derive(
-        Clone,
-        Copy,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash,
-        PartialOrd,
-        Ord,
-        ::prost::Enumeration
-    )]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
     pub enum CheckpointCommitmentKind {
         Unknown = 0,
@@ -365,17 +345,7 @@ pub struct ChangedObject {
 }
 /// Nested message and enum types in `ChangedObject`.
 pub mod changed_object {
-    #[derive(
-        Clone,
-        Copy,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash,
-        PartialOrd,
-        Ord,
-        ::prost::Enumeration
-    )]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
     pub enum InputObjectState {
         Unknown = 0,
@@ -404,17 +374,7 @@ pub mod changed_object {
             }
         }
     }
-    #[derive(
-        Clone,
-        Copy,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash,
-        PartialOrd,
-        Ord,
-        ::prost::Enumeration
-    )]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
     pub enum OutputObjectState {
         Unknown = 0,
@@ -446,17 +406,7 @@ pub mod changed_object {
             }
         }
     }
-    #[derive(
-        Clone,
-        Copy,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash,
-        PartialOrd,
-        Ord,
-        ::prost::Enumeration
-    )]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
     pub enum IdOperation {
         Unknown = 0,
@@ -514,17 +464,7 @@ pub struct UnchangedSharedObject {
 }
 /// Nested message and enum types in `UnchangedSharedObject`.
 pub mod unchanged_shared_object {
-    #[derive(
-        Clone,
-        Copy,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash,
-        PartialOrd,
-        Ord,
-        ::prost::Enumeration
-    )]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
     pub enum UnchangedSharedObjectKind {
         Unknown = 0,
@@ -681,7 +621,11 @@ pub struct ExecutionError {
     /// The command, if any, during which the error occurred.
     #[prost(uint64, optional, tag = "1")]
     pub command: ::core::option::Option<u64>,
-    #[prost(enumeration = "execution_error::ExecutionErrorKind", optional, tag = "2")]
+    #[prost(
+        enumeration = "execution_error::ExecutionErrorKind",
+        optional,
+        tag = "2"
+    )]
     pub kind: ::core::option::Option<i32>,
     /// Abort code from Move.
     #[prost(uint64, optional, tag = "3")]
@@ -717,17 +661,7 @@ pub struct ExecutionError {
 }
 /// Nested message and enum types in `ExecutionError`.
 pub mod execution_error {
-    #[derive(
-        Clone,
-        Copy,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash,
-        PartialOrd,
-        Ord,
-        ::prost::Enumeration
-    )]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
     pub enum ExecutionErrorKind {
         Unknown = 0,
@@ -850,24 +784,16 @@ pub mod execution_error {
                 Self::CommandArgumentError => "COMMAND_ARGUMENT_ERROR",
                 Self::TypeArgumentError => "TYPE_ARGUMENT_ERROR",
                 Self::UnusedValueWithoutDrop => "UNUSED_VALUE_WITHOUT_DROP",
-                Self::InvalidPublicFunctionReturnType => {
-                    "INVALID_PUBLIC_FUNCTION_RETURN_TYPE"
-                }
+                Self::InvalidPublicFunctionReturnType => "INVALID_PUBLIC_FUNCTION_RETURN_TYPE",
                 Self::InvalidTransferObject => "INVALID_TRANSFER_OBJECT",
                 Self::EffectsTooLarge => "EFFECTS_TOO_LARGE",
-                Self::PublishUpgradeMissingDependency => {
-                    "PUBLISH_UPGRADE_MISSING_DEPENDENCY"
-                }
-                Self::PublishUpgradeDependencyDowngrade => {
-                    "PUBLISH_UPGRADE_DEPENDENCY_DOWNGRADE"
-                }
+                Self::PublishUpgradeMissingDependency => "PUBLISH_UPGRADE_MISSING_DEPENDENCY",
+                Self::PublishUpgradeDependencyDowngrade => "PUBLISH_UPGRADE_DEPENDENCY_DOWNGRADE",
                 Self::PackageUpgradeError => "PACKAGE_UPGRADE_ERROR",
                 Self::WrittenObjectsTooLarge => "WRITTEN_OBJECTS_TOO_LARGE",
                 Self::CertificateDenied => "CERTIFICATE_DENIED",
                 Self::SuiMoveVerificationTimedout => "SUI_MOVE_VERIFICATION_TIMEDOUT",
-                Self::SharedObjectOperationNotAllowed => {
-                    "SHARED_OBJECT_OPERATION_NOT_ALLOWED"
-                }
+                Self::SharedObjectOperationNotAllowed => "SHARED_OBJECT_OPERATION_NOT_ALLOWED",
                 Self::InputObjectDeleted => "INPUT_OBJECT_DELETED",
                 Self::ExecutionCanceledDueToSharedObjectCongestion => {
                     "EXECUTION_CANCELED_DUE_TO_SHARED_OBJECT_CONGESTION"
@@ -894,9 +820,7 @@ pub mod execution_error {
                 "CIRCULAR_OBJECT_OWNERSHIP" => Some(Self::CircularObjectOwnership),
                 "INSUFFICIENT_COIN_BALANCE" => Some(Self::InsufficientCoinBalance),
                 "COIN_BALANCE_OVERFLOW" => Some(Self::CoinBalanceOverflow),
-                "PUBLISH_ERROR_NON_ZERO_ADDRESS" => {
-                    Some(Self::PublishErrorNonZeroAddress)
-                }
+                "PUBLISH_ERROR_NON_ZERO_ADDRESS" => Some(Self::PublishErrorNonZeroAddress),
                 "SUI_MOVE_VERIFICATION_ERROR" => Some(Self::SuiMoveVerificationError),
                 "MOVE_PRIMITIVE_RUNTIME_ERROR" => Some(Self::MovePrimitiveRuntimeError),
                 "MOVE_ABORT" => Some(Self::MoveAbort),
@@ -916,18 +840,14 @@ pub mod execution_error {
                 }
                 "INVALID_TRANSFER_OBJECT" => Some(Self::InvalidTransferObject),
                 "EFFECTS_TOO_LARGE" => Some(Self::EffectsTooLarge),
-                "PUBLISH_UPGRADE_MISSING_DEPENDENCY" => {
-                    Some(Self::PublishUpgradeMissingDependency)
-                }
+                "PUBLISH_UPGRADE_MISSING_DEPENDENCY" => Some(Self::PublishUpgradeMissingDependency),
                 "PUBLISH_UPGRADE_DEPENDENCY_DOWNGRADE" => {
                     Some(Self::PublishUpgradeDependencyDowngrade)
                 }
                 "PACKAGE_UPGRADE_ERROR" => Some(Self::PackageUpgradeError),
                 "WRITTEN_OBJECTS_TOO_LARGE" => Some(Self::WrittenObjectsTooLarge),
                 "CERTIFICATE_DENIED" => Some(Self::CertificateDenied),
-                "SUI_MOVE_VERIFICATION_TIMEDOUT" => {
-                    Some(Self::SuiMoveVerificationTimedout)
-                }
+                "SUI_MOVE_VERIFICATION_TIMEDOUT" => Some(Self::SuiMoveVerificationTimedout),
                 "SHARED_OBJECT_OPERATION_NOT_ALLOWED" => {
                     Some(Self::SharedObjectOperationNotAllowed)
                 }
@@ -997,17 +917,7 @@ pub struct CommandArgumentError {
 }
 /// Nested message and enum types in `CommandArgumentError`.
 pub mod command_argument_error {
-    #[derive(
-        Clone,
-        Copy,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash,
-        PartialOrd,
-        Ord,
-        ::prost::Enumeration
-    )]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
     pub enum CommandArgumentErrorKind {
         Unknown = 0,
@@ -1072,9 +982,7 @@ pub mod command_argument_error {
                 Self::InvalidValueUsage => "INVALID_VALUE_USAGE",
                 Self::InvalidObjectByValue => "INVALID_OBJECT_BY_VALUE",
                 Self::InvalidObjectByMutRef => "INVALID_OBJECT_BY_MUT_REF",
-                Self::SharedObjectOperationNotAllowed => {
-                    "SHARED_OBJECT_OPERATION_NOT_ALLOWED"
-                }
+                Self::SharedObjectOperationNotAllowed => "SHARED_OBJECT_OPERATION_NOT_ALLOWED",
                 Self::InvalidArgumentArity => "INVALID_ARGUMENT_ARITY",
             }
         }
@@ -1084,9 +992,7 @@ pub mod command_argument_error {
                 "COMMAND_ARGUMENT_ERROR_KIND_UNKNOWN" => Some(Self::Unknown),
                 "TYPE_MISMATCH" => Some(Self::TypeMismatch),
                 "INVALID_BCS_BYTES" => Some(Self::InvalidBcsBytes),
-                "INVALID_USAGE_OF_PURE_ARGUMENT" => {
-                    Some(Self::InvalidUsageOfPureArgument)
-                }
+                "INVALID_USAGE_OF_PURE_ARGUMENT" => Some(Self::InvalidUsageOfPureArgument),
                 "INVALID_ARGUMENT_TO_PRIVATE_ENTRY_FUNCTION" => {
                     Some(Self::InvalidArgumentToPrivateEntryFunction)
                 }
@@ -1130,17 +1036,7 @@ pub struct PackageUpgradeError {
 }
 /// Nested message and enum types in `PackageUpgradeError`.
 pub mod package_upgrade_error {
-    #[derive(
-        Clone,
-        Copy,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash,
-        PartialOrd,
-        Ord,
-        ::prost::Enumeration
-    )]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
     pub enum PackageUpgradeErrorKind {
         Unknown = 0,
@@ -1203,17 +1099,7 @@ pub struct TypeArgumentError {
 }
 /// Nested message and enum types in `TypeArgumentError`.
 pub mod type_argument_error {
-    #[derive(
-        Clone,
-        Copy,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash,
-        PartialOrd,
-        Ord,
-        ::prost::Enumeration
-    )]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
     pub enum TypeArgumentErrorKind {
         Unknown = 0,
@@ -1292,23 +1178,11 @@ pub struct Input {
     ///
     /// INPUT ONLY
     #[prost(message, optional, boxed, tag = "1000")]
-    pub literal: ::core::option::Option<
-        ::prost::alloc::boxed::Box<::prost_types::Value>,
-    >,
+    pub literal: ::core::option::Option<::prost::alloc::boxed::Box<::prost_types::Value>>,
 }
 /// Nested message and enum types in `Input`.
 pub mod input {
-    #[derive(
-        Clone,
-        Copy,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash,
-        PartialOrd,
-        Ord,
-        ::prost::Enumeration
-    )]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
     pub enum InputKind {
         Unknown = 0,
@@ -1477,10 +1351,10 @@ pub mod ledger_service_client {
         dead_code,
         missing_docs,
         clippy::wildcard_imports,
-        clippy::let_unit_value,
+        clippy::let_unit_value
     )]
-    use tonic::codegen::*;
     use tonic::codegen::http::Uri;
+    use tonic::codegen::*;
     #[derive(Debug, Clone)]
     pub struct LedgerServiceClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -1524,9 +1398,8 @@ pub mod ledger_service_client {
                     <T as tonic::client::GrpcService<tonic::body::Body>>::ResponseBody,
                 >,
             >,
-            <T as tonic::codegen::Service<
-                http::Request<tonic::body::Body>,
-            >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
+            <T as tonic::codegen::Service<http::Request<tonic::body::Body>>>::Error:
+                Into<StdError> + std::marker::Send + std::marker::Sync,
         {
             LedgerServiceClient::new(InterceptedService::new(inner, interceptor))
         }
@@ -1565,45 +1438,32 @@ pub mod ledger_service_client {
         pub async fn get_service_info(
             &mut self,
             request: impl tonic::IntoRequest<super::GetServiceInfoRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::GetServiceInfoResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> std::result::Result<tonic::Response<super::GetServiceInfoResponse>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sui.rpc.v2beta.LedgerService/GetServiceInfo",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new("sui.rpc.v2beta.LedgerService", "GetServiceInfo"),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "sui.rpc.v2beta.LedgerService",
+                "GetServiceInfo",
+            ));
             self.inner.unary(req, path, codec).await
         }
         pub async fn get_object(
             &mut self,
             request: impl tonic::IntoRequest<super::GetObjectRequest>,
         ) -> std::result::Result<tonic::Response<super::Object>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/sui.rpc.v2beta.LedgerService/GetObject",
-            );
+            let path =
+                http::uri::PathAndQuery::from_static("/sui.rpc.v2beta.LedgerService/GetObject");
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("sui.rpc.v2beta.LedgerService", "GetObject"));
@@ -1612,123 +1472,87 @@ pub mod ledger_service_client {
         pub async fn batch_get_objects(
             &mut self,
             request: impl tonic::IntoRequest<super::BatchGetObjectsRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::BatchGetObjectsResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> std::result::Result<tonic::Response<super::BatchGetObjectsResponse>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sui.rpc.v2beta.LedgerService/BatchGetObjects",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new("sui.rpc.v2beta.LedgerService", "BatchGetObjects"),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "sui.rpc.v2beta.LedgerService",
+                "BatchGetObjects",
+            ));
             self.inner.unary(req, path, codec).await
         }
         pub async fn get_transaction(
             &mut self,
             request: impl tonic::IntoRequest<super::GetTransactionRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::ExecutedTransaction>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> std::result::Result<tonic::Response<super::ExecutedTransaction>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sui.rpc.v2beta.LedgerService/GetTransaction",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new("sui.rpc.v2beta.LedgerService", "GetTransaction"),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "sui.rpc.v2beta.LedgerService",
+                "GetTransaction",
+            ));
             self.inner.unary(req, path, codec).await
         }
         pub async fn batch_get_transactions(
             &mut self,
             request: impl tonic::IntoRequest<super::BatchGetTransactionsRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::BatchGetTransactionsResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> std::result::Result<tonic::Response<super::BatchGetTransactionsResponse>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sui.rpc.v2beta.LedgerService/BatchGetTransactions",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "sui.rpc.v2beta.LedgerService",
-                        "BatchGetTransactions",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "sui.rpc.v2beta.LedgerService",
+                "BatchGetTransactions",
+            ));
             self.inner.unary(req, path, codec).await
         }
         pub async fn get_checkpoint(
             &mut self,
             request: impl tonic::IntoRequest<super::GetCheckpointRequest>,
         ) -> std::result::Result<tonic::Response<super::Checkpoint>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/sui.rpc.v2beta.LedgerService/GetCheckpoint",
-            );
+            let path =
+                http::uri::PathAndQuery::from_static("/sui.rpc.v2beta.LedgerService/GetCheckpoint");
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new("sui.rpc.v2beta.LedgerService", "GetCheckpoint"),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "sui.rpc.v2beta.LedgerService",
+                "GetCheckpoint",
+            ));
             self.inner.unary(req, path, codec).await
         }
         pub async fn get_epoch(
             &mut self,
             request: impl tonic::IntoRequest<super::GetEpochRequest>,
         ) -> std::result::Result<tonic::Response<super::Epoch>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/sui.rpc.v2beta.LedgerService/GetEpoch",
-            );
+            let path =
+                http::uri::PathAndQuery::from_static("/sui.rpc.v2beta.LedgerService/GetEpoch");
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("sui.rpc.v2beta.LedgerService", "GetEpoch"));
@@ -1743,7 +1567,7 @@ pub mod ledger_service_server {
         dead_code,
         missing_docs,
         clippy::wildcard_imports,
-        clippy::let_unit_value,
+        clippy::let_unit_value
     )]
     use tonic::codegen::*;
     /// Generated trait containing gRPC methods that should be implemented for use with LedgerServiceServer.
@@ -1753,10 +1577,7 @@ pub mod ledger_service_server {
         async fn get_service_info(
             &self,
             request: tonic::Request<super::GetServiceInfoRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::GetServiceInfoResponse>,
-            tonic::Status,
-        >;
+        ) -> std::result::Result<tonic::Response<super::GetServiceInfoResponse>, tonic::Status>;
         async fn get_object(
             &self,
             request: tonic::Request<super::GetObjectRequest>,
@@ -1764,24 +1585,15 @@ pub mod ledger_service_server {
         async fn batch_get_objects(
             &self,
             request: tonic::Request<super::BatchGetObjectsRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::BatchGetObjectsResponse>,
-            tonic::Status,
-        >;
+        ) -> std::result::Result<tonic::Response<super::BatchGetObjectsResponse>, tonic::Status>;
         async fn get_transaction(
             &self,
             request: tonic::Request<super::GetTransactionRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::ExecutedTransaction>,
-            tonic::Status,
-        >;
+        ) -> std::result::Result<tonic::Response<super::ExecutedTransaction>, tonic::Status>;
         async fn batch_get_transactions(
             &self,
             request: tonic::Request<super::BatchGetTransactionsRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::BatchGetTransactionsResponse>,
-            tonic::Status,
-        >;
+        ) -> std::result::Result<tonic::Response<super::BatchGetTransactionsResponse>, tonic::Status>;
         async fn get_checkpoint(
             &self,
             request: tonic::Request<super::GetCheckpointRequest>,
@@ -1812,10 +1624,7 @@ pub mod ledger_service_server {
                 max_encoding_message_size: None,
             }
         }
-        pub fn with_interceptor<F>(
-            inner: T,
-            interceptor: F,
-        ) -> InterceptedService<Self, F>
+        pub fn with_interceptor<F>(inner: T, interceptor: F) -> InterceptedService<Self, F>
         where
             F: tonic::service::Interceptor,
         {
@@ -1870,23 +1679,18 @@ pub mod ledger_service_server {
                 "/sui.rpc.v2beta.LedgerService/GetServiceInfo" => {
                     #[allow(non_camel_case_types)]
                     struct GetServiceInfoSvc<T: LedgerService>(pub Arc<T>);
-                    impl<
-                        T: LedgerService,
-                    > tonic::server::UnaryService<super::GetServiceInfoRequest>
-                    for GetServiceInfoSvc<T> {
+                    impl<T: LedgerService> tonic::server::UnaryService<super::GetServiceInfoRequest>
+                        for GetServiceInfoSvc<T>
+                    {
                         type Response = super::GetServiceInfoResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::GetServiceInfoRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as LedgerService>::get_service_info(&inner, request)
-                                    .await
+                                <T as LedgerService>::get_service_info(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -1916,15 +1720,9 @@ pub mod ledger_service_server {
                 "/sui.rpc.v2beta.LedgerService/GetObject" => {
                     #[allow(non_camel_case_types)]
                     struct GetObjectSvc<T: LedgerService>(pub Arc<T>);
-                    impl<
-                        T: LedgerService,
-                    > tonic::server::UnaryService<super::GetObjectRequest>
-                    for GetObjectSvc<T> {
+                    impl<T: LedgerService> tonic::server::UnaryService<super::GetObjectRequest> for GetObjectSvc<T> {
                         type Response = super::Object;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::GetObjectRequest>,
@@ -1961,23 +1759,19 @@ pub mod ledger_service_server {
                 "/sui.rpc.v2beta.LedgerService/BatchGetObjects" => {
                     #[allow(non_camel_case_types)]
                     struct BatchGetObjectsSvc<T: LedgerService>(pub Arc<T>);
-                    impl<
-                        T: LedgerService,
-                    > tonic::server::UnaryService<super::BatchGetObjectsRequest>
-                    for BatchGetObjectsSvc<T> {
+                    impl<T: LedgerService>
+                        tonic::server::UnaryService<super::BatchGetObjectsRequest>
+                        for BatchGetObjectsSvc<T>
+                    {
                         type Response = super::BatchGetObjectsResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::BatchGetObjectsRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as LedgerService>::batch_get_objects(&inner, request)
-                                    .await
+                                <T as LedgerService>::batch_get_objects(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -2007,15 +1801,11 @@ pub mod ledger_service_server {
                 "/sui.rpc.v2beta.LedgerService/GetTransaction" => {
                     #[allow(non_camel_case_types)]
                     struct GetTransactionSvc<T: LedgerService>(pub Arc<T>);
-                    impl<
-                        T: LedgerService,
-                    > tonic::server::UnaryService<super::GetTransactionRequest>
-                    for GetTransactionSvc<T> {
+                    impl<T: LedgerService> tonic::server::UnaryService<super::GetTransactionRequest>
+                        for GetTransactionSvc<T>
+                    {
                         type Response = super::ExecutedTransaction;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::GetTransactionRequest>,
@@ -2052,26 +1842,19 @@ pub mod ledger_service_server {
                 "/sui.rpc.v2beta.LedgerService/BatchGetTransactions" => {
                     #[allow(non_camel_case_types)]
                     struct BatchGetTransactionsSvc<T: LedgerService>(pub Arc<T>);
-                    impl<
-                        T: LedgerService,
-                    > tonic::server::UnaryService<super::BatchGetTransactionsRequest>
-                    for BatchGetTransactionsSvc<T> {
+                    impl<T: LedgerService>
+                        tonic::server::UnaryService<super::BatchGetTransactionsRequest>
+                        for BatchGetTransactionsSvc<T>
+                    {
                         type Response = super::BatchGetTransactionsResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::BatchGetTransactionsRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as LedgerService>::batch_get_transactions(
-                                        &inner,
-                                        request,
-                                    )
-                                    .await
+                                <T as LedgerService>::batch_get_transactions(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -2101,15 +1884,11 @@ pub mod ledger_service_server {
                 "/sui.rpc.v2beta.LedgerService/GetCheckpoint" => {
                     #[allow(non_camel_case_types)]
                     struct GetCheckpointSvc<T: LedgerService>(pub Arc<T>);
-                    impl<
-                        T: LedgerService,
-                    > tonic::server::UnaryService<super::GetCheckpointRequest>
-                    for GetCheckpointSvc<T> {
+                    impl<T: LedgerService> tonic::server::UnaryService<super::GetCheckpointRequest>
+                        for GetCheckpointSvc<T>
+                    {
                         type Response = super::Checkpoint;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::GetCheckpointRequest>,
@@ -2146,15 +1925,9 @@ pub mod ledger_service_server {
                 "/sui.rpc.v2beta.LedgerService/GetEpoch" => {
                     #[allow(non_camel_case_types)]
                     struct GetEpochSvc<T: LedgerService>(pub Arc<T>);
-                    impl<
-                        T: LedgerService,
-                    > tonic::server::UnaryService<super::GetEpochRequest>
-                    for GetEpochSvc<T> {
+                    impl<T: LedgerService> tonic::server::UnaryService<super::GetEpochRequest> for GetEpochSvc<T> {
                         type Response = super::Epoch;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::GetEpochRequest>,
@@ -2188,25 +1961,19 @@ pub mod ledger_service_server {
                     };
                     Box::pin(fut)
                 }
-                _ => {
-                    Box::pin(async move {
-                        let mut response = http::Response::new(
-                            tonic::body::Body::default(),
-                        );
-                        let headers = response.headers_mut();
-                        headers
-                            .insert(
-                                tonic::Status::GRPC_STATUS,
-                                (tonic::Code::Unimplemented as i32).into(),
-                            );
-                        headers
-                            .insert(
-                                http::header::CONTENT_TYPE,
-                                tonic::metadata::GRPC_CONTENT_TYPE,
-                            );
-                        Ok(response)
-                    })
-                }
+                _ => Box::pin(async move {
+                    let mut response = http::Response::new(tonic::body::Body::default());
+                    let headers = response.headers_mut();
+                    headers.insert(
+                        tonic::Status::GRPC_STATUS,
+                        (tonic::Code::Unimplemented as i32).into(),
+                    );
+                    headers.insert(
+                        http::header::CONTENT_TYPE,
+                        tonic::metadata::GRPC_CONTENT_TYPE,
+                    );
+                    Ok(response)
+                }),
             }
         }
     }
@@ -2351,17 +2118,7 @@ pub struct Owner {
 }
 /// Nested message and enum types in `Owner`.
 pub mod owner {
-    #[derive(
-        Clone,
-        Copy,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash,
-        PartialOrd,
-        Ord,
-        ::prost::Enumeration
-    )]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
     pub enum OwnerKind {
         Unknown = 0,
@@ -2407,10 +2164,8 @@ pub struct ProtocolConfig {
     #[prost(map = "string, bool", tag = "2")]
     pub feature_flags: ::std::collections::HashMap<::prost::alloc::string::String, bool>,
     #[prost(map = "string, string", tag = "3")]
-    pub attributes: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub attributes:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 /// A signature from a user.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -2435,14 +2190,10 @@ pub struct UserSignature {
     pub multisig: ::core::option::Option<MultisigAggregatedSignature>,
     /// The zklogin authenticator if scheme is `ZKLOGIN`.
     #[prost(message, optional, boxed, tag = "6")]
-    pub zklogin: ::core::option::Option<
-        ::prost::alloc::boxed::Box<ZkLoginAuthenticator>,
-    >,
+    pub zklogin: ::core::option::Option<::prost::alloc::boxed::Box<ZkLoginAuthenticator>>,
     /// The passkey authenticator if scheme is `PASSKEY`.
     #[prost(message, optional, boxed, tag = "7")]
-    pub passkey: ::core::option::Option<
-        ::prost::alloc::boxed::Box<PasskeyAuthenticator>,
-    >,
+    pub passkey: ::core::option::Option<::prost::alloc::boxed::Box<PasskeyAuthenticator>>,
 }
 /// Public key equivalent for zklogin authenticators.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -2765,17 +2516,7 @@ pub struct TransactionExpiration {
 }
 /// Nested message and enum types in `TransactionExpiration`.
 pub mod transaction_expiration {
-    #[derive(
-        Clone,
-        Copy,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash,
-        PartialOrd,
-        Ord,
-        ::prost::Enumeration
-    )]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
     pub enum TransactionExpirationKind {
         Unknown = 0,
@@ -3117,9 +2858,8 @@ pub struct ConsensusCommitPrologue {
     ///
     /// Present in V3, V4.
     #[prost(message, optional, tag = "6")]
-    pub consensus_determined_version_assignments: ::core::option::Option<
-        ConsensusDeterminedVersionAssignments,
-    >,
+    pub consensus_determined_version_assignments:
+        ::core::option::Option<ConsensusDeterminedVersionAssignments>,
     /// Digest of any additional state computed by the consensus handler.
     /// Used to detect forking bugs as early as possible.
     ///
@@ -3265,6 +3005,9 @@ pub mod end_of_epoch_transaction_kind {
         /// Initialize the bridge committee.
         #[prost(uint64, tag = "204")]
         BridgeCommitteeInit(u64),
+        /// Create and initialize the accumulator root object.
+        #[prost(message, tag = "205")]
+        AccumulatorRootCreate(()),
     }
 }
 /// Expire old JWKs.
@@ -3296,23 +3039,11 @@ pub struct ExecutionTimeObservation {
     #[prost(message, optional, tag = "2")]
     pub move_entry_point: ::core::option::Option<MoveCall>,
     #[prost(message, repeated, tag = "3")]
-    pub validator_observations: ::prost::alloc::vec::Vec<
-        ValidatorExecutionTimeObservation,
-    >,
+    pub validator_observations: ::prost::alloc::vec::Vec<ValidatorExecutionTimeObservation>,
 }
 /// Nested message and enum types in `ExecutionTimeObservation`.
 pub mod execution_time_observation {
-    #[derive(
-        Clone,
-        Copy,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash,
-        PartialOrd,
-        Ord,
-        ::prost::Enumeration
-    )]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
     pub enum ExecutionTimeObservationKind {
         Unknown = 0,
@@ -3419,10 +3150,10 @@ pub mod transaction_execution_service_client {
         dead_code,
         missing_docs,
         clippy::wildcard_imports,
-        clippy::let_unit_value,
+        clippy::let_unit_value
     )]
-    use tonic::codegen::*;
     use tonic::codegen::http::Uri;
+    use tonic::codegen::*;
     #[derive(Debug, Clone)]
     pub struct TransactionExecutionServiceClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -3466,13 +3197,10 @@ pub mod transaction_execution_service_client {
                     <T as tonic::client::GrpcService<tonic::body::Body>>::ResponseBody,
                 >,
             >,
-            <T as tonic::codegen::Service<
-                http::Request<tonic::body::Body>,
-            >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
+            <T as tonic::codegen::Service<http::Request<tonic::body::Body>>>::Error:
+                Into<StdError> + std::marker::Send + std::marker::Sync,
         {
-            TransactionExecutionServiceClient::new(
-                InterceptedService::new(inner, interceptor),
-            )
+            TransactionExecutionServiceClient::new(InterceptedService::new(inner, interceptor))
         }
         /// Compress requests with the given encoding.
         ///
@@ -3508,30 +3236,20 @@ pub mod transaction_execution_service_client {
         pub async fn execute_transaction(
             &mut self,
             request: impl tonic::IntoRequest<super::ExecuteTransactionRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::ExecuteTransactionResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> std::result::Result<tonic::Response<super::ExecuteTransactionResponse>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sui.rpc.v2beta.TransactionExecutionService/ExecuteTransaction",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "sui.rpc.v2beta.TransactionExecutionService",
-                        "ExecuteTransaction",
-                    ),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "sui.rpc.v2beta.TransactionExecutionService",
+                "ExecuteTransaction",
+            ));
             self.inner.unary(req, path, codec).await
         }
     }
@@ -3543,7 +3261,7 @@ pub mod transaction_execution_service_server {
         dead_code,
         missing_docs,
         clippy::wildcard_imports,
-        clippy::let_unit_value,
+        clippy::let_unit_value
     )]
     use tonic::codegen::*;
     /// Generated trait containing gRPC methods that should be implemented for use with TransactionExecutionServiceServer.
@@ -3552,10 +3270,7 @@ pub mod transaction_execution_service_server {
         async fn execute_transaction(
             &self,
             request: tonic::Request<super::ExecuteTransactionRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::ExecuteTransactionResponse>,
-            tonic::Status,
-        >;
+        ) -> std::result::Result<tonic::Response<super::ExecuteTransactionResponse>, tonic::Status>;
     }
     #[derive(Debug)]
     pub struct TransactionExecutionServiceServer<T> {
@@ -3578,10 +3293,7 @@ pub mod transaction_execution_service_server {
                 max_encoding_message_size: None,
             }
         }
-        pub fn with_interceptor<F>(
-            inner: T,
-            interceptor: F,
-        ) -> InterceptedService<Self, F>
+        pub fn with_interceptor<F>(inner: T, interceptor: F) -> InterceptedService<Self, F>
         where
             F: tonic::service::Interceptor,
         {
@@ -3616,8 +3328,7 @@ pub mod transaction_execution_service_server {
             self
         }
     }
-    impl<T, B> tonic::codegen::Service<http::Request<B>>
-    for TransactionExecutionServiceServer<T>
+    impl<T, B> tonic::codegen::Service<http::Request<B>> for TransactionExecutionServiceServer<T>
     where
         T: TransactionExecutionService,
         B: Body + std::marker::Send + 'static,
@@ -3636,18 +3347,13 @@ pub mod transaction_execution_service_server {
             match req.uri().path() {
                 "/sui.rpc.v2beta.TransactionExecutionService/ExecuteTransaction" => {
                     #[allow(non_camel_case_types)]
-                    struct ExecuteTransactionSvc<T: TransactionExecutionService>(
-                        pub Arc<T>,
-                    );
-                    impl<
-                        T: TransactionExecutionService,
-                    > tonic::server::UnaryService<super::ExecuteTransactionRequest>
-                    for ExecuteTransactionSvc<T> {
+                    struct ExecuteTransactionSvc<T: TransactionExecutionService>(pub Arc<T>);
+                    impl<T: TransactionExecutionService>
+                        tonic::server::UnaryService<super::ExecuteTransactionRequest>
+                        for ExecuteTransactionSvc<T>
+                    {
                         type Response = super::ExecuteTransactionResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::ExecuteTransactionRequest>,
@@ -3655,10 +3361,9 @@ pub mod transaction_execution_service_server {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
                                 <T as TransactionExecutionService>::execute_transaction(
-                                        &inner,
-                                        request,
-                                    )
-                                    .await
+                                    &inner, request,
+                                )
+                                .await
                             };
                             Box::pin(fut)
                         }
@@ -3685,25 +3390,19 @@ pub mod transaction_execution_service_server {
                     };
                     Box::pin(fut)
                 }
-                _ => {
-                    Box::pin(async move {
-                        let mut response = http::Response::new(
-                            tonic::body::Body::default(),
-                        );
-                        let headers = response.headers_mut();
-                        headers
-                            .insert(
-                                tonic::Status::GRPC_STATUS,
-                                (tonic::Code::Unimplemented as i32).into(),
-                            );
-                        headers
-                            .insert(
-                                http::header::CONTENT_TYPE,
-                                tonic::metadata::GRPC_CONTENT_TYPE,
-                            );
-                        Ok(response)
-                    })
-                }
+                _ => Box::pin(async move {
+                    let mut response = http::Response::new(tonic::body::Body::default());
+                    let headers = response.headers_mut();
+                    headers.insert(
+                        tonic::Status::GRPC_STATUS,
+                        (tonic::Code::Unimplemented as i32).into(),
+                    );
+                    headers.insert(
+                        http::header::CONTENT_TYPE,
+                        tonic::metadata::GRPC_CONTENT_TYPE,
+                    );
+                    Ok(response)
+                }),
             }
         }
     }
