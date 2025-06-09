@@ -211,6 +211,7 @@ impl TransactionOutputs {
             new_locks_to_init: vec![],
             written: WrittenObjects::new(),
             output_keys: vec![],
+            accumulator_events: vec![],
         }
     }
 }
