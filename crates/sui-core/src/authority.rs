@@ -5559,14 +5559,6 @@ impl RandomnessRoundReceiver {
         let transaction = VerifiedExecutableTransaction::new_system(transaction, epoch);
         let digest = *transaction.digest();
 
-        // Randomness state updates contain the full bls signature for the random round,
-        // which cannot necessarily be reconstructed again later. Therefore we must immediately
-        // persist this transaction. If we crash before its outputs are committed, this
-        // ensures we will be able to re-execute it.
-        self.authority_state
-            .get_cache_commit()
-            .persist_transaction(&transaction);
-
         self.authority_state.execution_scheduler().enqueue(
             vec![transaction],
             &epoch_store,
