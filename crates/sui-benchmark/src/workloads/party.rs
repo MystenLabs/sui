@@ -61,16 +61,16 @@ impl Payload for PartyTestPayload {
                     self.object_ref = FullObjectRef::from_fastpath_ref(obj);
                     self.sender = addr;
                 }
-                Owner::ConsensusV2 {
+                Owner::ConsensusAddressOwner {
                     start_version,
-                    authenticator,
+                    owner,
                 } => {
                     self.object_ref = FullObjectRef(
                         FullObjectID::Consensus((obj.0, start_version)),
                         obj.1,
                         obj.2,
                     );
-                    self.sender = *authenticator.as_single_owner();
+                    self.sender = owner;
                 }
                 _ => unreachable!("party payload never transfers objects to other owners"),
             }
@@ -285,19 +285,19 @@ impl Workload<dyn Payload> for PartyWorkload {
                 let effects = proxy.execute_transaction_block(transaction).await.unwrap();
                 let (
                     obj_ref,
-                    Owner::ConsensusV2 {
+                    Owner::ConsensusAddressOwner {
                         start_version,
-                        authenticator,
+                        owner,
                     },
                 ) = &effects.created()[0]
                 else {
-                    panic!("create_party should always create a ConsensusV2 object");
+                    panic!("create_party should always create a ConsensusAddressOwner object");
                 };
                 let (gas_object, _) = effects.gas_object();
                 {
                     let mut state = state.lock().unwrap();
                     // TODO: track owned objects per account in state as well once InMemoryWallet supports
-                    // ConsensusV2 objects.
+                    // ConsensusAddressOwner objects.
                     state.add_account(*sender, keypair.clone(), gas_object, vec![]);
                 }
                 let full_ref = FullObjectRef(
@@ -305,7 +305,7 @@ impl Workload<dyn Payload> for PartyWorkload {
                     obj_ref.1,
                     obj_ref.2,
                 );
-                let sender = *authenticator.as_single_owner();
+                let sender = *owner;
                 PartyTestPayload {
                     package_id: self.package_id,
                     object_ref: full_ref,
@@ -334,7 +334,7 @@ impl Workload<dyn Payload> for PartyWorkload {
                 {
                     let mut state = state.lock().unwrap();
                     // TODO: track owned objects per account in state as well once InMemoryWallet supports
-                    // ConsensusV2 objects.
+                    // ConsensusAddressOwner objects.
                     state.add_account(*sender, keypair.clone(), gas_object, vec![]);
                 }
                 let full_ref = FullObjectRef::from_fastpath_ref(obj_ref);
