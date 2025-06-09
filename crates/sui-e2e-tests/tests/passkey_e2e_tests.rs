@@ -20,11 +20,11 @@ use std::net::SocketAddr;
 use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::crypto::Signature;
 use sui_types::error::UserInputError;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::Transaction;
+use sui_types::{base_types::dbg_addr, crypto::Signature};
 use sui_types::{
     base_types::SuiAddress,
     crypto::{PublicKey, SignatureScheme},
@@ -334,8 +334,7 @@ async fn test_passkey_fails_wrong_author() {
     let test_cluster = TestClusterBuilder::new().build().await;
     // Modify sender that receives gas and construct test txn.
     let response =
-        create_credential_and_sign_test_tx(&test_cluster, Some(SuiAddress::ZERO), false, false)
-            .await;
+        create_credential_and_sign_test_tx(&test_cluster, Some(dbg_addr(1)), false, false).await;
     let sig = GenericSignature::PasskeyAuthenticator(
         PasskeyAuthenticator::new_for_testing(
             response.authenticator_data,
