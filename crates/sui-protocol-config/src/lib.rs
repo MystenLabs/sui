@@ -3728,6 +3728,9 @@ impl ProtocolConfig {
                         );
                 }
                 86 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_accumulators = true;
+                    }
                     cfg.feature_flags.type_tags_in_object_runtime = true;
 
                     // Set a stake_weighted_median_threshold for congestion control.
