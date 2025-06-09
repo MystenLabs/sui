@@ -21,6 +21,7 @@ use crate::traffic_controller::policies::{
     Policy, PolicyResponse, TrafficControlPolicy, TrafficTally,
 };
 use mysten_metrics::spawn_monitored_task;
+use parking_lot::Mutex as ParkingLotMutex;
 use rand::Rng;
 use std::fmt::Debug;
 use std::time::{Duration, Instant, SystemTime};
@@ -54,7 +55,7 @@ pub enum Acl {
 
 #[derive(Clone)]
 pub struct TrafficController {
-    tally_channel: Arc<Mutex<Option<mpsc::Sender<TrafficTally>>>>,
+    tally_channel: Arc<ParkingLotMutex<Option<mpsc::Sender<TrafficTally>>>>,
     acl: Acl,
     metrics: Arc<TrafficControllerMetrics>,
     spam_policy: Option<Arc<Mutex<TrafficControlPolicy>>>,
@@ -101,7 +102,7 @@ impl TrafficController {
                     })
                     .collect();
                 Self {
-                    tally_channel: Arc::new(Mutex::new(None)),
+                    tally_channel: Arc::new(ParkingLotMutex::new(None)),
                     acl: Acl::Allowlist(allowlist),
                     metrics,
                     policy_config: Arc::new(RwLock::new(policy_config)),
@@ -118,7 +119,7 @@ impl TrafficController {
                     TrafficControlPolicy::from_error_config(policy_config.clone()).await,
                 ));
                 let this = Self {
-                    tally_channel: Arc::new(Mutex::new(None)),
+                    tally_channel: Arc::new(ParkingLotMutex::new(None)),
                     acl: Acl::Blocklists(Blocklists {
                         clients: Arc::new(DashMap::new()),
                         proxied_clients: Arc::new(DashMap::new()),
@@ -195,7 +196,7 @@ impl TrafficController {
             clear_loop_blocklists,
             clear_loop_metrics,
         ));
-        self.open_tally_channel(tx).await;
+        self.open_tally_channel(tx);
     }
 
     pub async fn get_current_state(&self) -> TrafficControlReconfigParams {
@@ -279,8 +280,8 @@ impl TrafficController {
         }
     }
 
-    async fn open_tally_channel(&self, tx: mpsc::Sender<TrafficTally>) {
-        self.tally_channel.lock().await.replace(tx);
+    fn open_tally_channel(&self, tx: mpsc::Sender<TrafficTally>) {
+        self.tally_channel.lock().replace(tx);
     }
 
     fn set_policy_config_metrics(
@@ -305,8 +306,8 @@ impl TrafficController {
         }
     }
 
-    pub async fn tally(&self, tally: TrafficTally) {
-        if let Some(channel) = self.tally_channel.lock().await.as_ref() {
+    pub fn tally(&self, tally: TrafficTally) {
+        if let Some(channel) = self.tally_channel.lock().as_ref() {
             // Use try_send rather than send mainly to avoid creating backpressure
             // on the caller if the channel is full, which may slow down the critical
             // path. Dropping the tally on the floor should be ok, as in this case
@@ -904,16 +905,14 @@ impl TrafficSim {
                     total_time_blocked += time_blocked_start.elapsed();
                     currently_blocked = false;
                 }
-                controller
-                    .tally(TrafficTally::new(
-                        client,
-                        // TODO add proxy IP for testing
-                        None,
-                        // TODO add weight adjustments
-                        None,
-                        Weight::one(),
-                    ))
-                    .await;
+                controller.tally(TrafficTally::new(
+                    client,
+                    // TODO add proxy IP for testing
+                    None,
+                    // TODO add weight adjustments
+                    None,
+                    Weight::one(),
+                ));
             } else {
                 if !currently_blocked {
                     time_blocked_start = Instant::now();

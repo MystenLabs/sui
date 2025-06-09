@@ -81,26 +81,24 @@ async fn handle_traffic_resp(
     response: &MethodResponse,
 ) {
     let error = response.as_error_code().map(ErrorCode::from);
-    traffic_controller
-        .tally(TrafficTally {
-            direct: client,
-            through_fullnode: None,
-            error_info: error.map(|e| {
-                let error_type = e.to_string();
-                let error_weight = normalize(e);
-                (error_weight, error_type)
-            }),
-            // For now, count everything as spam with equal weight
-            // on the rpc node side, including gas-charging endpoints
-            // such as `sui_executeTransactionBlock`, as this can enable
-            // node operators who wish to rate limit their transcation
-            // traffic and incentivize high volume clients to choose a
-            // suitable rpc provider (or run their own). Later we may want
-            // to provide a weight distribution based on the method being called.
-            spam_weight: Weight::one(),
-            timestamp: SystemTime::now(),
-        })
-        .await;
+    traffic_controller.tally(TrafficTally {
+        direct: client,
+        through_fullnode: None,
+        error_info: error.map(|e| {
+            let error_type = e.to_string();
+            let error_weight = normalize(e);
+            (error_weight, error_type)
+        }),
+        // For now, count everything as spam with equal weight
+        // on the rpc node side, including gas-charging endpoints
+        // such as `sui_executeTransactionBlock`, as this can enable
+        // node operators who wish to rate limit their transcation
+        // traffic and incentivize high volume clients to choose a
+        // suitable rpc provider (or run their own). Later we may want
+        // to provide a weight distribution based on the method being called.
+        spam_weight: Weight::one(),
+        timestamp: SystemTime::now(),
+    });
 }
 
 // TODO: refine error matching here

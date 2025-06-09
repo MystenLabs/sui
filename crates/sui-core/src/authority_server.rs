@@ -1559,7 +1559,7 @@ impl ValidatorService {
         }
     }
 
-    async fn handle_traffic_resp<T>(
+    fn handle_traffic_resp<T>(
         &self,
         client: Option<IpAddr>,
         wrapped_response: WrappedServiceResponse<T>,
@@ -1574,19 +1574,17 @@ impl ValidatorService {
         };
 
         if let Some(traffic_controller) = self.traffic_controller.clone() {
-            traffic_controller
-                .tally(TrafficTally {
-                    direct: client,
-                    through_fullnode: None,
-                    error_info: error.map(|e| {
-                        let error_type = String::from(e.clone().as_ref());
-                        let error_weight = normalize(e);
-                        (error_weight, error_type)
-                    }),
-                    spam_weight,
-                    timestamp: SystemTime::now(),
-                })
-                .await;
+            traffic_controller.tally(TrafficTally {
+                direct: client,
+                through_fullnode: None,
+                error_info: error.map(|e| {
+                    let error_type = String::from(e.clone().as_ref());
+                    let error_weight = normalize(e);
+                    (error_weight, error_type)
+                }),
+                spam_weight,
+                timestamp: SystemTime::now(),
+            });
         }
         unwrapped_response
     }
@@ -1637,7 +1635,7 @@ macro_rules! handle_with_decoration {
 
         // handle traffic tallying
         let wrapped_response = $self.$func_name($request).await;
-        $self.handle_traffic_resp(client, wrapped_response).await
+        $self.handle_traffic_resp(client, wrapped_response)
     }};
 }
 
