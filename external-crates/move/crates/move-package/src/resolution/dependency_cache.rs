@@ -89,10 +89,14 @@ impl DependencyCache {
                         git_url,
                     )?;
                     // If the cached folder does not exist, download and clone accordingly
-                    if let Ok(mut output) = Command::new("git")
-                        .args([OsStr::new("clone"), os_git_url, git_path.as_os_str()])
-                        .stdin(Stdio::null())
-                        .spawn()
+                    if let Ok(mut output) = dbg!(Command::new("git").args([
+                        OsStr::new("clone"),
+                        OsStr::new("--filter=tree:0"),
+                        os_git_url,
+                        git_path.as_os_str(),
+                    ]))
+                    .stdin(Stdio::null())
+                    .spawn()
                     {
                         output.wait().map_err(|_| {
                             anyhow::anyhow!(
