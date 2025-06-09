@@ -65,12 +65,6 @@ use crate::{
 // =================================================================================================
 // # Constants
 
-/// A name we use to represent a script as a module.
-pub const SCRIPT_MODULE_NAME: &str = "<SELF>";
-
-/// Names used in the bytecode/AST to represent the main function of a script
-pub const SCRIPT_BYTECODE_FUN_NAME: &str = "<SELF>";
-
 /// A prefix used for structs which are backing specification ("ghost") memory.
 pub const GHOST_MEMORY_PREFIX: &str = "Ghost$";
 
@@ -865,17 +859,7 @@ impl GlobalEnv {
         function_data: BTreeMap<FunId, FunctionData>,
     ) {
         let idx = self.module_data.len();
-        let effective_name = if module.self_id().name().as_str() == SCRIPT_MODULE_NAME {
-            // Use the name of the first function in this module.
-            function_data
-                .iter()
-                .next()
-                .expect("functions in script")
-                .1
-                .name
-        } else {
-            self.symbol_pool.make(module.self_id().name().as_str())
-        };
+        let effective_name = self.symbol_pool.make(module.self_id().name().as_str());
         let name = ModuleName::from_str(&module.self_id().address().to_string(), effective_name);
         let struct_idx_to_id: BTreeMap<StructDefinitionIndex, DatatypeId> = struct_data
             .iter()

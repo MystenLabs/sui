@@ -314,6 +314,8 @@ pub enum StatusCode {
     ZERO_SIZED_ENUM = 1134,
     MAX_VARIANTS_REACHED = 1135,
 
+    INVALID_IDENTIFIER = 1136,
+
     // These are errors that the VM might raise if a violation of internal
     // invariants takes place.
     // Invariant Violation Errors: 2000-2999
