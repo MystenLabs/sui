@@ -169,8 +169,13 @@ impl<S: SourceKind> StacklessBytecodeGenerator<S> {
 
     // TODO: The CLI execution should be this -- so that we know printing is happening there, not
     // as part of the stackless bytecode interface itself.
-    pub fn execute(&self) -> anyhow::Result<()> {
-        let _packages = self.generate_stackless_bytecode()?;
-        Ok(())
+    pub fn execute(&self) -> anyhow::Result<String> {
+        let packages = self.generate_stackless_bytecode()?;
+        let out_string = packages
+            .iter()
+            .map(|package| package.to_string())
+            .collect::<Vec<String>>()
+            .join("\n");
+        Ok(out_string)
     }
 }

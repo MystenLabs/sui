@@ -8230,6 +8230,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-regex-borrow-graph"
+version = "0.0.1"
+dependencies = [
+ "itertools 0.10.5",
+ "move-binary-format",
+ "move-core-types",
+ "petgraph 0.8.1",
+]
+
+[[package]]
 name = "move-stackless-bytecode"
 version = "0.1.0"
 dependencies = [
@@ -8245,7 +8255,7 @@ dependencies = [
  "move-core-types",
  "move-model",
  "num",
- "petgraph 0.5.1",
+ "petgraph 0.8.1",
  "serde",
 ]
 
@@ -8254,6 +8264,7 @@ name = "move-stackless-bytecode-2"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "clap",
  "move-abstract-interpreter",
  "move-binary-format",
@@ -8268,16 +8279,6 @@ dependencies = [
  "move-symbol-pool",
  "move-vm-runtime",
  "tempfile",
-]
-
-[[package]]
-name = "move-regex-borrow-graph"
-version = "0.0.1"
-dependencies = [
- "itertools 0.10.5",
- "move-binary-format",
- "move-core-types",
- "petgraph 0.8.1",
 ]
 
 [[package]]

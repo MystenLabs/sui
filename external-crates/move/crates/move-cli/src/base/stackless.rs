@@ -68,6 +68,9 @@ impl Stackless {
             return stackless.disassemble_source();
         }
 
-        stackless.execute()
+        let stackless_out = stackless.execute()?;
+        println!("{}", stackless_out);
+
+        Ok(())
     }
 }

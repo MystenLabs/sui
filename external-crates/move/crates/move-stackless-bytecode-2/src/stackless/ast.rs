@@ -62,14 +62,14 @@ pub enum Instruction {
 #[derive(Debug, Clone)]
 pub enum Operand {
     Var(Var),
-    Constant(Constant),
-    Immediate(Immediate),
+    Constant(Type),
+    Immediate(Type),
 }
 
 #[derive(Debug, Clone)]
 pub enum RValue {
     Call {
-        function: FunctionId,
+        function: Symbol,
         args: Vec<Operand>,
     },
     Constant(Constant),
@@ -77,11 +77,11 @@ pub enum RValue {
         op: PrimitiveOp,
         args: Vec<Operand>,
     },
-    Immediate(Immediate),
+    Immediate(Type),
 }
 
 #[derive(Debug, Clone)]
-pub enum Immediate {
+pub enum Type {
     U8(u8),
     U16(u16),
     U32(u32),
@@ -90,7 +90,9 @@ pub enum Immediate {
     U256(move_core_types::u256::U256), // Representing as two u128s for simplicity
     True,
     False,
+    Address(AccountAddress),
     Empty, // empty added for the pop
+    NotImplemented(String),
 }
 
 #[derive(Debug, Clone)]
@@ -167,8 +169,7 @@ pub enum Var {
 }
 
 pub type Label = usize;
-pub type Constant = usize;
-pub type FunctionId = usize;
+pub type Constant = Vec<u8>;
 pub type PrimitiveOpId = usize;
 
 // -------------------------------------------------------------------------------------------------
@@ -248,7 +249,7 @@ impl std::fmt::Display for Instruction {
                 condition,
                 then_label,
                 else_label,
-            } => write!(f, "Branch({condition}, {then_label}, {else_label}"),
+            } => write!(f, "Branch({condition}, {then_label}, {else_label})"),
             Instruction::Abort => write!(f, "Abort"),
             Instruction::VariantSwitch { cases } => {
                 write!(f, "VariantSwitch(")?;
@@ -270,7 +271,7 @@ impl std::fmt::Display for Operand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Operand::Var(var) => write!(f, "{}", var),
-            Operand::Constant(constant) => write!(f, "Constant({})", constant),
+            Operand::Constant(constant) => write!(f, "Constant({:?})", constant),
             Operand::Immediate(val) => write!(f, "{}", val),
         }
     }
@@ -285,18 +286,20 @@ impl std::fmt::Display for Var {
     }
 }
 
-impl std::fmt::Display for Immediate {
+impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Immediate::U8(n) => write!(f, "U8({n})"),
-            Immediate::U16(n) => write!(f, "U16({n})"),
-            Immediate::U32(n) => write!(f, "U32({n})"),
-            Immediate::U64(n) => write!(f, "U64({n})"),
-            Immediate::U128(n) => write!(f, "U128({n})"),
-            Immediate::U256(n) => write!(f, "U256({n})"),
-            Immediate::True => write!(f, "True"),
-            Immediate::False => write!(f, "False"),
-            Immediate::Empty => write!(f, "Empty"),
+            Type::U8(n) => write!(f, "U8({n})"),
+            Type::U16(n) => write!(f, "U16({n})"),
+            Type::U32(n) => write!(f, "U32({n})"),
+            Type::U64(n) => write!(f, "U64({n})"),
+            Type::U128(n) => write!(f, "U128({n})"),
+            Type::U256(n) => write!(f, "U256({n})"),
+            Type::True => write!(f, "True"),
+            Type::False => write!(f, "False"),
+            Type::Empty => write!(f, "Empty"),
+            Type::Address(addr) => write!(f, "Address({})", addr.to_canonical_string(true)),
+            Type::NotImplemented(msg) => write!(f, "NotImplemented({})", msg),
         }
     }
 }
@@ -305,11 +308,11 @@ impl std::fmt::Display for RValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RValue::Call { function, args } => {
-                write!(f, "Call({}, ", function)?;
+                write!(f, "Call {}(", function)?;
                 write!(f, "{}", comma_separated(args))?;
                 write!(f, ")")
             }
-            RValue::Constant(constant) => write!(f, "Constant({})", constant),
+            RValue::Constant(constant) => write!(f, "Constant({:?})", constant),
             RValue::Primitive { op, args } => write!(f, "{}({})", op, comma_separated(args)),
             RValue::Immediate(immediate) => write!(f, "{immediate}"),
         }

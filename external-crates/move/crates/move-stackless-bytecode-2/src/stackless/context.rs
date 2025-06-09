@@ -7,11 +7,12 @@ use move_model_2::{model::Model as Model2, source_kind::SourceKind};
 // -------------------------------------------------------------------------------------------------
 
 pub struct Context<'a, K: SourceKind> {
-    pub var_counter: VarCounter,
+    pub var_counter: Counter,
+    pub locals_counter: Counter,
     pub model: &'a Model2<K>,
 }
 
-pub struct VarCounter {
+pub struct Counter {
     pub count: usize,
 }
 
@@ -22,30 +23,38 @@ pub struct VarCounter {
 impl<'a, K: SourceKind> Context<'a, K> {
     pub fn new(model: &'a Model2<K>) -> Self {
         Self {
-            var_counter: VarCounter::new(),
+            var_counter: Counter::new(),
+            locals_counter: Counter::new(),
             model,
         }
     }
 
     #[allow(unused)]
-    pub fn get_var_counter(&mut self) -> &mut VarCounter {
+    pub fn get_var_counter(&mut self) -> &mut Counter {
         &mut self.var_counter
+    }
+
+    #[allow(unused)]
+    pub fn get_locals_counter(&mut self) -> &mut Counter {
+        &mut self.locals_counter
     }
 }
 
-impl VarCounter {
+impl Counter {
     pub fn new() -> Self {
         Self { count: 0 }
     }
 
     pub fn next(&mut self) -> usize {
+        let curr = self.count;
         self.count += 1;
-        self.count
+        curr
     }
 
+    #[allow(unused)]
     pub fn prev(&mut self) -> usize {
         if self.count == 0 {
-            panic!("Cannot decrement VarCounter below zero");
+            panic!("Cannot decrement Counter below zero");
         }
         self.count -= 1;
         self.count
@@ -55,14 +64,12 @@ impl VarCounter {
         self.count = 0;
     }
 
+    #[allow(unused)]
     pub fn current(&self) -> usize {
         self.count
     }
 
     pub fn last(&self) -> usize {
-        if self.count == 0 {
-            panic!("VarCounter is empty, cannot return last value");
-        }
         self.count - 1
     }
 
@@ -71,6 +78,7 @@ impl VarCounter {
         self.count = value;
     }
 
+    #[allow(unused)]
     pub fn increment(&mut self) {
         self.count += 1;
     }
@@ -78,7 +86,7 @@ impl VarCounter {
     #[allow(unused)]
     pub fn decrement(&mut self) {
         if self.count == 0 {
-            panic!("Cannot decrement VarCounter below zero");
+            panic!("Cannot decrement Counter below zero");
         }
         self.count -= 1;
     }
@@ -88,7 +96,7 @@ impl VarCounter {
 // Default
 // -------------------------------------------------------------------------------------------------
 
-impl Default for VarCounter {
+impl Default for Counter {
     fn default() -> Self {
         Self::new()
     }

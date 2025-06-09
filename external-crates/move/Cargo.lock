@@ -2546,6 +2546,7 @@ name = "move-stackless-bytecode-2"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "clap 4.5.28",
  "datatest-stable",
  "move-abstract-interpreter",
