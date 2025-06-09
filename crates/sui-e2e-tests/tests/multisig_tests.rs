@@ -22,10 +22,13 @@ use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::crypto::{SignatureScheme, ToFromBytes};
 use sui_types::error::UserInputError;
 use sui_types::multisig_legacy::MultiSigLegacy;
 use sui_types::passkey_authenticator::{to_signing_message, PasskeyAuthenticator};
+use sui_types::{
+    base_types::dbg_addr,
+    crypto::{SignatureScheme, ToFromBytes},
+};
 use sui_types::{
     base_types::SuiAddress,
     crypto::{
@@ -241,7 +244,7 @@ async fn construct_simple_zklogin_multisig_tx(
         .fund_address_and_return_gas(rgp, Some(20000000000), multisig_addr)
         .await;
     let tx_data = TestTransactionBuilder::new(multisig_addr, gas, rgp)
-        .transfer_sui(None, SuiAddress::ZERO)
+        .transfer_sui(None, dbg_addr(1))
         .build();
     let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
     let sig_4: GenericSignature = ZkLoginAuthenticator::new(
@@ -1118,7 +1121,7 @@ async fn test_multisig_passkey_scenarios() {
     // wrong sender fails to verify
     let tx2 = create_credential_and_sign_test_tx_with_passkey_multisig(
         &test_cluster,
-        Some(SuiAddress::ZERO),
+        Some(dbg_addr(1)),
         false,
         false,
     )
