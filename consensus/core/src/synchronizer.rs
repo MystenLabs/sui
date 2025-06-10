@@ -10,6 +10,7 @@ use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use futures::{stream::FuturesUnordered, StreamExt as _};
 use itertools::Itertools as _;
+use mysten_common::debug_fatal;
 use mysten_metrics::{
     monitored_future,
     monitored_mpsc::{channel, Receiver, Sender},
@@ -903,6 +904,13 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
     }
 
     async fn start_fetch_missing_blocks_task(&mut self) -> ConsensusResult<()> {
+        if self.context.committee.size() == 1 {
+            trace!(
+                "Only one node in the network, will not try fetching missing blocks from peers."
+            );
+            return Ok(());
+        }
+
         let missing_blocks = self
             .core_dispatcher
             .get_missing_blocks()
@@ -1138,7 +1146,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             .take(2 * MAX_PERIODIC_SYNC_PEERS * context.parameters.max_blocks_per_sync)
             .collect::<Vec<_>>();
 
-        // Determine the number of peers to request missing blocks from.
+        // Maps authorities to the missing blocks they have.
         let mut authorities = BTreeMap::<AuthorityIndex, Vec<BlockRef>>::new();
         for block_ref in &missing_blocks {
             authorities
@@ -1146,11 +1154,11 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 .or_default()
                 .push(*block_ref);
         }
-        // Distribute the same number of authorities with missing blocks into each peer.
-        let num_peers = authorities
+        // Distribute the same number of authorities into each peer to sync.
+        // When running this function, context.committee.size() is always greater than 1.
+        let num_authorities_per_peer = authorities
             .len()
-            .div_ceil((context.committee.size() - 1).div_ceil(MAX_PERIODIC_SYNC_PEERS));
-        let num_authorities_per_peer = authorities.len().div_ceil(num_peers);
+            .div_ceil((context.committee.size() - 1).min(MAX_PERIODIC_SYNC_PEERS));
 
         // Update metrics related to missing blocks.
         let mut missing_blocks_per_authority = vec![0; context.committee.size()];
@@ -1201,9 +1209,10 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
         // Send the fetch requests
         for batch in authorities.chunks(num_authorities_per_peer) {
-            let peer = peers
-                .next()
-                .expect("Possible misconfiguration as a peer should be found");
+            let Some(peer) = peers.next() else {
+                debug_fatal!("No more peers left to fetch blocks!");
+                break;
+            };
             let peer_hostname = &context.committee.authority(peer).hostname;
             // Fetch from the lowest round missing blocks to ensure progress.
             // This may reduce efficiency and increase the chance of duplicated data transfer in edge cases.
