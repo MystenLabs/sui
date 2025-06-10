@@ -7,10 +7,8 @@ use crate::{
         ast::{
             self, BasicBlock, Instruction,
             Operand::{Constant, Var},
-            PrimitiveOp, RValue,
+            PrimitiveOp, RValue, Value,
             Var::{Local, Register},
-            Type,
-            
         },
         context::Context,
     },
@@ -34,6 +32,8 @@ use std::{
     result::Result::Ok,
     vec,
 };
+
+use super::ast::Operand;
 
 // -------------------------------------------------------------------------------------------------
 // Stackless Bytecode Translation
@@ -111,12 +111,13 @@ pub(crate) fn function<K: SourceKind>(
     if code.is_empty() {
         return Ok(ast::Function {
             name,
-            basic_blocks: vec![],
+            basic_blocks: BTreeMap::new(),
         });
     }
     let cfg = StacklessControlFlowGraph::new(code, function.jump_tables());
 
-    let mut bbs = vec![];
+    let mut basic_blocks = BTreeMap::new();
+
     for block_id in cfg.blocks() {
         let blk_start = cfg.block_start(block_id);
         let blk_end = cfg.block_end(block_id);
@@ -126,129 +127,143 @@ pub(crate) fn function<K: SourceKind>(
             .iter()
             .enumerate()
             .map(|(i, op)| bytecode(ctxt, op, blk_start as usize + i, function))
-            .collect::<Result<Vec<_>, _>>()?;
-        let bb = BasicBlock::from_instructions(block_id as usize, block_instructions);
-        bbs.push(bb);
+            .collect::<Result<Vec<Vec<_>>, _>>()?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        let label = block_id as usize;
+        let bb = BasicBlock::from_instructions(label, block_instructions);
+        if !ctxt.logical_stack.is_empty() {
+            panic!("Logical stack not empty: {:#?}\n{}", ctxt.logical_stack, bb);
+        }
+        basic_blocks.insert(label, bb);
     }
-    let function = ast::Function {
-        name,
-        basic_blocks: bbs,
-    };
+
+    let function = ast::Function { name, basic_blocks };
 
     Ok(function)
 }
 
-pub(crate) fn bytecode<S: Hash + Eq + Display + Debug, K: SourceKind>(
+// If([stack_top], 28, 25)
+//
+// => BrFalse(25)
+// => Branch(28)
+//
+// ~~>
+//
+// If([stack_top], [next_instr], 25)
+// Jump(28)
+//
+// ==>
+//
+// If([stack_top], 28, 25)
+//
+// If(reg_3, 22, 25)
+
+pub(crate) fn bytecode<K: SourceKind>(
     ctxt: &mut Context<'_, K>,
-    op: &IB<S>,
+    op: &IB<Symbol>,
     pc: usize,
     function: &N::Function<Symbol>,
-) -> anyhow::Result<Instruction>
-where
-    Symbol: From<S>,
-    move_symbol_pool::Symbol: PartialEq<S>,
-    move_symbol_pool::Symbol: std::borrow::Borrow<S>,
-{
+) -> anyhow::Result<Vec<Instruction>> {
     match op {
         IB::Pop => {
-            // TODO: how to handle Pop?
-            let inst = Instruction::Assign {
-                rhs: RValue::Immediate(Type::Empty),
-                lhs: vec![Register(ctxt.var_counter.next())],
-            };
-            Ok(inst)
+            ctxt.pop_register();
+            Ok(vec![])
         }
 
+        // push(0)    [reg_0: 0]
+        // push(10)   [reg_1: 10, reg_0: 0]
+        // push(20)   [reg_2: 20, reg_1: 10, reg_0: 0]
+        // pop        [reg_1: 10, reg_0: 0]
+        // ret(2)     (reg_1, reg_0)
         IB::Ret => {
+            // TODO: check if this needs to be reversed?
             let returned_vars = function
                 .return_
                 .iter()
                 .enumerate()
-                .map(|(i, _)| Register(ctxt.var_counter.last() - i))
+                .map(|_| ctxt.pop_register())
                 .collect::<Vec<_>>();
             let inst = Instruction::Return(returned_vars);
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::BrTrue(code_offset) => {
-            let inst = Instruction::Branch {
-                condition: Register(ctxt.get_var_counter().last()),
-                then_label: pc + 1,
-                else_label: *code_offset as usize,
+            let inst = Instruction::JumpIf {
+                condition: ctxt.pop_register(),
+                then_label: *code_offset as usize,
+                else_label: pc + 1,
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
         IB::BrFalse(code_offset) => {
-            let inst = Instruction::Branch {
-                condition: Register(ctxt.get_var_counter().last()),
+            let inst = Instruction::JumpIf {
+                condition: ctxt.pop_register(),
                 then_label: pc + 1,
                 else_label: *code_offset as usize,
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
         IB::Branch(code_offset) => {
-            let inst = Instruction::Branch {
-                condition: Register(ctxt.get_var_counter().last()),
-                then_label: *code_offset as usize,
-                else_label: *code_offset as usize,
-            };
-            Ok(inst)
+            let inst = Instruction::Jump(*code_offset as usize);
+            Ok(vec![inst])
         }
         IB::LdU8(value) => {
             let inst = Instruction::Assign {
-                rhs: RValue::Immediate(Type::U8(*value)),
-                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Operand(Operand::Immediate(Value::U8(*value))),
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::LdU64(value) => {
             let inst = Instruction::Assign {
-                rhs: RValue::Immediate(Type::U64(*value)),
-                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Operand(Operand::Immediate(Value::U64(*value))),
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::LdU128(bx) => {
             let inst = Instruction::Assign {
-                rhs: RValue::Immediate(Type::U128(*(*bx))),
-                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Operand(Operand::Immediate(Value::U128(*(*bx)))),
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::CastU8 => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::CastU8,
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::CastU64 => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::CastU64,
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::CastU128 => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::CastU128,
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::LdConst(const_ref) => {
@@ -258,25 +273,25 @@ where
                     // TODO convert Vec<u8> to a typed const ?
                     args: vec![Constant(deserialize_constant(const_ref))],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::LdTrue => {
             let inst = Instruction::Assign {
-                rhs: RValue::Immediate(Type::True),
-                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Operand(Operand::Immediate(Value::True)),
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::LdFalse => {
             let inst = Instruction::Assign {
-                rhs: RValue::Immediate(Type::False),
-                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Operand(Operand::Immediate(Value::False)),
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::CopyLoc(loc) => {
@@ -285,31 +300,25 @@ where
                     op: PrimitiveOp::CopyLoc,
                     args: vec![Var(Local(*loc as usize))],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::MoveLoc(loc) => {
             let inst = Instruction::Assign {
-                rhs: RValue::Primitive {
-                    op: PrimitiveOp::MoveLoc,
-                    args: vec![Var(Local(*loc as usize))],
-                },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
+                rhs: RValue::Operand(Operand::Var(Local(*loc as usize))),
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::StLoc(loc) => {
             let inst = Instruction::Assign {
-                rhs: RValue::Primitive {
-                    op: PrimitiveOp::StoreLoc,
-                    args: vec![Var(Local(*loc as usize))],
-                },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![Local(*loc as usize)],
+                rhs: RValue::Operand(Operand::Var(ctxt.pop_register())),
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::Call(bx) => {
@@ -356,7 +365,7 @@ where
             let lhs = function
                 .return_
                 .iter()
-                .map(|_| Register(ctxt.var_counter.next()))
+                .map(|_| ctxt.push_register())
                 .collect::<Vec<_>>();
 
             // println!("LHS: {:?}", lhs);
@@ -368,7 +377,7 @@ where
                     args,
                 },
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::Pack(_struct_ref) => {
@@ -381,52 +390,51 @@ where
                 .map(|(i, _)| Var(Register(ctxt.var_counter.last() - i)))
                 .collect::<Vec<_>>();
             let inst = Instruction::Assign {
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::Pack,
                     args,
                 },
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::Unpack(bx) => {
             let rhs = RValue::Primitive {
                 op: PrimitiveOp::Unpack,
-                args: vec![Var(Register(ctxt.var_counter.last()))],
+                args: vec![Var(ctxt.pop_register())],
             };
             let lhs = bx
                 .struct_
                 .fields
                 .0
                 .iter()
-                .enumerate()
-                .map(|(_, _)| Register(ctxt.var_counter.next()))
+                .map(|_| ctxt.push_register())
                 .collect::<Vec<_>>();
             let inst = Instruction::Assign { rhs, lhs };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::ReadRef => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::ReadRef,
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::WriteRef => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::WriteRef,
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![(Register(ctxt.var_counter.next()))],
+                lhs: vec![(ctxt.push_register())],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::FreezeRef => {
@@ -434,336 +442,288 @@ where
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::FreezeRef,
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::MutBorrowLoc(_local_index) => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::MutBorrowLoc,
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::ImmBorrowLoc(_local_index) => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::ImmBorrowLoc,
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::MutBorrowField(_field_ref) => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::MutBorrowField,
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::ImmBorrowField(_field_ref) => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::ImmBorrowField,
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::Add => {
-            let args = vec![
-                Var(Register(ctxt.var_counter.last())),
-                Var(Register(ctxt.var_counter.last() - 1)),
-            ];
+            let args = vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())];
             let inst = Instruction::Assign {
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::Add,
                     args,
                 },
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::Sub => {
             // TODO: check operand order
-            let args = vec![
-                Var(Register(ctxt.var_counter.last())),
-                Var(Register(ctxt.var_counter.last() - 1)),
-            ];
+            let args = vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())];
             let inst = Instruction::Assign {
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::Subtract,
                     args,
                 },
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::Mul => {
-            let args = vec![
-                Var(Register(ctxt.var_counter.last())),
-                Var(Register(ctxt.var_counter.last() - 1)),
-            ];
+            let args = vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())];
             let inst = Instruction::Assign {
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::Multiply,
                     args,
                 },
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::Mod => {
-            let args = vec![
-                Var(Register(ctxt.var_counter.last())),
-                Var(Register(ctxt.var_counter.last() - 1)),
-            ];
+            let args = vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())];
             let inst = Instruction::Assign {
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::Modulo,
                     args,
                 },
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::Div => {
-            let args = vec![
-                Var(Register(ctxt.var_counter.last())),
-                Var(Register(ctxt.var_counter.last() - 1)),
-            ];
+            let args = vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())];
             let inst = Instruction::Assign {
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::Divide,
                     args,
                 },
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
         IB::BitOr => {
-            let args = vec![
-                Var(Register(ctxt.var_counter.last())),
-                Var(Register(ctxt.var_counter.last() - 1)),
-            ];
+            let args = vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())];
             let inst = Instruction::Assign {
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::BitOr,
                     args,
                 },
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::BitAnd => {
-            let args = vec![
-                Var(Register(ctxt.var_counter.last())),
-                Var(Register(ctxt.var_counter.last() - 1)),
-            ];
+            let args = vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())];
             let inst = Instruction::Assign {
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::BitAnd,
                     args,
                 },
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::Xor => {
-            let args = vec![
-                Var(Register(ctxt.var_counter.last())),
-                Var(Register(ctxt.var_counter.last() - 1)),
-            ];
+            let args = vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())];
             let inst = Instruction::Assign {
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::Xor,
                     args,
                 },
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::Or => {
-            let args = vec![
-                Var(Register(ctxt.var_counter.last())),
-                Var(Register(ctxt.var_counter.last() - 1)),
-            ];
+            let args = vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())];
             let inst = Instruction::Assign {
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::Or,
                     args,
                 },
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::And => {
-            let args = vec![
-                Var(Register(ctxt.var_counter.last())),
-                Var(Register(ctxt.var_counter.last() - 1)),
-            ];
+            let args = vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())];
             let inst = Instruction::Assign {
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::And,
                     args,
                 },
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::Not => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::Not,
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
         IB::Eq => {
-            let args = vec![
-                Var(Register(ctxt.var_counter.last())),
-                Var(Register(ctxt.var_counter.last() - 1)),
-            ];
+            let args = vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())];
             let inst = Instruction::Assign {
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::Equal,
                     args,
                 },
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::Neq => {
-            let args = vec![
-                Var(Register(ctxt.var_counter.last())),
-                Var(Register(ctxt.var_counter.last() - 1)),
-            ];
+            let args = vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())];
             let inst = Instruction::Assign {
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::NotEqual,
                     args,
                 },
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::Lt => {
-            let args = vec![
-                Var(Register(ctxt.var_counter.last())),
-                Var(Register(ctxt.var_counter.last() - 1)),
-            ];
+            let args = vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())];
             let inst = Instruction::Assign {
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::LessThan,
                     args,
                 },
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::Gt => {
-            let args = vec![
-                Var(Register(ctxt.var_counter.last())),
-                Var(Register(ctxt.var_counter.last() - 1)),
-            ];
+            let args = vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())];
             let inst = Instruction::Assign {
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::GreaterThan,
                     args,
                 },
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
         IB::Le => {
-            let args = vec![
-                Var(Register(ctxt.var_counter.last())),
-                Var(Register(ctxt.var_counter.last() - 1)),
-            ];
+            let args = vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())];
             let inst = Instruction::Assign {
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::LessThanOrEqual,
                     args,
                 },
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::Ge => {
-            let args = vec![
-                Var(Register(ctxt.var_counter.last())),
-                Var(Register(ctxt.var_counter.last() - 1)),
-            ];
+            let args = vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())];
             let inst = Instruction::Assign {
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::GreaterThanOrEqual,
                     args,
                 },
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::Abort => {
             let inst = Instruction::Abort;
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::Nop => {
             let inst = Instruction::Nop;
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::Shl => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::ShiftLeft,
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::Shr => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::ShiftRight,
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::VecPack(_bx) => {
@@ -771,77 +731,77 @@ where
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::VecPack,
                     // VecPack will always take one arg only
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::VecLen(_rc) => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::VecLen,
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::VecImmBorrow(_rc) => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::VecImmBorrow,
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::VecMutBorrow(_rc) => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::VecMutBorrow,
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::VecPushBack(_rc) => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::VecPushBack,
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::VecPopBack(_rc) => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::VecPopBack,
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::VecUnpack(_bx) => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::VecUnpack,
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::VecSwap(_rc) => {
@@ -855,65 +815,65 @@ where
                     op: PrimitiveOp::VecSwap,
                     args,
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::LdU16(value) => {
             let inst = Instruction::Assign {
-                rhs: RValue::Immediate(Type::U16(*value)),
-                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Operand(Operand::Immediate(Value::U16(*value))),
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
         IB::LdU32(value) => {
             let inst = Instruction::Assign {
-                rhs: RValue::Immediate(Type::U32(*value)),
-                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Operand(Operand::Immediate(Value::U32(*value))),
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::LdU256(_bx) => {
             let inst = Instruction::Assign {
-                rhs: RValue::Immediate(Type::U256(*(*_bx))),
-                lhs: vec![Register(ctxt.var_counter.next())],
+                rhs: RValue::Operand(Operand::Immediate(Value::U256(*(*_bx)))),
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::CastU16 => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::CastU16,
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::CastU32 => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::CastU32,
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::CastU256 => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::CastU256,
-                    args: vec![Var(Register(ctxt.var_counter.last()))],
+                    args: vec![Var(ctxt.pop_register())],
                 },
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::PackVariant(bx) => {
@@ -923,21 +883,21 @@ where
                 .0
                 .iter()
                 .enumerate()
-                .map(|(i, _)| Var(Register(ctxt.var_counter.last() - i)))
+                .map(|_| Operand::Var(ctxt.pop_register()))
                 .collect::<Vec<_>>();
             let inst = Instruction::Assign {
-                lhs: vec![Register(ctxt.var_counter.next())],
+                lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::PackVariant,
                     args,
                 },
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
         IB::UnpackVariant(bx) => {
             let rhs = RValue::Primitive {
                 op: PrimitiveOp::UnpackVariant,
-                args: vec![Var(Register(ctxt.var_counter.last()))],
+                args: vec![Var(ctxt.pop_register())],
             };
             let lhs = bx
                 .variant
@@ -948,13 +908,13 @@ where
                 .map(|(i, _)| Register(ctxt.var_counter.next() + i))
                 .collect::<Vec<_>>();
             let inst = Instruction::Assign { lhs, rhs };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::UnpackVariantImmRef(bx) => {
             let rhs = RValue::Primitive {
                 op: PrimitiveOp::UnpackVariantImmRef,
-                args: vec![Var(Register(ctxt.var_counter.last()))],
+                args: vec![Var(ctxt.pop_register())],
             };
             let lhs = bx
                 .variant
@@ -965,13 +925,13 @@ where
                 .map(|(i, _)| Register(ctxt.var_counter.next() + i))
                 .collect::<Vec<_>>();
             let inst = Instruction::Assign { lhs, rhs };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::UnpackVariantMutRef(bx) => {
             let rhs = RValue::Primitive {
                 op: PrimitiveOp::UnpackVariant,
-                args: vec![Var(Register(ctxt.var_counter.last()))],
+                args: vec![Var(ctxt.pop_register())],
             };
             let lhs = bx
                 .variant
@@ -979,10 +939,10 @@ where
                 .0
                 .iter()
                 .enumerate()
-                .map(|(i, _)| Register(ctxt.var_counter.next() + i))
+                .map(|_| ctxt.push_register())
                 .collect::<Vec<_>>();
             let inst = Instruction::Assign { lhs, rhs };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         IB::VariantSwitch(jt) => {
@@ -993,51 +953,55 @@ where
                     .map(|offset| *offset as usize)
                     .collect::<Vec<_>>(),
             };
-            Ok(inst)
+            Ok(vec![inst])
         }
 
         // ******** DEPRECATED BYTECODES ********
-        IB::MutBorrowGlobalDeprecated(_bx) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
-        IB::ImmBorrowGlobalDeprecated(_bx) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
-        IB::ExistsDeprecated(_bx) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
-        IB::MoveFromDeprecated(_bx) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
-        IB::MoveToDeprecated(_bx) => Ok(Instruction::NotImplemented(format!("{:?}", op))),
+        IB::MutBorrowGlobalDeprecated(_bx) => {
+            Ok(vec![Instruction::NotImplemented(format!("{:?}", op))])
+        }
+        IB::ImmBorrowGlobalDeprecated(_bx) => {
+            Ok(vec![Instruction::NotImplemented(format!("{:?}", op))])
+        }
+        IB::ExistsDeprecated(_bx) => Ok(vec![Instruction::NotImplemented(format!("{:?}", op))]),
+        IB::MoveFromDeprecated(_bx) => Ok(vec![Instruction::NotImplemented(format!("{:?}", op))]),
+        IB::MoveToDeprecated(_bx) => Ok(vec![Instruction::NotImplemented(format!("{:?}", op))]),
     }
 }
 
-fn deserialize_constant<S: Hash + Eq + Display + Debug>(constant: &N::Constant<S>) -> Type {
+fn deserialize_constant<S: Hash + Eq + Display + Debug>(constant: &N::Constant<S>) -> Value {
     match constant.type_ {
         N::Type::U8 => {
-            Type::U8(bcs::from_bytes::<u8>(&constant.data).unwrap_or_else(|_| {
+            Value::U8(bcs::from_bytes::<u8>(&constant.data).unwrap_or_else(|_| {
                 panic!("Failed to deserialize U8 constant: {:?}", constant.data)
             }))
         }
         N::Type::U16 => {
-            Type::U16(bcs::from_bytes::<u16>(&constant.data).unwrap_or_else(|_| {
+            Value::U16(bcs::from_bytes::<u16>(&constant.data).unwrap_or_else(|_| {
                 panic!("Failed to deserialize U16 constant: {:?}", constant.data)
             }))
         }
         N::Type::U32 => {
-            Type::U32(bcs::from_bytes::<u32>(&constant.data).unwrap_or_else(|_| {
+            Value::U32(bcs::from_bytes::<u32>(&constant.data).unwrap_or_else(|_| {
                 panic!("Failed to deserialize U32 constant: {:?}", constant.data)
             }))
         }
         N::Type::U64 => {
-            Type::U64(bcs::from_bytes::<u64>(&constant.data).unwrap_or_else(|_| {
+            Value::U64(bcs::from_bytes::<u64>(&constant.data).unwrap_or_else(|_| {
                 panic!("Failed to deserialize U64 constant: {:?}", constant.data)
             }))
         }
         N::Type::U128 => {
-            Type::U128(bcs::from_bytes::<u128>(&constant.data).unwrap_or_else(|_| {
+            Value::U128(bcs::from_bytes::<u128>(&constant.data).unwrap_or_else(|_| {
                 panic!("Failed to deserialize U128 constant: {:?}", constant.data)
             }))
         }
         N::Type::U256 => {
-            Type::U256(bcs::from_bytes::<U256>(&constant.data).unwrap_or_else(|_| {
+            Value::U256(bcs::from_bytes::<U256>(&constant.data).unwrap_or_else(|_| {
                 panic!("Failed to deserialize U256 constant: {:?}", constant.data)
             }))
         }
-        N::Type::Address => Type::Address(
+        N::Type::Address => Value::Address(
             bcs::from_bytes::<AccountAddress>(&constant.data).unwrap_or_else(|_| {
                 panic!(
                     "Failed to deserialize Address constant: {:?}",
@@ -1048,23 +1012,23 @@ fn deserialize_constant<S: Hash + Eq + Display + Debug>(constant: &N::Constant<S
         N::Type::Bool => match bcs::from_bytes::<bool>(&constant.data) {
             Ok(value) => {
                 if value {
-                    Type::True
+                    Value::True
                 } else {
-                    Type::False
+                    Value::False
                 }
             }
             Err(_) => panic!("Failed to deserialize Bool constant: {:?}", constant.data),
         },
         N::Type::Vector(_) => {
             // TODO finish this
-            Type::NotImplemented(format!("Not implemented vector: {:?}", constant.type_))
-        },
+            Value::NotImplemented(format!("Not implemented vector: {:?}", constant.type_))
+        }
         N::Type::Datatype(_)
         | N::Type::Reference(_, _)
         | N::Type::Signer
         | N::Type::TypeParameter(_) => {
             // These types are not supported for immediate values
-            Type::NotImplemented(format!("Unsupported constant type: {:?}", constant.type_))
+            Value::NotImplemented(format!("Unsupported constant type: {:?}", constant.type_))
         }
     }
 }

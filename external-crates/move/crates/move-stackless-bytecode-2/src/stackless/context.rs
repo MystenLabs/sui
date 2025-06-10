@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_model_2::{model::Model as Model2, source_kind::SourceKind};
+
+use crate::stackless::ast;
 // -------------------------------------------------------------------------------------------------
 // Types
 // -------------------------------------------------------------------------------------------------
@@ -10,6 +12,7 @@ pub struct Context<'a, K: SourceKind> {
     pub var_counter: Counter,
     pub locals_counter: Counter,
     pub model: &'a Model2<K>,
+    pub logical_stack: Vec<usize>,
 }
 
 pub struct Counter {
@@ -26,12 +29,22 @@ impl<'a, K: SourceKind> Context<'a, K> {
             var_counter: Counter::new(),
             locals_counter: Counter::new(),
             model,
+            logical_stack: vec![],
         }
     }
 
-    #[allow(unused)]
-    pub fn get_var_counter(&mut self) -> &mut Counter {
-        &mut self.var_counter
+    pub fn pop_register(&mut self) -> ast::Var {
+        let reg_id = self
+            .logical_stack
+            .pop()
+            .expect("Popped a register and there was none");
+        ast::Var::Register(reg_id)
+    }
+
+    pub fn push_register(&mut self) -> ast::Var {
+        let reg_id = self.var_counter.next();
+        self.logical_stack.push(reg_id);
+        ast::Var::Register(reg_id)
     }
 
     #[allow(unused)]
