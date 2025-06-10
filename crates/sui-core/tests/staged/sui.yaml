@@ -595,6 +595,8 @@ ExecutionFailureStatus:
         STRUCT:
           - value_size: U64
           - max_scaled_size: U64
+    39:
+      InvalidLinkage: UNIT
 ExecutionStatus:
   ENUM:
     0:

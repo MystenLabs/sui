@@ -817,6 +817,7 @@ pub mod execution_error {
         ExecutionCanceledDueToRandomnessUnavailable = 37,
         MoveVectorElemTooBig = 38,
         MoveRawValueTooBig = 39,
+        InvalidLinkage = 40,
     }
     impl ExecutionErrorKind {
         /// String value of the enum field names used in the ProtoBuf definition.
@@ -879,6 +880,7 @@ pub mod execution_error {
                 }
                 Self::MoveVectorElemTooBig => "MOVE_VECTOR_ELEM_TOO_BIG",
                 Self::MoveRawValueTooBig => "MOVE_RAW_VALUE_TOO_BIG",
+                Self::InvalidLinkage => "INVALID_LINKAGE",
             }
         }
         /// Creates an enum from field names used in the ProtoBuf definition.
@@ -942,6 +944,7 @@ pub mod execution_error {
                 }
                 "MOVE_VECTOR_ELEM_TOO_BIG" => Some(Self::MoveVectorElemTooBig),
                 "MOVE_RAW_VALUE_TOO_BIG" => Some(Self::MoveRawValueTooBig),
+                "INVALID_LINKAGE" => Some(Self::InvalidLinkage),
                 _ => None,
             }
         }
