@@ -12,14 +12,14 @@ use super::{
     sha::GitSha,
 };
 
-/// A [GitCache] manages a collection of downloaded git trees
+/// A cache that manages a collection of downloaded git trees
 #[derive(Debug)]
 pub struct GitCache {
     root_dir: PathBuf,
 }
 
-/// A [GitTree] represents a git tree in a particular cache. A tree may or may not have been
-/// downloaded, but you can ensure that it has by calling `fetch()`
+/// A subdirectory within a particular commit of a git repository. The files may or may not have
+/// been downloaded, but you can ensure that they have by calling `fetch()`
 #[derive(Clone, Debug)]
 pub struct GitTree {
     /// Repository URL
@@ -45,16 +45,23 @@ impl GitCache {
 
     /// Resolve the git committish `rev` (branch, tag, or sha) from a repository at the remote
     /// `repo` to a commit hash. This will make a remote call so network is required.
-    pub async fn tree_for(
+    pub async fn find_sha(repo: &String, rev: &Option<String>) -> GitResult<GitSha> {
+        find_sha(repo, rev).await
+    }
+
+    /// Helper function to find the sha and then construct a [GitTree]
+    pub async fn resolve_to_tree(
         &self,
-        repo: String,
+        repo: &String,
         rev: &Option<String>,
         path_in_repo: Option<PathBuf>,
     ) -> GitResult<GitTree> {
-        let sha = find_sha(repo.as_ref(), rev).await?;
-        Ok(self.tree_for_sha(repo, sha, path_in_repo))
+        let sha = Self::find_sha(repo, rev).await?;
+        Ok(self.tree_for_sha(repo.clone(), sha.clone(), path_in_repo.clone()))
     }
 
+    /// Construct a tree in `self` for the repository `repo` with the provided `sha` and
+    /// `path_in_repo`.
     pub fn tree_for_sha(
         &self,
         repo: String,
@@ -76,19 +83,19 @@ impl GitCache {
 impl GitTree {
     /// The absolute path on the filesystem where this tree will be downloaded when `fetch` is
     /// called
-    pub fn fs_path(&self) -> PathBuf {
+    pub fn path_to_tree(&self) -> PathBuf {
         self.path_to_repo.join(&self.path_in_repo)
     }
 
-    /// Ensure that the files are downloaded to `self.fs_path()`. Fails if there was already a
-    /// dirty checkout at `self.fs_path()` (call [Self::fetch_allow_dirty] if you don't want to
-    /// fail). Returns `self.fs_path()`
+    /// Ensure that the files are downloaded to `self.path_to_tree()`. Fails if there was already a
+    /// dirty checkout there (call [Self::fetch_allow_dirty] if you don't want to
+    /// fail). Returns `self.path_to_tree()`.
     pub async fn fetch(&self) -> GitResult<PathBuf> {
         self.checkout_repo(false).await
     }
 
-    /// Ensure that there are files downloaded to `self.fs_path()`. Has no effect if
-    /// `self.fs_path()` already exists. Returns `self.fs_path()`
+    /// Ensure that there are files downloaded to `self.path_to_tree()`. Has no effect if
+    /// `self.path_to_tree()` already exists. Returns `self.path_to_tree()`
     pub async fn fetch_allow_dirty(&self) -> GitResult<PathBuf> {
         self.checkout_repo(true).await
     }
@@ -98,7 +105,7 @@ impl GitTree {
         &self.repo
     }
 
-    /// The relative path to the file within the repository
+    /// The relative path to the subtree within the repository
     pub fn path_in_repo(&self) -> &Path {
         &self.path_in_repo
     }
@@ -108,15 +115,15 @@ impl GitTree {
         &self.sha
     }
 
-    /// Checkout the repository using a sparse checkout. It will try to clone without checkout, set
+    /// Checkout the directory using a sparse checkout. It will try to clone without checkout, set
     /// sparse checkout directory, and then checkout the folder specified by `self.path` at the
     /// given sha.
     ///
-    /// Fails if `allow_dirty` is false and a dirty checkout of the tree already exists
+    /// Fails if `allow_dirty` is false and a dirty checkout of the directory already exists
     async fn checkout_repo(&self, allow_dirty: bool) -> GitResult<PathBuf> {
-        let tree_path = self.fs_path();
+        let tree_path = self.path_to_tree();
 
-        // Checkout repo if it does not exist already
+        // Checkout directory if it does not exist already
         if !tree_path.exists() {
             // TODO: does this work if we separately have two trees in the same git repo?
 
@@ -407,8 +414,8 @@ mod tests {
 
         // Pass in a branch name
         let git_tree = cache
-            .tree_for(
-                repo_path.to_string_lossy().to_string(),
+            .resolve_to_tree(
+                &repo_path.to_string_lossy().to_string(),
                 &Some("main".into()),
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -432,8 +439,8 @@ mod tests {
 
         // Pass in a commit SHA
         let git_tree = cache
-            .tree_for(
-                repo_path.to_string_lossy().to_string(),
+            .resolve_to_tree(
+                &repo_path.to_string_lossy().to_string(),
                 &Some(second_sha.into()),
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -455,8 +462,8 @@ mod tests {
         let cache = GitCache::new(cache_dir.path().to_path_buf());
 
         let git_tree_a = cache
-            .tree_for(
-                repo_path.to_string_lossy().to_string(),
+            .resolve_to_tree(
+                &repo_path.to_string_lossy().to_string(),
                 &None,
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -464,8 +471,8 @@ mod tests {
             .unwrap();
 
         let git_tree_b = cache
-            .tree_for(
-                repo_path.to_string_lossy().to_string(),
+            .resolve_to_tree(
+                &repo_path.to_string_lossy().to_string(),
                 &None,
                 Some(PathBuf::from("packages/pkg_b")),
             )
@@ -495,8 +502,8 @@ mod tests {
 
         // Pass in a commit SHA
         let git_tree = cache
-            .tree_for(
-                repo_path.to_string_lossy().to_string(),
+            .resolve_to_tree(
+                &repo_path.to_string_lossy().to_string(),
                 &Some(wrong_sha),
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -514,8 +521,8 @@ mod tests {
 
         let wrong_branch = "test";
         let git_tree = cache
-            .tree_for(
-                repo_path.to_string_lossy().to_string(),
+            .resolve_to_tree(
+                &repo_path.to_string_lossy().to_string(),
                 &Some("nonexisting_branch".to_string()),
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -535,8 +542,8 @@ mod tests {
 
         // Pass in a commit SHA
         let git_tree = cache
-            .tree_for(
-                repo_path.to_string_lossy().to_string(),
+            .resolve_to_tree(
+                &repo_path.to_string_lossy().to_string(),
                 &None,
                 Some(PathBuf::from("nope/non_here")),
             )
@@ -555,7 +562,7 @@ mod tests {
         let cache = GitCache::new(cache_dir.path().to_path_buf());
 
         let git_tree = cache
-            .tree_for(repo_path.to_string_lossy().to_string(), &None, None)
+            .resolve_to_tree(&repo_path.to_string_lossy().to_string(), &None, None)
             .await
             .unwrap();
     }
@@ -568,7 +575,7 @@ mod tests {
         let cache = GitCache::new(cache_dir.path().to_path_buf());
 
         let git_tree = cache
-            .tree_for(
+            .resolve_to_tree(
                 repo_path.to_string_lossy().to_string(),
                 &None,
                 Some(PathBuf::from("packages/pkg_a")),
@@ -576,9 +583,9 @@ mod tests {
             .await
             .unwrap();
 
-        fs::create_dir_all(git_tree.fs_path());
+        fs::create_dir_all(git_tree.path_to_tree());
         fs::write(
-            git_tree.fs_path().join("garbage.txt"),
+            git_tree.path_to_tree().join("garbage.txt"),
             "something to dirty the repo",
         );
 
@@ -594,17 +601,17 @@ mod tests {
         let cache = GitCache::new(cache_dir.path().to_path_buf());
 
         let git_tree = cache
-            .tree_for(
-                repo_path.to_string_lossy().to_string(),
+            .resolve_to_tree(
+                &repo_path.to_string_lossy().to_string(),
                 &None,
                 Some(PathBuf::from("packages/pkg_a")),
             )
             .await
             .unwrap();
 
-        fs::create_dir_all(git_tree.fs_path());
+        fs::create_dir_all(git_tree.path_to_tree());
         fs::write(
-            git_tree.fs_path().join("garbage.txt"),
+            git_tree.path_to_tree().join("garbage.txt"),
             "something to dirty the repo",
         );
 
@@ -619,8 +626,8 @@ mod tests {
         let cache = GitCache::new(cache_dir.path().to_path_buf());
 
         let git_tree = cache
-            .tree_for(
-                repo_path.to_string_lossy().to_string(),
+            .resolve_to_tree(
+                &repo_path.to_string_lossy().to_string(),
                 &None,
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -631,7 +638,7 @@ mod tests {
 
         // same as above
         let git_tree = cache
-            .tree_for(
+            .resolve_to_tree(
                 repo_path.to_string_lossy().to_string(),
                 &None,
                 Some(PathBuf::from("packages/pkg_a")),
@@ -650,7 +657,7 @@ mod tests {
         let cache = GitCache::new(cache_dir.path().to_path_buf());
 
         let git_tree = cache
-            .tree_for(
+            .resolve_to_tree(
                 repo_path.to_string_lossy().to_string(),
                 &None,
                 Some(PathBuf::from("packages/pkg_a")),
@@ -662,9 +669,9 @@ mod tests {
         git_tree.fetch().await.unwrap();
 
         // create dirty file in dep's parent directory
-        fs::create_dir_all(git_tree.fs_path().parent().unwrap());
+        fs::create_dir_all(git_tree.path_to_tree().parent().unwrap());
         fs::write(
-            git_tree.fs_path().join("garbage.txt"),
+            git_tree.path_to_tree().join("garbage.txt"),
             "something to dirty the repo",
         );
 

@@ -59,10 +59,11 @@ impl PinnedGitDependency {
         Ok(tree.fetch().await?)
     }
 
+    /// Return the path that `fetch` would return without actually fetching the data
     pub fn unfetched_path(&self) -> PathBuf {
         let cache = GitCache::new(move_command_line_common::env::MOVE_HOME.to_string());
         let tree = cache.tree_for_sha(self.repo.clone(), self.rev.clone(), Some(self.path.clone()));
-        tree.fs_path()
+        tree.path_to_tree()
     }
 }
 
@@ -83,14 +84,10 @@ impl UnpinnedGitDependency {
     /// Replace the commit-ish [self.rev] with a commit (i.e. a SHA). Requires fetching the git
     /// repository
     async fn pin_one(&self) -> PackageResult<PinnedGitDependency> {
-        let cache = GitCache::new(move_command_line_common::env::MOVE_HOME.to_string());
-        let tree = cache
-            .tree_for(self.repo.clone(), &self.rev, Some(self.path.clone()))
-            .await?;
         Ok(PinnedGitDependency {
-            repo: tree.repo_url().to_string(),
-            rev: tree.sha().clone(),
-            path: tree.path_in_repo().to_path_buf(),
+            repo: self.repo.clone(),
+            rev: GitCache::find_sha(&self.repo, &self.rev).await?,
+            path: self.path.clone(),
         })
     }
 }
