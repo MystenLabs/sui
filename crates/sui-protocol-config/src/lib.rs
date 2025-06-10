@@ -3723,12 +3723,26 @@ impl ProtocolConfig {
                                 max_estimate_us: 1_500_000, // 1.5s
                                 stored_observations_num_included_checkpoints: 10,
                                 stored_observations_limit: 20,
-                                stake_weighted_median_threshold: 3334,
+                                stake_weighted_median_threshold: 0,
                             },
                         );
                 }
                 86 => {
                     cfg.feature_flags.type_tags_in_object_runtime = true;
+
+                    // Set a stake_weighted_median_threshold for congestion control.
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                            ExecutionTimeEstimateParams {
+                                target_utilization: 50,
+                                allowed_txn_cost_overage_burst_limit_us: 500_000, // 500 ms
+                                randomness_scalar: 20,
+                                max_estimate_us: 1_500_000, // 1.5s
+                                stored_observations_num_included_checkpoints: 10,
+                                stored_observations_limit: 20,
+                                stake_weighted_median_threshold: 3334,
+                            },
+                        );
                 }
                 // Use this template when making changes:
                 //
