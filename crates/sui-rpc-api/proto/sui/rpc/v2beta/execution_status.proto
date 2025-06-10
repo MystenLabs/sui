@@ -166,6 +166,8 @@ message ExecutionError {
     MOVE_VECTOR_ELEM_TOO_BIG = 38;
 
     MOVE_RAW_VALUE_TOO_BIG = 39;
+
+    INVALID_LINKAGE = 40;
   }
 
   optional ExecutionErrorKind kind = 2;
