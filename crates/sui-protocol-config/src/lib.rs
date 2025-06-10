@@ -3092,7 +3092,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.mysticeti_num_leaders_per_round = Some(1);
 
                     // Set max transaction deferral to 10 consensus rounds.
-                    cfg.max_deferral_rounds_for_congestion_control = Some(10);
+                    cfg.max_deferral_rounds_for_congestion_control = Some(0);
                 }
                 51 => {
                     cfg.random_beacon_dkg_version = Some(1);
