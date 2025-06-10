@@ -344,6 +344,7 @@ pub enum EndOfEpochTransactionKind {
     BridgeStateCreate(ChainIdentifier),
     BridgeCommitteeInit(SequenceNumber),
     StoreExecutionTimeObservations(StoredExecutionTimeObservations),
+    AccumulatorRootCreate,
 }
 
 impl EndOfEpochTransactionKind {
@@ -385,6 +386,10 @@ impl EndOfEpochTransactionKind {
 
     pub fn new_randomness_state_create() -> Self {
         Self::RandomnessStateCreate
+    }
+
+    pub fn new_accumulator_root_create() -> Self {
+        Self::AccumulatorRootCreate
     }
 
     pub fn new_deny_list_state_create() -> Self {
@@ -444,6 +449,7 @@ impl EndOfEpochTransactionKind {
                     mutable: true,
                 }]
             }
+            Self::AccumulatorRootCreate => vec![],
         }
     }
 
@@ -478,6 +484,7 @@ impl EndOfEpochTransactionKind {
             Self::StoreExecutionTimeObservations(_) => {
                 Either::Left(vec![SharedInputObject::SUI_SYSTEM_OBJ].into_iter())
             }
+            Self::AccumulatorRootCreate => Either::Right(iter::empty()),
         }
     }
 
@@ -531,6 +538,13 @@ impl EndOfEpochTransactionKind {
                 ) {
                     return Err(UserInputError::Unsupported(
                         "execution time estimation not enabled".to_string(),
+                    ));
+                }
+            }
+            Self::AccumulatorRootCreate => {
+                if !config.enable_accumulators() {
+                    return Err(UserInputError::Unsupported(
+                        "accumulators not enabled".to_string(),
                     ));
                 }
             }

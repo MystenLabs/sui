@@ -710,6 +710,10 @@ struct FeatureFlags {
     // Signifies the cut-over of using type tags instead of `Type`s in the object runtime.
     #[serde(skip_serializing_if = "is_false")]
     type_tags_in_object_runtime: bool,
+
+    // Enable accumulators
+    #[serde(skip_serializing_if = "is_false")]
+    enable_accumulators: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1786,6 +1790,10 @@ impl ProtocolConfig {
 
     pub fn enable_coin_deny_list_v1(&self) -> bool {
         self.feature_flags.enable_coin_deny_list
+    }
+
+    pub fn enable_accumulators(&self) -> bool {
+        self.feature_flags.enable_accumulators
     }
 
     pub fn enable_coin_deny_list_v2(&self) -> bool {

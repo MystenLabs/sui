@@ -24,6 +24,7 @@ Summary generation successful. Summaries stored in 'package_summaries'
 0x0000000000000000000000000000000000000000000000000000000000000002
 address_mapping.yaml
 root_package_metadata.yaml
+accumulator.yaml
 address.yaml
 authenticator_state.yaml
 bag.yaml

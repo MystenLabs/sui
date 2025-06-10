@@ -3233,7 +3233,7 @@ pub struct EndOfEpochTransaction {
 pub struct EndOfEpochTransactionKind {
     #[prost(
         oneof = "end_of_epoch_transaction_kind::Kind",
-        tags = "2, 3, 4, 200, 201, 202, 203, 204"
+        tags = "2, 3, 4, 200, 201, 202, 203, 204, 205"
     )]
     pub kind: ::core::option::Option<end_of_epoch_transaction_kind::Kind>,
 }
@@ -3265,6 +3265,9 @@ pub mod end_of_epoch_transaction_kind {
         /// Initialize the bridge committee.
         #[prost(uint64, tag = "204")]
         BridgeCommitteeInit(u64),
+        /// Create the accumulator root object.
+        #[prost(message, tag = "205")]
+        AccumulatorRootCreate(()),
     }
 }
 /// Expire old JWKs.

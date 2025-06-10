@@ -1214,6 +1214,9 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             crate::transaction::EndOfEpochTransactionKind::StoreExecutionTimeObservations(
                 stored_execution_time_observations,
             ) => Self::StoreExecutionTimeObservations(stored_execution_time_observations.into()),
+            crate::transaction::EndOfEpochTransactionKind::AccumulatorRootCreate => {
+                Self::AccumulatorRootCreate
+            }
         }
     }
 }
