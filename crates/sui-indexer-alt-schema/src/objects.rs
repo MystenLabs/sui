@@ -62,7 +62,7 @@ pub struct StoredObjInfo {
     pub module: Option<String>,
     pub name: Option<String>,
     pub instantiation: Option<Vec<u8>>,
-    pub marked_obsolete: bool,
+    pub obsolete_at: Option<i64>,
     pub marked_predecessor: bool,
 }
 
@@ -113,7 +113,7 @@ impl StoredObjInfo {
                         object.id().to_canonical_display(/* with_prefix */ true),
                     )
                 })?,
-            marked_obsolete: false,
+            obsolete_at: None,
             marked_predecessor: false,
         })
     }

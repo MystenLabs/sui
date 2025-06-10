@@ -192,7 +192,7 @@ impl TryInto<StoredObjInfo> for &ProcessedObjInfo {
                 module: None,
                 name: None,
                 instantiation: None,
-                marked_obsolete: false,
+                obsolete_at: None,
                 marked_predecessor: false,
             }),
         }
@@ -231,7 +231,9 @@ mod tests {
     #[derive(diesel::QueryableByName)]
     struct T1Result {
         #[diesel(sql_type = diesel::sql_types::BigInt)]
-        deleted_count: i64,
+        deleted_latest_count: i64,
+        #[diesel(sql_type = diesel::sql_types::BigInt)]
+        deleted_obsolete_count: i64,
         #[diesel(sql_type = diesel::sql_types::BigInt)]
         start_timestamp_ms: i64,
         #[diesel(sql_type = diesel::sql_types::BigInt)]
@@ -280,19 +282,22 @@ mod tests {
             });
         }
 
-        fn add_t1_events(&mut self, result: &T1Result) {
+        fn add_t1_events(&mut self, result: &T1Result, tx_name: &str) {
             self.events.push(TimelineEvent {
                 timestamp_ms: result.start_timestamp_ms,
-                label: "CiT1_START".to_string(),
+                label: format!("{}_START", tx_name),
                 event_type: EventType::Start,
                 details: "T1 cleanup begins".to_string(),
             });
 
             self.events.push(TimelineEvent {
                 timestamp_ms: result.end_timestamp_ms,
-                label: "CiT1_END".to_string(),
+                label: format!("{}_END", tx_name),
                 event_type: EventType::End,
-                details: format!("rows_deleted: {}", result.deleted_count),
+                details: format!(
+                    "deleted_latest_count: {}, deleted_obsolete_count: {}",
+                    result.deleted_latest_count, result.deleted_obsolete_count
+                ),
             });
         }
 
@@ -465,42 +470,36 @@ mod tests {
         -- Delete preds that already marked their own immediate predecessors
         -- And intermediate entries among 'latest' changes
         , pred_deleted AS (
-            DELETE FROM obj_info
-            WHERE (object_id, cp_sequence_number) IN (
-                -- Original condition: preds that already marked their predecessors
-                (SELECT pred_object_id, pred_cp_sequence_number
-                FROM predecessors
-                WHERE pred_marked_predecessor = true
-                ORDER BY pred_object_id, pred_cp_sequence_number)
+    DELETE FROM obj_info
+    WHERE (object_id, cp_sequence_number) IN (
+        (SELECT pred_object_id, pred_cp_sequence_number
+        FROM predecessors
+        WHERE pred_marked_predecessor = true)
 
-                UNION
+        UNION
 
-                -- New condition: rows that appear as both latest AND pred
-                (SELECT latest_object_id, latest_cp_sequence_number
-                FROM predecessors p1
-                WHERE EXISTS (
-                    SELECT 1 FROM predecessors p2
-                    WHERE p2.pred_object_id = p1.latest_object_id
-                    AND p2.pred_cp_sequence_number = p1.latest_cp_sequence_number
-                )
-                ORDER BY latest_object_id, latest_cp_sequence_number)
-            )
-            RETURNING object_id
-        )
+        (SELECT latest_object_id, latest_cp_sequence_number
+        FROM predecessors p1
+        WHERE EXISTS (
+            SELECT 1 FROM predecessors p2
+            WHERE p2.pred_object_id = p1.latest_object_id
+            AND p2.pred_cp_sequence_number = p1.latest_cp_sequence_number
+        ))
+    )
+    RETURNING object_id
+)
         , pred_deleted_sleep AS (
             SELECT pg_sleep({BigInt}) as dummy
         )
         -- Otherwise, flag them for later deletion
         , pred_obsolete AS (
             UPDATE obj_info
-            SET marked_obsolete = true
-            WHERE (object_id, cp_sequence_number) IN (
-                SELECT pred_object_id, pred_cp_sequence_number
-                FROM predecessors
-                WHERE pred_marked_predecessor = false
-                ORDER BY pred_object_id, pred_cp_sequence_number
-            )
-            RETURNING object_id
+            SET obsolete_at = p.latest_cp_sequence_number
+            FROM predecessors p
+            WHERE obj_info.object_id = p.pred_object_id
+              AND obj_info.cp_sequence_number = p.pred_cp_sequence_number
+              AND p.pred_marked_predecessor = false
+            RETURNING obj_info.object_id
         )
         , pred_obsolete_sleep AS (
             SELECT pg_sleep({BigInt}) as dummy
@@ -618,55 +617,52 @@ mod tests {
                         .execute(conn).await?;
                 }
 
-
-
-
                 use std::collections::HashSet;
 
-let mut delete_set = HashSet::new();
+                let mut delete_set = HashSet::new();
 
-// Condition 1: Predecessors that already marked their predecessors
-for row in &predecessors {
-    if let (Some(pred_object_id), Some(pred_cp_sequence_number), Some(true)) =
-        (&row.pred_object_id, &row.pred_cp_sequence_number, &row.pred_marked_predecessor) {
-        delete_set.insert((pred_object_id.clone(), *pred_cp_sequence_number));
-    }
-}
+                // Condition 1: Predecessors that already marked their predecessors
+                for row in &predecessors {
+                    if let (Some(pred_object_id), Some(pred_cp_sequence_number), Some(true)) =
+                        (&row.pred_object_id, &row.pred_cp_sequence_number, &row.pred_marked_predecessor) {
+                        delete_set.insert((pred_object_id.clone(), *pred_cp_sequence_number));
+                    }
+                }
 
-// Condition 2: Intermediate entries (latest rows that appear as predecessors)
-for p1 in &predecessors {
-    for p2 in &predecessors {
-        if let (Some(p2_pred_id), Some(p2_pred_seq)) = (&p2.pred_object_id, &p2.pred_cp_sequence_number) {
-            if p1.latest_object_id == *p2_pred_id && p1.latest_cp_sequence_number == *p2_pred_seq {
-                delete_set.insert((p1.latest_object_id.clone(), p1.latest_cp_sequence_number));
-            }
-        }
-    }
-}
+                // Condition 2: Intermediate entries (latest rows that appear as predecessors)
+                for p1 in &predecessors {
+                    for p2 in &predecessors {
+                        if let (Some(p2_pred_id), Some(p2_pred_seq)) = (&p2.pred_object_id, &p2.pred_cp_sequence_number) {
+                            if p1.latest_object_id == *p2_pred_id && p1.latest_cp_sequence_number == *p2_pred_seq {
+                                delete_set.insert((p1.latest_object_id.clone(), p1.latest_cp_sequence_number));
+                            }
+                        }
+                    }
+                }
 
-let values = delete_set
-    .iter()
-    .map(|(object_id, cp_sequence_number)| {
-        let object_id_hex = hex::encode(object_id);
-        format!("('\\x{}'::BYTEA, {}::BIGINT)", object_id_hex, cp_sequence_number)
-    })
-    .collect::<Vec<_>>()
-    .join(",");
+                let values = delete_set
+                    .iter()
+                    .map(|(object_id, cp_sequence_number)| {
+                        let object_id_hex = hex::encode(object_id);
+                        format!("('\\x{}'::BYTEA, {}::BIGINT)", object_id_hex, cp_sequence_number)
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",");
 
-let pred_deleted_count = if values.is_empty() {
-    0
-} else {
-    let query = format!(
-                "
-        DELETE FROM obj_info
-        WHERE (object_id, cp_sequence_number) IN (
-            VALUES {}
-        )
-        ",
-        values
-    );
-    sql_query(query).execute(conn).await? as i64
-};
+                let pred_deleted_count = if values.is_empty() {
+                    0
+                } else {
+                    let query = format!(
+                        "
+                        DELETE FROM obj_info
+                        WHERE (object_id, cp_sequence_number) IN (
+                            VALUES {}
+                        )
+                        ",
+                        values
+                    );
+                    sql_query(query).execute(conn).await? as i64
+                };
 
                 // Step 3: Mark remaining predecessors as obsolete
                 if let Some(sleep) = pred_obsolete_sleep {
@@ -681,7 +677,8 @@ let pred_deleted_count = if values.is_empty() {
                     if let (Some(pred_object_id), Some(pred_cp_sequence_number), Some(false)) =
                         (&row.pred_object_id, &row.pred_cp_sequence_number, &row.pred_marked_predecessor) {
                         let object_id_hex = hex::encode(pred_object_id);
-                        Some(format!("('\\x{}'::BYTEA, {}::BIGINT)", object_id_hex, pred_cp_sequence_number))
+                        Some(format!("('\\x{}'::BYTEA, {}::BIGINT, {}::BIGINT)",
+                                   object_id_hex, pred_cp_sequence_number, row.latest_cp_sequence_number))
                     } else {
                         None
                     }
@@ -696,10 +693,10 @@ let pred_deleted_count = if values.is_empty() {
                 let query = format!(
                     "
                     UPDATE obj_info
-                    SET marked_obsolete = true
-                    WHERE (object_id, cp_sequence_number) IN (
-                        VALUES {}
-                    )
+                    SET obsolete_at = v.latest_cp_sequence_number
+                    FROM (VALUES {}) AS v(object_id, cp_sequence_number, latest_cp_sequence_number)
+                    WHERE obj_info.object_id = v.object_id
+                      AND obj_info.cp_sequence_number = v.cp_sequence_number
                     ",
                     values
                 );
@@ -765,22 +762,31 @@ let pred_deleted_count = if values.is_empty() {
             WITH start_timing AS (
             SELECT (extract(epoch from clock_timestamp()) * 1000)::BIGINT as start_ts
         ),
-     deletion AS (
+     deletion_latest AS (
         DELETE FROM obj_info
         WHERE cp_sequence_number >= {BigInt}
           AND cp_sequence_number < {BigInt}
           AND marked_predecessor = true
-          AND marked_obsolete = true
+          AND obsolete_at IS NOT NULL
+        RETURNING object_id
+    ),
+    deletion_obsolete AS (
+        DELETE FROM obj_info
+        WHERE obsolete_at >= {BigInt}
+          AND obsolete_at < {BigInt}
+          AND marked_predecessor = true
         RETURNING object_id
     )
     SELECT
-        COUNT(*)::BIGINT as deleted_count,
+        (SELECT COUNT(*)::BIGINT FROM deletion_latest) as deleted_latest_count,
+        (SELECT COUNT(*)::BIGINT FROM deletion_obsolete) as deleted_obsolete_count,
         (SELECT start_ts FROM start_timing) as start_timestamp_ms,
-        (SELECT extract(epoch from clock_timestamp()) * 1000)::BIGINT as end_timestamp_ms
-    FROM deletion;
+        (SELECT extract(epoch from clock_timestamp()) * 1000)::BIGINT as end_timestamp_ms;
     ",
             from as i64,
-            to_exclusive as i64
+            to_exclusive as i64,
+            from as i64,
+            to_exclusive as i64,
         );
 
         let mut result: T1Result = query.get_result(conn).await?;
@@ -1294,8 +1300,8 @@ let pred_deleted_count = if values.is_empty() {
         let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
 
-        let repeats = 1;
-        let range = 1;
+        let repeats = 4;
+        let range = 1000;
 
         // Create range * repeats objects, ie 4x1000 = 4000
         for r in 0..repeats {
@@ -1343,10 +1349,10 @@ let pred_deleted_count = if values.is_empty() {
 
         let db = indexer.store().clone();
 
-        let cit0 = tokio::spawn(async move {
+        let ci = tokio::spawn(async move {
             let mut conn1 = db.connect().await.unwrap();
             let cit0_sleep = 0;
-            let t0_result = t0_v2(
+            let t0_result = t0(
                 &mut conn1,
                 0,
                 cit0_end_exclusive,
@@ -1363,10 +1369,10 @@ let pred_deleted_count = if values.is_empty() {
         });
 
         let db = indexer.store().clone();
-        let cjt0 = tokio::spawn(async move {
+        let cj = tokio::spawn(async move {
             let mut conn2 = db.connect().await.unwrap();
             let cjt0_sleep = 0;
-            let result = t0_v2(
+            let t0_result = t0(
                 &mut conn2,
                 cit0_end_exclusive,
                 total_checkpoints,
@@ -1378,10 +1384,13 @@ let pred_deleted_count = if values.is_empty() {
             )
             .await
             .unwrap();
-            result
+            let t1_result = t1(&mut conn2, cit0_end_exclusive, total_checkpoints)
+                .await
+                .unwrap();
+            (t0_result, t1_result)
         });
 
-        let (ci_result, cj_result) = tokio::join!(cit0, cjt0);
+        let (ci_result, cj_result) = tokio::join!(ci, cj);
         match (&ci_result, &cj_result) {
             (Ok(_), Ok(_)) => {
                 println!("Case: Both transactions completed successfully");
@@ -1398,8 +1407,9 @@ let pred_deleted_count = if values.is_empty() {
         // Create timeline diagram
         let mut timeline = TimelineDiagram::new();
         timeline.add_transaction_events(&ci_result.0, "CiT0");
-        timeline.add_t1_events(&ci_result.1);
-        timeline.add_transaction_events(&cj_result, "CjT0");
+        timeline.add_t1_events(&ci_result.1, "CiT1");
+        timeline.add_transaction_events(&cj_result.0, "CjT0");
+        timeline.add_t1_events(&cj_result.1, "CjT1");
 
         println!("{}", timeline.generate_timeline());
 
@@ -1409,10 +1419,13 @@ let pred_deleted_count = if values.is_empty() {
         let mut marked_predecessor = 0;
 
         for obj in all_obj_info {
-            if obj.marked_predecessor && obj.marked_obsolete {
+            // println!("object_id: {:?}, cp_sequence_number: {}, obsolete_at: {:?}, marked_predecessor: {}",
+            //     obj.object_id, obj.cp_sequence_number, obj.obsolete_at, obj.marked_predecessor
+            // );
+            if obj.marked_predecessor && obj.obsolete_at.is_some() {
                 orphaned += 1;
             }
-            if obj.marked_obsolete {
+            if obj.obsolete_at.is_some() {
                 obsoleted += 1;
             }
             if obj.marked_predecessor {
@@ -1423,5 +1436,121 @@ let pred_deleted_count = if values.is_empty() {
             "orphaned: {}, obsoleted: {}, marked_predecessor: {}",
             orphaned, obsoleted, marked_predecessor
         );
+    }
+
+    #[tokio::test]
+    async fn test_deadlock_single_object_guaranteed() {
+        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
+        let obj_info = ObjInfo::default();
+        let mut builder = TestCheckpointDataBuilder::new(0);
+
+        // Create one object and modify it across many checkpoints
+        // This guarantees maximum overlap and lock contention
+
+        // Checkpoint 0: Create object 0
+        builder = builder
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
+        ObjInfo::commit(&result, &mut conn).await.unwrap();
+
+        let checkpoints = 10;
+
+        // Checkpoints 1-10: Keep modifying the same object
+        for i in 1..=10 {
+            builder = builder
+                .start_transaction(0)
+                .transfer_object(0, i % 2) // Alternate between addresses 0 and 1
+                .finish_transaction();
+            let checkpoint = builder.build_checkpoint();
+            let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
+            ObjInfo::commit(&result, &mut conn).await.unwrap();
+        }
+
+        println!("Created 11 checkpoints all modifying the same object");
+        let db1 = indexer.store().clone();
+        let db2 = indexer.store().clone();
+
+        let ci_range = (0, 6);
+        let cj_range = (6, 13);
+
+        println!("Ci will process checkpoints {}..{}", ci_range.0, ci_range.1);
+        println!("Cj will process checkpoints {}..{}", cj_range.0, cj_range.1);
+
+        let ci = tokio::spawn(async move {
+            let mut conn1 = db1.connect().await.unwrap();
+            let cit0_sleep = 0;
+            let t0_result = t0(
+                &mut conn1,
+                ci_range.0,
+                ci_range.1,
+                Some(cit0_sleep),
+                Some(cit0_sleep),
+                Some(cit0_sleep),
+                Some(cit0_sleep),
+                "CiT0".to_string(),
+            )
+            .await
+            .unwrap();
+            let t1_result = t1(&mut conn1, ci_range.0, ci_range.1).await.unwrap();
+            (t0_result, t1_result)
+        });
+
+        let cj = tokio::spawn(async move {
+            let mut conn2 = db2.connect().await.unwrap();
+            let cjt0_sleep = 0;
+            let t0_result = t0(
+                &mut conn2,
+                cj_range.0,
+                cj_range.1,
+                Some(cjt0_sleep),
+                Some(cjt0_sleep),
+                Some(cjt0_sleep),
+                Some(cjt0_sleep),
+                "CjT0".to_string(),
+            )
+            .await
+            .unwrap();
+            let t1_result = t1(&mut conn2, cj_range.0, cj_range.1).await.unwrap();
+            (t0_result, t1_result)
+        });
+
+        let (ci_result, cj_result) = tokio::join!(ci, cj);
+        match (&ci_result, &cj_result) {
+            (Ok(_), Ok(_)) => {
+                println!("Case: Both transactions completed successfully");
+            }
+            _ => {
+                println!("Deadlock encountered");
+                return;
+            }
+        }
+
+        let mut timeline = TimelineDiagram::new();
+        let ci_result = ci_result.unwrap();
+        let cj_result = cj_result.unwrap();
+        timeline.add_transaction_events(&ci_result.0, "CiT0");
+        timeline.add_t1_events(&ci_result.1, "CiT1");
+        timeline.add_transaction_events(&cj_result.0, "CjT0");
+        timeline.add_t1_events(&cj_result.1, "CjT1");
+        println!("{}", timeline.generate_timeline());
+
+        // Check final state regardless
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        let same_object_entries: Vec<_> = all_obj_info
+            .iter()
+            .filter(|obj| obj.object_id == TestCheckpointDataBuilder::derive_object_id(0).to_vec())
+            .collect();
+
+        println!("Entries for object 0: {}", same_object_entries.len());
+        for entry in same_object_entries {
+            println!(
+                "  cp: {}, obsolete_at: {:?}, marked_predecessor: {}",
+                entry.cp_sequence_number, entry.obsolete_at, entry.marked_predecessor
+            );
+        }
     }
 }

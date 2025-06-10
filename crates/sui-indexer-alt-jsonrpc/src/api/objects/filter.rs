@@ -418,7 +418,7 @@ async fn owned_obj_info(
             module,
             name,
             instantiation,
-            marked_obsolete,
+            obsolete_at,
             marked_predecessor,
         ))
         .left_join(
