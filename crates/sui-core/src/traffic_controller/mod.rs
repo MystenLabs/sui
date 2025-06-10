@@ -83,6 +83,7 @@ impl TrafficController {
         metrics: TrafficControllerMetrics,
         fw_config: Option<RemoteFirewallConfig>,
     ) -> Self {
+        metrics.dry_run_enabled.set(policy_config.dry_run as i64);
         match policy_config.allow_list {
             Some(allow_list) => {
                 let allowlist = allow_list
