@@ -209,6 +209,7 @@ impl From<sui_sdk_types::ExecutionError> for super::ExecutionError {
                 });
                 ExecutionErrorKind::MoveRawValueTooBig
             }
+            InvalidLinkage => ExecutionErrorKind::InvalidLinkage,
         };
 
         message.set_kind(kind);
@@ -224,7 +225,6 @@ impl TryFrom<&super::ExecutionError> for sui_sdk_types::ExecutionError {
 
         match value.kind() {
             Unknown => return Err(TryFromProtoError::from_error("unknown ExecutionErrorKind")),
-
             InsufficientGas => Self::InsufficientGas,
             InvalidGasObject => Self::InvalidGasObject,
             InvariantViolation => Self::InvariantViolation,
@@ -393,7 +393,6 @@ impl TryFrom<&super::ExecutionError> for sui_sdk_types::ExecutionError {
             ExecutionCanceledDueToRandomnessUnavailable => {
                 Self::ExecutionCanceledDueToRandomnessUnavailable
             }
-
             MoveVectorElemTooBig => {
                 let super::SizeError { size, max_size } = value
                     .size_error
@@ -418,6 +417,7 @@ impl TryFrom<&super::ExecutionError> for sui_sdk_types::ExecutionError {
                         .ok_or_else(|| TryFromProtoError::missing("max_size"))?,
                 }
             }
+            InvalidLinkage => Self::InvalidLinkage,
         }
         .pipe(Ok)
     }
