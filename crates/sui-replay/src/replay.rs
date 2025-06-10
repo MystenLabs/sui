@@ -2097,15 +2097,15 @@ impl ConfigStore for LocalExec {
         &self,
         object_id: &ObjectID,
         _epoch_id: EpochId,
-    ) -> sui_types::storage::error::Result<Option<VersionNumber>> {
+    ) -> Option<VersionNumber> {
         let Some(versions) = &self.config_and_versions else {
-            return Ok(None);
+            return None;
         };
 
-        Ok(versions
+        versions
             .iter()
             .find(|(id, _)| id == object_id)
-            .map(|(_, v)| *v))
+            .map(|(_, v)| *v)
     }
 }
 
@@ -2114,7 +2114,7 @@ impl ConfigStore for &mut LocalExec {
         &self,
         object_id: &ObjectID,
         epoch_id: EpochId,
-    ) -> sui_types::storage::error::Result<Option<VersionNumber>> {
+    ) -> Option<VersionNumber> {
         (**self).get_current_epoch_stable_sequence_number(object_id, epoch_id)
     }
 }

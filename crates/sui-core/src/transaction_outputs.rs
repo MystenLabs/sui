@@ -165,7 +165,7 @@ impl TransactionOutputs {
                 })
                 .map(|(id, version)| {
                     (
-                        ObjectKey::min_for_id(&id),
+                        FullObjectKey::config_key_for_id(&id),
                         MarkerValue::ConfigUpdate(version),
                     )
                 });

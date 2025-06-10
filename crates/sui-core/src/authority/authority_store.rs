@@ -808,12 +808,12 @@ impl AuthorityStore {
         // datastore for these objects.
         let (config_update_markers, all_other_markers): (Vec<_>, Vec<_>) = markers
             .iter()
-            .partition::<Vec<&(ObjectKey, MarkerValue)>, _>(|(_, marker_value)| {
+            .partition::<Vec<&(FullObjectKey, MarkerValue)>, _>(|(_, marker_value)| {
                 matches!(marker_value, MarkerValue::ConfigUpdate(_))
             });
         let already_written_config_updates = self
             .perpetual_tables
-            .object_per_epoch_marker_table
+            .object_per_epoch_marker_table_v2
             .multi_contains_keys(config_update_markers.iter().map(|(k, _)| (epoch_id, *k)))?;
         assert_eq!(
             already_written_config_updates.len(),

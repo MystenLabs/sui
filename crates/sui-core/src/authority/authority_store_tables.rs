@@ -523,8 +523,8 @@ impl AuthorityPerpetualTables {
         &self,
         object_id: &ObjectID,
         epoch_id: EpochId,
-    ) -> SuiResult<Option<VersionNumber>> {
-        let object_key = (epoch_id, ObjectKey::min_for_id(object_id));
+    ) -> Option<VersionNumber> {
+        let object_key = (epoch_id, FullObjectKey::config_key_for_id(object_id));
         // Read the object first then read the marker. This is to guard against data races between
         // the data store and marker table where the object could be mutated after we read the
         // marker table but before we read the object.
@@ -541,13 +541,19 @@ impl AuthorityPerpetualTables {
         // In either case this gives us the correct "pre-mutation" version for the object
         // for the epoch.
         let object = self.get_object(object_id);
-        Ok(match self.object_per_epoch_marker_table.get(&object_key)? {
+        match self
+            .object_per_epoch_marker_table_v2
+            .get(&object_key)
+            .expect("marker table error")
+        {
             Some(MarkerValue::ConfigUpdate(seqno)) => Some(seqno),
             Some(
-                MarkerValue::OwnedDeleted | MarkerValue::SharedDeleted(_) | MarkerValue::Received,
+                MarkerValue::FastpathStreamEnded
+                | MarkerValue::ConsensusStreamEnded(_)
+                | MarkerValue::Received,
             )
-            | None => object?.map(|o| o.version()),
-        })
+            | None => object.map(|o| o.version()),
+        }
     }
 
     pub fn set_highest_pruned_checkpoint(

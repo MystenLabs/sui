@@ -609,12 +609,22 @@ impl WritebackCache {
     ) {
         tracing::trace!("inserting marker value {object_key:?}: {marker_value:?}",);
         self.metrics.record_cache_write("marker");
-        self.dirty
+        let cached_version_map = &mut self
+            .dirty
             .markers
             .entry((epoch_id, object_key.id()))
-            .or_default()
-            .value_mut()
-            .insert(object_key.version(), marker_value);
+            .or_default();
+
+        // We always insert a marker for a config update in the marker table with the same sequence
+        // number (SequenceNumber::MIN) as the marker value, so that we can look up the first
+        // version at which a config is mutated in an epoch in the marker table using only the
+        // object ID and the epoch ID. Because of this we would violate the monoticity of the
+        // `CachedVersionMap` if we inserted more than once in an epoch.
+        if matches!(&marker_value, MarkerValue::ConfigUpdate(_)) && !cached_version_map.is_empty() {
+            return;
+        }
+
+        cached_version_map.insert(object_key.version(), marker_value);
         // It is possible for a transaction to use a consensus stream ended
         // object in the input, hence we must notify that it is now available
         // at the assigned version, so that any transaction waiting for this
@@ -1864,10 +1874,13 @@ impl ObjectCacheRead for WritebackCache {
         // Read object first to get the latest version before checking the marker table. This
         // ensures that we don't run into read-after-write type concurrency issues.
         let object = ObjectCacheRead::get_object(self, object_id);
-        match self.get_marker_value(object_id, SequenceNumber::new(), epoch_id) {
+        let config_key = FullObjectKey::config_key_for_id(object_id);
+        match self.get_marker_value(config_key, epoch_id) {
             Some(MarkerValue::ConfigUpdate(seqno)) => Some(seqno),
             Some(
-                MarkerValue::Received | MarkerValue::OwnedDeleted | MarkerValue::SharedDeleted(_),
+                MarkerValue::Received
+                | MarkerValue::FastpathStreamEnded
+                | MarkerValue::ConsensusStreamEnded(_),
             )
             | None => object.map(|o| o.version()),
         }

@@ -590,6 +590,10 @@ impl FullObjectKey {
             FullObjectKey::Consensus(consensus_object_key) => consensus_object_key.1,
         }
     }
+
+    pub fn config_key_for_id(id: &ObjectID) -> Self {
+        FullObjectKey::Fastpath(ObjectKey::min_for_id(id))
+    }
 }
 
 impl From<FullObjectRef> for FullObjectKey {

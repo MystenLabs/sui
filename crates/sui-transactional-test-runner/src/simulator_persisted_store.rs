@@ -393,10 +393,10 @@ impl ConfigStore for PersistedStore {
         &self,
         _object_id: &ObjectID,
         _epoch_id: EpochId,
-    ) -> sui_types::storage::error::Result<Option<VersionNumber>> {
-        Err(sui_types::storage::error::Error::custom(
+    ) -> Option<VersionNumber> {
+        unimplemented!(
             "TODO PersistedStore::get_current_epoch_stable_sequence_number is not yet implemented",
-        ))
+        )
     }
 }
 

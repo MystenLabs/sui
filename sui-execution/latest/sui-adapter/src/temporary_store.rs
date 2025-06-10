@@ -239,7 +239,6 @@ impl<'backing> TemporaryStore<'backing> {
                 let seqno = self
                     .store
                     .get_current_epoch_stable_sequence_number(id, self.cur_epoch)
-                    .expect("Should panic on storage error")
                     .expect(
                         "Config object already loaded during execution. Must exist and be able to be loaded.",
                     );

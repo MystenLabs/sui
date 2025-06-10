@@ -29,8 +29,8 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::{
-    BackingPackageStore, BackingStore, ChildObjectResolver, FullObjectKey, MarkerValue, ObjectKey, ConfigStore
-    ObjectOrTombstone, ObjectStore, PackageObject, ParentSync,
+    BackingPackageStore, BackingStore, ChildObjectResolver, ConfigStore, FullObjectKey,
+    MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject, ParentSync,
 };
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
@@ -385,10 +385,11 @@ pub trait ObjectCacheRead: Send + Sync {
         &self,
         object_id: &ObjectID,
         epoch_id: EpochId,
-    ) -> SuiResult<Option<SequenceNumber>> {
-        match self.get_marker_value(object_id, SequenceNumber::new(), epoch_id)? {
-            Some(MarkerValue::ConfigUpdate(version)) => Ok(Some(version)),
-            _ => Ok(None),
+    ) -> Option<SequenceNumber> {
+        let full_key = FullObjectKey::config_key_for_id(object_id);
+        match self.get_marker_value(full_key, epoch_id) {
+            Some(MarkerValue::ConfigUpdate(version)) => Some(version),
+            _ => None,
         }
     }
 
@@ -414,16 +415,6 @@ pub trait ObjectCacheRead: Send + Sync {
             self.get_latest_marker(full_id, epoch_id),
             Some((marker_version, MarkerValue::FastpathStreamEnded)) if marker_version >= version
         )
-    }
-
-    fn have_updated_config_in_epoch(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> SuiResult<bool> {
-        Ok(self
-            .get_config_object_change_sequence_number(object_id, epoch_id)?
-            .is_some())
     }
 
     /// Return the watermark for the highest checkpoint for which we've pruned objects.
@@ -730,12 +721,9 @@ macro_rules! implement_storage_traits {
             fn get_current_epoch_stable_sequence_number(
                 &self,
                 object_id: &ObjectID,
-                _epoch_id: EpochId,
-            ) -> StorageResult<Option<VersionNumber>> {
-                ObjectCacheRead::get_current_epoch_stable_sequence_number(
-                    self, object_id, _epoch_id,
-                )
-                .map_err(StorageError::custom)
+                epoch_id: EpochId,
+            ) -> Option<VersionNumber> {
+                ObjectCacheRead::get_current_epoch_stable_sequence_number(self, object_id, epoch_id)
             }
         }
 

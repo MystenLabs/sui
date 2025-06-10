@@ -287,10 +287,10 @@ impl ConfigStore for InMemoryStore {
         &self,
         _object_id: &ObjectID,
         _epoch_id: EpochId,
-    ) -> Result<Option<VersionNumber>, sui_types::storage::error::Error> {
-        Err(sui_types::storage::error::Error::custom(
+    ) -> Option<VersionNumber> {
+        unimplemented!(
             "TODO InMemoryStorage::get_current_epoch_stable_sequence_number is not yet supported",
-        ))
+        )
     }
 }
 

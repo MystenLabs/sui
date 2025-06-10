@@ -97,8 +97,8 @@ use crate::authority::execution_time_estimator::EXTRA_FIELD_EXECUTION_TIME_ESTIM
 use crate::authority::shared_object_version_manager::{
     AssignedTxAndVersions, ConsensusSharedObjVerAssignment, SharedObjVerManager,
 };
-use crate::authority::AuthorityMetrics;
 use crate::authority::ResolverWrapper;
+use crate::authority::{AuthorityMetrics, AuthorityState};
 use crate::checkpoints::{
     BuilderCheckpointSummary, CheckpointHeight, CheckpointServiceNotify, EpochStats,
     PendingCheckpointInfo, PendingCheckpointV2, PendingCheckpointV2Contents,
@@ -1294,13 +1294,9 @@ impl AuthorityPerEpochStore {
         )
     }
 
-    #[cfg(any(test, feature = "test-utils"))]
     pub async fn new_at_next_epoch_for_testing(
         &self,
-        backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
-        object_store: Arc<dyn ObjectStore + Send + Sync>,
-        expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
-        previous_epoch_last_checkpoint: CheckpointSequenceNumber,
+        authority: &Arc<AuthorityState>,
     ) -> Arc<Self> {
         use crate::mock_consensus;
         use sui_network::randomness;
@@ -1316,10 +1312,15 @@ impl AuthorityPerEpochStore {
             next_committee,
             self.epoch_start_configuration
                 .new_at_next_epoch_for_testing(),
-            backing_package_store,
-            object_store,
-            expensive_safety_check_config,
-            previous_epoch_last_checkpoint,
+                authority.get_backing_package_store().clone(),
+                authority.get_object_store().clone(),
+                &authority.config.expensive_safety_check_config,
+                authority
+                    .checkpoint_store
+                    .get_epoch_last_checkpoint(self.epoch())
+                    .unwrap()
+                    .map(|c| *c.sequence_number())
+                    .unwrap_or_default(),
         )
             .expect("failed to create new authority per epoch store");
 

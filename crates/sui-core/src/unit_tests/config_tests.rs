@@ -137,7 +137,6 @@ impl TestEnv {
             .get_object(id)
             .await
             .unwrap()
-            .unwrap()
             .compute_object_reference()
     }
 
@@ -219,7 +218,6 @@ impl TestEnv {
             .get_object(&SUI_DENY_LIST_OBJECT_ID)
             .await
             .unwrap()
-            .unwrap()
             .version();
         let mut coin_id = None;
         let mut coin_type = None;
@@ -227,7 +225,7 @@ impl TestEnv {
         let mut package_id = None;
         for created in effects.created() {
             let object_id = created.0 .0;
-            let object = authority.get_object(&object_id).await.unwrap().unwrap();
+            let object = authority.get_object(&object_id).await.unwrap();
             if object.is_package() {
                 package_id = Some(object_id);
                 continue;

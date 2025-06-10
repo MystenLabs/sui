@@ -149,8 +149,8 @@ impl ConfigStore for InMemoryStorage {
         &self,
         object_id: &ObjectID,
         _epoch_id: EpochId,
-    ) -> crate::storage::error::Result<Option<VersionNumber>> {
-        Ok(self.persistent.get(object_id).map(|o| o.version()))
+    ) -> Option<VersionNumber> {
+        self.persistent.get(object_id).map(|o| o.version())
     }
 }
 
@@ -159,7 +159,7 @@ impl ConfigStore for &mut InMemoryStorage {
         &self,
         object_id: &ObjectID,
         epoch_id: EpochId,
-    ) -> crate::storage::error::Result<Option<VersionNumber>> {
+    ) -> Option<VersionNumber> {
         (**self).get_current_epoch_stable_sequence_number(object_id, epoch_id)
     }
 }
