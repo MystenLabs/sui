@@ -85,7 +85,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         let transaction = epoch_store
             .verify_transaction(deserialized_transaction.clone())
             .map(|_| VerifiedTransaction::new_from_verified(deserialized_transaction))?;
-        let _tx_output = state.handle_vote_transaction(&epoch_store, transaction.clone())?;
+        state.handle_vote_transaction(&epoch_store, transaction.clone())?;
         if self.fault_config.fail_after_vote_transaction {
             return Err(SuiError::GenericAuthorityError {
                 error: "Mock error after vote transaction in submit_transaction".to_owned(),

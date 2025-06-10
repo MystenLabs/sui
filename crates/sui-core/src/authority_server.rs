@@ -580,10 +580,7 @@ impl ValidatorService {
         let tx_digest = transaction.digest();
         let _span = error_span!("validator_state_submit_transaction", ?tx_digest);
 
-        // TODO(fastpath): Skip checking for execution effects
-        // Effects are useless in mfp if they cannot be mapped to a consensus
-        // position
-        let _ = state
+        state
             .handle_vote_transaction(&epoch_store, transaction.clone())
             .tap_err(|e| {
                 if let SuiError::ValidatorHaltedAtEpochEnd = e {
@@ -784,18 +781,9 @@ impl ValidatorService {
                 return Err(SuiError::ValidatorHaltedAtEpochEnd.into());
             }
 
-            // TODO(fastpath): Should we resubmit anyways as the caller needs a consensus position?
-            // Check if all transactions are already processed
-            if epoch_store.all_external_consensus_messages_processed(
-                consensus_transactions.iter().map(|tx| tx.key()),
-            )? {
-                return Err(SuiError::FailedToSubmitToConsensus(
-                    "Transactions already processed by consensus".to_string(),
-                )
-                .into());
-            }
-
-            // Submit to consensus and wait for position
+            // Submit to consensus and wait for position, we do not check if tx
+            // has been processed by consensus already as this method is called
+            // to get back a consensus position.
             let _metrics_guard = self.metrics.consensus_latency.start_timer();
 
             self.consensus_adapter.submit_batch(
@@ -806,8 +794,8 @@ impl ValidatorService {
             )?;
         }
 
-        let consensus_positions = rx_consensus_positions.await.map_err(|_| {
-            SuiError::FailedToSubmitToConsensus("Failed to get consensus position".to_string())
+        let consensus_positions = rx_consensus_positions.await.map_err(|e| {
+            SuiError::FailedToSubmitToConsensus(format!("Failed to get consensus position: {e}"))
         })?;
 
         Ok((consensus_positions, Weight::zero()))

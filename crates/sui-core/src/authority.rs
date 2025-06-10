@@ -1081,21 +1081,20 @@ impl AuthorityState {
         }
     }
 
-    /// When Ok, returns None if the transaction has not been executed, and returns
-    /// (TransactionEffects, TransactionEvents) if the transaction has been executed.
+    /// When Ok, returns false if the transaction has not been executed, and returns
+    /// true if the transaction has been executed.
     #[instrument(level = "trace", skip_all)]
     pub(crate) fn handle_vote_transaction(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
-    ) -> SuiResult<Option<(TransactionEffects, TransactionEvents)>> {
+    ) -> SuiResult<()> {
         let tx_digest = *transaction.digest();
         debug!("handle_vote_transaction");
 
         // Check if the transaction has already been executed.
-        let tx_output = self.get_transaction_output(&tx_digest)?;
-        if tx_output.is_some() {
-            return Ok(tx_output);
+        if self.has_transaction_output(&tx_digest)? {
+            return Ok(());
         }
 
         let _metrics_guard = self
@@ -1118,11 +1117,14 @@ impl AuthorityState {
             Ok(Some(_)) => {
                 panic!("handle_transaction_impl should not return a signed transaction")
             }
-            Ok(None) => Ok(None),
+            Ok(None) => Ok(()),
             // It happens frequently that while we are checking the validity of the transaction, it
             // has just been executed.
             // In that case, we could still return Ok to avoid showing confusing errors.
-            Err(e) => self.get_transaction_output(&tx_digest)?.ok_or(e).map(Some),
+            Err(e) => self
+                .has_transaction_output(&tx_digest)?
+                .then_some(())
+                .ok_or(e),
         }
     }
 
@@ -4328,25 +4330,15 @@ impl AuthorityState {
         .await;
     }
 
-    /// Gets the execution outputs of a transaction if they exist
+    /// Checks the execution outputs of a transaction if they exist
     #[instrument(level = "trace", skip_all)]
-    pub fn get_transaction_output(
+    pub fn has_transaction_output(
         &self,
         transaction_digest: &TransactionDigest,
-    ) -> SuiResult<Option<(TransactionEffects, TransactionEvents)>> {
-        let effects = self
+    ) -> SuiResult<bool> {
+        Ok(self
             .get_transaction_cache_reader()
-            .get_executed_effects(transaction_digest);
-        if let Some(effects) = effects {
-            let events = if effects.events_digest().is_some() {
-                self.get_transaction_events(effects.transaction_digest())?
-            } else {
-                TransactionEvents::default()
-            };
-            Ok(Some((effects, events)))
-        } else {
-            Ok(None)
-        }
+            .is_tx_already_executed(transaction_digest))
     }
 
     /// Make a status response for a transaction

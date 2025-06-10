@@ -130,10 +130,14 @@ where
             TransactionDriverError::RpcFailure(name.concise().to_string(), e.to_string())
         })?;
 
-        debug!("Transaction submitted to consensus at position: {consensus_position:?}",);
+        debug!(
+            "Transaction {} submitted to consensus at position: {consensus_position:?}",
+            transaction.digest()
+        );
 
         let response = match timeout(
-            Duration::from_secs(2),
+            // TODO(fastpath): This will be removed when we change this to wait for effects from a quorum
+            Duration::from_secs(20),
             client.wait_for_effects(
                 RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
                     epoch,

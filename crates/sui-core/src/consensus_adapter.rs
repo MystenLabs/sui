@@ -713,6 +713,8 @@ impl ConsensusAdapter {
             return;
         }
 
+        let must_submit_for_positon = tx_consensus_positions.is_some();
+
         // Current code path ensures:
         // - If transactions.len() > 1, it is a soft bundle. Otherwise transactions should have been submitted individually.
         // - If is_soft_bundle, then all transactions are of UserTransaction kind.
@@ -743,9 +745,14 @@ impl ConsensusAdapter {
         let (await_submit, position, positions_moved, preceding_disconnected, amplification_factor) =
             self.await_submit_delay(epoch_store, &transactions[..]);
 
-        // Create the waiter until the transaction is processed by consensus or via checkpoint
-        let processed_via_consensus_or_checkpoint =
-            self.await_consensus_or_checkpoint(transaction_keys.clone(), epoch_store);
+        let processed_via_consensus_or_checkpoint = if must_submit_for_positon {
+            // If we need to get consensus position, don't bypass consensus submission
+            // for tx digest returned from consensus/checkpoint processing
+            future::pending().boxed()
+        } else {
+            self.await_consensus_or_checkpoint(transaction_keys.clone(), epoch_store)
+                .boxed()
+        };
         pin_mut!(processed_via_consensus_or_checkpoint);
 
         let processed_waiter = tokio::select! {
@@ -873,11 +880,17 @@ impl ConsensusAdapter {
                 }
             };
 
-            guard.processed_method = match select(processed_waiter, submit_inner.boxed()).await {
-                Either::Left((observed_via_consensus, _submit_inner)) => observed_via_consensus,
-                Either::Right(((), processed_waiter)) => {
-                    debug!("Submitted {transaction_keys:?} to consensus");
-                    processed_waiter.await
+            guard.processed_method = if must_submit_for_positon {
+                // When getting consensus positions, we only care about submit_inner completing
+                submit_inner.await;
+                ProcessedMethod::Consensus
+            } else {
+                match select(processed_waiter, submit_inner.boxed()).await {
+                    Either::Left((observed_via_consensus, _submit_inner)) => observed_via_consensus,
+                    Either::Right(((), processed_waiter)) => {
+                        debug!("Submitted {transaction_keys:?} to consensus");
+                        processed_waiter.await
+                    }
                 }
             };
         }

@@ -490,11 +490,20 @@ mod tests {
             }
         }
 
+        let mut transaction_count = 0;
         // Now iterate over all the waiters. Everyone should have been acknowledged.
         let mut block_status_waiters = Vec::new();
         while let Some(result) = included_in_block_waiters.next().await {
-            let (block_ref, _tx_indices, block_status_waiter) =
+            let (block_ref, tx_indices, block_status_waiter) =
                 result.expect("Block inclusion waiter shouldn't fail");
+            // tx is submitted one at a time so tx acks should only return one tx index
+            assert_eq!(tx_indices.len(), 1);
+            // The first transaction in the block should have index 0, the second one 1, etc.
+            // because we submit 2 transactions per block, the index should be 0 then 1 and then
+            // reset back to 0 for the next block.
+            assert_eq!(tx_indices[0], transaction_count % 2);
+            transaction_count += 1;
+
             block_status_waiters.push((block_ref, block_status_waiter));
         }
 
