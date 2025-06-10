@@ -201,6 +201,8 @@ impl TryInto<StoredObjInfo> for &ProcessedObjInfo {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::{BTreeMap, BTreeSet};
+
     use sui_indexer_alt_framework::{
         postgres::{self},
         types::{
@@ -218,6 +220,8 @@ mod tests {
     struct T0Result {
         #[diesel(sql_type = diesel::sql_types::BigInt)]
         pred_deleted: i64,
+        #[diesel(sql_type = diesel::sql_types::BigInt)]
+        intermediate_deleted: i64,
         #[diesel(sql_type = diesel::sql_types::BigInt)]
         pred_obsolete: i64,
         #[diesel(sql_type = diesel::sql_types::BigInt)]
@@ -254,6 +258,7 @@ mod tests {
         End,
     }
 
+    #[derive(Debug, Clone)]
     struct TimelineDiagram {
         events: Vec<TimelineEvent>,
     }
@@ -276,8 +281,8 @@ mod tests {
                 label: format!("{}_END", tx_name),
                 event_type: EventType::End,
                 details: format!(
-                    "pred_deleted: {}, pred_obsolete: {}, marked_predecessor: {}",
-                    result.pred_deleted, result.pred_obsolete, result.marked_predecessor
+                    "pred_deleted: {}, intermediate_deleted: {}, pred_obsolete: {}, marked_predecessor: {}",
+                    result.pred_deleted, result.intermediate_deleted, result.pred_obsolete, result.marked_predecessor
                 ),
             });
         }
@@ -366,55 +371,164 @@ mod tests {
         }
 
         fn analyze_execution_pattern(&self) -> String {
-            let events: Vec<&str> = self.events.iter().map(|e| e.label.as_str()).collect();
+            use std::collections::HashMap;
 
-            // Look for key patterns
+            // Extract all T0 transactions and their timing
+            let mut t0_transactions: HashMap<String, (i64, i64)> = HashMap::new();
+
+            for event in &self.events {
+                if event.label.contains("T0") {
+                    if let Some(worker_part) = event.label.split("T0").next() {
+                        let entry = t0_transactions
+                            .entry(worker_part.to_string())
+                            .or_insert((0, 0));
+                        if event.label.ends_with("_START") {
+                            entry.0 = event.timestamp_ms;
+                        } else if event.label.ends_with("_END") {
+                            entry.1 = event.timestamp_ms;
+                        }
+                    }
+                }
+            }
+
+            let events: Vec<&str> = self.events.iter().map(|e| e.label.as_str()).collect();
             let pattern = events.join(" → ");
 
-            // Classify the pattern
-            if pattern.contains("CiT0_END") && pattern.contains("CjT0_START") {
-                let cit0_end_pos = events.iter().position(|&x| x == "CiT0_END").unwrap_or(0);
-                let cjt0_start_pos = events.iter().position(|&x| x == "CjT0_START").unwrap_or(0);
-
-                if cit0_end_pos < cjt0_start_pos {
-                    format!("SEQUENTIAL (CiT0 → CjT0) [{}]", pattern)
-                } else {
-                    format!("CONCURRENT [{}]", pattern)
-                }
+            if t0_transactions.len() <= 1 {
+                format!("SINGLE WORKER [{}]", pattern)
             } else {
-                format!("CONCURRENT [{}]", pattern)
+                // Check if any T0 transactions overlap
+                let mut overlapping = false;
+                let transactions: Vec<_> = t0_transactions.values().collect();
+
+                for i in 0..transactions.len() {
+                    for j in (i + 1)..transactions.len() {
+                        let (start1, end1) = transactions[i];
+                        let (start2, end2) = transactions[j];
+
+                        // Check if they overlap
+                        if start1.max(start2) < end1.min(end2) {
+                            overlapping = true;
+                            break;
+                        }
+                    }
+                    if overlapping {
+                        break;
+                    }
+                }
+
+                if overlapping {
+                    format!("CONCURRENT [{}]", pattern)
+                } else {
+                    format!("SEQUENTIAL [{}]", pattern)
+                }
             }
         }
 
         fn analyze_overlaps(&self) -> String {
-            let cit0_start = self.events.iter().find(|e| e.label == "CiT0_START");
-            let cit0_end = self.events.iter().find(|e| e.label == "CiT0_END");
-            let cjt0_start = self.events.iter().find(|e| e.label == "CjT0_START");
-            let cjt0_end = self.events.iter().find(|e| e.label == "CjT0_END");
+            use std::collections::HashMap;
 
-            match (cit0_start, cit0_end, cjt0_start, cjt0_end) {
-                (Some(ci_start), Some(ci_end), Some(cj_start), Some(cj_end)) => {
-                    let ci_duration = ci_end.timestamp_ms - ci_start.timestamp_ms;
-                    let cj_duration = cj_end.timestamp_ms - cj_start.timestamp_ms;
+            // Group events by worker and transaction type
+            let mut workers: HashMap<String, (Option<&TimelineEvent>, Option<&TimelineEvent>)> =
+                HashMap::new();
 
-                    // Check for overlap
-                    let overlap_start = ci_start.timestamp_ms.max(cj_start.timestamp_ms);
-                    let overlap_end = ci_end.timestamp_ms.min(cj_end.timestamp_ms);
-
-                    if overlap_start < overlap_end {
-                        let overlap_duration = overlap_end - overlap_start;
-                        format!(
-                            "{}ms overlap (CiT0: {}ms, CjT0: {}ms)",
-                            overlap_duration, ci_duration, cj_duration
-                        )
-                    } else {
-                        format!(
-                            "No overlap (CiT0: {}ms, CjT0: {}ms)",
-                            ci_duration, cj_duration
-                        )
+            for event in &self.events {
+                if event.label.contains("T0") {
+                    // Extract worker ID from labels like "C0T0_START", "C1T0_END", etc.
+                    if let Some(worker_part) = event.label.split("T0").next() {
+                        let entry = workers
+                            .entry(worker_part.to_string())
+                            .or_insert((None, None));
+                        if event.label.ends_with("_START") {
+                            entry.0 = Some(event);
+                        } else if event.label.ends_with("_END") {
+                            entry.1 = Some(event);
+                        }
                     }
                 }
-                _ => "Incomplete timing data".to_string(),
+            }
+
+            let worker_count = workers.len();
+
+            if worker_count == 0 {
+                return "No T0 transactions found".to_string();
+            }
+
+            if worker_count == 1 {
+                // Single worker case
+                let (worker_name, (start, end)) = workers.iter().next().unwrap();
+                match (start, end) {
+                    (Some(start), Some(end)) => {
+                        let duration = end.timestamp_ms - start.timestamp_ms;
+                        format!("Single worker {}: {}ms duration", worker_name, duration)
+                    }
+                    _ => "Incomplete single worker timing data".to_string(),
+                }
+            } else {
+                // Multiple workers case - analyze overlaps
+                let mut worker_data: Vec<(String, i64, i64, i64)> = Vec::new();
+
+                for (worker_name, (start, end)) in &workers {
+                    if let (Some(start), Some(end)) = (start, end) {
+                        let duration = end.timestamp_ms - start.timestamp_ms;
+                        worker_data.push((
+                            worker_name.clone(),
+                            start.timestamp_ms,
+                            end.timestamp_ms,
+                            duration,
+                        ));
+                    }
+                }
+
+                if worker_data.len() < 2 {
+                    return "Insufficient complete worker timing data for overlap analysis"
+                        .to_string();
+                }
+
+                // Sort by start time for cleaner analysis
+                worker_data.sort_by_key(|(_, start_time, _, _)| *start_time);
+
+                let mut result = String::new();
+
+                // Check each pair of workers for overlap
+                for i in 0..worker_data.len() {
+                    for j in (i + 1)..worker_data.len() {
+                        let (name1, start1, end1, _dur1) = &worker_data[i];
+                        let (name2, start2, end2, _dur2) = &worker_data[j];
+
+                        let overlap_start = start1.max(start2);
+                        let overlap_end = end1.min(end2);
+
+                        if overlap_start < overlap_end {
+                            let overlap_duration = overlap_end - overlap_start;
+                            if !result.is_empty() {
+                                result.push_str(", ");
+                            }
+                            result
+                                .push_str(&format!("{}↔{}: {}ms", name1, name2, overlap_duration));
+                        }
+                    }
+                }
+
+                if result.is_empty() {
+                    // No overlaps found - show sequential execution
+                    let worker_summaries: Vec<String> = worker_data
+                        .iter()
+                        .map(|(name, _, _, duration)| format!("{}: {}ms", name, duration))
+                        .collect();
+                    format!("Sequential execution ({})", worker_summaries.join(", "))
+                } else {
+                    // Show overlaps
+                    let worker_summaries: Vec<String> = worker_data
+                        .iter()
+                        .map(|(name, _, _, duration)| format!("{}: {}ms", name, duration))
+                        .collect();
+                    format!(
+                        "Overlaps: {} | Workers: ({})",
+                        result,
+                        worker_summaries.join(", ")
+                    )
+                }
             }
         }
     }
@@ -445,85 +559,89 @@ mod tests {
             WITH start_timing AS (
                 SELECT (extract(epoch from clock_timestamp()) * 1000)::BIGINT as start_ts
             ),
-        predecessors AS (
-            SELECT
-                latest.object_id as latest_object_id,
-                latest.cp_sequence_number as latest_cp_sequence_number,
-                latest.marked_predecessor as latest_marked_predecessor,
-                pred.object_id as pred_object_id,
-                pred.cp_sequence_number as pred_cp_sequence_number,
-                pred.marked_predecessor as pred_marked_predecessor,
-                pg_sleep({BigInt}) as predecessors_sleep
-            FROM obj_info latest
-            LEFT JOIN LATERAL (
-                SELECT object_id, cp_sequence_number, marked_predecessor
-                FROM obj_info p
-                WHERE p.object_id = latest.object_id
-                  AND p.cp_sequence_number < latest.cp_sequence_number
-                ORDER BY p.cp_sequence_number DESC
-                LIMIT 1
-            ) pred ON true
-            WHERE latest.cp_sequence_number >= {BigInt} AND latest.cp_sequence_number < {BigInt}
-            ORDER BY latest.object_id, latest.cp_sequence_number
-            FOR UPDATE OF latest
-        )
-        -- Delete preds that already marked their own immediate predecessors
-        -- And intermediate entries among 'latest' changes
-        , pred_deleted AS (
-    DELETE FROM obj_info
-    WHERE (object_id, cp_sequence_number) IN (
-        (SELECT pred_object_id, pred_cp_sequence_number
-        FROM predecessors
-        WHERE pred_marked_predecessor = true)
-
-        UNION
-
-        (SELECT latest_object_id, latest_cp_sequence_number
-        FROM predecessors p1
-        WHERE EXISTS (
-            SELECT 1 FROM predecessors p2
-            WHERE p2.pred_object_id = p1.latest_object_id
-            AND p2.pred_cp_sequence_number = p1.latest_cp_sequence_number
-        ))
-    )
-    RETURNING object_id
-)
-        , pred_deleted_sleep AS (
-            SELECT pg_sleep({BigInt}) as dummy
-        )
-        -- Otherwise, flag them for later deletion
-        , pred_obsolete AS (
-            UPDATE obj_info
-            SET obsolete_at = p.latest_cp_sequence_number
-            FROM predecessors p
-            WHERE obj_info.object_id = p.pred_object_id
-              AND obj_info.cp_sequence_number = p.pred_cp_sequence_number
-              AND p.pred_marked_predecessor = false
-            RETURNING obj_info.object_id
-        )
-        , pred_obsolete_sleep AS (
-            SELECT pg_sleep({BigInt}) as dummy
-        )
-        -- Finally, mark 'latest' rows to have marked their own immediate predecessors
-        , marked_predecessor AS (
-            UPDATE obj_info
-            SET marked_predecessor = true
-            WHERE (object_id, cp_sequence_number) IN (
-                SELECT latest_object_id, latest_cp_sequence_number FROM predecessors
-                ORDER BY latest_object_id, latest_cp_sequence_number
+            predecessors AS (
+                SELECT
+                    latest.object_id as latest_object_id,
+                    latest.cp_sequence_number as latest_cp_sequence_number,
+                    latest.marked_predecessor as latest_marked_predecessor,
+                    pred.object_id as pred_object_id,
+                    pred.cp_sequence_number as pred_cp_sequence_number,
+                    pred.marked_predecessor as pred_marked_predecessor,
+                    pg_sleep({BigInt}) as predecessors_sleep
+                FROM obj_info latest
+                LEFT JOIN LATERAL (
+                    SELECT object_id, cp_sequence_number, marked_predecessor
+                    FROM obj_info p
+                    WHERE p.object_id = latest.object_id
+                      AND p.cp_sequence_number < latest.cp_sequence_number
+                    ORDER BY p.cp_sequence_number DESC
+                    LIMIT 1
+                ) pred ON true
+                WHERE latest.cp_sequence_number >= {BigInt} AND latest.cp_sequence_number < {BigInt}
+                ORDER BY latest.object_id, latest.cp_sequence_number
+                FOR UPDATE OF latest
+            ),
+            pred_deleted_sleep AS (
+                SELECT pg_sleep({BigInt}) as dummy
+            ),
+            -- Otherwise, flag them for later deletion
+            pred_obsolete AS (
+                UPDATE obj_info
+                SET obsolete_at = p.latest_cp_sequence_number
+                FROM predecessors p
+                WHERE obj_info.object_id = p.pred_object_id
+                  AND obj_info.cp_sequence_number = p.pred_cp_sequence_number
+                  AND p.pred_marked_predecessor = false
+                RETURNING obj_info.object_id
+            ),
+            pred_obsolete_sleep AS (
+                SELECT pg_sleep({BigInt}) as dummy
+            ),
+            -- Finally, mark 'latest' rows to have marked their own immediate predecessors
+            marked_predecessor AS (
+                UPDATE obj_info
+                SET marked_predecessor = true
+                WHERE (object_id, cp_sequence_number) IN (
+                    SELECT latest_object_id, latest_cp_sequence_number FROM predecessors
+                    ORDER BY latest_object_id, latest_cp_sequence_number
+                )
+                RETURNING object_id
+            ),
+            marked_predecessor_sleep AS (
+                SELECT pg_sleep({BigInt}) as dummy
+            ),
+            -- Delete preds that already marked their own immediate predecessors
+            pred_deleted AS (
+                DELETE FROM obj_info
+                WHERE (object_id, cp_sequence_number) IN (
+                    SELECT pred_object_id, pred_cp_sequence_number
+                    FROM predecessors
+                    WHERE pred_marked_predecessor = true
+                )
+                RETURNING object_id
+            ),
+            -- Delete intermediate entries among 'latest' changes
+            intermediate_deleted AS (
+                DELETE FROM obj_info
+                WHERE (object_id, cp_sequence_number) IN (
+                    SELECT latest_object_id, latest_cp_sequence_number
+                    FROM predecessors p1
+                    WHERE EXISTS (
+                        SELECT 1 FROM predecessors p2
+                        WHERE p2.pred_object_id = p1.latest_object_id
+                        AND p2.pred_cp_sequence_number = p1.latest_cp_sequence_number
+                    )
+                )
+                RETURNING object_id
             )
-            RETURNING object_id
-        )
-        , marked_predecessor_sleep AS (
-            SELECT pg_sleep({BigInt}) as dummy
-        )
-        SELECT
-            (SELECT COUNT(*)::BIGINT FROM pred_deleted) as pred_deleted,
-            (SELECT COUNT(*)::BIGINT FROM pred_obsolete) as pred_obsolete,
-            (SELECT COUNT(*)::BIGINT FROM marked_predecessor) as marked_predecessor,
-            (SELECT start_ts FROM start_timing) as start_timestamp_ms,
-            (SELECT extract(epoch from clock_timestamp()) * 1000)::BIGINT as end_timestamp_ms;
-        ",
+            SELECT
+                (SELECT COUNT(*)::BIGINT FROM pred_deleted) as pred_deleted,
+                (SELECT COUNT(*)::BIGINT FROM intermediate_deleted) as intermediate_deleted,
+                (SELECT COUNT(*)::BIGINT FROM pred_obsolete) as pred_obsolete,
+                (SELECT COUNT(*)::BIGINT FROM marked_predecessor) as marked_predecessor,
+                (SELECT start_ts FROM start_timing) as start_timestamp_ms,
+                (SELECT extract(epoch from clock_timestamp()) * 1000)::BIGINT as end_timestamp_ms;
+            ",
             predecessors_sleep.unwrap_or(0) as i64,
             from as i64,
             to_exclusive as i64,
@@ -540,215 +658,6 @@ mod tests {
 
         result.end_timestamp_ms = end;
         result.start_timestamp_ms = start;
-        Ok(result)
-    }
-
-    async fn t0_v2(
-        conn: &mut Connection<'_>,
-        from: u64,
-        to_exclusive: u64,
-        predecessors_sleep: Option<u64>,
-        pred_deleted_sleep: Option<u64>,
-        pred_obsolete_sleep: Option<u64>,
-        marked_predecessor_sleep: Option<u64>,
-        _label: String,
-    ) -> Result<T0Result> {
-        use diesel_async::AsyncConnection;
-
-        let result = conn.transaction::<_, diesel::result::Error, _>(move | conn| {
-            Box::pin(
-            async move {
-                let start = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as i64;
-
-                if let Some(sleep) = predecessors_sleep {
-                    postgres::sql_query!("SELECT pg_sleep({BigInt})", sleep as i64)
-                        .execute(conn).await?;
-                }
-
-                #[derive(diesel::QueryableByName)]
-                struct PredecessorRow {
-                    #[diesel(sql_type = diesel::sql_types::Bytea)]
-                    latest_object_id: Vec<u8>,
-                    #[diesel(sql_type = diesel::sql_types::BigInt)]
-                    latest_cp_sequence_number: i64,
-                    #[diesel(sql_type = diesel::sql_types::Bool)]
-                    latest_marked_predecessor: bool,
-                    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Bytea>)]
-                    pred_object_id: Option<Vec<u8>>,
-                    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::BigInt>)]
-                    pred_cp_sequence_number: Option<i64>,
-                    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Bool>)]
-                    pred_marked_predecessor: Option<bool>,
-                }
-
-                let predecessors = postgres::sql_query!(
-                    "
-                    SELECT
-                        latest.object_id as latest_object_id,
-                        latest.cp_sequence_number as latest_cp_sequence_number,
-                        latest.marked_predecessor as latest_marked_predecessor,
-                        pred.object_id as pred_object_id,
-                        pred.cp_sequence_number as pred_cp_sequence_number,
-                        pred.marked_predecessor as pred_marked_predecessor
-                    FROM obj_info latest
-                    LEFT JOIN LATERAL (
-                        SELECT object_id, cp_sequence_number, marked_predecessor
-                        FROM obj_info p
-                        WHERE p.object_id = latest.object_id
-                          AND p.cp_sequence_number < latest.cp_sequence_number
-                        ORDER BY p.cp_sequence_number DESC
-                        LIMIT 1
-                    ) pred ON true
-                    WHERE latest.cp_sequence_number >= {BigInt} AND latest.cp_sequence_number < {BigInt}
-                    ORDER BY latest.object_id, latest.cp_sequence_number
-                    FOR UPDATE OF latest
-                    ",
-                    from as i64,
-                    to_exclusive as i64,
-                ).load::<PredecessorRow>(conn).await?;
-
-                // Step 2: Delete predecessors that already marked their predecessors
-                // AND intermediate entries
-                if let Some(sleep) = pred_deleted_sleep {
-                    postgres::sql_query!("SELECT pg_sleep({BigInt})", sleep as i64)
-                        .execute(conn).await?;
-                }
-
-                use std::collections::HashSet;
-
-                let mut delete_set = HashSet::new();
-
-                // Condition 1: Predecessors that already marked their predecessors
-                for row in &predecessors {
-                    if let (Some(pred_object_id), Some(pred_cp_sequence_number), Some(true)) =
-                        (&row.pred_object_id, &row.pred_cp_sequence_number, &row.pred_marked_predecessor) {
-                        delete_set.insert((pred_object_id.clone(), *pred_cp_sequence_number));
-                    }
-                }
-
-                // Condition 2: Intermediate entries (latest rows that appear as predecessors)
-                for p1 in &predecessors {
-                    for p2 in &predecessors {
-                        if let (Some(p2_pred_id), Some(p2_pred_seq)) = (&p2.pred_object_id, &p2.pred_cp_sequence_number) {
-                            if p1.latest_object_id == *p2_pred_id && p1.latest_cp_sequence_number == *p2_pred_seq {
-                                delete_set.insert((p1.latest_object_id.clone(), p1.latest_cp_sequence_number));
-                            }
-                        }
-                    }
-                }
-
-                let values = delete_set
-                    .iter()
-                    .map(|(object_id, cp_sequence_number)| {
-                        let object_id_hex = hex::encode(object_id);
-                        format!("('\\x{}'::BYTEA, {}::BIGINT)", object_id_hex, cp_sequence_number)
-                    })
-                    .collect::<Vec<_>>()
-                    .join(",");
-
-                let pred_deleted_count = if values.is_empty() {
-                    0
-                } else {
-                    let query = format!(
-                        "
-                        DELETE FROM obj_info
-                        WHERE (object_id, cp_sequence_number) IN (
-                            VALUES {}
-                        )
-                        ",
-                        values
-                    );
-                    sql_query(query).execute(conn).await? as i64
-                };
-
-                // Step 3: Mark remaining predecessors as obsolete
-                if let Some(sleep) = pred_obsolete_sleep {
-                    postgres::sql_query!("SELECT pg_sleep({BigInt})", sleep as i64)
-                        .execute(conn).await?;
-                }
-
-                let values = predecessors
-                .iter()
-                .filter_map(|row| {
-                    // Only include rows where predecessor exists and hasn't marked its predecessor
-                    if let (Some(pred_object_id), Some(pred_cp_sequence_number), Some(false)) =
-                        (&row.pred_object_id, &row.pred_cp_sequence_number, &row.pred_marked_predecessor) {
-                        let object_id_hex = hex::encode(pred_object_id);
-                        Some(format!("('\\x{}'::BYTEA, {}::BIGINT, {}::BIGINT)",
-                                   object_id_hex, pred_cp_sequence_number, row.latest_cp_sequence_number))
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join(",");
-
-            // Handle empty case
-            let pred_obsolete_count = if values.is_empty() {
-                0
-            } else {
-                let query = format!(
-                    "
-                    UPDATE obj_info
-                    SET obsolete_at = v.latest_cp_sequence_number
-                    FROM (VALUES {}) AS v(object_id, cp_sequence_number, latest_cp_sequence_number)
-                    WHERE obj_info.object_id = v.object_id
-                      AND obj_info.cp_sequence_number = v.cp_sequence_number
-                    ",
-                    values
-                );
-                sql_query(query).execute(conn).await? as i64
-            };
-
-                // Step 4: Mark latest rows as having marked their predecessors
-                if let Some(sleep) = marked_predecessor_sleep {
-                    postgres::sql_query!("SELECT pg_sleep({BigInt})", sleep as i64)
-                        .execute(conn).await?;
-                }
-
-                let values = predecessors
-                .iter()
-                .map(|row| {
-                    let object_id_hex = hex::encode(&row.latest_object_id);
-                    format!("('\\x{}'::BYTEA, {}::BIGINT)", object_id_hex, row.latest_cp_sequence_number)
-                })
-                .collect::<Vec<_>>()
-                .join(",");
-
-            let marked_predecessor_count = if values.is_empty() {
-                0
-            } else {
-                let query = format!(
-                    "
-                    UPDATE obj_info
-                    SET marked_predecessor = true
-                    WHERE (object_id, cp_sequence_number) IN (
-                        VALUES {}
-                    )
-                    ",
-                    values
-                );
-                sql_query(query).execute(conn).await? as i64
-            };
-
-                let end = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as i64;
-
-                Ok(T0Result {
-                    pred_deleted: pred_deleted_count as i64,
-                    pred_obsolete: pred_obsolete_count as i64,
-                    marked_predecessor: marked_predecessor_count as i64,
-                    start_timestamp_ms: start,
-                    end_timestamp_ms: end,
-                })
-            })
-        }).await?;
-
         Ok(result)
     }
 
@@ -1300,7 +1209,7 @@ mod tests {
         let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
 
-        let repeats = 4;
+        let repeats = 40;
         let range = 1000;
 
         // Create range * repeats objects, ie 4x1000 = 4000
@@ -1457,13 +1366,13 @@ mod tests {
         let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
         ObjInfo::commit(&result, &mut conn).await.unwrap();
 
-        let checkpoints = 10;
+        let checkpoints: u64 = 1000;
 
         // Checkpoints 1-10: Keep modifying the same object
-        for i in 1..=10 {
+        for i in 1..=checkpoints {
             builder = builder
                 .start_transaction(0)
-                .transfer_object(0, i % 2) // Alternate between addresses 0 and 1
+                .transfer_object(0, (i % 2) as u8) // Alternate between addresses 0 and 1
                 .finish_transaction();
             let checkpoint = builder.build_checkpoint();
             let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
@@ -1474,8 +1383,8 @@ mod tests {
         let db1 = indexer.store().clone();
         let db2 = indexer.store().clone();
 
-        let ci_range = (0, 6);
-        let cj_range = (6, 13);
+        let ci_range = (0, checkpoints / 2);
+        let cj_range = (checkpoints / 2, checkpoints + 1);
 
         println!("Ci will process checkpoints {}..{}", ci_range.0, ci_range.1);
         println!("Cj will process checkpoints {}..{}", cj_range.0, cj_range.1);
@@ -1552,5 +1461,451 @@ mod tests {
                 entry.cp_sequence_number, entry.obsolete_at, entry.marked_predecessor
             );
         }
+    }
+
+    #[tokio::test]
+    async fn test_parameterized_pruning_stress() {
+        // Helper function to run the test with different configurations
+        async fn run_pruning_test(
+            objects: u64,
+            modification_rounds: u64,
+            workers: u64,
+            sleep_multiplier: u64,
+        ) -> bool {
+            let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+            let mut conn = indexer.store().connect().await.unwrap();
+            let obj_info = ObjInfo::default();
+            let mut builder = TestCheckpointDataBuilder::new(0);
+
+            println!(
+                "  Setting up {} objects with {} modification rounds...",
+                objects, modification_rounds
+            );
+
+            // Setup phase
+            for i in 0..objects {
+                builder = builder
+                    .start_transaction(0)
+                    .create_owned_object(i)
+                    .finish_transaction();
+                let checkpoint = builder.build_checkpoint();
+                let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
+                ObjInfo::commit(&result, &mut conn).await.unwrap();
+            }
+
+            println!(
+                "{} checkpoints created, one object created per checkpoint",
+                objects
+            );
+
+            for round in 0..modification_rounds {
+                for i in 0..objects {
+                    builder = builder
+                        .start_transaction(0)
+                        .transfer_object(i, (round % 3) as u8)
+                        .finish_transaction();
+                    let checkpoint = builder.build_checkpoint();
+                    let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
+                    ObjInfo::commit(&result, &mut conn).await.unwrap();
+                }
+            }
+
+            println!(
+                "{} checkpoints created, one object modified per checkpoint",
+                objects * modification_rounds,
+            );
+
+            let total_checkpoints = objects + (objects * modification_rounds);
+            // drop the - objects if we want to process all checkpoints
+            // let pruning_end = total_checkpoints - objects;
+            let pruning_end = total_checkpoints;
+            let work_per_worker = pruning_end / workers;
+
+            println!(
+                "  Spawning {} workers to prune checkpoints 0..{}",
+                workers, pruning_end
+            );
+
+            // Create worker ranges and spawn tasks
+            let mut handles = Vec::new();
+            let mut prune_ranges = Vec::new();
+            for i in 0..workers {
+                let start = i * work_per_worker;
+                let end = if i == workers - 1 {
+                    pruning_end
+                } else {
+                    (i + 1) * work_per_worker
+                };
+                prune_ranges.push((start, end));
+
+                println!("    Worker {}: range {}..{}", i, start, end);
+
+                let db = indexer.store().clone();
+                let handle = tokio::spawn(async move {
+                    let mut conn = db.connect().await.unwrap();
+                    let _sleep_base = (i * sleep_multiplier) as u64;
+
+                    let t0_result = t0(
+                        &mut conn,
+                        start,
+                        end,
+                        // Some(sleep_base + 100),
+                        // Some(sleep_base + 25),
+                        // Some(sleep_base + 75),
+                        // Some(sleep_base + 50),
+                        None,
+                        None,
+                        None,
+                        None,
+                        format!("C{}T0", i),
+                    )
+                    .await?;
+
+                    let t1_result = t1(&mut conn, start, end).await?;
+                    Ok::<(T0Result, T1Result), anyhow::Error>((t0_result, t1_result))
+                });
+
+                handles.push(handle);
+            }
+
+            // Wait for all workers and collect results
+            let results = futures::future::join_all(handles).await;
+            let mut successful_workers = Vec::new();
+            let mut failed = false;
+
+            for (worker_id, result) in results.into_iter().enumerate() {
+                match result {
+                    Ok(Ok((t0_result, t1_result))) => {
+                        successful_workers.push((worker_id, t0_result, t1_result));
+                    }
+                    Ok(Err(e)) => {
+                        println!("    Worker {} failed with error: {:?}", worker_id, e);
+                        failed = true;
+                    }
+                    Err(e) => {
+                        println!("    Worker {} task failed: {:?}", worker_id, e);
+                        failed = true;
+                    }
+                }
+            }
+
+            if failed {
+                println!("  DEADLOCK DETECTED in this configuration");
+                return false;
+            }
+
+            // Generate timeline diagram for successful runs
+            println!("  All workers completed successfully, generating timeline...");
+            let mut timeline = TimelineDiagram::new();
+            for (worker_id, t0_result, t1_result) in &successful_workers {
+                timeline.add_transaction_events(t0_result, &format!("C{}T0", worker_id));
+                timeline.add_t1_events(t1_result, &format!("C{}T1", worker_id));
+            }
+
+            println!("{}", timeline.generate_timeline());
+
+            println!("=== STARTING VALIDATION ===");
+            let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+            let total_entries = all_obj_info.len();
+
+            let validation_result = validate_obj_info_table(&mut conn, prune_ranges)
+                .await
+                .unwrap();
+
+            // Print validation summary
+            println!("=== VALIDATION SUMMARY ===");
+            println!("Total entries: {}", validation_result.stats.total_entries);
+            println!("Total objects: {}", validation_result.stats.total_objects);
+            println!(
+                "Orphaned entries: {}",
+                validation_result.stats.orphaned_entries
+            );
+            println!(
+                "Obsolete entries: {}",
+                validation_result.stats.obsolete_entries
+            );
+            println!(
+                "Marked predecessor entries: {}",
+                validation_result.stats.marked_predecessor_entries
+            );
+            println!(
+                "Objects with multiple entries: {}",
+                validation_result.stats.objects_with_multiple_entries
+            );
+            println!(
+                "Max entries per object: {}",
+                validation_result.stats.max_entries_per_object
+            );
+
+            let avg_entries_per_object = if validation_result.stats.total_objects > 0 {
+                validation_result.stats.total_entries as f64
+                    / validation_result.stats.total_objects as f64
+            } else {
+                0.0
+            };
+            println!("Average entries per object: {:.2}", avg_entries_per_object);
+
+            if validation_result.valid {
+                println!("✅ All validations passed!");
+            } else {
+                println!(
+                    "❌ Found {} validation errors:",
+                    validation_result.errors.len()
+                );
+                for error in &validation_result.errors {
+                    println!("  - {}", error);
+                }
+                return false; // Validation failed
+            }
+
+            // Analyze final state
+            let mut orphaned = 0;
+            let mut obsoleted = 0;
+            let mut marked_predecessor = 0;
+
+            for obj in all_obj_info {
+                // println!(
+                // "object_id: {:?}, cp_sequence_number: {}, obsolete_at: {:?}, marked_predecessor: {}",
+                // obj.object_id,
+                // obj.cp_sequence_number,
+                // obj.obsolete_at,
+                // obj.marked_predecessor,
+                // );
+                if obj.marked_predecessor && obj.obsolete_at.is_some() {
+                    orphaned += 1;
+                }
+                if obj.obsolete_at.is_some() {
+                    obsoleted += 1;
+                }
+                if obj.marked_predecessor {
+                    marked_predecessor += 1;
+                }
+            }
+
+            println!(
+                "  Final state: {} total entries, {} orphaned, {} obsoleted, {} marked",
+                total_entries, orphaned, obsoleted, marked_predecessor
+            );
+
+            if orphaned > 0 {
+                println!(
+                    "  WARNING: Found {} orphaned entries - potential correctness issue!",
+                    orphaned
+                );
+            }
+
+            true // All workers succeeded
+        }
+
+        // Test different configurations
+        let configs = vec![
+            // (100, 3, 2, 50),   // Small: 100 objects, 3 rounds, 2 workers
+            // (500, 4, 3, 75),   // Medium: 500 objects, 4 rounds, 3 workers
+            // (1000, 5, 4, 100), // Large: 1000 objects, 5 rounds, 4 workers
+            // (200, 10, 5, 25),  // High contention: fewer objects, more rounds, more workers
+            (1000, 5, 4, 0),
+        ];
+
+        for (objects, rounds, workers, sleep_mult) in configs {
+            println!(
+                "Testing config: {} objects, {} rounds, {} workers, {}ms sleep multiplier",
+                objects, rounds, workers, sleep_mult
+            );
+
+            let success = run_pruning_test(objects, rounds, workers, sleep_mult).await;
+            println!("Result: {}", if success { "SUCCESS" } else { "DEADLOCK" });
+        }
+    }
+
+    #[derive(Debug)]
+    struct ValidationResult {
+        pub valid: bool,
+        pub errors: Vec<String>,
+        pub stats: ValidationStats,
+    }
+
+    #[derive(Debug)]
+    struct ValidationStats {
+        pub total_entries: usize,
+        pub total_objects: usize,
+        pub orphaned_entries: usize,
+        pub obsolete_entries: usize,
+        pub marked_predecessor_entries: usize,
+        pub objects_with_multiple_entries: usize,
+        pub max_entries_per_object: usize,
+    }
+
+    async fn validate_obj_info_table(
+        conn: &mut Connection<'_>,
+        pruned_ranges: Vec<(u64, u64)>, // (from, to_exclusive) ranges that were pruned
+    ) -> Result<ValidationResult> {
+        let all_obj_info = get_all_obj_info(conn).await?;
+        let mut errors = Vec::new();
+
+        // Group entries by object_id
+        let mut object_entries: BTreeMap<Vec<u8>, Vec<&StoredObjInfo>> = BTreeMap::new();
+        for entry in &all_obj_info {
+            object_entries
+                .entry(entry.object_id.clone())
+                .or_insert_with(Vec::new)
+                .push(entry);
+        }
+
+        // Sort entries for each object by checkpoint sequence number
+        for entries in object_entries.values_mut() {
+            entries.sort_by_key(|e| e.cp_sequence_number);
+        }
+
+        let mut stats = ValidationStats {
+            total_entries: all_obj_info.len(),
+            total_objects: object_entries.len(),
+            orphaned_entries: 0,
+            obsolete_entries: 0,
+            marked_predecessor_entries: 0,
+            objects_with_multiple_entries: 0,
+            max_entries_per_object: 0,
+        };
+
+        // 2. Per-object validation
+        for (object_id, entries) in &object_entries {
+            let object_id = ObjectID::from_bytes(object_id).unwrap();
+
+            stats.max_entries_per_object = stats.max_entries_per_object.max(entries.len());
+            if entries.len() > 1 {
+                stats.objects_with_multiple_entries += 1;
+            }
+
+            // Validate checkpoint sequence ordering
+            for window in entries.windows(2) {
+                if window[0].cp_sequence_number >= window[1].cp_sequence_number {
+                    errors.push(format!(
+                        "Object {}: Entries not in checkpoint order: {} >= {}",
+                        object_id, window[0].cp_sequence_number, window[1].cp_sequence_number
+                    ));
+                }
+            }
+
+            // Validate marked_predecessor logic and count stats
+            for entry in entries.iter() {
+                if entry.marked_predecessor {
+                    stats.marked_predecessor_entries += 1;
+                }
+
+                if entry.obsolete_at.is_some() {
+                    stats.obsolete_entries += 1;
+
+                    // If obsolete_at is set, there should be a newer entry for this object
+                    let has_newer_entry = entries
+                        .iter()
+                        .any(|e| e.cp_sequence_number > entry.cp_sequence_number);
+
+                    if !has_newer_entry {
+                        errors.push(format!(
+                        "Object {}: Entry at cp {} is marked obsolete but no newer entry exists",
+                        object_id, entry.cp_sequence_number
+                    ));
+                    }
+                }
+
+                // Check for orphaned entries
+                if entry.marked_predecessor && entry.obsolete_at.is_some() {
+                    stats.orphaned_entries += 1;
+                    errors.push(format!(
+                    "Object {}: Entry at cp {} is orphaned (marked_predecessor=true AND obsolete_at=Some)",
+                    object_id, entry.cp_sequence_number
+                ));
+                }
+            }
+
+            // Validate pruning effectiveness
+            for &(prune_from, prune_to) in &pruned_ranges {
+                let entries_in_range: Vec<_> = entries
+                    .iter()
+                    .filter(|e| {
+                        e.cp_sequence_number >= prune_from as i64
+                            && e.cp_sequence_number < prune_to as i64
+                    })
+                    .collect();
+
+                // After pruning, each object should have at most 2 entries per pruned range:
+                // 1. First appearance (boundary anchor)
+                // 2. Last appearance (if it's the latest state)
+                if entries_in_range.len() > 2 {
+                    errors.push(format!(
+                        "Object {}: Too many entries ({}) in pruned range {}-{}, expected ≤ 2",
+                        object_id,
+                        entries_in_range.len(),
+                        prune_from,
+                        prune_to
+                    ));
+                }
+
+                // If there are 2 entries, first should be marked_predecessor=true, last should be false
+                if entries_in_range.len() == 2 {
+                    let first = entries_in_range[0];
+                    let last = entries_in_range[1];
+
+                    if !first.marked_predecessor {
+                        errors.push(format!(
+                        "Object {}: First entry in range {}-{} should have marked_predecessor=true",
+                        object_id, prune_from, prune_to
+                    ));
+                    }
+
+                    if last.marked_predecessor {
+                        errors.push(format!(
+                        "Object {}: Last entry in range {}-{} should have marked_predecessor=false",
+                        object_id, prune_from, prune_to
+                    ));
+                    }
+                }
+            }
+        }
+
+        // 3. Global consistency checks
+
+        // Check that no checkpoint appears twice for the same object
+        for (object_id, entries) in &object_entries {
+            let object_id = ObjectID::from_bytes(object_id).unwrap();
+            let mut seen_checkpoints = BTreeSet::new();
+            for entry in entries {
+                if !seen_checkpoints.insert(entry.cp_sequence_number) {
+                    errors.push(format!(
+                        "Object {}: Duplicate checkpoint {}",
+                        object_id, entry.cp_sequence_number
+                    ));
+                }
+            }
+        }
+
+        // 4. Efficiency checks
+
+        // After pruning, most objects should have exactly 1-2 entries per pruned range
+        let avg_entries_per_object = if stats.total_objects > 0 {
+            stats.total_entries as f64 / stats.total_objects as f64
+        } else {
+            0.0
+        };
+
+        if avg_entries_per_object > 3.0 {
+            errors.push(format!(
+                "Pruning may be ineffective: average {:.1} entries per object",
+                avg_entries_per_object
+            ));
+        }
+
+        // No orphaned entries should exist
+        if stats.orphaned_entries > 0 {
+            errors.push(format!(
+                "Found {} orphaned entries (marked_predecessor=true AND obsolete_at=Some)",
+                stats.orphaned_entries
+            ));
+        }
+
+        Ok(ValidationResult {
+            valid: errors.is_empty(),
+            errors,
+            stats,
+        })
     }
 }
