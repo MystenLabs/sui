@@ -19,15 +19,15 @@ use toml_edit::{
 };
 
 use crate::{
-    dependency::{DependencySet, PinnedDependencyInfo, pin},
-    errors::{Located, LockfileError, PackageError, PackageResult, TheFile},
-    flavor::MoveFlavor,
+    dependency::{Dependency, DependencySet},
+    errors::{FileHandle, Located, LockfileError, PackageError, PackageResult},
     schema::{self, EnvironmentID, EnvironmentName, PackageName, Publication},
 };
 
 #[derive(Debug, Default, Clone)]
 pub struct Lockfile {
     inner: schema::Lockfile,
+    ephemeral: BTreeMap<EnvironmentName, schema::Publication>,
 }
 
 impl Lockfile {
@@ -40,14 +40,15 @@ impl Lockfile {
             return Ok(Self::default());
         };
 
-        let (result, file_id) =
-            TheFile::with_file(lockfile_name, toml_edit::de::from_str::<schema::Lockfile>)?;
+        let file_id = FileHandle::new(lockfile_name)?;
+        let result = toml_edit::de::from_str::<schema::Lockfile>(file_id.source());
 
         let Ok(mut lockfiles) = result else {
             return Err(result.unwrap_err().into());
         };
 
         // Add in `Move.<env>.lock` files
+        let mut ephemeral: BTreeMap<EnvironmentName, schema::Publication> = BTreeMap::new();
         let dir = std::fs::read_dir(path)?;
         for entry in dir {
             let Ok(file) = entry else { continue };
@@ -56,20 +57,17 @@ impl Lockfile {
                 continue;
             };
 
-            let (metadata, file_id) =
-                TheFile::with_file(file.path(), toml_edit::de::from_str::<schema::Publication>)?;
+            let file_id = FileHandle::new(file.path())?;
 
-            let Ok(metadata) = metadata else {
-                return Err(metadata.unwrap_err().into());
-            };
+            let metadata = toml_edit::de::from_str::<schema::Publication>(file_id.source())?;
 
-            let old_entry = lockfiles.published.insert(env_name.clone(), metadata);
-            if old_entry.is_some() {
-                return Err(PackageError::Generic("Move.lock and Move.{env_name}.lock both contain publication information for {env_name}".to_string()));
-            }
+            ephemeral.insert(env_name.clone(), metadata);
         }
 
-        Ok(Self { inner: lockfiles })
+        Ok(Self {
+            inner: lockfiles,
+            ephemeral,
+        })
     }
 
     /// Serialize [self] into `Move.lock` and `Move.<env>.lock`.

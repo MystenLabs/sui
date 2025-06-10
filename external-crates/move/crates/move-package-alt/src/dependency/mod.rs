@@ -20,7 +20,7 @@ use tracing::debug;
 use crate::{
     errors::{FileHandle, PackageResult},
     flavor::MoveFlavor,
-    git::cache::GitTree,
+    git::GitTree,
     package::paths::PackagePath,
     schema::{
         Address, EnvironmentID, EnvironmentName, LocalDependency, LockfileDependencyInfo,
@@ -40,11 +40,12 @@ pub enum Pinned {
 
 pub type Fetched = PackagePath;
 
-// TODO: docs
+/// [Dependency] wraps information about the location of a dependency (such as the `git` or `local`
+/// fields) with additional metadata about how the dependency is used (such as the source file,
+/// enviroment overrides, etc).
 #[derive(Debug)]
 pub struct Dependency<DepInfo> {
-    // TODO: not sure I love pub(super) here
-    pub(super) dep_info: DepInfo,
+    dep_info: DepInfo,
 
     /// The environment in the dependency's namespace to use. For example, given
     /// ```toml
@@ -61,10 +62,13 @@ pub struct Dependency<DepInfo> {
     /// `source_environment` would be "0x1234"
     source_environment: EnvironmentID,
 
+    /// Was this dependency written with `override = true` in its original manifest?
     is_override: bool,
 
+    /// Does the original manifest override the published address?
     published_at: Option<Address>,
 
+    /// What manifest or lockfile does this dependency come from?
     containing_file: FileHandle,
 }
 

@@ -3,10 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    dependency::PinnedDependencyInfo,
+    dependency::{Dependency, Pinned},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
-    package::{EnvironmentName, Package, PackageName, PackagePath, lockfile::Lockfile},
+    package::{Package, lockfile::Lockfile, paths::PackagePath},
+    schema::{EnvironmentName, PackageName},
 };
 use petgraph::graph::{DiGraph, NodeIndex};
 use std::{
@@ -17,24 +18,23 @@ use std::{
 use tokio::sync::OnceCell;
 
 #[derive(Debug)]
-pub struct PackageGraph<F: MoveFlavor> {
-    // TODO: should be private
-    pub inner: DiGraph<Arc<Package<F>>, PackageName>,
+pub struct PackageGraph {
+    inner: DiGraph<Arc<Package>, PackageName>,
 }
 
-struct PackageCache<F: MoveFlavor> {
+struct PackageCache {
     // TODO: better errors; I'm using Option for now because PackageResult doesn't have clone, but
     // it's too much effort to add clone everywhere; we should do this when we update the error
     // infra
     // TODO: would dashmap simplify this?
-    cache: Mutex<BTreeMap<PathBuf, Arc<OnceCell<Option<Arc<Package<F>>>>>>>,
+    cache: Mutex<BTreeMap<PathBuf, Arc<OnceCell<Option<Arc<Package>>>>>>,
 }
 
-struct PackageGraphBuilder<F: MoveFlavor> {
-    cache: PackageCache<F>,
+struct PackageGraphBuilder {
+    cache: PackageCache,
 }
 
-impl<F: MoveFlavor> PackageGraph<F> {
+impl PackageGraph {
     // TODO: load should load for all environments and return a map
 
     /// Check to see whether the resolution graph in the lockfile inside `path` is up-to-date (i.e.
@@ -73,7 +73,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     }
 }
 
-impl<F: MoveFlavor> PackageGraphBuilder<F> {
+impl PackageGraphBuilder {
     pub fn new() -> Self {
         Self {
             cache: PackageCache::new(),
@@ -87,7 +87,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         &self,
         path: &PackagePath,
         env: &EnvironmentName,
-    ) -> PackageResult<Option<PackageGraph<F>>> {
+    ) -> PackageResult<Option<PackageGraph>> {
         self.load_from_lockfile_impl(path, env, true).await
     }
 
@@ -96,7 +96,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         &self,
         path: &PackagePath,
         env: &EnvironmentName,
-    ) -> PackageResult<Option<PackageGraph<F>>> {
+    ) -> PackageResult<Option<PackageGraph>> {
         self.load_from_lockfile_impl(path, env, false).await
     }
 
@@ -107,8 +107,8 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         path: &PackagePath,
         env: &EnvironmentName,
         check_digests: bool,
-    ) -> PackageResult<Option<PackageGraph<F>>> {
-        let lockfile = Lockfile::<F>::read_from_dir(path.as_path())?;
+    ) -> PackageResult<Option<PackageGraph>> {
+        let lockfile = Lockfile::read_from_dir(path.path())?;
         let mut graph = PackageGraph {
             inner: DiGraph::new(),
         };
@@ -118,7 +118,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         let mut package_indices = BTreeMap::new();
         if let Some(deps) = deps {
             // First pass: create nodes for all packages
-            for (pkg_id, dep_info) in deps.data.iter() {
+            for (pkg_id, dep_info) in deps.iter() {
                 let package = self.cache.fetch(&dep_info.source).await?;
                 if check_digests && package.manifest().digest() != dep_info.manifest_digest {
                     return Ok(None);
@@ -152,11 +152,11 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         &self,
         path: &PackagePath,
         env: &EnvironmentName,
-    ) -> PackageResult<PackageGraph<F>> {
+    ) -> PackageResult<PackageGraph> {
         // TODO: this is wrong - it is ignoring `path`
         let graph = Arc::new(Mutex::new(DiGraph::new()));
         let visited = Arc::new(Mutex::new(BTreeMap::new()));
-        let root = PinnedDependencyInfo::<F>::root_dependency();
+        let root = PinnedDependencyInfo::root_dependency();
 
         self.add_transitive_manifest_deps(&root, env, graph.clone(), visited)
             .await?;
@@ -185,9 +185,9 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
     /// deadlock
     async fn add_transitive_manifest_deps(
         &self,
-        dep: &PinnedDependencyInfo<F>,
+        dep: &PinnedDependencyInfo,
         env: &EnvironmentName,
-        graph: Arc<Mutex<DiGraph<Option<Arc<Package<F>>>, PackageName>>>,
+        graph: Arc<Mutex<DiGraph<Option<Arc<Package>>, PackageName>>>,
         visited: Arc<Mutex<BTreeMap<PathBuf, NodeIndex>>>,
     ) -> PackageResult<NodeIndex> {
         // return early if node is cached; add empty node to graph and visited list otherwise
@@ -227,7 +227,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
     }
 }
 
-impl<F: MoveFlavor> PackageCache<F> {
+impl PackageCache {
     /// Construct a new empty cache
     pub fn new() -> Self {
         Self {
@@ -236,7 +236,7 @@ impl<F: MoveFlavor> PackageCache<F> {
     }
 
     /// Return a reference to a cached [Package], loading it if necessary
-    pub async fn fetch(&self, dep: &PinnedDependencyInfo<F>) -> PackageResult<Arc<Package<F>>> {
+    pub async fn fetch(&self, dep: &Dependency<Pinned>) -> PackageResult<Arc<Package>> {
         let cell = self
             .cache
             .lock()

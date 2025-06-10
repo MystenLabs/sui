@@ -33,9 +33,22 @@ pub struct Publication {
 
 /// A serialized entry in the `[pinned.<environment>.<package-id>]` table of the lockfile
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename = "kabob-case")]
 pub struct Pin {
     /// Metadata about the package's source
     pub source: LockfileDependencyInfo,
+
+    /// The environment that should be used for the dependency (as defined in the dependency's
+    /// manifest but specified in the depender's manifest).
+    ///
+    /// E.g. if `a/Move.toml` contains
+    /// ```toml
+    /// environments.mainnet = "1234"
+    /// dep-replacements.mainnet.b = { ..., use-environment="foo" }
+    /// ```
+    ///
+    /// then use_environment for the `b` dependency would be `foo`
+    pub use_environment: EnvironmentName,
 
     /// Contains the package's manifest digest. This is used to verify if a manifest has changed
     /// and re-pinning is required.

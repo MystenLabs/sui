@@ -32,7 +32,8 @@ pub struct ParsedManifest {
 
     /// Replace dependencies for the given environment.
     #[serde(default)]
-    pub dep_replacements: DependencySet<Spanned<ReplacementDependency>>,
+    pub dep_replacements:
+        BTreeMap<EnvironmentName, BTreeMap<PackageName, Spanned<ReplacementDependency>>>,
 }
 
 /// The `[package]` section of a manifest

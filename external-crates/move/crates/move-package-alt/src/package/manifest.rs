@@ -25,7 +25,7 @@ use thiserror::Error;
 use tracing::{debug, info};
 
 use crate::{
-    dependency::unpinned::UnpinnedDependency,
+    dependency::{Dependency, Parsed, unpinned::UnpinnedDependency},
     errors::{FileHandle, Located, Location, PackageResult, TheFile},
     schema::{
         self, Address, DefaultDependency, EnvironmentID, EnvironmentName, PackageName,
@@ -33,7 +33,7 @@ use crate::{
     },
 };
 
-use super::*;
+use super::{paths::PackagePath, *};
 use sha2::{Digest as ShaDigest, Sha256};
 
 // TODO: replace this with something more strongly typed
@@ -71,7 +71,7 @@ pub struct Manifest {
     environments: BTreeMap<EnvironmentName, EnvironmentID>,
 
     // invariant: `dependencies` contains an entry for every environment
-    dependencies: BTreeMap<EnvironmentName, BTreeMap<PackageName, UnpinnedDependency>>,
+    dependencies: BTreeMap<EnvironmentName, BTreeMap<PackageName, Dependency<Parsed>>>,
 
     /// The file that this manifest was parsed from
     file_id: FileHandle,
@@ -82,13 +82,12 @@ pub struct Manifest {
 
 impl Manifest {
     /// Read the manifest file in `path`, returning a [`Manifest`].
-    pub fn load(path: PackagePath) -> ManifestResult<Self> {
-        debug!("Reading manifest from {:?}", path.as_path());
+    // TODO: PackageResult is probably wrong here
+    pub fn load(path: PackagePath) -> PackageResult<Self> {
+        debug!("Reading manifest from {:?}", path.path());
 
-        let (manifest, file_id) = TheFile::with_file(
-            path.as_path(),
-            toml_edit::de::from_str::<schema::ParsedManifest>,
-        )?;
+        let file_id = FileHandle::new(path.manifest_path())?;
+        let manifest = toml_edit::de::from_str::<schema::ParsedManifest>(file_id.source());
 
         let schema::ParsedManifest {
             package,
@@ -100,11 +99,13 @@ impl Manifest {
         // merge dependencies
         let mut deps_for_envs: BTreeMap<EnvironmentName, _> = BTreeMap::new();
 
-        for (env, _) in environments.iter() {
+        for (env, env_id) in environments.iter() {
             let full_deps_for_env = map_zip(
                 dependencies.clone(),
                 dep_replacements.remove(env.as_ref()).unwrap_or_default(),
-                |_, default, replacement| combine_deps(file_id, env, default, replacement),
+                |_, default, replacement| {
+                    combine_deps(file_id, env, env_id.as_ref(), default, replacement)
+                },
             )?;
 
             deps_for_envs.insert(env.as_ref().clone(), full_deps_for_env);
@@ -144,7 +145,7 @@ impl Manifest {
     pub fn deps_for_env(
         &self,
         env: EnvironmentName,
-    ) -> Option<&BTreeMap<PackageName, UnpinnedDependency>> {
+    ) -> Option<&BTreeMap<PackageName, Dependency<Parsed>>> {
         self.dependencies.get(&env)
     }
 
@@ -201,23 +202,26 @@ fn map_zip<K: Ord, V1, V2, V, E, F: Fn(&K, Option<V1>, Option<V2>) -> Result<V, 
 fn combine_deps(
     file_id: FileHandle,
     env: &Spanned<EnvironmentName>,
+    source_env: &EnvironmentID,
     default: Option<Spanned<DefaultDependency>>,
     replacement: Option<Spanned<ReplacementDependency>>,
-) -> ManifestResult<UnpinnedDependency> {
+) -> ManifestResult<Dependency<Parsed>> {
     let env = env.as_ref().clone();
 
     match (default, replacement) {
-        (Some(default), None) => Ok(UnpinnedDependency::from_default(
+        (Some(default), None) => Ok(Dependency::from_default(
             file_id,
             env,
+            source_env.clone(),
             default.into_inner(),
         )),
         (None, Some(replacement)) => {
-            UnpinnedDependency::from_replacement(file_id, env, replacement.into_inner())
+            Dependency::from_replacement(file_id, env, source_env.clone(), replacement.into_inner())
         }
-        (Some(default), Some(replacement)) => UnpinnedDependency::from_default_with_replacement(
+        (Some(default), Some(replacement)) => Dependency::from_default_with_replacement(
             file_id,
             env,
+            source_env.clone(),
             default.into_inner(),
             replacement.into_inner(),
         ),

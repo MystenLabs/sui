@@ -21,7 +21,7 @@ use tokio::process::Command;
 use tracing::{debug, info};
 
 use crate::{
-    errors::{FileHandle, TheFile},
+    errors::FileHandle,
     flavor::MoveFlavor,
     jsonrpc::Endpoint,
     schema::{

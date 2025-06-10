@@ -169,7 +169,7 @@ impl GitTree {
     /// The path to the folder containing the cached repo (without the addition of the path within
     /// the repo)
     #[cfg(test)]
-    fn repo_fs_path(&self) -> &Path {
+    pub fn repo_fs_path(&self) -> &Path {
         &self.path_to_repo
     }
 }
@@ -630,5 +630,35 @@ mod tests {
             .unwrap();
 
         git_tree.fetch().await.unwrap();
+    }
+
+    /// Fetching should succeed if the path is clean but other paths are not
+    #[tokio::test]
+    async fn test_fetch_clean_parallel_dirty() {
+        let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
+        let cache_dir = tempdir().unwrap();
+        let cache = GitCache::new(cache_dir.path().to_path_buf());
+
+        let git_tree = cache
+            .tree_for(
+                repo_path.to_string_lossy().to_string(),
+                &None,
+                Some(PathBuf::from("packages/pkg_a")),
+            )
+            .await
+            .unwrap();
+
+        // fetch
+        git_tree.fetch().await.unwrap();
+
+        // create dirty file in dep's parent directory
+        fs::create_dir_all(git_tree.fs_path().parent().unwrap());
+        fs::write(
+            git_tree.fs_path().join("garbage.txt"),
+            "something to dirty the repo",
+        );
+
+        // fetch again - subtree should still be clean so it should succeed
+        let result = git_tree.fetch().await.unwrap();
     }
 }
