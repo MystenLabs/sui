@@ -6,13 +6,7 @@ ssfn_config_info: ~
 validator_config_info: ~
 parameters:
   chain_start_timestamp_ms: 0
-<<<<<<< HEAD
   protocol_version: 86
-||||||| parent of 347b1c92df (add epoch stable sequence number to transaction effects for configs)
-  protocol_version: 60
-=======
-  protocol_version: 61
->>>>>>> 347b1c92df (add epoch stable sequence number to transaction effects for configs)
   allow_insertion_of_extra_objects: true
   epoch_duration_ms: 86400000
   stake_subsidy_start_epoch: 0
@@ -55,4 +49,3 @@ accounts:
       - 30000000000000000
       - 30000000000000000
       - 30000000000000000
-
