@@ -724,6 +724,10 @@ fn is_empty(b: &BTreeSet<String>) -> bool {
     b.is_empty()
 }
 
+fn is_zero(val: &u64) -> bool {
+    *val == 0
+}
+
 /// Ordering mechanism for transactions in one Narwhal consensus output.
 #[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub enum ConsensusTransactionOrdering {
@@ -762,6 +766,11 @@ pub struct ExecutionTimeEstimateParams {
 
     // Absolute limit on the number of saved observations at end of epoch.
     pub stored_observations_limit: u64,
+
+    // Requires observations from at least this amount of stake in order to use
+    // observation-based execution time estimates instead of the default.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub stake_weighted_median_threshold: u64,
 }
 
 // The config for per object congestion control in consensus handler.
@@ -3559,6 +3568,7 @@ impl ProtocolConfig {
                                     max_estimate_us: 1_500_000, // 1.5s
                                     stored_observations_num_included_checkpoints: 10,
                                     stored_observations_limit: u64::MAX,
+                                    stake_weighted_median_threshold: 0,
                                 },
                             );
                     }
@@ -3638,6 +3648,7 @@ impl ProtocolConfig {
                                     max_estimate_us: 1_500_000, // 1.5s
                                     stored_observations_num_included_checkpoints: 10,
                                     stored_observations_limit: u64::MAX,
+                                    stake_weighted_median_threshold: 0,
                                 },
                             );
 
@@ -3667,6 +3678,7 @@ impl ProtocolConfig {
                                     max_estimate_us: 1_500_000, // 1.5s
                                     stored_observations_num_included_checkpoints: 10,
                                     stored_observations_limit: u64::MAX,
+                                    stake_weighted_median_threshold: 0,
                                 },
                             );
 
@@ -3689,6 +3701,7 @@ impl ProtocolConfig {
                                 max_estimate_us: 1_500_000, // 1.5s
                                 stored_observations_num_included_checkpoints: 10,
                                 stored_observations_limit: 20,
+                                stake_weighted_median_threshold: 0,
                             },
                         );
                     cfg.feature_flags.allow_unbounded_system_objects = true;
@@ -3710,6 +3723,7 @@ impl ProtocolConfig {
                                 max_estimate_us: 1_500_000, // 1.5s
                                 stored_observations_num_included_checkpoints: 10,
                                 stored_observations_limit: 20,
+                                stake_weighted_median_threshold: 3334,
                             },
                         );
                 }
