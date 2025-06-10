@@ -111,9 +111,11 @@ pub fn run_cli(
         Command::Stackless(c) => {
             c.execute(move_args.package_path.as_deref(), move_args.build_config)
         }
-        Command::Summary(summary) => {
-            summary.execute::<()>(move_args.package_path.as_deref(), move_args.build_config, None)
-        }
+        Command::Summary(summary) => summary.execute::<()>(
+            move_args.package_path.as_deref(),
+            move_args.build_config,
+            None,
+        ),
     }
 }
 

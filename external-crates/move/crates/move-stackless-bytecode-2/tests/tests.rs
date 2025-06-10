@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_stackless_bytecode_2::{generator::StacklessBytecodeGenerator, stackless::ast};
+use move_stackless_bytecode_2::generator::StacklessBytecodeGenerator;
 
 use move_command_line_common::insta_assert;
 use move_package::{BuildConfig, compilation::model_builder};
@@ -47,8 +47,8 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
         let pkg_name = pkg.name;
         for (module_name, module) in &pkg.modules {
             if test_module_names.contains(module_name) {
-                let name = format!("{}::{}", pkg_name, module_name);
-                let stackless_bytecode = render(&name, module);
+                let name = format!("{}::{}", pkg_name.expect("NO PACKAGE NAME"), module_name);
+                let stackless_bytecode = format!("{}", module);
                 insta_assert! {
                     input_path: file_path,
                     contents: stackless_bytecode,
@@ -60,21 +60,6 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
     }
 
     Ok(())
-}
-
-fn render(name: &str, module: &ast::Module) -> String {
-    use std::io::Write;
-    let mut writer = Vec::new();
-    // TODO: Write a display instance for a module and use it here instead
-    writeln!(writer, "Module {}", name).unwrap();
-
-    for (name, fun) in &module.functions {
-        writeln!(writer, "    Function {}", name).unwrap();
-        for instr in &fun.instructions {
-            writeln!(writer, "        {}", instr).unwrap();
-        }
-    }
-    String::from_utf8(writer).expect("Output is not valid UTF-8")
 }
 
 // Hand in each Move.toml path
