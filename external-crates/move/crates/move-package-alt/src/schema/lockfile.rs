@@ -5,7 +5,7 @@ use toml_edit::{
     visit_mut::{self, VisitMut},
 };
 
-use crate::git::sha::GitSha;
+use crate::git::GitSha;
 
 use super::{Address, EnvironmentName, LocalDependency, OnChainDependency, PackageName};
 
