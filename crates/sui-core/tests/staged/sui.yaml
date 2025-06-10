@@ -440,6 +440,8 @@ EndOfEpochTransactionKind:
       StoreExecutionTimeObservations:
         NEWTYPE:
           TYPENAME: StoredExecutionTimeObservations
+    8:
+      AccumulatorRootCreate: UNIT
 Event:
   STRUCT:
     - package_id:

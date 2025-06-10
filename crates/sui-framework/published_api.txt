@@ -1087,45 +1087,6 @@ vdf_verify
 vdf_verify_internal
 	fun
 	0x2::vdf
-encode
-	public fun
-	0x2::hex
-decode
-	public fun
-	0x2::hex
-decode_byte
-	fun
-	0x2::hex
-to_u256
-	public fun
-	0x2::address
-from_u256
-	public fun
-	0x2::address
-from_bytes
-	public fun
-	0x2::address
-to_bytes
-	public fun
-	0x2::address
-to_ascii_string
-	public fun
-	0x2::address
-to_string
-	public fun
-	0x2::address
-from_ascii_bytes
-	public fun
-	0x2::address
-hex_char_value
-	fun
-	0x2::address
-length
-	public fun
-	0x2::address
-max
-	public fun
-	0x2::address
 TxContext
 	public struct
 	0x2::tx_context
@@ -1264,6 +1225,45 @@ is_single_owner
 into_native
 	public(package) fun
 	0x2::party
+encode
+	public fun
+	0x2::hex
+decode
+	public fun
+	0x2::hex
+decode_byte
+	fun
+	0x2::hex
+to_u256
+	public fun
+	0x2::address
+from_u256
+	public fun
+	0x2::address
+from_bytes
+	public fun
+	0x2::address
+to_bytes
+	public fun
+	0x2::address
+to_ascii_string
+	public fun
+	0x2::address
+to_string
+	public fun
+	0x2::address
+from_ascii_bytes
+	public fun
+	0x2::address
+hex_char_value
+	fun
+	0x2::address
+length
+	public fun
+	0x2::address
+max
+	public fun
+	0x2::address
 ID
 	public struct
 	0x2::object
@@ -1295,6 +1295,12 @@ randomness_state
 	public(package) fun
 	0x2::object
 sui_deny_list_object_id
+	public(package) fun
+	0x2::object
+sui_accumulator_root_object_id
+	public(package) fun
+	0x2::object
+sui_accumulator_root_address
 	public(package) fun
 	0x2::object
 bridge
@@ -1393,6 +1399,12 @@ transfer_impl
 receive_impl
 	fun
 	0x2::transfer
+Accumulator
+	public struct
+	0x2::accumulator
+create
+	fun
+	0x2::accumulator
 Field
 	public struct
 	0x2::dynamic_field

@@ -1322,6 +1322,7 @@
                 "disallow_change_struct_type_params_on_upgrade": false,
                 "disallow_new_modules_in_deps_only_packages": false,
                 "disallow_self_identifier": false,
+                "enable_accumulators": false,
                 "enable_coin_deny_list": false,
                 "enable_coin_deny_list_v2": false,
                 "enable_effects_v2": false,
@@ -8826,7 +8827,8 @@
               "AuthenticatorStateCreate",
               "RandomnessStateCreate",
               "CoinDenyListStateCreate",
-              "StoreExecutionTimeObservations"
+              "StoreExecutionTimeObservations",
+              "AccumulatorRootCreate"
             ]
           },
           {
