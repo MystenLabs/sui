@@ -232,6 +232,7 @@ mod tests {
     impl Handler for TestHandler {
         type Store = Db;
 
+        const MIN_EAGER_ROWS: usize = 10;
         const MAX_PENDING_ROWS: usize = 10000;
         async fn commit<'a>(
             _values: &[Self::Value],
@@ -239,6 +240,14 @@ mod tests {
         ) -> anyhow::Result<usize> {
             tokio::time::sleep(Duration::from_millis(1000)).await;
             Ok(0)
+        }
+    }
+
+    /// Wait for a timeout on the channel, expecting this operation to timeout.
+    async fn expect_timeout(rx: &mut mpsc::Receiver<BatchedRows<TestHandler>>, duration: Duration) {
+        match tokio::time::timeout(duration, rx.recv()).await {
+            Err(_) => (), // Expected timeout - test passes
+            Ok(_) => panic!("Expected timeout but received data instead"),
         }
     }
 
@@ -367,6 +376,141 @@ mod tests {
             send_result,
             Err(mpsc::error::TrySendError::Full(_))
         ));
+
+        cancel.cancel();
+    }
+
+    #[tokio::test]
+    async fn test_collector_accumulates_across_checkpoints_until_eager_threshold() {
+        let (processor_tx, processor_rx) = mpsc::channel(10);
+        let (collector_tx, mut collector_rx) = mpsc::channel(10);
+        let cancel = CancellationToken::new();
+
+        // Set a very long collect interval (60 seconds) to ensure timing doesn't trigger batching
+        let config = CommitterConfig {
+            collect_interval_ms: 60_000,
+            ..CommitterConfig::default()
+        };
+        let _collector = collector::<TestHandler>(
+            config,
+            processor_rx,
+            collector_tx,
+            test_metrics(),
+            cancel.clone(),
+        );
+
+        let start_time = std::time::Instant::now();
+
+        // The collector starts with an immediate poll tick, creating an empty batch
+        let initial_batch = collector_rx.recv().await.unwrap();
+        assert_eq!(initial_batch.len(), 0);
+
+        // Send data that's just below MIN_EAGER_ROWS threshold.
+        let below_threshold =
+            IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry; TestHandler::MIN_EAGER_ROWS - 1]);
+        processor_tx.send(below_threshold).await.unwrap();
+
+        // Try to receive with timeout - should timeout since we're below threshold
+        expect_timeout(&mut collector_rx, Duration::from_secs(1)).await;
+
+        // Now send one more entry to cross the MIN_EAGER_ROWS threshold
+        let threshold_trigger = IndexedCheckpoint::new(
+            0,
+            2,
+            20,
+            2000,
+            vec![Entry; 1], // Just 1 more entry to reach 10 total
+        );
+        processor_tx.send(threshold_trigger).await.unwrap();
+
+        // Should immediately get a batch without waiting for the long interval
+        let eager_batch = collector_rx.recv().await.unwrap();
+        assert_eq!(eager_batch.len(), TestHandler::MIN_EAGER_ROWS);
+
+        // Verify batch was created quickly (much less than 60 seconds)
+        let elapsed = start_time.elapsed();
+        assert!(elapsed < Duration::from_secs(10));
+
+        cancel.cancel();
+    }
+
+    #[tokio::test]
+    async fn test_immediate_batch_on_min_eager_rows() {
+        let (processor_tx, processor_rx) = mpsc::channel(10);
+        let (collector_tx, mut collector_rx) = mpsc::channel(10);
+        let cancel = CancellationToken::new();
+
+        // Set a very long collect interval (60 seconds) to ensure timing doesn't trigger batching
+        let config = CommitterConfig {
+            collect_interval_ms: 60_000,
+            ..CommitterConfig::default()
+        };
+        let _collector = collector::<TestHandler>(
+            config,
+            processor_rx,
+            collector_tx,
+            test_metrics(),
+            cancel.clone(),
+        );
+
+        // The collector starts with an immediate poll tick, creating an empty batch
+        let initial_batch = collector_rx.recv().await.unwrap();
+        assert_eq!(initial_batch.len(), 0);
+        // The collector will then just wait for the next poll as there is no new data yet.
+        expect_timeout(&mut collector_rx, Duration::from_secs(1)).await;
+
+        let start_time = std::time::Instant::now();
+
+        // Send exactly MIN_EAGER_ROWS in one checkpoint
+        let exact_threshold =
+            IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry; TestHandler::MIN_EAGER_ROWS]);
+        processor_tx.send(exact_threshold).await.unwrap();
+
+        // Should trigger immediately since pending_rows >= MIN_EAGER_ROWS.
+        let batch = collector_rx.recv().await.unwrap();
+        assert_eq!(batch.len(), TestHandler::MIN_EAGER_ROWS);
+
+        // Verify batch was created quickly (much less than 60 seconds)
+        let elapsed = start_time.elapsed();
+        assert!(elapsed < Duration::from_secs(10));
+
+        cancel.cancel();
+    }
+
+    #[tokio::test]
+    async fn test_collector_waits_for_timer_when_below_eager_threshold() {
+        let (processor_tx, processor_rx) = mpsc::channel(10);
+        let (collector_tx, mut collector_rx) = mpsc::channel(10);
+        let cancel = CancellationToken::new();
+
+        // Set a reasonable collect interval for this test (3 seconds).
+        let config = CommitterConfig {
+            collect_interval_ms: 3000,
+            ..CommitterConfig::default()
+        };
+        let _collector = collector::<TestHandler>(
+            config,
+            processor_rx,
+            collector_tx,
+            test_metrics(),
+            cancel.clone(),
+        );
+
+        // Consume initial empty batch
+        let initial_batch = collector_rx.recv().await.unwrap();
+        assert_eq!(initial_batch.len(), 0);
+
+        // Send MIN_EAGER_ROWS - 1 entries (below threshold)
+        let below_threshold =
+            IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry; TestHandler::MIN_EAGER_ROWS - 1]);
+        processor_tx.send(below_threshold).await.unwrap();
+
+        // Try to receive with timeout - should timeout since we're below threshold
+        expect_timeout(&mut collector_rx, Duration::from_secs(1)).await;
+
+        // Should eventually get batch when timer triggers
+        let timer_batch = collector_rx.recv().await.unwrap();
+        assert_eq!(timer_batch.len(), TestHandler::MIN_EAGER_ROWS - 1);
 
         cancel.cancel();
     }
