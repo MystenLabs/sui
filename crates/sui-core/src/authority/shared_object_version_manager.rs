@@ -18,6 +18,7 @@ use sui_types::storage::{
     transaction_non_shared_input_object_keys, transaction_receiving_object_keys, ObjectKey,
 };
 use sui_types::transaction::{SharedInputObject, TransactionDataAPI, TransactionKey};
+use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::{base_types::SequenceNumber, error::SuiResult, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use tracing::trace;
 
@@ -46,6 +47,7 @@ impl AssignedTxAndVersions {
 pub enum Schedulable<T = VerifiedExecutableTransaction> {
     Transaction(T),
     RandomnessStateUpdate(EpochId, RandomnessRound),
+    AccumulatorSettlement(EpochId, u64 /* checkpoint height */),
 }
 
 impl From<VerifiedExecutableTransaction> for Schedulable<VerifiedExecutableTransaction> {
@@ -80,6 +82,9 @@ impl Schedulable<&'_ VerifiedExecutableTransaction> {
             Schedulable::RandomnessStateUpdate(epoch, round) => {
                 Schedulable::RandomnessStateUpdate(*epoch, *round)
             }
+            Schedulable::AccumulatorSettlement(epoch, checkpoint_height) => {
+                Schedulable::AccumulatorSettlement(*epoch, *checkpoint_height)
+            }
         }
     }
 }
@@ -92,6 +97,7 @@ impl<T> Schedulable<T> {
         match self {
             Schedulable::Transaction(tx) => Some(tx.as_tx()),
             Schedulable::RandomnessStateUpdate(_, _) => None,
+            Schedulable::AccumulatorSettlement(_, _) => None,
         }
     }
 
@@ -114,6 +120,16 @@ impl<T> Schedulable<T> {
                     mutable: true,
                 }))
             }
+            Schedulable::AccumulatorSettlement(_, _) => {
+                Either::Right(std::iter::once(SharedInputObject {
+                    id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                    initial_shared_version: epoch_store
+                        .epoch_start_config()
+                        .accumulator_root_obj_initial_shared_version()
+                        .expect("accumulator root obj initial shared version should be set"),
+                    mutable: true,
+                }))
+            }
         }
     }
 
@@ -125,6 +141,7 @@ impl<T> Schedulable<T> {
             Schedulable::Transaction(tx) => transaction_non_shared_input_object_keys(tx.as_tx())
                 .expect("Transaction input should have been verified"),
             Schedulable::RandomnessStateUpdate(_, _) => vec![],
+            Schedulable::AccumulatorSettlement(_, _) => vec![],
         }
     }
 
@@ -135,6 +152,7 @@ impl<T> Schedulable<T> {
         match self {
             Schedulable::Transaction(tx) => transaction_receiving_object_keys(tx.as_tx()),
             Schedulable::RandomnessStateUpdate(_, _) => vec![],
+            Schedulable::AccumulatorSettlement(_, _) => vec![],
         }
     }
 
@@ -146,6 +164,9 @@ impl<T> Schedulable<T> {
             Schedulable::Transaction(tx) => tx.as_tx().key(),
             Schedulable::RandomnessStateUpdate(epoch, round) => {
                 TransactionKey::RandomnessRound(*epoch, *round)
+            }
+            Schedulable::AccumulatorSettlement(epoch, checkpoint_height) => {
+                TransactionKey::AccumulatorSettlement(*epoch, *checkpoint_height)
             }
         }
     }
@@ -177,6 +198,12 @@ impl SharedObjVerManager {
         )?;
         let mut assigned_versions = Vec::new();
         for assignable in assignables {
+            if matches!(assignable, Schedulable::AccumulatorSettlement(_, _))
+                && !epoch_store.accumulators_enabled()
+            {
+                continue;
+            }
+
             let cert_assigned_versions = Self::assign_versions_for_certificate(
                 epoch_store,
                 assignable,

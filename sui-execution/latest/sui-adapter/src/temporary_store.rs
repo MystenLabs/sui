@@ -944,6 +944,13 @@ impl TemporaryStore<'_> {
                 })?;
             }
         }
+
+        for event in &self.execution_results.accumulator_events {
+            let (input, output) = event.total_sui_in_event();
+            total_input_sui += input;
+            total_output_sui += output;
+        }
+
         // note: storage_cost flows into the storage_rebate field of the output objects, which is
         // why it is not accounted for here.
         // similarly, all of the storage_rebate *except* the storage_fund_rebate_inflow
