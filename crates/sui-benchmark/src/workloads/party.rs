@@ -111,7 +111,7 @@ impl PartyTestPayload {
                         ObjectArg::SharedObject {
                             id: *id,
                             initial_shared_version: *initial_shared_version,
-                            mutable: false,
+                            mutable: true,
                         }
                     }
                 })
