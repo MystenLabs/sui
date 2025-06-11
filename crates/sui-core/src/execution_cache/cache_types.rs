@@ -193,7 +193,7 @@ where
 {
     pub fn new(cache_size: u64) -> Self {
         Self {
-            cache: MokaCache::builder(32).max_capacity(cache_size).build(),
+            cache: MokaCache::builder(8).max_capacity(cache_size).build(),
             key_generation: (0..KEY_GENERATION_SIZE)
                 .map(|_| AtomicU64::new(0))
                 .collect(),
