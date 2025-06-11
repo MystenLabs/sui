@@ -68,15 +68,18 @@ impl GitCache {
         sha: GitSha,
         path_in_repo: Option<PathBuf>,
     ) -> GitTree {
-        let path_to_repo = self.root_dir.join(format!("{repo}_{sha}"));
+        let filename = url_to_file_name(repo.as_str());
+        let path_to_repo = self.root_dir.join(format!("{filename}_{sha}"));
         let path_in_repo = path_in_repo.unwrap_or_default();
 
-        GitTree {
+        let result = GitTree {
             repo,
             sha,
             path_in_repo,
             path_to_repo,
-        }
+        };
+        debug!("{result:?}");
+        result
     }
 }
 
@@ -152,7 +155,7 @@ impl GitTree {
             // git checkout
             self.run_git(&["checkout", self.sha.as_ref()]).await?;
             debug!("Checkout at successful");
-        } else if self.is_dirty().await? && !allow_dirty {
+        } else if self.is_dirty().await && !allow_dirty {
             return Err(GitError::dirty(&self.repo));
         }
 
@@ -164,24 +167,32 @@ impl GitTree {
         run_git_cmd_with_args(args, Some(&self.path_to_repo)).await
     }
 
-    /// Check if the git repository is dirty
-    async fn is_dirty(&self) -> GitResult<bool> {
-        debug!("Checking if repo is dirty");
-        let output = self
+    /// Return true if the directory exists and is dirty
+    async fn is_dirty(&self) -> bool {
+        if !self.path_to_repo.join(".git").exists() {
+            // git directory has been removed - it's dirty!
+            return true;
+        }
+
+        let Ok(output) = self
             .run_git(&[
                 "status",
                 "--porcelain",
                 "--untracked-files=no",
                 &self.path_in_repo.to_string_lossy(),
             ])
-            .await?;
+            .await
+        else {
+            // if there's an error, the git repo has probably been tampered with - it's dirty
+            return true;
+        };
 
         if !output.is_empty() {
             debug!("Tree {self:?} is dirty");
-            return Ok(true);
+            return true;
         }
 
-        Ok(false)
+        false
     }
 
     /// The path to the folder containing the cached repo (without the addition of the path within
@@ -287,22 +298,22 @@ async fn run_git_cmd_with_args(args: &[&str], cwd: Option<&PathBuf>) -> GitResul
         .await
         .map_err(|e| GitError::io_error(&cmd, &cwd, e))?;
 
-    if !output.status.success() {
-        return Err(GitError::nonzero_exit_status(&cmd, &cwd, output.status));
-    }
-
     if !output.stderr.is_empty() {
-        info!("output from {cmd:?}:");
+        info!("output from `{:?}`", cmd.as_std());
         for line in output.stderr.lines() {
             info!("  │ {}", line.expect("vector read can't fail"));
         }
     }
 
     if !output.stdout.is_empty() {
-        debug!("stdout from {cmd:?}:");
+        debug!("stdout from `{:?}`", cmd.as_std());
         for line in output.stdout.lines() {
             debug!("  │ {}", line.expect("vector read can't fail"));
         }
+    }
+
+    if !output.status.success() {
+        return Err(GitError::nonzero_exit_status(&cmd, &cwd, output.status));
     }
 
     String::from_utf8(output.stdout).map_err(|e| GitError::non_utf_output(&cmd, &cwd))
@@ -316,6 +327,7 @@ mod tests {
     use std::fs;
     use std::path::Path;
     use tempfile::{TempDir, tempdir};
+    use test_log::test;
 
     fn setup_temp_dir() -> TempDir {
         tempdir().unwrap()
@@ -340,7 +352,7 @@ mod tests {
     /// The second commit contains the following files:
     ///  - packages/pkg_a/Move.toml (copied from tests/data/basic_move_project/pkg_a/Move.toml
     ///  - packages/pkg_b/Move.toml (copied from tests/data/basic_move_project/pkg_b/Move.toml
-    pub async fn setup_test_move_project() -> (TempDir, PathBuf, String, String) {
+    pub async fn setup_test_move_project() -> (TempDir, String, String, String) {
         // Create a temporary directory
         let temp_dir = tempdir().unwrap();
         let root_path = temp_dir.path().to_path_buf();
@@ -393,7 +405,7 @@ mod tests {
 
         (
             temp_dir,
-            root_path,
+            format!("file://{}", root_path.to_string_lossy()),
             commits[1].to_string(),
             commits[0].to_string(),
         )
@@ -406,7 +418,7 @@ mod tests {
     }
 
     /// Ensure that loading a package into an empty cache outputs only the correct files
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_sparse_checkout_branch() {
         let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
         let cache_dir = tempdir().unwrap();
@@ -415,7 +427,7 @@ mod tests {
         // Pass in a branch name
         let git_tree = cache
             .resolve_to_tree(
-                &repo_path.to_string_lossy().to_string(),
+                &repo_path,
                 &Some("main".into()),
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -431,7 +443,7 @@ mod tests {
     }
 
     /// Ensure that loading a package into an empty cache from a SHA outputs only the correct files
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_sparse_checkout_sha() {
         let (repo_dir, repo_path, _, second_sha) = setup_test_move_project().await;
         let cache_dir = tempdir().unwrap();
@@ -440,7 +452,7 @@ mod tests {
         // Pass in a commit SHA
         let git_tree = cache
             .resolve_to_tree(
-                &repo_path.to_string_lossy().to_string(),
+                &repo_path,
                 &Some(second_sha.into()),
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -455,27 +467,19 @@ mod tests {
     }
 
     /// Ensure that checking out two different paths from the same repo / sha works
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_multi_checkout() {
         let (repo_dir, repo_path, _, second_sha) = setup_test_move_project().await;
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new(cache_dir.path().to_path_buf());
 
         let git_tree_a = cache
-            .resolve_to_tree(
-                &repo_path.to_string_lossy().to_string(),
-                &None,
-                Some(PathBuf::from("packages/pkg_a")),
-            )
+            .resolve_to_tree(&repo_path, &None, Some(PathBuf::from("packages/pkg_a")))
             .await
             .unwrap();
 
         let git_tree_b = cache
-            .resolve_to_tree(
-                &repo_path.to_string_lossy().to_string(),
-                &None,
-                Some(PathBuf::from("packages/pkg_b")),
-            )
+            .resolve_to_tree(&repo_path, &None, Some(PathBuf::from("packages/pkg_b")))
             .await
             .unwrap();
 
@@ -491,7 +495,7 @@ mod tests {
     }
 
     /// Creating a git tree should fail if the sha doesn't exist
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_wrong_sha() {
         let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
         let cache_dir = tempdir().unwrap();
@@ -503,7 +507,7 @@ mod tests {
         // Pass in a commit SHA
         let git_tree = cache
             .resolve_to_tree(
-                &repo_path.to_string_lossy().to_string(),
+                &repo_path,
                 &Some(wrong_sha),
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -513,7 +517,7 @@ mod tests {
     }
 
     /// Creating a git tree should fail if the branch doesn't exist
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_wrong_branch_name() {
         let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
         let cache_dir = tempdir().unwrap();
@@ -522,7 +526,7 @@ mod tests {
         let wrong_branch = "test";
         let git_tree = cache
             .resolve_to_tree(
-                &repo_path.to_string_lossy().to_string(),
+                &repo_path,
                 &Some("nonexisting_branch".to_string()),
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -532,7 +536,7 @@ mod tests {
     }
 
     /// Fetching should fail if the path doesn't exist
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_wrong_path() {
         let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
         let cache_dir = tempdir().unwrap();
@@ -542,11 +546,7 @@ mod tests {
 
         // Pass in a commit SHA
         let git_tree = cache
-            .resolve_to_tree(
-                &repo_path.to_string_lossy().to_string(),
-                &None,
-                Some(PathBuf::from("nope/non_here")),
-            )
+            .resolve_to_tree(&repo_path, &None, Some(PathBuf::from("nope/non_here")))
             .await
             .unwrap();
 
@@ -555,31 +555,27 @@ mod tests {
     }
 
     /// Fetching should succeeed if the path is `None`
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_fetch_no_path() {
         let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new(cache_dir.path().to_path_buf());
 
         let git_tree = cache
-            .resolve_to_tree(&repo_path.to_string_lossy().to_string(), &None, None)
+            .resolve_to_tree(&repo_path, &None, None)
             .await
             .unwrap();
     }
 
     /// Fetching should fail if a dirty checkout exists
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_fetch_dirty_fail() {
         let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new(cache_dir.path().to_path_buf());
 
         let git_tree = cache
-            .resolve_to_tree(
-                repo_path.to_string_lossy().to_string(),
-                &None,
-                Some(PathBuf::from("packages/pkg_a")),
-            )
+            .resolve_to_tree(&repo_path, &None, Some(PathBuf::from("packages/pkg_a")))
             .await
             .unwrap();
 
@@ -594,18 +590,14 @@ mod tests {
     }
 
     /// `fetch_allow_dirty` should succeed with a dirty checkout
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_fetch_allow_dirty() {
-        let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
+        let (repo_dir, repo_url, _, _) = setup_test_move_project().await;
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new(cache_dir.path().to_path_buf());
 
         let git_tree = cache
-            .resolve_to_tree(
-                &repo_path.to_string_lossy().to_string(),
-                &None,
-                Some(PathBuf::from("packages/pkg_a")),
-            )
+            .resolve_to_tree(&repo_url, &None, Some(PathBuf::from("packages/pkg_a")))
             .await
             .unwrap();
 
@@ -619,18 +611,14 @@ mod tests {
     }
 
     /// Fetching should succeed if a clean checkout exists
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_fetch_clean_exists() {
         let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new(cache_dir.path().to_path_buf());
 
         let git_tree = cache
-            .resolve_to_tree(
-                &repo_path.to_string_lossy().to_string(),
-                &None,
-                Some(PathBuf::from("packages/pkg_a")),
-            )
+            .resolve_to_tree(&repo_path, &None, Some(PathBuf::from("packages/pkg_a")))
             .await
             .unwrap();
 
@@ -638,11 +626,7 @@ mod tests {
 
         // same as above
         let git_tree = cache
-            .resolve_to_tree(
-                repo_path.to_string_lossy().to_string(),
-                &None,
-                Some(PathBuf::from("packages/pkg_a")),
-            )
+            .resolve_to_tree(&repo_path, &None, Some(PathBuf::from("packages/pkg_a")))
             .await
             .unwrap();
 
@@ -650,18 +634,14 @@ mod tests {
     }
 
     /// Fetching should succeed if the path is clean but other paths are not
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_fetch_clean_parallel_dirty() {
-        let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
+        let (repo_dir, repo_url, _, _) = setup_test_move_project().await;
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new(cache_dir.path().to_path_buf());
 
         let git_tree = cache
-            .resolve_to_tree(
-                repo_path.to_string_lossy().to_string(),
-                &None,
-                Some(PathBuf::from("packages/pkg_a")),
-            )
+            .resolve_to_tree(&repo_url, &None, Some(PathBuf::from("packages/pkg_a")))
             .await
             .unwrap();
 
