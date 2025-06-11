@@ -9,6 +9,7 @@ use crate::{
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
     execution_scheduler::{ExecutingGuard, PendingCertificateStats},
 };
+use futures::{stream::FuturesUnordered, StreamExt};
 use mysten_metrics::spawn_monitored_task;
 use std::{
     collections::{BTreeSet, HashSet},
@@ -20,7 +21,7 @@ use sui_types::{
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
     storage::InputKey,
-    transaction::{SenderSignedData, TransactionDataAPI},
+    transaction::{SenderSignedData, TransactionDataAPI, TransactionKey},
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
@@ -199,6 +200,24 @@ impl ExecutionScheduler {
         };
         let _ = self.tx_ready_certificates.send(pending_cert);
     }
+
+    async fn wait_for_randomness_transactions<'a>(
+        &'a self,
+        keys: Vec<TransactionKey>,
+        epoch_store: &'a Arc<AuthorityPerEpochStore>,
+    ) -> impl Iterator<Item = VerifiedExecutableTransaction> + 'a {
+        let digests = epoch_store
+            .notify_read_tx_key_to_digest(&keys)
+            .await
+            .expect("db error");
+        self.transaction_cache_read
+            .multi_get_transaction_blocks(&digests)
+            .into_iter()
+            .map(|tx| {
+                let tx = tx.expect("tx must exist").as_ref().clone();
+                VerifiedExecutableTransaction::new_system(tx, epoch_store.epoch())
+            })
+    }
 }
 
 impl ExecutionSchedulerAPI for ExecutionScheduler {
@@ -207,48 +226,73 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
         certs: Vec<(Schedulable, ExecutionEnv)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
-        // schedule all transactions immediately
         let mut txns = Vec::with_capacity(certs.len());
-        let mut rest = Vec::new();
+        let mut randomness_txns = Vec::new();
+        let mut settlement_txns = Vec::new();
 
         for (schedulable, env) in certs {
-            if let Schedulable::Transaction(tx) = schedulable {
-                txns.push((tx, env));
-            } else {
-                rest.push((schedulable, env));
+            match schedulable {
+                Schedulable::Transaction(tx) => {
+                    txns.push((tx, env));
+                }
+                Schedulable::RandomnessStateUpdate(_, _) => {
+                    randomness_txns.push((schedulable.key(), env));
+                }
+                Schedulable::AccumulatorSettlement(_, _) => {
+                    settlement_txns.push((schedulable.key(), env));
+                }
             }
         }
 
+        // schedule all transactions immediately
         self.enqueue_transactions(txns, epoch_store);
 
-        if rest.is_empty() {
-            return;
+        if !randomness_txns.is_empty() {
+            let randomness_keys = randomness_txns
+                .iter()
+                .map(|(key, _)| *key)
+                .collect::<Vec<_>>();
+
+            let scheduler = self.clone();
+            let epoch_store = epoch_store.clone();
+
+            spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
+                let randomness_transactions = scheduler
+                    .wait_for_randomness_transactions(randomness_keys, &epoch_store)
+                    .await
+                    .zip(randomness_txns.into_iter().map(|(_, env)| env))
+                    .collect::<Vec<_>>();
+                scheduler.enqueue_transactions(randomness_transactions, &epoch_store);
+            }));
         }
 
-        let rest_keys = rest
-            .iter()
-            .map(|(schedulable, _)| schedulable.key())
-            .collect::<Vec<_>>();
+        if !settlement_txns.is_empty() {
+            let scheduler = self.clone();
+            let epoch_store = epoch_store.clone();
 
-        let scheduler = self.clone();
-        let epoch_store = epoch_store.clone();
-        spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
-            let rest_digests = epoch_store
-                .notify_read_tx_key_to_digest(&rest_keys)
-                .await
-                .expect("db error");
-            let rest_transactions = scheduler
-                .transaction_cache_read
-                .multi_get_transaction_blocks(&rest_digests)
-                .into_iter()
-                .map(|tx| {
-                    let tx = tx.expect("tx must exist").as_ref().clone();
-                    VerifiedExecutableTransaction::new_system(tx, epoch_store.epoch())
+            spawn_monitored_task!(
+                epoch_store.clone().within_alive_epoch(async move {
+                    let mut futures: FuturesUnordered<_> =
+                        settlement_txns
+                            .into_iter()
+                            .map(|(key, env)| {
+                                let epoch_store = epoch_store.clone();
+                                async move {
+                                    (epoch_store.wait_for_settlement_transactions(key).await, env)
+                                }
+                            })
+                            .collect();
+
+                    while let Some((txns, env)) = futures.next().await {
+                        let txns = txns
+                            .into_iter()
+                            .map(|tx| (tx, env.clone()))
+                            .collect::<Vec<_>>();
+                        scheduler.enqueue_transactions(txns, &epoch_store);
+                    }
                 })
-                .zip(rest.into_iter().map(|(_, env)| env))
-                .collect::<Vec<_>>();
-            scheduler.enqueue_transactions(rest_transactions, &epoch_store);
-        }));
+            );
+        }
     }
 
     fn enqueue_transactions(
