@@ -3454,7 +3454,7 @@ impl serde::Serialize for Container {
                 };
 
                 struct VariantsSerializer<'a>(&'a [ValueImpl]);
-                impl<'a> serde::Serialize for VariantsSerializer<'a> {
+                impl serde::Serialize for VariantsSerializer<'_> {
                     fn serialize<S: serde::Serializer>(
                         &self,
                         serializer: S,
