@@ -24,8 +24,7 @@ By default the tool only execute transactions. To verify that the executed trans
 the same effects as the one executed by the system one must pass the `-v` flag. That is likely to be
 the default in time but it's off for convenience.<br>
 `-s` shows effects and gas status to help inspect a transaction.
-`-n` specifies the chain. Right now only mainnet and a custom chain are supported. In time a node would be
-likely one of `mainnet`, `testnet`, `devnet` or `custom(url)`.
+`-n` specifies the chain, with `mainnet`, `testnet`, and `custom(url)` being currently supported
 
 ### Installation
 
