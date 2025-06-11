@@ -297,27 +297,9 @@ struct IndexStoreTables {
 }
 
 impl IndexStoreTables {
-    fn track_coin_balance_change(
-        object: &Object,
-        owner: &SuiAddress,
-        is_removal: bool,
-        balance_changes: &mut HashMap<BalanceKey, BalanceIndexInfo>,
-    ) -> Result<(), StorageError> {
+    fn extract_coin_balance(object: &Object) -> Result<Option<(StructTag, u64)>, StorageError> {
         match Coin::extract_balance_if_coin(object) {
-            Ok(Some((TypeTag::Struct(struct_tag), value))) => {
-                let key = BalanceKey {
-                    owner: *owner,
-                    coin_type: (*struct_tag).clone(),
-                };
-
-                let mut delta = BalanceIndexInfo::from_coin_value(value);
-                if is_removal {
-                    delta = delta.invert();
-                }
-
-                balance_changes.entry(key).or_default().merge_delta(&delta);
-                Ok(())
-            }
+            Ok(Some((TypeTag::Struct(struct_tag), value))) => Ok(Some((*struct_tag, value))),
             Ok(Some(_)) => {
                 // Non-struct type tag for a coin - this shouldn't happen
                 Err(StorageError::custom(format!(
@@ -326,8 +308,8 @@ impl IndexStoreTables {
                 )))
             }
             Ok(None) => {
-                // Not a coin, nothing to do
-                Ok(())
+                // Not a coin
+                Ok(None)
             }
             Err(e) => {
                 // Corrupted coin data
@@ -338,6 +320,28 @@ impl IndexStoreTables {
                 )))
             }
         }
+    }
+
+    fn track_coin_balance_change(
+        object: &Object,
+        owner: &SuiAddress,
+        is_removal: bool,
+        balance_changes: &mut HashMap<BalanceKey, BalanceIndexInfo>,
+    ) -> Result<(), StorageError> {
+        if let Some((struct_tag, value)) = Self::extract_coin_balance(object)? {
+            let key = BalanceKey {
+                owner: *owner,
+                coin_type: struct_tag,
+            };
+
+            let mut delta = BalanceIndexInfo::from_coin_value(value);
+            if is_removal {
+                delta = delta.invert();
+            }
+
+            balance_changes.entry(key).or_default().merge_delta(&delta);
+        }
+        Ok(())
     }
     fn open<P: Into<PathBuf>>(path: P) -> Self {
         IndexStoreTables::open_tables_read_write(
