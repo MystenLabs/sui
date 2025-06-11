@@ -358,7 +358,7 @@ mod checked {
                         .get_runtime()
                         .type_to_type_layout(&ty)
                         .map_err(|e| self.convert_vm_error(e))?;
-                    let Some(bytes) = value.simple_serialize(&layout) else {
+                    let Some(bytes) = value.typed_serialize(&layout) else {
                         invariant_violation!("Failed to deserialize already serialized Move value");
                     };
                     Ok((module_id.clone(), tag, bytes))
@@ -918,7 +918,7 @@ mod checked {
                         protocol_config.resolve_abort_locations_to_package_id(),
                     )
                 })?;
-                let Some(bytes) = value.simple_serialize(&layout) else {
+                let Some(bytes) = value.typed_serialize(&layout) else {
                     invariant_violation!("Failed to deserialize already serialized Move value");
                 };
                 // safe because has_public_transfer has been determined by the abilities
