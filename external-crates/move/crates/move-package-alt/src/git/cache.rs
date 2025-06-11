@@ -119,7 +119,7 @@ impl GitTree {
     }
 
     /// Checkout the directory using a sparse checkout. It will try to clone without checkout, set
-    /// sparse checkout directory, and then checkout the folder specified by `self.path` at the
+    /// sparse checkout directory, and then checkout the folder specified by `self.path_in_repo` at the
     /// given sha.
     ///
     /// Fails if `allow_dirty` is false and a dirty checkout of the directory already exists
@@ -133,7 +133,10 @@ impl GitTree {
             // git clone --sparse --filter=blob:none --no-checkout <url> <path>
             run_git_cmd_with_args(
                 &[
+                    "-c",
+                    "advice.detachedHead=false",
                     "clone",
+                    "--quiet",
                     "--sparse",
                     "--filter=blob:none",
                     "--no-checkout",
@@ -153,7 +156,8 @@ impl GitTree {
                 .await?;
 
             // git checkout
-            self.run_git(&["checkout", self.sha.as_ref()]).await?;
+            self.run_git(&["checkout", "--quiet", self.sha.as_ref()])
+                .await?;
             debug!("Checkout at successful");
         } else if self.is_dirty().await && !allow_dirty {
             return Err(GitError::dirty(&self.repo));
@@ -299,14 +303,16 @@ async fn run_git_cmd_with_args(args: &[&str], cwd: Option<&PathBuf>) -> GitResul
         .map_err(|e| GitError::io_error(&cmd, &cwd, e))?;
 
     if !output.stderr.is_empty() {
-        info!("output from `{:?}`", cmd.as_std());
+        info!("output from `{}`", display_cmd(&cmd));
+        debug!("  in directory `{:?}`", cmd.as_std().get_current_dir());
         for line in output.stderr.lines() {
             info!("  │ {}", line.expect("vector read can't fail"));
         }
     }
 
     if !output.stdout.is_empty() {
-        debug!("stdout from `{:?}`", cmd.as_std());
+        debug!("stdout from `{}`", display_cmd(&cmd));
+        debug!("  in directory `{:?}`", cmd.as_std().get_current_dir());
         for line in output.stdout.lines() {
             debug!("  │ {}", line.expect("vector read can't fail"));
         }
@@ -317,6 +323,16 @@ async fn run_git_cmd_with_args(args: &[&str], cwd: Option<&PathBuf>) -> GitResul
     }
 
     String::from_utf8(output.stdout).map_err(|e| GitError::non_utf_output(&cmd, &cwd))
+}
+
+/// Output the `cmd` and its args in a concise form (without quoting or showing the working directory)
+fn display_cmd(cmd: &Command) -> String {
+    let mut result: String = cmd.as_std().get_program().to_string_lossy().into();
+    for arg in cmd.as_std().get_args() {
+        result.push(' ');
+        result.push_str(arg.to_string_lossy().as_ref());
+    }
+    result
 }
 
 // TODO: add more tests
