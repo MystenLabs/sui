@@ -23,6 +23,7 @@ use sui_types::base_types::MoveObjectType;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
+use sui_types::coin::Coin;
 use sui_types::committee::EpochId;
 use sui_types::digests::ObjectDigest;
 use sui_types::digests::TransactionDigest;
@@ -301,22 +302,41 @@ impl IndexStoreTables {
         owner: &SuiAddress,
         is_removal: bool,
         balance_changes: &mut HashMap<BalanceKey, BalanceIndexInfo>,
-    ) {
-        if let Some((TypeTag::Struct(struct_tag), coin)) = object
-            .coin_type_maybe()
-            .and_then(|ct| object.as_coin_maybe().map(|c| (ct, c)))
-        {
-            let key = BalanceKey {
-                owner: *owner,
-                coin_type: (*struct_tag).clone(),
-            };
+    ) -> Result<(), StorageError> {
+        match Coin::extract_balance_if_coin(object) {
+            Ok(Some((TypeTag::Struct(struct_tag), value))) => {
+                let key = BalanceKey {
+                    owner: *owner,
+                    coin_type: (*struct_tag).clone(),
+                };
 
-            let mut delta = BalanceIndexInfo::from_coin_value(coin.value());
-            if is_removal {
-                delta = delta.invert();
+                let mut delta = BalanceIndexInfo::from_coin_value(value);
+                if is_removal {
+                    delta = delta.invert();
+                }
+
+                balance_changes.entry(key).or_default().merge_delta(&delta);
+                Ok(())
             }
-
-            balance_changes.entry(key).or_default().merge_delta(&delta);
+            Ok(Some(_)) => {
+                // Non-struct type tag for a coin - this shouldn't happen
+                Err(StorageError::custom(format!(
+                    "Coin object {} has non-struct type tag",
+                    object.id()
+                )))
+            }
+            Ok(None) => {
+                // Not a coin, nothing to do
+                Ok(())
+            }
+            Err(e) => {
+                // Corrupted coin data
+                Err(StorageError::custom(format!(
+                    "Failed to deserialize coin object {}: {}",
+                    object.id(),
+                    e
+                )))
+            }
         }
     }
     fn open<P: Into<PathBuf>>(path: P) -> Self {
@@ -600,7 +620,7 @@ impl IndexStoreTables {
                             owner,
                             true,
                             &mut balance_changes,
-                        );
+                        )?;
 
                         let owner_key = OwnerIndexKey::from_object(removed_object);
                         batch.delete_batch(&self.owner, [owner_key])?;
@@ -625,7 +645,7 @@ impl IndexStoreTables {
                                 owner,
                                 true,
                                 &mut balance_changes,
-                            );
+                            )?;
 
                             let owner_key = OwnerIndexKey::from_object(old_object);
                             batch.delete_batch(&self.owner, [owner_key])?;
@@ -646,7 +666,12 @@ impl IndexStoreTables {
 
                 match object.owner() {
                     Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => {
-                        Self::track_coin_balance_change(object, owner, false, &mut balance_changes);
+                        Self::track_coin_balance_change(
+                            object,
+                            owner,
+                            false,
+                            &mut balance_changes,
+                        )?;
                         let owner_key = OwnerIndexKey::from_object(object);
                         let owner_info = OwnerIndexInfo::new(object);
                         batch.insert_batch(&self.owner, [(owner_key, owner_info)])?;
