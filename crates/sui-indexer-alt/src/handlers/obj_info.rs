@@ -1703,7 +1703,7 @@ mod tests {
             // (500, 4, 3, 75),   // Medium: 500 objects, 4 rounds, 3 workers
             // (1000, 5, 4, 100), // Large: 1000 objects, 5 rounds, 4 workers
             // (200, 10, 5, 25),  // High contention: fewer objects, more rounds, more workers
-            (1000, 5, 4, 0),
+            (10000, 20, 20, 0),
         ];
 
         for (objects, rounds, workers, sleep_mult) in configs {
