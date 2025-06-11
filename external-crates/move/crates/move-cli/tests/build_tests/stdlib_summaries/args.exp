@@ -5,6 +5,9 @@ BUILDING summaries
 Summary generation successful. Summaries stored in 'package_summaries'
 External Command `cat package_summaries/std/*.yaml`:
 ---
+id:
+  address: std
+  name: address
 doc: " Provides a way to get address length since it's a\n platform-specific parameter."
 immediate_dependencies: []
 attributes: []
@@ -23,6 +26,9 @@ functions:
 structs: {}
 enums: {}
 ---
+id:
+  address: std
+  name: ascii
 doc: " The `ASCII` module defines basic string and char newtypes in Move that verify\n that characters are valid ASCII, and that strings consist of only valid ASCII characters."
 immediate_dependencies:
   - address: std
@@ -87,12 +93,14 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - Datatype:
-                module:
-                  address: std
-                  name: ascii
-                name: String
-                type_arguments: []
+            - phantom: false
+              argument:
+                Datatype:
+                  module:
+                    address: std
+                    name: ascii
+                  name: String
+                  type_arguments: []
   all_characters_printable:
     source_index: 3
     index: 3
@@ -530,6 +538,9 @@ structs:
           type_: u8
 enums: {}
 ---
+id:
+  address: std
+  name: bcs
 doc: " Utility for converting a Move value to its binary representation in BCS (Binary Canonical\n Serialization). BCS is the binary encoding for Move resources and other non-module values\n published on-chain. See https://github.com/diem/bcs#binary-canonical-serialization-bcs for more\n details on BCS."
 immediate_dependencies: []
 attributes: []
@@ -555,6 +566,9 @@ functions:
 structs: {}
 enums: {}
 ---
+id:
+  address: std
+  name: bit_vector
 doc: ~
 immediate_dependencies: []
 attributes: []
@@ -734,6 +748,9 @@ structs:
             vector: bool
 enums: {}
 ---
+id:
+  address: std
+  name: debug
 doc: " Module providing debug functionality."
 immediate_dependencies: []
 attributes: []
@@ -768,6 +785,9 @@ functions:
 structs: {}
 enums: {}
 ---
+id:
+  address: std
+  name: fixed_point32
 doc: " Defines a fixed-point numeric type with a 32-bit integer part and\n a 32-bit fractional part."
 immediate_dependencies: []
 attributes:
@@ -914,6 +934,9 @@ structs:
           type_: u64
 enums: {}
 ---
+id:
+  address: std
+  name: hash
 doc: " Module which defines SHA hashes for byte vectors.\n\n The functions in this module are natively declared both in the Move runtime\n as in the Move prover's prelude."
 immediate_dependencies: []
 attributes: []
@@ -949,6 +972,9 @@ functions:
 structs: {}
 enums: {}
 ---
+id:
+  address: std
+  name: macros
 doc: " This module holds shared implementation of macros used in `std`"
 immediate_dependencies: []
 attributes: []
@@ -1210,7 +1236,8 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - u128
+            - phantom: false
+              argument: u128
   try_as_u16:
     source_index: 12
     index: 18446744073709551615
@@ -1230,7 +1257,8 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - u16
+            - phantom: false
+              argument: u16
   try_as_u32:
     source_index: 13
     index: 18446744073709551615
@@ -1250,7 +1278,8 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - u32
+            - phantom: false
+              argument: u32
   try_as_u64:
     source_index: 14
     index: 18446744073709551615
@@ -1270,7 +1299,8 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - u64
+            - phantom: false
+              argument: u64
   try_as_u8:
     source_index: 11
     index: 18446744073709551615
@@ -1290,7 +1320,8 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - u8
+            - phantom: false
+              argument: u8
   uq_add:
     source_index: 18
     index: 18446744073709551615
@@ -1480,6 +1511,9 @@ functions:
 structs: {}
 enums: {}
 ---
+id:
+  address: std
+  name: option
 doc: " This module defines the Option type and its methods to represent and handle an optional value."
 immediate_dependencies:
   - address: std
@@ -1504,7 +1538,9 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - NamedTypeParameter: Element
+            - phantom: false
+              argument:
+                NamedTypeParameter: Element
   some:
     source_index: 1
     index: 1
@@ -1526,7 +1562,9 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - NamedTypeParameter: Element
+            - phantom: false
+              argument:
+                NamedTypeParameter: Element
   is_none:
     source_index: 2
     index: 2
@@ -1548,7 +1586,9 @@ functions:
                   name: option
                 name: Option
                 type_arguments:
-                  - NamedTypeParameter: Element
+                  - phantom: false
+                    argument:
+                      NamedTypeParameter: Element
     return_:
       - bool
   is_some:
@@ -1572,7 +1612,9 @@ functions:
                   name: option
                 name: Option
                 type_arguments:
-                  - NamedTypeParameter: Element
+                  - phantom: false
+                    argument:
+                      NamedTypeParameter: Element
     return_:
       - bool
   contains:
@@ -1596,7 +1638,9 @@ functions:
                   name: option
                 name: Option
                 type_arguments:
-                  - NamedTypeParameter: Element
+                  - phantom: false
+                    argument:
+                      NamedTypeParameter: Element
       - name: e_ref
         type_:
           Reference:
@@ -1625,7 +1669,9 @@ functions:
                   name: option
                 name: Option
                 type_arguments:
-                  - NamedTypeParameter: Element
+                  - phantom: false
+                    argument:
+                      NamedTypeParameter: Element
     return_:
       - Reference:
           - false
@@ -1651,7 +1697,9 @@ functions:
                   name: option
                 name: Option
                 type_arguments:
-                  - NamedTypeParameter: Element
+                  - phantom: false
+                    argument:
+                      NamedTypeParameter: Element
       - name: default_ref
         type_:
           Reference:
@@ -1684,7 +1732,9 @@ functions:
                   name: option
                 name: Option
                 type_arguments:
-                  - NamedTypeParameter: Element
+                  - phantom: false
+                    argument:
+                      NamedTypeParameter: Element
       - name: default
         type_:
           NamedTypeParameter: Element
@@ -1711,7 +1761,9 @@ functions:
                   name: option
                 name: Option
                 type_arguments:
-                  - NamedTypeParameter: Element
+                  - phantom: false
+                    argument:
+                      NamedTypeParameter: Element
       - name: e
         type_:
           NamedTypeParameter: Element
@@ -1737,7 +1789,9 @@ functions:
                   name: option
                 name: Option
                 type_arguments:
-                  - NamedTypeParameter: Element
+                  - phantom: false
+                    argument:
+                      NamedTypeParameter: Element
     return_:
       - NamedTypeParameter: Element
   borrow_mut:
@@ -1761,7 +1815,9 @@ functions:
                   name: option
                 name: Option
                 type_arguments:
-                  - NamedTypeParameter: Element
+                  - phantom: false
+                    argument:
+                      NamedTypeParameter: Element
     return_:
       - Reference:
           - true
@@ -1787,7 +1843,9 @@ functions:
                   name: option
                 name: Option
                 type_arguments:
-                  - NamedTypeParameter: Element
+                  - phantom: false
+                    argument:
+                      NamedTypeParameter: Element
       - name: e
         type_:
           NamedTypeParameter: Element
@@ -1814,7 +1872,9 @@ functions:
                   name: option
                 name: Option
                 type_arguments:
-                  - NamedTypeParameter: Element
+                  - phantom: false
+                    argument:
+                      NamedTypeParameter: Element
       - name: e
         type_:
           NamedTypeParameter: Element
@@ -1825,7 +1885,9 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - NamedTypeParameter: Element
+            - phantom: false
+              argument:
+                NamedTypeParameter: Element
   destroy_with_default:
     source_index: 13
     index: 13
@@ -1846,7 +1908,9 @@ functions:
               name: option
             name: Option
             type_arguments:
-              - NamedTypeParameter: Element
+              - phantom: false
+                argument:
+                  NamedTypeParameter: Element
       - name: default
         type_:
           NamedTypeParameter: Element
@@ -1871,7 +1935,9 @@ functions:
               name: option
             name: Option
             type_arguments:
-              - NamedTypeParameter: Element
+              - phantom: false
+                argument:
+                  NamedTypeParameter: Element
     return_:
       - NamedTypeParameter: Element
   destroy_none:
@@ -1893,7 +1959,9 @@ functions:
               name: option
             name: Option
             type_arguments:
-              - NamedTypeParameter: Element
+              - phantom: false
+                argument:
+                  NamedTypeParameter: Element
     return_: []
   to_vec:
     source_index: 16
@@ -1914,7 +1982,9 @@ functions:
               name: option
             name: Option
             type_arguments:
-              - NamedTypeParameter: Element
+              - phantom: false
+                argument:
+                  NamedTypeParameter: Element
     return_:
       - vector:
           NamedTypeParameter: Element
@@ -1940,7 +2010,9 @@ functions:
               name: option
             name: Option
             type_arguments:
-              - NamedTypeParameter: $T
+              - phantom: false
+                argument:
+                  NamedTypeParameter: $T
       - name: $f
         type_:
           fun:
@@ -1951,7 +2023,9 @@ functions:
                   name: option
                 name: Option
                 type_arguments:
-                  - NamedTypeParameter: $U
+                  - phantom: false
+                    argument:
+                      NamedTypeParameter: $U
     return_:
       - Datatype:
           module:
@@ -1959,7 +2033,9 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - NamedTypeParameter: $U
+            - phantom: false
+              argument:
+                NamedTypeParameter: $U
   and_ref:
     source_index: 23
     index: 18446744073709551615
@@ -1984,7 +2060,9 @@ functions:
                   name: option
                 name: Option
                 type_arguments:
-                  - NamedTypeParameter: $T
+                  - phantom: false
+                    argument:
+                      NamedTypeParameter: $T
       - name: $f
         type_:
           fun:
@@ -1997,7 +2075,9 @@ functions:
                   name: option
                 name: Option
                 type_arguments:
-                  - NamedTypeParameter: $U
+                  - phantom: false
+                    argument:
+                      NamedTypeParameter: $U
     return_:
       - Datatype:
           module:
@@ -2005,7 +2085,9 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - NamedTypeParameter: $U
+            - phantom: false
+              argument:
+                NamedTypeParameter: $U
   destroy:
     source_index: 17
     index: 18446744073709551615
@@ -2029,7 +2111,9 @@ functions:
               name: option
             name: Option
             type_arguments:
-              - NamedTypeParameter: $T
+              - phantom: false
+                argument:
+                  NamedTypeParameter: $T
       - name: $f
         type_:
           fun:
@@ -2056,7 +2140,9 @@ functions:
               name: option
             name: Option
             type_arguments:
-              - NamedTypeParameter: $T
+              - phantom: false
+                argument:
+                  NamedTypeParameter: $T
       - name: $default
         type_:
           NamedTypeParameter: $T
@@ -2085,7 +2171,9 @@ functions:
               name: option
             name: Option
             type_arguments:
-              - NamedTypeParameter: $T
+              - phantom: false
+                argument:
+                  NamedTypeParameter: $T
       - name: $f
         type_:
           fun:
@@ -2117,7 +2205,9 @@ functions:
                   name: option
                 name: Option
                 type_arguments:
-                  - NamedTypeParameter: $T
+                  - phantom: false
+                    argument:
+                      NamedTypeParameter: $T
       - name: $f
         type_:
           fun:
@@ -2151,7 +2241,9 @@ functions:
                   name: option
                 name: Option
                 type_arguments:
-                  - NamedTypeParameter: $T
+                  - phantom: false
+                    argument:
+                      NamedTypeParameter: $T
       - name: $f
         type_:
           fun:
@@ -2181,7 +2273,9 @@ functions:
               name: option
             name: Option
             type_arguments:
-              - NamedTypeParameter: $T
+              - phantom: false
+                argument:
+                  NamedTypeParameter: $T
       - name: $f
         type_:
           fun:
@@ -2196,7 +2290,9 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - NamedTypeParameter: $T
+            - phantom: false
+              argument:
+                NamedTypeParameter: $T
   is_some_and:
     source_index: 27
     index: 18446744073709551615
@@ -2219,7 +2315,9 @@ functions:
                   name: option
                 name: Option
                 type_arguments:
-                  - NamedTypeParameter: $T
+                  - phantom: false
+                    argument:
+                      NamedTypeParameter: $T
       - name: $f
         type_:
           fun:
@@ -2251,7 +2349,9 @@ functions:
               name: option
             name: Option
             type_arguments:
-              - NamedTypeParameter: $T
+              - phantom: false
+                argument:
+                  NamedTypeParameter: $T
       - name: $f
         type_:
           fun:
@@ -2264,7 +2364,9 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - NamedTypeParameter: $U
+            - phantom: false
+              argument:
+                NamedTypeParameter: $U
   map_ref:
     source_index: 25
     index: 18446744073709551615
@@ -2289,7 +2391,9 @@ functions:
                   name: option
                 name: Option
                 type_arguments:
-                  - NamedTypeParameter: $T
+                  - phantom: false
+                    argument:
+                      NamedTypeParameter: $T
       - name: $f
         type_:
           fun:
@@ -2304,7 +2408,9 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - NamedTypeParameter: $U
+            - phantom: false
+              argument:
+                NamedTypeParameter: $U
   or:
     source_index: 21
     index: 18446744073709551615
@@ -2325,7 +2431,9 @@ functions:
               name: option
             name: Option
             type_arguments:
-              - NamedTypeParameter: $T
+              - phantom: false
+                argument:
+                  NamedTypeParameter: $T
       - name: $default
         type_:
           Datatype:
@@ -2334,7 +2442,9 @@ functions:
               name: option
             name: Option
             type_arguments:
-              - NamedTypeParameter: $T
+              - phantom: false
+                argument:
+                  NamedTypeParameter: $T
     return_:
       - Datatype:
           module:
@@ -2342,7 +2452,9 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - NamedTypeParameter: $T
+            - phantom: false
+              argument:
+                NamedTypeParameter: $T
 structs:
   Option:
     index: 0
@@ -2364,9 +2476,12 @@ structs:
           doc: ~
           type_:
             vector:
-              TypeParameter: 0
+              NamedTypeParameter: Element
 enums: {}
 ---
+id:
+  address: std
+  name: string
 doc: " The `string` module defines the `String` type which represents UTF8 encoded\n strings."
 immediate_dependencies:
   - address: std
@@ -2463,12 +2578,14 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - Datatype:
-                module:
-                  address: std
-                  name: string
-                name: String
-                type_arguments: []
+            - phantom: false
+              argument:
+                Datatype:
+                  module:
+                    address: std
+                    name: string
+                  name: String
+                  type_arguments: []
   as_bytes:
     source_index: 4
     index: 4
@@ -2853,6 +2970,9 @@ structs:
             vector: u8
 enums: {}
 ---
+id:
+  address: std
+  name: type_name
 doc: " Functionality for converting Move types into values. Use with care!"
 immediate_dependencies:
   - address: std
@@ -3047,6 +3167,9 @@ structs:
               type_arguments: []
 enums: {}
 ---
+id:
+  address: std
+  name: u128
 doc: ~
 immediate_dependencies:
   - address: std
@@ -3179,7 +3302,8 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - u8
+            - phantom: false
+              argument: u8
   try_as_u16:
     source_index: 8
     index: 8
@@ -3198,7 +3322,8 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - u16
+            - phantom: false
+              argument: u16
   try_as_u32:
     source_index: 9
     index: 9
@@ -3217,7 +3342,8 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - u32
+            - phantom: false
+              argument: u32
   try_as_u64:
     source_index: 10
     index: 10
@@ -3236,7 +3362,8 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - u64
+            - phantom: false
+              argument: u64
   to_string:
     source_index: 11
     index: 11
@@ -3358,6 +3485,9 @@ functions:
 structs: {}
 enums: {}
 ---
+id:
+  address: std
+  name: u16
 doc: ~
 immediate_dependencies:
   - address: std
@@ -3490,7 +3620,8 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - u8
+            - phantom: false
+              argument: u8
   to_string:
     source_index: 8
     index: 8
@@ -3612,6 +3743,9 @@ functions:
 structs: {}
 enums: {}
 ---
+id:
+  address: std
+  name: u256
 doc: ~
 immediate_dependencies:
   - address: std
@@ -3731,7 +3865,8 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - u8
+            - phantom: false
+              argument: u8
   try_as_u16:
     source_index: 7
     index: 7
@@ -3750,7 +3885,8 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - u16
+            - phantom: false
+              argument: u16
   try_as_u32:
     source_index: 8
     index: 8
@@ -3769,7 +3905,8 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - u32
+            - phantom: false
+              argument: u32
   try_as_u64:
     source_index: 9
     index: 9
@@ -3788,7 +3925,8 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - u64
+            - phantom: false
+              argument: u64
   try_as_u128:
     source_index: 10
     index: 10
@@ -3807,7 +3945,8 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - u128
+            - phantom: false
+              argument: u128
   to_string:
     source_index: 11
     index: 11
@@ -3929,6 +4068,9 @@ functions:
 structs: {}
 enums: {}
 ---
+id:
+  address: std
+  name: u32
 doc: ~
 immediate_dependencies:
   - address: std
@@ -4061,7 +4203,8 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - u8
+            - phantom: false
+              argument: u8
   try_as_u16:
     source_index: 8
     index: 8
@@ -4080,7 +4223,8 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - u16
+            - phantom: false
+              argument: u16
   to_string:
     source_index: 9
     index: 9
@@ -4202,6 +4346,9 @@ functions:
 structs: {}
 enums: {}
 ---
+id:
+  address: std
+  name: u64
 doc: ~
 immediate_dependencies:
   - address: std
@@ -4334,7 +4481,8 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - u8
+            - phantom: false
+              argument: u8
   try_as_u16:
     source_index: 8
     index: 8
@@ -4353,7 +4501,8 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - u16
+            - phantom: false
+              argument: u16
   try_as_u32:
     source_index: 9
     index: 9
@@ -4372,7 +4521,8 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - u32
+            - phantom: false
+              argument: u32
   to_string:
     source_index: 10
     index: 10
@@ -4494,6 +4644,9 @@ functions:
 structs: {}
 enums: {}
 ---
+id:
+  address: std
+  name: u8
 doc: ~
 immediate_dependencies:
   - address: std
@@ -4727,6 +4880,9 @@ functions:
 structs: {}
 enums: {}
 ---
+id:
+  address: std
+  name: uq32_32
 doc: " Defines an unsigned, fixed-point numeric type with a 32-bit integer part and a 32-bit fractional\n part. The notation `uq32_32` and `UQ32_32` is based on\n [Q notation](https://en.wikipedia.org/wiki/Q_(number_format)). `q` indicates it a fixed-point\n number. The `u` prefix indicates it is unsigned. The `32_32` suffix indicates the number of\n bits, where the first number indicates the number of bits in the integer part, and the second\n the number of bits in the fractional part--in this case 32 bits for each."
 immediate_dependencies: []
 attributes: []
@@ -5122,6 +5278,9 @@ structs:
           type_: u64
 enums: {}
 ---
+id:
+  address: std
+  name: uq64_64
 doc: " Defines an unsigned, fixed-point numeric type with a 64-bit integer part and a 64-bit fractional\n part. The notation `uq64_64` and `UQ64_64` is based on\n [Q notation](https://en.wikipedia.org/wiki/Q_(number_format)). `q` indicates it a fixed-point\n number. The `u` prefix indicates it is unsigned. The `64_64` suffix indicates the number of\n bits, where the first number indicates the number of bits in the integer part, and the second\n the number of bits in the fractional part--in this case 64 bits for each."
 immediate_dependencies: []
 attributes: []
@@ -5517,6 +5676,9 @@ structs:
           type_: u128
 enums: {}
 ---
+id:
+  address: std
+  name: vector
 doc: " A variable-sized container that can hold any type. Indexing is 0-based, and\n vectors are growable. This module has many native functions."
 immediate_dependencies: []
 attributes:
@@ -6152,7 +6314,8 @@ functions:
             name: option
           name: Option
           type_arguments:
-            - u64
+            - phantom: false
+              argument: u64
   fold:
     source_index: 28
     index: 18446744073709551615
