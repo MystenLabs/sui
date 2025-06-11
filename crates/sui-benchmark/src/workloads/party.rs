@@ -47,7 +47,7 @@ impl std::fmt::Display for PartyTestPayload {
 
 impl Payload for PartyTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
-        debug_assert!(
+        assert!(
             effects.is_ok(),
             "Party transactions should never abort: {effects:?}",
         );
