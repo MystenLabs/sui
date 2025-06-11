@@ -370,11 +370,36 @@ mod tests {
         pruner_hi: u64,
     }
 
+    #[derive(Default)]
+    pub struct FailingBehavior {
+        /// Map of [from, to) -> remaining failure count before success
+        remaining_failures: HashMap<(u64, u64), usize>,
+    }
+
+    impl FailingBehavior {
+        pub fn new() -> Self {
+            Self::default()
+        }
+
+        /// Configure a range to fail the specified number of times before succeeding
+        pub fn with_range_failing(
+            mut self,
+            from: u64,
+            to_exclusive: u64,
+            failure_count: usize,
+        ) -> Self {
+            self.remaining_failures
+                .insert((from, to_exclusive), failure_count);
+            self
+        }
+    }
+
     #[derive(Clone)]
     pub struct MockStore {
         pub watermarks: Arc<Mutex<MockWatermark>>,
         /// Map of checkpoint sequence number to list of transaction sequence numbers.
         pub data: Arc<Mutex<HashMap<u64, Vec<u64>>>>,
+        pub failing_behavior: Arc<Mutex<FailingBehavior>>,
     }
 
     #[derive(Clone)]
@@ -524,12 +549,152 @@ mod tests {
             to_exclusive: u64,
             conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
+            let should_fail = conn
+                .0
+                .failing_behavior
+                .lock()
+                .unwrap()
+                .remaining_failures
+                .get_mut(&(from, to_exclusive))
+                .is_some_and(|remaining| {
+                    if *remaining > 0 {
+                        *remaining -= 1;
+                        true
+                    } else {
+                        false
+                    }
+                });
+
+            if should_fail {
+                return Err(anyhow::anyhow!("Pruning failed"));
+            }
+
             let mut data = conn.0.data.lock().unwrap();
             for cp_sequence_number in from..to_exclusive {
                 data.remove(&cp_sequence_number);
             }
             Ok((to_exclusive - from) as usize)
         }
+    }
+
+    #[test]
+    fn test_pending_ranges_basic_scheduling() {
+        let mut ranges = PendingRanges::default();
+
+        // Schedule initial range
+        ranges.schedule(1, 5);
+
+        // Schedule non-overlapping range
+        ranges.schedule(10, 15);
+
+        // Verify ranges are stored correctly
+        let scheduled: Vec<_> = ranges.iter().collect();
+        assert_eq!(scheduled, vec![(1, 5), (10, 15)]);
+    }
+
+    #[test]
+    fn test_pending_ranges_double_pruning_prevention() {
+        let mut ranges = PendingRanges::default();
+
+        // Schedule initial range
+        ranges.schedule(1, 5);
+
+        // Try to schedule overlapping range.
+        ranges.schedule(3, 7);
+
+        let scheduled: Vec<_> = ranges.iter().collect();
+        assert_eq!(scheduled, vec![(1, 5), (5, 7)]);
+
+        // Try to schedule range that's entirely covered by previous range
+        ranges.schedule(2, 4); // Entirely within (1,5), should be ignored
+        assert_eq!(ranges.len(), 2); // No change
+
+        let scheduled: Vec<_> = ranges.iter().collect();
+        assert_eq!(scheduled, vec![(1, 5), (5, 7)]); // No change
+    }
+
+    #[test]
+    fn test_pending_ranges_exact_duplicate() {
+        let mut ranges = PendingRanges::default();
+
+        // Schedule initial range
+        ranges.schedule(1, 5);
+        assert_eq!(ranges.len(), 1);
+
+        // Schedule exact same range.
+        ranges.schedule(1, 5);
+        assert_eq!(ranges.len(), 1); // No change
+
+        let scheduled: Vec<_> = ranges.iter().collect();
+        assert_eq!(scheduled, vec![(1, 5)]);
+    }
+
+    #[test]
+    fn test_pending_ranges_adjacent_ranges() {
+        let mut ranges = PendingRanges::default();
+
+        // Schedule initial range
+        ranges.schedule(1, 5);
+
+        // Schedule adjacent range
+        ranges.schedule(5, 10);
+
+        let scheduled: Vec<_> = ranges.iter().collect();
+        assert_eq!(scheduled, vec![(1, 5), (5, 10)]);
+    }
+
+    #[test]
+    fn test_pending_ranges_remove_and_watermark() {
+        let mut ranges = PendingRanges::default();
+
+        // Schedule multiple ranges
+        ranges.schedule(1, 5);
+        ranges.schedule(10, 15);
+        ranges.schedule(20, 25);
+        assert_eq!(ranges.len(), 3);
+        assert_eq!(ranges.get_pruner_hi(), 1);
+
+        // Remove first range - watermark should advance
+        ranges.remove(&1);
+        assert_eq!(ranges.len(), 2);
+        assert_eq!(ranges.get_pruner_hi(), 10); // Next range starts at 10
+
+        // Remove middle range
+        ranges.remove(&10);
+        assert_eq!(ranges.len(), 1);
+        assert_eq!(ranges.get_pruner_hi(), 20);
+
+        // Remove last range - watermark should use last_scheduled_range
+        ranges.remove(&20);
+        assert_eq!(ranges.len(), 0);
+        assert_eq!(ranges.get_pruner_hi(), 25); // End of last scheduled range
+    }
+
+    #[test]
+    fn test_pending_ranges_remove_and_watermark_out_of_order() {
+        let mut ranges = PendingRanges::default();
+
+        // Schedule multiple ranges
+        ranges.schedule(1, 5);
+        ranges.schedule(10, 15);
+        ranges.schedule(20, 25);
+        assert_eq!(ranges.len(), 3);
+        assert_eq!(ranges.get_pruner_hi(), 1);
+
+        // Remove middle range
+        ranges.remove(&10);
+        assert_eq!(ranges.len(), 2);
+        assert_eq!(ranges.get_pruner_hi(), 1);
+
+        // Remove first range
+        ranges.remove(&1);
+        assert_eq!(ranges.len(), 1);
+        assert_eq!(ranges.get_pruner_hi(), 20);
+
+        // Remove last range - watermark should use last_scheduled_range
+        ranges.remove(&20);
+        assert_eq!(ranges.len(), 0);
+        assert_eq!(ranges.get_pruner_hi(), 25); // End of last scheduled range
     }
 
     #[tokio::test]
@@ -566,6 +731,7 @@ mod tests {
         let store = MockStore {
             watermarks: Arc::new(Mutex::new(watermark)),
             data: Arc::new(Mutex::new(test_data.clone())),
+            failing_behavior: Arc::new(Mutex::new(FailingBehavior::new())),
         };
 
         // Start the pruner
@@ -661,6 +827,7 @@ mod tests {
         let store = MockStore {
             watermarks: Arc::new(Mutex::new(watermark)),
             data: Arc::new(Mutex::new(test_data.clone())),
+            failing_behavior: Arc::new(Mutex::new(FailingBehavior::new())),
         };
 
         // Start the pruner
@@ -697,6 +864,106 @@ mod tests {
                 watermark.pruner_hi > 1,
                 "Pruner watermark should be updated"
             );
+        }
+
+        // Clean up
+        cancel.cancel();
+        let _ = tokio::time::timeout(Duration::from_millis(1000), pruner_handle).await;
+    }
+
+    #[tokio::test]
+    async fn test_pruner_watermark_update_with_retries() {
+        let handler = Arc::new(DataPipeline);
+        let pruner_config = PrunerConfig {
+            interval_ms: 3_000, // Long interval to test retried attempts of failed range.
+            delay_ms: 100,      // Short delay to speed up each interval
+            retention: 1,
+            max_chunk_size: 1, // Process one checkpoint at a time
+            prune_concurrency: 1,
+        };
+        let registry = Registry::new_custom(Some("test".to_string()), None).unwrap();
+        let metrics = IndexerMetrics::new(&registry);
+        let cancel = CancellationToken::new();
+
+        // Set up test data for checkpoints 1-4
+        let test_data = HashMap::from([
+            (1, vec![1, 2]),
+            (2, vec![3, 4]),
+            (3, vec![5, 6]),
+            (4, vec![7, 8]),
+        ]);
+
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+
+        let watermark = MockWatermark {
+            epoch_hi_inclusive: 0,
+            checkpoint_hi_inclusive: 4,
+            tx_hi: 8,
+            timestamp_ms_hi_inclusive: timestamp,
+            reader_lo: 4,        // Allow pruning up to checkpoint 4 (exclusive)
+            pruner_timestamp: 0, // Past timestamp so delay doesn't block
+            pruner_hi: 1,
+        };
+
+        // Configure failing behavior: range [1,2) should fail once before succeeding
+        let failing_behavior =
+            FailingBehavior::new().with_range_failing(1, 2, /* failure_count= */ 1);
+
+        let store = MockStore {
+            watermarks: Arc::new(Mutex::new(watermark)),
+            data: Arc::new(Mutex::new(test_data.clone())),
+            failing_behavior: Arc::new(Mutex::new(failing_behavior)),
+        };
+
+        // Start the pruner
+        let store_clone = store.clone();
+        let cancel_clone = cancel.clone();
+        let pruner_handle = tokio::spawn(async move {
+            pruner(
+                handler,
+                Some(pruner_config),
+                store_clone,
+                metrics,
+                cancel_clone,
+            )
+            .await
+        });
+
+        // Wait for first pruning cycle - ranges [2,3) and [3,4) should succeed, [1,2) should fail
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        {
+            let data = store.data.lock().unwrap();
+            let watermarks = store.watermarks.lock().unwrap();
+
+            // Verify watermark doesn't advance past the failed range [1,2)
+            assert_eq!(
+                watermarks.pruner_hi, 1,
+                "Pruner watermark should remain at 1 because range [1,2) failed"
+            );
+            assert!(data.contains_key(&1), "Checkpoint 1 should be preserved");
+            assert!(!data.contains_key(&2), "Checkpoint 2 should be pruned");
+            assert!(!data.contains_key(&3), "Checkpoint 3 should be pruned");
+            assert!(data.contains_key(&4), "Checkpoint 4 should be preserved");
+        }
+
+        // Wait for second pruning cycle - range [1,2) should succeed on retry
+        tokio::time::sleep(Duration::from_millis(3000)).await;
+        {
+            let data = store.data.lock().unwrap();
+            let watermarks = store.watermarks.lock().unwrap();
+
+            // Verify watermark advances after all ranges complete successfully
+            assert_eq!(
+                watermarks.pruner_hi, 4,
+                "Pruner watermark should advance to 4 after all ranges complete"
+            );
+            assert!(!data.contains_key(&1), "Checkpoint 1 should be pruned");
+            assert!(!data.contains_key(&2), "Checkpoint 2 should be pruned");
+            assert!(!data.contains_key(&3), "Checkpoint 3 should be pruned");
+            assert!(data.contains_key(&4), "Checkpoint 4 should be preserved");
         }
 
         // Clean up
