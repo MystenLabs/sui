@@ -252,6 +252,7 @@ impl Workload<dyn Payload> for PartyWorkload {
                 .publish(path)
                 .build_and_sign(first_gas.2.as_ref());
         let effects = proxy.execute_transaction_block(transaction).await.unwrap();
+        assert!(effects.is_ok(), "Failed to publish party package");
         let created = effects.created();
         let package_obj = created
             .iter()
@@ -276,7 +277,7 @@ impl Workload<dyn Payload> for PartyWorkload {
         let mut futures = vec![];
         for (gas, sender, keypair) in &self.payload_gas[..self.payload_gas.len() / 2] {
             let transaction = TestTransactionBuilder::new(*sender, *gas, reference_gas_price)
-                .move_call(self.package_id, "mp", "create_party", vec![])
+                .move_call(self.package_id, "party", "create_party", vec![])
                 .build_and_sign(keypair.as_ref());
             let state = state.clone();
             let system_state_observer = system_state_observer.clone();
@@ -320,7 +321,7 @@ impl Workload<dyn Payload> for PartyWorkload {
         let mut futures = vec![];
         for (gas, sender, keypair) in &self.payload_gas[self.payload_gas.len() / 2..] {
             let transaction = TestTransactionBuilder::new(*sender, *gas, reference_gas_price)
-                .move_call(self.package_id, "mp", "create_fastpath", vec![])
+                .move_call(self.package_id, "party", "create_fastpath", vec![])
                 .build_and_sign(keypair.as_ref());
             let state = state.clone();
             let system_state_observer = system_state_observer.clone();

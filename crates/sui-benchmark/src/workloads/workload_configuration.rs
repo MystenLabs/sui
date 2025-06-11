@@ -222,7 +222,8 @@ impl WorkloadConfiguration {
             + weights.randomness
             + weights.expected_failure
             + weights.randomized_transaction
-            + weights.slow;
+            + weights.slow
+            + weights.party;
         let reference_gas_price = system_state_observer.state.borrow().reference_gas_price;
         let mut workload_builders = vec![];
         let shared_workload = SharedCounterWorkloadBuilder::from(

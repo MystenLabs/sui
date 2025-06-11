@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module party::party {
-    use std::vector;
-    use sui::clock;
+    use sui::party;
 
     public struct Obj has key {
         id: object::UID,
@@ -15,7 +14,7 @@ module party::party {
             Obj {
                 id: object::new(ctx),
             },
-            ctx.sender(),
+            party::single_owner(ctx.sender()),
         );
     }
 
@@ -31,7 +30,7 @@ module party::party {
 
     /// Transfer an object to a party owner.
     public fun transfer_party(obj: Obj, recipient: address) {
-        transfer::party_transfer(obj, recipient);
+        transfer::party_transfer(obj, party::single_owner(recipient));
     }
 
     /// Transfer an object to a fastpath owner.
