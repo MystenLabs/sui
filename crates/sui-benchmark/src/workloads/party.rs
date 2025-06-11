@@ -177,6 +177,12 @@ impl WorkloadBuilder<dyn Payload> for PartyWorkloadBuilder {
         init_gas: Vec<Gas>,
         payload_gas: Vec<Gas>,
     ) -> Box<dyn Workload<dyn Payload>> {
+        for (i, gas) in init_gas.iter().enumerate() {
+            info!("PartyWorkloadBuilder: init_gas[{i}] = {:?}", gas.0);
+        }
+        for (i, gas) in payload_gas.iter().enumerate() {
+            info!("PartyWorkloadBuilder: payload_gas[{i}] = {:?}", gas.0);
+        }
         Box::<dyn Workload<dyn Payload>>::from(Box::new(PartyWorkload {
             package_id: ObjectID::ZERO,
             init_gas,
@@ -197,6 +203,10 @@ impl PartyWorkloadBuilder {
         let target_qps = (workload_weight * target_qps as f32).ceil() as u64;
         let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
         let max_ops = target_qps * in_flight_ratio;
+        info!(
+            "Party workload: max_ops = {}, num_workers = {}, target_qps = {}, in_flight_ratio = {}, workload_weight = {}",
+            max_ops, num_workers, target_qps, in_flight_ratio, workload_weight
+        );
         if max_ops == 0 || num_workers == 0 {
             None
         } else {
@@ -252,6 +262,7 @@ impl Workload<dyn Payload> for PartyWorkload {
                 .publish(path)
                 .build_and_sign(first_gas.2.as_ref());
         let effects = proxy.execute_transaction_block(transaction).await.unwrap();
+        assert!(effects.is_ok(), "Failed to publish party package");
         let created = effects.created();
         let package_obj = created
             .iter()
@@ -274,15 +285,27 @@ impl Workload<dyn Payload> for PartyWorkload {
         let state = Arc::new(Mutex::new(InMemoryWallet::new_empty()));
 
         let mut futures = vec![];
-        for (gas, sender, keypair) in &self.payload_gas[..self.payload_gas.len() / 2] {
+        info!(
+            "make_test_payloads: Calling create_party with gas from 0 to {}",
+            self.payload_gas.len() / 2
+        );
+        for (i, (gas, sender, keypair)) in self.payload_gas[..self.payload_gas.len() / 2]
+            .iter()
+            .enumerate()
+        {
+            info!("make_test_payloads: create_party call number {i} with gas object {gas:?}");
             let transaction = TestTransactionBuilder::new(*sender, *gas, reference_gas_price)
-                .move_call(self.package_id, "mp", "create_party", vec![])
+                .move_call(self.package_id, "party", "create_party", vec![])
                 .build_and_sign(keypair.as_ref());
             let state = state.clone();
             let system_state_observer = system_state_observer.clone();
             let proxy = proxy.clone();
             futures.push(async move {
                 let effects = proxy.execute_transaction_block(transaction).await.unwrap();
+                info!(
+                    "make_test_payloads: create_party call number {i} effects status: {:?}",
+                    effects.status()
+                );
                 let (
                     obj_ref,
                     Owner::ConsensusAddressOwner {
@@ -318,9 +341,14 @@ impl Workload<dyn Payload> for PartyWorkload {
         let mut payloads = futures::future::join_all(futures).await;
 
         let mut futures = vec![];
+        info!(
+            "make_test_payloads: Calling create_fastpath with gas from {} to {}",
+            self.payload_gas.len() / 2,
+            self.payload_gas.len()
+        );
         for (gas, sender, keypair) in &self.payload_gas[self.payload_gas.len() / 2..] {
             let transaction = TestTransactionBuilder::new(*sender, *gas, reference_gas_price)
-                .move_call(self.package_id, "mp", "create_fastpath", vec![])
+                .move_call(self.package_id, "party", "create_fastpath", vec![])
                 .build_and_sign(keypair.as_ref());
             let state = state.clone();
             let system_state_observer = system_state_observer.clone();
@@ -349,6 +377,7 @@ impl Workload<dyn Payload> for PartyWorkload {
         }
         payloads.extend(futures::future::join_all(futures).await);
 
+        info!("make_test_payloads: Created {} payloads", payloads.len());
         payloads
             .into_iter()
             .map(|b| Box::<dyn Payload>::from(Box::new(b)))

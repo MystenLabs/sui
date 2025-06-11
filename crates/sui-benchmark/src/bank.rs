@@ -51,7 +51,7 @@ impl BenchmarkBank {
         let mut new_gas_coins: Vec<Gas> = vec![];
         let chunked_coin_configs = all_coin_configs.chunks(chunk_size as usize);
 
-        // Split off the initlization coin for this workload, to reduce contention
+        // Split off the initialization coin for this workload, to reduce contention
         // of main gas coin used by other instances of this tool.
         let total_gas_needed: u64 = all_coin_configs.iter().map(|c| c.amount).sum();
         let mut init_coin = self
@@ -193,11 +193,17 @@ impl BenchmarkBank {
         );
 
         match effects.created().first() {
-            Some(created_coin) => Ok((
-                created_coin.0,
-                created_coin.1.get_owner_address()?,
-                self.primary_coin.2.clone(),
-            )),
+            Some(created_coin) => {
+                info!(
+                    "Created initialization coin with ID: {:?}",
+                    created_coin.0 .0
+                );
+                Ok((
+                    created_coin.0,
+                    created_coin.1.get_owner_address()?,
+                    self.primary_coin.2.clone(),
+                ))
+            }
             None => panic!("Failed to create initilization coin for workload."),
         }
     }

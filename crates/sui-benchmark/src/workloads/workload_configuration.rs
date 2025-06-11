@@ -153,6 +153,7 @@ impl WorkloadConfiguration {
         gas_request_chunk_size: u64,
     ) -> Result<BTreeMap<GroupID, Vec<WorkloadInfo>>> {
         // Generate the workloads and init them
+        info!("Building {} workloads", workload_builders.len());
         let reference_gas_price = system_state_observer.state.borrow().reference_gas_price;
         let (workload_params, workload_builders): (Vec<_>, Vec<_>) = workload_builders
             .into_iter()
@@ -166,6 +167,7 @@ impl WorkloadConfiguration {
                 gas_request_chunk_size,
             )
             .await?;
+        info!("Initializing {} workloads", workloads.len());
         for workload in workloads.iter_mut() {
             workload
                 .init(bank.proxy.clone(), system_state_observer.clone())
@@ -222,7 +224,8 @@ impl WorkloadConfiguration {
             + weights.randomness
             + weights.expected_failure
             + weights.randomized_transaction
-            + weights.slow;
+            + weights.slow
+            + weights.party;
         let reference_gas_price = system_state_observer.state.borrow().reference_gas_price;
         let mut workload_builders = vec![];
         let shared_workload = SharedCounterWorkloadBuilder::from(
