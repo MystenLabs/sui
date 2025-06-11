@@ -423,19 +423,15 @@ async fn test_invalid_requests() {
     let result = grpc_client.get_balance(request).await;
     assert!(result.is_err(), "Expected error for missing owner");
 
-    // Test with missing coin type - API defaults to SUI
+    // Test with missing coin type - should error
     let address = test_cluster.get_address_0();
-    let response = grpc_client
+    let result = grpc_client
         .get_balance(GetBalanceRequest {
             owner: Some(address.to_string()),
             coin_type: None,
         })
-        .await
-        .unwrap()
-        .into_inner();
-    let balance = response.balance.unwrap();
-    assert_eq!(balance.coin_type, Some(SUI_COIN_TYPE.to_string()));
-    assert!(balance.total_balance.unwrap() > 0);
+        .await;
+    assert!(result.is_err(), "Expected error for missing coin_type");
 
     // Test with invalid address format
     let result = grpc_client

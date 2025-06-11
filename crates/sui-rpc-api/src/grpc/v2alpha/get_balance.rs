@@ -9,8 +9,6 @@ use sui_sdk_types::StructTag;
 use sui_types::base_types::SuiAddress;
 use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 
-const DEFAULT_COIN_TYPE: &str = "0x2::sui::SUI";
-
 #[tracing::instrument(skip(service))]
 pub fn get_balance(service: &RpcService, request: GetBalanceRequest) -> Result<GetBalanceResponse> {
     let indexes = service
@@ -35,8 +33,12 @@ pub fn get_balance(service: &RpcService, request: GetBalanceRequest) -> Result<G
         )
     })?;
 
-    // Parse coin type (default to SUI if not provided)
-    let coin_type_str = request.coin_type.as_deref().unwrap_or(DEFAULT_COIN_TYPE);
+    // Parse coin type
+    let coin_type_str = request
+        .coin_type
+        .as_ref()
+        .ok_or_else(|| RpcError::new(tonic::Code::InvalidArgument, "coin_type is required"))?;
+
     let coin_type = coin_type_str.parse::<StructTag>().map_err(|e| {
         RpcError::new(
             tonic::Code::InvalidArgument,

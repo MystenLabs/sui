@@ -86,8 +86,7 @@ message GetBalanceRequest {
   // Required. The owner's Sui address.
   optional string owner = 1;
 
-  // The type names for the coin (e.g., 0x2::sui::SUI).
-  // If not specified, defaults to 0x2::sui::SUI.
+  // Required. The type names for the coin (e.g., 0x2::sui::SUI).
   optional string coin_type = 2;
 }
 
