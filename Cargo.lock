@@ -8215,6 +8215,7 @@ dependencies = [
  "toml_edit 0.22.24",
  "tracing",
  "tracing-subscriber",
+ "walkdir",
 ]
 
 [[package]]
