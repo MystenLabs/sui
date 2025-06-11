@@ -63,6 +63,7 @@ use std::sync::Arc;
 use sui_config::ExecutionCacheConfig;
 use sui_macros::fail_point;
 use sui_protocol_config::ProtocolVersion;
+use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::base_types::{
     EpochId, FullObjectID, ObjectID, ObjectRef, SequenceNumber, VerifiedExecutionData,
 };
@@ -2151,6 +2152,13 @@ impl TransactionCacheRead for WritebackCache {
                     .collect()
             })
             .boxed()
+    }
+
+    fn take_accumulator_events(&self, digest: &TransactionDigest) -> Option<Vec<AccumulatorEvent>> {
+        self.dirty
+            .pending_transaction_writes
+            .get(digest)
+            .map(|transaction_output| transaction_output.take_accumulator_events())
     }
 }
 

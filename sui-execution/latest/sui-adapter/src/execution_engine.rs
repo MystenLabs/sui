@@ -685,8 +685,7 @@ mod checked {
                 .expect("ConsensusCommitPrologue cannot fail");
                 Ok((Mode::empty_results(), vec![]))
             }
-            TransactionKind::ProgrammableTransaction(pt)
-            | TransactionKind::ProgrammableSystemTransaction(pt) => {
+            TransactionKind::ProgrammableTransaction(pt) => {
                 programmable_transactions::execution::execute::<Mode>(
                     protocol_config,
                     metrics,
@@ -698,6 +697,20 @@ mod checked {
                     pt,
                     trace_builder_opt,
                 )
+            }
+            TransactionKind::ProgrammableSystemTransaction(pt) => {
+                programmable_transactions::execution::execute::<execution_mode::System>(
+                    protocol_config,
+                    metrics,
+                    move_vm,
+                    temporary_store,
+                    store.as_backing_package_store(),
+                    tx_ctx,
+                    gas_charger,
+                    pt,
+                    trace_builder_opt,
+                )?;
+                Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::EndOfEpochTransaction(txns) => {
                 let mut builder = ProgrammableTransactionBuilder::new();

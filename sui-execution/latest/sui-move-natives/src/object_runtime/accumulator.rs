@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
-use move_vm_types::{loaded_data::runtime_types::Type, values::Value};
+use move_core_types::account_address::AccountAddress;
+use move_vm_types::loaded_data::runtime_types::Type;
 use sui_types::{base_types::ObjectID, effects::AccumulatorOperation};
 
 #[derive(Debug)]
@@ -22,7 +22,7 @@ impl MoveAccumulatorAction {
 
 #[derive(Debug)]
 pub enum MoveAccumulatorValue {
-    MoveValue(Type, StructTag, Value),
+    U64(u64),
 }
 
 #[derive(Debug)]

@@ -6,6 +6,8 @@
 /// custom coins with `Supply` and `Balance`s.
 module sui::balance;
 
+use sui::accumulator;
+
 /// Allows calling `.into_coin()` on a `Balance` to turn it into a coin.
 public use fun sui::coin::from_balance as Balance.into_coin;
 
@@ -139,4 +141,20 @@ public fun destroy_for_testing<T>(self: Balance<T>): u64 {
 /// Create a `Supply` of any coin for testing purposes.
 public fun create_supply_for_testing<T>(): Supply<T> {
     Supply { value: 0 }
+}
+
+#[allow(unused_function)]
+fun send_to_account<T>(balance: Balance<T>, recipient: address) {
+    let Balance { value } = balance;
+    let accumulator = accumulator::get_accumulator_field_address<Balance<T>>(recipient);
+    accumulator::emit_deposit_event<Balance<T>>(accumulator, recipient, value);
+}
+
+#[allow(unused_function)]
+fun withdraw_from_account<T>(amount: u64, ctx: &TxContext): Balance<T> {
+    let owner = ctx.sender();
+    let accumulator = accumulator::get_accumulator_field_address<Balance<T>>(owner);
+    let credit = Balance { value: amount };
+    accumulator::emit_withdraw_event<Balance<T>>(accumulator, owner, amount);
+    credit
 }

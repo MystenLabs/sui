@@ -55,9 +55,11 @@ mod checked {
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
+        accumulator_event::AccumulatorEvent,
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
         coin::Coin,
+        effects::{AccumulatorAddress, AccumulatorValue, AccumulatorWriteV1},
         error::{ExecutionError, ExecutionErrorKind, SuiError, command_argument_error},
         event::Event,
         execution::{ExecutionResults, ExecutionResultsV2},
@@ -941,6 +943,7 @@ mod checked {
             }
 
             finish(
+                vm,
                 protocol_config,
                 state_view,
                 gas_charger,
@@ -1266,6 +1269,7 @@ mod checked {
     }
 
     pub fn finish(
+        vm: &MoveVM,
         protocol_config: &ProtocolConfig,
         state_view: &dyn ExecutionState,
         gas_charger: &mut GasCharger,
@@ -1370,7 +1374,23 @@ mod checked {
         let accumulator_events = accumulator_events
             .into_iter()
             .map(|accum_event| match accum_event.value {
-                MoveAccumulatorValue::MoveValue(_, _, _) => todo!(),
+                MoveAccumulatorValue::U64(amount) => {
+                    let value = AccumulatorValue::Integer(amount);
+                    let address = AccumulatorAddress::new(
+                        accum_event.target_addr.into(),
+                        vm.get_runtime()
+                            .get_type_tag(&accum_event.target_ty)
+                            .unwrap(),
+                    );
+
+                    let write = AccumulatorWriteV1 {
+                        address,
+                        operation: accum_event.action.into_sui_accumulator_action(),
+                        value,
+                    };
+
+                    AccumulatorEvent::new(accum_event.accumulator_id, write)
+                }
             })
             .collect();
 
