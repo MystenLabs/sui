@@ -381,22 +381,27 @@ impl IndexStoreTables {
 
         self.initialize_current_epoch(authority_store, checkpoint_store)?;
 
-        let coin_index = Mutex::new(HashMap::new());
+        // Only index live objects if genesis checkpoint has been executed.
+        // If genesis hasn't been executed yet, the objects will be properly indexed
+        // as checkpoints are processed through the normal checkpoint execution path.
+        if highest_executed_checkpint.is_some() {
+            let coin_index = Mutex::new(HashMap::new());
 
-        let make_live_object_indexer = RpcParLiveObjectSetIndexer {
-            tables: self,
-            coin_index: &coin_index,
-            epoch_store,
-            package_store,
-            object_store: authority_store as _,
-        };
+            let make_live_object_indexer = RpcParLiveObjectSetIndexer {
+                tables: self,
+                coin_index: &coin_index,
+                epoch_store,
+                package_store,
+                object_store: authority_store as _,
+            };
 
-        crate::par_index_live_object_set::par_index_live_object_set(
-            authority_store,
-            &make_live_object_indexer,
-        )?;
+            crate::par_index_live_object_set::par_index_live_object_set(
+                authority_store,
+                &make_live_object_indexer,
+            )?;
 
-        self.coin.multi_insert(coin_index.into_inner().unwrap())?;
+            self.coin.multi_insert(coin_index.into_inner().unwrap())?;
+        }
 
         self.watermark.insert(
             &Watermark::Indexed,
