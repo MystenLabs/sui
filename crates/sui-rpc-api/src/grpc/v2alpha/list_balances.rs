@@ -59,7 +59,7 @@ pub fn list_balances(
 
     let next_page_token = if balances.len() > page_size {
         // SAFETY: We've already verified that balances is greater than limit, which is
-        // gaurenteed to be >= 1.
+        // guaranteed to be >= 1.
         balances
             .pop()
             .unwrap()
