@@ -1088,7 +1088,7 @@ mod test {
                 expected_failure_config: ExpectedFailurePayloadCfg {
                     failure_type: ExpectedFailureType::try_from(0).unwrap(),
                 },
-                party_weight: 0,
+                party_weight: 1,
             }
         }
     }
