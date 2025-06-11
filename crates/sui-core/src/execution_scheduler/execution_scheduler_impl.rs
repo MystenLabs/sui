@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    authority::{authority_per_epoch_store::AuthorityPerEpochStore, AuthorityMetrics},
+    authority::{
+        authority_per_epoch_store::AuthorityPerEpochStore,
+        shared_object_version_manager::AssignedVersions, AuthorityMetrics,
+    },
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
     execution_scheduler::{ExecutingGuard, PendingCertificateStats},
 };
@@ -88,6 +91,7 @@ impl ExecutionScheduler {
         self,
         cert: VerifiedExecutableTransaction,
         expected_effects_digest: Option<TransactionEffectsDigest>,
+        assigned_versions: Option<AssignedVersions>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         scheduling_source: SchedulingSource,
     ) {
@@ -96,25 +100,28 @@ impl ExecutionScheduler {
         let input_object_kinds = tx_data
             .input_objects()
             .expect("input_objects() cannot fail");
-        let input_object_keys: Vec<_> =
-            match epoch_store.get_input_object_keys(&cert.key(), &input_object_kinds) {
-                Ok(keys) => keys,
-                Err(_) => {
-                    // This is possible if the transaction is already executed.
-                    // TODO: Eventually we could pass assigned shared object versions
-                    // to the scheduler so that this call cannot return Err.
-                    assert!(self
-                        .transaction_cache_read
-                        .is_tx_already_executed(cert.digest()));
-                    self.metrics
-                        .transaction_manager_num_enqueued_certificates
-                        .with_label_values(&["already_executed"])
-                        .inc();
-                    return;
-                }
+        let input_object_keys: Vec<_> = match epoch_store.get_input_object_keys(
+            &cert.key(),
+            &input_object_kinds,
+            assigned_versions.as_ref(),
+        ) {
+            Ok(keys) => keys,
+            Err(_) => {
+                // This is possible if the transaction is already executed.
+                // TODO: Eventually we could pass assigned shared object versions
+                // to the scheduler so that this call cannot return Err.
+                assert!(self
+                    .transaction_cache_read
+                    .is_tx_already_executed(cert.digest()));
+                self.metrics
+                    .transaction_manager_num_enqueued_certificates
+                    .with_label_values(&["already_executed"])
+                    .inc();
+                return;
             }
-            .into_iter()
-            .collect();
+        }
+        .into_iter()
+        .collect();
         let receiving_object_keys: HashSet<_> = tx_data
             .receiving_objects()
             .into_iter()
@@ -162,6 +169,7 @@ impl ExecutionScheduler {
             self.send_transaction_for_execution(
                 &cert,
                 expected_effects_digest,
+                assigned_versions,
                 enqueue_time,
                 scheduling_source,
             );
@@ -182,7 +190,13 @@ impl ExecutionScheduler {
                         .observe(enqueue_time.elapsed().as_secs_f64());
                     debug!(?digest, "Input objects available");
                     // TODO: Eventually we could fold execution_driver into the scheduler.
-                    self.send_transaction_for_execution(&cert, expected_effects_digest, enqueue_time, scheduling_source);
+                    self.send_transaction_for_execution(
+                        &cert,
+                        expected_effects_digest,
+                        assigned_versions,
+                        enqueue_time,
+                        scheduling_source,
+                    );
                 }
             _ = self.transaction_cache_read.notify_read_executed_effects_digests(&digests) => {
                 debug!(?digests, "Transaction already executed");
@@ -194,12 +208,14 @@ impl ExecutionScheduler {
         &self,
         cert: &VerifiedExecutableTransaction,
         expected_effects_digest: Option<TransactionEffectsDigest>,
+        assigned_versions: Option<AssignedVersions>,
         enqueue_time: Instant,
         scheduling_source: SchedulingSource,
     ) {
         let pending_cert = PendingCertificate {
             certificate: cert.clone(),
             expected_effects_digest,
+            assigned_versions,
             waiting_input_objects: BTreeSet::new(),
             stats: PendingCertificateStats {
                 enqueue_time,
@@ -222,6 +238,7 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
         certs: Vec<(
             VerifiedExecutableTransaction,
             Option<TransactionEffectsDigest>,
+            Option<AssignedVersions>,
         )>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         scheduling_source: SchedulingSource,
@@ -242,15 +259,15 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
                 }
             })
             .collect();
-        let digests: Vec<_> = certs.iter().map(|(cert, _)| *cert.digest()).collect();
+        let digests: Vec<_> = certs.iter().map(|(cert, _, _)| *cert.digest()).collect();
         let executed = self
             .transaction_cache_read
             .multi_get_executed_effects_digests(&digests);
         let mut already_executed_certs_num = 0;
         let pending_certs = certs.into_iter().zip(executed).filter_map(
-            |((cert, expected_effects_digest), executed)| {
+            |((cert, expected_effects_digest, assigned_versions), executed)| {
                 if executed.is_none() {
-                    Some((cert, expected_effects_digest))
+                    Some((cert, expected_effects_digest, assigned_versions))
                 } else {
                     already_executed_certs_num += 1;
                     None
@@ -258,13 +275,14 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
             },
         );
 
-        for (cert, expected_effects_digest) in pending_certs {
+        for (cert, expected_effects_digest, assigned_versions) in pending_certs {
             let scheduler = self.clone();
             let epoch_store = epoch_store.clone();
             spawn_monitored_task!(
                 epoch_store.within_alive_epoch(scheduler.schedule_transaction(
                     cert,
                     expected_effects_digest,
+                    assigned_versions,
                     &epoch_store,
                     scheduling_source,
                 ))
