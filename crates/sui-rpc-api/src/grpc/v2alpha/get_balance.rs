@@ -25,7 +25,7 @@ pub fn get_balance(service: &RpcService, request: GetBalanceRequest) -> Result<G
     let owner = owner_str.parse::<SuiAddress>().map_err(|e| {
         RpcError::new(
             tonic::Code::InvalidArgument,
-            format!("invalid owner address: {e}"),
+            format!("invalid owner: {e}"),
         )
     })?;
 
