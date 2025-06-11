@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::static_programmable_transactions::linkage::{Linkage, analysis::ResolvedLinkage};
+use indexmap::IndexSet;
 use move_binary_format::file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex};
 use move_core_types::{
     account_address::AccountAddress,
@@ -176,7 +177,7 @@ impl Type {
             TxContextKind::None
         }
     }
-    pub fn all_addresses(&self) -> Vec<AccountAddress> {
+    pub fn all_addresses(&self) -> IndexSet<AccountAddress> {
         match self {
             Type::Bool
             | Type::U8
@@ -186,7 +187,7 @@ impl Type {
             | Type::U128
             | Type::U256
             | Type::Address
-            | Type::Signer => vec![],
+            | Type::Signer => IndexSet::new(),
             Type::Vector(v) => v.element_type.all_addresses(),
             Type::Reference(_, inner) => inner.all_addresses(),
             Type::Datatype(dt) => dt.all_addresses(),
@@ -203,8 +204,9 @@ impl Datatype {
         )
     }
 
-    pub fn all_addresses(&self) -> Vec<AccountAddress> {
-        let mut addresses = vec![*self.module.address()];
+    pub fn all_addresses(&self) -> IndexSet<AccountAddress> {
+        let mut addresses = IndexSet::new();
+        addresses.insert(*self.module.address());
         for arg in &self.type_arguments {
             addresses.extend(arg.all_addresses());
         }

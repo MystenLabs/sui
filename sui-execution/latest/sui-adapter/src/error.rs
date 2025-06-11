@@ -6,18 +6,16 @@ use move_binary_format::{
     file_format::FunctionDefinitionIndex,
 };
 use move_core_types::{
-    resolver::MoveResolver,
+    language_storage::ModuleId,
     vm_status::{StatusCode, StatusType},
 };
-use move_vm_runtime::move_vm::MoveVM;
-use sui_types::error::{ExecutionError, SuiError};
+use sui_types::error::ExecutionError;
 use sui_types::execution_status::{ExecutionFailureStatus, MoveLocation, MoveLocationOpt};
 
-pub(crate) fn convert_vm_error<S: MoveResolver<Err = SuiError>>(
+pub(crate) fn convert_vm_error_impl(
     error: VMError,
-    vm: &MoveVM,
-    state_view: &S,
-    resolve_abort_location_to_package_id: bool,
+    abort_module_id_relocation_fn: &impl Fn(&ModuleId) -> ModuleId,
+    function_name_resolution_fn: &impl Fn(&ModuleId, FunctionDefinitionIndex) -> Option<String>,
 ) -> ExecutionError {
     let kind = match (error.major_status(), error.sub_status(), error.location()) {
         (StatusCode::EXECUTED, _, _) => {
@@ -31,19 +29,11 @@ pub(crate) fn convert_vm_error<S: MoveResolver<Err = SuiError>>(
             ExecutionFailureStatus::VMInvariantViolation
         }
         (StatusCode::ABORTED, Some(code), Location::Module(id)) => {
-            let abort_location_id = if resolve_abort_location_to_package_id {
-                state_view.relocate(id).unwrap_or_else(|_| id.clone())
-            } else {
-                id.clone()
-            };
+            let abort_location_id = abort_module_id_relocation_fn(id);
             let offset = error.offsets().first().copied().map(|(f, i)| (f.0, i));
             debug_assert!(offset.is_some(), "Move should set the location on aborts");
             let (function, instruction) = offset.unwrap_or((0, 0));
-            let function_name = vm.load_module(id, state_view).ok().map(|module| {
-                let fdef = module.function_def_at(FunctionDefinitionIndex(function));
-                let fhandle = module.function_handle_at(fdef.function);
-                module.identifier_at(fhandle.name).to_string()
-            });
+            let function_name = function_name_resolution_fn(id, FunctionDefinitionIndex(function));
             ExecutionFailureStatus::MoveAbort(
                 MoveLocation {
                     module: abort_location_id,
@@ -66,11 +56,8 @@ pub(crate) fn convert_vm_error<S: MoveResolver<Err = SuiError>>(
                             "Move should set the location on all execution errors. Error {error}"
                         );
                         let (function, instruction) = offset.unwrap_or((0, 0));
-                        let function_name = vm.load_module(id, state_view).ok().map(|module| {
-                            let fdef = module.function_def_at(FunctionDefinitionIndex(function));
-                            let fhandle = module.function_handle_at(fdef.function);
-                            module.identifier_at(fhandle.name).to_string()
-                        });
+                        let function_name =
+                            function_name_resolution_fn(id, FunctionDefinitionIndex(function));
                         Some(MoveLocation {
                             module: id.clone(),
                             function,
