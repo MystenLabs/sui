@@ -10,12 +10,12 @@ use std::{
 
 use crate::{
     adapter::{new_native_extensions, substitute_package_id},
+    data_store::sui_data_store::SuiDataStore,
     execution_mode::ExecutionMode,
     gas_charger::GasCharger,
     gas_meter::SuiGasMeter,
     programmable_transactions::{
         context::finish,
-        data_store::SuiDataStore,
         execution::{check_compatibility, fetch_package, fetch_packages},
     },
     sp,
