@@ -1,0 +1,135 @@
+##
+## Reindeer Config
+##
+## This file sets all of Reindeer's basic configuration. This file also marks
+## the top of the reindeer-managed directory, as all other paths are relative to
+## this one (both paths mentioned in this file, and implicit).
+##
+## Reindeer is under active development, and the layout and options in this file
+## may change.
+
+# Parse Rust code to work out the precise set of source files for each crate.
+# This uses `srcfiles` which only works on Rust 2018 and without some macro
+# constructions. It works in almost all cases, but you may need to have a
+# fixups.toml adding extra srcs if it fails.
+precise_srcs = true
+
+# Possible patterns for license files - lots of packages have them without
+# registering them in the Cargo metadata, or have more than the single file it
+# allows. Just look in the top-level dir for now.
+license_patterns = [
+  "LICENSE*", "COPYING*", "UNLICENSE*",
+]
+
+# If a fixups.toml file is needed (eg, the package has a build.rs), then
+# generate a template fixups.toml to be edited.
+fixup_templates = true
+
+# Emit Cargo pkg metadata into rules (experimental, not used)
+#emit_metadata = false
+
+# Include an explicit public top-level target which depends on all other library
+# targets, so that you can to a test/check build.
+include_top_level = true
+
+# Configuration for vendoring
+#
+# You can instead set `vendor = false` to make Reindeer-generated targets not
+# build from the vendored sources, but instead download sources from crates.io
+# at build time.
+[vendor]
+# Exclude files listed in the .gitignore in this directory
+gitignore_checksum_exclude = [".gitignore"]
+# Additional globs to ignore (prefer .gitignore for consistentcy with source
+# control)
+checksum_exclude = [
+]
+
+# Configuration for rustsec auditing
+[audit]
+# Name of a package which is expected to always have an advisory to make sure
+# the mechanism is working.
+never_autofix = [
+  "rustsec-example-crate", # never fix because this is a canary
+]
+
+# Platforms we want to support.
+# https://github.com/facebookincubator/reindeer/blob/main/src/default_platforms.toml
+#
+# A Reindeer platform is a collection of predicates, which are closely related
+# to rustc/cargo's notion of a platform. If a conditional dependency matches
+# against a platform's predicates, then it is included in the platform-specific
+# dependencies in the rule.
+#
+# These same platforms and predicates are used in fixups.toml files, for
+# platform-specific fixups (such as additional dependencies, extra sources,
+# options, etc).
+#
+# Listed properties are a set of values, any of which can match a predicate.
+# These match specific configurations of rustc, as shown with `rustc --target
+# <TARGET> --print cfg`. Unlisted properties are "don't care" or "match
+# anything"
+#
+# The platform key sets the name of the platform in `platform_deps` /
+# `named_platform_deps`. If it is "DEFAULT" then the platform's dependencies are
+# put into the normal `deps` / `named_deps`.
+
+# x86_64-unknown-linux-gnu
+[platform.linux-x86_64]
+x86_64-unknown-linux-gnu = [] # true for a boolean test
+target_arch = ["x86_64"]
+target_endian = ["little"]
+target_env = ["gnu"]
+target_family = ["unix"]
+target_feature = ["fxsr", "sse", "sse2"]
+target_has_atomic = ["8", "16", "32", "64", "ptr"]
+target_os = ["linux"]
+target_pointer_width = ["64"]
+target_vendor = ["unknown"]
+
+# aarch64-unknown-linux-gnu
+[platform.linux-arm64]
+aarch64-unknown-linux-gnu = []
+target_arch = ["aarch64"]
+target_endian = ["little"]
+target_env = ["gnu"]
+target_family = ["unix"]
+target_feature = ["neon"]
+target_has_atomic = ["8", "16", "32", "64", "128", "ptr"]
+target_os = ["linux"]
+target_pointer_width = ["64"]
+target_vendor = ["unknown"]
+
+# aarch64-apple-darwin (macOS, Apple silicon)
+[platform.macos-arm64]
+aarch64-apple-darwin = []
+target_arch = ["aarch64"]
+target_endian = ["little"]
+target_env = []
+target_family = ["unix"]
+target_feature = ["aes", "crc", "dit", "dotprod", "dpb", "dpb2", "fcma", "fhm", "flagm", "fp16", "frintts", "jsconv", "lor", "lse", "neon", "paca", "pacg", "pan", "pmuv3", "ras", "rcpc", "rcpc2", "rdm", "sb", "sha2", "sha3", "ssbs", "vh"]
+target_has_atomic = ["8", "16", "32", "64", "128", "ptr"]
+target_os = ["macos"]
+target_pointer_width = ["64"]
+target_vendor = ["apple"]
+
+# Configuration for cargo (used both for vendoring and resolving dependencies)
+[cargo]
+# Path to cargo, relative to this file. Can also be specified on the
+# command-line. Defaults to plain "cargo".
+# cargo = "path/to/cargo"
+
+# Path to rustc, relative to this file. Can also be specified on the
+# command-line. Used to set RUSTC env when invoking cargo.
+# rustc = "path/to/rustc"
+
+# Support Cargo's unstable "artifact dependencies" functionality, RFC 3028.
+# This requires a version of Cargo containing
+# https://github.com/rust-lang/cargo/pull/11550.
+# bindeps = false
+
+# Configuration for generated BUCK file
+[buck]
+# Name of the generated file
+file_name = "BUCK" # default
+
