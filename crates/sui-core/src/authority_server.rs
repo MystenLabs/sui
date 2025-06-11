@@ -23,7 +23,6 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
-use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
 use sui_types::message_envelope::Message;
 use sui_types::messages_consensus::ConsensusPosition;
@@ -46,6 +45,9 @@ use sui_types::{
     effects::TransactionEffects,
     messages_grpc::{RawSubmitTxRequest, RawWaitForEffectsRequest, RawWaitForEffectsResponse},
 };
+use sui_types::{
+    effects::TransactionEffectsAPI, executable_transaction::VerifiedExecutableTransaction,
+};
 use sui_types::{error::*, transaction::*};
 use sui_types::{
     fp_ensure,
@@ -63,9 +65,10 @@ use crate::consensus_adapter::ConnectionMonitorStatusForTests;
 use crate::{
     authority::{
         authority_per_epoch_store::AuthorityPerEpochStore,
-        consensus_tx_status_cache::NotifyReadConsensusTxStatusResult,
+        consensus_tx_status_cache::NotifyReadConsensusTxStatusResult, ExecutionEnv,
     },
     checkpoints::CheckpointStore,
+    execution_scheduler::SchedulingSource,
     mysticeti_adapter::LazyMysticetiClient,
     transaction_outputs::TransactionOutputs,
     wait_for_effects_request::{
@@ -853,14 +856,20 @@ impl ValidatorService {
                     if let ConsensusTransactionKind::CertifiedTransaction(certificate) = &tx.kind {
                         (!certificate.contains_shared_object())
                             // Certificates already verified by callers of this function.
-                            .then_some(VerifiedCertificate::new_unchecked(*(certificate.clone())))
+                            .then_some((
+                                VerifiedExecutableTransaction::new_from_certificate(
+                                    VerifiedCertificate::new_unchecked(*(certificate.clone())),
+                                ),
+                                ExecutionEnv::default()
+                                    .with_scheduling_source(SchedulingSource::NonFastPath),
+                            ))
                     } else {
                         None
                     }
                 })
                 .collect::<Vec<_>>();
             if !certificates_without_shared_objects.is_empty() {
-                self.state.enqueue_certificates_for_execution(
+                self.state.enqueue_transactions_for_execution(
                     certificates_without_shared_objects,
                     epoch_store,
                 );

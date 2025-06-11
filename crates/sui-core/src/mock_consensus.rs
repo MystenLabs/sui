@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::{AuthorityMetrics, AuthorityState};
+use crate::authority::{AuthorityMetrics, AuthorityState, ExecutionEnv};
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_adapter::{BlockStatusReceiver, ConsensusClient, SubmitToConsensus};
 use crate::consensus_handler::SequencedConsensusTransaction;
+use crate::execution_scheduler::SchedulingSource;
 use consensus_core::BlockRef;
 use prometheus::Registry;
 use std::sync::{Arc, Weak};
@@ -63,10 +64,10 @@ impl MockConsensusClient {
                 return;
             };
             let epoch_store = validator.epoch_store_for_testing();
-            match consensus_mode {
-                ConsensusMode::Noop => {}
+            let env = match consensus_mode {
+                ConsensusMode::Noop => ExecutionEnv::default(),
                 ConsensusMode::DirectSequencing => {
-                    epoch_store
+                    let (_, assigned_versions) = epoch_store
                         .process_consensus_transactions_for_tests(
                             vec![SequencedConsensusTransaction::new_test(tx.clone())],
                             &checkpoint_service,
@@ -77,26 +78,48 @@ impl MockConsensusClient {
                         )
                         .await
                         .unwrap();
+                    let assigned_versions = assigned_versions
+                        .0
+                        .into_iter()
+                        .next()
+                        .map(|(_, v)| v)
+                        .unwrap_or_default();
+                    ExecutionEnv {
+                        assigned_versions,
+                        expected_effects_digest: None,
+                        scheduling_source: SchedulingSource::NonFastPath,
+                    }
                 }
-            }
-            if let ConsensusTransactionKind::CertifiedTransaction(tx) = &tx.kind {
-                if tx.contains_shared_object() {
-                    validator.enqueue_certificates_for_execution(
-                        vec![VerifiedCertificate::new_unchecked(*tx.clone())],
-                        &epoch_store,
-                    );
+            };
+            match &tx.kind {
+                ConsensusTransactionKind::CertifiedTransaction(tx) => {
+                    if tx.contains_shared_object() {
+                        validator.enqueue_transactions_for_execution(
+                            vec![(
+                                VerifiedExecutableTransaction::new_from_certificate(
+                                    VerifiedCertificate::new_unchecked(*tx.clone()),
+                                ),
+                                env,
+                            )],
+                            &epoch_store,
+                        );
+                    }
                 }
-            }
-            if let ConsensusTransactionKind::UserTransaction(tx) = &tx.kind {
-                if tx.contains_shared_object() {
-                    validator.enqueue_transactions_for_execution(
-                        vec![VerifiedExecutableTransaction::new_from_consensus(
-                            VerifiedTransaction::new_unchecked(*tx.clone()),
-                            0,
-                        )],
-                        &epoch_store,
-                    );
+                ConsensusTransactionKind::UserTransaction(tx) => {
+                    if tx.contains_shared_object() {
+                        validator.enqueue_transactions_for_execution(
+                            vec![(
+                                VerifiedExecutableTransaction::new_from_consensus(
+                                    VerifiedTransaction::new_unchecked(*tx.clone()),
+                                    0,
+                                ),
+                                env,
+                            )],
+                            &epoch_store,
+                        );
+                    }
                 }
+                _ => {}
             }
         }
     }

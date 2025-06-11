@@ -15,7 +15,6 @@ use parking_lot::RwLock;
 use sui_types::{
     base_types::{FullObjectID, SequenceNumber, TransactionDigest},
     committee::EpochId,
-    digests::TransactionEffectsDigest,
     error::{SuiError, SuiResult},
     fp_ensure,
     message_envelope::Message,
@@ -30,12 +29,15 @@ use tracing::{error, info, instrument, trace, warn};
 use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore, execution_cache::ObjectCacheRead,
 };
-use crate::{authority::AuthorityMetrics, execution_cache::TransactionCacheRead};
+use crate::{
+    authority::{AuthorityMetrics, ExecutionEnv},
+    execution_cache::TransactionCacheRead,
+};
 use sui_config::node::AuthorityOverloadConfig;
 use sui_types::transaction::SenderSignedData;
 use tap::TapOptional;
 
-use super::{ExecutionSchedulerAPI, PendingCertificate, PendingCertificateStats, SchedulingSource};
+use super::{ExecutionSchedulerAPI, PendingCertificate, PendingCertificateStats};
 
 /// Minimum capacity of HashMaps used in TransactionManager.
 const MIN_HASHMAP_CAPACITY: usize = 1000;
@@ -379,14 +381,10 @@ impl TransactionManager {
 }
 
 impl ExecutionSchedulerAPI for TransactionManager {
-    fn enqueue_impl(
+    fn enqueue(
         &self,
-        certs: Vec<(
-            VerifiedExecutableTransaction,
-            Option<TransactionEffectsDigest>,
-        )>,
+        certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        scheduling_source: SchedulingSource,
     ) {
         let reconfig_lock = self.inner.read();
 
@@ -412,31 +410,34 @@ impl ExecutionSchedulerAPI for TransactionManager {
         let mut receiving_objects: HashSet<InputKey> = HashSet::new();
         let certs: Vec<_> = certs
             .into_iter()
-            .filter_map(|(cert, fx_digest)| {
+            .filter_map(|(cert, execution_env)| {
                 let input_object_kinds = cert
                     .data()
                     .intent_message()
                     .value
                     .input_objects()
                     .expect("input_objects() cannot fail");
-                let mut input_object_keys =
-                    match epoch_store.get_input_object_keys(&cert.key(), &input_object_kinds) {
-                        Ok(keys) => keys,
-                        Err(e) => {
-                            // Because we do not hold the transaction lock during enqueue, it is possible
-                            // that the transaction was executed and the shared version assignments deleted
-                            // since the earlier check. This is a rare race condition, and it is better to
-                            // handle it ad-hoc here than to hold tx locks for every cert for the duration
-                            // of this function in order to remove the race.
-                            if self
-                                .transaction_cache_read
-                                .is_tx_already_executed(cert.digest())
-                            {
-                                return None;
-                            }
-                            fatal!("Failed to get input object keys: {:?}", e);
+                let mut input_object_keys = match epoch_store.get_input_object_keys(
+                    &cert.key(),
+                    &input_object_kinds,
+                    execution_env.assigned_versions.as_ref(),
+                ) {
+                    Ok(keys) => keys,
+                    Err(e) => {
+                        // Because we do not hold the transaction lock during enqueue, it is possible
+                        // that the transaction was executed and the shared version assignments deleted
+                        // since the earlier check. This is a rare race condition, and it is better to
+                        // handle it ad-hoc here than to hold tx locks for every cert for the duration
+                        // of this function in order to remove the race.
+                        if self
+                            .transaction_cache_read
+                            .is_tx_already_executed(cert.digest())
+                        {
+                            return None;
                         }
-                    };
+                        fatal!("Failed to get input object keys: {:?}", e);
+                    }
+                };
 
                 if input_object_kinds.len() != input_object_keys.len() {
                     error!("Duplicated input objects: {:?}", input_object_kinds);
@@ -464,7 +465,7 @@ impl ExecutionSchedulerAPI for TransactionManager {
                     }
                 }
 
-                Some((cert, fx_digest, input_object_keys))
+                Some((cert, execution_env, input_object_keys))
             })
             .collect();
 
@@ -538,17 +539,16 @@ impl ExecutionSchedulerAPI for TransactionManager {
         let mut pending = Vec::new();
         let pending_cert_enqueue_time = Instant::now();
 
-        for (cert, expected_effects_digest, input_object_keys) in certs {
+        for (cert, execution_env, input_object_keys) in certs {
             pending.push(PendingCertificate {
                 certificate: cert,
-                expected_effects_digest,
+                execution_env,
                 waiting_input_objects: input_object_keys,
                 stats: PendingCertificateStats {
                     enqueue_time: pending_cert_enqueue_time,
                     ready_time: None,
                 },
                 executing_guard: None,
-                scheduling_source,
             });
         }
 

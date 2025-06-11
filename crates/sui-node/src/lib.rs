@@ -31,6 +31,7 @@ use sui_core::authority::authority_store_tables::{
 use sui_core::authority::backpressure::BackpressureManager;
 use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::authority::execution_time_estimator::ExecutionTimeObserver;
+use sui_core::authority::ExecutionEnv;
 use sui_core::authority::RandomnessRoundReceiver;
 use sui_core::consensus_adapter::ConsensusClient;
 use sui_core::consensus_manager::UpdatableConsensusClient;
@@ -757,9 +758,8 @@ impl SuiNode {
             state
                 .try_execute_immediately(
                     &transaction,
-                    None,
+                    ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
                     &epoch_store,
-                    SchedulingSource::NonFastPath,
                 )
                 .instrument(span)
                 .await
@@ -1400,15 +1400,6 @@ impl SuiNode {
             .await;
         let consensus_replay_waiter = consensus_manager.replay_waiter();
 
-        if !epoch_store
-            .epoch_start_config()
-            .is_data_quarantine_active_from_beginning_of_epoch()
-        {
-            checkpoint_store
-                .reexecute_local_checkpoints(&state, &epoch_store)
-                .await;
-        }
-
         info!("Spawning checkpoint service");
         let checkpoint_service_tasks = checkpoint_service.spawn(consensus_replay_waiter).await;
 
@@ -1593,9 +1584,20 @@ impl SuiNode {
                         .get_signed_effects_digest(tx.digest())
                         .expect("db error")
                     {
-                        pending_consensus_certificates.push((tx, fx_digest));
+                        pending_consensus_certificates.push((
+                            tx,
+                            ExecutionEnv {
+                                expected_effects_digest: Some(fx_digest),
+                                scheduling_source: SchedulingSource::NonFastPath,
+                                ..Default::default()
+                            },
+                        ));
                     } else {
-                        additional_certs.push(tx);
+                        additional_certs.push((
+                            tx,
+                            ExecutionEnv::default()
+                                .with_scheduling_source(SchedulingSource::NonFastPath),
+                        ));
                     }
                 }
                 _ => (),
@@ -1613,7 +1615,7 @@ impl SuiNode {
             digests
         );
 
-        state.enqueue_with_expected_effects_digest(pending_consensus_certificates, epoch_store);
+        state.enqueue_transactions_for_execution(pending_consensus_certificates, epoch_store);
         state.enqueue_transactions_for_execution(additional_certs, epoch_store);
 
         // If this times out, the validator will still almost certainly start up fine. But, it is

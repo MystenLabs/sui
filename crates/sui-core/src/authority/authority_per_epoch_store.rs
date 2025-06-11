@@ -91,11 +91,12 @@ use super::execution_time_estimator::{ConsensusObservations, ExecutionTimeEstima
 use super::shared_object_congestion_tracker::{
     CongestionPerObjectDebt, SharedObjectCongestionTracker,
 };
+use super::shared_object_version_manager::AssignedVersions;
 use super::transaction_deferral::{transaction_deferral_within_limit, DeferralKey, DeferralReason};
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::execution_time_estimator::EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY;
 use crate::authority::shared_object_version_manager::{
-    AssignedTxAndVersions, ConsensusSharedObjVerAssignment, SharedObjVerManager,
+    AssignedTxAndVersions, ConsensusSharedObjVerAssignment, Schedulable, SharedObjVerManager,
 };
 use crate::authority::ResolverWrapper;
 use crate::authority::{AuthorityMetrics, AuthorityState};
@@ -1063,8 +1064,7 @@ impl AuthorityPerEpochStore {
 
         let jwk_aggregator = Mutex::new(jwk_aggregator);
 
-        let consensus_output_cache =
-            ConsensusOutputCache::new(&epoch_start_configuration, &tables, metrics.clone());
+        let consensus_output_cache = ConsensusOutputCache::new(&epoch_start_configuration, &tables);
 
         let execution_time_observations = tables
             .execution_time_observations
@@ -1662,18 +1662,6 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub(crate) fn remove_shared_version_assignments(
-        &self,
-        keys: impl IntoIterator<Item = TransactionKey>,
-    ) {
-        self.consensus_output_cache
-            .remove_shared_object_assignments(keys);
-    }
-
-    pub fn num_shared_version_assignments(&self) -> usize {
-        self.consensus_output_cache.num_shared_version_assignments()
-    }
-
     pub fn revert_executed_transaction(&self, tx_digest: &TransactionDigest) -> SuiResult {
         self.consensus_output_cache
             .remove_reverted_transaction(tx_digest);
@@ -1756,10 +1744,12 @@ impl AuthorityPerEpochStore {
         &self,
         key: &TransactionKey,
         objects: &[InputObjectKind],
+        assigned_versions: &AssignedVersions,
     ) -> SuiResult<BTreeSet<InputKey>> {
-        let assigned_shared_versions = once_cell::unsync::OnceCell::<
-            Option<HashMap<ConsensusObjectSequenceKey, SequenceNumber>>,
-        >::new();
+        let assigned_shared_versions = assigned_versions
+            .iter()
+            .cloned()
+            .collect::<BTreeMap<_, _>>();
         objects
             .iter()
             .map(|kind| {
@@ -1769,18 +1759,6 @@ impl AuthorityPerEpochStore {
                         initial_shared_version,
                         ..
                     } => {
-                        let assigned_shared_versions = assigned_shared_versions
-                            .get_or_init(|| {
-                                self.get_assigned_shared_object_versions(key)
-                                    .map(|versions| versions.into_iter().collect())
-                            })
-                            .as_ref()
-                            // Shared version assignments could have been deleted if the tx just
-                            // finished executing concurrently.
-                            .ok_or(SuiError::GenericAuthorityError {
-                                error: "no assigned shared versions".to_string(),
-                            })?;
-
                         // If we found assigned versions, but they are missing the assignment for
                         // this object, it indicates a serious inconsistency!
                         let Some(version) = assigned_shared_versions.get(&(*id, *initial_shared_version)) else {
@@ -1922,16 +1900,6 @@ impl AuthorityPerEpochStore {
             .next_shared_object_versions_v2
             .get(&(*obj, start_version))
             .unwrap()
-    }
-
-    pub fn set_shared_object_versions_for_testing(
-        &self,
-        tx_digest: &TransactionDigest,
-        assigned_versions: &[(ConsensusObjectSequenceKey, SequenceNumber)],
-    ) -> SuiResult {
-        self.consensus_output_cache
-            .set_shared_object_versions_for_testing(tx_digest, assigned_versions);
-        Ok(())
     }
 
     pub fn insert_finalized_transactions(
@@ -2099,39 +2067,24 @@ impl AuthorityPerEpochStore {
         Ok(ret)
     }
 
-    pub fn get_assigned_shared_object_versions(
-        &self,
-        key: &TransactionKey,
-    ) -> Option<Vec<(ConsensusObjectSequenceKey, SequenceNumber)>> {
-        self.consensus_output_cache
-            .get_assigned_shared_object_versions(key)
-    }
-
-    fn set_assigned_shared_object_versions(&self, versions: AssignedTxAndVersions) {
-        self.consensus_output_cache
-            .insert_shared_object_assignments(&versions);
-    }
-
     /// Given list of certificates, assign versions for all shared objects used in them.
     /// We start with the current next_shared_object_versions table for each object, and build
     /// up the versions based on the dependencies of each certificate.
     /// However, in the end we do not update the next_shared_object_versions table, which keeps
     /// this function idempotent. We should call this function when we are assigning shared object
     /// versions outside of consensus and do not want to taint the next_shared_object_versions table.
-    pub fn assign_shared_object_versions_idempotent(
+    pub fn assign_shared_object_versions_idempotent<'a>(
         &self,
         cache_reader: &dyn ObjectCacheRead,
-        certificates: &[VerifiedExecutableTransaction],
-    ) -> SuiResult {
-        let assigned_versions = SharedObjVerManager::assign_versions_from_consensus(
+        assignables: impl Iterator<Item = &'a Schedulable<&'a VerifiedExecutableTransaction>> + Clone,
+    ) -> SuiResult<AssignedTxAndVersions> {
+        Ok(SharedObjVerManager::assign_versions_from_consensus(
             self,
             cache_reader,
-            certificates.iter(),
+            assignables,
             &BTreeMap::new(),
         )?
-        .assigned_versions;
-        self.set_assigned_shared_object_versions(assigned_versions);
-        Ok(())
+        .assigned_versions)
     }
 
     fn load_deferred_transactions_for_randomness(
@@ -2290,14 +2243,14 @@ impl AuthorityPerEpochStore {
         certificate: &VerifiedExecutableTransaction,
         effects: &TransactionEffects,
         cache_reader: &dyn ObjectCacheRead,
-    ) -> SuiResult {
-        let versions = SharedObjVerManager::assign_versions_from_effects(
+    ) -> SuiResult<AssignedVersions> {
+        let assigned_versions = SharedObjVerManager::assign_versions_from_effects(
             &[(certificate, effects)],
             self,
             cache_reader,
         );
-        self.set_assigned_shared_object_versions(versions);
-        Ok(())
+        let (_, assigned_versions) = assigned_versions.0.into_iter().next().unwrap();
+        Ok(assigned_versions)
     }
 
     /// When submitting a certificate caller **must** provide a ReconfigState lock guard
@@ -2797,12 +2750,14 @@ impl AuthorityPerEpochStore {
             .expect("push_consensus_output should not fail");
     }
 
-    fn process_user_signatures<'a>(
-        &self,
-        certificates: impl Iterator<Item = &'a VerifiedExecutableTransaction>,
-    ) {
+    fn process_user_signatures<'a>(&self, certificates: impl Iterator<Item = &'a Schedulable>) {
         let sigs: Vec<_> = certificates
-            .map(|certificate| (*certificate.digest(), certificate.tx_signatures().to_vec()))
+            .filter_map(|s| match s {
+                Schedulable::Transaction(certificate) => {
+                    Some((*certificate.digest(), certificate.tx_signatures().to_vec()))
+                }
+                Schedulable::RandomnessStateUpdate(_, _) => None,
+            })
             .collect();
 
         let mut user_sigs = self
@@ -3065,7 +3020,7 @@ impl AuthorityPerEpochStore {
         tx_reader: &dyn TransactionCacheRead,
         consensus_commit_info: &ConsensusCommitInfo,
         authority_metrics: &Arc<AuthorityMetrics>,
-    ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
+    ) -> SuiResult<(Vec<Schedulable>, AssignedTxAndVersions)> {
         // Split transactions into different types for processing.
         let verified_transactions: Vec<_> = transactions
             .into_iter()
@@ -3292,6 +3247,7 @@ impl AuthorityPerEpochStore {
             lock,
             final_round,
             consensus_commit_prologue_root,
+            assigned_versions,
         ) = self
             .process_consensus_transactions(
                 &mut output,
@@ -3374,7 +3330,7 @@ impl AuthorityPerEpochStore {
                         info!("Randomness update transaction {:?} already exists, scheduling for execution", digest);
                         let tx =
                             VerifiedExecutableTransaction::new_system((*tx).clone(), self.epoch());
-                        verified_randomness_transactions.push(tx);
+                        verified_randomness_transactions.push(Schedulable::Transaction(tx));
                     }
                 }
 
@@ -3458,11 +3414,10 @@ impl AuthorityPerEpochStore {
             self.record_end_of_message_quorum_time_metric();
         }
 
-        Ok([
-            verified_non_randomness_transactions,
-            verified_randomness_transactions,
-        ]
-        .concat())
+        let mut all_txns = verified_non_randomness_transactions;
+        all_txns.extend(verified_randomness_transactions);
+
+        Ok((all_txns, assigned_versions))
     }
 
     fn calculate_pending_checkpoint_height(&self, consensus_round: u64) -> u64 {
@@ -3479,7 +3434,7 @@ impl AuthorityPerEpochStore {
     fn add_consensus_commit_prologue_transaction(
         &self,
         output: &mut ConsensusCommitOutput,
-        transactions: &mut VecDeque<VerifiedExecutableTransaction>,
+        transactions: &mut VecDeque<Schedulable<VerifiedExecutableTransaction>>,
         consensus_commit_info: &ConsensusCommitInfo,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
     ) -> SuiResult<Option<TransactionKey>> {
@@ -3492,16 +3447,18 @@ impl AuthorityPerEpochStore {
         let mut version_assignment = Vec::new();
         let mut shared_input_next_version = HashMap::new();
         for txn in transactions.iter() {
-            match cancelled_txns.get(txn.digest()) {
+            let key = txn.key();
+            match key.as_digest().and_then(|d| cancelled_txns.get(d)) {
                 Some(CancelConsensusCertificateReason::CongestionOnObjects(_))
                 | Some(CancelConsensusCertificateReason::DkgFailed) => {
                     assert_reachable!("cancelled transactions");
                     let assigned_versions = SharedObjVerManager::assign_versions_for_certificate(
+                        self,
                         txn,
                         &mut shared_input_next_version,
                         cancelled_txns,
                     );
-                    version_assignment.push((*txn.digest(), assigned_versions));
+                    version_assignment.push((key.unwrap_digest(), assigned_versions));
                 }
                 None => {}
             }
@@ -3525,7 +3482,7 @@ impl AuthorityPerEpochStore {
         );
         let consensus_commit_prologue_root = match self.process_consensus_system_transaction(&transaction) {
             ConsensusCertificateResult::SuiTransaction(processed_tx) => {
-                transactions.push_front(processed_tx.clone());
+                transactions.push_front(Schedulable::Transaction(processed_tx.clone()));
                 Some(processed_tx.key())
             }
             ConsensusCertificateResult::IgnoredSystem => None,
@@ -3546,48 +3503,31 @@ impl AuthorityPerEpochStore {
         cache_reader: &dyn ObjectCacheRead,
         non_randomness_transactions: &[VerifiedExecutableTransaction],
         randomness_transactions: &[VerifiedExecutableTransaction],
-        randomness_round: Option<RandomnessRound>,
+        randomness_state_update: Option<Schedulable<&VerifiedExecutableTransaction>>,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
         output: &mut ConsensusCommitOutput,
-    ) -> SuiResult {
-        // If randomness_round is set, we know that eventually there will be a randomness state update transaction.
-        // We create a placeholder transaction so that the SharedObjVerManager
-        // can update the version of the randomness state object and use that version for randomness transactions.
-        let randomness_state_update = randomness_round.map(|round| {
-            VerifiedExecutableTransaction::new_system(
-                VerifiedTransaction::new_randomness_state_update(
-                    self.epoch(),
-                    round,
-                    // This is placeholder bytes, since this transaction does not exist yet.
-                    vec![],
-                    self.epoch_start_config()
-                        .randomness_obj_initial_shared_version()
-                        .expect("randomness obj initial shared version should be set if randomness_round is set"),
-                ),
-                self.epoch(),
-            )
-        });
-        let all_certs = non_randomness_transactions
+    ) -> SuiResult<AssignedTxAndVersions> {
+        let all_certs: Vec<_> = non_randomness_transactions
             .iter()
+            .map(Schedulable::Transaction)
             // randomness_state_update must be before randomness_transactions to make sure the version
             // of the randomness state object is updated before it is used in randomness transactions.
-            .chain(randomness_state_update.iter())
-            .chain(randomness_transactions.iter());
+            .chain(randomness_state_update.clone())
+            .chain(randomness_transactions.iter().map(Schedulable::Transaction))
+            .collect();
+
         let ConsensusSharedObjVerAssignment {
             shared_input_next_versions,
             assigned_versions,
         } = SharedObjVerManager::assign_versions_from_consensus(
             self,
             cache_reader,
-            all_certs,
+            all_certs.iter(),
             cancelled_txns,
         )?;
 
-        self.consensus_output_cache
-            .insert_shared_object_assignments(&assigned_versions);
-
         output.set_next_shared_object_versions(shared_input_next_versions);
-        Ok(())
+        Ok(assigned_versions)
     }
 
     pub fn get_highest_pending_checkpoint_height(&self) -> CheckpointHeight {
@@ -3609,7 +3549,7 @@ impl AuthorityPerEpochStore {
         tx_reader: &dyn TransactionCacheRead,
         authority_metrics: &Arc<AuthorityMetrics>,
         skip_consensus_commit_prologue_in_test: bool,
-    ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
+    ) -> SuiResult<(Vec<Schedulable>, AssignedTxAndVersions)> {
         self.process_consensus_transactions_and_commit_boundary(
             transactions,
             &ExecutionIndicesWithStats::default(),
@@ -3635,9 +3575,9 @@ impl AuthorityPerEpochStore {
         self: &Arc<Self>,
         cache_reader: &dyn ObjectCacheRead,
         transactions: &[VerifiedExecutableTransaction],
-    ) -> SuiResult {
+    ) -> SuiResult<AssignedTxAndVersions> {
         let mut output = ConsensusCommitOutput::new(0);
-        self.process_consensus_transaction_shared_object_versions(
+        let assigned_versions = self.process_consensus_transaction_shared_object_versions(
             cache_reader,
             transactions,
             &[],
@@ -3649,7 +3589,7 @@ impl AuthorityPerEpochStore {
         output.set_default_commit_stats_for_testing();
         output.write_to_batch(self, &mut batch)?;
         batch.write()?;
-        Ok(())
+        Ok(assigned_versions)
     }
 
     fn process_notifications(
@@ -3692,12 +3632,13 @@ impl AuthorityPerEpochStore {
         execution_time_estimator: Option<&ExecutionTimeEstimator>,
         authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<(
-        Vec<VerifiedExecutableTransaction>, // non-randomness transactions to schedule
-        Vec<VerifiedExecutableTransaction>, // randomness transactions to schedule
+        Vec<Schedulable>,                      // non-randomness transactions to schedule
+        Vec<Schedulable>,                      // randomness transactions to schedule
         Vec<SequencedConsensusTransactionKey>, // keys to notify as complete
         Option<RwLockWriteGuard<ReconfigState>>,
         bool,                   // true if final round
         Option<TransactionKey>, // consensus commit prologue root
+        AssignedTxAndVersions,
     )> {
         let _scope = monitored_scope("ConsensusCommitHandler::process_consensus_transactions");
 
@@ -3768,7 +3709,7 @@ impl AuthorityPerEpochStore {
             {
                 ConsensusCertificateResult::SuiTransaction(cert) => {
                     notifications.push(key.clone());
-                    verified_certificates.push_back(cert);
+                    verified_certificates.push_back(Schedulable::Transaction(cert));
                 }
                 ConsensusCertificateResult::Deferred(deferral_key) => {
                     // Note: record_consensus_message_processed() must be called for this
@@ -3786,7 +3727,7 @@ impl AuthorityPerEpochStore {
                 ConsensusCertificateResult::Cancelled((cert, reason)) => {
                     notifications.push(key.clone());
                     assert!(cancelled_txns.insert(*cert.digest(), reason).is_none());
-                    verified_certificates.push_back(cert);
+                    verified_certificates.push_back(Schedulable::Transaction(cert));
                 }
                 ConsensusCertificateResult::RandomnessConsensusMessage => {
                     randomness_state_updated = true;
@@ -3883,14 +3824,19 @@ impl AuthorityPerEpochStore {
             verified_non_randomness_certificates.into();
         let verified_randomness_certificates: Vec<_> = verified_randomness_certificates.into();
 
-        self.process_consensus_transaction_shared_object_versions(
-            cache_reader,
-            &verified_non_randomness_certificates,
-            &verified_randomness_certificates,
-            randomness_round,
-            &cancelled_txns,
-            output,
-        )?;
+        // If randomness_round is set, we know that eventually there will be a randomness state update transaction.
+        let randomness_state_update =
+            randomness_round.map(|round| Schedulable::RandomnessStateUpdate(self.epoch(), round));
+
+        let (additional_schedulables, assigned_tx_and_versions) = self
+            .process_consensus_transaction_shared_object_versions(
+                cache_reader,
+                &verified_non_randomness_certificates,
+                &verified_randomness_certificates,
+                randomness_state_update,
+                &cancelled_txns,
+                output,
+            )?;
 
         let (lock, final_round) = self.process_end_of_publish_transactions_and_reconfig(
             output,
@@ -3905,6 +3851,7 @@ impl AuthorityPerEpochStore {
             lock,
             final_round,
             consensus_commit_prologue_root,
+            assigned_tx_and_versions,
         ))
     }
 

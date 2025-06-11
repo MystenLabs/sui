@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    authority::{authority_per_epoch_store::AuthorityPerEpochStore, AuthorityMetrics},
+    authority::{
+        authority_per_epoch_store::AuthorityPerEpochStore, AuthorityMetrics, ExecutionEnv,
+    },
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
     execution_scheduler::{ExecutingGuard, PendingCertificateStats},
 };
@@ -14,7 +16,6 @@ use std::{
 use sui_config::node::AuthorityOverloadConfig;
 use sui_types::{
     base_types::FullObjectID,
-    digests::TransactionEffectsDigest,
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
     storage::InputKey,
@@ -24,9 +25,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
 use tracing::{debug, warn};
 
-use super::{
-    overload_tracker::OverloadTracker, ExecutionSchedulerAPI, PendingCertificate, SchedulingSource,
-};
+use super::{overload_tracker::OverloadTracker, ExecutionSchedulerAPI, PendingCertificate};
 
 #[derive(Clone)]
 pub(crate) struct ExecutionScheduler {
@@ -87,34 +86,36 @@ impl ExecutionScheduler {
     async fn schedule_transaction(
         self,
         cert: VerifiedExecutableTransaction,
-        expected_effects_digest: Option<TransactionEffectsDigest>,
+        execution_env: ExecutionEnv,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        scheduling_source: SchedulingSource,
     ) {
         let enqueue_time = Instant::now();
         let tx_data = cert.transaction_data();
         let input_object_kinds = tx_data
             .input_objects()
             .expect("input_objects() cannot fail");
-        let input_object_keys: Vec<_> =
-            match epoch_store.get_input_object_keys(&cert.key(), &input_object_kinds) {
-                Ok(keys) => keys,
-                Err(_) => {
-                    // This is possible if the transaction is already executed.
-                    // TODO: Eventually we could pass assigned shared object versions
-                    // to the scheduler so that this call cannot return Err.
-                    assert!(self
-                        .transaction_cache_read
-                        .is_tx_already_executed(cert.digest()));
-                    self.metrics
-                        .transaction_manager_num_enqueued_certificates
-                        .with_label_values(&["already_executed"])
-                        .inc();
-                    return;
-                }
+        let input_object_keys: Vec<_> = match epoch_store.get_input_object_keys(
+            &cert.key(),
+            &input_object_kinds,
+            &execution_env.assigned_versions,
+        ) {
+            Ok(keys) => keys,
+            Err(_) => {
+                // This is possible if the transaction is already executed.
+                // TODO: Eventually we could pass assigned shared object versions
+                // to the scheduler so that this call cannot return Err.
+                assert!(self
+                    .transaction_cache_read
+                    .is_tx_already_executed(cert.digest()));
+                self.metrics
+                    .transaction_manager_num_enqueued_certificates
+                    .with_label_values(&["already_executed"])
+                    .inc();
+                return;
             }
-            .into_iter()
-            .collect();
+        }
+        .into_iter()
+        .collect();
         let receiving_object_keys: HashSet<_> = tx_data
             .receiving_objects()
             .into_iter()
@@ -159,12 +160,7 @@ impl ExecutionScheduler {
                 .with_label_values(&["ready"])
                 .inc();
             debug!(?digest, "Input objects already available");
-            self.send_transaction_for_execution(
-                &cert,
-                expected_effects_digest,
-                enqueue_time,
-                scheduling_source,
-            );
+            self.send_transaction_for_execution(&cert, execution_env, enqueue_time);
             return;
         }
 
@@ -182,7 +178,11 @@ impl ExecutionScheduler {
                         .observe(enqueue_time.elapsed().as_secs_f64());
                     debug!(?digest, "Input objects available");
                     // TODO: Eventually we could fold execution_driver into the scheduler.
-                    self.send_transaction_for_execution(&cert, expected_effects_digest, enqueue_time, scheduling_source);
+                    self.send_transaction_for_execution(
+                        &cert,
+                        execution_env,
+                        enqueue_time,
+                    );
                 }
             _ = self.transaction_cache_read.notify_read_executed_effects_digests(&digests) => {
                 debug!(?digests, "Transaction already executed");
@@ -193,13 +193,12 @@ impl ExecutionScheduler {
     fn send_transaction_for_execution(
         &self,
         cert: &VerifiedExecutableTransaction,
-        expected_effects_digest: Option<TransactionEffectsDigest>,
+        execution_env: ExecutionEnv,
         enqueue_time: Instant,
-        scheduling_source: SchedulingSource,
     ) {
         let pending_cert = PendingCertificate {
             certificate: cert.clone(),
-            expected_effects_digest,
+            execution_env,
             waiting_input_objects: BTreeSet::new(),
             stats: PendingCertificateStats {
                 enqueue_time,
@@ -210,21 +209,16 @@ impl ExecutionScheduler {
                     .transaction_manager_num_executing_certificates
                     .clone(),
             )),
-            scheduling_source,
         };
         let _ = self.tx_ready_certificates.send(pending_cert);
     }
 }
 
 impl ExecutionSchedulerAPI for ExecutionScheduler {
-    fn enqueue_impl(
+    fn enqueue(
         &self,
-        certs: Vec<(
-            VerifiedExecutableTransaction,
-            Option<TransactionEffectsDigest>,
-        )>,
+        certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        scheduling_source: SchedulingSource,
     ) {
         // Filter out certificates from wrong epoch.
         let certs: Vec<_> = certs
@@ -247,26 +241,27 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
             .transaction_cache_read
             .multi_get_executed_effects_digests(&digests);
         let mut already_executed_certs_num = 0;
-        let pending_certs = certs.into_iter().zip(executed).filter_map(
-            |((cert, expected_effects_digest), executed)| {
-                if executed.is_none() {
-                    Some((cert, expected_effects_digest))
-                } else {
-                    already_executed_certs_num += 1;
-                    None
-                }
-            },
-        );
+        let pending_certs =
+            certs
+                .into_iter()
+                .zip(executed)
+                .filter_map(|((cert, execution_env), executed)| {
+                    if executed.is_none() {
+                        Some((cert, execution_env))
+                    } else {
+                        already_executed_certs_num += 1;
+                        None
+                    }
+                });
 
-        for (cert, expected_effects_digest) in pending_certs {
+        for (cert, execution_env) in pending_certs {
             let scheduler = self.clone();
             let epoch_store = epoch_store.clone();
             spawn_monitored_task!(
                 epoch_store.within_alive_epoch(scheduler.schedule_transaction(
                     cert,
-                    expected_effects_digest,
+                    execution_env,
                     &epoch_store,
-                    scheduling_source,
                 ))
             );
         }
@@ -325,6 +320,7 @@ mod test {
         time::sleep,
     };
 
+    use crate::authority::ExecutionEnv;
     use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
     use crate::execution_scheduler::{
         ExecutionSchedulerAPI, ExecutionSchedulerWrapper, SchedulingSource,
@@ -393,11 +389,7 @@ mod test {
         assert_eq!(execution_scheduler.num_pending_certificates(), 0);
 
         // Enqueue empty vec should not crash.
-        execution_scheduler.enqueue(
-            vec![],
-            &state.epoch_store_for_testing(),
-            SchedulingSource::NonFastPath,
-        );
+        execution_scheduler.enqueue(vec![], &state.epoch_store_for_testing());
         // scheduler should output no transaction.
         assert!(rx_ready_certificates
             .try_recv()
@@ -407,9 +399,11 @@ mod test {
         let transaction = make_transaction(gas_objects[0].clone(), vec![]);
         let tx_start_time = Instant::now();
         execution_scheduler.enqueue(
-            vec![transaction.clone()],
+            vec![(
+                transaction.clone(),
+                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+            )],
             &state.epoch_store_for_testing(),
-            SchedulingSource::NonFastPath,
         );
         // scheduler should output the transaction eventually.
         let pending_certificate = rx_ready_certificates.recv().await.unwrap();
@@ -437,9 +431,11 @@ mod test {
         let transaction = make_transaction(gas_object_new.clone(), vec![]);
         let tx_start_time = Instant::now();
         execution_scheduler.enqueue(
-            vec![transaction.clone()],
+            vec![(
+                transaction.clone(),
+                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+            )],
             &state.epoch_store_for_testing(),
-            SchedulingSource::NonFastPath,
         );
         // scheduler should output no transaction yet.
         sleep(Duration::from_secs(1)).await;
@@ -451,9 +447,11 @@ mod test {
 
         // Duplicated enqueue is allowed.
         execution_scheduler.enqueue(
-            vec![transaction.clone()],
+            vec![(
+                transaction.clone(),
+                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+            )],
             &state.epoch_store_for_testing(),
-            SchedulingSource::NonFastPath,
         );
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates
@@ -545,32 +543,20 @@ mod test {
             gas_objects[1].clone(),
             vec![CallArg::Object(shared_object_arg_read)],
         );
-        state
-            .epoch_store_for_testing()
-            .set_shared_object_versions_for_testing(
-                transaction_read_0.digest(),
-                &[(
-                    (
-                        shared_object.id(),
-                        shared_object.owner().start_version().unwrap(),
-                    ),
-                    shared_version,
-                )],
-            )
-            .unwrap();
-        state
-            .epoch_store_for_testing()
-            .set_shared_object_versions_for_testing(
-                transaction_read_1.digest(),
-                &[(
-                    (
-                        shared_object.id(),
-                        shared_object.owner().start_version().unwrap(),
-                    ),
-                    shared_version,
-                )],
-            )
-            .unwrap();
+        let tx_read_0_assigned_versions = vec![(
+            (
+                shared_object.id(),
+                shared_object.owner().start_version().unwrap(),
+            ),
+            shared_version,
+        )];
+        let tx_read_1_assigned_versions = vec![(
+            (
+                shared_object.id(),
+                shared_object.owner().start_version().unwrap(),
+            ),
+            shared_version,
+        )];
 
         // Enqueue one transaction with the same shared object in mutable mode.
         let shared_object_arg_default = ObjectArg::SharedObject {
@@ -582,19 +568,13 @@ mod test {
             gas_objects[2].clone(),
             vec![CallArg::Object(shared_object_arg_default)],
         );
-        state
-            .epoch_store_for_testing()
-            .set_shared_object_versions_for_testing(
-                transaction_default.digest(),
-                &[(
-                    (
-                        shared_object.id(),
-                        shared_object.owner().start_version().unwrap(),
-                    ),
-                    shared_version,
-                )],
-            )
-            .unwrap();
+        let tx_default_assigned_versions = vec![(
+            (
+                shared_object.id(),
+                shared_object.owner().start_version().unwrap(),
+            ),
+            shared_version,
+        )];
 
         // Enqueue one transaction with two readonly shared object inputs, `shared_object` and `shared_object_2`.
         let shared_version_2 = 1000.into();
@@ -610,38 +590,43 @@ mod test {
                 CallArg::Object(shared_object_arg_read_2),
             ],
         );
-        state
-            .epoch_store_for_testing()
-            .set_shared_object_versions_for_testing(
-                transaction_read_2.digest(),
-                &[
-                    (
-                        (
-                            shared_object.id(),
-                            shared_object.owner().start_version().unwrap(),
-                        ),
-                        shared_version,
-                    ),
-                    (
-                        (
-                            shared_object_2.id(),
-                            shared_object_2.owner().start_version().unwrap(),
-                        ),
-                        shared_version_2,
-                    ),
-                ],
-            )
-            .unwrap();
+        let tx_read_2_assigned_versions = vec![
+            (
+                (
+                    shared_object.id(),
+                    shared_object.owner().start_version().unwrap(),
+                ),
+                shared_version,
+            ),
+            (
+                (
+                    shared_object_2.id(),
+                    shared_object_2.owner().start_version().unwrap(),
+                ),
+                shared_version_2,
+            ),
+        ];
 
         execution_scheduler.enqueue(
             vec![
-                transaction_read_0.clone(),
-                transaction_read_1.clone(),
-                transaction_default.clone(),
-                transaction_read_2.clone(),
+                (
+                    transaction_read_0.clone(),
+                    ExecutionEnv::new().with_assigned_versions(tx_read_0_assigned_versions),
+                ),
+                (
+                    transaction_read_1.clone(),
+                    ExecutionEnv::new().with_assigned_versions(tx_read_1_assigned_versions),
+                ),
+                (
+                    transaction_default.clone(),
+                    ExecutionEnv::new().with_assigned_versions(tx_default_assigned_versions),
+                ),
+                (
+                    transaction_read_2.clone(),
+                    ExecutionEnv::new().with_assigned_versions(tx_read_2_assigned_versions),
+                ),
             ],
             &state.epoch_store_for_testing(),
-            SchedulingSource::NonFastPath,
         );
 
         // scheduler should output no transaction yet.
@@ -753,9 +738,11 @@ mod test {
             // scheduler should output no transaction yet since waiting on receiving object or
             // ImmOrOwnedObject input.
             execution_scheduler.enqueue(
-                vec![txn.clone()],
+                vec![(
+                    txn.clone(),
+                    ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+                )],
                 &state.epoch_store_for_testing(),
-                SchedulingSource::NonFastPath,
             );
             sleep(Duration::from_secs(1)).await;
             assert!(rx_ready_certificates.try_recv().is_err());
@@ -835,9 +822,11 @@ mod test {
 
         // scheduler should output no transaction yet since waiting on receiving object.
         execution_scheduler.enqueue(
-            vec![receive_object_transaction0.clone()],
+            vec![(
+                receive_object_transaction0.clone(),
+                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+            )],
             &state.epoch_store_for_testing(),
-            SchedulingSource::NonFastPath,
         );
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates.try_recv().is_err());
@@ -845,9 +834,11 @@ mod test {
 
         // scheduler should output no transaction yet since waiting on receiving object.
         execution_scheduler.enqueue(
-            vec![receive_object_transaction1.clone()],
+            vec![(
+                receive_object_transaction1.clone(),
+                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+            )],
             &state.epoch_store_for_testing(),
-            SchedulingSource::NonFastPath,
         );
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates.try_recv().is_err());
@@ -855,9 +846,11 @@ mod test {
 
         // Duplicate enqueue of receiving object is allowed.
         execution_scheduler.enqueue(
-            vec![receive_object_transaction0.clone()],
+            vec![(
+                receive_object_transaction0.clone(),
+                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+            )],
             &state.epoch_store_for_testing(),
-            SchedulingSource::NonFastPath,
         );
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates.try_recv().is_err());
@@ -937,9 +930,11 @@ mod test {
 
         // scheduler should output no transaction yet since waiting on receiving object.
         execution_scheduler.enqueue(
-            vec![receive_object_transaction0.clone()],
+            vec![(
+                receive_object_transaction0.clone(),
+                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+            )],
             &state.epoch_store_for_testing(),
-            SchedulingSource::NonFastPath,
         );
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates.try_recv().is_err());
@@ -947,9 +942,11 @@ mod test {
 
         // scheduler should output no transaction yet since waiting on receiving object.
         execution_scheduler.enqueue(
-            vec![receive_object_transaction1.clone()],
+            vec![(
+                receive_object_transaction1.clone(),
+                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+            )],
             &state.epoch_store_for_testing(),
-            SchedulingSource::NonFastPath,
         );
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates.try_recv().is_err());
@@ -958,9 +955,11 @@ mod test {
         // Different transaction with a duplicate receiving object reference is allowed.
         // Both transaction's will be outputted once the receiving object is available.
         execution_scheduler.enqueue(
-            vec![receive_object_transaction01.clone()],
+            vec![(
+                receive_object_transaction01.clone(),
+                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+            )],
             &state.epoch_store_for_testing(),
-            SchedulingSource::NonFastPath,
         );
         sleep(Duration::from_secs(1)).await;
         assert!(rx_ready_certificates.try_recv().is_err());
@@ -983,9 +982,11 @@ mod test {
         // Enqueue a transaction with a receiving object that is available at the time it is enqueued.
         // This should be immediately available.
         execution_scheduler.enqueue(
-            vec![tx1.clone()],
+            vec![(
+                tx1.clone(),
+                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+            )],
             &state.epoch_store_for_testing(),
-            SchedulingSource::NonFastPath,
         );
         sleep(Duration::from_secs(1)).await;
         rx_ready_certificates.recv().await.unwrap();
@@ -1058,19 +1059,25 @@ mod test {
 
         // scheduler should output no transaction yet since waiting on receiving object.
         execution_scheduler.enqueue(
-            vec![receive_object_transaction0.clone()],
+            vec![(
+                receive_object_transaction0.clone(),
+                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+            )],
             &state.epoch_store_for_testing(),
-            SchedulingSource::NonFastPath,
         );
         execution_scheduler.enqueue(
-            vec![receive_object_transaction01.clone()],
+            vec![(
+                receive_object_transaction01.clone(),
+                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+            )],
             &state.epoch_store_for_testing(),
-            SchedulingSource::NonFastPath,
         );
         execution_scheduler.enqueue(
-            vec![receive_object_transaction1.clone()],
+            vec![(
+                receive_object_transaction1.clone(),
+                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+            )],
             &state.epoch_store_for_testing(),
-            SchedulingSource::NonFastPath,
         );
         sleep(Duration::from_secs(1)).await;
         rx_ready_certificates.recv().await.unwrap();
@@ -1132,33 +1139,33 @@ mod test {
                 CallArg::Object(owned_object_arg),
             ],
         );
-        state
-            .epoch_store_for_testing()
-            .set_shared_object_versions_for_testing(
-                cancelled_transaction.digest(),
-                &[
-                    (
-                        (
-                            shared_object_1.id(),
-                            shared_object_1.owner().start_version().unwrap(),
-                        ),
-                        SequenceNumber::CANCELLED_READ,
-                    ),
-                    (
-                        (
-                            shared_object_2.id(),
-                            shared_object_2.owner().start_version().unwrap(),
-                        ),
-                        SequenceNumber::CONGESTED,
-                    ),
-                ],
-            )
-            .unwrap();
+        let assigned_versions = vec![
+            (
+                (
+                    shared_object_1.id(),
+                    shared_object_1.owner().start_version().unwrap(),
+                ),
+                SequenceNumber::CANCELLED_READ,
+            ),
+            (
+                (
+                    shared_object_2.id(),
+                    shared_object_2.owner().start_version().unwrap(),
+                ),
+                SequenceNumber::CONGESTED,
+            ),
+        ];
 
         execution_scheduler.enqueue(
-            vec![cancelled_transaction.clone()],
+            vec![(
+                cancelled_transaction.clone(),
+                ExecutionEnv {
+                    assigned_versions,
+                    scheduling_source: SchedulingSource::NonFastPath,
+                    expected_effects_digest: None,
+                },
+            )],
             &state.epoch_store_for_testing(),
-            SchedulingSource::NonFastPath,
         );
 
         // scheduler should output no transaction yet.

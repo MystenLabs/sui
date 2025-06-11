@@ -3,7 +3,7 @@
 
 use crate::authority::authority_tests::{send_consensus, send_consensus_no_execution};
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
-use crate::authority::AuthorityState;
+use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::authority_aggregator::authority_aggregator_tests::{
     create_object_move_transaction, do_cert, do_transaction, extract_cert, get_latest_ref,
 };
@@ -22,6 +22,7 @@ use crate::unit_test_utils::{
 use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
 
 use sui_types::error::SuiError;
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 
 use std::collections::BTreeSet;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -424,21 +425,30 @@ async fn test_execution_with_dependencies() {
 
     // ---- Execute transactions in reverse dependency order on the last authority.
 
-    // Sets shared object locks in the executed order.
+    // Assign shared object versions in the executed order.
+
+    let mut certs = Vec::new();
     for cert in executed_shared_certs.iter() {
-        send_consensus_no_execution(&authorities[3], cert).await;
+        let assigned_versions = send_consensus_no_execution(&authorities[3], cert).await;
+        certs.push((
+            VerifiedExecutableTransaction::new_from_certificate(cert.clone()),
+            ExecutionEnv::new().with_assigned_versions(assigned_versions),
+        ));
     }
 
     // Enqueue certs out of dependency order for executions.
-    for cert in executed_shared_certs.iter().rev() {
-        authorities[3].enqueue_certificates_for_execution(
-            vec![cert.clone()],
+    for (cert, env) in certs.iter().rev() {
+        authorities[3].enqueue_transactions_for_execution(
+            vec![(cert.clone(), env.clone())],
             &authorities[3].epoch_store_for_testing(),
         );
     }
     for cert in executed_owned_certs.iter().rev() {
-        authorities[3].enqueue_certificates_for_execution(
-            vec![cert.clone()],
+        authorities[3].enqueue_transactions_for_execution(
+            vec![(
+                VerifiedExecutableTransaction::new_from_certificate(cert.clone()),
+                ExecutionEnv::new(),
+            )],
             &authorities[3].epoch_store_for_testing(),
         );
     }

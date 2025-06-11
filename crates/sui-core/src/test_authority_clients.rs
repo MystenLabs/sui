@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use crate::authority::test_authority_builder::TestAuthorityBuilder;
+use crate::authority::{test_authority_builder::TestAuthorityBuilder, ExecutionEnv};
 use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use consensus_core::BlockRef;
@@ -17,6 +17,7 @@ use sui_config::genesis::Genesis;
 use sui_types::{
     crypto::AuthorityKeyPair,
     error::SuiError,
+    executable_transaction::VerifiedExecutableTransaction,
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
     messages_consensus::ConsensusPosition,
     messages_grpc::{
@@ -278,8 +279,13 @@ impl LocalAuthorityClient {
                     .signature_verifier
                     .verify_cert(request.certificate)
                     .await?;
-                //let certificate = certificate.verify(epoch_store.committee())?;
-                state.enqueue_certificates_for_execution(vec![certificate.clone()], &epoch_store);
+                state.enqueue_transactions_for_execution(
+                    vec![(
+                        VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
+                        ExecutionEnv::default(),
+                    )],
+                    &epoch_store,
+                );
                 let effects = state.notify_read_effects(*certificate.digest()).await?;
                 state.sign_effects(effects, &epoch_store)?
             }

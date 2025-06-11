@@ -49,7 +49,8 @@ use crate::{
         backpressure::{BackpressureManager, BackpressureSubscriber},
         consensus_tx_status_cache::ConsensusTxStatus,
         epoch_start_configuration::EpochStartConfigTrait,
-        AuthorityMetrics, AuthorityState,
+        shared_object_version_manager::AssignedTxAndVersions,
+        AuthorityMetrics, AuthorityState, ExecutionEnv,
     },
     checkpoints::{CheckpointService, CheckpointServiceNotify},
     consensus_throughput_calculator::ConsensusThroughputCalculator,
@@ -835,7 +836,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         }
 
-        let executable_transactions = self
+        let (executable_transactions, assigned_versions) = self
             .epoch_store
             .process_consensus_transactions_and_commit_boundary(
                 all_transactions,
@@ -862,8 +863,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         fail_point!("crash"); // for tests that produce random crashes
 
-        self.transaction_manager_sender
-            .send(executable_transactions, SchedulingSource::NonFastPath);
+        self.transaction_manager_sender.send(
+            executable_transactions,
+            assigned_versions,
+            SchedulingSource::NonFastPath,
+        );
     }
 }
 
@@ -872,7 +876,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 #[derive(Clone)]
 pub(crate) struct TransactionManagerSender {
     // Using unbounded channel to avoid blocking consensus commit and transaction handler.
-    sender: monitored_mpsc::UnboundedSender<(Vec<VerifiedExecutableTransaction>, SchedulingSource)>,
+    sender: monitored_mpsc::UnboundedSender<(
+        Vec<VerifiedExecutableTransaction>,
+        AssignedTxAndVersions,
+        SchedulingSource,
+    )>,
 }
 
 impl TransactionManagerSender {
@@ -888,22 +896,44 @@ impl TransactionManagerSender {
     fn send(
         &self,
         transactions: Vec<VerifiedExecutableTransaction>,
+        assigned_versions: AssignedTxAndVersions,
         scheduling_source: SchedulingSource,
     ) {
-        let _ = self.sender.send((transactions, scheduling_source));
+        let _ = self
+            .sender
+            .send((transactions, assigned_versions, scheduling_source));
     }
 
     async fn run(
         mut recv: monitored_mpsc::UnboundedReceiver<(
             Vec<VerifiedExecutableTransaction>,
+            AssignedTxAndVersions,
             SchedulingSource,
         )>,
         execution_scheduler: Arc<ExecutionSchedulerWrapper>,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) {
-        while let Some((transactions, scheduling_source)) = recv.recv().await {
+        while let Some((transactions, assigned_versions, scheduling_source)) = recv.recv().await {
             let _guard = monitored_scope("ConsensusHandler::enqueue");
-            execution_scheduler.enqueue(transactions, &epoch_store, scheduling_source);
+            let assigned_versions = assigned_versions.into_map();
+            let txns = transactions
+                .into_iter()
+                .map(|txn| {
+                    let key = txn.key();
+                    (
+                        txn,
+                        ExecutionEnv {
+                            assigned_versions: assigned_versions
+                                .get(&key)
+                                .cloned()
+                                .unwrap_or_default(),
+                            expected_effects_digest: None,
+                            scheduling_source,
+                        },
+                    )
+                })
+                .collect();
+            execution_scheduler.enqueue(txns, &epoch_store);
         }
     }
 }
@@ -1318,8 +1348,11 @@ impl ConsensusBlockHandler {
         self.metrics
             .consensus_block_handler_fastpath_executions
             .inc_by(executable_transactions.len() as u64);
-        self.transaction_manager_sender
-            .send(executable_transactions, SchedulingSource::MysticetiFastPath);
+        self.transaction_manager_sender.send(
+            executable_transactions,
+            Default::default(),
+            SchedulingSource::MysticetiFastPath,
+        );
     }
 }
 
@@ -1397,6 +1430,8 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_consensus_commit_handler() {
+        telemetry_subscribers::init_for_testing();
+
         // GIVEN
         // 1 account keypair
         let (sender, keypair) = deterministic_random_account_key();
