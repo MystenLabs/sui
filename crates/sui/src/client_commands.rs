@@ -1948,13 +1948,24 @@ impl SuiClientCommands {
                     .read_api()
                     .get_chain_identifier()
                     .await?;
-                let compiled_package = BuildConfig {
+                let mut compiled_package = BuildConfig {
                     config: build_config,
                     run_bytecode_verifier: true,
                     print_diags_to_stderr: true,
                     chain_id: Some(chain_id),
                 }
                 .build(&package_path)?;
+
+                // When comparing transitive dependencies against the linkage table, we need to
+                // also tree shake the locally compiled package otherwise the source verification
+                // will fail as the linkage table will not contain dependencies that are not
+                // referenced in the source code.
+                pkg_tree_shake(
+                    context.get_client().await?.read_api(),
+                    /* with_unpublished_dependencies */ false,
+                    &mut compiled_package,
+                )
+                .await?;
 
                 let client = context.get_client().await?;
                 BytecodeSourceVerifier::new(client.read_api())
