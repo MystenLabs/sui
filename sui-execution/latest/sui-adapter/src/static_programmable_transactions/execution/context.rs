@@ -13,7 +13,7 @@ use crate::{
     execution_mode::ExecutionMode,
     gas_charger::GasCharger,
     gas_meter::SuiGasMeter,
-    programmable_transactions::context::finish,
+    programmable_transactions::{context::finish, data_store::SuiDataStore},
     sp,
     static_programmable_transactions::{
         better_todo,
@@ -26,10 +26,13 @@ use crate::{
 };
 use indexmap::IndexMap;
 use move_binary_format::{
-    errors::{Location, PartialVMError},
+    errors::{Location, PartialVMError, VMResult},
     file_format::{CodeOffset, FunctionDefinitionIndex},
 };
-use move_core_types::language_storage::{ModuleId, StructTag};
+use move_core_types::{
+    identifier::IdentStr,
+    language_storage::{ModuleId, StructTag},
+};
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 use move_vm_types::{
@@ -549,19 +552,54 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 Value::tx_context(self.tx_context.borrow().digest())?,
             )),
         }
-        let storage_id = function.storage_id.clone();
         let (index, last_instr) = {
             let _ = &function;
             // access FunctionDefinitionIndex and last instruction CodeOffset
             better_todo!("LOADING")
         };
-        let result = {
-            let _ = function;
-            let _ = trace_builder_opt;
-            better_todo!("RUNTIME")
-        };
-        self.take_user_events(&storage_id, index, last_instr)?;
+        let result = self
+            .execute_function_bypass_visibility(
+                &function.runtime_id,
+                &function.name,
+                function.type_arguments,
+                args,
+                trace_builder_opt,
+            )
+            .map_err(|e| self.env.convert_vm_error(e))?;
+        self.take_user_events(&function.storage_id, index, last_instr)?;
         Ok(result)
+    }
+
+    pub fn execute_function_bypass_visibility(
+        &mut self,
+        module: &ModuleId,
+        function_name: &IdentStr,
+        ty_args: Vec<Type>,
+        args: Vec<CtxValue>,
+        tracer: Option<&mut MoveTraceBuilder>,
+    ) -> VMResult<Vec<CtxValue>> {
+        let ty_args = {
+            // load type arguments for VM
+            let _ = ty_args;
+            better_todo!("LOADING")
+        };
+        let gas_status = self.gas_charger.move_gas_status_mut();
+        let mut data_store = SuiDataStore::new(self.env.linkage_view, &self.new_packages);
+        let values = self
+            .env
+            .vm
+            .get_runtime()
+            .execute_function_with_values_bypass_visibility(
+                module,
+                function_name,
+                ty_args,
+                args.into_iter().map(|v| v.0.into()).collect(),
+                &mut data_store,
+                &mut SuiGasMeter(gas_status),
+                &mut self.native_extensions,
+                tracer,
+            )?;
+        Ok(values.into_iter().map(|v| CtxValue(v.into())).collect())
     }
 
     pub fn transfer_object(

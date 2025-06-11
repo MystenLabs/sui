@@ -321,16 +321,7 @@ impl Value {
         // }
         Ok(Self(VMValue::struct_(Struct::pack([
             VMValue::address(AccountAddress::ZERO),
-            Self::vec_pack(
-                Type::U8,
-                digest
-                    .inner()
-                    .iter()
-                    .copied()
-                    .map(|v| Value(VMValue::u8(v)))
-                    .collect(),
-            )?
-            .0,
+            VMValue::vector_u8(digest.inner().iter().copied()),
             VMValue::u64(0),
             VMValue::u64(0),
             VMValue::u64(0),
