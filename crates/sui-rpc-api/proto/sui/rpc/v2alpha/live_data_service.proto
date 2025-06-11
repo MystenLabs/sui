@@ -131,7 +131,7 @@ message Balance {
   // The type of the coin (e.g., 0x2::sui::SUI).
   optional string coin_type = 1;
 
-  // Shows the total balance of the coin in its smallest unit (mist).
+  // Shows the total balance of the coin in its smallest unit.
   optional uint64 total_balance = 3;
 }
 
