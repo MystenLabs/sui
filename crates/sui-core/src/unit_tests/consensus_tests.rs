@@ -212,6 +212,7 @@ pub fn make_consensus_adapter_for_test(
             let mut transactions = Vec::new();
             let mut executed_via_checkpoint = 0;
 
+            let num_transactions = sequenced_transactions.len();
             for tx in sequenced_transactions {
                 if let Some(transaction_digest) = tx.transaction.executable_transaction_digest() {
                     if self.process_via_checkpoint.contains(&transaction_digest) {
@@ -267,8 +268,17 @@ pub fn make_consensus_adapter_for_test(
                 !self.mock_block_status_receivers.lock().is_empty(),
                 "No mock submit responses left"
             );
+
+            let mut consensus_positions = Vec::new();
+            for index in 0..num_transactions {
+                consensus_positions.push(ConsensusTxPosition {
+                    index: index as u16,
+                    block: BlockRef::MIN,
+                });
+            }
+
             Ok((
-                Vec::new(),
+                consensus_positions,
                 self.mock_block_status_receivers.lock().remove(0),
             ))
         }

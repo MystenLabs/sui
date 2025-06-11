@@ -92,6 +92,10 @@ mod server_tests;
 #[path = "unit_tests/wait_for_effects_tests.rs"]
 mod wait_for_effects_tests;
 
+#[cfg(test)]
+#[path = "unit_tests/submit_transaction_tests.rs"]
+mod submit_transaction_tests;
+
 pub struct AuthorityServerHandle {
     server_handle: mysten_network::server::Server,
 }

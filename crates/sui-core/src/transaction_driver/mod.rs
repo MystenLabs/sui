@@ -168,9 +168,7 @@ where
                 details,
                 effects_digest: _,
             } => {
-                if details.is_some() {
-                    let details = details.unwrap();
-
+                if let Some(details) = details {
                     return Ok(QuorumSubmitTransactionResponse {
                         effects: FinalizedEffects {
                             effects: details.effects,

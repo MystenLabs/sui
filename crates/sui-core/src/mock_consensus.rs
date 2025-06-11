@@ -111,8 +111,12 @@ impl MockConsensusClient {
         self.tx_sender
             .try_send(transaction.clone())
             .map_err(|_| SuiError::from("MockConsensusClient channel overflowed"))?;
+        // TODO(fastpath): Add some way to simulate consensus positions across blocks
         Ok((
-            Vec::new(),
+            vec![ConsensusTxPosition {
+                block: BlockRef::MIN,
+                index: 0,
+            }],
             with_block_status(consensus_core::BlockStatus::Sequenced(BlockRef::MIN)),
         ))
     }
