@@ -281,7 +281,7 @@ impl VMRuntime {
             })?
         };
 
-        let bytes = value.simple_serialize(&layout).ok_or_else(|| {
+        let bytes = value.typed_serialize(&layout).ok_or_else(|| {
             PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                 .with_message("failed to serialize return values".to_string())
         })?;

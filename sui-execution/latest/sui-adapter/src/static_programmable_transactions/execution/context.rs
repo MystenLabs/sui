@@ -280,8 +280,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             };
             let abilities = ty.abilities();
             let has_public_transfer = abilities.has_store();
-            let layout = env.runtime_layout(&ty)?;
-            let Some(bytes) = value.simple_serialize(&layout) else {
+            let Some(bytes) = value.serialize() else {
                 invariant_violation!("Failed to deserialize already serialized Move value");
             };
             // safe because has_public_transfer has been determined by the abilities
@@ -379,23 +378,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let new_events = events
             .into_iter()
             .map(|(tag, value)| {
-                let ty = self
-                    .env
-                    .vm
-                    .get_runtime()
-                    .try_load_cached_type(&TypeTag::Struct(Box::new(tag.clone())))
-                    .map_err(|e| self.env.convert_vm_error(e))?
-                    .ok_or_else(|| {
-                        make_invariant_violation!("Failed to load type for event tag: {}", tag)
-                    })?;
-                let layout = self
-                    .env
-                    .vm
-                    .get_runtime()
-                    .type_to_type_layout(&ty)
-                    .map_err(|e| self.env.convert_vm_error(e))?;
-                let Some(bytes) = value.simple_serialize(&layout) else {
-                    invariant_violation!("Failed to deserialize already serialized Move value");
+                let Some(bytes) = value.serialize() else {
+                    invariant_violation!("Failed to serialize Move event");
                 };
                 Ok((module_id.clone(), tag, bytes))
             })
@@ -623,7 +607,6 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let Ok(tag): Result<TypeTag, _> = ty.clone().try_into() else {
             invariant_violation!("unable to generate type tag from type")
         };
-        let layout = self.env.runtime_layout(&ty)?;
         let (_, _, lv) = self.location_value(location, ty)?;
         let local = match lv {
             LocationValue::Loaded(v) => {
@@ -634,7 +617,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             }
             LocationValue::InputBytes(_, _, _) => return Ok(None),
         };
-        let Some(bytes) = local.copy()?.serialize(&layout) else {
+        let Some(bytes) = local.copy()?.serialize() else {
             invariant_violation!("Failed to serialize Move value");
         };
         let arg = match location {
@@ -666,7 +649,6 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         result: &Value,
         ty: Type,
     ) -> Result<(Vec<u8>, TypeTag), ExecutionError> {
-        let layout = self.env.runtime_layout(&ty)?;
         let inner_value;
         let (v, ty) = match ty {
             Type::Reference(_, inner) => {
@@ -675,7 +657,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             }
             _ => (result, ty),
         };
-        let Some(bytes) = v.serialize(&layout) else {
+        let Some(bytes) = v.serialize() else {
             invariant_violation!("Failed to serialize Move value");
         };
         let Ok(tag): Result<TypeTag, _> = ty.try_into() else {
