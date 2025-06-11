@@ -51,9 +51,9 @@ pub struct ReplayConfig {
 #[derive(Clone, Debug)]
 pub enum Node {
     Mainnet,
+    Testnet,
     // TODO: define once we have stable end points.
     //       Use `Custom` for now.
-    // Testnet,
     // Devnet,
     Custom(String),
 }
@@ -62,7 +62,7 @@ impl Node {
     pub fn chain(&self) -> Chain {
         match self {
             Node::Mainnet => Chain::Mainnet,
-            // Node::Testnet => Chain::Testnet,
+            Node::Testnet => Chain::Testnet,
             // Node::Devnet => Chain::Unknown,
             Node::Custom(_) => Chain::Unknown,
         }
@@ -75,7 +75,7 @@ impl FromStr for Node {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "mainnet" => Ok(Node::Mainnet),
-            // "testnet" => Ok(Node::Testnet),
+            "testnet" => Ok(Node::Testnet),
             // "devnet" => Ok(Node::Devnet),
             _ => Ok(Node::Custom(s.to_string())),
         }
