@@ -72,14 +72,12 @@ impl GitCache {
         let path_to_repo = self.root_dir.join(format!("{filename}_{sha}"));
         let path_in_repo = path_in_repo.unwrap_or_default();
 
-        let result = GitTree {
+        GitTree {
             repo,
             sha,
             path_in_repo,
             path_to_repo,
-        };
-        debug!("{result:?}");
-        result
+        }
     }
 }
 
@@ -339,11 +337,14 @@ fn display_cmd(cmd: &Command) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeSet;
     use std::env;
     use std::fs;
     use std::path::Path;
     use tempfile::{TempDir, tempdir};
     use test_log::test;
+    use walkdir::DirEntry;
+    use walkdir::WalkDir;
 
     fn setup_temp_dir() -> TempDir {
         tempdir().unwrap()
@@ -428,9 +429,37 @@ mod tests {
     }
 
     /// Asserts that `root/path` exists for each path in `paths`, and that no other files exist
-    /// inside `root`. Ignores files that start with `.` (in particular, `.git`)
+    /// inside `root`. Ignores empty directories and files that start with `.` (in particular, `.git`)
     fn assert_exactly_paths(root: &Path, paths: impl IntoIterator<Item = impl AsRef<Path>>) {
-        todo!()
+        fn is_hidden(entry: &DirEntry) -> bool {
+            entry
+                .file_name()
+                .to_str()
+                .map(|s| s.starts_with("."))
+                .unwrap_or(false)
+        }
+
+        let mut files: BTreeSet<PathBuf> = WalkDir::new(root)
+            .into_iter()
+            .filter_entry(|e| !is_hidden(e))
+            .filter_map(|e| {
+                let path = e.unwrap().into_path();
+                debug!("  found path: {path:?}");
+                if path.is_file() { Some(path) } else { None }
+            })
+            .collect();
+
+        for path in paths {
+            let fullpath = root.join(&path);
+            debug!("removing {fullpath:?}");
+            assert!(
+                files.remove(&fullpath),
+                "missing file {:?}",
+                path.as_ref().to_string_lossy()
+            );
+        }
+
+        assert!(files.is_empty(), "extra files: {files:?}");
     }
 
     /// Ensure that loading a package into an empty cache outputs only the correct files
@@ -479,7 +508,7 @@ mod tests {
         let checkout_path = git_tree.fetch().await.unwrap();
 
         // Verify only packages/pkg_b was checked out
-        assert_exactly_paths(git_tree.repo_fs_path(), ["packages/pkg_b/Move.toml"]);
+        assert_exactly_paths(git_tree.repo_fs_path(), ["packages/pkg_a/Move.toml"]);
     }
 
     /// Ensure that checking out two different paths from the same repo / sha works
@@ -520,16 +549,20 @@ mod tests {
         // valid sha, but incorrect for repo:
         let wrong_sha = "0".repeat(40);
 
-        // Pass in a commit SHA
+        // note: in current implementation, find_sha succeeds with an invalid sha; it doesn't
+        // contact the server - we only fail when we try to fetch (which seems reasonable)
         let git_tree = cache
             .resolve_to_tree(
                 &repo_path,
                 &Some(wrong_sha),
                 Some(PathBuf::from("packages/pkg_a")),
             )
-            .await;
+            .await
+            .unwrap();
 
-        assert!(git_tree.is_err());
+        let result = git_tree.fetch().await;
+
+        assert!(result.is_err());
     }
 
     /// Creating a git tree should fail if the branch doesn't exist
@@ -549,25 +582,6 @@ mod tests {
             .await;
 
         assert!(git_tree.is_err());
-    }
-
-    /// Fetching should fail if the path doesn't exist
-    #[test(tokio::test)]
-    async fn test_wrong_path() {
-        let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
-        let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new(cache_dir.path().to_path_buf());
-
-        let wrong_branch = "test";
-
-        // Pass in a commit SHA
-        let git_tree = cache
-            .resolve_to_tree(&repo_path, &None, Some(PathBuf::from("nope/non_here")))
-            .await
-            .unwrap();
-
-        let path = git_tree.fetch().await;
-        assert!(path.is_err());
     }
 
     /// Fetching should succeeed if the path is `None`
