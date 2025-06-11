@@ -154,10 +154,6 @@ impl GitTree {
         if !tree_path.exists() {
             // git sparse-checkout add <path>
             let path_in_repo = self.path_in_repo().to_string_lossy();
-            self.run_git(&["sparse-checkout", "init", "--cone"]).await?;
-
-            // git sparse-checkout add <path>
-            let path_in_repo = self.path_in_repo().to_string_lossy();
             self.run_git(&["sparse-checkout", "add", &path_in_repo])
                 .await?;
 
