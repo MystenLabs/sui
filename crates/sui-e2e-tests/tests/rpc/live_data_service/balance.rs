@@ -444,6 +444,13 @@ async fn test_invalid_requests() {
     };
     let result = grpc_client.get_balance(request).await;
     assert!(result.is_err(), "Expected error for missing owner");
+    let error = result.unwrap_err();
+    assert_eq!(error.code(), tonic::Code::InvalidArgument);
+    assert!(
+        error.message().contains("owner is required"),
+        "Expected error message to contain 'owner is required', but got: {}",
+        error.message()
+    );
 
     // Test with missing coin type - should error
     let address = test_cluster.get_address_0();
@@ -454,6 +461,13 @@ async fn test_invalid_requests() {
         })
         .await;
     assert!(result.is_err(), "Expected error for missing coin_type");
+    let error = result.unwrap_err();
+    assert_eq!(error.code(), tonic::Code::InvalidArgument);
+    assert!(
+        error.message().contains("coin_type is required"),
+        "Expected error message to contain 'coin_type is required', but got: {}",
+        error.message()
+    );
 
     // Test with invalid address format
     let result = grpc_client
@@ -463,6 +477,13 @@ async fn test_invalid_requests() {
         })
         .await;
     assert!(result.is_err(), "Expected error for invalid address format");
+    let error = result.unwrap_err();
+    assert_eq!(error.code(), tonic::Code::InvalidArgument);
+    assert!(
+        error.message().contains("invalid owner"),
+        "Expected error message to contain 'invalid owner', but got: {}",
+        error.message()
+    );
 
     // Test with invalid coin type format
     let result = grpc_client
@@ -472,6 +493,13 @@ async fn test_invalid_requests() {
         })
         .await;
     assert!(result.is_err(), "Expected error for invalid coin type");
+    let error = result.unwrap_err();
+    assert_eq!(error.code(), tonic::Code::InvalidArgument);
+    assert!(
+        error.message().contains("invalid coin_type"),
+        "Expected error message to contain 'invalid coin_type', but got: {}",
+        error.message()
+    );
 
     // Test with non-existent coin type (well-formed but doesn't exist)
     let fake_coin_type =
@@ -503,6 +531,13 @@ async fn test_invalid_requests() {
         result.is_err(),
         "Expected error for missing owner in list request"
     );
+    let error = result.unwrap_err();
+    assert_eq!(error.code(), tonic::Code::InvalidArgument);
+    assert!(
+        error.message().contains("owner is required"),
+        "Expected error message to contain 'owner is required', but got: {}",
+        error.message()
+    );
 
     // Test corrupted page token
     let result = grpc_client
@@ -513,6 +548,8 @@ async fn test_invalid_requests() {
         })
         .await;
     assert!(result.is_err(), "Expected error for corrupted page token");
+    let error = result.unwrap_err();
+    assert_eq!(error.code(), tonic::Code::Internal);
 }
 
 fn calculate_gas_used(gas_summary: &GasCostSummary) -> u64 {
