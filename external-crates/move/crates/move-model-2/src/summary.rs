@@ -836,7 +836,7 @@ impl Type {
         match ty_ {
             N::Type_::Unit => Self::Tuple(vec![]),
             N::Type_::Ref(mut_, inner) => {
-                Type::Reference(*mut_, Box::new(Self::from_ast(context, &**inner)))
+                Type::Reference(*mut_, Box::new(Self::from_ast(context, inner)))
             }
             N::Type_::Param(tp) => Type::NamedTypeParameter(tp.user_specified_name.value),
             N::Type_::Apply(_, sp!(_, tn_), tys) => match tn_ {
@@ -883,7 +883,7 @@ impl Type {
                     .iter()
                     .map(|ty| Self::from_ast(context, ty))
                     .collect(),
-                Box::new(Self::from_ast(context, &**ret_)),
+                Box::new(Self::from_ast(context, ret_)),
             ),
             N::Type_::Var(_) | N::Type_::Anything | N::Type_::UnresolvedError => Self::Any,
         }

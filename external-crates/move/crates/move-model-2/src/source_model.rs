@@ -142,7 +142,7 @@ impl Model {
 
     pub fn summary_with_source(&self) -> &summary::Packages {
         self.summary.get_or_init(|| {
-            let context = summary::Context::new(&self);
+            let context = summary::Context::new(self);
             let mut info = summary::Packages::from_normalized(&context, &self.compiled);
             info.annotate(&context, self);
             info
