@@ -15,10 +15,8 @@ fn run_test_impl(path: &Path) -> anyhow::Result<()> {
         num_threads: 1,
         gas_limit: Some(1000),
         source_files,
-        dep_files: move_stdlib::move_stdlib_files(),
-        named_address_values: move_stdlib::move_stdlib_named_addresses()
-            .into_iter()
-            .collect(),
+        dep_files: move_stdlib::source_files(),
+        named_address_values: move_stdlib::named_addresses().into_iter().collect(),
         report_stacktrace_on_abort: true,
         deterministic_generation: true,
 
