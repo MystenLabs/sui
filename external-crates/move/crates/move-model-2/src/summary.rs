@@ -229,12 +229,12 @@ pub enum Type {
 pub struct Datatype {
     pub module: ModuleId,
     pub name: Symbol,
-    pub type_arguments: Vec<TypeArgument>,
+    pub type_arguments: Vec<DatatypeTArg>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct TypeArgument {
-    pub is_phantom: bool,
+pub struct DatatypeTArg {
+    pub phantom: bool,
     pub argument: Type,
 }
 
@@ -539,7 +539,7 @@ impl Type {
                         .enumerate()
                         .map(|(idx, ty)| {
                             let ty = Self::from_normalized(context, ty);
-                            TypeArgument::new(context, &d.module, &name, idx, ty)
+                            DatatypeTArg::new(context, &d.module, &name, idx, ty)
                         })
                         .collect(),
                 }))
@@ -555,7 +555,7 @@ impl Type {
     }
 }
 
-impl TypeArgument {
+impl DatatypeTArg {
     pub fn new(
         context: &Context,
         module: &normalized::ModuleId,
@@ -564,7 +564,7 @@ impl TypeArgument {
         ty: Type,
     ) -> Self {
         Self {
-            is_phantom: context.phantom_type_positions[module][name][idx],
+            phantom: context.phantom_type_positions[module][name][idx],
             argument: ty,
         }
     }
@@ -851,7 +851,7 @@ impl Type {
                             .enumerate()
                             .map(|(idx, ty)| {
                                 let ty = Self::from_ast(context, ty);
-                                TypeArgument::new(context, &normalized_id, &name, idx, ty)
+                                DatatypeTArg::new(context, &normalized_id, &name, idx, ty)
                             })
                             .collect(),
                     }))
