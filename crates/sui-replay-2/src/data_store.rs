@@ -87,8 +87,8 @@ impl DataStore {
         debug!("Start stores creation");
         let client = reqwest::Client::new();
         let url = match node {
-            Node::Mainnet => "https://rpc.mainnet.mystenlabs.com/alt/graphql",
-            // Node::Testnet => "",
+            Node::Mainnet => "https://public-rpc.sui-mainnet.mystenlabs.com/graphql",
+            Node::Testnet => "https://public-rpc.sui-testnet.mystenlabs.com/graphql",
             // Node::Devnet => "",
             Node::Custom(ref url) => url,
         };
