@@ -8215,7 +8215,6 @@ dependencies = [
  "toml_edit 0.22.24",
  "tracing",
  "tracing-subscriber",
- "walkdir",
 ]
 
 [[package]]
@@ -8252,7 +8251,6 @@ dependencies = [
  "move-stdlib-natives",
  "move-vm-runtime",
  "sha2 0.9.9",
- "walkdir",
 ]
 
 [[package]]
