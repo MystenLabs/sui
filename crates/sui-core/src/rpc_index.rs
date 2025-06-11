@@ -297,38 +297,13 @@ struct IndexStoreTables {
 }
 
 impl IndexStoreTables {
-    fn extract_coin_balance(object: &Object) -> Result<Option<(StructTag, u64)>, StorageError> {
-        match Coin::extract_balance_if_coin(object) {
-            Ok(Some((TypeTag::Struct(struct_tag), value))) => Ok(Some((*struct_tag, value))),
-            Ok(Some(_)) => {
-                // Non-struct type tag for a coin - this shouldn't happen
-                Err(StorageError::custom(format!(
-                    "Coin object {} has non-struct type tag",
-                    object.id()
-                )))
-            }
-            Ok(None) => {
-                // Not a coin
-                Ok(None)
-            }
-            Err(e) => {
-                // Corrupted coin data
-                Err(StorageError::custom(format!(
-                    "Failed to deserialize coin object {}: {}",
-                    object.id(),
-                    e
-                )))
-            }
-        }
-    }
-
     fn track_coin_balance_change(
         object: &Object,
         owner: &SuiAddress,
         is_removal: bool,
         balance_changes: &mut HashMap<BalanceKey, BalanceIndexInfo>,
     ) -> Result<(), StorageError> {
-        if let Some((struct_tag, value)) = Self::extract_coin_balance(object)? {
+        if let Some((struct_tag, value)) = extract_coin_balance(object)? {
             let key = BalanceKey {
                 owner: *owner,
                 coin_type: struct_tag,
@@ -1161,7 +1136,7 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
                     .insert_batch(&self.tables.owner, [(owner_key, owner_info)])?;
 
                 // Track balance for coins
-                if let Some((coin_type, value)) = IndexStoreTables::extract_coin_balance(&object)? {
+                if let Some((coin_type, value)) = extract_coin_balance(&object)? {
                     let balance_key = BalanceKey { owner, coin_type };
                     let balance_info = BalanceIndexInfo::from_coin_value(value);
                     self.batch
@@ -1276,4 +1251,29 @@ fn sparse_checkpoint_data_for_backfill(
     };
 
     Ok(checkpoint_data)
+}
+
+fn extract_coin_balance(object: &Object) -> Result<Option<(StructTag, u64)>, StorageError> {
+    match Coin::extract_balance_if_coin(object) {
+        Ok(Some((TypeTag::Struct(struct_tag), value))) => Ok(Some((*struct_tag, value))),
+        Ok(Some(_)) => {
+            // Non-struct type tag for a coin - this shouldn't happen
+            Err(StorageError::custom(format!(
+                "Coin object {} has non-struct type tag",
+                object.id()
+            )))
+        }
+        Ok(None) => {
+            // Not a coin
+            Ok(None)
+        }
+        Err(e) => {
+            // Corrupted coin data
+            Err(StorageError::custom(format!(
+                "Failed to deserialize coin object {}: {}",
+                object.id(),
+                e
+            )))
+        }
+    }
 }
