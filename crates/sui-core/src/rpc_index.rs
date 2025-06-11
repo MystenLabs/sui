@@ -1154,11 +1154,19 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
     fn index_object(&mut self, object: Object) -> Result<(), StorageError> {
         match object.owner {
             // Owner Index
-            Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => {
+            Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => {
                 let owner_key = OwnerIndexKey::from_object(&object);
                 let owner_info = OwnerIndexInfo::new(&object);
                 self.batch
                     .insert_batch(&self.tables.owner, [(owner_key, owner_info)])?;
+
+                // Track balance for coins
+                if let Some((coin_type, value)) = IndexStoreTables::extract_coin_balance(&object)? {
+                    let balance_key = BalanceKey { owner, coin_type };
+                    let balance_info = BalanceIndexInfo::from_coin_value(value);
+                    self.batch
+                        .partial_merge_batch(&self.tables.balance, [(balance_key, balance_info)])?;
+                }
             }
 
             // Dynamic Field Index
