@@ -145,6 +145,19 @@ diesel::table! {
         module -> Nullable<Text>,
         name -> Nullable<Text>,
         instantiation -> Nullable<Bytea>,
+    }
+}
+
+diesel::table! {
+    obj_info_v2 (object_id, cp_sequence_number) {
+        object_id -> Bytea,
+        cp_sequence_number -> Int8,
+        owner_kind -> Nullable<Int2>,
+        owner_id -> Nullable<Bytea>,
+        package -> Nullable<Bytea>,
+        module -> Nullable<Text>,
+        name -> Nullable<Text>,
+        instantiation -> Nullable<Bytea>,
         obsolete_at -> Nullable<Int8>,
         marked_predecessor -> Bool,
     }
@@ -243,6 +256,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     kv_protocol_configs,
     kv_transactions,
     obj_info,
+    obj_info_v2,
     obj_versions,
     sum_displays,
     tx_affected_addresses,

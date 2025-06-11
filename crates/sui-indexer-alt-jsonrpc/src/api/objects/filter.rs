@@ -418,8 +418,6 @@ async fn owned_obj_info(
             module,
             name,
             instantiation,
-            obsolete_at,
-            marked_predecessor,
         ))
         .left_join(
             newer.on(candidates!(object_id)
