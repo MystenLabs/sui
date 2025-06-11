@@ -713,7 +713,10 @@ impl ConsensusAdapter {
             return;
         }
 
-        let must_submit_for_positon = tx_consensus_positions.is_some();
+        // If tx_consensus_positions channel is provided, the caller is looking for a
+        // consensus position for mfp. Therefore we will skip shortcutting submission
+        // if txes have already been processed.
+        let skip_processed_checks = tx_consensus_positions.is_some();
 
         // Current code path ensures:
         // - If transactions.len() > 1, it is a soft bundle. Otherwise transactions should have been submitted individually.
@@ -745,7 +748,7 @@ impl ConsensusAdapter {
         let (await_submit, position, positions_moved, preceding_disconnected, amplification_factor) =
             self.await_submit_delay(epoch_store, &transactions[..]);
 
-        let processed_via_consensus_or_checkpoint = if must_submit_for_positon {
+        let processed_via_consensus_or_checkpoint = if skip_processed_checks {
             // If we need to get consensus position, don't bypass consensus submission
             // for tx digest returned from consensus/checkpoint processing
             future::pending().boxed()
@@ -880,7 +883,7 @@ impl ConsensusAdapter {
                 }
             };
 
-            guard.processed_method = if must_submit_for_positon {
+            guard.processed_method = if skip_processed_checks {
                 // When getting consensus positions, we only care about submit_inner completing
                 submit_inner.await;
                 ProcessedMethod::Consensus
