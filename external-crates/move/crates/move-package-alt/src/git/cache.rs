@@ -1,3 +1,7 @@
+// Copyright (c) The Diem Core Contributors
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 use std::{
     io::BufRead,
     path::{Path, PathBuf},
@@ -45,19 +49,19 @@ impl GitCache {
 
     /// Resolve the git committish `rev` (branch, tag, or sha) from a repository at the remote
     /// `repo` to a commit hash. This will make a remote call so network is required.
-    pub async fn find_sha(repo: &String, rev: &Option<String>) -> GitResult<GitSha> {
+    pub async fn find_sha(repo: &str, rev: &Option<String>) -> GitResult<GitSha> {
         find_sha(repo, rev).await
     }
 
     /// Helper function to find the sha and then construct a [GitTree]
     pub async fn resolve_to_tree(
         &self,
-        repo: &String,
+        repo: &str,
         rev: &Option<String>,
         path_in_repo: Option<PathBuf>,
     ) -> GitResult<GitTree> {
         let sha = Self::find_sha(repo, rev).await?;
-        Ok(self.tree_for_sha(repo.clone(), sha.clone(), path_in_repo.clone()))
+        Ok(self.tree_for_sha(repo.to_string(), sha.clone(), path_in_repo.clone()))
     }
 
     /// Construct a tree in `self` for the repository `repo` with the provided `sha` and
@@ -124,10 +128,8 @@ impl GitTree {
     async fn checkout_repo(&self, allow_dirty: bool) -> GitResult<PathBuf> {
         let tree_path = self.path_to_tree();
 
-        // Checkout directory if it does not exist already
-        if !tree_path.exists() {
-            // TODO: does this work if we separately have two trees in the same git repo?
-
+        // create repo if necessary
+        if !self.path_to_repo.exists() {
             // git clone --sparse --filter=blob:none --no-checkout <url> <path>
             run_git_cmd_with_args(
                 &[
@@ -138,30 +140,40 @@ impl GitTree {
                     "--sparse",
                     "--filter=blob:none",
                     "--no-checkout",
+                    "--depth",
+                    "1",
                     &self.repo,
                     &self.path_to_repo.to_string_lossy(),
                 ],
                 None,
             )
             .await?;
+        }
 
-            // git sparse-checkout init --cone
+        // Checkout directory if it does not exist already
+        if !tree_path.exists() {
+            // git sparse-checkout add <path>
+            let path_in_repo = self.path_in_repo().to_string_lossy();
             self.run_git(&["sparse-checkout", "init", "--cone"]).await?;
 
-            // git sparse-checkout set <path>
+            // git sparse-checkout add <path>
             let path_in_repo = self.path_in_repo().to_string_lossy();
-            self.run_git(&["sparse-checkout", "set", &path_in_repo])
+            self.run_git(&["sparse-checkout", "add", &path_in_repo])
                 .await?;
 
             // git checkout
             self.run_git(&["checkout", "--quiet", self.sha.as_ref()])
                 .await?;
-            debug!("Checkout at successful");
-        } else if self.is_dirty().await && !allow_dirty {
-            return Err(GitError::dirty(&self.repo));
         }
 
-        Ok(tree_path)
+        // check for dirt
+        if !allow_dirty && self.is_dirty().await {
+            Err(GitError::dirty(
+                self.path_to_tree().to_string_lossy().as_ref(),
+            ))
+        } else {
+            Ok(tree_path)
+        }
     }
 
     /// Run `git <args>` in working directory `self.path_to_repo`
@@ -227,16 +239,13 @@ async fn find_sha(repo: &str, rev: &Option<String>) -> GitResult<GitSha> {
 
         // we have a branch or tag
         // git ls-remote https://github.com/user/repo.git refs/heads/main
-        let stdout = run_git_cmd_with_args(
-            &["ls-remote", repo.as_ref(), &format!("refs/heads/{r}")],
-            None,
-        )
-        .await?;
+        let stdout =
+            run_git_cmd_with_args(&["ls-remote", repo, &format!("refs/heads/{r}")], None).await?;
 
         let sha = stdout
             .split_whitespace()
             .next()
-            .ok_or(GitError::no_sha(repo.as_ref(), r))?
+            .ok_or(GitError::no_sha(repo, r))?
             .to_string()
             .try_into()
             .expect("git returns valid shas");
@@ -244,7 +253,7 @@ async fn find_sha(repo: &str, rev: &Option<String>) -> GitResult<GitSha> {
         Ok(sha)
     } else {
         // nothing specified, so we need to find the default branch
-        find_default_branch_and_get_sha(repo.as_ref()).await
+        find_default_branch_and_get_sha(repo).await
     }
 }
 
@@ -287,13 +296,8 @@ async fn run_git_cmd_with_args(args: &[&str], cwd: Option<&PathBuf>) -> GitResul
         cmd.current_dir(cwd);
     }
 
-    debug!(
-        "Running {}{cmd:?}",
-        match cwd {
-            Some(p) => format!("(in dir {p:?}) "),
-            None => String::new(),
-        }
-    );
+    debug!("running `{}`", display_cmd(&cmd));
+    debug!("  in directory `{:?}`", cmd.as_std().get_current_dir());
 
     let output = cmd
         .output()
@@ -302,7 +306,6 @@ async fn run_git_cmd_with_args(args: &[&str], cwd: Option<&PathBuf>) -> GitResul
 
     if !output.stderr.is_empty() {
         info!("output from `{}`", display_cmd(&cmd));
-        debug!("  in directory `{:?}`", cmd.as_std().get_current_dir());
         for line in output.stderr.lines() {
             info!("  │ {}", line.expect("vector read can't fail"));
         }
@@ -310,7 +313,6 @@ async fn run_git_cmd_with_args(args: &[&str], cwd: Option<&PathBuf>) -> GitResul
 
     if !output.stdout.is_empty() {
         debug!("stdout from `{}`", display_cmd(&cmd));
-        debug!("  in directory `{:?}`", cmd.as_std().get_current_dir());
         for line in output.stdout.lines() {
             debug!("  │ {}", line.expect("vector read can't fail"));
         }
@@ -467,7 +469,7 @@ mod tests {
     async fn test_sparse_checkout_branch() {
         let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new(cache_dir.path().to_path_buf());
+        let cache = GitCache::new(cache_dir.path());
 
         // Pass in a branch name
         let git_tree = cache
@@ -492,13 +494,13 @@ mod tests {
     async fn test_sparse_checkout_sha() {
         let (repo_dir, repo_path, _, second_sha) = setup_test_move_project().await;
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new(cache_dir.path().to_path_buf());
+        let cache = GitCache::new(cache_dir.path());
 
         // Pass in a commit SHA
         let git_tree = cache
             .resolve_to_tree(
                 &repo_path,
-                &Some(second_sha.into()),
+                &Some(second_sha),
                 Some(PathBuf::from("packages/pkg_a")),
             )
             .await
@@ -516,7 +518,7 @@ mod tests {
     async fn test_multi_checkout() {
         let (repo_dir, repo_path, _, second_sha) = setup_test_move_project().await;
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new(cache_dir.path().to_path_buf());
+        let cache = GitCache::new(cache_dir.path());
 
         let git_tree_a = cache
             .resolve_to_tree(&repo_path, &None, Some(PathBuf::from("packages/pkg_a")))
@@ -544,7 +546,7 @@ mod tests {
     async fn test_wrong_sha() {
         let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new(cache_dir.path().to_path_buf());
+        let cache = GitCache::new(cache_dir.path());
 
         // valid sha, but incorrect for repo:
         let wrong_sha = "0".repeat(40);
@@ -570,7 +572,7 @@ mod tests {
     async fn test_wrong_branch_name() {
         let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new(cache_dir.path().to_path_buf());
+        let cache = GitCache::new(cache_dir.path());
 
         let wrong_branch = "test";
         let git_tree = cache
@@ -589,7 +591,7 @@ mod tests {
     async fn test_fetch_no_path() {
         let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new(cache_dir.path().to_path_buf());
+        let cache = GitCache::new(cache_dir.path());
 
         let git_tree = cache
             .resolve_to_tree(&repo_path, &None, None)
@@ -602,7 +604,7 @@ mod tests {
     async fn test_fetch_dirty_fail() {
         let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new(cache_dir.path().to_path_buf());
+        let cache = GitCache::new(cache_dir.path());
 
         let git_tree = cache
             .resolve_to_tree(&repo_path, &None, Some(PathBuf::from("packages/pkg_a")))
@@ -624,7 +626,7 @@ mod tests {
     async fn test_fetch_allow_dirty() {
         let (repo_dir, repo_url, _, _) = setup_test_move_project().await;
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new(cache_dir.path().to_path_buf());
+        let cache = GitCache::new(cache_dir.path());
 
         let git_tree = cache
             .resolve_to_tree(&repo_url, &None, Some(PathBuf::from("packages/pkg_a")))
@@ -645,7 +647,7 @@ mod tests {
     async fn test_fetch_clean_exists() {
         let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new(cache_dir.path().to_path_buf());
+        let cache = GitCache::new(cache_dir.path());
 
         let git_tree = cache
             .resolve_to_tree(&repo_path, &None, Some(PathBuf::from("packages/pkg_a")))
@@ -668,7 +670,7 @@ mod tests {
     async fn test_fetch_clean_parallel_dirty() {
         let (repo_dir, repo_url, _, _) = setup_test_move_project().await;
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new(cache_dir.path().to_path_buf());
+        let cache = GitCache::new(cache_dir.path());
 
         let git_tree = cache
             .resolve_to_tree(&repo_url, &None, Some(PathBuf::from("packages/pkg_a")))
