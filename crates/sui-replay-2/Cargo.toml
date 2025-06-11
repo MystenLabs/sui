@@ -36,8 +36,8 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 
-# [features]
-# tracing = [
-#     "sui-types/tracing",
-#     "sui-execution/tracing",
-# ]
+[features]
+tracing = [
+    "sui-types/tracing",
+    "sui-execution/tracing",
+]
