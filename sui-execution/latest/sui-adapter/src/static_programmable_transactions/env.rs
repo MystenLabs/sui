@@ -21,8 +21,8 @@ use crate::{
 use indexmap::IndexSet;
 use move_binary_format::{
     CompiledModule,
-    errors::{Location, VMError},
-    file_format::{AbilitySet, FunctionDefinitionIndex, TypeParameterIndex},
+    errors::VMError,
+    file_format::{AbilitySet, TypeParameterIndex},
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -38,7 +38,7 @@ use sui_types::{
     Identifier, TypeTag,
     base_types::{ObjectID, TxContextKind},
     error::{ExecutionError, ExecutionErrorKind},
-    execution_status::{ExecutionFailureStatus, MoveLocation, MoveLocationOpt, TypeArgumentError},
+    execution_status::TypeArgumentError,
     gas_coin::GasCoin,
     move_package::{UpgradeReceipt, UpgradeTicket},
     object::Object,
@@ -357,7 +357,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                 };
                 Type::Datatype(Rc::new(datatype))
             }
-            VRT::Type::DatatypeInstantiation(inst) => {
+            ty @ VRT::Type::DatatypeInstantiation(inst) => {
                 let (cached_type_index, type_arguments) = &**inst;
                 let runtime = self.vm.get_runtime();
                 let Some(cached_info) = runtime.get_type(*cached_type_index) else {
@@ -367,17 +367,23 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                         vm_type
                     )
                 };
+
+                let abilities = runtime
+                    .get_type_abilities(ty)
+                    .map_err(|e| self.convert_linked_vm_error(e, linkage))?;
+                let module = cached_info.defining_id.clone();
+                let name = cached_info.name.clone();
                 let type_arguments = type_arguments
                     .iter()
                     .map(|t| self.adapter_type_from_vm_type(t, linkage))
                     .collect::<Result<Vec<_>, _>>()?;
-                let datatype = Datatype {
-                    abilities: cached_info.abilities,
-                    module: cached_info.defining_id.clone(),
-                    name: cached_info.name.clone(),
+
+                Type::Datatype(Rc::new(Datatype {
+                    abilities,
+                    module,
+                    name,
                     type_arguments,
-                };
-                Type::Datatype(Rc::new(datatype))
+                }))
             }
 
             VRT::Type::TyParam(_) => {
@@ -463,95 +469,37 @@ fn link_info_for_type_tag(
     Ok((addresses, link_context))
 }
 
-pub(crate) fn convert_vm_error(
+fn convert_vm_error(
     error: VMError,
     vm: &MoveVM,
     store: &dyn PackageStore,
     linkage: Option<&Linkage>,
 ) -> ExecutionError {
-    use move_core_types::vm_status::{StatusCode, StatusType};
-    let kind = match (error.major_status(), error.sub_status(), error.location()) {
-        (StatusCode::EXECUTED, _, _) => {
-            // If we have an error the status probably shouldn't ever be Executed
-            debug_assert!(false, "VmError shouldn't ever report successful execution");
-            ExecutionFailureStatus::VMInvariantViolation
-        }
-        (StatusCode::ABORTED, None, _) => {
-            debug_assert!(false, "No abort code");
-            // this is a Move VM invariant violation, the code should always be there
-            ExecutionFailureStatus::VMInvariantViolation
-        }
-        (StatusCode::ABORTED, Some(code), Location::Module(id)) => {
+    use crate::error::convert_vm_error_impl;
+    convert_vm_error_impl(
+        error,
+        &|id| {
             debug_assert!(
                 linkage.is_some(),
                 "Linkage should be set anywhere where runtime errors may occur in order to resolve abort locations to package IDs"
             );
-            let abort_location_id = linkage
+            linkage
                 .and_then(|linkage| LinkedDataStore::new(linkage, store).relocate(id).ok())
-                .unwrap_or_else(|| id.clone());
-            let offset = error.offsets().first().copied().map(|(f, i)| (f.0, i));
-            debug_assert!(offset.is_some(), "Move should set the location on aborts");
-            let (function, instruction) = offset.unwrap_or((0, 0));
-            let function_name = linkage.and_then(|linkage| {
+                .unwrap_or_else(|| id.clone())
+        },
+        &|id, function| {
+            debug_assert!(
+                linkage.is_some(),
+                "Linkage should be set anywhere where runtime errors may occur in order to resolve abort locations to package IDs"
+            );
+            linkage.and_then(|linkage| {
                 let state_view = LinkedDataStore::new(linkage, store);
                 vm.load_module(id, state_view).ok().map(|module| {
-                    let fdef = module.function_def_at(FunctionDefinitionIndex(function));
+                    let fdef = module.function_def_at(function);
                     let fhandle = module.function_handle_at(fdef.function);
                     module.identifier_at(fhandle.name).to_string()
                 })
-            });
-            ExecutionFailureStatus::MoveAbort(
-                MoveLocation {
-                    module: abort_location_id,
-                    function,
-                    instruction,
-                    function_name,
-                },
-                code,
-            )
-        }
-        (StatusCode::OUT_OF_GAS, _, _) => ExecutionFailureStatus::InsufficientGas,
-        (_, _, location) => match error.major_status().status_type() {
-            StatusType::Execution => {
-                debug_assert!(error.major_status() != StatusCode::ABORTED);
-                let location = match location {
-                    Location::Module(id) => {
-                        debug_assert!(
-                            linkage.is_some(),
-                            "Linkage should be set anywhere where runtime errors may occur in order to resolve abort locations to package IDs"
-                        );
-                        let offset = error.offsets().first().copied().map(|(f, i)| (f.0, i));
-                        debug_assert!(
-                            offset.is_some(),
-                            "Move should set the location on all execution errors. Error {error}"
-                        );
-                        let (function, instruction) = offset.unwrap_or((0, 0));
-                        let function_name = linkage.and_then(|linkage| {
-                            let state_view = LinkedDataStore::new(linkage, store);
-                            vm.load_module(id, state_view).ok().map(|module| {
-                                let fdef =
-                                    module.function_def_at(FunctionDefinitionIndex(function));
-                                let fhandle = module.function_handle_at(fdef.function);
-                                module.identifier_at(fhandle.name).to_string()
-                            })
-                        });
-                        Some(MoveLocation {
-                            module: id.clone(),
-                            function,
-                            instruction,
-                            function_name,
-                        })
-                    }
-                    _ => None,
-                };
-                ExecutionFailureStatus::MovePrimitiveRuntimeError(MoveLocationOpt(location))
-            }
-            StatusType::Validation
-            | StatusType::Verification
-            | StatusType::Deserialization
-            | StatusType::Unknown => ExecutionFailureStatus::VMVerificationOrDeserializationError,
-            StatusType::InvariantViolation => ExecutionFailureStatus::VMInvariantViolation,
+            })
         },
-    };
-    ExecutionError::new_with_source(kind, error)
+    )
 }
