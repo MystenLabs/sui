@@ -26,7 +26,7 @@ pub fn list_balances(
     let owner: Address = request
         .owner
         .as_ref()
-        .ok_or_else(|| RpcError::new(tonic::Code::InvalidArgument, "missing owner"))?
+        .ok_or_else(|| RpcError::new(tonic::Code::InvalidArgument, "owner is required"))?
         .parse()
         .map_err(|e| RpcError::new(tonic::Code::InvalidArgument, format!("invalid owner: {e}")))?;
 
