@@ -190,7 +190,7 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     let named_address_map = default_testing_addresses(flavor);
     let deps = vec![PackagePaths {
         name: Some(("stdlib".into(), PackageConfig::default())),
-        paths: move_stdlib::move_stdlib_files(),
+        paths: move_stdlib::source_files(),
         named_address_map: named_address_map.clone(),
     }];
     let target_name = if migration_mode {

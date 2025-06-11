@@ -21,7 +21,7 @@ pub fn compile_units(s: &str) -> Result<Vec<AnnotatedCompiledUnit>> {
         None,
         vec![file_path.to_str().unwrap().to_string()],
         vec![],
-        move_stdlib::move_stdlib_named_addresses(),
+        move_stdlib::named_addresses(),
     )
     .build_and_report()?;
 
