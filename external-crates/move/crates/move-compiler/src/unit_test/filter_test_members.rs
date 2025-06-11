@@ -97,7 +97,7 @@ pub const UNIT_TEST_POISON_FUN_NAME: Symbol = symbol!("unit_test_poison");
 // a test plan is created for use by the testing framework.
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
     prog: P::Program,
 ) -> P::Program {
     let reporter = compilation_env.diagnostic_reporter_at_top_level();
@@ -134,11 +134,12 @@ fn has_stdlib_unit_test_module(prog: &P::Program) -> bool {
 fn check_has_unit_test_module(
     compilation_env: &CompilationEnv,
     reporter: &DiagnosticReporter,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
     prog: &P::Program,
 ) -> bool {
     let has_unit_test_module = has_stdlib_unit_test_module(prog)
-        || pre_compiled_lib.is_some_and(|p| has_stdlib_unit_test_module(&p.parser));
+        || pre_compiled_lib
+            .is_some_and(|p_vec| p_vec.iter().any(|p| has_stdlib_unit_test_module(&p.parser)));
     if !has_unit_test_module && compilation_env.flags().is_testing() {
         if let Some(P::PackageDefinition { def, .. }) = prog
             .source_definitions

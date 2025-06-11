@@ -155,7 +155,7 @@ impl<'env> Context<'env> {
 
 pub fn program(
     compilation_env: &CompilationEnv,
-    _pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    _pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
     prog: H::Program,
 ) -> G::Program {
     let H::Program {

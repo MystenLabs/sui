@@ -150,7 +150,7 @@ pub(super) struct Context<'env> {
 impl<'env> Context<'env> {
     pub fn new(
         env: &'env CompilationEnv,
-        _pre_compiled_lib_opt: Option<Arc<FullyCompiledProgram>>,
+        _pre_compiled_lib_opt: Option<Vec<Arc<FullyCompiledProgram>>>,
         prog: &T::Program,
     ) -> Self {
         let debug = HLIRDebugFlags {
@@ -313,7 +313,7 @@ impl MatchContext<true> for Context<'_> {
 
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
     prog: T::Program,
 ) -> H::Program {
     detect_dead_code_analysis(compilation_env, &prog);

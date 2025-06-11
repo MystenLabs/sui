@@ -5,11 +5,7 @@
 //! for coordinating the symbolication process between different threads
 //! in the analyzer.
 
-use crate::symbols::{
-    Symbols,
-    compilation::{MANIFEST_FILE_NAME, PrecomputedPkgInfo},
-    get_symbols,
-};
+use crate::symbols::{Symbols, compilation::MANIFEST_FILE_NAME, get_symbols};
 
 use anyhow::{Result, anyhow};
 use crossbeam::channel::Sender;
@@ -24,6 +20,8 @@ use vfs::VfsPath;
 
 use move_compiler::linters::LintLevel;
 use move_package::source_package::parsed_manifest::Dependencies;
+
+use super::compilation::CachedPackagesInfo;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum RunnerState {
@@ -48,7 +46,7 @@ impl SymbolicatorRunner {
     pub fn new(
         ide_files_root: VfsPath,
         symbols_map: Arc<Mutex<BTreeMap<PathBuf, Symbols>>>,
-        packages_info: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
+        packages_info: Arc<Mutex<CachedPackagesInfo>>,
         sender: Sender<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
         lint: LintLevel,
         implicit_deps: Dependencies,

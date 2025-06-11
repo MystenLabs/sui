@@ -405,7 +405,7 @@ pub type ModuleMembers = BTreeMap<ModuleIdent, BTreeMap<Symbol, ResolvedModuleMe
 
 pub fn build_member_map(
     env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
     prog: &E::Program,
 ) -> ModuleMembers {
     // NB: This checks if the element is present, and doesn't replace it if so. This is congruent
@@ -423,16 +423,18 @@ pub fn build_member_map(
     }
 
     use ResolvedModuleMember as M;
-    let all_modules = prog
-        .modules
-        .key_cloned_iter()
-        .chain(pre_compiled_lib.iter().flat_map(|pre_compiled| {
-            pre_compiled
-                .expansion
-                .modules
-                .key_cloned_iter()
-                .filter(|(mident, _m)| !prog.modules.contains_key(mident))
-        }));
+    let all_modules = prog.modules.key_cloned_iter().chain(
+        pre_compiled_lib
+            .iter()
+            .flat_map(|pre_compiled_vec| pre_compiled_vec.iter())
+            .flat_map(|pre_compiled| {
+                pre_compiled
+                    .expansion
+                    .modules
+                    .key_cloned_iter()
+                    .filter(|(mident, _m)| !prog.modules.contains_key(mident))
+            }),
+    );
     let mut all_members = BTreeMap::new();
     for (mident, mdef) in all_modules {
         let mut members = BTreeMap::new();
@@ -570,7 +572,7 @@ macro_rules! resolve_from_module_access {
 impl OuterContext {
     fn new(
         compilation_env: &CompilationEnv,
-        pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
         prog: &E::Program,
     ) -> Self {
         use ResolvedType as RT;
@@ -1658,7 +1660,7 @@ fn arity_string(arity: usize) -> &'static str {
 
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Vec<Arc<FullyCompiledProgram>>>,
     prog: E::Program,
 ) -> N::Program {
     let outer_context = OuterContext::new(compilation_env, pre_compiled_lib.clone(), &prog);
