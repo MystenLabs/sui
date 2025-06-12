@@ -173,30 +173,16 @@ impl<F: MoveFlavor> Manifest<F> {
         // TODO: this drops everything besides the [UnpinnedDependencyInfo] (e.g. override,
         // published-at, etc).
         for (env, _) in self.environments() {
-            let defaults: BTreeMap<PackageName, UnpinnedDependencyInfo> = self
-                .dependencies
-                .iter()
-                .map(|(pkg, dep)| (pkg.clone(), dep.dependency_info.clone()))
-                .collect();
+            for (pkg, dep) in self.dependencies.iter() {
+                deps.insert(env.clone(), pkg.clone(), dep.dependency_info.clone());
+            }
 
-            let replacements: BTreeMap<PackageName, UnpinnedDependencyInfo> = self
-                .dep_replacements
-                .get(env)
-                .unwrap_or(&BTreeMap::new())
-                .iter()
-                .filter_map(|(pkg, dep)| {
-                    dep.dependency
-                        .clone()
-                        .map(|d| (pkg.clone(), d.dependency_info))
-                })
-                .collect();
-
-            let combined = map_zip(defaults, replacements, |_, def, rep| {
-                rep.or(def).expect("map_zip doesn't pass (None,None)")
-            });
-
-            for (pkg, dep) in combined.into_iter() {
-                deps.insert(env.clone(), pkg, dep);
+            if let Some(replacements) = self.dep_replacements.get(env) {
+                for (pkg, dep) in replacements {
+                    if let Some(dep) = &dep.dependency {
+                        deps.insert(env.clone(), pkg.clone(), dep.dependency_info.clone());
+                    }
+                }
             }
         }
 
@@ -206,45 +192,6 @@ impl<F: MoveFlavor> Manifest<F> {
     pub fn environments(&self) -> &BTreeMap<EnvironmentName, F::EnvironmentID> {
         &self.environments
     }
-}
-
-/// Produce a new map `m` containing the union of the keys of `m1` and `m2`, with `m[k]` given by
-/// `f(m1.get(k), m2.get(k))`
-///
-/// `f(_, None, None)` is never called
-///
-/// Example:
-/// ```
-/// fn main() {
-///     let m1 = BTreeMap::from([("a", 1), ("b", 2)]);
-///     let m2 = BTreeMap::from([("b", 2), ("c", 3)]);
-///
-///     let zipped = map_zip(m1, m2, |_k, v1, v2| v1.unwrap_or_default() + v2.unwrap_or_default());
-///
-///     let expected = BTreeMap::from([("a", 1), ("b", 4), ("c", 3)]);
-///
-///     assert_eq!(zipped, expected);
-/// }
-/// ```
-// TODO: maybe this already exists somewhere, or could be moved into a utility module
-fn map_zip<K: Ord, V1, V2, V, F: Fn(&K, Option<V1>, Option<V2>) -> V>(
-    mut m1: BTreeMap<K, V1>,
-    mut m2: BTreeMap<K, V2>,
-    f: F,
-) -> BTreeMap<K, V> {
-    let mut result: BTreeMap<K, V> = BTreeMap::new();
-
-    for (k, v1) in m1.into_iter() {
-        let v = f(&k, Some(v1), m2.remove(&k));
-        result.insert(k, v);
-    }
-
-    for (k, v2) in m2.into_iter() {
-        let v = f(&k, None, Some(v2));
-        result.insert(k, v);
-    }
-
-    result
 }
 
 /// Compute a digest of this input data using SHA-256.
