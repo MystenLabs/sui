@@ -172,7 +172,6 @@ where
                     return Ok(QuorumSubmitTransactionResponse {
                         effects: FinalizedEffects {
                             effects: details.effects,
-                            // TODO(fastpath): return the epoch in response.
                             finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
                         },
                         events: details.events,

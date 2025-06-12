@@ -4,6 +4,7 @@
 use crate::base_types::{AuthorityName, ConsensusObjectSequenceKey, ObjectRef, TransactionDigest};
 use crate::base_types::{ConciseableName, ObjectID, SequenceNumber};
 use crate::digests::{AdditionalConsensusStateDigest, ConsensusCommitDigest};
+use crate::error::SuiError;
 use crate::execution::ExecutionTimeObservationKey;
 use crate::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSignatureMessage};
 use crate::supported_protocol_versions::{
@@ -11,6 +12,7 @@ use crate::supported_protocol_versions::{
 };
 use crate::transaction::{CertifiedTransaction, Transaction};
 use byteorder::{BigEndian, ReadBytesExt};
+use bytes::Bytes;
 use consensus_core::BlockRef;
 use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
@@ -39,11 +41,33 @@ pub type TimestampMs = u64;
 
 /// The position of a transaction in consensus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ConsensusTxPosition {
+pub struct ConsensusPosition {
     // Block containing a transaction.
     pub block: BlockRef,
     // Index of the transaction in the block.
     pub index: TransactionIndex,
+}
+
+impl ConsensusPosition {
+    pub fn into_raw(self) -> Result<Bytes, SuiError> {
+        bcs::to_bytes(&self)
+            .map_err(|e| SuiError::GrpcMessageSerializeError {
+                type_info: "ConsensusPosition".to_string(),
+                error: e.to_string(),
+            })
+            .map(Bytes::from)
+    }
+}
+
+impl TryFrom<&[u8]> for ConsensusPosition {
+    type Error = SuiError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        bcs::from_bytes(bytes).map_err(|e| SuiError::GrpcMessageDeserializeError {
+            type_info: "ConsensusPosition".to_string(),
+            error: e.to_string(),
+        })
+    }
 }
 
 /// Only commit_timestamp_ms is passed to the move call currently.

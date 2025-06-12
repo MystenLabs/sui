@@ -11,6 +11,7 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{random_object_ref, ObjectRef, SuiAddress};
 use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::messages_consensus::ConsensusPosition;
 use sui_types::messages_grpc::{RawSubmitTxRequest, SubmitTxResponse};
 use sui_types::object::Object;
 use sui_types::transaction::{
@@ -112,7 +113,10 @@ async fn test_submit_transaction_success() {
         .unwrap();
 
     // Verify we got a consensus position back
-    let response = SubmitTxResponse::from_bytes(response.consensus_position).unwrap();
+    let response = SubmitTxResponse {
+        consensus_position: ConsensusPosition::try_from(response.consensus_position.as_ref())
+            .unwrap(),
+    };
     assert_eq!(response.consensus_position.index, 0);
 }
 
@@ -144,7 +148,10 @@ async fn test_submit_transaction_duplicate() {
         .await
         .unwrap();
     // Verify we got a consensus position back
-    let response1 = SubmitTxResponse::from_bytes(response1.consensus_position).unwrap();
+    let response1 = SubmitTxResponse {
+        consensus_position: ConsensusPosition::try_from(response1.consensus_position.as_ref())
+            .unwrap(),
+    };
     assert_eq!(response1.consensus_position.index, 0);
 
     // Submit the same transaction again
@@ -154,7 +161,10 @@ async fn test_submit_transaction_duplicate() {
         .await
         .unwrap();
     // Verify we got a consensus position back
-    let response2 = SubmitTxResponse::from_bytes(response2.consensus_position).unwrap();
+    let response2 = SubmitTxResponse {
+        consensus_position: ConsensusPosition::try_from(response2.consensus_position.as_ref())
+            .unwrap(),
+    };
     assert_eq!(response2.consensus_position.index, 0);
 }
 
@@ -173,7 +183,10 @@ async fn test_submit_transaction_already_executed() {
         .await
         .unwrap();
     // Verify we got a consensus position back
-    let response1 = SubmitTxResponse::from_bytes(response1.consensus_position).unwrap();
+    let response1 = SubmitTxResponse {
+        consensus_position: ConsensusPosition::try_from(response1.consensus_position.as_ref())
+            .unwrap(),
+    };
     let tx_position = response1.consensus_position;
     assert_eq!(tx_position.index, 0);
 
@@ -207,7 +220,10 @@ async fn test_submit_transaction_already_executed() {
         .unwrap();
 
     // Verify we got a consensus position back
-    let response2 = SubmitTxResponse::from_bytes(response2.consensus_position).unwrap();
+    let response2 = SubmitTxResponse {
+        consensus_position: ConsensusPosition::try_from(response2.consensus_position.as_ref())
+            .unwrap(),
+    };
     assert_eq!(response2.consensus_position.index, 0);
 }
 

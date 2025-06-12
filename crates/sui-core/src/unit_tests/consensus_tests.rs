@@ -202,7 +202,7 @@ pub fn make_consensus_adapter_for_test(
             &self,
             transactions: &[ConsensusTransaction],
             epoch_store: &Arc<AuthorityPerEpochStore>,
-        ) -> SuiResult<(Vec<ConsensusTxPosition>, BlockStatusReceiver)> {
+        ) -> SuiResult<(Vec<ConsensusPosition>, BlockStatusReceiver)> {
             let sequenced_transactions: Vec<SequencedConsensusTransaction> = transactions
                 .iter()
                 .map(|txn| SequencedConsensusTransaction::new_test(txn.clone()))
@@ -271,7 +271,7 @@ pub fn make_consensus_adapter_for_test(
 
             let mut consensus_positions = Vec::new();
             for index in 0..num_transactions {
-                consensus_positions.push(ConsensusTxPosition {
+                consensus_positions.push(ConsensusPosition {
                     index: index as u16,
                     block: BlockRef::MIN,
                 });

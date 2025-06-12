@@ -38,8 +38,8 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::fp_ensure;
+use sui_types::messages_consensus::ConsensusPosition;
 use sui_types::messages_consensus::ConsensusTransactionKind;
-use sui_types::messages_consensus::ConsensusTxPosition;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKey};
 use sui_types::transaction::TransactionDataAPI;
 use tokio::sync::{oneshot, Semaphore, SemaphorePermit};
@@ -234,7 +234,7 @@ pub trait ConsensusClient: Sync + Send + 'static {
         &self,
         transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<(Vec<ConsensusTxPosition>, BlockStatusReceiver)>;
+    ) -> SuiResult<(Vec<ConsensusPosition>, BlockStatusReceiver)>;
 }
 
 /// Submit Sui certificates to the consensus.
@@ -613,7 +613,7 @@ impl ConsensusAdapter {
         transaction: ConsensusTransaction,
         lock: Option<&RwLockReadGuard<ReconfigState>>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusTxPosition>>>,
+        tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
     ) -> SuiResult<JoinHandle<()>> {
         self.submit_batch(&[transaction], lock, epoch_store, tx_consensus_position)
     }
@@ -623,7 +623,7 @@ impl ConsensusAdapter {
         transactions: &[ConsensusTransaction],
         lock: Option<&RwLockReadGuard<ReconfigState>>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusTxPosition>>>,
+        tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
     ) -> SuiResult<JoinHandle<()>> {
         if transactions.len() > 1 {
             // In soft bundle, we need to check if all transactions are of CertifiedTransaction
@@ -661,7 +661,7 @@ impl ConsensusAdapter {
         self: &Arc<Self>,
         transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusTxPosition>>>,
+        tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
     ) -> JoinHandle<()> {
         // Reconfiguration lock is dropped when pending_consensus_transactions is persisted, before it is handled by consensus
         let async_stage = self.clone().submit_and_wait(
@@ -679,7 +679,7 @@ impl ConsensusAdapter {
         self: Arc<Self>,
         transactions: Vec<ConsensusTransaction>,
         epoch_store: Arc<AuthorityPerEpochStore>,
-        tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusTxPosition>>>,
+        tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
     ) {
         // When epoch_terminated signal is received all pending submit_and_wait_inner are dropped.
         //
@@ -707,7 +707,7 @@ impl ConsensusAdapter {
         self: Arc<Self>,
         transactions: Vec<ConsensusTransaction>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        tx_consensus_positions: Option<oneshot::Sender<Vec<ConsensusTxPosition>>>,
+        tx_consensus_positions: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
     ) {
         if transactions.is_empty() {
             return;
@@ -840,9 +840,10 @@ impl ConsensusAdapter {
 
                     if let Some(tx_consensus_positions) = tx_consensus_positions.take() {
                         // We send the first consensus position returned by consensus
-                        // to the submitting client. They can handle retries as needed
-                        // if the consensus position does not return the desired results
-                        // (e.g. not sequenced due to garbage collection).
+                        // to the submitting client even if it is retried internally within
+                        // consensus adapter due to an error or GC. They can handle retries
+                        // as needed if the consensus position does not return the desired
+                        // results (e.g. not sequenced due to garbage collection).
                         let _ = tx_consensus_positions.send(consensus_positions);
                     }
 
@@ -959,7 +960,7 @@ impl ConsensusAdapter {
         transaction_keys: &[SequencedConsensusTransactionKey],
         tx_type: &str,
         is_soft_bundle: bool,
-    ) -> (Vec<ConsensusTxPosition>, BlockStatusReceiver) {
+    ) -> (Vec<ConsensusPosition>, BlockStatusReceiver) {
         let ack_start = Instant::now();
         let mut retries: u32 = 0;
 

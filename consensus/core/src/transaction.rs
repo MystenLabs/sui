@@ -28,9 +28,14 @@ pub(crate) struct TransactionsGuard {
     // A TransactionsGuard may be partially consumed by `TransactionConsumer`, in which case, this holds the remaining transactions.
     transactions: Vec<Transaction>,
 
+    // When the transactions are included in a block, this will be signalled with
+    // the following information
     included_in_block_ack: oneshot::Sender<(
+        // The block reference in which the transactions have been included
         BlockRef,
+        // The indices of the transactions that have been included in the block
         Vec<TransactionIndex>,
+        // A receiver to notify the submitter about the block status
         oneshot::Receiver<BlockStatus>,
     )>,
 }
@@ -111,9 +116,8 @@ impl TransactionConsumer {
 
             // Calculate indices for this batch
             let start_idx = transactions.len() as TransactionIndex;
-            let indices: Vec<TransactionIndex> = (0..t.transactions.len())
-                .map(|i| start_idx + i as TransactionIndex)
-                .collect();
+            let indices: Vec<TransactionIndex> =
+                (start_idx..start_idx + t.transactions.len() as TransactionIndex).collect();
 
             // The transactions can be consumed, register its ack and transaction
             // indices to be sent with the ack.

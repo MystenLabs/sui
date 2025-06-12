@@ -6,8 +6,7 @@ use crate::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use crate::effects::{
     SignedTransactionEffects, TransactionEvents, VerifiedSignedTransactionEffects,
 };
-use crate::error::SuiError;
-use crate::messages_consensus::{ConsensusTxPosition, Round};
+use crate::messages_consensus::{ConsensusPosition, Round};
 use crate::object::Object;
 use crate::transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction};
 use bytes::Bytes;
@@ -235,35 +234,9 @@ pub struct RawSubmitTxResponse {
     pub consensus_position: Bytes,
 }
 
-impl RawSubmitTxResponse {
-    pub fn into_raw(consensus_position: ConsensusTxPosition) -> Result<Self, SuiError> {
-        Ok(Self {
-            consensus_position: bcs::to_bytes(&consensus_position)
-                .map_err(|e| SuiError::GrpcMessageSerializeError {
-                    type_info: "RawSubmitTxResponse.consensus_position".to_string(),
-                    error: e.to_string(),
-                })?
-                .into(),
-        })
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct SubmitTxResponse {
-    pub consensus_position: ConsensusTxPosition,
-}
-
-impl SubmitTxResponse {
-    pub fn from_bytes(consensus_position: Bytes) -> Result<Self, SuiError> {
-        Ok(Self {
-            consensus_position: bcs::from_bytes(&consensus_position).map_err(|e| {
-                SuiError::GrpcMessageDeserializeError {
-                    type_info: "SubmitTxResponse.consensus_position".to_string(),
-                    error: e.to_string(),
-                }
-            })?,
-        })
-    }
+    pub consensus_position: ConsensusPosition,
 }
 
 #[derive(Clone, prost::Message)]

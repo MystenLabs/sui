@@ -26,7 +26,7 @@ use sui_network::{
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
 use sui_types::message_envelope::Message;
-use sui_types::messages_consensus::ConsensusTxPosition;
+use sui_types::messages_consensus::ConsensusPosition;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
 use sui_types::messages_grpc::{
     HandleCertificateRequestV3, HandleCertificateResponseV3, RawSubmitTxResponse,
@@ -609,7 +609,9 @@ impl ValidatorService {
             // Only submitting a single tx so we should get back a single consensus position
             let consensus_position = resp.remove(0);
 
-            let submit_transaction_response = RawSubmitTxResponse::into_raw(consensus_position)?;
+            let submit_transaction_response = RawSubmitTxResponse {
+                consensus_position: consensus_position.into_raw()?,
+            };
 
             Ok((
                 tonic::Response::new(submit_transaction_response),
@@ -774,7 +776,7 @@ impl ValidatorService {
         &self,
         consensus_transactions: NonEmpty<ConsensusTransaction>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> Result<(Vec<ConsensusTxPosition>, Weight), tonic::Status> {
+    ) -> Result<(Vec<ConsensusPosition>, Weight), tonic::Status> {
         let consensus_transactions: Vec<_> = consensus_transactions.into();
         let (tx_consensus_positions, rx_consensus_positions) = oneshot::channel();
         {

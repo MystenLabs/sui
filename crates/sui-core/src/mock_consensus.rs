@@ -13,7 +13,7 @@ use std::time::Duration;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_consensus::{
-    ConsensusTransaction, ConsensusTransactionKind, ConsensusTxPosition,
+    ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind,
 };
 use sui_types::transaction::{VerifiedCertificate, VerifiedTransaction};
 use tokio::sync::{mpsc, oneshot};
@@ -104,7 +104,7 @@ impl MockConsensusClient {
     fn submit_impl(
         &self,
         transactions: &[ConsensusTransaction],
-    ) -> SuiResult<(Vec<ConsensusTxPosition>, BlockStatusReceiver)> {
+    ) -> SuiResult<(Vec<ConsensusPosition>, BlockStatusReceiver)> {
         // TODO: maybe support multi-transactions and remove this check
         assert!(transactions.len() == 1);
         let transaction = &transactions[0];
@@ -113,7 +113,7 @@ impl MockConsensusClient {
             .map_err(|_| SuiError::from("MockConsensusClient channel overflowed"))?;
         // TODO(fastpath): Add some way to simulate consensus positions across blocks
         Ok((
-            vec![ConsensusTxPosition {
+            vec![ConsensusPosition {
                 block: BlockRef::MIN,
                 index: 0,
             }],
@@ -147,7 +147,7 @@ impl ConsensusClient for MockConsensusClient {
         &self,
         transactions: &[ConsensusTransaction],
         _epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<(Vec<ConsensusTxPosition>, BlockStatusReceiver)> {
+    ) -> SuiResult<(Vec<ConsensusPosition>, BlockStatusReceiver)> {
         self.submit_impl(transactions)
     }
 }

@@ -18,7 +18,7 @@ use sui_types::{
     crypto::AuthorityKeyPair,
     error::SuiError,
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
-    messages_consensus::ConsensusTxPosition,
+    messages_consensus::ConsensusPosition,
     messages_grpc::{
         RawSubmitTxRequest, RawSubmitTxResponse, RawWaitForEffectsRequest,
         RawWaitForEffectsResponse,
@@ -100,12 +100,14 @@ impl AuthorityAPI for LocalAuthorityClient {
         // No submission to consensus is needed for test authority client, return
         // dummy consensus position
         // TODO(fastpath): Return the actual consensus position
-        let consensus_position = ConsensusTxPosition {
+        let consensus_position = ConsensusPosition {
             block: BlockRef::MIN,
             index: 0,
         };
 
-        RawSubmitTxResponse::into_raw(consensus_position)
+        Ok(RawSubmitTxResponse {
+            consensus_position: consensus_position.into_raw()?,
+        })
     }
 
     async fn handle_transaction(

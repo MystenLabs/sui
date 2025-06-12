@@ -6,7 +6,7 @@ use sui_types::{
     digests::{TransactionDigest, TransactionEffectsDigest},
     effects::{TransactionEffects, TransactionEvents},
     error::SuiError,
-    messages_consensus::{ConsensusTxPosition, Round},
+    messages_consensus::{ConsensusPosition, Round},
     messages_grpc::{
         RawExecutedData, RawExecutedStatus, RawRejectReason, RawRejectedStatus,
         RawValidatorTransactionStatus, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
@@ -17,7 +17,7 @@ use sui_types::{
 pub(crate) struct WaitForEffectsRequest {
     pub epoch: EpochId,
     pub transaction_digest: TransactionDigest,
-    pub transaction_position: ConsensusTxPosition,
+    pub transaction_position: ConsensusPosition,
     /// Whether to include details of the effects,
     /// including the effects content, events, input objects, and output objects.
     pub include_details: bool,

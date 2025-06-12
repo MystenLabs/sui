@@ -7,7 +7,7 @@ use arc_swap::{ArcSwapOption, Guard};
 use consensus_core::{ClientError, TransactionClient};
 use sui_types::{
     error::{SuiError, SuiResult},
-    messages_consensus::{ConsensusTransaction, ConsensusTransactionKind, ConsensusTxPosition},
+    messages_consensus::{ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind},
 };
 use tap::prelude::*;
 use tokio::time::{sleep, Instant};
@@ -80,7 +80,7 @@ impl ConsensusClient for LazyMysticetiClient {
         &self,
         transactions: &[ConsensusTransaction],
         _epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<(Vec<ConsensusTxPosition>, BlockStatusReceiver)> {
+    ) -> SuiResult<(Vec<ConsensusPosition>, BlockStatusReceiver)> {
         // TODO(mysticeti): confirm comment is still true
         // The retrieved TransactionClient can be from the past epoch. Submit would fail after
         // Mysticeti shuts down, so there should be no correctness issue.
@@ -133,7 +133,7 @@ impl ConsensusClient for LazyMysticetiClient {
         // Calculate consensus tx positions
         let mut consensus_positions = Vec::new();
         for index in tx_indices {
-            consensus_positions.push(ConsensusTxPosition {
+            consensus_positions.push(ConsensusPosition {
                 index,
                 block: block_ref,
             });

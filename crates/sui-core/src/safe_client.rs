@@ -19,7 +19,7 @@ use sui_types::effects::{SignedTransactionEffects, TransactionEffectsAPI, Transa
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
-use sui_types::messages_consensus::ConsensusTxPosition;
+use sui_types::messages_consensus::ConsensusPosition;
 use sui_types::messages_grpc::{
     HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
     ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest, RawWaitForEffectsRequest,
@@ -319,7 +319,7 @@ where
         &self,
         request: RawSubmitTxRequest,
         client_addr: Option<SocketAddr>,
-    ) -> Result<ConsensusTxPosition, SuiError> {
+    ) -> Result<ConsensusPosition, SuiError> {
         let _timer = self.metrics.handle_certificate_latency.start_timer();
         let response = self
             .authority_client

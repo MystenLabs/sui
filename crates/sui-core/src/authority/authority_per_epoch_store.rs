@@ -59,7 +59,7 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::messages_consensus::{
     check_total_jwk_size, AuthorityCapabilitiesV1, AuthorityCapabilitiesV2, AuthorityIndex,
-    ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind, ConsensusTxPosition,
+    ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
     ExecutionTimeObservation, TimestampMs, VersionedDkgConfirmation,
 };
 use sui_types::signature::GenericSignature;
@@ -4684,7 +4684,7 @@ impl AuthorityPerEpochStore {
 
     pub(crate) fn set_consensus_tx_status(
         &self,
-        position: ConsensusTxPosition,
+        position: ConsensusPosition,
         status: ConsensusTxStatus,
     ) {
         if let Some(cache) = self.consensus_tx_status_cache.as_ref() {
