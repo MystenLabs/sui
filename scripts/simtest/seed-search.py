@@ -8,6 +8,16 @@ import sys
 import os
 import random
 import argparse
+import threading
+
+print_lock = threading.Lock()
+def safe_print(*args, **kwargs):
+    with print_lock:
+        try:
+            print(*args, **kwargs)
+            sys.stdout.flush()
+        except BlockingIOError:
+            sys.exit(1)
 
 parser = argparse.ArgumentParser(description='Run the simulator with different seeds')
 parser.add_argument('testname', type=str, help='Name of test to run')
@@ -30,21 +40,21 @@ def run_command(command, env_vars):
         env = os.environ.copy()
         env.update(env_vars)
 
-        print("running seed: " + env_vars["MSIM_TEST_SEED"])
+        safe_print("running seed: " + env_vars["MSIM_TEST_SEED"])
         process = subprocess.Popen(command, shell=True, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, preexec_fn=os.setsid)
         stdout, stderr = process.communicate()
         exit_code = process.returncode
         if exit_code != 0:
-            print(f"Command '{command}' failed with exit code {exit_code} for seed: " + env_vars["MSIM_TEST_SEED"])
-            print(f"stdout:\n=========================={stdout.decode('utf-8')}\n==========================")
+            safe_print(f"Command '{command}' failed with exit code {exit_code} for seed: " + env_vars["MSIM_TEST_SEED"])
+            safe_print(f"stdout:\n=========================={stdout.decode('utf-8')}\n==========================")
             if stderr:
-              print(f"stderr:\n=========================={stderr.decode('utf-8')}\n==========================")
+              safe_print(f"stderr:\n=========================={stderr.decode('utf-8')}\n==========================")
         else:
-          print("-- seed passed %s" % env_vars["MSIM_TEST_SEED"])
+          safe_print("-- seed passed %s" % env_vars["MSIM_TEST_SEED"])
 
         return exit_code
     except subprocess.CalledProcessError as e:
-        print(f"Command '{e.cmd}' failed with exit code {e.returncode} for seed: " + env_vars["MSIM_TEST_SEED"])
+        safe_print(f"Command '{e.cmd}' failed with exit code {e.returncode} for seed: " + env_vars["MSIM_TEST_SEED"])
         return e.returncode
 
 def main(commands):
@@ -62,11 +72,11 @@ def main(commands):
             exit_code = future.result()
             if exit_code != 0:
                 all_passed = False
-                print(f"Command '{cmd}' failed with exit code {exit_code}")
+                safe_print(f"Command '{cmd}' failed with exit code {exit_code}")
                 sys.exit(1)
 
         if all_passed:
-            print("\033[92mAll tests passed successfully!\033[0m")
+            safe_print("\033[92mAll tests passed successfully!\033[0m")
 
 if __name__ == "__main__":
     repo_root = subprocess.check_output(["git", "rev-parse", "--show-toplevel"]).decode("utf-8").strip()
@@ -83,12 +93,12 @@ if __name__ == "__main__":
         if not os.path.isfile(binary):
             path = os.path.join(repo_root, "target/simulator/deps", args.test + "*")
             binary = subprocess.getstatusoutput(f"ls -ltr {path} | tail -n 1")[1].split()[-1]
-            print(f"Found binary: {binary}")
+            safe_print(f"Found binary: {binary}")
 
     # check that binary is an executable file
     if not os.path.isfile(binary) or not os.access(binary, os.X_OK):
-        print(f"Error: {args.test} is not an executable file")
-        print(f"run: `$ ls -ltr target/simulator/deps/ | tail` to find recent test binaries");
+        safe_print(f"Error: {args.test} is not an executable file")
+        safe_print(f"run: `$ ls -ltr target/simulator/deps/ | tail` to find recent test binaries");
         sys.exit(1)
 
     commands = []
@@ -104,7 +114,7 @@ if __name__ == "__main__":
     import atexit
     import signal
     def kill_child_processes(*args):
-        print("Killing child processes")
+        safe_print("Killing child processes")
         os.killpg(0, signal.SIGKILL)
         sys.exit(0)
     atexit.register(kill_child_processes)
