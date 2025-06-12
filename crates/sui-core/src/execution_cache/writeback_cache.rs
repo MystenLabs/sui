@@ -82,6 +82,7 @@ use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
 use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
 use tap::TapOptional;
 use tracing::{debug, info, instrument, trace, warn};
+use typed_store::rocks::DBBatch;
 
 use super::cache_types::Ticket;
 use super::ExecutionCacheAPI;
@@ -992,17 +993,14 @@ impl WritebackCache {
         (all_outputs, batch)
     }
 
-    // Commits dirty data for the given TransactionDigest to the db.
     #[instrument(level = "debug", skip_all)]
-    fn commit_transaction_outputs(
+    fn write_db_batch(
         &self,
-        epoch: EpochId,
-        (all_outputs, mut db_batch): Batch,
-        digests: &[TransactionDigest],
-    ) {
+        mut db_batch: DBBatch,
+        digests: &[TransactionDigest] ) {
         let _metrics_guard =
-            mysten_metrics::monitored_scope("WritebackCache::commit_transaction_outputs");
-        fail_point!("writeback-cache-commit");
+            mysten_metrics::monitored_scope("WritebackCache::commit_transaction_outputs::write_batch");
+        fail_point!("writeback-cache-write-batch");
         trace!(?digests);
 
         // Flush writes to disk before removing anything from dirty set. otherwise,
@@ -1010,6 +1008,18 @@ impl WritebackCache {
         // cache before removing from the dirty set.
         db_batch.set_tag("commit_transaction_outputs".to_string());
         db_batch.write().expect("db error");
+    }
+
+    // Commits dirty data for the given TransactionDigest to the db.
+    #[instrument(level = "debug", skip_all)]
+    fn flush_cache(
+        &self,
+        epoch: EpochId,
+        all_outputs: Vec<Arc<TransactionOutputs>>,
+        digests: &[TransactionDigest],
+    ) {
+        fail_point!("writeback-cache-flush");
+        trace!(?digests);
 
         let _metrics_guard =
             mysten_metrics::monitored_scope("WritebackCache::commit_transaction_outputs::flush");
@@ -1315,13 +1325,20 @@ impl ExecutionCacheCommit for WritebackCache {
         self.build_db_batch(epoch, digests)
     }
 
-    fn commit_transaction_outputs(
+    fn write_db_batch(
+        &self,
+        batch: DBBatch,
+        digests: &[TransactionDigest]) {
+        WritebackCache::write_db_batch(self, batch, digests)
+    }
+
+    fn flush_cache(
         &self,
         epoch: EpochId,
-        batch: Batch,
+        all_outputs: Vec<Arc<TransactionOutputs>>,
         digests: &[TransactionDigest],
     ) {
-        WritebackCache::commit_transaction_outputs(self, epoch, batch, digests)
+        WritebackCache::flush_cache(self, epoch, all_outputs, digests)
     }
 
     fn persist_transaction(&self, tx: &VerifiedExecutableTransaction) {

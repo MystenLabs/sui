@@ -409,13 +409,17 @@ impl<'a> TestAuthorityBuilder<'a> {
             .await
             .unwrap();
 
-        let batch = state
+        let (all_outputs, db_batch) = state
             .get_cache_commit()
             .build_db_batch(epoch_store.epoch(), &[*genesis.transaction().digest()]);
 
-        state.get_cache_commit().commit_transaction_outputs(
+        state.get_cache_commit().write_db_batch(
+            db_batch,
+            &[*genesis.transaction().digest()],
+        );
+        state.get_cache_commit().flush_cache(
             epoch_store.epoch(),
-            batch,
+            all_outputs,
             &[*genesis.transaction().digest()],
         );
 
