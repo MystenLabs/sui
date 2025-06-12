@@ -4,23 +4,18 @@
 use crate::{
     data_store::PackageStore,
     execution_mode::ExecutionMode,
-    static_programmable_transactions::linkage::analysis::{
+    static_programmable_transactions::linkage::{
         config::ResolutionConfig,
+        legacy_linkage,
         resolution::{ConflictResolution, ResolutionTable, add_and_unify, get_package},
+        resolved_linkage::{ResolvedLinkage, ResolvedLinkage_},
     },
 };
-use std::{collections::BTreeMap, rc::Rc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber},
-    error::ExecutionError,
-    execution_config_utils::to_binary_config,
+    base_types::ObjectID, error::ExecutionError, execution_config_utils::to_binary_config,
     transaction as P,
 };
-
-mod config;
-mod legacy_linkage;
-mod resolution;
 
 pub trait LinkageAnalysis {
     fn compute_call_linkage(
@@ -48,45 +43,6 @@ pub fn linkage_analysis_for_protocol_config<Mode: ExecutionMode>(
         to_binary_config(protocol_config),
         store,
     )?))
-}
-
-pub type ResolvedLinkage = Rc<ResolvedLinkage_>;
-
-#[derive(Debug, Clone)]
-pub struct ResolvedLinkage_ {
-    pub linkage: BTreeMap<ObjectID, ObjectID>,
-    // A mapping of every package ID to its runtime ID.
-    // Note: Multiple packages can have the same runtime ID in this mapping, and domain of this map
-    // is a superset of range of `linkage`.
-    pub linkage_resolution: BTreeMap<ObjectID, ObjectID>,
-    pub versions: BTreeMap<ObjectID, SequenceNumber>,
-}
-
-impl ResolvedLinkage_ {
-    /// In the current linkage resolve an object ID to its original package ID.
-    pub fn resolve_to_original_id(&self, object_id: &ObjectID) -> Option<ObjectID> {
-        self.linkage_resolution.get(object_id).copied()
-    }
-
-    /// Create a `ResolvedLinkage` from a `ResolutionTable`.
-    fn from_resolution_table(resolution_table: ResolutionTable) -> Rc<Self> {
-        let mut linkage = BTreeMap::new();
-        let mut versions = BTreeMap::new();
-        for (original_id, resolution) in resolution_table.resolution_table {
-            match resolution {
-                ConflictResolution::Exact(version, object_id)
-                | ConflictResolution::AtLeast(version, object_id) => {
-                    linkage.insert(original_id, object_id);
-                    versions.insert(original_id, version);
-                }
-            }
-        }
-        Rc::new(Self {
-            linkage,
-            linkage_resolution: resolution_table.all_versions_resolution_table,
-            versions,
-        })
-    }
 }
 
 /// Given a list of object IDs, generate a `ResolvedLinkage` for them.

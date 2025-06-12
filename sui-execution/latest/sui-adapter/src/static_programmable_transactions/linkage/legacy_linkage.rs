@@ -3,11 +3,11 @@
 
 use crate::{
     data_store::PackageStore,
-    static_programmable_transactions::linkage::analysis::{
-        LinkageAnalysis, ResolvedLinkage, ResolvedLinkage_, add_and_unify,
+    static_programmable_transactions::linkage::{
+        analysis::LinkageAnalysis,
         config::{LinkageConfig, ResolutionConfig},
-        get_package,
-        resolution::{ConflictResolution, ResolutionTable},
+        resolution::{ConflictResolution, ResolutionTable, add_and_unify, get_package},
+        resolved_linkage::{ResolvedLinkage, ResolvedLinkage_},
     },
 };
 use move_binary_format::binary_config::BinaryConfig;

@@ -3,9 +3,8 @@
 
 use crate::{
     data_store::PackageStore,
-    static_programmable_transactions::linkage::analysis::{
-        get_package,
-        resolution::{ConflictResolution, ResolutionTable},
+    static_programmable_transactions::linkage::resolution::{
+        ConflictResolution, ResolutionTable, get_package,
     },
 };
 use move_binary_format::binary_config::BinaryConfig;

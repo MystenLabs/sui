@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::static_programmable_transactions::linkage::{Linkage, analysis::ResolvedLinkage};
+use crate::static_programmable_transactions::linkage::resolved_linkage::{
+    ResolvedLinkage, RootedLinkage,
+};
 use indexmap::IndexSet;
 use move_binary_format::file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex};
 use move_core_types::{
@@ -108,7 +110,7 @@ pub struct LoadedFunction {
     pub type_arguments: Vec<Type>,
     pub signature: LoadedFunctionInstantiation,
     pub tx_context: TxContextKind,
-    pub linkage: Linkage,
+    pub linkage: RootedLinkage,
     pub instruction_length: CodeOffset,
     pub definition_index: FunctionDefinitionIndex,
 }

@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{data_store::PackageStore, static_programmable_transactions::linkage::Linkage};
+use crate::{
+    data_store::PackageStore, static_programmable_transactions::linkage::resolved_linkage::RootedLinkage,
+};
 use move_binary_format::errors::{Location, PartialVMError, PartialVMResult, VMResult};
 use move_core_types::{
     account_address::AccountAddress,
@@ -23,12 +25,12 @@ use sui_types::{
 /// construct a valid `DataStore` for execution in the VM as it needs to be able to resolve modules
 /// under a specific linkage.
 pub struct LinkedDataStore<'a> {
-    pub linkage: &'a Linkage,
+    pub linkage: &'a RootedLinkage,
     pub store: &'a dyn PackageStore,
 }
 
 impl<'a> LinkedDataStore<'a> {
-    pub fn new(linkage: &'a Linkage, store: &'a dyn PackageStore) -> Self {
+    pub fn new(linkage: &'a RootedLinkage, store: &'a dyn PackageStore) -> Self {
         Self { linkage, store }
     }
 }

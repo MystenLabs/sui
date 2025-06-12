@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::static_programmable_transactions::{
-    linkage::analysis::ResolvedLinkage, loading::ast as L, spanned::Spanned,
+    linkage::resolved_linkage::ResolvedLinkage, loading::ast as L, spanned::Spanned,
 };
 use move_vm_types::values::VectorSpecialization;
 use std::{cell::OnceCell, collections::BTreeMap, fmt};
