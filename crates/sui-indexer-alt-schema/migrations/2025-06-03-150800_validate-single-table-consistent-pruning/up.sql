@@ -73,16 +73,21 @@ ALTER TABLE obj_info_v2
 ADD COLUMN obsolete_at BIGINT,
 ADD COLUMN marked_predecessor BOOLEAN NOT NULL DEFAULT FALSE;
 
--- 1. PREDECESSOR LOOKUP (T0 critical path)
-CREATE INDEX obj_info_predecessor_lookup ON obj_info_v2 (object_id, cp_sequence_number DESC);
+-- 1. CRITICAL: Predecessor lookup (used in every pruning operation)
+CREATE INDEX obj_info_predecessor_lookup ON obj_info_v2 (object_id, cp_sequence_number DESC, obsolete_at);
 
--- 2. DUAL-FLAGGED DELETION (T2 Part 1)
+-- 2. CRITICAL: Checkpoint range scanning
+CREATE INDEX obj_info_by_checkpoint ON obj_info_v2 (cp_sequence_number, object_id);
+
+-- 3. CRITICAL: T1 deletion by checkpoint range
 CREATE INDEX obj_info_can_delete ON obj_info_v2 (cp_sequence_number, object_id)
 WHERE obsolete_at IS NOT NULL AND marked_predecessor = TRUE;
 
--- 3. CROSS-CHECKPOINT CLEANUP (T2 Part 2)
+-- 4. CRITICAL: T1 deletion by obsolete_at range
 CREATE INDEX obj_info_obsoleted_by_range ON obj_info_v2 (obsolete_at, object_id)
 WHERE obsolete_at IS NOT NULL AND marked_predecessor = TRUE;
 
--- 4. CHECKPOINT RANGE PROCESSING (T0, T1, T2)
-CREATE INDEX obj_info_by_checkpoint ON obj_info_v2 (cp_sequence_number, object_id);
+-- For T0b: Finding unflagged predecessors efficiently
+CREATE INDEX obj_info_unflagged_predecessors
+ON obj_info_v2 (object_id, cp_sequence_number DESC)
+WHERE obsolete_at IS NULL;

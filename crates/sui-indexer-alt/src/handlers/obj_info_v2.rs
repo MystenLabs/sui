@@ -136,83 +136,79 @@ impl Handler for ObjInfoV2 {
         to_exclusive: u64,
         conn: &mut Connection<'a>,
     ) -> Result<usize> {
-        let query = postgres::sql_query!(
+        let intermediate_deleted = postgres::sql_query!(
             "
-            WITH predecessors AS (
-                SELECT
-                    latest.object_id as latest_object_id,
-                    latest.cp_sequence_number as latest_cp_sequence_number,
-                    latest.marked_predecessor as latest_marked_predecessor,
-                    pred.object_id as pred_object_id,
-                    pred.cp_sequence_number as pred_cp_sequence_number,
-                    pred.marked_predecessor as pred_marked_predecessor
-                FROM obj_info_v2 latest
-                LEFT JOIN LATERAL (
-                    SELECT object_id, cp_sequence_number, marked_predecessor
-                    FROM obj_info_v2 p
-                    WHERE p.object_id = latest.object_id
-                    AND p.cp_sequence_number < latest.cp_sequence_number
-                    ORDER BY p.cp_sequence_number DESC
-                    LIMIT 1
-                ) pred ON true
-                WHERE latest.cp_sequence_number >= {BigInt} AND latest.cp_sequence_number < {BigInt}
-                ORDER BY latest.object_id, latest.cp_sequence_number
-                FOR UPDATE OF latest
-            ),
-            -- Otherwise, flag them for later deletion
-            pred_obsolete AS (
-                UPDATE obj_info_v2
-                SET obsolete_at = p.latest_cp_sequence_number
-                FROM predecessors p
-                WHERE obj_info_v2.object_id = p.pred_object_id
-                AND obj_info_v2.cp_sequence_number = p.pred_cp_sequence_number
-                AND p.pred_marked_predecessor = false
-                RETURNING obj_info_v2.object_id
-            ),
-            -- Finally, mark 'latest' rows to have marked their own immediate predecessors
-            marked_predecessor AS (
-                UPDATE obj_info_v2
-                SET marked_predecessor = true
-                WHERE (object_id, cp_sequence_number) IN (
-                    SELECT latest_object_id, latest_cp_sequence_number FROM predecessors
-                    ORDER BY latest_object_id, latest_cp_sequence_number
-                )
-                RETURNING object_id
-            ),
-            -- Delete preds that already marked their own immediate predecessors
-            pred_deleted AS (
-                DELETE FROM obj_info_v2
-                WHERE (object_id, cp_sequence_number) IN (
-                    SELECT pred_object_id, pred_cp_sequence_number
-                    FROM predecessors
-                    WHERE pred_marked_predecessor = true
-                )
-                RETURNING object_id
-            ),
-            -- Delete intermediate entries among 'latest' changes
-            intermediate_deleted AS (
-                DELETE FROM obj_info_v2
-                WHERE (object_id, cp_sequence_number) IN (
-                    SELECT latest_object_id, latest_cp_sequence_number
-                    FROM predecessors p1
-                    WHERE EXISTS (
-                        SELECT 1 FROM predecessors p2
-                        WHERE p2.pred_object_id = p1.latest_object_id
-                        AND p2.pred_cp_sequence_number = p1.latest_cp_sequence_number
-                    )
-                )
-                RETURNING object_id
+            WITH entries_in_range AS (
+                SELECT object_id, cp_sequence_number,
+                       ROW_NUMBER() OVER (PARTITION BY object_id ORDER BY cp_sequence_number DESC) as rn_desc,
+                       ROW_NUMBER() OVER (PARTITION BY object_id ORDER BY cp_sequence_number ASC) as rn_asc,
+                       COUNT(*) OVER (PARTITION BY object_id) as total_per_object
+                FROM obj_info_v2
+                WHERE cp_sequence_number >= {BigInt}
+                AND cp_sequence_number < {BigInt}
             )
-            SELECT
-                (SELECT COUNT(*)::BIGINT FROM pred_deleted) as pred_deleted,
-                (SELECT COUNT(*)::BIGINT FROM intermediate_deleted) as intermediate_deleted,
-                (SELECT COUNT(*)::BIGINT FROM pred_obsolete) as pred_obsolete,
-                (SELECT COUNT(*)::BIGINT FROM marked_predecessor) as marked_predecessor;
+            DELETE FROM obj_info_v2
+            WHERE (object_id, cp_sequence_number) IN (
+                SELECT object_id, cp_sequence_number
+                FROM entries_in_range
+                WHERE total_per_object > 2  -- Only if there are intermediates
+                AND rn_desc > 1             -- Not the latest
+                AND rn_asc > 1              -- Not the earliest
+            );
             ",
             from as i64,
             to_exclusive as i64,
-        );
-        let t0: T0Result = query.get_result(conn).await?;
+        )
+        .execute(conn)
+        .await? as i64;
+
+        // Step 2: T0b - Flag predecessors as obsolete
+        let _pred_updates = postgres::sql_query!(
+            "
+            UPDATE obj_info_v2
+            SET obsolete_at = latest.cp_sequence_number
+            FROM (
+                SELECT
+                    latest.cp_sequence_number,
+                    pred.object_id as pred_object_id,
+                    pred.cp_sequence_number as pred_cp_sequence_number
+                FROM obj_info_v2 latest
+                JOIN LATERAL (
+                    SELECT object_id, cp_sequence_number
+                    FROM obj_info_v2 p
+                    WHERE p.object_id = latest.object_id
+                    AND p.cp_sequence_number < latest.cp_sequence_number
+                    AND p.obsolete_at IS NULL
+                    ORDER BY p.cp_sequence_number DESC
+                    LIMIT 1
+                ) pred ON true
+                WHERE latest.cp_sequence_number >= {BigInt}
+                AND latest.cp_sequence_number < {BigInt}
+                ORDER BY pred.object_id, pred.cp_sequence_number
+            ) AS latest
+            WHERE obj_info_v2.object_id = latest.pred_object_id
+            AND obj_info_v2.cp_sequence_number = latest.pred_cp_sequence_number;
+            ",
+            from as i64,
+            to_exclusive as i64,
+        )
+        .execute(conn)
+        .await?;
+
+        // Step 3: T0c - Mark current entries as processed
+        let _current_updates = postgres::sql_query!(
+            "
+            UPDATE obj_info_v2
+            SET marked_predecessor = true
+            WHERE cp_sequence_number >= {BigInt}
+            AND cp_sequence_number < {BigInt}
+            AND marked_predecessor = false;
+            ",
+            from as i64,
+            to_exclusive as i64,
+        )
+        .execute(conn)
+        .await?;
 
         let query = postgres::sql_query!(
             "
@@ -242,10 +238,7 @@ impl Handler for ObjInfoV2 {
         );
         let t1: T1Result = query.get_result(conn).await?;
 
-        Ok((t0.pred_deleted
-            + t0.intermediate_deleted
-            + t1.deleted_latest_count
-            + t1.deleted_obsolete_count) as usize)
+        Ok((intermediate_deleted + t1.deleted_latest_count + t1.deleted_obsolete_count) as usize)
     }
 }
 
