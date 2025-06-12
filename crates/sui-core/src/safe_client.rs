@@ -4,6 +4,7 @@
 
 use crate::authority_client::AuthorityAPI;
 use crate::epoch::committee_store::CommitteeStore;
+use crate::wait_for_effects_request::{ExecutedData, WaitForEffectsResponse};
 use prometheus::core::GenericCounter;
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry, Histogram,
@@ -18,9 +19,10 @@ use sui_types::effects::{SignedTransactionEffects, TransactionEffectsAPI, Transa
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
+use sui_types::messages_consensus::ConsensusPosition;
 use sui_types::messages_grpc::{
     HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
-    ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest, SubmitTxResponse,
+    ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest, RawWaitForEffectsRequest,
     SystemStateRequest, TransactionInfoRequest, TransactionStatus, VerifiedObjectInfoResponse,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
@@ -317,34 +319,50 @@ where
         &self,
         request: RawSubmitTxRequest,
         client_addr: Option<SocketAddr>,
-    ) -> Result<SubmitTxResponse, SuiError> {
+    ) -> Result<ConsensusPosition, SuiError> {
         let _timer = self.metrics.handle_certificate_latency.start_timer();
-        let include_events = request.include_events;
-        let include_input_objects = request.include_input_objects;
-        let include_output_objects = request.include_output_objects;
         let response = self
             .authority_client
             .submit_transaction(request, client_addr)
             .await?;
 
-        let response = SubmitTxResponse::from_bytes(
-            response.effects,
-            include_events,
-            response.events,
-            include_input_objects,
-            response.input_objects,
-            include_output_objects,
-            response.output_objects,
-            false,
-            None,
-        )?;
+        let consensus_position = bcs::from_bytes(&response.consensus_position).map_err(|e| {
+            SuiError::GrpcMessageSerializeError {
+                type_info: "RawSubmitTxResponse.consensus_position".to_string(),
+                error: e.to_string(),
+            }
+        })?;
+        Ok(consensus_position)
+    }
 
-        let verified_resp = check_error!(
-            self.address,
-            self.verify_submit_transaction_response(response),
-            "Client error in submit_transaction"
-        )?;
-        Ok(verified_resp)
+    /// Wait for effects of a transaction that has been submitted to the network
+    /// through the `submit_transaction` API.
+    pub async fn wait_for_effects(
+        &self,
+        request: RawWaitForEffectsRequest,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<WaitForEffectsResponse, SuiError> {
+        let _timer = self.metrics.handle_certificate_latency.start_timer();
+        let response = self
+            .authority_client
+            .wait_for_effects(request, client_addr)
+            .await?;
+
+        let wait_for_effects_resp = WaitForEffectsResponse::try_from(response)?;
+
+        match &wait_for_effects_resp {
+            WaitForEffectsResponse::Executed {
+                effects_digest: _,
+                details: Some(details),
+            } => {
+                self.verify_executed_data((**details).clone())?;
+            }
+            _ => {
+                // No additional verification needed for other response types
+            }
+        };
+
+        Ok(wait_for_effects_resp)
     }
 
     /// Initiate a new transfer to a Sui or Primary account.
@@ -500,22 +518,21 @@ where
         })
     }
 
-    fn verify_submit_transaction_response(
+    fn verify_executed_data(
         &self,
-        SubmitTxResponse {
+        ExecutedData {
             effects,
             events,
             input_objects,
             output_objects,
-            auxiliary_data,
-        }: SubmitTxResponse,
-    ) -> SuiResult<SubmitTxResponse> {
+        }: ExecutedData,
+    ) -> SuiResult<()> {
         // Check Events
         self.verify_events(&events, effects.events_digest())?;
 
         // Check Input Objects
         self.verify_objects(
-            &input_objects,
+            &Some(input_objects).filter(|v| !v.is_empty()),
             effects
                 .old_object_metadata()
                 .into_iter()
@@ -524,20 +541,14 @@ where
 
         // Check Output Objects
         self.verify_objects(
-            &output_objects,
+            &Some(output_objects).filter(|v| !v.is_empty()),
             effects
                 .all_changed_objects()
                 .into_iter()
                 .map(|(object_ref, _, _)| (object_ref.0, object_ref)),
         )?;
 
-        Ok(SubmitTxResponse {
-            effects,
-            events,
-            input_objects,
-            output_objects,
-            auxiliary_data,
-        })
+        Ok(())
     }
 
     /// Execute a certificate.

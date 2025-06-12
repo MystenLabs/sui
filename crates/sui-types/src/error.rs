@@ -497,6 +497,8 @@ pub enum SuiError {
     TransactionsNotFound { digests: Vec<TransactionDigest> },
     #[error("Could not find the referenced transaction events [{digest:?}].")]
     TransactionEventsNotFound { digest: TransactionDigest },
+    #[error("Could not find the referenced transaction effects [{digest:?}].")]
+    TransactionEffectsNotFound { digest: TransactionDigest },
     #[error(
         "Attempt to move to `Executed` state an transaction that has already been executed: {:?}.",
         digest

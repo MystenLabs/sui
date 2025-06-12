@@ -59,7 +59,7 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::messages_consensus::{
     check_total_jwk_size, AuthorityCapabilitiesV1, AuthorityCapabilitiesV2, AuthorityIndex,
-    ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
+    ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
     ExecutionTimeObservation, TimestampMs, VersionedDkgConfirmation,
 };
 use sui_types::signature::GenericSignature;
@@ -120,7 +120,6 @@ use crate::module_cache_metrics::ResolverMetrics;
 use crate::post_consensus_tx_reorder::PostConsensusTxReorder;
 use crate::signature_verifier::*;
 use crate::stake_aggregator::{GenericMultiStakeAggregator, StakeAggregator};
-use crate::wait_for_effects_request::ConsensusTxPosition;
 
 /// The key where the latest consensus index is stored in the database.
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
@@ -4685,7 +4684,7 @@ impl AuthorityPerEpochStore {
 
     pub(crate) fn set_consensus_tx_status(
         &self,
-        position: ConsensusTxPosition,
+        position: ConsensusPosition,
         status: ConsensusTxStatus,
     ) {
         if let Some(cache) = self.consensus_tx_status_cache.as_ref() {

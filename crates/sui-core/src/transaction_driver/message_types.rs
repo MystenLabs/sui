@@ -11,11 +11,6 @@ use sui_types::{
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SubmitTxRequest {
     pub transaction: Transaction,
-
-    pub include_events: bool,
-    pub include_input_objects: bool,
-    pub include_output_objects: bool,
-    pub include_auxiliary_data: bool,
 }
 
 impl SubmitTxRequest {
@@ -26,9 +21,6 @@ impl SubmitTxRequest {
                     error: e.to_string(),
                 })?
                 .into(),
-            include_events: self.include_events,
-            include_input_objects: self.include_input_objects,
-            include_output_objects: self.include_output_objects,
         })
     }
 }
