@@ -10,10 +10,11 @@ use std::{
 
 use crate::{
     adapter::new_native_extensions,
+    data_store::sui_data_store::SuiDataStore,
     execution_mode::ExecutionMode,
     gas_charger::GasCharger,
     gas_meter::SuiGasMeter,
-    programmable_transactions::{context::finish, data_store::SuiDataStore},
+    programmable_transactions::context::finish,
     sp,
     static_programmable_transactions::{
         better_todo,
