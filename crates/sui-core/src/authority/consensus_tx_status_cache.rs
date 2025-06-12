@@ -3,13 +3,14 @@
 
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::{
+    error::{SuiError, SuiResult},
+    messages_consensus::ConsensusPosition,
+};
 use tokio::sync::watch;
 use tracing::debug;
 
 use mysten_common::sync::notify_read::NotifyRead;
-
-use crate::wait_for_effects_request::ConsensusTxPosition;
 
 /// The number of consensus rounds to retain transaction status information before garbage collection.
 /// Used to expire positions from old rounds, as well as to check if a transaction is too far ahead of the last committed round.
@@ -37,7 +38,7 @@ pub(crate) enum NotifyReadConsensusTxStatusResult {
 
 pub(crate) struct ConsensusTxStatusCache {
     inner: RwLock<Inner>,
-    status_notify_read: NotifyRead<ConsensusTxPosition, ConsensusTxStatus>,
+    status_notify_read: NotifyRead<ConsensusPosition, ConsensusTxStatus>,
     /// Watch channel for last committed leader round updates
     last_committed_leader_round_tx: watch::Sender<Option<u64>>,
     last_committed_leader_round_rx: watch::Receiver<Option<u64>>,
@@ -46,9 +47,9 @@ pub(crate) struct ConsensusTxStatusCache {
 #[derive(Default)]
 struct Inner {
     /// A map of transaction position to its status from consensus.
-    transaction_status: HashMap<ConsensusTxPosition, ConsensusTxStatus>,
+    transaction_status: HashMap<ConsensusPosition, ConsensusTxStatus>,
     /// A map of consensus round to all transactions that were updated in that round.
-    round_lookup_map: BTreeMap<u64, HashSet<ConsensusTxPosition>>,
+    round_lookup_map: BTreeMap<u64, HashSet<ConsensusPosition>>,
 }
 
 impl ConsensusTxStatusCache {
@@ -64,7 +65,7 @@ impl ConsensusTxStatusCache {
 
     pub fn set_transaction_status(
         &self,
-        transaction_position: ConsensusTxPosition,
+        transaction_position: ConsensusPosition,
         status: ConsensusTxStatus,
     ) {
         debug!(
@@ -118,7 +119,7 @@ impl ConsensusTxStatusCache {
 
     pub async fn notify_read_transaction_status(
         &self,
-        transaction_position: ConsensusTxPosition,
+        transaction_position: ConsensusPosition,
         old_status: Option<ConsensusTxStatus>,
     ) -> NotifyReadConsensusTxStatusResult {
         // TODO(fastpath): We should track the typical distance between the last committed round
@@ -180,7 +181,7 @@ impl ConsensusTxStatusCache {
     }
 
     /// Returns true if the position is too far ahead of the last committed round.
-    pub fn check_position_too_ahead(&self, position: &ConsensusTxPosition) -> SuiResult<()> {
+    pub fn check_position_too_ahead(&self, position: &ConsensusPosition) -> SuiResult<()> {
         if let Some(last_committed_leader_round) = *self.last_committed_leader_round_rx.borrow() {
             if position.block.round as u64
                 > last_committed_leader_round + CONSENSUS_STATUS_RETENTION_ROUNDS
@@ -197,7 +198,7 @@ impl ConsensusTxStatusCache {
     #[cfg(test)]
     pub fn get_transaction_status(
         &self,
-        position: &ConsensusTxPosition,
+        position: &ConsensusPosition,
     ) -> Option<ConsensusTxStatus> {
         let inner = self.inner.read();
         inner.transaction_status.get(position).cloned()
@@ -213,8 +214,8 @@ mod tests {
     use futures::FutureExt;
     use sui_types::messages_consensus::TransactionIndex;
 
-    fn create_test_tx_position(round: u64, index: u64) -> ConsensusTxPosition {
-        ConsensusTxPosition {
+    fn create_test_tx_position(round: u64, index: u64) -> ConsensusPosition {
+        ConsensusPosition {
             block: BlockRef {
                 round: round as u32,
                 author: Default::default(),

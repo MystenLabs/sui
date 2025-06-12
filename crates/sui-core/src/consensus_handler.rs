@@ -30,9 +30,9 @@ use sui_types::{
     digests::{AdditionalConsensusStateDigest, ConsensusCommitDigest},
     executable_transaction::{TrustedExecutableTransaction, VerifiedExecutableTransaction},
     messages_consensus::{
-        AuthorityIndex, ConsensusDeterminedVersionAssignments, ConsensusTransaction,
-        ConsensusTransactionKey, ConsensusTransactionKind, ExecutionTimeObservation,
-        TransactionIndex,
+        AuthorityIndex, ConsensusDeterminedVersionAssignments, ConsensusPosition,
+        ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
+        ExecutionTimeObservation, TransactionIndex,
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{SenderSignedData, VerifiedTransaction},
@@ -57,7 +57,6 @@ use crate::{
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
     execution_scheduler::{ExecutionSchedulerAPI, ExecutionSchedulerWrapper, SchedulingSource},
     scoring_decision::update_low_scoring_authorities,
-    wait_for_effects_request::ConsensusTxPosition,
 };
 
 pub struct ConsensusHandlerInitializer {
@@ -718,7 +717,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 // TODO: consider only messages within 1~3 rounds of the leader?
                 self.last_consensus_stats.stats.inc_num_messages(author);
                 for (tx_index, parsed) in parsed_transactions.into_iter().enumerate() {
-                    let position = ConsensusTxPosition {
+                    let position = ConsensusPosition {
                         block,
                         index: tx_index as TransactionIndex,
                     };
@@ -1275,7 +1274,7 @@ impl ConsensusBlockHandler {
         let mut executable_transactions = vec![];
         for (idx, (block, transactions)) in parsed_transactions.into_iter().enumerate() {
             for parsed in transactions {
-                let position = ConsensusTxPosition {
+                let position = ConsensusPosition {
                     block,
                     index: idx as TransactionIndex,
                 };

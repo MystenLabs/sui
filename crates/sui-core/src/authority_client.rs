@@ -42,6 +42,8 @@ pub trait AuthorityAPI {
         client_addr: Option<SocketAddr>,
     ) -> Result<RawSubmitTxResponse, SuiError>;
 
+    // TODO(fastpath): Add a soft bundle path for mfp which will return the list of consensus positions
+
     /// Initiate a new transaction to a Sui or Primary account.
     async fn handle_transaction(
         &self,

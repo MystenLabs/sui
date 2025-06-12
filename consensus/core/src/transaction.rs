@@ -28,7 +28,16 @@ pub(crate) struct TransactionsGuard {
     // A TransactionsGuard may be partially consumed by `TransactionConsumer`, in which case, this holds the remaining transactions.
     transactions: Vec<Transaction>,
 
-    included_in_block_ack: oneshot::Sender<(BlockRef, oneshot::Receiver<BlockStatus>)>,
+    // When the transactions are included in a block, this will be signalled with
+    // the following information
+    included_in_block_ack: oneshot::Sender<(
+        // The block reference in which the transactions have been included
+        BlockRef,
+        // The indices of the transactions that have been included in the block
+        Vec<TransactionIndex>,
+        // A receiver to notify the submitter about the block status
+        oneshot::Receiver<BlockStatus>,
+    )>,
 }
 
 /// The TransactionConsumer is responsible for fetching the next transactions to be included for the block proposals.
@@ -105,8 +114,14 @@ impl TransactionConsumer {
 
             total_bytes += transactions_bytes;
 
-            // The transactions can be consumed, register its ack.
-            acks.push(t.included_in_block_ack);
+            // Calculate indices for this batch
+            let start_idx = transactions.len() as TransactionIndex;
+            let indices: Vec<TransactionIndex> =
+                (start_idx..start_idx + t.transactions.len() as TransactionIndex).collect();
+
+            // The transactions can be consumed, register its ack and transaction
+            // indices to be sent with the ack.
+            acks.push((t.included_in_block_ack, indices));
             transactions.extend(t.transactions);
             None
         };
@@ -133,7 +148,7 @@ impl TransactionConsumer {
             Box::new(move |block_ref: BlockRef| {
                 let mut block_status_subscribers = block_status_subscribers.lock();
 
-                for ack in acks {
+                for (ack, tx_indices) in acks {
                     let (status_tx, status_rx) = oneshot::channel();
 
                     block_status_subscribers
@@ -141,7 +156,7 @@ impl TransactionConsumer {
                         .or_default()
                         .push(status_tx);
 
-                    let _ = ack.send((block_ref, status_rx));
+                    let _ = ack.send((block_ref, tx_indices, status_rx));
                 }
             }),
             limit_reached,
@@ -253,8 +268,14 @@ impl TransactionClient {
     pub async fn submit(
         &self,
         transactions: Vec<Vec<u8>>,
-    ) -> Result<(BlockRef, oneshot::Receiver<BlockStatus>), ClientError> {
-        // TODO: Support returning the block refs for transactions that span multiple blocks
+    ) -> Result<
+        (
+            BlockRef,
+            Vec<TransactionIndex>,
+            oneshot::Receiver<BlockStatus>,
+        ),
+        ClientError,
+    > {
         let included_in_block = self.submit_no_wait(transactions).await?;
         included_in_block
             .await
@@ -274,7 +295,14 @@ impl TransactionClient {
     pub(crate) async fn submit_no_wait(
         &self,
         transactions: Vec<Vec<u8>>,
-    ) -> Result<oneshot::Receiver<(BlockRef, oneshot::Receiver<BlockStatus>)>, ClientError> {
+    ) -> Result<
+        oneshot::Receiver<(
+            BlockRef,
+            Vec<TransactionIndex>,
+            oneshot::Receiver<BlockStatus>,
+        )>,
+        ClientError,
+    > {
         let (included_in_block_ack_send, included_in_block_ack_receive) = oneshot::channel();
 
         let mut bundle_size = 0;
@@ -466,11 +494,20 @@ mod tests {
             }
         }
 
+        let mut transaction_count = 0;
         // Now iterate over all the waiters. Everyone should have been acknowledged.
         let mut block_status_waiters = Vec::new();
         while let Some(result) = included_in_block_waiters.next().await {
-            let (block_ref, block_status_waiter) =
+            let (block_ref, tx_indices, block_status_waiter) =
                 result.expect("Block inclusion waiter shouldn't fail");
+            // tx is submitted one at a time so tx acks should only return one tx index
+            assert_eq!(tx_indices.len(), 1);
+            // The first transaction in the block should have index 0, the second one 1, etc.
+            // because we submit 2 transactions per block, the index should be 0 then 1 and then
+            // reset back to 0 for the next block.
+            assert_eq!(tx_indices[0], transaction_count % 2);
+            transaction_count += 1;
+
             block_status_waiters.push((block_ref, block_status_waiter));
         }
 

@@ -21,18 +21,20 @@ use rand::seq::SliceRandom as _;
 use sui_types::{
     base_types::ConciseableName,
     committee::EpochId,
+    messages_grpc::RawWaitForEffectsRequest,
     quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
 };
 use tokio::{
     task::JoinSet,
     time::{sleep, timeout},
 };
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
+    wait_for_effects_request::{WaitForEffectsRequest, WaitForEffectsResponse},
 };
 
 /// Options for submitting a transaction.
@@ -108,6 +110,7 @@ where
         let auth_agg = self.authority_aggregator.load();
         let committee = auth_agg.committee.clone();
         let epoch = committee.epoch();
+        let transaction = request.transaction.clone();
         let raw_request = request
             .into_raw()
             .map_err(TransactionDriverError::SerializationError)?;
@@ -116,7 +119,8 @@ where
         // Send the transaction to a random validator.
         let clients = auth_agg.authority_clients.iter().collect::<Vec<_>>();
         let (name, client) = clients.choose(&mut rand::thread_rng()).unwrap();
-        let response = timeout(
+
+        let consensus_position = timeout(
             Duration::from_secs(2),
             client.submit_transaction(raw_request, options.forwarded_client_addr),
         )
@@ -126,18 +130,72 @@ where
             TransactionDriverError::RpcFailure(name.concise().to_string(), e.to_string())
         })?;
 
-        // TODO(fastpath): Aggregate quorum of responses before returning QuorumSubmitTransactionResponse
-        Ok(QuorumSubmitTransactionResponse {
-            effects: FinalizedEffects {
-                effects: response.effects,
-                // TODO(fastpath): return the epoch in response.
-                finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
-            },
-            events: response.events,
-            input_objects: response.input_objects,
-            output_objects: response.output_objects,
-            auxiliary_data: response.auxiliary_data,
-        })
+        debug!(
+            "Transaction {} submitted to consensus at position: {consensus_position:?}",
+            transaction.digest()
+        );
+
+        let response = match timeout(
+            // TODO(fastpath): This will be removed when we change this to wait for effects from a quorum
+            Duration::from_secs(20),
+            client.wait_for_effects(
+                RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
+                    epoch,
+                    transaction_digest: *transaction.digest(),
+                    transaction_position: consensus_position,
+                    include_details: true,
+                })
+                .map_err(TransactionDriverError::SerializationError)?,
+                options.forwarded_client_addr,
+            ),
+        )
+        .await
+        {
+            Ok(Ok(response)) => response,
+            Ok(Err(e)) => {
+                return Err(TransactionDriverError::RpcFailure(
+                    name.concise().to_string(),
+                    e.to_string(),
+                ));
+            }
+            Err(_) => {
+                return Err(TransactionDriverError::TimeoutBeforeFinality);
+            }
+        };
+
+        match response {
+            WaitForEffectsResponse::Executed {
+                details,
+                effects_digest: _,
+            } => {
+                if let Some(details) = details {
+                    return Ok(QuorumSubmitTransactionResponse {
+                        effects: FinalizedEffects {
+                            effects: details.effects,
+                            finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
+                        },
+                        events: details.events,
+                        input_objects: Some(details.input_objects),
+                        output_objects: Some(details.output_objects),
+                        auxiliary_data: None,
+                    });
+                } else {
+                    return Err(TransactionDriverError::ExecutionDataNotFound(
+                        transaction.digest().to_string(),
+                    ));
+                }
+            }
+            WaitForEffectsResponse::Rejected { reason } => {
+                return Err(TransactionDriverError::TransactionRejected(
+                    reason.to_string(),
+                ));
+            }
+            WaitForEffectsResponse::Expired(round) => {
+                return Err(TransactionDriverError::TransactionExpired(
+                    round.to_string(),
+                ));
+            }
+        };
     }
 
     fn enable_reconfig(
