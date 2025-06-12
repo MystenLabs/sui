@@ -216,7 +216,7 @@ impl AuthorityPerpetualTables {
             WalPosition,
         };
         const MUTEXES: usize = 4 * 1024;
-        const VALUE_CACHE_SIZE: usize = 20_000;
+        const VALUE_CACHE_SIZE: usize = 2_000;
 
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
         let objects_compactor = |index: &mut BTreeMap<Bytes, WalPosition>| {
