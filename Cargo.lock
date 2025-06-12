@@ -8251,6 +8251,7 @@ dependencies = [
  "move-stdlib-natives",
  "move-vm-runtime",
  "sha2 0.9.9",
+ "walkdir",
 ]
 
 [[package]]
