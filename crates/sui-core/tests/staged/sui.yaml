@@ -1217,6 +1217,10 @@ TransactionKind:
       ConsensusCommitPrologueV4:
         NEWTYPE:
           TYPENAME: ConsensusCommitPrologueV4
+    10:
+      ProgrammableSystemTransaction:
+        NEWTYPE:
+          TYPENAME: ProgrammableTransaction
 TypeArgumentError:
   ENUM:
     0:

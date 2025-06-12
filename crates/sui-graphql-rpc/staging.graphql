@@ -3100,6 +3100,21 @@ type Parent {
 }
 
 """
+ProgrammableSystemTransactionBlock is identical to ProgrammableTransactionBlock, but graphql
+does not allow multiple variants with the same type.
+"""
+type ProgrammableSystemTransactionBlock {
+	"""
+	Input objects or primitive values.
+	"""
+	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
+	"""
+	The transaction commands, executed sequentially.
+	"""
+	transactions(first: Int, after: String, last: Int, before: String): ProgrammableTransactionConnection!
+}
+
+"""
 A single transaction, or command, in the programmable transaction block.
 """
 union ProgrammableTransaction = MoveCallTransaction | TransferObjectsTransaction | SplitCoinsTransaction | MergeCoinsTransaction | PublishTransaction | UpgradeTransaction | MakeMoveVecTransaction
@@ -4408,7 +4423,7 @@ input TransactionBlockFilter {
 """
 The kind of transaction block, either a programmable transaction or a system transaction.
 """
-union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction | ProgrammableTransactionBlock | AuthenticatorStateUpdateTransaction | RandomnessStateUpdateTransaction | EndOfEpochTransaction
+union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction | ProgrammableTransactionBlock | AuthenticatorStateUpdateTransaction | RandomnessStateUpdateTransaction | EndOfEpochTransaction | ProgrammableSystemTransactionBlock
 
 """
 An input filter selecting for either system or programmable transactions.

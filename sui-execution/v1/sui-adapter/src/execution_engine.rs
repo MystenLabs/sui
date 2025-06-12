@@ -690,6 +690,9 @@ mod checked {
             TransactionKind::RandomnessStateUpdate(_) => {
                 panic!("RandomnessStateUpdate should not exist in v1");
             }
+            TransactionKind::ProgrammableSystemTransaction(_) => {
+                panic!("ProgrammableSystemTransaction should not exist in execution layer v1");
+            }
         }?;
         temporary_store.check_execution_results_consistency()?;
         Ok(result)
