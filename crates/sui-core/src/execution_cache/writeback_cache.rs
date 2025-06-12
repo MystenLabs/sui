@@ -997,7 +997,7 @@ impl WritebackCache {
     fn commit_transaction_outputs(
         &self,
         epoch: EpochId,
-        (all_outputs, db_batch): Batch,
+        (all_outputs, mut db_batch): Batch,
         digests: &[TransactionDigest],
     ) {
         let _metrics_guard =
@@ -1008,6 +1008,7 @@ impl WritebackCache {
         // Flush writes to disk before removing anything from dirty set. otherwise,
         // a cache eviction could cause a value to disappear briefly, even if we insert to the
         // cache before removing from the dirty set.
+        db_batch.set_tag("commit_transaction_outputs".to_string());
         db_batch.write().expect("db error");
 
         let _metrics_guard =

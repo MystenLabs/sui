@@ -1164,6 +1164,13 @@ impl DBBatch {
         Ok(())
     }
 
+    pub fn set_tag(&mut self, tag: String) {
+        #[cfg(tidehunter)]
+        if let StorageWriteBatch::TideHunter(th_batch) = &mut self.batch {
+            th_batch.set_tag(tag);
+        }
+    }
+
     pub fn size_in_bytes(&self) -> usize {
         match self.batch {
             StorageWriteBatch::Rocks(ref b) => b.size_in_bytes(),
