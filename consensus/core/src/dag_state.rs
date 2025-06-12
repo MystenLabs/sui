@@ -286,23 +286,12 @@ impl DagState {
 
         let now = self.context.clock.timestamp_utc_ms();
         if block.timestamp_ms() > now {
-            if self
-                .context
-                .protocol_config
-                .consensus_median_based_commit_timestamp()
-            {
-                trace!(
-                    "Block {:?} with timestamp {} is greater than local timestamp {}.",
-                    block,
-                    block.timestamp_ms(),
-                    now,
-                );
-            } else {
-                panic!(
-                    "Block {:?} cannot be accepted! Block timestamp {} is greater than local timestamp {}.",
-                    block, block.timestamp_ms(), now,
-                );
-            }
+            trace!(
+                "Block {:?} with timestamp {} is greater than local timestamp {}.",
+                block,
+                block.timestamp_ms(),
+                now,
+            );
         }
         let hostname = &self.context.committee.authority(block_ref.author).hostname;
         self.context
@@ -2530,38 +2519,9 @@ mod test {
     }
 
     #[tokio::test]
-    #[should_panic]
-    async fn test_accept_block_panics_when_timestamp_is_ahead() {
-        // GIVEN
-        let (mut context, _) = Context::new_for_test(4);
-        context
-            .protocol_config
-            .set_consensus_median_based_commit_timestamp_for_testing(false);
-        let context = Arc::new(context);
-        let store = Arc::new(MemStore::new());
-        let mut dag_state = DagState::new(context.clone(), store.clone());
-
-        // Set a timestamp for the block that is ahead of the current time
-        let block_timestamp = context.clock.timestamp_utc_ms() + 5_000;
-
-        let block = VerifiedBlock::new_for_test(
-            TestBlock::new(10, 0)
-                .set_timestamp_ms(block_timestamp)
-                .build(),
-        );
-
-        // Try to accept the block - it will panic as accepted block timestamp is ahead of the current time
-        dag_state.accept_block(block);
-    }
-
-    #[tokio::test]
     async fn test_accept_block_not_panics_when_timestamp_is_ahead_and_median_timestamp() {
         // GIVEN
-        let (mut context, _) = Context::new_for_test(4);
-        context
-            .protocol_config
-            .set_consensus_median_based_commit_timestamp_for_testing(true);
-
+        let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let mut dag_state = DagState::new(context.clone(), store.clone());

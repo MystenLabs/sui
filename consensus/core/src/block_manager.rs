@@ -1152,7 +1152,7 @@ mod tests {
     async fn test_verify_block_timestamps_and_accept() {
         telemetry_subscribers::init_for_testing();
         let (context, _key_pairs) = Context::new_for_test(4);
-        
+
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
