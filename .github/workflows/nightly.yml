@@ -29,7 +29,7 @@ env:
 
 jobs:
   release:
-    name: build release binaries
+    name: Build Release Binaries
     runs-on: [ubuntu-ghcloud]
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
@@ -39,8 +39,8 @@ jobs:
           command: build
           args: --all-targets --all-features --release
 
-  report-status:
-    name: Report Status
+  report-failure:
+    name: Report Failure
     runs-on: ubuntu-latest
     if: failure()
     needs: [release]
