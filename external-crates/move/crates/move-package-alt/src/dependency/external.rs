@@ -97,7 +97,7 @@ struct RField {
 #[derive(Serialize, Debug)]
 struct ResolveRequest<EnvironmentID: Serialize> {
     #[serde(default)]
-    env: Option<EnvironmentID>,
+    env: EnvironmentID,
     data: toml::Value,
     #[serde(skip)]
     containing_file: FileHandle,
@@ -125,22 +125,19 @@ impl ExternalDependency {
         deps: &mut DependencySet<UnpinnedDependencyInfo>,
         envs: &BTreeMap<EnvironmentName, EnvironmentID>,
     ) -> ResolverResult<()> {
-        // we explode [deps] first so that we know exactly which deps are needed for each env.
-        deps.explode(envs.keys().cloned());
-
         // iterate over [deps] to collect queries for external resolvers
         let mut requests: BTreeMap<ResolverName, DependencySet<ResolveRequest<EnvironmentID>>> =
             BTreeMap::new();
 
         for (env, pkg, dep) in deps.iter() {
             if let UnpinnedDependencyInfo::External(dep) = dep {
-                let env_id = env.map(|id| {
-                    envs.get(id)
-                        .expect("all environments must be in [envs]")
-                        .clone()
-                });
+                let env_id = envs
+                    .get(env)
+                    .expect("all environments must be in [envs]")
+                    .clone();
+
                 requests.entry(dep.resolver.clone()).or_default().insert(
-                    env.cloned(),
+                    env.clone(),
                     pkg.clone(),
                     ResolveRequest {
                         env: env_id,
