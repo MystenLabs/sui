@@ -715,8 +715,8 @@ pub enum SuiError {
         "Validator consensus rounds are lagging behind. last committed leader round: {last_committed_round:?}, requested round: {round:?}"
     )]
     ValidatorConsensusLagging {
-        round: u64,
-        last_committed_round: u64,
+        round: u32,
+        last_committed_round: u32,
     },
 }
 

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use parking_lot::RwLock;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{btree_map::Entry, BTreeMap};
 use sui_types::{
     error::{SuiError, SuiResult},
     messages_consensus::ConsensusPosition,
@@ -15,7 +15,7 @@ use mysten_common::sync::notify_read::NotifyRead;
 /// The number of consensus rounds to retain transaction status information before garbage collection.
 /// Used to expire positions from old rounds, as well as to check if a transaction is too far ahead of the last committed round.
 /// Assuming a max round rate of 15/sec, this allows status updates to be valid within a window of ~25-30 seconds.
-pub(crate) const CONSENSUS_STATUS_RETENTION_ROUNDS: u64 = 400;
+pub(crate) const CONSENSUS_STATUS_RETENTION_ROUNDS: u32 = 400;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ConsensusTxStatus {
@@ -33,23 +33,21 @@ pub(crate) enum NotifyReadConsensusTxStatusResult {
     Status(ConsensusTxStatus),
     // The consensus position to be read has expired.
     // Provided with the last committed round that was used to check for expiration.
-    Expired(u64),
+    Expired(u32),
 }
 
 pub(crate) struct ConsensusTxStatusCache {
     inner: RwLock<Inner>,
     status_notify_read: NotifyRead<ConsensusPosition, ConsensusTxStatus>,
     /// Watch channel for last committed leader round updates
-    last_committed_leader_round_tx: watch::Sender<Option<u64>>,
-    last_committed_leader_round_rx: watch::Receiver<Option<u64>>,
+    last_committed_leader_round_tx: watch::Sender<Option<u32>>,
+    last_committed_leader_round_rx: watch::Receiver<Option<u32>>,
 }
 
 #[derive(Default)]
 struct Inner {
     /// A map of transaction position to its status from consensus.
-    transaction_status: HashMap<ConsensusPosition, ConsensusTxStatus>,
-    /// A map of consensus round to all transactions that were updated in that round.
-    round_lookup_map: BTreeMap<u64, HashSet<ConsensusPosition>>,
+    transaction_status: BTreeMap<ConsensusPosition, ConsensusTxStatus>,
 }
 
 impl ConsensusTxStatusCache {
@@ -63,58 +61,57 @@ impl ConsensusTxStatusCache {
         }
     }
 
-    pub fn set_transaction_status(
-        &self,
-        transaction_position: ConsensusPosition,
-        status: ConsensusTxStatus,
-    ) {
-        debug!(
-            "Setting transaction status for {:?}: {:?}",
-            transaction_position, status
-        );
-        let mut inner = self.inner.write();
-        if let Some(last_committed_leader_round) = *self.last_committed_leader_round_rx.borrow() {
-            if transaction_position.block.round as u64 + CONSENSUS_STATUS_RETENTION_ROUNDS
-                < last_committed_leader_round
+    pub fn set_transaction_status(&self, pos: ConsensusPosition, status: ConsensusTxStatus) {
+        {
+            let mut inner = self.inner.write();
+            if let Some(last_committed_leader_round) = *self.last_committed_leader_round_rx.borrow()
             {
-                return;
+                if pos.block.round + CONSENSUS_STATUS_RETENTION_ROUNDS < last_committed_leader_round
+                {
+                    // Ignore stale status updates.
+                    return;
+                }
             }
+
+            // Calls to set_transaction_status are async and can be out of order.
+            // Makes sure this is tolerated by handling state transitions properly.
+            let status_entry = inner.transaction_status.entry(pos);
+            match status_entry {
+                Entry::Vacant(entry) => {
+                    // Set the status for the first time.
+                    entry.insert(status);
+                }
+                Entry::Occupied(mut entry) => {
+                    let old_status = *entry.get();
+                    match (old_status, status) {
+                        // If the statuses are the same, no update is needed.
+                        (s1, s2) if s1 == s2 => return,
+                        // FastpathCertified is transient and can be updated to other statuses.
+                        (ConsensusTxStatus::FastpathCertified, _) => {
+                            entry.insert(status);
+                        }
+                        // This happens when statuses arrive out-of-order, and is a no-op.
+                        (
+                            ConsensusTxStatus::Rejected | ConsensusTxStatus::Finalized,
+                            ConsensusTxStatus::FastpathCertified,
+                        ) => {
+                            return;
+                        }
+                        // Transitions between terminal statuses are invalid.
+                        _ => {
+                            panic!(
+                                "Conflicting status updates for transaction {:?}: {:?} -> {:?}",
+                                pos, old_status, status
+                            );
+                        }
+                    }
+                }
+            };
         }
-        let old_status = inner
-            .transaction_status
-            .insert(transaction_position, status);
-        // Calls to set_transaction_status are async and can be out of order.
-        // We need to handle cases where new status is in fact older than the old status,
-        // or did not change.
-        if old_status == Some(status) {
-            return;
-        }
-        if let Some(old_status) = old_status {
-            if status == ConsensusTxStatus::FastpathCertified {
-                // If the new status is FastpathCertified, it must be older than the old status.
-                // We need to reset the status back to the old status.
-                inner
-                    .transaction_status
-                    .insert(transaction_position, old_status);
-            } else if old_status != ConsensusTxStatus::FastpathCertified {
-                // If neither old nor new status is FastpathCertified,
-                // we must have a conflict (either from Rejected to Finalized, or from Finalized to Rejected).
-                panic!(
-                    "Conflicting status updates for transaction {:?}: {:?} -> {:?}",
-                    transaction_position, old_status, status
-                );
-            }
-        } else {
-            // This is the first time we are setting the status for this transaction.
-            // We need to add it to the round lookup map to track its expiration.
-            inner
-                .round_lookup_map
-                .entry(transaction_position.block.round as u64)
-                .or_default()
-                .insert(transaction_position);
-        }
-        self.status_notify_read
-            .notify(&transaction_position, &status);
+
+        // All code paths leading to here should have set the status.
+        debug!("Transaction status is set for {:?}: {:?}", pos, status);
+        self.status_notify_read.notify(&pos, &status);
     }
 
     pub async fn notify_read_transaction_status(
@@ -144,7 +141,7 @@ impl ConsensusTxStatusCache {
         let expiration_check = async {
             loop {
                 if let Some(last_committed_leader_round) = *round_rx.borrow() {
-                    if transaction_position.block.round as u64 + CONSENSUS_STATUS_RETENTION_ROUNDS
+                    if transaction_position.block.round + CONSENSUS_STATUS_RETENTION_ROUNDS
                         < last_committed_leader_round
                     {
                         return last_committed_leader_round;
@@ -163,31 +160,28 @@ impl ConsensusTxStatusCache {
         }
     }
 
-    pub async fn update_last_committed_leader_round(&self, round: u64) {
-        debug!("Updating last committed leader round: {}", round);
+    pub async fn update_last_committed_leader_round(&self, leader_round: u32) {
+        debug!("Updating last committed leader round: {}", leader_round);
         let mut inner = self.inner.write();
-        while let Some(&next_round) = inner.round_lookup_map.keys().next() {
-            if next_round + CONSENSUS_STATUS_RETENTION_ROUNDS < round {
-                let transactions = inner.round_lookup_map.remove(&next_round).unwrap();
-                for tx in transactions {
-                    inner.transaction_status.remove(&tx);
-                }
+        while let Some((position, _)) = inner.transaction_status.first_key_value() {
+            if position.block.round + CONSENSUS_STATUS_RETENTION_ROUNDS <= leader_round {
+                inner.transaction_status.pop_first();
             } else {
                 break;
             }
         }
         // Send update through watch channel
-        let _ = self.last_committed_leader_round_tx.send(Some(round));
+        let _ = self.last_committed_leader_round_tx.send(Some(leader_round));
     }
 
     /// Returns true if the position is too far ahead of the last committed round.
     pub fn check_position_too_ahead(&self, position: &ConsensusPosition) -> SuiResult<()> {
         if let Some(last_committed_leader_round) = *self.last_committed_leader_round_rx.borrow() {
-            if position.block.round as u64
+            if position.block.round
                 > last_committed_leader_round + CONSENSUS_STATUS_RETENTION_ROUNDS
             {
                 return Err(SuiError::ValidatorConsensusLagging {
-                    round: position.block.round as u64,
+                    round: position.block.round,
                     last_committed_round: last_committed_leader_round,
                 });
             }
@@ -276,7 +270,7 @@ mod tests {
         // Set initial status
         cache.set_transaction_status(tx_pos, ConsensusTxStatus::FastpathCertified);
 
-        // Update last committed round to trigger expiration
+        // Update last committed round to trigger expiration up to including round 2.
         cache
             .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 2)
             .await;
@@ -320,17 +314,19 @@ mod tests {
             cache.set_transaction_status(tx_pos, ConsensusTxStatus::FastpathCertified);
         }
 
-        // Update last committed round to expire early rounds
+        // Update last committed round to expire early rounds up to including round 3.
         cache
             .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 3)
             .await;
 
         // Verify early rounds are cleaned up
         let inner = cache.inner.read();
-        assert!(!inner.round_lookup_map.contains_key(&1));
-        assert!(!inner.round_lookup_map.contains_key(&2));
-        assert!(inner.round_lookup_map.contains_key(&4));
-        assert!(inner.round_lookup_map.contains_key(&5));
+        let rounds = inner
+            .transaction_status
+            .keys()
+            .map(|p| p.block.round)
+            .collect::<Vec<_>>();
+        assert_eq!(rounds, vec![4, 5]);
     }
 
     #[tokio::test]

@@ -579,7 +579,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         if let Some(consensus_tx_status_cache) = self.epoch_store.consensus_tx_status_cache.as_ref()
         {
             consensus_tx_status_cache
-                .update_last_committed_leader_round(last_committed_round)
+                .update_last_committed_leader_round(last_committed_round as u32)
                 .await;
         }
 
