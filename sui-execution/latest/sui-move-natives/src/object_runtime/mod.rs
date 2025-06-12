@@ -537,6 +537,10 @@ impl<'a> ObjectRuntime<'a> {
     pub fn wrapped_object_containers(&self) -> BTreeMap<ObjectID, ObjectID> {
         self.child_object_store.wrapped_object_containers().clone()
     }
+
+    pub fn accessed_configs(&self) -> BTreeSet<ObjectID> {
+        self.child_object_store.accessed_configs()
+    }
 }
 
 pub fn max_event_error(max_events: u64) -> PartialVMError {

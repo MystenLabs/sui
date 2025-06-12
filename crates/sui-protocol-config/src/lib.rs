@@ -243,6 +243,7 @@ const MAX_PROTOCOL_VERSION: u64 = 86;
 // Version 84: Limit number of stored execution time observations between epochs.
 // Version 85: Enable party transfer in devnet.
 // Version 86: Use type tags in the object runtime and adapter instead of `Type`s.
+//             Enable epoch stable sequence number in effects for unsequenced config reads.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -714,6 +715,10 @@ struct FeatureFlags {
     // Enable accumulators
     #[serde(skip_serializing_if = "is_false")]
     enable_accumulators: bool,
+
+    // Rethrow type layout errors during serialization instead of trying to convert them.
+    #[serde(skip_serializing_if = "is_false")]
+    include_epoch_stable_sequence_number_in_effects: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2050,6 +2055,11 @@ impl ProtocolConfig {
 
     pub fn type_tags_in_object_runtime(&self) -> bool {
         self.feature_flags.type_tags_in_object_runtime
+    }
+
+    pub fn include_epoch_stable_sequence_number_in_effects(&self) -> bool {
+        self.feature_flags
+            .include_epoch_stable_sequence_number_in_effects
     }
 }
 
@@ -3715,6 +3725,8 @@ impl ProtocolConfig {
                 }
                 86 => {
                     cfg.feature_flags.type_tags_in_object_runtime = true;
+                    cfg.feature_flags
+                        .include_epoch_stable_sequence_number_in_effects = true;
                 }
                 // Use this template when making changes:
                 //

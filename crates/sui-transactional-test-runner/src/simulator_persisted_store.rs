@@ -12,7 +12,7 @@ use sui_config::genesis;
 use sui_protocol_config::ProtocolVersion;
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
-use sui_types::storage::{ReadStore, RpcStateReader};
+use sui_types::storage::{ConfigStore, ReadStore, RpcStateReader};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, VersionNumber},
     committee::{Committee, EpochId},
@@ -385,6 +385,18 @@ impl SimulatorStore for PersistedStore {
 
     fn backing_store(&self) -> &dyn sui_types::storage::BackingStore {
         self
+    }
+}
+
+impl ConfigStore for PersistedStore {
+    fn get_current_epoch_stable_sequence_number(
+        &self,
+        _object_id: &ObjectID,
+        _epoch_id: EpochId,
+    ) -> Option<VersionNumber> {
+        unimplemented!(
+            "TODO PersistedStore::get_current_epoch_stable_sequence_number is not yet implemented",
+        )
     }
 }
 

@@ -363,7 +363,8 @@ fn get_effects_ids(effects: &TransactionEffects) -> Result<BTreeSet<ObjectKey>, 
             UnchangedSharedKind::MutateConsensusStreamEnded(_)
             | UnchangedSharedKind::ReadConsensusStreamEnded(_)
             | UnchangedSharedKind::Cancelled(_)
-            | UnchangedSharedKind::PerEpochConfig => {
+            | UnchangedSharedKind::PerEpochConfigDEPRECATED
+            | UnchangedSharedKind::PerEpochConfigWithSeqno(_) => {
                 trace!("Ignored `UnchangedSharedKind`: {:?}", kind);
             }
         });

@@ -560,7 +560,11 @@ impl From<UnchangedSharedKind> for crate::effects::UnchangedSharedKind {
                 Self::ReadConsensusStreamEnded(version.into())
             }
             UnchangedSharedKind::Canceled { version } => Self::Cancelled(version.into()),
-            UnchangedSharedKind::PerEpochConfig => Self::PerEpochConfig,
+            UnchangedSharedKind::PerEpochConfig => Self::PerEpochConfigDEPRECATED,
+            // TODO(tzakian): add this into the SDK
+            // UnchangedSharedKind::PerEpochConfigWithSequenceNumber(seqno) => {
+            //     Self::PerEpochConfigWithSeqno(seqno.into())
+            // }
         }
     }
 }
@@ -587,7 +591,12 @@ impl From<crate::effects::UnchangedSharedKind> for UnchangedSharedKind {
             crate::effects::UnchangedSharedKind::Cancelled(version) => Self::Canceled {
                 version: version.into(),
             },
-            crate::effects::UnchangedSharedKind::PerEpochConfig => Self::PerEpochConfig,
+            crate::effects::UnchangedSharedKind::PerEpochConfigDEPRECATED => Self::PerEpochConfig,
+            // TODO(tzakian): add this into the SDK
+            crate::effects::UnchangedSharedKind::PerEpochConfigWithSeqno(_seqno) => {
+                todo!()
+                // Self::PerEpochConfigWithSequenceNumber(seqno.into())
+            }
         }
     }
 }

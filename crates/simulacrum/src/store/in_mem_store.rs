@@ -6,7 +6,10 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use std::collections::{BTreeMap, HashMap};
 use sui_config::genesis;
-use sui_types::storage::{get_module, load_package_object_from_object_store, PackageObject};
+use sui_types::base_types::VersionNumber;
+use sui_types::storage::{
+    get_module, load_package_object_from_object_store, ConfigStore, PackageObject,
+};
 use sui_types::{
     base_types::{AuthorityName, ObjectID, SequenceNumber, SuiAddress},
     committee::{Committee, EpochId},
@@ -276,6 +279,18 @@ impl ChildObjectResolver for InMemoryStore {
             return Ok(None);
         }
         Ok(Some(recv_object))
+    }
+}
+
+impl ConfigStore for InMemoryStore {
+    fn get_current_epoch_stable_sequence_number(
+        &self,
+        _object_id: &ObjectID,
+        _epoch_id: EpochId,
+    ) -> Option<VersionNumber> {
+        unimplemented!(
+            "TODO InMemoryStorage::get_current_epoch_stable_sequence_number is not yet supported",
+        )
     }
 }
 

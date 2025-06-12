@@ -36,7 +36,7 @@ use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::message_envelope::Message;
-use sui_types::storage::{get_module, PackageObject};
+use sui_types::storage::{get_module, ConfigStore, PackageObject};
 use sui_types::transaction::GasData;
 use sui_types::transaction::TransactionKind::ProgrammableTransaction;
 use sui_types::SUI_DENY_LIST_OBJECT_ID;
@@ -2089,6 +2089,33 @@ impl ObjectStore for LocalExec {
             });
 
         res
+    }
+}
+
+impl ConfigStore for LocalExec {
+    fn get_current_epoch_stable_sequence_number(
+        &self,
+        object_id: &ObjectID,
+        _epoch_id: EpochId,
+    ) -> Option<VersionNumber> {
+        let Some(versions) = &self.config_and_versions else {
+            return None;
+        };
+
+        versions
+            .iter()
+            .find(|(id, _)| id == object_id)
+            .map(|(_, v)| *v)
+    }
+}
+
+impl ConfigStore for &mut LocalExec {
+    fn get_current_epoch_stable_sequence_number(
+        &self,
+        object_id: &ObjectID,
+        epoch_id: EpochId,
+    ) -> Option<VersionNumber> {
+        (**self).get_current_epoch_stable_sequence_number(object_id, epoch_id)
     }
 }
 
