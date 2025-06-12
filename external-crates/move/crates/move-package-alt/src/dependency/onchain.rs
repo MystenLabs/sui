@@ -36,7 +36,7 @@ impl TryFrom<bool> for ConstTrue {
     type Error = &'static str;
 
     fn try_from(value: bool) -> Result<Self, Self::Error> {
-        if value != true {
+        if !value {
             return Err("Expected the constant `true`");
         }
         Ok(Self)
