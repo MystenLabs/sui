@@ -143,7 +143,7 @@ impl ConflictResolution {
 
 /// Load a package from the store, and update the type origin map with the types in that
 /// package.
-pub(super) fn get_package(
+pub(crate) fn get_package(
     object_id: &ObjectID,
     store: &dyn PackageStore,
 ) -> Result<Rc<MovePackage>, ExecutionError> {
@@ -157,7 +157,7 @@ pub(super) fn get_package(
 
 // Add a package to the unification table, unifying it with any existing package in the table.
 // Errors if the packages cannot be unified (e.g., if one is exact and the other is not).
-pub(super) fn add_and_unify(
+pub(crate) fn add_and_unify(
     object_id: &ObjectID,
     store: &dyn PackageStore,
     resolution_table: &mut ResolutionTable,

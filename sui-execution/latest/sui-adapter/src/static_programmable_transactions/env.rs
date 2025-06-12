@@ -10,8 +10,8 @@ use crate::{
     execution_value::ExecutionState,
     static_programmable_transactions::{
         linkage::{
-            Linkage,
             analysis::{LinkageAnalysis, type_linkage},
+            resolved_linkage::RootedLinkage,
         },
         loading::ast::{
             self as L, Datatype, LoadedFunction, LoadedFunctionInstantiation, Type, Vector,
@@ -88,7 +88,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         }
     }
 
-    pub fn convert_linked_vm_error(&self, e: VMError, linkage: &Linkage) -> ExecutionError {
+    pub fn convert_linked_vm_error(&self, e: VMError, linkage: &RootedLinkage) -> ExecutionError {
         convert_vm_error(e, self.vm, self.linkable_store, Some(linkage))
     }
 
@@ -100,7 +100,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         &self,
         idx: usize,
         e: VMError,
-        linkage: &Linkage,
+        linkage: &RootedLinkage,
     ) -> ExecutionError {
         use move_core_types::vm_status::StatusCode;
         match e.major_status() {
@@ -124,7 +124,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
     pub fn module_definition(
         &self,
         module_id: &ModuleId,
-        linkage: &Linkage,
+        linkage: &RootedLinkage,
     ) -> Result<Arc<CompiledModule>, ExecutionError> {
         let linked_data_store = LinkedDataStore::new(linkage, self.linkable_store);
         self.vm
@@ -161,7 +161,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         module: String,
         function: String,
         type_arguments: Vec<Type>,
-        linkage: Linkage,
+        linkage: RootedLinkage,
     ) -> Result<LoadedFunction, ExecutionError> {
         let Some(original_id) = linkage.resolved_linkage.resolve_to_original_id(&package) else {
             invariant_violation!(
@@ -275,7 +275,10 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
     }
 
     /// Takes an adapter Type and returns a VM runtime Type and the linkage for it.
-    fn load_vm_type(&self, ty: &Type) -> Result<(vm_runtime_type::Type, Linkage), ExecutionError> {
+    fn load_vm_type(
+        &self,
+        ty: &Type,
+    ) -> Result<(vm_runtime_type::Type, RootedLinkage), ExecutionError> {
         let tag: TypeTag = ty.clone().try_into().map_err(|s| {
             ExecutionError::new_with_source(ExecutionErrorKind::VMInvariantViolation, s)
         })?;
@@ -286,11 +289,11 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
     fn load_vm_type_from_type_tag(
         &self,
         tag: &TypeTag,
-    ) -> Result<(vm_runtime_type::Type, Linkage), ExecutionError> {
+    ) -> Result<(vm_runtime_type::Type, RootedLinkage), ExecutionError> {
         let (addresses, link_context) = link_info_for_type_tag(tag)?;
         let ids: Vec<_> = addresses.into_iter().map(ObjectID::from).collect();
         let linkage = type_linkage(&ids, self.linkable_store)?;
-        let linkage = Linkage::new(link_context, linkage);
+        let linkage = RootedLinkage::new(link_context, linkage);
         let linked_store = LinkedDataStore::new(&linkage, self.linkable_store);
         self.vm
             .get_runtime()
@@ -303,7 +306,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
     fn adapter_type_from_vm_type(
         &self,
         vm_type: &vm_runtime_type::Type,
-        linkage: &Linkage,
+        linkage: &RootedLinkage,
     ) -> Result<Type, ExecutionError> {
         use vm_runtime_type as VRT;
 
@@ -402,7 +405,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
     fn load_vm_type_from_type_input(
         &self,
         ty: TypeInput,
-    ) -> Result<(vm_runtime_type::Type, Linkage), ExecutionError> {
+    ) -> Result<(vm_runtime_type::Type, RootedLinkage), ExecutionError> {
         fn to_type_tag_internal(ty: TypeInput) -> Result<TypeTag, ExecutionError> {
             Ok(match ty {
                 TypeInput::Bool => TypeTag::Bool,
@@ -473,7 +476,7 @@ fn convert_vm_error(
     error: VMError,
     vm: &MoveVM,
     store: &dyn PackageStore,
-    linkage: Option<&Linkage>,
+    linkage: Option<&RootedLinkage>,
 ) -> ExecutionError {
     use crate::error::convert_vm_error_impl;
     convert_vm_error_impl(

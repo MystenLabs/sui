@@ -13,7 +13,9 @@ use sui_types::{
     move_package::MovePackage,
 };
 
-use crate::static_programmable_transactions::linkage::{Linkage, analysis::type_linkage};
+use crate::static_programmable_transactions::linkage::{
+    analysis::type_linkage, resolved_linkage::RootedLinkage,
+};
 
 // A unifying trait that allows us to resolve a type to its defining ID as well as load packages.
 // Some move packages that can be "loaded" via this may not be objects just yet (e.g., if
@@ -35,7 +37,7 @@ pub trait PackageStore {
 pub fn linkage_for_object_type(
     store: &dyn PackageStore,
     object_type: MoveObjectType,
-) -> Result<Linkage, ExecutionError> {
+) -> Result<RootedLinkage, ExecutionError> {
     linkage_for_struct_tag(store, &StructTag::from(object_type))
 }
 
@@ -44,7 +46,7 @@ pub fn linkage_for_object_type(
 pub fn linkage_for_struct_tag(
     store: &dyn PackageStore,
     struct_tag: &StructTag,
-) -> Result<Linkage, ExecutionError> {
+) -> Result<RootedLinkage, ExecutionError> {
     let link_context = struct_tag.address;
     let ids: Vec<_> = struct_tag
         .all_addresses()
@@ -52,5 +54,5 @@ pub fn linkage_for_struct_tag(
         .map(ObjectID::from)
         .collect();
     let resolved_linkage = type_linkage(ids.as_slice(), store)?;
-    Ok(Linkage::new(link_context, resolved_linkage))
+    Ok(RootedLinkage::new(link_context, resolved_linkage))
 }

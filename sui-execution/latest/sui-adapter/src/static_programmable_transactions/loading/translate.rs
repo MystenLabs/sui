@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::static_programmable_transactions::{env::Env, linkage::Linkage, loading::ast as L};
+use crate::static_programmable_transactions::{
+    env::Env, linkage::resolved_linkage::RootedLinkage, loading::ast as L,
+};
 use move_core_types::language_storage::StructTag;
 use sui_types::{
     error::ExecutionError,
@@ -86,7 +88,7 @@ fn command(env: &Env, command: P::Command) -> Result<L::Command, ExecutionError>
                 type_arguments: ptype_arguments,
                 arguments,
             } = *pmc;
-            let linkage = Linkage::new(*package, resolved_linkage);
+            let linkage = RootedLinkage::new(*package, resolved_linkage);
             let type_arguments = ptype_arguments
                 .into_iter()
                 .enumerate()
