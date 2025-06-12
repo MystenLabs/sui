@@ -31,6 +31,13 @@ pub(crate) struct ProgrammableTransactionBlock {
     pub checkpoint_viewed_at: u64,
 }
 
+#[derive(Clone, Eq, PartialEq)]
+pub(crate) struct ProgrammableSystemTransactionBlock {
+    pub native: NativeProgrammableTransactionBlock,
+    /// The checkpoint sequence number this was viewed at.
+    pub checkpoint_viewed_at: u64,
+}
+
 pub(crate) type CInput = JsonCursor<ConsistentIndexCursor>;
 pub(crate) type CTxn = JsonCursor<ConsistentIndexCursor>;
 
@@ -200,6 +207,69 @@ pub(crate) struct TxResult {
     ix: Option<u16>,
 }
 
+mod programmable_transaction_block_impl {
+    use super::*;
+
+    pub(crate) async fn inputs(
+        native: &NativeProgrammableTransactionBlock,
+        checkpoint_viewed_at: u64,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CInput>,
+        last: Option<u64>,
+        before: Option<CInput>,
+    ) -> Result<Connection<String, TransactionInput>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+
+        let mut connection = Connection::new(false, false);
+        let Some((prev, next, _, cs)) =
+            page.paginate_consistent_indices(native.inputs.len(), checkpoint_viewed_at)?
+        else {
+            return Ok(connection);
+        };
+
+        connection.has_previous_page = prev;
+        connection.has_next_page = next;
+
+        for c in cs {
+            let input = TransactionInput::from(native.inputs[c.ix].clone(), c.c);
+            connection.edges.push(Edge::new(c.encode_cursor(), input));
+        }
+
+        Ok(connection)
+    }
+
+    /// The transaction commands, executed sequentially.
+    pub(crate) async fn transactions(
+        native: &NativeProgrammableTransactionBlock,
+        checkpoint_viewed_at: u64,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CTxn>,
+        last: Option<u64>,
+        before: Option<CTxn>,
+    ) -> Result<Connection<String, ProgrammableTransaction>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+
+        let mut connection = Connection::new(false, false);
+        let Some((prev, next, _, cs)) =
+            page.paginate_consistent_indices(native.commands.len(), checkpoint_viewed_at)?
+        else {
+            return Ok(connection);
+        };
+
+        connection.has_previous_page = prev;
+        connection.has_next_page = next;
+
+        for c in cs {
+            let txn = ProgrammableTransaction::from(native.commands[c.ix].clone(), c.c);
+            connection.edges.push(Edge::new(c.encode_cursor(), txn));
+        }
+
+        Ok(connection)
+    }
+}
+
 /// A user transaction that allows the interleaving of native commands (like transfer, split coins,
 /// merge coins, etc) and move calls, executed atomically.
 #[Object]
@@ -213,24 +283,16 @@ impl ProgrammableTransactionBlock {
         last: Option<u64>,
         before: Option<CInput>,
     ) -> Result<Connection<String, TransactionInput>> {
-        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-
-        let mut connection = Connection::new(false, false);
-        let Some((prev, next, _, cs)) =
-            page.paginate_consistent_indices(self.native.inputs.len(), self.checkpoint_viewed_at)?
-        else {
-            return Ok(connection);
-        };
-
-        connection.has_previous_page = prev;
-        connection.has_next_page = next;
-
-        for c in cs {
-            let input = TransactionInput::from(self.native.inputs[c.ix].clone(), c.c);
-            connection.edges.push(Edge::new(c.encode_cursor(), input));
-        }
-
-        Ok(connection)
+        programmable_transaction_block_impl::inputs(
+            &self.native,
+            self.checkpoint_viewed_at,
+            ctx,
+            first,
+            after,
+            last,
+            before,
+        )
+        .await
     }
 
     /// The transaction commands, executed sequentially.
@@ -242,27 +304,65 @@ impl ProgrammableTransactionBlock {
         last: Option<u64>,
         before: Option<CTxn>,
     ) -> Result<Connection<String, ProgrammableTransaction>> {
-        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-
-        let mut connection = Connection::new(false, false);
-        let Some((prev, next, _, cs)) = page
-            .paginate_consistent_indices(self.native.commands.len(), self.checkpoint_viewed_at)?
-        else {
-            return Ok(connection);
-        };
-
-        connection.has_previous_page = prev;
-        connection.has_next_page = next;
-
-        for c in cs {
-            let txn = ProgrammableTransaction::from(self.native.commands[c.ix].clone(), c.c);
-            connection.edges.push(Edge::new(c.encode_cursor(), txn));
-        }
-
-        Ok(connection)
+        programmable_transaction_block_impl::transactions(
+            &self.native,
+            self.checkpoint_viewed_at,
+            ctx,
+            first,
+            after,
+            last,
+            before,
+        )
+        .await
     }
 }
 
+/// ProgrammableSystemTransactionBlock is identical to ProgrammableTransactionBlock, but graphql
+/// does not allow multiple variants with the same type.
+#[Object]
+impl ProgrammableSystemTransactionBlock {
+    /// Input objects or primitive values.
+    async fn inputs(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CInput>,
+        last: Option<u64>,
+        before: Option<CInput>,
+    ) -> Result<Connection<String, TransactionInput>> {
+        programmable_transaction_block_impl::inputs(
+            &self.native,
+            self.checkpoint_viewed_at,
+            ctx,
+            first,
+            after,
+            last,
+            before,
+        )
+        .await
+    }
+
+    /// The transaction commands, executed sequentially.
+    async fn transactions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CTxn>,
+        last: Option<u64>,
+        before: Option<CTxn>,
+    ) -> Result<Connection<String, ProgrammableTransaction>> {
+        programmable_transaction_block_impl::transactions(
+            &self.native,
+            self.checkpoint_viewed_at,
+            ctx,
+            first,
+            after,
+            last,
+            before,
+        )
+        .await
+    }
+}
 /// A call to either an entry or a public Move function.
 #[Object]
 impl MoveCallTransaction {

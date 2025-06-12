@@ -10943,6 +10943,37 @@
                 ]
               }
             }
+          },
+          {
+            "description": "A series of commands where the results of one command can be used in future commands",
+            "type": "object",
+            "required": [
+              "inputs",
+              "kind",
+              "transactions"
+            ],
+            "properties": {
+              "inputs": {
+                "description": "Input objects or primitive values",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SuiCallArg"
+                }
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "ProgrammableSystemTransaction"
+                ]
+              },
+              "transactions": {
+                "description": "The transactions to be executed sequentially. A failure in any transaction will result in the failure of the entire programmable transaction block.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SuiTransaction"
+                }
+              }
+            }
           }
         ]
       },

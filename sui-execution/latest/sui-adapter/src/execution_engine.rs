@@ -689,7 +689,8 @@ mod checked {
                 .expect("ConsensusCommitPrologue cannot fail");
                 Ok((Mode::empty_results(), vec![]))
             }
-            TransactionKind::ProgrammableTransaction(pt) => {
+            TransactionKind::ProgrammableTransaction(pt)
+            | TransactionKind::ProgrammableSystemTransaction(pt) => {
                 programmable_transactions::execution::execute::<Mode>(
                     protocol_config,
                     metrics,
