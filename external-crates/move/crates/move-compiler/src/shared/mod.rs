@@ -855,6 +855,7 @@ impl Flags {
     }
 }
 
+/// Used by CLAP for parsing modes in fields
 fn parse_symbol(s: &str) -> Result<Symbol, String> {
     Ok(Symbol::from(s))
 }
