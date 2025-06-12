@@ -239,6 +239,22 @@ impl TransactionCertifier {
         );
         self.certifier_state.write().update_gc_round(gc_round);
     }
+
+    // If the blocks are finalized as part of a commit, this will be called to
+    // mark them as certified to prevent sending them to fastpath in the future.
+    pub(crate) fn mark_blocks_as_certified(&self, block_refs: &[BlockRef]) {
+        let mut certifier_state = self.certifier_state.write();
+        for block_ref in block_refs {
+            if let Some(vote_info) = certifier_state.votes.get_mut(block_ref) {
+                vote_info.is_certified = true;
+            } else {
+                debug_fatal!(
+                    "Block {} not found in certifier state but was part of a commit",
+                    block_ref
+                );
+            }
+        }
+    }
 }
 
 /// CertifierState keeps track of votes received by each transaction and block,

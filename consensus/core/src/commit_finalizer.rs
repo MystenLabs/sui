@@ -232,6 +232,15 @@ impl CommitFinalizer {
             }
         }
 
+        // Mark finalized blocks as certified in transaction certifier
+        // so that they are not sent on the fastpath again later.
+        let block_refs: Vec<_> = finalized_commits
+            .iter()
+            .flat_map(|commit| commit.blocks.iter().map(|block| block.reference()))
+            .collect();
+        self.transaction_certifier
+            .mark_blocks_as_certified(&block_refs);
+
         // GC TransactionCertifier state only with finalized commits, to ensure unfinalized transactions
         // can access their reject votes from TransactionCertifier.
         if let Some(last_commit) = finalized_commits.last() {
