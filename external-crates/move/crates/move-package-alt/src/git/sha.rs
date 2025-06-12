@@ -2,6 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt::Display;
+
 use serde::{Deserialize, Deserializer, Serialize};
 
 use super::errors::{ShaError, ShaResult};
@@ -34,7 +36,13 @@ impl TryFrom<String> for GitSha {
     }
 }
 
-impl AsRef<str> for &GitSha {
+impl Display for GitSha {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.inner.as_str())
+    }
+}
+
+impl AsRef<str> for GitSha {
     fn as_ref(&self) -> &str {
         self.inner.as_ref()
     }

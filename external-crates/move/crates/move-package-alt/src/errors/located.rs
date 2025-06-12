@@ -15,6 +15,18 @@ use serde_spanned::Spanned;
 
 use super::{FileHandle, PackageResult, TheFile};
 
+#[derive(Debug)]
+pub struct Location {
+    file: FileHandle,
+    range: Range<usize>,
+}
+
+impl Location {
+    pub fn new(file: FileHandle, range: Range<usize>) -> Self {
+        Self { file, range }
+    }
+}
+
 /// A located value contains both a file location and a span. Located values (and data structures
 /// that contain them) can only be deserialized inside of [with_file]; attempting to deserialize
 /// outside of `with_file` will panic
