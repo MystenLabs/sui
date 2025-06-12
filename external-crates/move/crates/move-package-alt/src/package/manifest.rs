@@ -5,6 +5,7 @@
 use std::{
     collections::BTreeMap,
     fmt::{self, Debug, Display, Formatter},
+    ops::Range,
     path::Path,
 };
 
@@ -37,12 +38,14 @@ type Digest = String;
 pub struct Manifest<F: MoveFlavor> {
     package: PackageMetadata<F>,
 
-    #[serde(default)]
+    // invariant: environments is nonempty
     environments: BTreeMap<EnvironmentName, F::EnvironmentID>,
 
     #[serde(default)]
     dependencies: BTreeMap<PackageName, ManifestDependency>,
+
     /// Replace dependencies for the given environment.
+    /// invariant: all keys have entries in `self.environments`
     #[serde(default)]
     dep_replacements:
         BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyReplacement>>,
@@ -93,14 +96,10 @@ impl<F: MoveFlavor> Manifest<F> {
         let contents = std::fs::read_to_string(&path)?;
 
         let (manifest, file_id) = TheFile::with_file(&path, toml_edit::de::from_str::<Self>)?;
+        let manifest = manifest?;
 
-        match manifest {
-            Ok(manifest) => {
-                manifest.validate_manifest(file_id)?;
-                Ok(manifest)
-            }
-            Err(err) => Err(err.into()),
-        }
+        manifest.validate_manifest(file_id)?;
+        Ok(manifest)
     }
 
     /// Validate the manifest contents, after deserialization.
@@ -130,6 +129,28 @@ impl<F: MoveFlavor> Manifest<F> {
             };
             err.emit()?;
             return Err(err.into());
+        }
+
+        if self.environments().is_empty() {
+            let err = ManifestError {
+                kind: ManifestErrorKind::NoEnvironments,
+                span: None,
+                handle,
+            };
+            err.emit()?;
+            return Err(err.into());
+        }
+
+        for (env, _) in self.dep_replacements.iter() {
+            if !self.environments().contains_key(env) {
+                let err = ManifestError {
+                    kind: ManifestErrorKind::MissingEnvironment { env: env.clone() },
+                    span: None, // TODO
+                    handle,
+                };
+                err.emit()?;
+                return Err(err.into());
+            }
         }
 
         Ok(())

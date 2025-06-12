@@ -2,5 +2,8 @@
 name = "example"
 edition = "2024"
 
+[environments]
+default = "default"
+
 [dependencies]
 foo = { r.abcdef = "" }
