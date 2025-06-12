@@ -213,5 +213,5 @@ impl ThConfig {
 }
 
 pub fn default_cells_per_mutex() -> usize {
-    1
+    2
 }
