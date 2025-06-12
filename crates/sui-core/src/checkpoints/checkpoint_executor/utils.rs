@@ -341,11 +341,12 @@ pub(crate) enum PipelineStage {
     FinalizeTransactions = 2,
     ProcessCheckpointData = 3,
     BuildDbBatch = 4,
-    CommitTransactionOutputs = 5,
-    FinalizeCheckpoint = 6,
-    UpdateRpcIndex = 7,
-    BumpHighestExecutedCheckpoint = 8,
-    End = 9,
+    WriteDbBatch = 5,
+    FlushCache = 6,
+    FinalizeCheckpoint = 7,
+    UpdateRpcIndex = 8,
+    BumpHighestExecutedCheckpoint = 9,
+    End = 10,
 }
 
 impl PipelineStage {
