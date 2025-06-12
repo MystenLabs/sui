@@ -370,36 +370,13 @@ mod tests {
         pruner_hi: u64,
     }
 
-    #[derive(Default)]
-    pub struct FailingBehavior {
-        /// Map of [from, to) -> remaining failure count before success
-        remaining_failures: HashMap<(u64, u64), usize>,
-    }
-
-    impl FailingBehavior {
-        pub fn new() -> Self {
-            Self::default()
-        }
-
-        /// Configure a range to fail the specified number of times before succeeding
-        pub fn with_range_failing(
-            mut self,
-            from: u64,
-            to_exclusive: u64,
-            failure_count: usize,
-        ) -> Self {
-            self.remaining_failures
-                .insert((from, to_exclusive), failure_count);
-            self
-        }
-    }
-
     #[derive(Clone)]
     pub struct MockStore {
         pub watermarks: Arc<Mutex<MockWatermark>>,
         /// Map of checkpoint sequence number to list of transaction sequence numbers.
         pub data: Arc<Mutex<HashMap<u64, Vec<u64>>>>,
-        pub failing_behavior: Arc<Mutex<FailingBehavior>>,
+        /// Map of [from, to) -> remaining failure count before success
+        pub remaining_failures: Arc<Mutex<HashMap<(u64, u64), usize>>>,
     }
 
     #[derive(Clone)]
@@ -498,10 +475,7 @@ mod tests {
     }
 
     #[derive(FieldCount)]
-    pub struct StoredData {
-        pub cp_sequence_number: u64,
-        pub tx_sequence_numbers: Vec<u64>,
-    }
+    pub struct StoredData {}
 
     pub struct DataPipeline;
 
@@ -510,21 +484,8 @@ mod tests {
 
         type Value = StoredData;
 
-        fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
-            let start_tx = checkpoint.checkpoint_summary.network_total_transactions as usize
-                - checkpoint.transactions.len();
-            let tx_sequence_numbers = checkpoint
-                .transactions
-                .iter()
-                .enumerate()
-                .map(|(i, _)| (start_tx + i) as u64)
-                .collect();
-            let value = StoredData {
-                cp_sequence_number: checkpoint.checkpoint_summary.sequence_number,
-                tx_sequence_numbers,
-            };
-
-            Ok(vec![value])
+        fn process(&self, _checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+            Ok(vec![])
         }
     }
 
@@ -534,12 +495,8 @@ mod tests {
 
         async fn commit<'a>(
             values: &[Self::Value],
-            conn: &mut MockConnection<'a>,
+            _conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
-            let mut data = conn.0.data.lock().unwrap();
-            for value in values {
-                data.insert(value.cp_sequence_number, value.tx_sequence_numbers.clone());
-            }
             Ok(values.len())
         }
 
@@ -551,10 +508,9 @@ mod tests {
         ) -> anyhow::Result<usize> {
             let should_fail = conn
                 .0
-                .failing_behavior
+                .remaining_failures
                 .lock()
                 .unwrap()
-                .remaining_failures
                 .get_mut(&(from, to_exclusive))
                 .is_some_and(|remaining| {
                     if *remaining > 0 {
@@ -731,7 +687,7 @@ mod tests {
         let store = MockStore {
             watermarks: Arc::new(Mutex::new(watermark)),
             data: Arc::new(Mutex::new(test_data.clone())),
-            failing_behavior: Arc::new(Mutex::new(FailingBehavior::new())),
+            remaining_failures: Arc::new(Mutex::new(HashMap::new())),
         };
 
         // Start the pruner
@@ -827,7 +783,7 @@ mod tests {
         let store = MockStore {
             watermarks: Arc::new(Mutex::new(watermark)),
             data: Arc::new(Mutex::new(test_data.clone())),
-            failing_behavior: Arc::new(Mutex::new(FailingBehavior::new())),
+            remaining_failures: Arc::new(Mutex::new(HashMap::new())),
         };
 
         // Start the pruner
@@ -909,13 +865,12 @@ mod tests {
         };
 
         // Configure failing behavior: range [1,2) should fail once before succeeding
-        let failing_behavior =
-            FailingBehavior::new().with_range_failing(1, 2, /* failure_count= */ 1);
-
+        let mut remaining_failures = HashMap::new();
+        remaining_failures.insert((1, 2), 1);
         let store = MockStore {
             watermarks: Arc::new(Mutex::new(watermark)),
             data: Arc::new(Mutex::new(test_data.clone())),
-            failing_behavior: Arc::new(Mutex::new(failing_behavior)),
+            remaining_failures: Arc::new(Mutex::new(remaining_failures)),
         };
 
         // Start the pruner
