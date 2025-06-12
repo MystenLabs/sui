@@ -519,6 +519,7 @@ mod test {
                         max_estimate_us: 1_500_000,
                         stored_observations_num_included_checkpoints: 10,
                         stored_observations_limit: rng.gen_range(1..=20),
+                        stake_weighted_median_threshold: 0,
                     },
                 ),
             ]

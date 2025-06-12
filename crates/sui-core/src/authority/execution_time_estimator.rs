@@ -483,11 +483,15 @@ pub struct ExecutionTimeEstimator {
 #[derive(Debug, Clone)]
 pub struct ConsensusObservations {
     observations: Vec<(u64 /* generation */, Option<Duration>)>, // keyed by authority index
-    stake_weighted_median: Duration,                             // cached value
+    stake_weighted_median: Option<Duration>,                     // cached value
 }
 
 impl ConsensusObservations {
-    fn update_stake_weighted_median(&mut self, committee: &Committee) {
+    fn update_stake_weighted_median(
+        &mut self,
+        committee: &Committee,
+        config: &ExecutionTimeEstimateParams,
+    ) {
         let mut stake_with_observations = 0;
         let sorted_observations: Vec<_> = self
             .observations
@@ -503,12 +507,19 @@ impl ConsensusObservations {
             .sorted()
             .collect();
 
+        // Don't use observations until we have received enough.
+        if stake_with_observations < config.stake_weighted_median_threshold {
+            self.stake_weighted_median = None;
+            return;
+        }
+
+        // Compute stake-weighted median.
         let median_stake = stake_with_observations / 2;
         let mut running_stake = 0;
         for (duration, authority_index) in sorted_observations {
             running_stake += committee.stake_by_index(authority_index).unwrap();
             if running_stake > median_stake {
-                self.stake_weighted_median = duration;
+                self.stake_weighted_median = Some(duration);
                 break;
             }
         }
@@ -538,7 +549,8 @@ impl ExecutionTimeEstimator {
             );
         }
         for observation in estimator.consensus_observations.values_mut() {
-            observation.update_stake_weighted_median(&estimator.committee);
+            observation
+                .update_stake_weighted_median(&estimator.committee, &estimator.protocol_params);
         }
         estimator
     }
@@ -601,7 +613,7 @@ impl ExecutionTimeEstimator {
                 empty_observations.resize(len, (0, None));
                 ConsensusObservations {
                     observations: empty_observations,
-                    stake_weighted_median: Duration::ZERO,
+                    stake_weighted_median: None,
                 }
             });
 
@@ -614,7 +626,7 @@ impl ExecutionTimeEstimator {
         *obs_generation = generation;
         *obs_duration = Some(duration);
         if !skip_update {
-            observations.update_stake_weighted_median(&self.committee);
+            observations.update_stake_weighted_median(&self.committee, &self.protocol_params);
         }
     }
 
@@ -629,7 +641,7 @@ impl ExecutionTimeEstimator {
                 let key = ExecutionTimeObservationKey::from_command(command);
                 self.consensus_observations
                     .get(&key)
-                    .map(|obs| obs.stake_weighted_median)
+                    .and_then(|obs| obs.stake_weighted_median)
                     .unwrap_or_else(|| key.default_duration())
                     // For native commands, adjust duration by length of command's inputs/outputs.
                     // This is sort of arbitrary, but hopefully works okay as a heuristic.
@@ -716,6 +728,7 @@ mod tests {
                         max_estimate_us: u64::MAX,
                         stored_observations_num_included_checkpoints: 10,
                         stored_observations_limit: u64::MAX,
+                        stake_weighted_median_threshold: 0,
                     },
                 ),
             );
@@ -850,6 +863,7 @@ mod tests {
                         max_estimate_us: u64::MAX,
                         stored_observations_num_included_checkpoints: 10,
                         stored_observations_limit: u64::MAX,
+                        stake_weighted_median_threshold: 0,
                     },
                 ),
             );
@@ -946,6 +960,7 @@ mod tests {
                         max_estimate_us: u64::MAX,
                         stored_observations_num_included_checkpoints: 10,
                         stored_observations_limit: u64::MAX,
+                        stake_weighted_median_threshold: 0,
                     },
                 ),
             );
@@ -1086,6 +1101,7 @@ mod tests {
                         max_estimate_us: u64::MAX,
                         stored_observations_num_included_checkpoints: 10,
                         stored_observations_limit: u64::MAX,
+                        stake_weighted_median_threshold: 0,
                     },
                 ),
             );
@@ -1192,11 +1208,17 @@ mod tests {
     }
 
     #[tokio::test]
+    // TODO-DNS add tests for min stake amt
     async fn test_stake_weighted_median() {
         telemetry_subscribers::init_for_testing();
 
         let (committee, _) =
             Committee::new_simple_test_committee_with_normalized_voting_power(vec![10, 20, 30, 40]);
+
+        let params = ExecutionTimeEstimateParams {
+            stake_weighted_median_threshold: 0,
+            ..Default::default()
+        };
 
         let mut tracker = ConsensusObservations {
             observations: vec![
@@ -1205,16 +1227,16 @@ mod tests {
                 (0, Some(Duration::from_secs(3))), // 30% stake
                 (0, Some(Duration::from_secs(4))), // 40% stake
             ],
-            stake_weighted_median: Duration::ZERO,
+            stake_weighted_median: None,
         };
-        tracker.update_stake_weighted_median(&committee);
+        tracker.update_stake_weighted_median(&committee, &params);
         // With stake weights [10,20,30,40]:
         // - Duration 1 covers 10% of stake
         // - Duration 2 covers 30% of stake (10+20)
         // - Duration 3 covers 60% of stake (10+20+30)
         // - Duration 4 covers 100% of stake
         // Median should be 3 since that's where we cross 50% of stake
-        assert_eq!(tracker.stake_weighted_median, Duration::from_secs(3));
+        assert_eq!(tracker.stake_weighted_median, Some(Duration::from_secs(3)));
 
         // Test duration sorting
         let mut tracker = ConsensusObservations {
@@ -1224,16 +1246,16 @@ mod tests {
                 (0, Some(Duration::from_secs(1))), // 30% stake
                 (0, Some(Duration::from_secs(2))), // 40% stake
             ],
-            stake_weighted_median: Duration::ZERO,
+            stake_weighted_median: None,
         };
-        tracker.update_stake_weighted_median(&committee);
+        tracker.update_stake_weighted_median(&committee, &params);
         // With sorted stake weights [30,40,10,20]:
         // - Duration 1 covers 30% of stake
         // - Duration 2 covers 70% of stake (30+40)
         // - Duration 3 covers 80% of stake (30+40+10)
         // - Duration 4 covers 100% of stake
         // Median should be 2 since that's where we cross 50% of stake
-        assert_eq!(tracker.stake_weighted_median, Duration::from_secs(2));
+        assert_eq!(tracker.stake_weighted_median, Some(Duration::from_secs(2)));
 
         // Test with one missing observation
         let mut tracker = ConsensusObservations {
@@ -1243,15 +1265,15 @@ mod tests {
                 (0, Some(Duration::from_secs(3))), // 30% stake
                 (0, Some(Duration::from_secs(4))), // 40% stake
             ],
-            stake_weighted_median: Duration::ZERO,
+            stake_weighted_median: None,
         };
-        tracker.update_stake_weighted_median(&committee);
+        tracker.update_stake_weighted_median(&committee, &params);
         // With missing observation for 20% stake:
         // - Duration 1 covers 10% of stake
         // - Duration 3 covers 40% of stake (10+30)
         // - Duration 4 covers 80% of stake (10+30+40)
         // Median should be 4 since that's where we pass half of available stake (80% / 2 == 40%)
-        assert_eq!(tracker.stake_weighted_median, Duration::from_secs(4));
+        assert_eq!(tracker.stake_weighted_median, Some(Duration::from_secs(4)));
 
         // Test with multiple missing observations
         let mut tracker = ConsensusObservations {
@@ -1261,14 +1283,14 @@ mod tests {
                 (0, None),                         // 30% stake (missing)
                 (0, None),                         // 40% stake (missing)
             ],
-            stake_weighted_median: Duration::ZERO,
+            stake_weighted_median: None,
         };
-        tracker.update_stake_weighted_median(&committee);
+        tracker.update_stake_weighted_median(&committee, &params);
         // With missing observations:
         // - Duration 1 covers 10% of stake
         // - Duration 2 covers 30% of stake (10+20)
         // Median should be 2 since that's where we cross half of available stake (40% / 2 == 20%)
-        assert_eq!(tracker.stake_weighted_median, Duration::from_secs(2));
+        assert_eq!(tracker.stake_weighted_median, Some(Duration::from_secs(2)));
 
         // Test with one observation
         let mut tracker = ConsensusObservations {
@@ -1278,11 +1300,11 @@ mod tests {
                 (0, Some(Duration::from_secs(3))), // 30% stake
                 (0, None),                         // 40% stake
             ],
-            stake_weighted_median: Duration::ZERO,
+            stake_weighted_median: None,
         };
-        tracker.update_stake_weighted_median(&committee);
+        tracker.update_stake_weighted_median(&committee, &params);
         // With only one observation, median should be that observation
-        assert_eq!(tracker.stake_weighted_median, Duration::from_secs(3));
+        assert_eq!(tracker.stake_weighted_median, Some(Duration::from_secs(3)));
 
         // Test with all same durations
         let mut tracker = ConsensusObservations {
@@ -1292,10 +1314,52 @@ mod tests {
                 (0, Some(Duration::from_secs(5))), // 30% stake
                 (0, Some(Duration::from_secs(5))), // 40% stake
             ],
-            stake_weighted_median: Duration::ZERO,
+            stake_weighted_median: None,
         };
-        tracker.update_stake_weighted_median(&committee);
-        assert_eq!(tracker.stake_weighted_median, Duration::from_secs(5));
+        tracker.update_stake_weighted_median(&committee, &params);
+        assert_eq!(tracker.stake_weighted_median, Some(Duration::from_secs(5)));
+    }
+
+    #[tokio::test]
+    async fn test_stake_weighted_median_threshold() {
+        telemetry_subscribers::init_for_testing();
+
+        let (committee, _) =
+            Committee::new_simple_test_committee_with_normalized_voting_power(vec![10, 20, 30, 40]);
+
+        // Test with threshold requiring at least 50% stake
+        let params = ExecutionTimeEstimateParams {
+            stake_weighted_median_threshold: 5000,
+            ..Default::default()
+        };
+
+        // Test with insufficient stake (only 30% have observations)
+        let mut tracker = ConsensusObservations {
+            observations: vec![
+                (0, Some(Duration::from_secs(1))), // 10% stake
+                (0, Some(Duration::from_secs(2))), // 20% stake
+                (0, None),                         // 30% stake (missing)
+                (0, None),                         // 40% stake (missing)
+            ],
+            stake_weighted_median: None,
+        };
+        tracker.update_stake_weighted_median(&committee, &params);
+        // Should not compute median since only 30% stake has observations (< 50% threshold)
+        assert_eq!(tracker.stake_weighted_median, None);
+
+        // Test with sufficient stake (60% have observations)
+        let mut tracker = ConsensusObservations {
+            observations: vec![
+                (0, Some(Duration::from_secs(1))), // 10% stake
+                (0, Some(Duration::from_secs(2))), // 20% stake
+                (0, Some(Duration::from_secs(3))), // 30% stake
+                (0, None),                         // 40% stake (missing)
+            ],
+            stake_weighted_median: None,
+        };
+        tracker.update_stake_weighted_median(&committee, &params);
+        // Should compute median since 60% stake has observations (>= 50% threshold)
+        assert_eq!(tracker.stake_weighted_median, Some(Duration::from_secs(3)));
     }
 
     #[tokio::test]
@@ -1315,6 +1379,7 @@ mod tests {
                 randomness_scalar: 0,
                 stored_observations_num_included_checkpoints: 10,
                 stored_observations_limit: u64::MAX,
+                stake_weighted_median_threshold: 0,
             },
             std::iter::empty(),
         );
