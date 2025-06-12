@@ -1126,6 +1126,9 @@ ids_created
 native_ids_created
 	fun
 	0x2::tx_context
+native_rgp
+	fun
+	0x2::tx_context
 native_gas_price
 	fun
 	0x2::tx_context

@@ -234,6 +234,37 @@ pub fn sponsor(
 }
 
 #[derive(Clone)]
+pub struct TxContextRGPCostParams {
+    pub tx_context_rgp_cost_base: InternalGas,
+}
+/***************************************************************************************************
+ * native fun native_rgp
+ * Implementation of the Move native function `fun native_rgp(): u64`
+ **************************************************************************************************/
+pub fn rgp(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.is_empty());
+
+    let tx_context_rgp_cost_params = context
+        .extensions_mut()
+        .get::<NativesCostTable>()?
+        .tx_context_rgp_cost_params
+        .clone();
+    native_charge_gas_early_exit!(context, tx_context_rgp_cost_params.tx_context_rgp_cost_base);
+
+    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut()?;
+    let rgp = transaction_context.rgp();
+
+    Ok(NativeResult::ok(
+        context.gas_used(),
+        smallvec![Value::u64(rgp)],
+    ))
+}
+#[derive(Clone)]
 pub struct TxContextGasPriceCostParams {
     pub tx_context_gas_price_cost_base: InternalGas,
 }
@@ -346,15 +377,19 @@ pub struct TxContextReplaceCostParams {
     pub tx_context_replace_cost_base: InternalGas,
 }
 /***************************************************************************************************
- * native fun native_replace
+ * native fun replace
  * Implementation of the Move native function
  * ```
- * fun native_replace(
- *   sender: address,
- *   tx_hash: vector<u8>,
- *   epoch: u64,
- *   epoch_timestamp_ms: u64,
- *   ids_created: u64,
+ * native fun replace(
+ *     sender: address,
+ *     tx_hash: vector<u8>,
+ *     epoch: u64,
+ *     epoch_timestamp_ms: u64,
+ *     ids_created: u64,
+ *     rgp: u64,
+ *     gas_price: u64,
+ *     gas_budget: u64,
+ *     sponsor: vector<address>,
  * )
  * ```
  * Used by all testing functions that have to change a value in the `TransactionContext`.
@@ -365,9 +400,10 @@ pub fn replace(
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 8);
+    debug_assert!(args.len() == 9);
 
-    let tx_context_replace_cost_params = context
+    // use the `TxContextReplaceCostParams` for the cost of this function
+    let tx_context_replace_cost_params: TxContextReplaceCostParams = context
         .extensions_mut()
         .get::<NativesCostTable>()?
         .tx_context_replace_cost_params
@@ -380,6 +416,7 @@ pub fn replace(
     let mut sponsor: Vec<AccountAddress> = pop_arg!(args, Vec<AccountAddress>);
     let gas_budget: u64 = pop_arg!(args, u64);
     let gas_price: u64 = pop_arg!(args, u64);
+    let rgp: u64 = pop_arg!(args, u64);
     let ids_created: u64 = pop_arg!(args, u64);
     let epoch_timestamp_ms: u64 = pop_arg!(args, u64);
     let epoch: u64 = pop_arg!(args, u64);
@@ -392,6 +429,7 @@ pub fn replace(
         epoch,
         epoch_timestamp_ms,
         ids_created,
+        rgp,
         gas_price,
         gas_budget,
         sponsor.pop(),
@@ -399,6 +437,7 @@ pub fn replace(
 
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }
+
 // Attempt to get the most recent created object ID when none has been created.
 // Lifted out of Move into this native function.
 const E_NO_IDS_CREATED: u64 = 1;

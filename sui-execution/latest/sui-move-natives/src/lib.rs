@@ -34,8 +34,8 @@ use self::{
     tx_context::{
         TxContextDeriveIdCostParams, TxContextEpochCostParams, TxContextEpochTimestampMsCostParams,
         TxContextFreshIdCostParams, TxContextGasBudgetCostParams, TxContextGasPriceCostParams,
-        TxContextIdsCreatedCostParams, TxContextReplaceCostParams, TxContextSenderCostParams,
-        TxContextSponsorCostParams,
+        TxContextIdsCreatedCostParams, TxContextRGPCostParams, TxContextReplaceCostParams,
+        TxContextSenderCostParams, TxContextSponsorCostParams,
     },
     types::TypesIsOneTimeWitnessCostParams,
     validator::ValidatorValidateMetadataBcsCostParams,
@@ -130,6 +130,7 @@ pub struct NativesCostTable {
     pub tx_context_epoch_cost_params: TxContextEpochCostParams,
     pub tx_context_epoch_timestamp_ms_cost_params: TxContextEpochTimestampMsCostParams,
     pub tx_context_sponsor_cost_params: TxContextSponsorCostParams,
+    pub tx_context_rgp_cost_params: TxContextRGPCostParams,
     pub tx_context_gas_price_cost_params: TxContextGasPriceCostParams,
     pub tx_context_gas_budget_cost_params: TxContextGasBudgetCostParams,
     pub tx_context_ids_created_cost_params: TxContextIdsCreatedCostParams,
@@ -408,6 +409,12 @@ impl NativesCostTable {
                 } else {
                     DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST.into()
                 },
+            },
+            tx_context_rgp_cost_params: TxContextRGPCostParams {
+                tx_context_rgp_cost_base: protocol_config
+                    .tx_context_rgp_cost_base_as_option()
+                    .unwrap_or(DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST)
+                    .into(),
             },
             tx_context_gas_price_cost_params: TxContextGasPriceCostParams {
                 tx_context_gas_price_cost_base: if protocol_config.move_native_context() {
@@ -1152,6 +1159,7 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "native_sponsor",
             make_native!(tx_context::sponsor),
         ),
+        ("tx_context", "native_rgp", make_native!(tx_context::rgp)),
         (
             "tx_context",
             "native_gas_price",

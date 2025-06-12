@@ -77,6 +77,10 @@ native fun native_ids_created(): u64;
 
 #[allow(unused_function)]
 // native function to retrieve gas price, currently not exposed
+native fun native_rgp(): u64;
+
+#[allow(unused_function)]
+// native function to retrieve gas price, currently not exposed
 native fun native_gas_price(): u64;
 
 #[allow(unused_function)]
@@ -101,6 +105,7 @@ public fun new(
         epoch,
         epoch_timestamp_ms,
         ids_created,
+        native_rgp(),
         native_gas_price(),
         native_gas_budget(),
         native_sponsor(),
@@ -165,6 +170,7 @@ public fun increment_epoch_number(self: &mut TxContext) {
         epoch,
         native_epoch_timestamp_ms(),
         native_ids_created(),
+        native_rgp(),
         native_gas_price(),
         native_gas_budget(),
         native_sponsor(),
@@ -180,6 +186,7 @@ public fun increment_epoch_timestamp(self: &mut TxContext, delta_ms: u64) {
         native_epoch(),
         epoch_timestamp_ms,
         native_ids_created(),
+        native_rgp(),
         native_gas_price(),
         native_gas_budget(),
         native_sponsor(),
@@ -199,6 +206,7 @@ native fun replace(
     epoch: u64,
     epoch_timestamp_ms: u64,
     ids_created: u64,
+    rgp: u64,
     gas_price: u64,
     gas_budget: u64,
     sponsor: vector<address>,

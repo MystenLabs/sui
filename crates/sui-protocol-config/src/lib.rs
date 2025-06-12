@@ -1210,6 +1210,7 @@ pub struct ProtocolConfig {
     tx_context_epoch_cost_base: Option<u64>,
     tx_context_epoch_timestamp_ms_cost_base: Option<u64>,
     tx_context_sponsor_cost_base: Option<u64>,
+    tx_context_rgp_cost_base: Option<u64>,
     tx_context_gas_price_cost_base: Option<u64>,
     tx_context_gas_budget_cost_base: Option<u64>,
     tx_context_ids_created_cost_base: Option<u64>,
@@ -2351,6 +2352,7 @@ impl ProtocolConfig {
             tx_context_epoch_cost_base: None,
             tx_context_epoch_timestamp_ms_cost_base: None,
             tx_context_sponsor_cost_base: None,
+            tx_context_rgp_cost_base: None,
             tx_context_gas_price_cost_base: None,
             tx_context_gas_budget_cost_base: None,
             tx_context_ids_created_cost_base: None,
@@ -3715,6 +3717,7 @@ impl ProtocolConfig {
                 }
                 86 => {
                     cfg.feature_flags.type_tags_in_object_runtime = true;
+                    cfg.tx_context_rgp_cost_base = Some(30);
                 }
                 // Use this template when making changes:
                 //
