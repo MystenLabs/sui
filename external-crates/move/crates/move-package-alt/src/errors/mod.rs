@@ -3,13 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod lockfile_error;
-mod manifest_error;
 use append_only_vec::AppendOnlyVec;
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::files::SimpleFiles;
 pub use lockfile_error::LockfileError;
-pub use manifest_error::ManifestError;
-pub use manifest_error::ManifestErrorKind;
 
 mod located;
 mod thefile;
@@ -31,6 +28,7 @@ use thiserror::Error;
 
 use crate::dependency::external::ResolverError;
 use crate::git::GitError;
+use crate::package::manifest::ManifestError;
 use crate::package::paths::PackagePathError;
 
 /// Result type for package operations
