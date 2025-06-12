@@ -45,11 +45,12 @@ use serde::ser::Serializer;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::{serde_as, Bytes};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
 use std::fmt::{self, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
+use parking_lot::{RwLock};
 use strum::EnumString;
 use tracing::{instrument, warn};
 
@@ -548,6 +549,21 @@ pub trait SuiAuthoritySignature {
         T: Serialize;
 }
 
+static KEY_CACHE: std::sync::LazyLock<RwLock<HashMap<AuthorityPublicKeyBytes, AuthorityPublicKey>>> = std::sync::LazyLock::new(||Default::default());
+
+fn parse_public_key_cached(author: AuthorityPublicKeyBytes) -> AuthorityPublicKey {
+    if let Some(cached) = KEY_CACHE.read().get(&author).cloned() {
+        return cached;
+    }
+    let public_key = AuthorityPublicKey::try_from(author.clone()).map_err(|_| {
+        SuiError::KeyConversionError(
+            "Failed to serialize public key bytes to valid public key".to_string(),
+        )
+    }).unwrap();
+    KEY_CACHE.write().insert(author, public_key.clone());
+    public_key
+}
+
 impl SuiAuthoritySignature for AuthoritySignature {
     #[instrument(level = "trace", skip_all)]
     fn new_secure<T>(value: &IntentMessage<T>, epoch: &EpochId, secret: &dyn Signer<Self>) -> Self
@@ -573,11 +589,7 @@ impl SuiAuthoritySignature for AuthoritySignature {
         let mut message = bcs::to_bytes(&value).expect("Message serialization should not fail");
         epoch.write(&mut message);
 
-        let public_key = AuthorityPublicKey::try_from(author).map_err(|_| {
-            SuiError::KeyConversionError(
-                "Failed to serialize public key bytes to valid public key".to_string(),
-            )
-        })?;
+        let public_key = parse_public_key_cached(author);
         public_key
             .verify(&message[..], self)
             .map_err(|e| SuiError::InvalidSignature {
