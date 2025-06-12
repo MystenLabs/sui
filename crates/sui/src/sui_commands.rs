@@ -596,9 +596,6 @@ impl SuiCommand {
                         }
                         .build(&rerooted_path)?;
 
-                        // check for conflicts on published-at address in toml vs lock
-                        pkg.published_at.clone()?;
-
                         let with_unpublished_deps = build.with_unpublished_dependencies;
 
                         check_conflicting_addresses(&pkg.dependency_ids.conflicting, true)?;
