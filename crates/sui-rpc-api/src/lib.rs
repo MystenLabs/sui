@@ -29,7 +29,7 @@ pub use config::Config;
 pub use error::{
     CheckpointNotFoundError, ErrorDetails, ErrorReason, ObjectNotFoundError, Result, RpcError,
 };
-pub use metrics::RpcMetrics;
+pub use metrics::{RpcMetrics, RpcMetricsMakeCallbackHandler};
 pub use reader::TransactionNotFoundError;
 pub use service::protocol_config::config_to_proto;
 
