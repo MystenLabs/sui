@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use prometheus::Registry;
 use sui_kvstore::{BigTableClient, KeyValueStoreReader};
 use sui_rpc_api::proto::rpc::v2beta::{
     ledger_service_server::LedgerService, BatchGetObjectsRequest, BatchGetObjectsResponse,
@@ -12,6 +13,7 @@ use sui_rpc_api::proto::timestamp_ms_to_proto;
 use sui_rpc_api::{CheckpointNotFoundError, RpcError, ServerVersion};
 use sui_sdk_types::CheckpointDigest;
 use sui_types::digests::ChainIdentifier;
+use sui_types::message_envelope::Message;
 
 mod get_checkpoint;
 mod get_epoch;
@@ -23,6 +25,34 @@ pub struct KvRpcServer {
     chain_id: ChainIdentifier,
     client: BigTableClient,
     server_version: Option<ServerVersion>,
+}
+
+impl KvRpcServer {
+    pub async fn new(
+        instance_id: String,
+        server_version: Option<ServerVersion>,
+        registry: &Registry,
+    ) -> anyhow::Result<Self> {
+        let mut client = BigTableClient::new_remote(
+            instance_id,
+            false,
+            None,
+            "sui-kv-rpc".to_string(),
+            Some(registry),
+        )
+        .await?;
+        let genesis = client
+            .get_checkpoints(&[0])
+            .await?
+            .pop()
+            .expect("failed to fetch genesis checkpoint from the KV store");
+        let chain_id = ChainIdentifier::from(genesis.summary.digest());
+        Ok(Self {
+            chain_id,
+            client,
+            server_version,
+        })
+    }
 }
 
 #[tonic::async_trait]

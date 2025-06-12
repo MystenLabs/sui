@@ -14937,11 +14937,19 @@ dependencies = [
 name = "sui-kv-rpc"
 version = "1.51.0"
 dependencies = [
+ "anyhow",
+ "bin-version",
+ "clap",
+ "mysten-metrics",
+ "mysten-network",
+ "prometheus",
  "sui-kvstore",
  "sui-protocol-config",
  "sui-rpc-api",
  "sui-sdk-types",
  "sui-types",
+ "telemetry-subscribers",
+ "tokio",
  "tonic 0.13.1",
 ]
 

@@ -7,9 +7,17 @@ edition = "2021"
 version.workspace = true
 
 [dependencies]
+anyhow.workspace = true
+bin-version.workspace = true
+clap.workspace = true
+prometheus.workspace = true
+mysten-metrics.workspace = true
+mysten-network.workspace = true
 sui-kvstore.workspace = true
 sui-rpc-api.workspace = true
 sui-types.workspace = true
 sui-sdk-types.workspace = true
+telemetry-subscribers.workspace = true
+tokio.workspace = true
 tonic.workspace = true
 sui-protocol-config.workspace = true
