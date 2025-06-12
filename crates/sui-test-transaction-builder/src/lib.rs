@@ -37,6 +37,7 @@ pub struct TestTransactionBuilder {
 
 impl TestTransactionBuilder {
     pub fn new(sender: SuiAddress, gas_object: ObjectRef, gas_price: u64) -> Self {
+        assert!(sender != SuiAddress::ZERO);
         Self {
             test_data: TestTransactionData::Empty,
             sender,

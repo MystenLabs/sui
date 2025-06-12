@@ -84,7 +84,7 @@ pub fn execute_transaction_to_effects(
     let epoch = expected_effects.executed_epoch();
     let epoch_data = epoch_store.epoch_info(epoch)?;
     let epoch_start_timestamp = epoch_data.start_timestamp;
-    let gas_status = if txn_data.kind().is_system_tx() {
+    let gas_status = if txn_data.is_system_tx() {
         SuiGasStatus::new_unmetered()
     } else {
         SuiGasStatus::new(

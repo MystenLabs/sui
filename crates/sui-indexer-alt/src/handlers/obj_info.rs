@@ -199,8 +199,7 @@ impl TryInto<StoredObjInfo> for &ProcessedObjInfo {
 mod tests {
     use sui_indexer_alt_framework::{
         types::{
-            base_types::{dbg_addr, SequenceNumber},
-            object::Owner,
+            base_types::SequenceNumber, object::Owner,
             test_checkpoint_data_builder::TestCheckpointDataBuilder,
         },
         Indexer,
@@ -508,7 +507,10 @@ mod tests {
 
         builder = builder
             .start_transaction(0)
-            .change_object_owner(0, Owner::ObjectOwner(dbg_addr(0)))
+            .change_object_owner(
+                0,
+                Owner::ObjectOwner(TestCheckpointDataBuilder::derive_address(0)),
+            )
             .finish_transaction();
         let checkpoint = builder.build_checkpoint();
         let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
@@ -555,7 +557,7 @@ mod tests {
                 0,
                 Owner::ConsensusAddressOwner {
                     start_version: SequenceNumber::from_u64(1),
-                    owner: dbg_addr(0),
+                    owner: TestCheckpointDataBuilder::derive_address(0),
                 },
             )
             .finish_transaction();

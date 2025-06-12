@@ -8,7 +8,7 @@ use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_test_transaction_builder::publish_basics_package_and_make_party_object;
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{dbg_addr, SuiAddress};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::object::Owner;
 use sui_types::transaction::{CallArg, ObjectArg};
@@ -774,7 +774,7 @@ async fn party_coin_grpc() {
     // Make a transaction to transfer 1 gas coin that is Address owned and 1 gas coin that is
     // ConsensusAddress owned
     let (sender, gas) = cluster.wallet.get_one_account().await.unwrap();
-    let recipient = SuiAddress::ZERO;
+    let recipient = dbg_addr(1);
     let gas_coin = gas[0];
     let party_coin = gas[1];
     let owned_coin = gas[2];

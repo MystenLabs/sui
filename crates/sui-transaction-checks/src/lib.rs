@@ -62,7 +62,7 @@ mod checked {
             gas,
             transaction.gas_budget(),
             transaction.gas_price(),
-            transaction.kind(),
+            transaction,
         )
     }
 
@@ -162,13 +162,6 @@ mod checked {
         _receiving_objects: ReceivingObjects,
     ) -> SuiResult<CheckedInputObjects> {
         kind.validity_check(config)?;
-        if kind.is_system_tx() {
-            return Err(UserInputError::Unsupported(format!(
-                "Transaction kind {} is not supported in dev-inspect",
-                kind
-            ))
-            .into());
-        }
         let mut used_objects: HashSet<SuiAddress> = HashSet::new();
         for input_object in input_objects.iter() {
             let Some(object) = input_object.as_object() else {
@@ -337,9 +330,9 @@ mod checked {
         gas: &[ObjectRef],
         gas_budget: u64,
         gas_price: u64,
-        tx_kind: &TransactionKind,
+        tx: &TransactionData,
     ) -> SuiResult<SuiGasStatus> {
-        if tx_kind.is_system_tx() {
+        if tx.is_system_tx() {
             Ok(SuiGasStatus::new_unmetered())
         } else {
             let gas_status =

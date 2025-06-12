@@ -693,7 +693,9 @@ impl TestCheckpointDataBuilder {
 
     /// Derive an address from an index.
     pub fn derive_address(address_idx: u8) -> SuiAddress {
-        dbg_addr(address_idx)
+        assert!(address_idx < 255);
+        // do not generate the 0x0 address, as it is reserved for system transactions
+        dbg_addr(address_idx + 1)
     }
 
     /// Add a shared input to the transaction, being accessed from the currently recorded live
