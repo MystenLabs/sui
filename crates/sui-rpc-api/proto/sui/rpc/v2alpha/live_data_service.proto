@@ -8,12 +8,8 @@ package sui.rpc.v2alpha;
 import "google/protobuf/field_mask.proto";
 import "google/protobuf/struct.proto";
 import "sui/rpc/v2beta/argument.proto";
-import "sui/rpc/v2beta/balance_change.proto";
 import "sui/rpc/v2beta/bcs.proto";
-import "sui/rpc/v2beta/effects.proto";
-import "sui/rpc/v2beta/event.proto";
 import "sui/rpc/v2beta/executed_transaction.proto";
-import "sui/rpc/v2beta/object.proto";
 import "sui/rpc/v2beta/owner.proto";
 import "sui/rpc/v2beta/transaction.proto";
 
@@ -153,7 +149,8 @@ message SimulateTransactionRequest {
   optional sui.rpc.v2beta.Transaction transaction = 1;
   optional google.protobuf.FieldMask read_mask = 2;
 
-  enum VmChecks {
+  // buf:lint:ignore ENUM_ZERO_VALUE_SUFFIX
+  enum VmChecks { 
     //VM_CHECKS_UNKNOWN = 0;
     ENABLED = 0;
     DISABLED = 1;

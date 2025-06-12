@@ -80,7 +80,6 @@ pub fn resolve_transaction(
         commands,
         unresolved_transaction.gas_payment.as_ref(),
     )
-    .map_err(Into::into)
 }
 
 pub(super) struct NormalizedPackages {

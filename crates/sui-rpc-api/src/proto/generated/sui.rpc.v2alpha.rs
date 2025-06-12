@@ -192,6 +192,7 @@ pub struct SimulateTransactionRequest {
 }
 /// Nested message and enum types in `SimulateTransactionRequest`.
 pub mod simulate_transaction_request {
+    /// buf:lint:ignore ENUM_ZERO_VALUE_SUFFIX
     #[derive(
         Clone,
         Copy,
