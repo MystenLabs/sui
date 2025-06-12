@@ -594,7 +594,7 @@ impl AuthorityEpochTables {
         use typed_store::tidehunter_util::{
             default_cells_per_mutex, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
         };
-        const MUTEXES: usize = 1024;
+        const MUTEXES: usize = 4 * 1024;
         let mut digest_prefix = vec![0; 8];
         digest_prefix[7] = 32;
         const VALUE_CACHE_SIZE: usize = 5000;

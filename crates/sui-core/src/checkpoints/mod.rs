@@ -210,7 +210,7 @@ impl CheckpointStoreTables {
         use typed_store::tidehunter_util::{
             default_cells_per_mutex, KeySpaceConfig, KeyType, ThConfig,
         };
-        const MUTEXES: usize = 1024;
+        const MUTEXES: usize = 4 * 1024;
         let u64_sequence_key = KeyType::prefix_uniform(6, 0);
         let override_dirty_keys_config =
             KeySpaceConfig::new()
