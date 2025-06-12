@@ -1,0 +1,6510 @@
+Command `summary -o yaml`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING summaries
+
+Summary generation successful. Summaries stored in 'package_summaries'
+External Command `cat package_summaries/std/*.yaml`:
+---
+doc: " Provides a way to get address length since it's a\n platform-specific parameter."
+immediate_dependencies: []
+attributes: []
+functions:
+  length:
+    source_index: 0
+    index: 0
+    doc: " Should be converted to a native function.\n Current implementation only works for Sui."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters: []
+    return_:
+      - u64
+structs: {}
+enums: {}
+---
+doc: " The `ASCII` module defines basic string and char newtypes in Move that verify\n that characters are valid ASCII, and that strings consist of only valid ASCII characters."
+immediate_dependencies:
+  - address: std
+    name: option
+  - address: std
+    name: vector
+attributes: []
+functions:
+  char:
+    source_index: 0
+    index: 0
+    doc: " Convert a `byte` into a `Char` that is checked to make sure it is valid ASCII."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: byte
+        type_: u8
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: ascii
+          name: Char
+          type_arguments: []
+  string:
+    source_index: 1
+    index: 1
+    doc: " Convert a vector of bytes `bytes` into an `String`. Aborts if\n `bytes` contains non-ASCII characters."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: bytes
+        type_:
+          vector: u8
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: ascii
+          name: String
+          type_arguments: []
+  try_string:
+    source_index: 2
+    index: 2
+    doc: " Convert a vector of bytes `bytes` into an `String`. Returns\n `Some(<ascii_string>)` if the `bytes` contains all valid ASCII\n characters. Otherwise returns `None`."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: bytes
+        type_:
+          vector: u8
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - Datatype:
+                module:
+                  address: std
+                  name: ascii
+                name: String
+                type_arguments: []
+  all_characters_printable:
+    source_index: 3
+    index: 3
+    doc: " Returns `true` if all characters in `string` are printable characters\n Returns `false` otherwise. Not all `String`s are printable strings."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: string
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: ascii
+                name: String
+                type_arguments: []
+    return_:
+      - bool
+  push_char:
+    source_index: 4
+    index: 4
+    doc: " Push a `Char` to the end of the `string`."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: string
+        type_:
+          Reference:
+            - true
+            - Datatype:
+                module:
+                  address: std
+                  name: ascii
+                name: String
+                type_arguments: []
+      - name: char
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: ascii
+            name: Char
+            type_arguments: []
+    return_: []
+  pop_char:
+    source_index: 5
+    index: 5
+    doc: " Pop a `Char` from the end of the `string`."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: string
+        type_:
+          Reference:
+            - true
+            - Datatype:
+                module:
+                  address: std
+                  name: ascii
+                name: String
+                type_arguments: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: ascii
+          name: Char
+          type_arguments: []
+  length:
+    source_index: 6
+    index: 6
+    doc: " Returns the length of the `string` in bytes."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: string
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: ascii
+                name: String
+                type_arguments: []
+    return_:
+      - u64
+  append:
+    source_index: 7
+    index: 7
+    doc: " Append the `other` string to the end of `string`."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: string
+        type_:
+          Reference:
+            - true
+            - Datatype:
+                module:
+                  address: std
+                  name: ascii
+                name: String
+                type_arguments: []
+      - name: other
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: ascii
+            name: String
+            type_arguments: []
+    return_: []
+  insert:
+    source_index: 8
+    index: 8
+    doc: " Insert the `other` string at the `at` index of `string`."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: s
+        type_:
+          Reference:
+            - true
+            - Datatype:
+                module:
+                  address: std
+                  name: ascii
+                name: String
+                type_arguments: []
+      - name: at
+        type_: u64
+      - name: o
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: ascii
+            name: String
+            type_arguments: []
+    return_: []
+  substring:
+    source_index: 9
+    index: 9
+    doc: " Copy the slice of the `string` from `i` to `j` into a new `String`."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: string
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: ascii
+                name: String
+                type_arguments: []
+      - name: i
+        type_: u64
+      - name: j
+        type_: u64
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: ascii
+          name: String
+          type_arguments: []
+  as_bytes:
+    source_index: 10
+    index: 10
+    doc: " Get the inner bytes of the `string` as a reference"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: string
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: ascii
+                name: String
+                type_arguments: []
+    return_:
+      - Reference:
+          - false
+          - vector: u8
+  into_bytes:
+    source_index: 11
+    index: 11
+    doc: " Unpack the `string` to get its backing bytes"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: string
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: ascii
+            name: String
+            type_arguments: []
+    return_:
+      - vector: u8
+  byte:
+    source_index: 12
+    index: 12
+    doc: " Unpack the `char` into its underlying bytes."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: char
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: ascii
+            name: Char
+            type_arguments: []
+    return_:
+      - u8
+  is_valid_char:
+    source_index: 13
+    index: 13
+    doc: " Returns `true` if `b` is a valid ASCII character.\n Returns `false` otherwise."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: b
+        type_: u8
+    return_:
+      - bool
+  is_printable_char:
+    source_index: 14
+    index: 14
+    doc: " Returns `true` if `byte` is a printable ASCII character.\n Returns `false` otherwise."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: byte
+        type_: u8
+    return_:
+      - bool
+  is_empty:
+    source_index: 15
+    index: 15
+    doc: " Returns `true` if `string` is empty."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: string
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: ascii
+                name: String
+                type_arguments: []
+    return_:
+      - bool
+  to_uppercase:
+    source_index: 16
+    index: 16
+    doc: " Convert a `string` to its uppercase equivalent."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: string
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: ascii
+                name: String
+                type_arguments: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: ascii
+          name: String
+          type_arguments: []
+  to_lowercase:
+    source_index: 17
+    index: 17
+    doc: " Convert a `string` to its lowercase equivalent."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: string
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: ascii
+                name: String
+                type_arguments: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: ascii
+          name: String
+          type_arguments: []
+  index_of:
+    source_index: 18
+    index: 18
+    doc: " Computes the index of the first occurrence of the `substr` in the `string`.\n Returns the length of the `string` if the `substr` is not found.\n Returns 0 if the `substr` is empty."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: string
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: ascii
+                name: String
+                type_arguments: []
+      - name: substr
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: ascii
+                name: String
+                type_arguments: []
+    return_:
+      - u64
+  char_to_uppercase:
+    source_index: 19
+    index: 19
+    doc: " Convert a `char` to its lowercase equivalent."
+    attributes: []
+    visibility: Private
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: byte
+        type_: u8
+    return_:
+      - u8
+  char_to_lowercase:
+    source_index: 20
+    index: 20
+    doc: " Convert a `char` to its lowercase equivalent."
+    attributes: []
+    visibility: Private
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: byte
+        type_: u8
+    return_:
+      - u8
+structs:
+  String:
+    index: 0
+    doc: " The `String` struct holds a vector of bytes that all represent\n valid ASCII characters. Note that these ASCII characters may not all\n be printable. To determine if a `String` contains only \"printable\"\n characters you should use the `all_characters_printable` predicate\n defined in this module."
+    attributes: []
+    abilities:
+      - Copy
+      - Drop
+      - Store
+    type_parameters: []
+    fields:
+      positional_fields: false
+      fields:
+        bytes:
+          index: 0
+          doc: ~
+          type_:
+            vector: u8
+  Char:
+    index: 1
+    doc: " An ASCII character."
+    attributes: []
+    abilities:
+      - Copy
+      - Drop
+      - Store
+    type_parameters: []
+    fields:
+      positional_fields: false
+      fields:
+        byte:
+          index: 0
+          doc: ~
+          type_: u8
+enums: {}
+---
+doc: " Utility for converting a Move value to its binary representation in BCS (Binary Canonical\n Serialization). BCS is the binary encoding for Move resources and other non-module values\n published on-chain. See https://github.com/diem/bcs#binary-canonical-serialization-bcs for more\n details on BCS."
+immediate_dependencies: []
+attributes: []
+functions:
+  to_bytes:
+    source_index: 0
+    index: 0
+    doc: " Return the binary representation of `v` in BCS (Binary Canonical Serialization) format"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: MoveValue
+        constraints: []
+    parameters:
+      - name: v
+        type_:
+          Reference:
+            - false
+            - NamedTypeParameter: MoveValue
+    return_:
+      - vector: u8
+structs: {}
+enums: {}
+---
+doc: ~
+immediate_dependencies: []
+attributes: []
+functions:
+  new:
+    source_index: 0
+    index: 0
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: length
+        type_: u64
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: bit_vector
+          name: BitVector
+          type_arguments: []
+  set:
+    source_index: 1
+    index: 1
+    doc: " Set the bit at `bit_index` in the `bitvector` regardless of its previous state."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: bitvector
+        type_:
+          Reference:
+            - true
+            - Datatype:
+                module:
+                  address: std
+                  name: bit_vector
+                name: BitVector
+                type_arguments: []
+      - name: bit_index
+        type_: u64
+    return_: []
+  unset:
+    source_index: 2
+    index: 2
+    doc: " Unset the bit at `bit_index` in the `bitvector` regardless of its previous state."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: bitvector
+        type_:
+          Reference:
+            - true
+            - Datatype:
+                module:
+                  address: std
+                  name: bit_vector
+                name: BitVector
+                type_arguments: []
+      - name: bit_index
+        type_: u64
+    return_: []
+  shift_left:
+    source_index: 3
+    index: 3
+    doc: " Shift the `bitvector` left by `amount`. If `amount` is greater than the\n bitvector's length the bitvector will be zeroed out."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: bitvector
+        type_:
+          Reference:
+            - true
+            - Datatype:
+                module:
+                  address: std
+                  name: bit_vector
+                name: BitVector
+                type_arguments: []
+      - name: amount
+        type_: u64
+    return_: []
+  is_index_set:
+    source_index: 4
+    index: 4
+    doc: " Return the value of the bit at `bit_index` in the `bitvector`. `true`\n represents \"1\" and `false` represents a 0"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: bitvector
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: bit_vector
+                name: BitVector
+                type_arguments: []
+      - name: bit_index
+        type_: u64
+    return_:
+      - bool
+  length:
+    source_index: 5
+    index: 5
+    doc: " Return the length (number of usable bits) of this bitvector"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: bitvector
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: bit_vector
+                name: BitVector
+                type_arguments: []
+    return_:
+      - u64
+  longest_set_sequence_starting_at:
+    source_index: 6
+    index: 6
+    doc: " Returns the length of the longest sequence of set bits starting at (and\n including) `start_index` in the `bitvector`. If there is no such\n sequence, then `0` is returned."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: bitvector
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: bit_vector
+                name: BitVector
+                type_arguments: []
+      - name: start_index
+        type_: u64
+    return_:
+      - u64
+structs:
+  BitVector:
+    index: 0
+    doc: ~
+    attributes: []
+    abilities:
+      - Copy
+      - Drop
+      - Store
+    type_parameters: []
+    fields:
+      positional_fields: false
+      fields:
+        length:
+          index: 0
+          doc: ~
+          type_: u64
+        bit_field:
+          index: 1
+          doc: ~
+          type_:
+            vector: bool
+enums: {}
+---
+doc: " Module providing debug functionality."
+immediate_dependencies: []
+attributes: []
+functions:
+  print:
+    source_index: 0
+    index: 0
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: T
+        constraints: []
+    parameters:
+      - name: x
+        type_:
+          Reference:
+            - false
+            - NamedTypeParameter: T
+    return_: []
+  print_stack_trace:
+    source_index: 1
+    index: 1
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters: []
+    return_: []
+structs: {}
+enums: {}
+---
+doc: " Defines a fixed-point numeric type with a 32-bit integer part and\n a 32-bit fractional part."
+immediate_dependencies: []
+attributes:
+  - Parameterized:
+      - deprecated
+      - - Assigned:
+            - note
+            - "Use `std::uq32_32` instead. If you need to convert from a `FixedPoint32` to a `UQ32_32`, you can use the `std::fixed_point32::get_raw_value` with `std::uq32_32::from_raw_value`."
+functions:
+  multiply_u64:
+    source_index: 0
+    index: 0
+    doc: " Multiply a u64 integer by a fixed-point number, truncating any\n fractional part of the product. This will abort if the product\n overflows."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: val
+        type_: u64
+      - name: multiplier
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: fixed_point32
+            name: FixedPoint32
+            type_arguments: []
+    return_:
+      - u64
+  divide_u64:
+    source_index: 1
+    index: 1
+    doc: " Divide a u64 integer by a fixed-point number, truncating any\n fractional part of the quotient. This will abort if the divisor\n is zero or if the quotient overflows."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: val
+        type_: u64
+      - name: divisor
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: fixed_point32
+            name: FixedPoint32
+            type_arguments: []
+    return_:
+      - u64
+  create_from_rational:
+    source_index: 2
+    index: 2
+    doc: " Create a fixed-point value from a rational number specified by its\n numerator and denominator. Calling this function should be preferred\n for using `Self::create_from_raw_value` which is also available.\n This will abort if the denominator is zero. It will also\n abort if the numerator is nonzero and the ratio is not in the range\n 2^-32 .. 2^32-1. When specifying decimal fractions, be careful about\n rounding errors: if you round to display N digits after the decimal\n point, you can use a denominator of 10^N to avoid numbers where the\n very small imprecision in the binary representation could change the\n rounding, e.g., 0.0125 will round down to 0.012 instead of up to 0.013."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: numerator
+        type_: u64
+      - name: denominator
+        type_: u64
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: fixed_point32
+          name: FixedPoint32
+          type_arguments: []
+  create_from_raw_value:
+    source_index: 3
+    index: 3
+    doc: " Create a fixedpoint value from a raw value."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: value
+        type_: u64
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: fixed_point32
+          name: FixedPoint32
+          type_arguments: []
+  get_raw_value:
+    source_index: 4
+    index: 4
+    doc: " Accessor for the raw u64 value. Other less common operations, such as\n adding or subtracting FixedPoint32 values, can be done using the raw\n values directly."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: num
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: fixed_point32
+            name: FixedPoint32
+            type_arguments: []
+    return_:
+      - u64
+  is_zero:
+    source_index: 5
+    index: 5
+    doc: " Returns true if the ratio is zero."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: num
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: fixed_point32
+            name: FixedPoint32
+            type_arguments: []
+    return_:
+      - bool
+structs:
+  FixedPoint32:
+    index: 0
+    doc: " Define a fixed-point numeric type with 32 fractional bits.\n This is just a u64 integer but it is wrapped in a struct to\n make a unique type. This is a binary representation, so decimal\n values may not be exactly representable, but it provides more\n than 9 decimal digits of precision both before and after the\n decimal point (18 digits total). For comparison, double precision\n floating-point has less than 16 decimal digits of precision, so\n be careful about using floating-point to convert these values to\n decimal."
+    attributes: []
+    abilities:
+      - Copy
+      - Drop
+      - Store
+    type_parameters: []
+    fields:
+      positional_fields: false
+      fields:
+        value:
+          index: 0
+          doc: ~
+          type_: u64
+enums: {}
+---
+doc: " Module which defines SHA hashes for byte vectors.\n\n The functions in this module are natively declared both in the Move runtime\n as in the Move prover's prelude."
+immediate_dependencies: []
+attributes: []
+functions:
+  sha2_256:
+    source_index: 0
+    index: 0
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: data
+        type_:
+          vector: u8
+    return_:
+      - vector: u8
+  sha3_256:
+    source_index: 1
+    index: 1
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: data
+        type_:
+          vector: u8
+    return_:
+      - vector: u8
+structs: {}
+enums: {}
+---
+doc: " This module holds shared implementation of macros used in `std`"
+immediate_dependencies: []
+attributes: []
+functions:
+  do:
+    source_index: 9
+    index: 18446744073709551615
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $stop
+        type_:
+          NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - NamedTypeParameter: $T
+            - NamedTypeParameter: $R
+    return_: []
+  do_eq:
+    source_index: 10
+    index: 18446744073709551615
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $stop
+        type_:
+          NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - NamedTypeParameter: $T
+            - NamedTypeParameter: $R
+    return_: []
+  num_diff:
+    source_index: 2
+    index: 18446744073709551615
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+    parameters:
+      - name: $x
+        type_:
+          NamedTypeParameter: $T
+      - name: $y
+        type_:
+          NamedTypeParameter: $T
+    return_:
+      - NamedTypeParameter: $T
+  num_divide_and_round_up:
+    source_index: 3
+    index: 18446744073709551615
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+    parameters:
+      - name: $x
+        type_:
+          NamedTypeParameter: $T
+      - name: $y
+        type_:
+          NamedTypeParameter: $T
+    return_:
+      - NamedTypeParameter: $T
+  num_max:
+    source_index: 0
+    index: 18446744073709551615
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+    parameters:
+      - name: $x
+        type_:
+          NamedTypeParameter: $T
+      - name: $y
+        type_:
+          NamedTypeParameter: $T
+    return_:
+      - NamedTypeParameter: $T
+  num_min:
+    source_index: 1
+    index: 18446744073709551615
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+    parameters:
+      - name: $x
+        type_:
+          NamedTypeParameter: $T
+      - name: $y
+        type_:
+          NamedTypeParameter: $T
+    return_:
+      - NamedTypeParameter: $T
+  num_pow:
+    source_index: 4
+    index: 18446744073709551615
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters: []
+    parameters:
+      - name: $base
+        type_: _
+      - name: $exponent
+        type_: u8
+    return_:
+      - _
+  num_sqrt:
+    source_index: 5
+    index: 18446744073709551615
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $U
+        constraints: []
+    parameters:
+      - name: $x
+        type_:
+          NamedTypeParameter: $T
+      - name: $bitsize
+        type_: u8
+    return_:
+      - NamedTypeParameter: $T
+  num_to_string:
+    source_index: 6
+    index: 18446744073709551615
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters: []
+    parameters:
+      - name: $x
+        type_: _
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: string
+          name: String
+          type_arguments: []
+  range_do:
+    source_index: 7
+    index: 18446744073709551615
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $start
+        type_:
+          NamedTypeParameter: $T
+      - name: $stop
+        type_:
+          NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - NamedTypeParameter: $T
+            - NamedTypeParameter: $R
+    return_: []
+  range_do_eq:
+    source_index: 8
+    index: 18446744073709551615
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $start
+        type_:
+          NamedTypeParameter: $T
+      - name: $stop
+        type_:
+          NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - NamedTypeParameter: $T
+            - NamedTypeParameter: $R
+    return_: []
+  try_as_u128:
+    source_index: 15
+    index: 18446744073709551615
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters: []
+    parameters:
+      - name: $x
+        type_: _
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - u128
+  try_as_u16:
+    source_index: 12
+    index: 18446744073709551615
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters: []
+    parameters:
+      - name: $x
+        type_: _
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - u16
+  try_as_u32:
+    source_index: 13
+    index: 18446744073709551615
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters: []
+    parameters:
+      - name: $x
+        type_: _
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - u32
+  try_as_u64:
+    source_index: 14
+    index: 18446744073709551615
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters: []
+    parameters:
+      - name: $x
+        type_: _
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - u64
+  try_as_u8:
+    source_index: 11
+    index: 18446744073709551615
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters: []
+    parameters:
+      - name: $x
+        type_: _
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - u8
+  uq_add:
+    source_index: 18
+    index: 18446744073709551615
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $U
+        constraints: []
+    parameters:
+      - name: $a
+        type_:
+          NamedTypeParameter: $T
+      - name: $b
+        type_:
+          NamedTypeParameter: $T
+      - name: $max_t
+        type_:
+          NamedTypeParameter: $T
+      - name: $abort_overflow
+        type_: _
+    return_:
+      - NamedTypeParameter: $T
+  uq_from_int:
+    source_index: 17
+    index: 18446744073709551615
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $U
+        constraints: []
+    parameters:
+      - name: $integer
+        type_:
+          NamedTypeParameter: $T
+      - name: $fractional_bits
+        type_: u8
+    return_:
+      - NamedTypeParameter: $U
+  uq_from_quotient:
+    source_index: 16
+    index: 18446744073709551615
+    doc: " Creates a fixed-point value from a quotient specified by its numerator and denominator.\n `$T` is the underlying integer type for the fixed-point value, where `$T` has `$t_bits` bits.\n `$U` is the type used for intermediate calculations, where `$U` is the next larger integer type.\n `$max_t` is the maximum value that can be represented by `$T`.\n `$t_bits` (as mentioned above) is the total number of bits in the fixed-point value (integer\n plus fractional).\n `$fractional_bits` is the number of fractional bits in the fixed-point value."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $U
+        constraints: []
+    parameters:
+      - name: $numerator
+        type_:
+          NamedTypeParameter: $T
+      - name: $denominator
+        type_:
+          NamedTypeParameter: $T
+      - name: $max_t
+        type_:
+          NamedTypeParameter: $T
+      - name: $t_bits
+        type_: u8
+      - name: $fractional_bits
+        type_: u8
+      - name: $abort_denominator
+        type_: _
+      - name: $abort_quotient_too_small
+        type_: _
+      - name: $abort_quotient_too_large
+        type_: _
+    return_:
+      - NamedTypeParameter: $T
+  uq_int_div:
+    source_index: 22
+    index: 18446744073709551615
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $U
+        constraints: []
+    parameters:
+      - name: $val
+        type_:
+          NamedTypeParameter: $T
+      - name: $divisor
+        type_:
+          NamedTypeParameter: $T
+      - name: $max_t
+        type_:
+          NamedTypeParameter: $T
+      - name: $fractional_bits
+        type_: u8
+      - name: $abort_division_by_zero
+        type_: _
+      - name: $abort_overflow
+        type_: _
+    return_:
+      - NamedTypeParameter: $T
+  uq_int_mul:
+    source_index: 21
+    index: 18446744073709551615
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $U
+        constraints: []
+    parameters:
+      - name: $val
+        type_:
+          NamedTypeParameter: $T
+      - name: $multiplier
+        type_:
+          NamedTypeParameter: $T
+      - name: $max_t
+        type_:
+          NamedTypeParameter: $T
+      - name: $fractional_bits
+        type_: u8
+      - name: $abort_overflow
+        type_: _
+    return_:
+      - NamedTypeParameter: $T
+  uq_sub:
+    source_index: 19
+    index: 18446744073709551615
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+    parameters:
+      - name: $a
+        type_:
+          NamedTypeParameter: $T
+      - name: $b
+        type_:
+          NamedTypeParameter: $T
+      - name: $abort_overflow
+        type_: _
+    return_:
+      - NamedTypeParameter: $T
+  uq_to_int:
+    source_index: 20
+    index: 18446744073709551615
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $U
+        constraints: []
+    parameters:
+      - name: $a
+        type_:
+          NamedTypeParameter: $U
+      - name: $fractional_bits
+        type_: u8
+    return_:
+      - NamedTypeParameter: $T
+structs: {}
+enums: {}
+---
+doc: " This module defines the Option type and its methods to represent and handle an optional value."
+immediate_dependencies:
+  - address: std
+    name: vector
+attributes: []
+functions:
+  none:
+    source_index: 0
+    index: 0
+    doc: " Return an empty `Option`"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - NamedTypeParameter: Element
+  some:
+    source_index: 1
+    index: 1
+    doc: " Return an `Option` containing `e`"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: e
+        type_:
+          NamedTypeParameter: Element
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - NamedTypeParameter: Element
+  is_none:
+    source_index: 2
+    index: 2
+    doc: " Return true if `t` does not hold a value"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: t
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: option
+                name: Option
+                type_arguments:
+                  - NamedTypeParameter: Element
+    return_:
+      - bool
+  is_some:
+    source_index: 3
+    index: 3
+    doc: " Return true if `t` holds a value"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: t
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: option
+                name: Option
+                type_arguments:
+                  - NamedTypeParameter: Element
+    return_:
+      - bool
+  contains:
+    source_index: 4
+    index: 4
+    doc: " Return true if the value in `t` is equal to `e_ref`\n Always returns `false` if `t` does not hold a value"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: t
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: option
+                name: Option
+                type_arguments:
+                  - NamedTypeParameter: Element
+      - name: e_ref
+        type_:
+          Reference:
+            - false
+            - NamedTypeParameter: Element
+    return_:
+      - bool
+  borrow:
+    source_index: 5
+    index: 5
+    doc: " Return an immutable reference to the value inside `t`\n Aborts if `t` does not hold a value"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: t
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: option
+                name: Option
+                type_arguments:
+                  - NamedTypeParameter: Element
+    return_:
+      - Reference:
+          - false
+          - NamedTypeParameter: Element
+  borrow_with_default:
+    source_index: 6
+    index: 6
+    doc: " Return a reference to the value inside `t` if it holds one\n Return `default_ref` if `t` does not hold a value"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: t
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: option
+                name: Option
+                type_arguments:
+                  - NamedTypeParameter: Element
+      - name: default_ref
+        type_:
+          Reference:
+            - false
+            - NamedTypeParameter: Element
+    return_:
+      - Reference:
+          - false
+          - NamedTypeParameter: Element
+  get_with_default:
+    source_index: 7
+    index: 7
+    doc: " Return the value inside `t` if it holds one\n Return `default` if `t` does not hold a value"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints:
+          - Copy
+          - Drop
+    parameters:
+      - name: t
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: option
+                name: Option
+                type_arguments:
+                  - NamedTypeParameter: Element
+      - name: default
+        type_:
+          NamedTypeParameter: Element
+    return_:
+      - NamedTypeParameter: Element
+  fill:
+    source_index: 8
+    index: 8
+    doc: " Convert the none option `t` to a some option by adding `e`.\n Aborts if `t` already holds a value"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: t
+        type_:
+          Reference:
+            - true
+            - Datatype:
+                module:
+                  address: std
+                  name: option
+                name: Option
+                type_arguments:
+                  - NamedTypeParameter: Element
+      - name: e
+        type_:
+          NamedTypeParameter: Element
+    return_: []
+  extract:
+    source_index: 9
+    index: 9
+    doc: " Convert a `some` option to a `none` by removing and returning the value stored inside `t`\n Aborts if `t` does not hold a value"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: t
+        type_:
+          Reference:
+            - true
+            - Datatype:
+                module:
+                  address: std
+                  name: option
+                name: Option
+                type_arguments:
+                  - NamedTypeParameter: Element
+    return_:
+      - NamedTypeParameter: Element
+  borrow_mut:
+    source_index: 10
+    index: 10
+    doc: " Return a mutable reference to the value inside `t`\n Aborts if `t` does not hold a value"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: t
+        type_:
+          Reference:
+            - true
+            - Datatype:
+                module:
+                  address: std
+                  name: option
+                name: Option
+                type_arguments:
+                  - NamedTypeParameter: Element
+    return_:
+      - Reference:
+          - true
+          - NamedTypeParameter: Element
+  swap:
+    source_index: 11
+    index: 11
+    doc: " Swap the old value inside `t` with `e` and return the old value\n Aborts if `t` does not hold a value"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: t
+        type_:
+          Reference:
+            - true
+            - Datatype:
+                module:
+                  address: std
+                  name: option
+                name: Option
+                type_arguments:
+                  - NamedTypeParameter: Element
+      - name: e
+        type_:
+          NamedTypeParameter: Element
+    return_:
+      - NamedTypeParameter: Element
+  swap_or_fill:
+    source_index: 12
+    index: 12
+    doc: " Swap the old value inside `t` with `e` and return the old value;\n or if there is no old value, fill it with `e`.\n Different from swap(), swap_or_fill() allows for `t` not holding a value."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: t
+        type_:
+          Reference:
+            - true
+            - Datatype:
+                module:
+                  address: std
+                  name: option
+                name: Option
+                type_arguments:
+                  - NamedTypeParameter: Element
+      - name: e
+        type_:
+          NamedTypeParameter: Element
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - NamedTypeParameter: Element
+  destroy_with_default:
+    source_index: 13
+    index: 13
+    doc: " Destroys `t.` If `t` holds a value, return it. Returns `default` otherwise"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints:
+          - Drop
+    parameters:
+      - name: t
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: option
+            name: Option
+            type_arguments:
+              - NamedTypeParameter: Element
+      - name: default
+        type_:
+          NamedTypeParameter: Element
+    return_:
+      - NamedTypeParameter: Element
+  destroy_some:
+    source_index: 14
+    index: 14
+    doc: " Unpack `t` and return its contents\n Aborts if `t` does not hold a value"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: t
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: option
+            name: Option
+            type_arguments:
+              - NamedTypeParameter: Element
+    return_:
+      - NamedTypeParameter: Element
+  destroy_none:
+    source_index: 15
+    index: 15
+    doc: " Unpack `t`\n Aborts if `t` holds a value"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: t
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: option
+            name: Option
+            type_arguments:
+              - NamedTypeParameter: Element
+    return_: []
+  to_vec:
+    source_index: 16
+    index: 16
+    doc: " Convert `t` into a vector of length 1 if it is `Some`,\n and an empty vector otherwise"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: t
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: option
+            name: Option
+            type_arguments:
+              - NamedTypeParameter: Element
+    return_:
+      - vector:
+          NamedTypeParameter: Element
+  and:
+    source_index: 22
+    index: 18446744073709551615
+    doc: " If the value is `Some`, call the closure `f` on it. Otherwise, return `None`.\n Equivalent to Rust's `t.and_then(f)`."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $U
+        constraints: []
+    parameters:
+      - name: $o
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: option
+            name: Option
+            type_arguments:
+              - NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - NamedTypeParameter: $T
+            - Datatype:
+                module:
+                  address: std
+                  name: option
+                name: Option
+                type_arguments:
+                  - NamedTypeParameter: $U
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - NamedTypeParameter: $U
+  and_ref:
+    source_index: 23
+    index: 18446744073709551615
+    doc: " If the value is `Some`, call the closure `f` on it. Otherwise, return `None`.\n Equivalent to Rust's `t.and_then(f)`."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $U
+        constraints: []
+    parameters:
+      - name: $o
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: option
+                name: Option
+                type_arguments:
+                  - NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - Reference:
+                  - false
+                  - NamedTypeParameter: $T
+            - Datatype:
+                module:
+                  address: std
+                  name: option
+                name: Option
+                type_arguments:
+                  - NamedTypeParameter: $U
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - NamedTypeParameter: $U
+  destroy:
+    source_index: 17
+    index: 18446744073709551615
+    doc: " Destroy `Option<T>` and call the closure `f` on the value inside if it holds one."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $o
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: option
+            name: Option
+            type_arguments:
+              - NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - NamedTypeParameter: $T
+            - NamedTypeParameter: $R
+    return_: []
+  destroy_or:
+    source_index: 28
+    index: 18446744073709551615
+    doc: " Destroy `Option<T>` and return the value inside if it holds one, or `default` otherwise.\n Equivalent to Rust's `t.unwrap_or(default)`.\n\n Note: this function is a more efficient version of `destroy_with_default`, as it does not\n evaluate the default value unless necessary. The `destroy_with_default` function should be\n deprecated in favor of this function."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+    parameters:
+      - name: $o
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: option
+            name: Option
+            type_arguments:
+              - NamedTypeParameter: $T
+      - name: $default
+        type_:
+          NamedTypeParameter: $T
+    return_:
+      - NamedTypeParameter: $T
+  do:
+    source_index: 18
+    index: 18446744073709551615
+    doc: " Destroy `Option<T>` and call the closure `f` on the value inside if it holds one."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $o
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: option
+            name: Option
+            type_arguments:
+              - NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - NamedTypeParameter: $T
+            - NamedTypeParameter: $R
+    return_: []
+  do_mut:
+    source_index: 20
+    index: 18446744073709551615
+    doc: " Execute a closure on the mutable reference to the value inside `t` if it holds one."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $o
+        type_:
+          Reference:
+            - true
+            - Datatype:
+                module:
+                  address: std
+                  name: option
+                name: Option
+                type_arguments:
+                  - NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - Reference:
+                  - true
+                  - NamedTypeParameter: $T
+            - NamedTypeParameter: $R
+    return_: []
+  do_ref:
+    source_index: 19
+    index: 18446744073709551615
+    doc: " Execute a closure on the value inside `t` if it holds one."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $o
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: option
+                name: Option
+                type_arguments:
+                  - NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - Reference:
+                  - false
+                  - NamedTypeParameter: $T
+            - NamedTypeParameter: $R
+    return_: []
+  filter:
+    source_index: 26
+    index: 18446744073709551615
+    doc: " Return `None` if the value is `None`, otherwise return `Option<T>` if the predicate `f` returns true."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints:
+          - Drop
+    parameters:
+      - name: $o
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: option
+            name: Option
+            type_arguments:
+              - NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - Reference:
+                  - false
+                  - NamedTypeParameter: $T
+            - bool
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - NamedTypeParameter: $T
+  is_some_and:
+    source_index: 27
+    index: 18446744073709551615
+    doc: " Return `false` if the value is `None`, otherwise return the result of the predicate `f`."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+    parameters:
+      - name: $o
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: option
+                name: Option
+                type_arguments:
+                  - NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - Reference:
+                  - false
+                  - NamedTypeParameter: $T
+            - bool
+    return_:
+      - bool
+  map:
+    source_index: 24
+    index: 18446744073709551615
+    doc: " Map an `Option<T>` to `Option<U>` by applying a function to a contained value.\n Equivalent to Rust's `t.map(f)`."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $U
+        constraints: []
+    parameters:
+      - name: $o
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: option
+            name: Option
+            type_arguments:
+              - NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - NamedTypeParameter: $T
+            - NamedTypeParameter: $U
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - NamedTypeParameter: $U
+  map_ref:
+    source_index: 25
+    index: 18446744073709551615
+    doc: " Map an `Option<T>` value to `Option<U>` by applying a function to a contained value by reference.\n Original `Option<T>` is preserved.\n Equivalent to Rust's `t.map(f)`."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $U
+        constraints: []
+    parameters:
+      - name: $o
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: option
+                name: Option
+                type_arguments:
+                  - NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - Reference:
+                  - false
+                  - NamedTypeParameter: $T
+            - NamedTypeParameter: $U
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - NamedTypeParameter: $U
+  or:
+    source_index: 21
+    index: 18446744073709551615
+    doc: " Select the first `Some` value from the two options, or `None` if both are `None`.\n Equivalent to Rust's `a.or(b)`."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+    parameters:
+      - name: $o
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: option
+            name: Option
+            type_arguments:
+              - NamedTypeParameter: $T
+      - name: $default
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: option
+            name: Option
+            type_arguments:
+              - NamedTypeParameter: $T
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - NamedTypeParameter: $T
+structs:
+  Option:
+    index: 0
+    doc: " Abstraction of a value that may or may not be present. Implemented with a vector of size\n zero or one because Move bytecode does not have ADTs."
+    attributes: []
+    abilities:
+      - Copy
+      - Drop
+      - Store
+    type_parameters:
+      - phantom: false
+        name: Element
+        constraints: []
+    fields:
+      positional_fields: false
+      fields:
+        vec:
+          index: 0
+          doc: ~
+          type_:
+            vector:
+              TypeParameter: 0
+enums: {}
+---
+doc: " The `string` module defines the `String` type which represents UTF8 encoded\n strings."
+immediate_dependencies:
+  - address: std
+    name: ascii
+  - address: std
+    name: option
+  - address: std
+    name: vector
+attributes: []
+functions:
+  utf8:
+    source_index: 0
+    index: 0
+    doc: " Creates a new string from a sequence of bytes. Aborts if the bytes do\n not represent valid utf8."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: bytes
+        type_:
+          vector: u8
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: string
+          name: String
+          type_arguments: []
+  from_ascii:
+    source_index: 1
+    index: 1
+    doc: " Convert an ASCII string to a UTF8 string"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: s
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: ascii
+            name: String
+            type_arguments: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: string
+          name: String
+          type_arguments: []
+  to_ascii:
+    source_index: 2
+    index: 2
+    doc: " Convert an UTF8 string to an ASCII string.\n Aborts if `s` is not valid ASCII"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: s
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: string
+            name: String
+            type_arguments: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: ascii
+          name: String
+          type_arguments: []
+  try_utf8:
+    source_index: 3
+    index: 3
+    doc: " Tries to create a new string from a sequence of bytes."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: bytes
+        type_:
+          vector: u8
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - Datatype:
+                module:
+                  address: std
+                  name: string
+                name: String
+                type_arguments: []
+  as_bytes:
+    source_index: 4
+    index: 4
+    doc: " Returns a reference to the underlying byte vector."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: s
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: string
+                name: String
+                type_arguments: []
+    return_:
+      - Reference:
+          - false
+          - vector: u8
+  into_bytes:
+    source_index: 5
+    index: 5
+    doc: " Unpack the `string` to get its underlying bytes."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: s
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: string
+            name: String
+            type_arguments: []
+    return_:
+      - vector: u8
+  is_empty:
+    source_index: 6
+    index: 6
+    doc: " Checks whether this string is empty."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: s
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: string
+                name: String
+                type_arguments: []
+    return_:
+      - bool
+  length:
+    source_index: 7
+    index: 7
+    doc: " Returns the length of this string, in bytes."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: s
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: string
+                name: String
+                type_arguments: []
+    return_:
+      - u64
+  append:
+    source_index: 8
+    index: 8
+    doc: " Appends a string."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: s
+        type_:
+          Reference:
+            - true
+            - Datatype:
+                module:
+                  address: std
+                  name: string
+                name: String
+                type_arguments: []
+      - name: r
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: string
+            name: String
+            type_arguments: []
+    return_: []
+  append_utf8:
+    source_index: 9
+    index: 9
+    doc: " Appends bytes which must be in valid utf8 format."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: s
+        type_:
+          Reference:
+            - true
+            - Datatype:
+                module:
+                  address: std
+                  name: string
+                name: String
+                type_arguments: []
+      - name: bytes
+        type_:
+          vector: u8
+    return_: []
+  insert:
+    source_index: 10
+    index: 10
+    doc: " Insert the other string at the byte index in given string. The index\n must be at a valid utf8 char boundary."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: s
+        type_:
+          Reference:
+            - true
+            - Datatype:
+                module:
+                  address: std
+                  name: string
+                name: String
+                type_arguments: []
+      - name: at
+        type_: u64
+      - name: o
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: string
+            name: String
+            type_arguments: []
+    return_: []
+  substring:
+    source_index: 11
+    index: 11
+    doc: " Returns a sub-string using the given byte indices, where `i` is the first\n byte position and `j` is the start of the first byte not included (or the\n length of the string). The indices must be at valid utf8 char boundaries,\n guaranteeing that the result is valid utf8."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: s
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: string
+                name: String
+                type_arguments: []
+      - name: i
+        type_: u64
+      - name: j
+        type_: u64
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: string
+          name: String
+          type_arguments: []
+  index_of:
+    source_index: 12
+    index: 12
+    doc: " Computes the index of the first occurrence of a string. Returns `s.length()`\n if no occurrence found."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: s
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: string
+                name: String
+                type_arguments: []
+      - name: r
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: string
+                name: String
+                type_arguments: []
+    return_:
+      - u64
+  internal_check_utf8:
+    source_index: 13
+    index: 13
+    doc: ~
+    attributes: []
+    visibility: Private
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: v
+        type_:
+          Reference:
+            - false
+            - vector: u8
+    return_:
+      - bool
+  internal_is_char_boundary:
+    source_index: 14
+    index: 14
+    doc: ~
+    attributes: []
+    visibility: Private
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: v
+        type_:
+          Reference:
+            - false
+            - vector: u8
+      - name: i
+        type_: u64
+    return_:
+      - bool
+  internal_sub_string:
+    source_index: 15
+    index: 15
+    doc: ~
+    attributes: []
+    visibility: Private
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: v
+        type_:
+          Reference:
+            - false
+            - vector: u8
+      - name: i
+        type_: u64
+      - name: j
+        type_: u64
+    return_:
+      - vector: u8
+  internal_index_of:
+    source_index: 16
+    index: 16
+    doc: ~
+    attributes: []
+    visibility: Private
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: v
+        type_:
+          Reference:
+            - false
+            - vector: u8
+      - name: r
+        type_:
+          Reference:
+            - false
+            - vector: u8
+    return_:
+      - u64
+  bytes:
+    source_index: 17
+    index: 17
+    doc: ~
+    attributes:
+      - Parameterized:
+          - deprecated
+          - - Assigned:
+                - note
+                - "Use `std::string::as_bytes` instead."
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: s
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: string
+                name: String
+                type_arguments: []
+    return_:
+      - Reference:
+          - false
+          - vector: u8
+  sub_string:
+    source_index: 18
+    index: 18
+    doc: ~
+    attributes:
+      - Parameterized:
+          - deprecated
+          - - Assigned:
+                - note
+                - "Use `std::string::substring` instead."
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: s
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: string
+                name: String
+                type_arguments: []
+      - name: i
+        type_: u64
+      - name: j
+        type_: u64
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: string
+          name: String
+          type_arguments: []
+structs:
+  String:
+    index: 0
+    doc: " A `String` holds a sequence of bytes which is guaranteed to be in utf8\n format."
+    attributes: []
+    abilities:
+      - Copy
+      - Drop
+      - Store
+    type_parameters: []
+    fields:
+      positional_fields: false
+      fields:
+        bytes:
+          index: 0
+          doc: ~
+          type_:
+            vector: u8
+enums: {}
+---
+doc: " Functionality for converting Move types into values. Use with care!"
+immediate_dependencies:
+  - address: std
+    name: address
+  - address: std
+    name: ascii
+attributes: []
+functions:
+  get:
+    source_index: 0
+    index: 0
+    doc: " Return a value representation of the type `T`.  Package IDs\n that appear in fully qualified type names in the output from\n this function are defining IDs (the ID of the package in\n storage that first introduced the type)."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: T
+        constraints: []
+    parameters: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: type_name
+          name: TypeName
+          type_arguments: []
+  get_with_original_ids:
+    source_index: 1
+    index: 1
+    doc: " Return a value representation of the type `T`.  Package IDs\n that appear in fully qualified type names in the output from\n this function are original IDs (the ID of the first version of\n the package, even if the type in question was introduced in a\n later upgrade)."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: T
+        constraints: []
+    parameters: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: type_name
+          name: TypeName
+          type_arguments: []
+  is_primitive:
+    source_index: 2
+    index: 2
+    doc: " Returns true iff the TypeName represents a primitive type, i.e. one of\n u8, u16, u32, u64, u128, u256, bool, address, vector."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: self
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: type_name
+                name: TypeName
+                type_arguments: []
+    return_:
+      - bool
+  borrow_string:
+    source_index: 3
+    index: 3
+    doc: " Get the String representation of `self`"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: self
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: type_name
+                name: TypeName
+                type_arguments: []
+    return_:
+      - Reference:
+          - false
+          - Datatype:
+              module:
+                address: std
+                name: ascii
+              name: String
+              type_arguments: []
+  get_address:
+    source_index: 4
+    index: 4
+    doc: " Get Address string (Base16 encoded), first part of the TypeName.\n Aborts if given a primitive type."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: self
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: type_name
+                name: TypeName
+                type_arguments: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: ascii
+          name: String
+          type_arguments: []
+  get_module:
+    source_index: 5
+    index: 5
+    doc: " Get name of the module.\n Aborts if given a primitive type."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: self
+        type_:
+          Reference:
+            - false
+            - Datatype:
+                module:
+                  address: std
+                  name: type_name
+                name: TypeName
+                type_arguments: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: ascii
+          name: String
+          type_arguments: []
+  into_string:
+    source_index: 6
+    index: 6
+    doc: " Convert `self` into its inner String"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: self
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: type_name
+            name: TypeName
+            type_arguments: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: ascii
+          name: String
+          type_arguments: []
+structs:
+  TypeName:
+    index: 0
+    doc: ~
+    attributes: []
+    abilities:
+      - Copy
+      - Drop
+      - Store
+    type_parameters: []
+    fields:
+      positional_fields: false
+      fields:
+        name:
+          index: 0
+          doc: " String representation of the type. All types are represented\n using their source syntax:\n \"u8\", \"u64\", \"bool\", \"address\", \"vector\", and so on for primitive types.\n Struct types are represented as fully qualified type names; e.g.\n `00000000000000000000000000000001::string::String` or\n `0000000000000000000000000000000a::module_name1::type_name1<0000000000000000000000000000000a::module_name2::type_name2<u64>>`\n Addresses are hex-encoded lowercase values of length ADDRESS_LENGTH (16, 20, or 32 depending on the Move platform)"
+          type_:
+            Datatype:
+              module:
+                address: std
+                name: ascii
+              name: String
+              type_arguments: []
+enums: {}
+---
+doc: ~
+immediate_dependencies:
+  - address: std
+    name: option
+  - address: std
+    name: string
+  - address: std
+    name: vector
+attributes:
+  - Parameterized:
+      - defines_primitive
+      - - Name: u128
+functions:
+  bitwise_not:
+    source_index: 0
+    index: 0
+    doc: " Returns the bitwise not of the value.\n Each bit that is 1 becomes 0. Each bit that is 0 becomes 1."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u128
+    return_:
+      - u128
+  max:
+    source_index: 1
+    index: 1
+    doc: " Return the larger of `x` and `y`"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u128
+      - name: y
+        type_: u128
+    return_:
+      - u128
+  min:
+    source_index: 2
+    index: 2
+    doc: " Return the smaller of `x` and `y`"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u128
+      - name: y
+        type_: u128
+    return_:
+      - u128
+  diff:
+    source_index: 3
+    index: 3
+    doc: " Return the absolute value of x - y"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u128
+      - name: y
+        type_: u128
+    return_:
+      - u128
+  divide_and_round_up:
+    source_index: 4
+    index: 4
+    doc: " Calculate x / y, but round up the result."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u128
+      - name: y
+        type_: u128
+    return_:
+      - u128
+  pow:
+    source_index: 5
+    index: 5
+    doc: " Return the value of a base raised to a power"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: base
+        type_: u128
+      - name: exponent
+        type_: u8
+    return_:
+      - u128
+  sqrt:
+    source_index: 6
+    index: 6
+    doc: " Get a nearest lower integer Square Root for `x`. Given that this\n function can only operate with integers, it is impossible\n to get perfect (or precise) integer square root for some numbers.\n\n Example:\n ```\n math::sqrt(9) => 3\n math::sqrt(8) => 2 // the nearest lower square root is 4;\n ```\n\n In integer math, one of the possible ways to get results with more\n precision is to use higher values or temporarily multiply the\n value by some bigger number. Ideally if this is a square of 10 or 100.\n\n Example:\n ```\n math::sqrt(8) => 2;\n math::sqrt(8 * 10000) => 282;\n // now we can use this value as if it was 2.82;\n // but to get the actual result, this value needs\n // to be divided by 100 (because sqrt(10000)).\n\n\n math::sqrt(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)\n ```"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u128
+    return_:
+      - u128
+  try_as_u8:
+    source_index: 7
+    index: 7
+    doc: " Try to convert a `u128` to a `u8`. Returns `None` if the value is too large."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u128
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - u8
+  try_as_u16:
+    source_index: 8
+    index: 8
+    doc: " Try to convert a `u128` to a `u16`. Returns `None` if the value is too large."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u128
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - u16
+  try_as_u32:
+    source_index: 9
+    index: 9
+    doc: " Try to convert a `u128` to a `u32`. Returns `None` if the value is too large."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u128
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - u32
+  try_as_u64:
+    source_index: 10
+    index: 10
+    doc: " Try to convert a `u128` to a `u64`. Returns `None` if the value is too large."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u128
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - u64
+  to_string:
+    source_index: 11
+    index: 11
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u128
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: string
+          name: String
+          type_arguments: []
+  do:
+    source_index: 15
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `0` to `$stop` (exclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $stop
+        type_: u128
+      - name: $f
+        type_:
+          fun:
+            - - u128
+            - NamedTypeParameter: $R
+    return_: []
+  do_eq:
+    source_index: 16
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `0` to `$stop` (inclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $stop
+        type_: u128
+      - name: $f
+        type_:
+          fun:
+            - - u128
+            - NamedTypeParameter: $R
+    return_: []
+  max_value:
+    source_index: 12
+    index: 18446744073709551615
+    doc: " Maximum value for a `u128`"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters: []
+    parameters: []
+    return_:
+      - u128
+  range_do:
+    source_index: 13
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `$start` to `$stop` (exclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $start
+        type_: u128
+      - name: $stop
+        type_: u128
+      - name: $f
+        type_:
+          fun:
+            - - u128
+            - NamedTypeParameter: $R
+    return_: []
+  range_do_eq:
+    source_index: 14
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `$start` to `$stop` (inclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $start
+        type_: u128
+      - name: $stop
+        type_: u128
+      - name: $f
+        type_:
+          fun:
+            - - u128
+            - NamedTypeParameter: $R
+    return_: []
+structs: {}
+enums: {}
+---
+doc: ~
+immediate_dependencies:
+  - address: std
+    name: option
+  - address: std
+    name: string
+  - address: std
+    name: vector
+attributes:
+  - Parameterized:
+      - defines_primitive
+      - - Name: u16
+functions:
+  bitwise_not:
+    source_index: 0
+    index: 0
+    doc: " Returns the bitwise not of the value.\n Each bit that is 1 becomes 0. Each bit that is 0 becomes 1."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u16
+    return_:
+      - u16
+  max:
+    source_index: 1
+    index: 1
+    doc: " Return the larger of `x` and `y`"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u16
+      - name: y
+        type_: u16
+    return_:
+      - u16
+  min:
+    source_index: 2
+    index: 2
+    doc: " Return the smaller of `x` and `y`"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u16
+      - name: y
+        type_: u16
+    return_:
+      - u16
+  diff:
+    source_index: 3
+    index: 3
+    doc: " Return the absolute value of x - y"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u16
+      - name: y
+        type_: u16
+    return_:
+      - u16
+  divide_and_round_up:
+    source_index: 4
+    index: 4
+    doc: " Calculate x / y, but round up the result."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u16
+      - name: y
+        type_: u16
+    return_:
+      - u16
+  pow:
+    source_index: 5
+    index: 5
+    doc: " Return the value of a base raised to a power"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: base
+        type_: u16
+      - name: exponent
+        type_: u8
+    return_:
+      - u16
+  sqrt:
+    source_index: 6
+    index: 6
+    doc: " Get a nearest lower integer Square Root for `x`. Given that this\n function can only operate with integers, it is impossible\n to get perfect (or precise) integer square root for some numbers.\n\n Example:\n ```\n math::sqrt(9) => 3\n math::sqrt(8) => 2 // the nearest lower square root is 4;\n ```\n\n In integer math, one of the possible ways to get results with more\n precision is to use higher values or temporarily multiply the\n value by some bigger number. Ideally if this is a square of 10 or 100.\n\n Example:\n ```\n math::sqrt(8) => 2;\n math::sqrt(8 * 10000) => 282;\n // now we can use this value as if it was 2.82;\n // but to get the actual result, this value needs\n // to be divided by 100 (because sqrt(10000)).\n\n\n math::sqrt(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)\n ```"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u16
+    return_:
+      - u16
+  try_as_u8:
+    source_index: 7
+    index: 7
+    doc: " Try to convert a `u16` to a `u8`. Returns `None` if the value is too large."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u16
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - u8
+  to_string:
+    source_index: 8
+    index: 8
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u16
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: string
+          name: String
+          type_arguments: []
+  do:
+    source_index: 12
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `0` to `$stop` (exclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $stop
+        type_: u16
+      - name: $f
+        type_:
+          fun:
+            - - u16
+            - NamedTypeParameter: $R
+    return_: []
+  do_eq:
+    source_index: 13
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `0` to `$stop` (inclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $stop
+        type_: u16
+      - name: $f
+        type_:
+          fun:
+            - - u16
+            - NamedTypeParameter: $R
+    return_: []
+  max_value:
+    source_index: 9
+    index: 18446744073709551615
+    doc: " Maximum value for a `u16`"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters: []
+    parameters: []
+    return_:
+      - u16
+  range_do:
+    source_index: 10
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `$start` to `$stop` (exclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $start
+        type_: u16
+      - name: $stop
+        type_: u16
+      - name: $f
+        type_:
+          fun:
+            - - u16
+            - NamedTypeParameter: $R
+    return_: []
+  range_do_eq:
+    source_index: 11
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `$start` to `$stop` (inclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $start
+        type_: u16
+      - name: $stop
+        type_: u16
+      - name: $f
+        type_:
+          fun:
+            - - u16
+            - NamedTypeParameter: $R
+    return_: []
+structs: {}
+enums: {}
+---
+doc: ~
+immediate_dependencies:
+  - address: std
+    name: option
+  - address: std
+    name: string
+  - address: std
+    name: vector
+attributes:
+  - Parameterized:
+      - defines_primitive
+      - - Name: u256
+functions:
+  bitwise_not:
+    source_index: 0
+    index: 0
+    doc: " Returns the bitwise not of the value.\n Each bit that is 1 becomes 0. Each bit that is 0 becomes 1."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u256
+    return_:
+      - u256
+  max:
+    source_index: 1
+    index: 1
+    doc: " Return the larger of `x` and `y`"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u256
+      - name: y
+        type_: u256
+    return_:
+      - u256
+  min:
+    source_index: 2
+    index: 2
+    doc: " Return the smaller of `x` and `y`"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u256
+      - name: y
+        type_: u256
+    return_:
+      - u256
+  diff:
+    source_index: 3
+    index: 3
+    doc: " Return the absolute value of x - y"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u256
+      - name: y
+        type_: u256
+    return_:
+      - u256
+  divide_and_round_up:
+    source_index: 4
+    index: 4
+    doc: " Calculate x / y, but round up the result."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u256
+      - name: y
+        type_: u256
+    return_:
+      - u256
+  pow:
+    source_index: 5
+    index: 5
+    doc: " Return the value of a base raised to a power"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: base
+        type_: u256
+      - name: exponent
+        type_: u8
+    return_:
+      - u256
+  try_as_u8:
+    source_index: 6
+    index: 6
+    doc: " Try to convert a `u256` to a `u8`. Returns `None` if the value is too large."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u256
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - u8
+  try_as_u16:
+    source_index: 7
+    index: 7
+    doc: " Try to convert a `u256` to a `u16`. Returns `None` if the value is too large."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u256
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - u16
+  try_as_u32:
+    source_index: 8
+    index: 8
+    doc: " Try to convert a `u256` to a `u32`. Returns `None` if the value is too large."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u256
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - u32
+  try_as_u64:
+    source_index: 9
+    index: 9
+    doc: " Try to convert a `u256` to a `u64`. Returns `None` if the value is too large."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u256
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - u64
+  try_as_u128:
+    source_index: 10
+    index: 10
+    doc: " Try to convert a `u256` to a `u128`. Returns `None` if the value is too large."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u256
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - u128
+  to_string:
+    source_index: 11
+    index: 11
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u256
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: string
+          name: String
+          type_arguments: []
+  do:
+    source_index: 15
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `0` to `$stop` (exclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $stop
+        type_: u256
+      - name: $f
+        type_:
+          fun:
+            - - u256
+            - NamedTypeParameter: $R
+    return_: []
+  do_eq:
+    source_index: 16
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `0` to `$stop` (inclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $stop
+        type_: u256
+      - name: $f
+        type_:
+          fun:
+            - - u256
+            - NamedTypeParameter: $R
+    return_: []
+  max_value:
+    source_index: 12
+    index: 18446744073709551615
+    doc: " Maximum value for a `u256`"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters: []
+    parameters: []
+    return_:
+      - u256
+  range_do:
+    source_index: 13
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `$start` to `$stop` (exclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $start
+        type_: u256
+      - name: $stop
+        type_: u256
+      - name: $f
+        type_:
+          fun:
+            - - u256
+            - NamedTypeParameter: $R
+    return_: []
+  range_do_eq:
+    source_index: 14
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `$start` to `$stop` (inclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $start
+        type_: u256
+      - name: $stop
+        type_: u256
+      - name: $f
+        type_:
+          fun:
+            - - u256
+            - NamedTypeParameter: $R
+    return_: []
+structs: {}
+enums: {}
+---
+doc: ~
+immediate_dependencies:
+  - address: std
+    name: option
+  - address: std
+    name: string
+  - address: std
+    name: vector
+attributes:
+  - Parameterized:
+      - defines_primitive
+      - - Name: u32
+functions:
+  bitwise_not:
+    source_index: 0
+    index: 0
+    doc: " Returns the bitwise not of the value.\n Each bit that is 1 becomes 0. Each bit that is 0 becomes 1."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u32
+    return_:
+      - u32
+  max:
+    source_index: 1
+    index: 1
+    doc: " Return the larger of `x` and `y`"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u32
+      - name: y
+        type_: u32
+    return_:
+      - u32
+  min:
+    source_index: 2
+    index: 2
+    doc: " Return the smaller of `x` and `y`"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u32
+      - name: y
+        type_: u32
+    return_:
+      - u32
+  diff:
+    source_index: 3
+    index: 3
+    doc: " Return the absolute value of x - y"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u32
+      - name: y
+        type_: u32
+    return_:
+      - u32
+  divide_and_round_up:
+    source_index: 4
+    index: 4
+    doc: " Calculate x / y, but round up the result."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u32
+      - name: y
+        type_: u32
+    return_:
+      - u32
+  pow:
+    source_index: 5
+    index: 5
+    doc: " Return the value of a base raised to a power"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: base
+        type_: u32
+      - name: exponent
+        type_: u8
+    return_:
+      - u32
+  sqrt:
+    source_index: 6
+    index: 6
+    doc: " Get a nearest lower integer Square Root for `x`. Given that this\n function can only operate with integers, it is impossible\n to get perfect (or precise) integer square root for some numbers.\n\n Example:\n ```\n math::sqrt(9) => 3\n math::sqrt(8) => 2 // the nearest lower square root is 4;\n ```\n\n In integer math, one of the possible ways to get results with more\n precision is to use higher values or temporarily multiply the\n value by some bigger number. Ideally if this is a square of 10 or 100.\n\n Example:\n ```\n math::sqrt(8) => 2;\n math::sqrt(8 * 10000) => 282;\n // now we can use this value as if it was 2.82;\n // but to get the actual result, this value needs\n // to be divided by 100 (because sqrt(10000)).\n\n\n math::sqrt(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)\n ```"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u32
+    return_:
+      - u32
+  try_as_u8:
+    source_index: 7
+    index: 7
+    doc: " Try to convert a `u32` to a `u8`. Returns `None` if the value is too large."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u32
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - u8
+  try_as_u16:
+    source_index: 8
+    index: 8
+    doc: " Try to convert a `u32` to a `u16`. Returns `None` if the value is too large."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u32
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - u16
+  to_string:
+    source_index: 9
+    index: 9
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u32
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: string
+          name: String
+          type_arguments: []
+  do:
+    source_index: 13
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `0` to `$stop` (exclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $stop
+        type_: u32
+      - name: $f
+        type_:
+          fun:
+            - - u32
+            - NamedTypeParameter: $R
+    return_: []
+  do_eq:
+    source_index: 14
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `0` to `$stop` (inclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $stop
+        type_: u32
+      - name: $f
+        type_:
+          fun:
+            - - u32
+            - NamedTypeParameter: $R
+    return_: []
+  max_value:
+    source_index: 10
+    index: 18446744073709551615
+    doc: " Maximum value for a `u32`"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters: []
+    parameters: []
+    return_:
+      - u32
+  range_do:
+    source_index: 11
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `$start` to `$stop` (exclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $start
+        type_: u32
+      - name: $stop
+        type_: u32
+      - name: $f
+        type_:
+          fun:
+            - - u32
+            - NamedTypeParameter: $R
+    return_: []
+  range_do_eq:
+    source_index: 12
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `$start` to `$stop` (inclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $start
+        type_: u32
+      - name: $stop
+        type_: u32
+      - name: $f
+        type_:
+          fun:
+            - - u32
+            - NamedTypeParameter: $R
+    return_: []
+structs: {}
+enums: {}
+---
+doc: ~
+immediate_dependencies:
+  - address: std
+    name: option
+  - address: std
+    name: string
+  - address: std
+    name: vector
+attributes:
+  - Parameterized:
+      - defines_primitive
+      - - Name: u64
+functions:
+  bitwise_not:
+    source_index: 0
+    index: 0
+    doc: " Returns the bitwise not of the value.\n Each bit that is 1 becomes 0. Each bit that is 0 becomes 1."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u64
+    return_:
+      - u64
+  max:
+    source_index: 1
+    index: 1
+    doc: " Return the larger of `x` and `y`"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u64
+      - name: y
+        type_: u64
+    return_:
+      - u64
+  min:
+    source_index: 2
+    index: 2
+    doc: " Return the smaller of `x` and `y`"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u64
+      - name: y
+        type_: u64
+    return_:
+      - u64
+  diff:
+    source_index: 3
+    index: 3
+    doc: " Return the absolute value of x - y"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u64
+      - name: y
+        type_: u64
+    return_:
+      - u64
+  divide_and_round_up:
+    source_index: 4
+    index: 4
+    doc: " Calculate x / y, but round up the result."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u64
+      - name: y
+        type_: u64
+    return_:
+      - u64
+  pow:
+    source_index: 5
+    index: 5
+    doc: " Return the value of a base raised to a power"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: base
+        type_: u64
+      - name: exponent
+        type_: u8
+    return_:
+      - u64
+  sqrt:
+    source_index: 6
+    index: 6
+    doc: " Get a nearest lower integer Square Root for `x`. Given that this\n function can only operate with integers, it is impossible\n to get perfect (or precise) integer square root for some numbers.\n\n Example:\n ```\n math::sqrt(9) => 3\n math::sqrt(8) => 2 // the nearest lower square root is 4;\n ```\n\n In integer math, one of the possible ways to get results with more\n precision is to use higher values or temporarily multiply the\n value by some bigger number. Ideally if this is a square of 10 or 100.\n\n Example:\n ```\n math::sqrt(8) => 2;\n math::sqrt(8 * 10000) => 282;\n // now we can use this value as if it was 2.82;\n // but to get the actual result, this value needs\n // to be divided by 100 (because sqrt(10000)).\n\n\n math::sqrt(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)\n ```"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u64
+    return_:
+      - u64
+  try_as_u8:
+    source_index: 7
+    index: 7
+    doc: " Try to convert a `u64` to a `u8`. Returns `None` if the value is too large."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u64
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - u8
+  try_as_u16:
+    source_index: 8
+    index: 8
+    doc: " Try to convert a `u64` to a `u16`. Returns `None` if the value is too large."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u64
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - u16
+  try_as_u32:
+    source_index: 9
+    index: 9
+    doc: " Try to convert a `u64` to a `u32`. Returns `None` if the value is too large."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u64
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - u32
+  to_string:
+    source_index: 10
+    index: 10
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u64
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: string
+          name: String
+          type_arguments: []
+  do:
+    source_index: 14
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `0` to `$stop` (exclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $stop
+        type_: u64
+      - name: $f
+        type_:
+          fun:
+            - - u64
+            - NamedTypeParameter: $R
+    return_: []
+  do_eq:
+    source_index: 15
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `0` to `$stop` (inclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $stop
+        type_: u64
+      - name: $f
+        type_:
+          fun:
+            - - u64
+            - NamedTypeParameter: $R
+    return_: []
+  max_value:
+    source_index: 11
+    index: 18446744073709551615
+    doc: " Maximum value for a `u64`"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters: []
+    parameters: []
+    return_:
+      - u64
+  range_do:
+    source_index: 12
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `$start` to `$stop` (exclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $start
+        type_: u64
+      - name: $stop
+        type_: u64
+      - name: $f
+        type_:
+          fun:
+            - - u64
+            - NamedTypeParameter: $R
+    return_: []
+  range_do_eq:
+    source_index: 13
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `$start` to `$stop` (inclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $start
+        type_: u64
+      - name: $stop
+        type_: u64
+      - name: $f
+        type_:
+          fun:
+            - - u64
+            - NamedTypeParameter: $R
+    return_: []
+structs: {}
+enums: {}
+---
+doc: ~
+immediate_dependencies:
+  - address: std
+    name: string
+  - address: std
+    name: vector
+attributes:
+  - Parameterized:
+      - defines_primitive
+      - - Name: u8
+functions:
+  bitwise_not:
+    source_index: 0
+    index: 0
+    doc: " Returns the bitwise not of the value.\n Each bit that is 1 becomes 0. Each bit that is 0 becomes 1."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u8
+    return_:
+      - u8
+  max:
+    source_index: 1
+    index: 1
+    doc: " Return the larger of `x` and `y`"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u8
+      - name: y
+        type_: u8
+    return_:
+      - u8
+  min:
+    source_index: 2
+    index: 2
+    doc: " Return the smaller of `x` and `y`"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u8
+      - name: y
+        type_: u8
+    return_:
+      - u8
+  diff:
+    source_index: 3
+    index: 3
+    doc: " Return the absolute value of x - y"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u8
+      - name: y
+        type_: u8
+    return_:
+      - u8
+  divide_and_round_up:
+    source_index: 4
+    index: 4
+    doc: " Calculate x / y, but round up the result."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u8
+      - name: y
+        type_: u8
+    return_:
+      - u8
+  pow:
+    source_index: 5
+    index: 5
+    doc: " Return the value of a base raised to a power"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: base
+        type_: u8
+      - name: exponent
+        type_: u8
+    return_:
+      - u8
+  sqrt:
+    source_index: 6
+    index: 6
+    doc: " Get a nearest lower integer Square Root for `x`. Given that this\n function can only operate with integers, it is impossible\n to get perfect (or precise) integer square root for some numbers.\n\n Example:\n ```\n math::sqrt(9) => 3\n math::sqrt(8) => 2 // the nearest lower square root is 4;\n ```\n\n In integer math, one of the possible ways to get results with more\n precision is to use higher values or temporarily multiply the\n value by some bigger number. Ideally if this is a square of 10 or 100.\n\n Example:\n ```\n math::sqrt(8) => 2;\n math::sqrt(8 * 10000) => 282;\n // now we can use this value as if it was 2.82;\n // but to get the actual result, this value needs\n // to be divided by 100 (because sqrt(10000)).\n\n\n math::sqrt(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)\n ```"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u8
+    return_:
+      - u8
+  to_string:
+    source_index: 7
+    index: 7
+    doc: ~
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: x
+        type_: u8
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: string
+          name: String
+          type_arguments: []
+  do:
+    source_index: 11
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `0` to `$stop` (exclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $stop
+        type_: u8
+      - name: $f
+        type_:
+          fun:
+            - - u8
+            - NamedTypeParameter: $R
+    return_: []
+  do_eq:
+    source_index: 12
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `0` to `$stop` (inclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $stop
+        type_: u8
+      - name: $f
+        type_:
+          fun:
+            - - u8
+            - NamedTypeParameter: $R
+    return_: []
+  max_value:
+    source_index: 8
+    index: 18446744073709551615
+    doc: " Maximum value for a `u8`"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters: []
+    parameters: []
+    return_:
+      - u8
+  range_do:
+    source_index: 9
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `$start` to `$stop` (exclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $start
+        type_: u8
+      - name: $stop
+        type_: u8
+      - name: $f
+        type_:
+          fun:
+            - - u8
+            - NamedTypeParameter: $R
+    return_: []
+  range_do_eq:
+    source_index: 10
+    index: 18446744073709551615
+    doc: " Loops applying `$f` to each number from `$start` to `$stop` (inclusive)"
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $start
+        type_: u8
+      - name: $stop
+        type_: u8
+      - name: $f
+        type_:
+          fun:
+            - - u8
+            - NamedTypeParameter: $R
+    return_: []
+structs: {}
+enums: {}
+---
+doc: " Defines an unsigned, fixed-point numeric type with a 32-bit integer part and a 32-bit fractional\n part. The notation `uq32_32` and `UQ32_32` is based on\n [Q notation](https://en.wikipedia.org/wiki/Q_(number_format)). `q` indicates it a fixed-point\n number. The `u` prefix indicates it is unsigned. The `32_32` suffix indicates the number of\n bits, where the first number indicates the number of bits in the integer part, and the second\n the number of bits in the fractional part--in this case 32 bits for each."
+immediate_dependencies: []
+attributes: []
+functions:
+  from_quotient:
+    source_index: 0
+    index: 0
+    doc: " Create a fixed-point value from a quotient specified by its numerator and denominator.\n `from_quotient` and `from_int` should be preferred over using `from_raw`.\n Unless the denominator is a power of two, fractions can not be represented accurately,\n so be careful about rounding errors.\n Aborts if the denominator is zero.\n Aborts if the input is non-zero but so small that it will be represented as zero, e.g. smaller\n than 2^{-32}.\n Aborts if the input is too large, e.g. larger than or equal to 2^32."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: numerator
+        type_: u64
+      - name: denominator
+        type_: u64
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: uq32_32
+          name: UQ32_32
+          type_arguments: []
+  from_int:
+    source_index: 1
+    index: 1
+    doc: " Create a fixed-point value from an integer.\n `from_int` and `from_quotient` should be preferred over using `from_raw`."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: integer
+        type_: u32
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: uq32_32
+          name: UQ32_32
+          type_arguments: []
+  add:
+    source_index: 2
+    index: 2
+    doc: " Add two fixed-point numbers, `a + b`.\n Aborts if the sum overflows."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: a
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq32_32
+            name: UQ32_32
+            type_arguments: []
+      - name: b
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq32_32
+            name: UQ32_32
+            type_arguments: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: uq32_32
+          name: UQ32_32
+          type_arguments: []
+  sub:
+    source_index: 3
+    index: 3
+    doc: " Subtract two fixed-point numbers, `a - b`.\n Aborts if `a < b`."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: a
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq32_32
+            name: UQ32_32
+            type_arguments: []
+      - name: b
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq32_32
+            name: UQ32_32
+            type_arguments: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: uq32_32
+          name: UQ32_32
+          type_arguments: []
+  mul:
+    source_index: 4
+    index: 4
+    doc: " Multiply two fixed-point numbers, truncating any fractional part of the product.\n Aborts if the product overflows."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: a
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq32_32
+            name: UQ32_32
+            type_arguments: []
+      - name: b
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq32_32
+            name: UQ32_32
+            type_arguments: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: uq32_32
+          name: UQ32_32
+          type_arguments: []
+  div:
+    source_index: 5
+    index: 5
+    doc: " Divide two fixed-point numbers, truncating any fractional part of the quotient.\n Aborts if the divisor is zero.\n Aborts if the quotient overflows."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: a
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq32_32
+            name: UQ32_32
+            type_arguments: []
+      - name: b
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq32_32
+            name: UQ32_32
+            type_arguments: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: uq32_32
+          name: UQ32_32
+          type_arguments: []
+  to_int:
+    source_index: 6
+    index: 6
+    doc: " Convert a fixed-point number to an integer, truncating any fractional part."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: a
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq32_32
+            name: UQ32_32
+            type_arguments: []
+    return_:
+      - u32
+  int_mul:
+    source_index: 7
+    index: 7
+    doc: " Multiply a `u64` integer by a fixed-point number, truncating any fractional part of the product.\n Aborts if the product overflows."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: val
+        type_: u64
+      - name: multiplier
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq32_32
+            name: UQ32_32
+            type_arguments: []
+    return_:
+      - u64
+  int_div:
+    source_index: 8
+    index: 8
+    doc: " Divide a `u64` integer by a fixed-point number, truncating any fractional part of the quotient.\n Aborts if the divisor is zero.\n Aborts if the quotient overflows."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: val
+        type_: u64
+      - name: divisor
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq32_32
+            name: UQ32_32
+            type_arguments: []
+    return_:
+      - u64
+  le:
+    source_index: 9
+    index: 9
+    doc: " Less than or equal to. Returns `true` if and only if `a <= a`."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: a
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq32_32
+            name: UQ32_32
+            type_arguments: []
+      - name: b
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq32_32
+            name: UQ32_32
+            type_arguments: []
+    return_:
+      - bool
+  lt:
+    source_index: 10
+    index: 10
+    doc: " Less than. Returns `true` if and only if `a < b`."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: a
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq32_32
+            name: UQ32_32
+            type_arguments: []
+      - name: b
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq32_32
+            name: UQ32_32
+            type_arguments: []
+    return_:
+      - bool
+  ge:
+    source_index: 11
+    index: 11
+    doc: " Greater than or equal to. Returns `true` if and only if `a >= b`."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: a
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq32_32
+            name: UQ32_32
+            type_arguments: []
+      - name: b
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq32_32
+            name: UQ32_32
+            type_arguments: []
+    return_:
+      - bool
+  gt:
+    source_index: 12
+    index: 12
+    doc: " Greater than. Returns `true` if and only if `a > b`."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: a
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq32_32
+            name: UQ32_32
+            type_arguments: []
+      - name: b
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq32_32
+            name: UQ32_32
+            type_arguments: []
+    return_:
+      - bool
+  to_raw:
+    source_index: 13
+    index: 13
+    doc: " Accessor for the raw u64 value. Can be paired with `from_raw` to perform less common operations\n on the raw values directly."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: a
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq32_32
+            name: UQ32_32
+            type_arguments: []
+    return_:
+      - u64
+  from_raw:
+    source_index: 14
+    index: 14
+    doc: " Accessor for the raw u64 value. Can be paired with `to_raw` to perform less common operations\n on the raw values directly."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: raw_value
+        type_: u64
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: uq32_32
+          name: UQ32_32
+          type_arguments: []
+structs:
+  UQ32_32:
+    index: 0
+    doc: " A fixed-point numeric type with 32 integer bits and 32 fractional bits, represented by an\n underlying 64 bit value. This is a binary representation, so decimal values may not be exactly\n representable, but it provides more than 9 decimal digits of precision both before and after the\n decimal point (18 digits total)."
+    attributes: []
+    abilities:
+      - Copy
+      - Drop
+      - Store
+    type_parameters: []
+    fields:
+      positional_fields: true
+      fields:
+        pos0:
+          index: 0
+          doc: ~
+          type_: u64
+enums: {}
+---
+doc: " Defines an unsigned, fixed-point numeric type with a 64-bit integer part and a 64-bit fractional\n part. The notation `uq64_64` and `UQ64_64` is based on\n [Q notation](https://en.wikipedia.org/wiki/Q_(number_format)). `q` indicates it a fixed-point\n number. The `u` prefix indicates it is unsigned. The `64_64` suffix indicates the number of\n bits, where the first number indicates the number of bits in the integer part, and the second\n the number of bits in the fractional part--in this case 64 bits for each."
+immediate_dependencies: []
+attributes: []
+functions:
+  from_quotient:
+    source_index: 0
+    index: 0
+    doc: " Create a fixed-point value from a quotient specified by its numerator and denominator.\n `from_quotient` and `from_int` should be preferred over using `from_raw`.\n Unless the denominator is a power of two, fractions can not be represented accurately,\n so be careful about rounding errors.\n Aborts if the denominator is zero.\n Aborts if the input is non-zero but so small that it will be represented as zero, e.g. smaller\n than 2^{-64}.\n Aborts if the input is too large, e.g. larger than or equal to 2^64."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: numerator
+        type_: u128
+      - name: denominator
+        type_: u128
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: uq64_64
+          name: UQ64_64
+          type_arguments: []
+  from_int:
+    source_index: 1
+    index: 1
+    doc: " Create a fixed-point value from an integer.\n `from_int` and `from_quotient` should be preferred over using `from_raw`."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: integer
+        type_: u64
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: uq64_64
+          name: UQ64_64
+          type_arguments: []
+  add:
+    source_index: 2
+    index: 2
+    doc: " Add two fixed-point numbers, `a + b`.\n Aborts if the sum overflows."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: a
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq64_64
+            name: UQ64_64
+            type_arguments: []
+      - name: b
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq64_64
+            name: UQ64_64
+            type_arguments: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: uq64_64
+          name: UQ64_64
+          type_arguments: []
+  sub:
+    source_index: 3
+    index: 3
+    doc: " Subtract two fixed-point numbers, `a - b`.\n Aborts if `a < b`."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: a
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq64_64
+            name: UQ64_64
+            type_arguments: []
+      - name: b
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq64_64
+            name: UQ64_64
+            type_arguments: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: uq64_64
+          name: UQ64_64
+          type_arguments: []
+  mul:
+    source_index: 4
+    index: 4
+    doc: " Multiply two fixed-point numbers, truncating any fractional part of the product.\n Aborts if the product overflows."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: a
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq64_64
+            name: UQ64_64
+            type_arguments: []
+      - name: b
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq64_64
+            name: UQ64_64
+            type_arguments: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: uq64_64
+          name: UQ64_64
+          type_arguments: []
+  div:
+    source_index: 5
+    index: 5
+    doc: " Divide two fixed-point numbers, truncating any fractional part of the quotient.\n Aborts if the divisor is zero.\n Aborts if the quotient overflows."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: a
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq64_64
+            name: UQ64_64
+            type_arguments: []
+      - name: b
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq64_64
+            name: UQ64_64
+            type_arguments: []
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: uq64_64
+          name: UQ64_64
+          type_arguments: []
+  to_int:
+    source_index: 6
+    index: 6
+    doc: " Convert a fixed-point number to an integer, truncating any fractional part."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: a
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq64_64
+            name: UQ64_64
+            type_arguments: []
+    return_:
+      - u64
+  int_mul:
+    source_index: 7
+    index: 7
+    doc: " Multiply a `u128` integer by a fixed-point number, truncating any fractional part of the product.\n Aborts if the product overflows."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: val
+        type_: u128
+      - name: multiplier
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq64_64
+            name: UQ64_64
+            type_arguments: []
+    return_:
+      - u128
+  int_div:
+    source_index: 8
+    index: 8
+    doc: " Divide a `u128` integer by a fixed-point number, truncating any fractional part of the quotient.\n Aborts if the divisor is zero.\n Aborts if the quotient overflows."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: val
+        type_: u128
+      - name: divisor
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq64_64
+            name: UQ64_64
+            type_arguments: []
+    return_:
+      - u128
+  le:
+    source_index: 9
+    index: 9
+    doc: " Less than or equal to. Returns `true` if and only if `a <= a`."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: a
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq64_64
+            name: UQ64_64
+            type_arguments: []
+      - name: b
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq64_64
+            name: UQ64_64
+            type_arguments: []
+    return_:
+      - bool
+  lt:
+    source_index: 10
+    index: 10
+    doc: " Less than. Returns `true` if and only if `a < b`."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: a
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq64_64
+            name: UQ64_64
+            type_arguments: []
+      - name: b
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq64_64
+            name: UQ64_64
+            type_arguments: []
+    return_:
+      - bool
+  ge:
+    source_index: 11
+    index: 11
+    doc: " Greater than or equal to. Returns `true` if and only if `a >= b`."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: a
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq64_64
+            name: UQ64_64
+            type_arguments: []
+      - name: b
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq64_64
+            name: UQ64_64
+            type_arguments: []
+    return_:
+      - bool
+  gt:
+    source_index: 12
+    index: 12
+    doc: " Greater than. Returns `true` if and only if `a > b`."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: a
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq64_64
+            name: UQ64_64
+            type_arguments: []
+      - name: b
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq64_64
+            name: UQ64_64
+            type_arguments: []
+    return_:
+      - bool
+  to_raw:
+    source_index: 13
+    index: 13
+    doc: " Accessor for the raw u128 value. Can be paired with `from_raw` to perform less common operations\n on the raw values directly."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: a
+        type_:
+          Datatype:
+            module:
+              address: std
+              name: uq64_64
+            name: UQ64_64
+            type_arguments: []
+    return_:
+      - u128
+  from_raw:
+    source_index: 14
+    index: 14
+    doc: " Accessor for the raw u128 value. Can be paired with `to_raw` to perform less common operations\n on the raw values directly."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters: []
+    parameters:
+      - name: raw_value
+        type_: u128
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: uq64_64
+          name: UQ64_64
+          type_arguments: []
+structs:
+  UQ64_64:
+    index: 0
+    doc: " A fixed-point numeric type with 64 integer bits and 64 fractional bits, represented by an\n underlying 128 bit value. This is a binary representation, so decimal values may not be exactly\n representable, but it provides more than 19 decimal digits of precision both before and after\n the decimal point (38 digits total)."
+    attributes: []
+    abilities:
+      - Copy
+      - Drop
+      - Store
+    type_parameters: []
+    fields:
+      positional_fields: true
+      fields:
+        pos0:
+          index: 0
+          doc: ~
+          type_: u128
+enums: {}
+---
+doc: " A variable-sized container that can hold any type. Indexing is 0-based, and\n vectors are growable. This module has many native functions."
+immediate_dependencies: []
+attributes:
+  - Parameterized:
+      - defines_primitive
+      - - Name: vector
+functions:
+  empty:
+    source_index: 0
+    index: 0
+    doc: " Create an empty vector."
+    attributes:
+      - Name: bytecode_instruction
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters: []
+    return_:
+      - vector:
+          NamedTypeParameter: Element
+  length:
+    source_index: 1
+    index: 1
+    doc: " Return the length of the vector."
+    attributes:
+      - Name: bytecode_instruction
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: v
+        type_:
+          Reference:
+            - false
+            - vector:
+                NamedTypeParameter: Element
+    return_:
+      - u64
+  borrow:
+    source_index: 2
+    index: 2
+    doc: " Acquire an immutable reference to the `i`th element of the vector `v`.\n Aborts if `i` is out of bounds."
+    attributes:
+      - Name: bytecode_instruction
+      - Parameterized:
+          - syntax
+          - - Name: index
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: v
+        type_:
+          Reference:
+            - false
+            - vector:
+                NamedTypeParameter: Element
+      - name: i
+        type_: u64
+    return_:
+      - Reference:
+          - false
+          - NamedTypeParameter: Element
+  push_back:
+    source_index: 3
+    index: 3
+    doc: " Add element `e` to the end of the vector `v`."
+    attributes:
+      - Name: bytecode_instruction
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: v
+        type_:
+          Reference:
+            - true
+            - vector:
+                NamedTypeParameter: Element
+      - name: e
+        type_:
+          NamedTypeParameter: Element
+    return_: []
+  borrow_mut:
+    source_index: 4
+    index: 4
+    doc: " Return a mutable reference to the `i`th element in the vector `v`.\n Aborts if `i` is out of bounds."
+    attributes:
+      - Name: bytecode_instruction
+      - Parameterized:
+          - syntax
+          - - Name: index
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: v
+        type_:
+          Reference:
+            - true
+            - vector:
+                NamedTypeParameter: Element
+      - name: i
+        type_: u64
+    return_:
+      - Reference:
+          - true
+          - NamedTypeParameter: Element
+  pop_back:
+    source_index: 5
+    index: 5
+    doc: " Pop an element from the end of vector `v`.\n Aborts if `v` is empty."
+    attributes:
+      - Name: bytecode_instruction
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: v
+        type_:
+          Reference:
+            - true
+            - vector:
+                NamedTypeParameter: Element
+    return_:
+      - NamedTypeParameter: Element
+  destroy_empty:
+    source_index: 6
+    index: 6
+    doc: " Destroy the vector `v`.\n Aborts if `v` is not empty."
+    attributes:
+      - Name: bytecode_instruction
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: v
+        type_:
+          vector:
+            NamedTypeParameter: Element
+    return_: []
+  swap:
+    source_index: 7
+    index: 7
+    doc: " Swaps the elements at the `i`th and `j`th indices in the vector `v`.\n Aborts if `i` or `j` is out of bounds."
+    attributes:
+      - Name: bytecode_instruction
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: v
+        type_:
+          Reference:
+            - true
+            - vector:
+                NamedTypeParameter: Element
+      - name: i
+        type_: u64
+      - name: j
+        type_: u64
+    return_: []
+  singleton:
+    source_index: 8
+    index: 8
+    doc: " Return an vector of size one containing element `e`."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: e
+        type_:
+          NamedTypeParameter: Element
+    return_:
+      - vector:
+          NamedTypeParameter: Element
+  reverse:
+    source_index: 9
+    index: 9
+    doc: " Reverses the order of the elements in the vector `v` in place."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: v
+        type_:
+          Reference:
+            - true
+            - vector:
+                NamedTypeParameter: Element
+    return_: []
+  append:
+    source_index: 10
+    index: 10
+    doc: " Pushes all of the elements of the `other` vector into the `lhs` vector."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: lhs
+        type_:
+          Reference:
+            - true
+            - vector:
+                NamedTypeParameter: Element
+      - name: other
+        type_:
+          vector:
+            NamedTypeParameter: Element
+    return_: []
+  is_empty:
+    source_index: 11
+    index: 11
+    doc: " Return `true` if the vector `v` has no elements and `false` otherwise."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: v
+        type_:
+          Reference:
+            - false
+            - vector:
+                NamedTypeParameter: Element
+    return_:
+      - bool
+  contains:
+    source_index: 12
+    index: 12
+    doc: " Return true if `e` is in the vector `v`.\n Otherwise, returns false."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: v
+        type_:
+          Reference:
+            - false
+            - vector:
+                NamedTypeParameter: Element
+      - name: e
+        type_:
+          Reference:
+            - false
+            - NamedTypeParameter: Element
+    return_:
+      - bool
+  index_of:
+    source_index: 13
+    index: 13
+    doc: " Return `(true, i)` if `e` is in the vector `v` at index `i`.\n Otherwise, returns `(false, 0)`."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: v
+        type_:
+          Reference:
+            - false
+            - vector:
+                NamedTypeParameter: Element
+      - name: e
+        type_:
+          Reference:
+            - false
+            - NamedTypeParameter: Element
+    return_:
+      - bool
+      - u64
+  remove:
+    source_index: 14
+    index: 14
+    doc: " Remove the `i`th element of the vector `v`, shifting all subsequent elements.\n This is O(n) and preserves ordering of elements in the vector.\n Aborts if `i` is out of bounds."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: v
+        type_:
+          Reference:
+            - true
+            - vector:
+                NamedTypeParameter: Element
+      - name: i
+        type_: u64
+    return_:
+      - NamedTypeParameter: Element
+  insert:
+    source_index: 15
+    index: 15
+    doc: " Insert `e` at position `i` in the vector `v`.\n If `i` is in bounds, this shifts the old `v[i]` and all subsequent elements to the right.\n If `i == v.length()`, this adds `e` to the end of the vector.\n This is O(n) and preserves ordering of elements in the vector.\n Aborts if `i > v.length()`"
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: v
+        type_:
+          Reference:
+            - true
+            - vector:
+                NamedTypeParameter: Element
+      - name: e
+        type_:
+          NamedTypeParameter: Element
+      - name: i
+        type_: u64
+    return_: []
+  swap_remove:
+    source_index: 16
+    index: 16
+    doc: " Swap the `i`th element of the vector `v` with the last element and then pop the vector.\n This is O(1), but does not preserve ordering of elements in the vector.\n Aborts if `i` is out of bounds."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: Element
+        constraints: []
+    parameters:
+      - name: v
+        type_:
+          Reference:
+            - true
+            - vector:
+                NamedTypeParameter: Element
+      - name: i
+        type_: u64
+    return_:
+      - NamedTypeParameter: Element
+  flatten:
+    source_index: 29
+    index: 17
+    doc: " Concatenate the vectors of `v` into a single vector, keeping the order of the elements."
+    attributes: []
+    visibility: Public
+    entry: false
+    type_parameters:
+      - name: T
+        constraints: []
+    parameters:
+      - name: v
+        type_:
+          vector:
+            vector:
+              NamedTypeParameter: T
+    return_:
+      - vector:
+          NamedTypeParameter: T
+  all:
+    source_index: 31
+    index: 18446744073709551615
+    doc: " Whether all elements in the vector `v` satisfy the predicate `f`.\n If the vector is empty, returns `true`."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+    parameters:
+      - name: $v
+        type_:
+          Reference:
+            - false
+            - vector:
+                NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - Reference:
+                  - false
+                  - NamedTypeParameter: $T
+            - bool
+    return_:
+      - bool
+  any:
+    source_index: 30
+    index: 18446744073709551615
+    doc: " Whether any element in the vector `v` satisfies the predicate `f`.\n If the vector is empty, returns `false`."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+    parameters:
+      - name: $v
+        type_:
+          Reference:
+            - false
+            - vector:
+                NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - Reference:
+                  - false
+                  - NamedTypeParameter: $T
+            - bool
+    return_:
+      - bool
+  count:
+    source_index: 27
+    index: 18446744073709551615
+    doc: " Count how many elements in the vector `v` satisfy the predicate `f`."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+    parameters:
+      - name: $v
+        type_:
+          Reference:
+            - false
+            - vector:
+                NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - Reference:
+                  - false
+                  - NamedTypeParameter: $T
+            - bool
+    return_:
+      - u64
+  destroy:
+    source_index: 18
+    index: 18446744073709551615
+    doc: " Destroy the vector `v` by calling `f` on each element and then destroying the vector.\n Does not preserve the order of elements in the vector (starts from the end of the vector)."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $v
+        type_:
+          vector:
+            NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - NamedTypeParameter: $T
+            - NamedTypeParameter: $R
+    return_: []
+  do:
+    source_index: 19
+    index: 18446744073709551615
+    doc: " Destroy the vector `v` by calling `f` on each element and then destroying the vector.\n Preserves the order of elements in the vector."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $v
+        type_:
+          vector:
+            NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - NamedTypeParameter: $T
+            - NamedTypeParameter: $R
+    return_: []
+  do_mut:
+    source_index: 21
+    index: 18446744073709551615
+    doc: " Perform an action `f` on each element of the vector `v`.\n The function `f` takes a mutable reference to the element."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $v
+        type_:
+          Reference:
+            - true
+            - vector:
+                NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - Reference:
+                  - true
+                  - NamedTypeParameter: $T
+            - NamedTypeParameter: $R
+    return_: []
+  do_ref:
+    source_index: 20
+    index: 18446744073709551615
+    doc: " Perform an action `f` on each element of the vector `v`. The vector is not modified."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $v
+        type_:
+          Reference:
+            - false
+            - vector:
+                NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - Reference:
+                  - false
+                  - NamedTypeParameter: $T
+            - NamedTypeParameter: $R
+    return_: []
+  filter:
+    source_index: 24
+    index: 18446744073709551615
+    doc: " Filter the vector `v` by applying the function `f` to each element.\n Return a new vector containing only the elements for which `f` returns `true`."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints:
+          - Drop
+    parameters:
+      - name: $v
+        type_:
+          vector:
+            NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - Reference:
+                  - false
+                  - NamedTypeParameter: $T
+            - bool
+    return_:
+      - vector:
+          NamedTypeParameter: $T
+  find_index:
+    source_index: 26
+    index: 18446744073709551615
+    doc: " Finds the index of first element in the vector `v` that satisfies the predicate `f`.\n Returns `some(index)` if such an element is found, otherwise `none()`."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+    parameters:
+      - name: $v
+        type_:
+          Reference:
+            - false
+            - vector:
+                NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - Reference:
+                  - false
+                  - NamedTypeParameter: $T
+            - bool
+    return_:
+      - Datatype:
+          module:
+            address: std
+            name: option
+          name: Option
+          type_arguments:
+            - u64
+  fold:
+    source_index: 28
+    index: 18446744073709551615
+    doc: " Reduce the vector `v` to a single value by applying the function `f` to each element.\n Similar to `fold_left` in Rust and `reduce` in Python and JavaScript."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $Acc
+        constraints: []
+    parameters:
+      - name: $v
+        type_:
+          vector:
+            NamedTypeParameter: $T
+      - name: $init
+        type_:
+          NamedTypeParameter: $Acc
+      - name: $f
+        type_:
+          fun:
+            - - NamedTypeParameter: $Acc
+              - NamedTypeParameter: $T
+            - NamedTypeParameter: $Acc
+    return_:
+      - NamedTypeParameter: $Acc
+  map:
+    source_index: 22
+    index: 18446744073709551615
+    doc: " Map the vector `v` to a new vector by applying the function `f` to each element.\n Preserves the order of elements in the vector, first is called first."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $U
+        constraints: []
+    parameters:
+      - name: $v
+        type_:
+          vector:
+            NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - NamedTypeParameter: $T
+            - NamedTypeParameter: $U
+    return_:
+      - vector:
+          NamedTypeParameter: $U
+  map_ref:
+    source_index: 23
+    index: 18446744073709551615
+    doc: " Map the vector `v` to a new vector by applying the function `f` to each element.\n Preserves the order of elements in the vector, first is called first."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+      - name: $U
+        constraints: []
+    parameters:
+      - name: $v
+        type_:
+          Reference:
+            - false
+            - vector:
+                NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - Reference:
+                  - false
+                  - NamedTypeParameter: $T
+            - NamedTypeParameter: $U
+    return_:
+      - vector:
+          NamedTypeParameter: $U
+  partition:
+    source_index: 25
+    index: 18446744073709551615
+    doc: " Split the vector `v` into two vectors by applying the function `f` to each element.\n Return a tuple containing two vectors: the first containing the elements for which `f` returns `true`,\n and the second containing the elements for which `f` returns `false`."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+    parameters:
+      - name: $v
+        type_:
+          vector:
+            NamedTypeParameter: $T
+      - name: $f
+        type_:
+          fun:
+            - - Reference:
+                  - false
+                  - NamedTypeParameter: $T
+            - bool
+    return_:
+      - vector:
+          NamedTypeParameter: $T
+      - vector:
+          NamedTypeParameter: $T
+  tabulate:
+    source_index: 17
+    index: 18446744073709551615
+    doc: " Create a vector of length `n` by calling the function `f` on each index."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T
+        constraints: []
+    parameters:
+      - name: $n
+        type_: u64
+      - name: $f
+        type_:
+          fun:
+            - - u64
+            - NamedTypeParameter: $T
+    return_:
+      - vector:
+          NamedTypeParameter: $T
+  zip_do:
+    source_index: 32
+    index: 18446744073709551615
+    doc: " Destroys two vectors `v1` and `v2` by calling `f` to each pair of elements.\n Aborts if the vectors are not of the same length.\n The order of elements in the vectors is preserved."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T1
+        constraints: []
+      - name: $T2
+        constraints: []
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $v1
+        type_:
+          vector:
+            NamedTypeParameter: $T1
+      - name: $v2
+        type_:
+          vector:
+            NamedTypeParameter: $T2
+      - name: $f
+        type_:
+          fun:
+            - - NamedTypeParameter: $T1
+              - NamedTypeParameter: $T2
+            - NamedTypeParameter: $R
+    return_: []
+  zip_do_mut:
+    source_index: 35
+    index: 18446744073709551615
+    doc: " Iterate through `v1` and `v2` and apply the function `f` to mutable references of each pair\n of elements. The vectors may be modified.\n Aborts if the vectors are not of the same length.\n The order of elements in the vectors is preserved."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T1
+        constraints: []
+      - name: $T2
+        constraints: []
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $v1
+        type_:
+          Reference:
+            - true
+            - vector:
+                NamedTypeParameter: $T1
+      - name: $v2
+        type_:
+          Reference:
+            - true
+            - vector:
+                NamedTypeParameter: $T2
+      - name: $f
+        type_:
+          fun:
+            - - Reference:
+                  - true
+                  - NamedTypeParameter: $T1
+              - Reference:
+                  - true
+                  - NamedTypeParameter: $T2
+            - NamedTypeParameter: $R
+    return_: []
+  zip_do_ref:
+    source_index: 34
+    index: 18446744073709551615
+    doc: " Iterate through `v1` and `v2` and apply the function `f` to references of each pair of\n elements. The vectors are not modified.\n Aborts if the vectors are not of the same length.\n The order of elements in the vectors is preserved."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T1
+        constraints: []
+      - name: $T2
+        constraints: []
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $v1
+        type_:
+          Reference:
+            - false
+            - vector:
+                NamedTypeParameter: $T1
+      - name: $v2
+        type_:
+          Reference:
+            - false
+            - vector:
+                NamedTypeParameter: $T2
+      - name: $f
+        type_:
+          fun:
+            - - Reference:
+                  - false
+                  - NamedTypeParameter: $T1
+              - Reference:
+                  - false
+                  - NamedTypeParameter: $T2
+            - NamedTypeParameter: $R
+    return_: []
+  zip_do_reverse:
+    source_index: 33
+    index: 18446744073709551615
+    doc: " Destroys two vectors `v1` and `v2` by calling `f` to each pair of elements.\n Aborts if the vectors are not of the same length.\n Starts from the end of the vectors."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T1
+        constraints: []
+      - name: $T2
+        constraints: []
+      - name: $R
+        constraints:
+          - Drop
+    parameters:
+      - name: $v1
+        type_:
+          vector:
+            NamedTypeParameter: $T1
+      - name: $v2
+        type_:
+          vector:
+            NamedTypeParameter: $T2
+      - name: $f
+        type_:
+          fun:
+            - - NamedTypeParameter: $T1
+              - NamedTypeParameter: $T2
+            - NamedTypeParameter: $R
+    return_: []
+  zip_map:
+    source_index: 36
+    index: 18446744073709551615
+    doc: " Destroys two vectors `v1` and `v2` by applying the function `f` to each pair of elements.\n The returned values are collected into a new vector.\n Aborts if the vectors are not of the same length.\n The order of elements in the vectors is preserved."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T1
+        constraints: []
+      - name: $T2
+        constraints: []
+      - name: $U
+        constraints: []
+    parameters:
+      - name: $v1
+        type_:
+          vector:
+            NamedTypeParameter: $T1
+      - name: $v2
+        type_:
+          vector:
+            NamedTypeParameter: $T2
+      - name: $f
+        type_:
+          fun:
+            - - NamedTypeParameter: $T1
+              - NamedTypeParameter: $T2
+            - NamedTypeParameter: $U
+    return_:
+      - vector:
+          NamedTypeParameter: $U
+  zip_map_ref:
+    source_index: 37
+    index: 18446744073709551615
+    doc: " Iterate through `v1` and `v2` and apply the function `f` to references of each pair of\n elements. The returned values are collected into a new vector.\n Aborts if the vectors are not of the same length.\n The order of elements in the vectors is preserved."
+    attributes: []
+    visibility: Public
+    entry: false
+    macro_: true
+    type_parameters:
+      - name: $T1
+        constraints: []
+      - name: $T2
+        constraints: []
+      - name: $U
+        constraints: []
+    parameters:
+      - name: $v1
+        type_:
+          Reference:
+            - false
+            - vector:
+                NamedTypeParameter: $T1
+      - name: $v2
+        type_:
+          Reference:
+            - false
+            - vector:
+                NamedTypeParameter: $T2
+      - name: $f
+        type_:
+          fun:
+            - - Reference:
+                  - false
+                  - NamedTypeParameter: $T1
+              - Reference:
+                  - false
+                  - NamedTypeParameter: $T2
+            - NamedTypeParameter: $U
+    return_:
+      - vector:
+          NamedTypeParameter: $U
+structs: {}
+enums: {}
