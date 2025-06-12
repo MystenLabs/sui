@@ -30,7 +30,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::dependency::external::ResolverError;
-use crate::git::errors::GitError;
+use crate::git::GitError;
 use crate::package::paths::PackagePathError;
 
 /// Result type for package operations

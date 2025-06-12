@@ -21,7 +21,6 @@ use crate::{
     dependency::{DependencySet, PinnedDependencyInfo},
     errors::{ManifestError, PackageResult},
     flavor::MoveFlavor,
-    git::GitRepo,
 };
 use move_core_types::identifier::Identifier;
 use tracing::debug;

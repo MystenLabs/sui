@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     errors::PackageResult,
-    git::{GitRepo, sha::GitSha},
+    git::{GitCache, GitSha, GitTree},
 };
 
 use super::DependencySet;
@@ -54,8 +54,16 @@ pub struct PinnedGitDependency {
 impl PinnedGitDependency {
     /// Fetch the given git dependency and return the path to the checked out repo
     pub async fn fetch(&self) -> PackageResult<PathBuf> {
-        let git_repo = GitRepo::from(self);
-        Ok(git_repo.fetch().await?)
+        let cache = GitCache::new(move_command_line_common::env::MOVE_HOME.to_string());
+        let tree = cache.tree_for_sha(self.repo.clone(), self.rev.clone(), Some(self.path.clone()));
+        Ok(tree.fetch().await?)
+    }
+
+    /// Return the path that `fetch` would return without actually fetching the data
+    pub fn unfetched_path(&self) -> PathBuf {
+        let cache = GitCache::new(move_command_line_common::env::MOVE_HOME.to_string());
+        let tree = cache.tree_for_sha(self.repo.clone(), self.rev.clone(), Some(self.path.clone()));
+        tree.path_to_tree()
     }
 }
 
@@ -76,41 +84,10 @@ impl UnpinnedGitDependency {
     /// Replace the commit-ish [self.rev] with a commit (i.e. a SHA). Requires fetching the git
     /// repository
     async fn pin_one(&self) -> PackageResult<PinnedGitDependency> {
-        let git: GitRepo = self.into();
-        let sha = git.find_sha().await?;
-
         Ok(PinnedGitDependency {
-            repo: git.repo_url,
-            rev: sha,
-            path: git.path,
+            repo: self.repo.clone(),
+            rev: GitCache::find_sha(&self.repo, &self.rev).await?,
+            path: self.path.clone(),
         })
-    }
-}
-
-impl From<&UnpinnedGitDependency> for GitRepo {
-    fn from(dep: &UnpinnedGitDependency) -> Self {
-        GitRepo::new(dep.repo.clone(), dep.rev.clone(), dep.path.clone())
-    }
-}
-
-impl From<&PinnedGitDependency> for GitRepo {
-    fn from(dep: &PinnedGitDependency) -> Self {
-        GitRepo::new(
-            dep.repo.clone(),
-            Some(dep.rev.clone().into()),
-            dep.path.clone(),
-        )
-    }
-}
-
-impl From<UnpinnedGitDependency> for GitRepo {
-    fn from(dep: UnpinnedGitDependency) -> Self {
-        GitRepo::new(dep.repo, dep.rev, dep.path)
-    }
-}
-
-impl From<PinnedGitDependency> for GitRepo {
-    fn from(dep: PinnedGitDependency) -> Self {
-        GitRepo::new(dep.repo, Some(dep.rev.into()), dep.path)
     }
 }
