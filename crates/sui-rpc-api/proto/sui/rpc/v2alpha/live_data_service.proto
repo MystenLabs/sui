@@ -150,7 +150,7 @@ message SimulateTransactionRequest {
   optional google.protobuf.FieldMask read_mask = 2;
 
   // buf:lint:ignore ENUM_ZERO_VALUE_SUFFIX
-  enum VmChecks { 
+  enum VmChecks {
     //VM_CHECKS_UNKNOWN = 0;
     ENABLED = 0;
     DISABLED = 1;
