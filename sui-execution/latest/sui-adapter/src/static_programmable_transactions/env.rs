@@ -6,7 +6,9 @@
 //! the `Env` provides consistent access to shared components such as the VM or the protocol config.
 
 use crate::{
-    data_store::{PackageStore, linked_data_store::LinkedDataStore},
+    data_store::{
+        PackageStore, cached_package_store::CachedPackageStore, linked_data_store::LinkedDataStore,
+    },
     execution_value::ExecutionState,
     static_programmable_transactions::{
         linkage::{
@@ -49,7 +51,7 @@ pub struct Env<'pc, 'vm, 'state, 'linkage> {
     pub protocol_config: &'pc ProtocolConfig,
     pub vm: &'vm MoveVM,
     pub state_view: &'state mut dyn ExecutionState,
-    pub linkable_store: &'linkage dyn PackageStore,
+    pub linkable_store: &'linkage CachedPackageStore<'state>,
     pub linkage_analysis: &'linkage dyn LinkageAnalysis,
     gas_coin_type: OnceCell<Type>,
     upgrade_ticket_type: OnceCell<Type>,
@@ -73,7 +75,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         protocol_config: &'pc ProtocolConfig,
         vm: &'vm MoveVM,
         state_view: &'state mut dyn ExecutionState,
-        linkable_store: &'linkage dyn PackageStore,
+        linkable_store: &'linkage CachedPackageStore<'state>,
         linkage_analysis: &'linkage dyn LinkageAnalysis,
     ) -> Self {
         Self {
