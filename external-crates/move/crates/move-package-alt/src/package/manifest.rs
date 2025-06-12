@@ -208,45 +208,6 @@ impl<F: MoveFlavor> Manifest<F> {
     }
 }
 
-/// Produce a new map `m` containing the union of the keys of `m1` and `m2`, with `m[k]` given by
-/// `f(m1.get(k), m2.get(k))`
-///
-/// `f(_, None, None)` is never called
-///
-/// Example:
-/// ```
-/// fn main() {
-///     let m1 = BTreeMap::from([("a", 1), ("b", 2)]);
-///     let m2 = BTreeMap::from([("b", 2), ("c", 3)]);
-///
-///     let zipped = map_zip(m1, m2, |_k, v1, v2| v1.unwrap_or_default() + v2.unwrap_or_default());
-///
-///     let expected = BTreeMap::from([("a", 1), ("b", 4), ("c", 3)]);
-///
-///     assert_eq!(zipped, expected);
-/// }
-/// ```
-// TODO: maybe this already exists somewhere, or could be moved into a utility module
-fn map_zip<K: Ord, V1, V2, V, F: Fn(&K, Option<V1>, Option<V2>) -> V>(
-    mut m1: BTreeMap<K, V1>,
-    mut m2: BTreeMap<K, V2>,
-    f: F,
-) -> BTreeMap<K, V> {
-    let mut result: BTreeMap<K, V> = BTreeMap::new();
-
-    for (k, v1) in m1.into_iter() {
-        let v = f(&k, Some(v1), m2.remove(&k));
-        result.insert(k, v);
-    }
-
-    for (k, v2) in m2.into_iter() {
-        let v = f(&k, None, Some(v2));
-        result.insert(k, v);
-    }
-
-    result
-}
-
 /// Compute a digest of this input data using SHA-256.
 pub fn digest(data: &[u8]) -> Digest {
     format!("{:X}", Sha256::digest(data))
