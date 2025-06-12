@@ -41,11 +41,11 @@ pub struct Manifest<F: MoveFlavor> {
     environments: BTreeMap<EnvironmentName, F::EnvironmentID>,
 
     #[serde(default)]
-    dependencies: BTreeMap<PackageName, ManifestDependency<F>>,
+    dependencies: BTreeMap<PackageName, ManifestDependency>,
     /// Replace dependencies for the given environment.
     #[serde(default)]
     dep_replacements:
-        BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyReplacement<F>>>,
+        BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyReplacement>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -61,9 +61,9 @@ struct PackageMetadata<F: MoveFlavor> {
 #[derive(Deserialize, Debug)]
 #[serde(bound = "")]
 #[serde(rename_all = "kebab-case")]
-pub struct ManifestDependency<F: MoveFlavor> {
+pub struct ManifestDependency {
     #[serde(flatten)]
-    dependency_info: UnpinnedDependencyInfo<F>,
+    dependency_info: UnpinnedDependencyInfo,
 
     #[serde(rename = "override", default)]
     is_override: bool,
@@ -75,12 +75,12 @@ pub struct ManifestDependency<F: MoveFlavor> {
 #[derive(Debug, Deserialize)]
 #[serde(bound = "")]
 #[serde(rename_all = "kebab-case")]
-pub struct ManifestDependencyReplacement<F: MoveFlavor> {
+pub struct ManifestDependencyReplacement {
     #[serde(flatten, default)]
-    dependency: Option<ManifestDependency<F>>,
+    dependency: Option<ManifestDependency>,
 
     #[serde(flatten, default)]
-    address_info: Option<F::AddressInfo>,
+    address_info: Option<AddressInfo>,
 
     #[serde(default)]
     use_environment: Option<EnvironmentName>,
@@ -146,7 +146,7 @@ impl<F: MoveFlavor> Manifest<F> {
     }
 
     /// Return the dependency set of this manifest, including replacements.
-    pub fn dependencies(&self) -> DependencySet<UnpinnedDependencyInfo<F>> {
+    pub fn dependencies(&self) -> DependencySet<UnpinnedDependencyInfo> {
         let mut deps = DependencySet::new();
 
         for (name, dep) in &self.dependencies {

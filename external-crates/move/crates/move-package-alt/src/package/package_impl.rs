@@ -26,10 +26,13 @@ use move_core_types::identifier::Identifier;
 use tracing::debug;
 
 pub type EnvironmentName = String;
+pub type EnvironmentID = String;
+
 pub type PackageName = Identifier;
+pub type AddressInfo = String;
 
 #[derive(Debug)]
-pub struct Package<F: MoveFlavor + fmt::Debug> {
+pub struct Package<F: MoveFlavor> {
     // TODO: maybe hold a lock on the lock file? Maybe not if move-analyzer wants to hold on to a
     // Package long term?
     manifest: Manifest<F>,
@@ -42,16 +45,16 @@ impl<F: MoveFlavor> Package<F> {
     ///
     /// Fails if [path] does not exist, or if it doesn't contain a manifest
     pub async fn load_root(path: impl AsRef<Path>) -> PackageResult<Self> {
-        let manifest = Manifest::<F>::read_from_file(path.as_ref())?;
+        let manifest = Manifest::read_from_file(path.as_ref())?;
         let path = PackagePath::new(path.as_ref().to_path_buf())?;
         Ok(Self { manifest, path })
     }
 
     /// Fetch [dep] and load a package from the fetched source
     /// Makes a best effort to translate old-style packages into the current format,
-    pub async fn load(dep: PinnedDependencyInfo<F>) -> PackageResult<Self> {
+    pub async fn load(dep: PinnedDependencyInfo) -> PackageResult<Self> {
         let path = PackagePath::new(dep.fetch().await?)?;
-        let manifest = Manifest::<F>::read_from_file(path.manifest_path())?;
+        let manifest = Manifest::read_from_file(path.manifest_path())?;
 
         Ok(Self { manifest, path })
     }
@@ -71,7 +74,7 @@ impl<F: MoveFlavor> Package<F> {
     pub fn direct_deps(
         &self,
         env: &EnvironmentName,
-    ) -> BTreeMap<PackageName, PinnedDependencyInfo<F>> {
+    ) -> BTreeMap<PackageName, PinnedDependencyInfo> {
         todo!()
     }
 }
