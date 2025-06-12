@@ -1,2 +1,2 @@
-summary
->cat package_summaries/std/*.json
+summary -o yaml
+>cat package_summaries/std/*.yaml
