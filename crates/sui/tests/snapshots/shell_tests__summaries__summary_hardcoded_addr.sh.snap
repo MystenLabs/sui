@@ -33,6 +33,10 @@ sui
 sui_system
 summary_pkg
 {
+  "id": {
+    "address": "summary_pkg",
+    "name": "a"
+  },
   "doc": " This is a doc comment on a module",
   "immediate_dependencies": [
     {
@@ -126,6 +130,10 @@ summary_pkg
   },
   "enums": {}
 }{
+  "id": {
+    "address": "summary_pkg",
+    "name": "b"
+  },
   "doc": " This is a doc comment on a module",
   "immediate_dependencies": [],
   "attributes": [
@@ -200,6 +208,10 @@ summary_pkg
   },
   "enums": {}
 }{
+  "id": {
+    "address": "summary_pkg",
+    "name": "b"
+  },
   "doc": " This is a doc comment on a module",
   "immediate_dependencies": [],
   "attributes": [

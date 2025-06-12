@@ -37,6 +37,10 @@ std
 sui
 sui_system
 {
+  "id": {
+    "address": "child_pkg",
+    "name": "a"
+  },
   "doc": null,
   "immediate_dependencies": [],
   "attributes": [],
@@ -75,6 +79,10 @@ sui_system
   },
   "enums": {}
 }{
+  "id": {
+    "address": "other_child",
+    "name": "a"
+  },
   "doc": null,
   "immediate_dependencies": [],
   "attributes": [],
@@ -113,6 +121,10 @@ sui_system
   },
   "enums": {}
 }{
+  "id": {
+    "address": "overlapping_summaries",
+    "name": "b"
+  },
   "doc": null,
   "immediate_dependencies": [
     {
