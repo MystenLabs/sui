@@ -172,23 +172,14 @@ impl BalanceIndexInfo {
 
 impl From<BalanceIndexInfo> for sui_types::storage::BalanceInfo {
     fn from(index_info: BalanceIndexInfo) -> Self {
-        // We store the balance as an i128 because balances can be subtracted
-        // (negative delta), but we should never end up with a balance less than 0 or greater
-        // than u64::max after the merge.
-        assert!(
-            index_info.balance_delta >= 0,
-            "Balance is negative: {} - this should never happen.",
-            index_info.balance_delta
-        );
-        assert!(
-            index_info.balance_delta <= u64::MAX as i128,
-            "Balance {} exceeds u64::MAX - this should never happen.",
-            index_info.balance_delta
-        );
-
-        sui_types::storage::BalanceInfo {
-            balance: index_info.balance_delta as u64,
-        }
+        // Note: We represent balance deltas as i128 to simplify merging positive and negative updates.
+        // Be aware: Move doesn’t enforce a one-time-witness (OTW) pattern when creating a Supply<T>.
+        // Anyone can call `sui::balance::create_supply` and mint unbounded supply, potentially pushing
+        // total balances over u64::MAX. To avoid crashing the indexer, we clamp the merged value instead
+        // of panicking on overflow. This has the unfortunate consequence of making bugs in the index
+        // harder to detect, but is a necessary trade-off to avoid creating a DOS attack vector.
+        let balance = index_info.balance_delta.clamp(0, u64::MAX as i128) as u64;
+        sui_types::storage::BalanceInfo { balance }
     }
 }
 
