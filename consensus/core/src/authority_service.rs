@@ -357,12 +357,11 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             excluded_ancestors.truncate(excluded_ancestors_limit);
         }
 
+        // Update round tracker from excluded ancestors only. The block itself was
+        // updated in round tracker from block manager.
         self.round_tracker
             .write()
-            .update_from_accepted_block(&ExtendedBlock {
-                block: verified_block,
-                excluded_ancestors: excluded_ancestors.clone(),
-            });
+            .update_from_excluded_ancestors(verified_block.author(), &excluded_ancestors);
 
         self.context
             .metrics

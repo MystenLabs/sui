@@ -15,11 +15,7 @@ use itertools::Itertools;
 
 use tracing::{debug, trace};
 
-use crate::{
-    block::{BlockAPI, ExtendedBlock},
-    context::Context,
-    Round,
-};
+use crate::{block::BlockAPI, context::Context, BlockRef, Round, VerifiedBlock};
 
 /// A [`QuorumRound`] is a round range [low, high]. It is computed from
 /// highest received or accepted rounds of an authority reported by all
@@ -59,27 +55,33 @@ impl PeerRoundTracker {
         }
     }
 
-    /// Update accepted rounds based on a new block created locally or received from the network
-    /// and its excluded ancestors
-    pub(crate) fn update_from_accepted_block(&mut self, extended_block: &ExtendedBlock) {
-        let block = &extended_block.block;
-        let excluded_ancestors = &extended_block.excluded_ancestors;
-        let author = block.author();
+    /// Update accepted rounds based on a new block created locally, received from the
+    /// network, commit sync, or via live sync.
+    pub(crate) fn update_from_accepted_blocks(&mut self, blocks: &Vec<VerifiedBlock>) {
+        for block in blocks {
+            let author = block.author();
 
-        // Update author accepted round from block round
-        self.block_accepted_rounds[author][author] =
-            self.block_accepted_rounds[author][author].max(block.round());
+            // Update author accepted round from block round
+            self.block_accepted_rounds[author][author] =
+                self.block_accepted_rounds[author][author].max(block.round());
 
-        // Update accepted rounds from included ancestors
-        for ancestor in block.ancestors() {
-            self.block_accepted_rounds[author][ancestor.author] =
-                self.block_accepted_rounds[author][ancestor.author].max(ancestor.round);
+            // Update accepted rounds from included ancestors
+            for ancestor in block.ancestors() {
+                self.block_accepted_rounds[author][ancestor.author] =
+                    self.block_accepted_rounds[author][ancestor.author].max(ancestor.round);
+            }
         }
+    }
 
+    pub(crate) fn update_from_excluded_ancestors(
+        &mut self,
+        peer: AuthorityIndex,
+        excluded_ancestors: &Vec<BlockRef>,
+    ) {
         // Update accepted rounds from excluded ancestors
         for excluded_ancestor in excluded_ancestors {
-            self.block_accepted_rounds[author][excluded_ancestor.author] = self
-                .block_accepted_rounds[author][excluded_ancestor.author]
+            self.block_accepted_rounds[peer][excluded_ancestor.author] = self.block_accepted_rounds
+                [peer][excluded_ancestor.author]
                 .max(excluded_ancestor.round);
         }
     }
@@ -276,10 +278,10 @@ mod test {
     use consensus_config::AuthorityIndex;
 
     use crate::{
-        block::{BlockDigest, ExtendedBlock},
+        block::BlockDigest,
         context::Context,
         round_tracker::{compute_quorum_round, PeerRoundTracker},
-        BlockRef, TestBlock, VerifiedBlock,
+        BlockAPI, BlockRef, TestBlock, VerifiedBlock,
     };
 
     #[tokio::test]
@@ -374,14 +376,15 @@ mod test {
             )])
             .build();
         let block = VerifiedBlock::new_for_test(test_block);
-        round_tracker.update_from_accepted_block(&ExtendedBlock {
-            block,
-            excluded_ancestors: vec![BlockRef::new(
+        round_tracker.update_from_excluded_ancestors(
+            block.author(),
+            &vec![BlockRef::new(
                 8,
                 AuthorityIndex::new_for_test(1),
                 BlockDigest::MIN,
             )],
-        });
+        );
+        round_tracker.update_from_accepted_blocks(&vec![block]);
 
         // Simulate proposing a new block
         // note: not valid rounds, but tests that the max value will always be
@@ -393,14 +396,15 @@ mod test {
             ])
             .build();
         let block = VerifiedBlock::new_for_test(test_block);
-        round_tracker.update_from_accepted_block(&ExtendedBlock {
-            block,
-            excluded_ancestors: vec![BlockRef::new(
+        round_tracker.update_from_excluded_ancestors(
+            block.author(),
+            &vec![BlockRef::new(
                 8,
                 AuthorityIndex::new_for_test(1),
                 BlockDigest::MIN,
             )],
-        });
+        );
+        round_tracker.update_from_accepted_blocks(&vec![block]);
 
         // Compute quorum rounds based on highest accepted rounds (max from prober
         // or from blocks):
@@ -445,15 +449,13 @@ mod test {
         round_tracker.update_from_probe(highest_accepted_rounds, highest_received_rounds);
 
         // Create test blocks for each authority with incrementing rounds starting at 110
-        for authority in 0..NUM_AUTHORITIES {
-            let round = 110 + (authority as u32 * 10);
-            let block =
-                VerifiedBlock::new_for_test(TestBlock::new(round, authority as u32).build());
-            round_tracker.update_from_accepted_block(&ExtendedBlock {
-                block,
-                excluded_ancestors: vec![],
-            });
-        }
+        let test_blocks = (0..NUM_AUTHORITIES)
+            .map(|authority| {
+                let round = 110 + authority as u32 * 10;
+                VerifiedBlock::new_for_test(TestBlock::new(round, authority as u32).build())
+            })
+            .collect::<Vec<_>>();
+        round_tracker.update_from_accepted_blocks(&test_blocks);
 
         // Compute quorum rounds and propagation delay based on last proposed round = 110,
         // and highest received rounds:

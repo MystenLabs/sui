@@ -295,8 +295,14 @@ where
                 .is_zero();
         info!("Sync last known own block: {sync_last_known_own_block}");
 
-        let block_manager =
-            BlockManager::new(context.clone(), dag_state.clone(), block_verifier.clone());
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+
+        let block_manager = BlockManager::new(
+            context.clone(),
+            dag_state.clone(),
+            block_verifier.clone(),
+            round_tracker.clone(),
+        );
 
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
@@ -313,8 +319,6 @@ where
             transaction_certifier.clone(),
             leader_schedule.clone(),
         );
-
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
 
         let core = Core::new(
             context.clone(),
