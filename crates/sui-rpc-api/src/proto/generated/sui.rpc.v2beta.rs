@@ -576,6 +576,11 @@ pub struct Epoch {
     /// The committee governing this epoch.
     #[prost(message, optional, tag = "2")]
     pub committee: ::core::option::Option<ValidatorCommittee>,
+    /// Snapshot of Sui's SystemState (`0x3::sui_system::SystemState`) at the
+    /// beginning of the epoch, for past epochs, or the current state for the
+    /// current epoch.
+    #[prost(message, optional, boxed, tag = "3")]
+    pub system_state: ::core::option::Option<::prost::alloc::boxed::Box<SystemState>>,
     #[prost(uint64, optional, tag = "4")]
     pub first_checkpoint: ::core::option::Option<u64>,
     #[prost(uint64, optional, tag = "5")]
@@ -2714,6 +2719,357 @@ impl SignatureScheme {
             _ => None,
         }
     }
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SystemState {
+    /// The version of the system state data structure type.
+    #[prost(uint64, optional, tag = "1")]
+    pub version: ::core::option::Option<u64>,
+    /// The epoch id
+    #[prost(uint64, optional, tag = "2")]
+    pub epoch: ::core::option::Option<u64>,
+    /// The protocol version
+    #[prost(uint64, optional, tag = "3")]
+    pub protocol_version: ::core::option::Option<u64>,
+    /// Information about the validators
+    #[prost(message, optional, tag = "4")]
+    pub validators: ::core::option::Option<ValidatorSet>,
+    /// Storage Fund info
+    #[prost(message, optional, tag = "5")]
+    pub storage_fund: ::core::option::Option<StorageFund>,
+    /// Set of system config parameters
+    #[prost(message, optional, tag = "6")]
+    pub parameters: ::core::option::Option<SystemParameters>,
+    /// The reference gas price for this epoch
+    #[prost(uint64, optional, tag = "7")]
+    pub reference_gas_price: ::core::option::Option<u64>,
+    /// A list of the records of validator reporting each other.
+    ///
+    /// There is an entry in this list for each validator that has been reported
+    /// at least once. Each record contains all the validators that reported
+    /// them. If a validator has never been reported they don't have a record in this list.
+    /// This lists persists across epoch: a peer continues being in a reported state until the
+    /// reporter doesn't explicitly remove their report.
+    #[prost(message, repeated, tag = "8")]
+    pub validator_report_records: ::prost::alloc::vec::Vec<ValidatorReportRecord>,
+    /// Schedule of stake subsidies given out each epoch.
+    #[prost(message, optional, tag = "9")]
+    pub stake_subsidy: ::core::option::Option<StakeSubsidy>,
+    /// Whether the system is running in a downgraded safe mode due to a non-recoverable bug.
+    /// This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode.
+    /// It can be reset once we are able to successfully execute advance_epoch.
+    /// The rest of the fields starting with `safe_mode_` are accumulated during safe mode
+    /// when advance_epoch_safe_mode is executed. They will eventually be processed once we
+    /// are out of safe mode.
+    #[prost(bool, optional, tag = "10")]
+    pub safe_mode: ::core::option::Option<bool>,
+    /// Storage rewards accumulated during safe_mode
+    #[prost(uint64, optional, tag = "11")]
+    pub safe_mode_storage_rewards: ::core::option::Option<u64>,
+    /// Computation rewards accumulated during safe_mode
+    #[prost(uint64, optional, tag = "12")]
+    pub safe_mode_computation_rewards: ::core::option::Option<u64>,
+    /// Storage rebates paid out during safe_mode
+    #[prost(uint64, optional, tag = "13")]
+    pub safe_mode_storage_rebates: ::core::option::Option<u64>,
+    /// Nonrefundable storage fees accumulated during safe_mode
+    #[prost(uint64, optional, tag = "14")]
+    pub safe_mode_non_refundable_storage_fee: ::core::option::Option<u64>,
+    /// Unix timestamp of when this this epoch started
+    #[prost(uint64, optional, tag = "15")]
+    pub epoch_start_timestamp_ms: ::core::option::Option<u64>,
+    /// Any extra fields that's not defined statically.
+    #[prost(message, optional, tag = "16")]
+    pub extra_fields: ::core::option::Option<MoveTable>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ValidatorReportRecord {
+    /// The address of the validator being reported
+    #[prost(string, optional, tag = "1")]
+    pub reported: ::core::option::Option<::prost::alloc::string::String>,
+    /// The list of validator (addresses) that are reporting on the validator specified by `reported`
+    #[prost(string, repeated, tag = "2")]
+    pub reporters: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SystemParameters {
+    /// The duration of an epoch, in milliseconds.
+    #[prost(uint64, optional, tag = "1")]
+    pub epoch_duration_ms: ::core::option::Option<u64>,
+    /// The starting epoch in which stake subsidies start being paid out
+    #[prost(uint64, optional, tag = "2")]
+    pub stake_subsidy_start_epoch: ::core::option::Option<u64>,
+    /// Minimum number of active validators at any moment.
+    #[prost(uint64, optional, tag = "3")]
+    pub min_validator_count: ::core::option::Option<u64>,
+    /// Maximum number of active validators at any moment.
+    /// We do not allow the number of validators in any epoch to go above this.
+    #[prost(uint64, optional, tag = "4")]
+    pub max_validator_count: ::core::option::Option<u64>,
+    /// Deprecated.
+    /// Lower-bound on the amount of stake required to become a validator.
+    #[prost(uint64, optional, tag = "5")]
+    pub min_validator_joining_stake: ::core::option::Option<u64>,
+    /// Deprecated.
+    /// Validators with stake amount below `validator_low_stake_threshold` are considered to
+    /// have low stake and will be escorted out of the validator set after being below this
+    /// threshold for more than `validator_low_stake_grace_period` number of epochs.
+    #[prost(uint64, optional, tag = "6")]
+    pub validator_low_stake_threshold: ::core::option::Option<u64>,
+    /// Deprecated.
+    /// Validators with stake below `validator_very_low_stake_threshold` will be removed
+    /// immediately at epoch change, no grace period.
+    #[prost(uint64, optional, tag = "7")]
+    pub validator_very_low_stake_threshold: ::core::option::Option<u64>,
+    /// A validator can have stake below `validator_low_stake_threshold`
+    /// for this many epochs before being kicked out.
+    #[prost(uint64, optional, tag = "8")]
+    pub validator_low_stake_grace_period: ::core::option::Option<u64>,
+    /// Any extra fields that are not defined statically.
+    #[prost(message, optional, tag = "9")]
+    pub extra_fields: ::core::option::Option<MoveTable>,
+}
+/// A message that represents a Move `0x2::table::Table` or `0x2::bag::Bag`
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MoveTable {
+    /// The UID of the table or bag
+    #[prost(string, optional, tag = "1")]
+    pub id: ::core::option::Option<::prost::alloc::string::String>,
+    /// The size or number of key-value pairs in the table or bag
+    #[prost(uint64, optional, tag = "2")]
+    pub size: ::core::option::Option<u64>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct StakeSubsidy {
+    /// Balance of SUI set aside for stake subsidies that will be drawn down over time.
+    #[prost(uint64, optional, tag = "1")]
+    pub balance: ::core::option::Option<u64>,
+    /// Count of the number of times stake subsidies have been distributed.
+    #[prost(uint64, optional, tag = "2")]
+    pub distribution_counter: ::core::option::Option<u64>,
+    /// The amount of stake subsidy to be drawn down per distribution.
+    /// This amount decays and decreases over time.
+    #[prost(uint64, optional, tag = "3")]
+    pub current_distribution_amount: ::core::option::Option<u64>,
+    /// Number of distributions to occur before the distribution amount decays.
+    #[prost(uint64, optional, tag = "4")]
+    pub stake_subsidy_period_length: ::core::option::Option<u64>,
+    /// The rate at which the distribution amount decays at the end of each
+    /// period. Expressed in basis points.
+    #[prost(uint32, optional, tag = "5")]
+    pub stake_subsidy_decrease_rate: ::core::option::Option<u32>,
+    /// Any extra fields that's not defined statically.
+    #[prost(message, optional, tag = "6")]
+    pub extra_fields: ::core::option::Option<MoveTable>,
+}
+/// Struct representing the onchain storage fund.
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct StorageFund {
+    /// This is the sum of `storage_rebate` of
+    /// all objects currently stored on-chain. To maintain this invariant, the only inflow of this
+    /// balance is storage charges collected from transactions, and the only outflow is storage rebates
+    /// of transactions, including both the portion refunded to the transaction senders as well as
+    /// the non-refundable portion taken out and put into `non_refundable_balance`.
+    #[prost(uint64, optional, tag = "1")]
+    pub total_object_storage_rebates: ::core::option::Option<u64>,
+    /// Represents any remaining inflow of the storage fund that should not
+    /// be taken out of the fund.
+    #[prost(uint64, optional, tag = "2")]
+    pub non_refundable_balance: ::core::option::Option<u64>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ValidatorSet {
+    /// Total amount of stake from all active validators at the beginning of the epoch.
+    /// Written only once per epoch, in `advance_epoch` function.
+    #[prost(uint64, optional, tag = "1")]
+    pub total_stake: ::core::option::Option<u64>,
+    /// The current list of active validators.
+    #[prost(message, repeated, tag = "2")]
+    pub active_validators: ::prost::alloc::vec::Vec<Validator>,
+    /// List of new validator candidates added during the current epoch.
+    /// They will be processed at the end of the epoch.
+    ///
+    /// key: u64 (index), value: 0x3::validator::Validator
+    #[prost(message, optional, tag = "3")]
+    pub pending_active_validators: ::core::option::Option<MoveTable>,
+    /// Removal requests from the validators. Each element is an index
+    /// pointing to `active_validators`.
+    #[prost(uint64, repeated, tag = "4")]
+    pub pending_removals: ::prost::alloc::vec::Vec<u64>,
+    /// Mappings from staking pool's ID to the sui address of a validator.
+    ///
+    /// key: address (staking pool Id), value: address (sui address of the validator)
+    #[prost(message, optional, tag = "5")]
+    pub staking_pool_mappings: ::core::option::Option<MoveTable>,
+    /// Mapping from a staking pool ID to the inactive validator that has that pool as its staking pool.
+    /// When a validator is deactivated the validator is removed from `active_validators` it
+    /// is added to this table so that stakers can continue to withdraw their stake from it.
+    ///
+    /// key: address (staking pool Id), value: 0x3::validator_wrapper::ValidatorWrapper
+    #[prost(message, optional, tag = "6")]
+    pub inactive_validators: ::core::option::Option<MoveTable>,
+    /// Table storing preactive/candidate validators, mapping their addresses to their `Validator ` structs.
+    /// When an address calls `request_add_validator_candidate`, they get added to this table and become a preactive
+    /// validator.
+    /// When the candidate has met the min stake requirement, they can call `request_add_validator` to
+    /// officially add them to the active validator set `active_validators` next epoch.
+    ///
+    /// key: address (sui address of the validator), value: 0x3::validator_wrapper::ValidatorWrapper
+    #[prost(message, optional, tag = "7")]
+    pub validator_candidates: ::core::option::Option<MoveTable>,
+    /// Table storing the number of epochs during which a validator's stake has been below the low stake threshold.
+    #[prost(map = "string, uint64", tag = "8")]
+    pub at_risk_validators: ::std::collections::HashMap<
+        ::prost::alloc::string::String,
+        u64,
+    >,
+    /// Any extra fields that's not defined statically.
+    #[prost(message, optional, tag = "9")]
+    pub extra_fields: ::core::option::Option<MoveTable>,
+}
+/// Definition of a Validator in the system contracts
+///
+/// Note: fields of ValidatorMetadata are flattened into this type
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Validator {
+    /// A unique human-readable name of this validator.
+    #[prost(string, optional, tag = "1")]
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
+    /// The Sui Address of the validator. This is the sender that created the Validator object,
+    /// and also the address to send validator/coins to during withdraws.
+    #[prost(string, optional, tag = "2")]
+    pub address: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "3")]
+    pub description: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "4")]
+    pub image_url: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "5")]
+    pub project_url: ::core::option::Option<::prost::alloc::string::String>,
+    /// The public key bytes corresponding to the private key that the validator
+    /// holds to sign transactions. For now, this is the same as AuthorityName.
+    #[prost(bytes = "bytes", optional, tag = "7")]
+    pub protocol_public_key: ::core::option::Option<::prost::bytes::Bytes>,
+    /// This is a proof that the validator has ownership of the protocol private key
+    #[prost(bytes = "bytes", optional, tag = "8")]
+    pub proof_of_possession: ::core::option::Option<::prost::bytes::Bytes>,
+    /// The public key bytes corresponding to the private key that the validator
+    /// uses to establish TLS connections
+    #[prost(bytes = "bytes", optional, tag = "10")]
+    pub network_public_key: ::core::option::Option<::prost::bytes::Bytes>,
+    /// The public key bytes correstponding to the Narwhal Worker
+    #[prost(bytes = "bytes", optional, tag = "12")]
+    pub worker_public_key: ::core::option::Option<::prost::bytes::Bytes>,
+    /// The network address of the validator (could also contain extra info such as port, DNS and etc.).
+    #[prost(string, optional, tag = "13")]
+    pub network_address: ::core::option::Option<::prost::alloc::string::String>,
+    /// The address of the validator used for p2p activities such as state sync (could also contain extra info such as port, DNS and etc.).
+    #[prost(string, optional, tag = "14")]
+    pub p2p_address: ::core::option::Option<::prost::alloc::string::String>,
+    /// The address of the narwhal primary
+    #[prost(string, optional, tag = "15")]
+    pub primary_address: ::core::option::Option<::prost::alloc::string::String>,
+    /// The address of the narwhal worker
+    #[prost(string, optional, tag = "16")]
+    pub worker_address: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(bytes = "bytes", optional, tag = "18")]
+    pub next_epoch_protocol_public_key: ::core::option::Option<::prost::bytes::Bytes>,
+    #[prost(bytes = "bytes", optional, tag = "19")]
+    pub next_epoch_proof_of_possession: ::core::option::Option<::prost::bytes::Bytes>,
+    #[prost(bytes = "bytes", optional, tag = "21")]
+    pub next_epoch_network_public_key: ::core::option::Option<::prost::bytes::Bytes>,
+    #[prost(bytes = "bytes", optional, tag = "23")]
+    pub next_epoch_worker_public_key: ::core::option::Option<::prost::bytes::Bytes>,
+    #[prost(string, optional, tag = "24")]
+    pub next_epoch_network_address: ::core::option::Option<
+        ::prost::alloc::string::String,
+    >,
+    #[prost(string, optional, tag = "25")]
+    pub next_epoch_p2p_address: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "26")]
+    pub next_epoch_primary_address: ::core::option::Option<
+        ::prost::alloc::string::String,
+    >,
+    #[prost(string, optional, tag = "27")]
+    pub next_epoch_worker_address: ::core::option::Option<
+        ::prost::alloc::string::String,
+    >,
+    /// Any extra fields that's not defined statically in the `ValidatorMetadata` struct
+    #[prost(message, optional, tag = "28")]
+    pub metadata_extra_fields: ::core::option::Option<MoveTable>,
+    /// The voting power of this validator, which might be different from its
+    /// stake amount.
+    #[prost(uint64, optional, tag = "29")]
+    pub voting_power: ::core::option::Option<u64>,
+    /// The ID of this validator's current valid `UnverifiedValidatorOperationCap`
+    #[prost(string, optional, tag = "30")]
+    pub operation_cap_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Gas price quote, updated only at end of epoch.
+    #[prost(uint64, optional, tag = "31")]
+    pub gas_price: ::core::option::Option<u64>,
+    /// Staking pool for this validator.
+    #[prost(message, optional, tag = "32")]
+    pub staking_pool: ::core::option::Option<StakingPool>,
+    /// Commission rate of the validator, in basis point.
+    #[prost(uint64, optional, tag = "33")]
+    pub commission_rate: ::core::option::Option<u64>,
+    /// Total amount of stake that would be active in the next epoch.
+    #[prost(uint64, optional, tag = "34")]
+    pub next_epoch_stake: ::core::option::Option<u64>,
+    /// This validator's gas price quote for the next epoch.
+    #[prost(uint64, optional, tag = "35")]
+    pub next_epoch_gas_price: ::core::option::Option<u64>,
+    /// The commission rate of the validator starting the next epoch, in basis point.
+    #[prost(uint64, optional, tag = "36")]
+    pub next_epoch_commission_rate: ::core::option::Option<u64>,
+    /// Any extra fields that's not defined statically.
+    #[prost(message, optional, tag = "37")]
+    pub extra_fields: ::core::option::Option<MoveTable>,
+}
+/// A staking pool embedded in each validator struct in the system state object.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct StakingPool {
+    /// UID of the StakingPool object
+    #[prost(string, optional, tag = "1")]
+    pub id: ::core::option::Option<::prost::alloc::string::String>,
+    /// The epoch at which this pool became active.
+    /// The value is `None` if the pool is pre-active and `Some(<epoch_number>)` if active or inactive.
+    #[prost(uint64, optional, tag = "2")]
+    pub activation_epoch: ::core::option::Option<u64>,
+    /// The epoch at which this staking pool ceased to be active. `None` = {pre-active, active},
+    /// `Some(<epoch_number>)` if in-active, and it was de-activated at epoch `<epoch_number>`.
+    #[prost(uint64, optional, tag = "3")]
+    pub deactivation_epoch: ::core::option::Option<u64>,
+    /// The total number of SUI tokens in this pool, including the SUI in the rewards_pool, as well as in all the principal
+    /// in the `StakedSui` object, updated at epoch boundaries.
+    #[prost(uint64, optional, tag = "4")]
+    pub sui_balance: ::core::option::Option<u64>,
+    /// The epoch stake rewards will be added here at the end of each epoch.
+    #[prost(uint64, optional, tag = "5")]
+    pub rewards_pool: ::core::option::Option<u64>,
+    /// Total number of pool tokens issued by the pool.
+    #[prost(uint64, optional, tag = "6")]
+    pub pool_token_balance: ::core::option::Option<u64>,
+    /// Exchange rate history of previous epochs.
+    ///
+    /// The entries start from the `activation_epoch` of this pool and contains exchange rates at the beginning of each epoch,
+    /// i.e., right after the rewards for the previous epoch have been deposited into the pool.
+    ///
+    /// key: u64 (epoch number), value: PoolTokenExchangeRate
+    #[prost(message, optional, tag = "7")]
+    pub exchange_rates: ::core::option::Option<MoveTable>,
+    /// Pending stake amount for this epoch, emptied at epoch boundaries.
+    #[prost(uint64, optional, tag = "8")]
+    pub pending_stake: ::core::option::Option<u64>,
+    /// Pending stake withdrawn during the current epoch, emptied at epoch boundaries.
+    /// This includes both the principal and rewards SUI withdrawn.
+    #[prost(uint64, optional, tag = "9")]
+    pub pending_total_sui_withdraw: ::core::option::Option<u64>,
+    /// Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.
+    #[prost(uint64, optional, tag = "10")]
+    pub pending_pool_token_withdraw: ::core::option::Option<u64>,
+    /// Any extra fields that's not defined statically.
+    #[prost(message, optional, tag = "11")]
+    pub extra_fields: ::core::option::Option<MoveTable>,
 }
 /// A transaction.
 #[derive(Clone, PartialEq, ::prost::Message)]

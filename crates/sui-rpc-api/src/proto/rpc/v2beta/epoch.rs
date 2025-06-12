@@ -10,6 +10,7 @@ use crate::message::{MessageField, MessageFields};
 impl Epoch {
     pub const EPOCH_FIELD: &'static MessageField = &MessageField::new("epoch");
     pub const COMMITTEE_FIELD: &'static MessageField = &MessageField::new("committee");
+    pub const SYSTEM_STATE_FIELD: &'static MessageField = &MessageField::new("system_state");
     pub const FIRST_CHECKPOINT_FIELD: &'static MessageField =
         &MessageField::new("first_checkpoint");
     pub const LAST_CHECKPOINT_FIELD: &'static MessageField = &MessageField::new("last_checkpoint");
@@ -25,6 +26,7 @@ impl MessageFields for Epoch {
     const FIELDS: &'static [&'static MessageField] = &[
         Self::EPOCH_FIELD,
         Self::COMMITTEE_FIELD,
+        Self::SYSTEM_STATE_FIELD,
         Self::FIRST_CHECKPOINT_FIELD,
         Self::LAST_CHECKPOINT_FIELD,
         Self::START_FIELD,
@@ -39,6 +41,7 @@ impl MessageMerge<&Epoch> for Epoch {
         let Epoch {
             epoch,
             committee,
+            system_state,
             first_checkpoint,
             last_checkpoint,
             start,
@@ -53,6 +56,10 @@ impl MessageMerge<&Epoch> for Epoch {
 
         if mask.contains(Self::COMMITTEE_FIELD.name) {
             self.committee = committee.to_owned();
+        }
+
+        if mask.contains(Self::SYSTEM_STATE_FIELD.name) {
+            self.system_state = system_state.to_owned();
         }
 
         if mask.contains(Self::FIRST_CHECKPOINT_FIELD.name) {
