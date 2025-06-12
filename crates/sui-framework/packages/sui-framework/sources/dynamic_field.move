@@ -168,3 +168,12 @@ public(package) native fun remove_child_object<Child: key>(parent: address, id: 
 public(package) native fun has_child_object(parent: address, id: address): bool;
 
 public(package) native fun has_child_object_with_ty<Child: key>(parent: address, id: address): bool;
+
+
+#[test_only]
+public fun field_id<Name: copy + drop + store, Value: store>(object: &UID, name: Name): ID {
+    let object_addr = object.to_address();
+    let hash = hash_type_and_key(object_addr, name);
+    let field = borrow_child_object<Field<Name, Value>>(object, hash);
+    field.id.to_inner()
+}
