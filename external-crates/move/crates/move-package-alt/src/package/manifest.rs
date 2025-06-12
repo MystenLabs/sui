@@ -6,16 +6,26 @@ use std::{
     collections::BTreeMap,
     fmt::{self, Debug, Display, Formatter},
     ops::Range,
-    path::Path,
+    path::{Path, PathBuf},
+};
+
+use codespan_reporting::{
+    diagnostic::{Diagnostic, Label},
+    files::SimpleFiles,
+    term::{
+        self,
+        termcolor::{ColorChoice, StandardStream},
+    },
 };
 
 use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use tracing::{debug, info};
 
 use crate::{
     dependency::{DependencySet, UnpinnedDependencyInfo},
-    errors::{FileHandle, Located, ManifestError, ManifestErrorKind, PackageResult, TheFile},
+    errors::{FileHandle, Located, PackageResult, TheFile},
     flavor::{MoveFlavor, Vanilla},
 };
 
@@ -89,24 +99,48 @@ pub struct ManifestDependencyReplacement {
     use_environment: Option<EnvironmentName>,
 }
 
-impl<F: MoveFlavor> PackageMetadata<F> {
-    pub fn name(&self) -> &PackageName {
-        self.name.get_ref()
-    }
-
-    pub fn edition(&self) -> &str {
-        self.edition.get_ref()
-    }
+#[derive(Error, Debug)]
+#[error("Invalid manifest: {kind}")]
+pub struct ManifestError {
+    pub kind: ManifestErrorKind,
+    pub span: Option<Range<usize>>,
+    pub file: PathBuf,
 }
+
+#[derive(Error, Debug)]
+pub enum ManifestErrorKind {
+    #[error("package name cannot be empty")]
+    EmptyPackageName,
+    #[error("unsupported edition '{edition}', expected one of '{valid}'")]
+    InvalidEdition { edition: String, valid: String },
+    #[error("externally resolved dependencies must have exactly one resolver field")]
+    BadExternalDependency,
+    #[error("environment {env} is not in the [environments] table")]
+    MissingEnvironment { env: EnvironmentName },
+    #[error(
+        // TODO: add a suggested environment (needs to be part of the flavor)
+        "you must define at least one environment in the [environments] section of `Move.toml`."
+    )]
+    NoEnvironments,
+    #[error(transparent)]
+    ParseError(#[from] toml_edit::de::Error),
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
+}
+
+type ManifestResult<T> = Result<T, ManifestError>;
 
 impl<F: MoveFlavor> Manifest<F> {
     /// Read the manifest file at the given path, returning a [`Manifest`].
-    pub fn read_from_file(path: impl AsRef<Path>) -> PackageResult<Self> {
+    // TODO: probably return a more specific error
+    pub fn read_from_file(path: impl AsRef<Path>) -> ManifestResult<Self> {
         debug!("Reading manifest from {:?}", path.as_ref());
-        let contents = std::fs::read_to_string(&path)?;
+        let contents = std::fs::read_to_string(&path).map_err(ManifestError::with_file(&path))?;
 
-        let (manifest, file_id) = TheFile::with_file(&path, toml_edit::de::from_str::<Self>)?;
-        let manifest = manifest?;
+        let (manifest, file_id) = TheFile::with_file(&path, toml_edit::de::from_str::<Self>)
+            .map_err(ManifestError::with_file(&path))?;
+
+        let manifest = manifest.map_err(ManifestError::from_toml(&path))?;
 
         manifest.validate_manifest(file_id)?;
         Ok(manifest)
@@ -115,51 +149,47 @@ impl<F: MoveFlavor> Manifest<F> {
     /// Validate the manifest contents, after deserialization.
     ///
     // TODO: add more validation
-    pub fn validate_manifest(&self, handle: FileHandle) -> PackageResult<()> {
+    pub fn validate_manifest(&self, handle: FileHandle) -> ManifestResult<()> {
         // Validate package name
+        // TODO: this should be impossible now, since [Identifier]s can't be empty
         if self.package.name.get_ref().is_empty() {
-            let err = ManifestError {
+            return Err(ManifestError {
                 kind: ManifestErrorKind::EmptyPackageName,
                 span: Some(self.package.name.span()),
-                handle,
-            };
-            err.emit()?;
-            return Err(err.into());
+                file: handle.path().to_path_buf(),
+            });
         }
 
         // Validate edition
         if !ALLOWED_EDITIONS.contains(&self.package.edition.get_ref().as_str()) {
-            let err = ManifestError {
+            return Err(ManifestError {
                 kind: ManifestErrorKind::InvalidEdition {
                     edition: self.package.edition.get_ref().clone(),
                     valid: ALLOWED_EDITIONS.join(", ").to_string(),
                 },
                 span: Some(self.package.edition.span()),
-                handle,
-            };
-            err.emit()?;
-            return Err(err.into());
+                file: handle.path().to_path_buf(),
+            });
         }
 
+        // Are there any environments?
         if self.environments().is_empty() {
-            let err = ManifestError {
+            return Err(ManifestError {
                 kind: ManifestErrorKind::NoEnvironments,
                 span: None,
-                handle,
-            };
-            err.emit()?;
-            return Err(err.into());
+                file: handle.path().to_path_buf(),
+            });
         }
 
+        // Do all dep-replacements have valid environments?
+        // TODO: maybe better to do by making an `Environment` type?
         for (env, _) in self.dep_replacements.iter() {
             if !self.environments().contains_key(env) {
-                let err = ManifestError {
+                return Err(ManifestError {
                     kind: ManifestErrorKind::MissingEnvironment { env: env.clone() },
                     span: None, // TODO
-                    handle,
-                };
-                err.emit()?;
-                return Err(err.into());
+                    file: handle.path().to_path_buf(),
+                });
             }
         }
 
@@ -208,7 +238,86 @@ impl<F: MoveFlavor> Manifest<F> {
     }
 }
 
+impl<F: MoveFlavor> PackageMetadata<F> {
+    pub fn name(&self) -> &PackageName {
+        self.name.get_ref()
+    }
+
+    pub fn edition(&self) -> &str {
+        self.edition.get_ref()
+    }
+}
+
 /// Compute a digest of this input data using SHA-256.
 pub fn digest(data: &[u8]) -> Digest {
     format!("{:X}", Sha256::digest(data))
+}
+
+struct ErrorBuilder {
+    span: Range<usize>,
+    file: PathBuf,
+}
+
+impl ManifestError {
+    fn with_file<T: Into<ManifestErrorKind>>(path: impl AsRef<Path>) -> impl Fn(T) -> Self {
+        move |e| ManifestError {
+            kind: e.into(),
+            span: None,
+            file: path.as_ref().to_path_buf(),
+        }
+    }
+
+    fn with_span<T: Into<ManifestErrorKind>>(
+        path: impl AsRef<Path>,
+        span: Range<usize>,
+    ) -> impl Fn(T) -> Self {
+        move |e| ManifestError {
+            kind: e.into(),
+            span: Some(span.clone()),
+            file: path.as_ref().to_path_buf(),
+        }
+    }
+
+    fn from_toml(path: impl AsRef<Path>) -> impl Fn(toml_edit::de::Error) -> Self {
+        move |e| {
+            let span = e.span();
+            ManifestError {
+                kind: e.into(),
+                span,
+                file: path.as_ref().to_path_buf(),
+            }
+        }
+    }
+
+    /// Convert this error into a codespan Diagnostic
+    pub fn to_diagnostic(&self) -> Diagnostic<usize> {
+        let (file_id, span) = self.span_info();
+        Diagnostic::error()
+            .with_message(self.kind.to_string())
+            .with_labels(vec![Label::primary(file_id, span.unwrap_or_default())])
+    }
+
+    /// Get the file ID and span for this error
+    fn span_info(&self) -> (usize, Option<Range<usize>>) {
+        let mut files = SimpleFiles::new();
+        let file_id = files.add(self.file.to_string_lossy(), self.handle.source());
+        (file_id, self.span.clone())
+    }
+
+    /// Emit this error to stderr
+    pub fn emit(&self) -> Result<(), codespan_reporting::files::Error> {
+        let mut files = SimpleFiles::new();
+        let file_id = files.add(self.handle.path().to_string_lossy(), self.handle.source());
+
+        let writer = StandardStream::stderr(ColorChoice::Always);
+        let config = term::Config {
+            display_style: term::DisplayStyle::Rich,
+            chars: term::Chars::ascii(),
+            ..Default::default()
+        };
+
+        let diagnostic = self.to_diagnostic();
+        let e = term::emit(&mut writer.lock(), &config, &files, &diagnostic);
+        e
+    }
 }
