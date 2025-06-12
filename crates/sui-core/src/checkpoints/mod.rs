@@ -24,7 +24,7 @@ use diffy::create_patch;
 use itertools::Itertools;
 use mysten_common::random::get_rng;
 use mysten_common::sync::notify_read::NotifyRead;
-use mysten_common::{assert_reachable, debug_fatal, fatal, in_test_configuration};
+use mysten_common::{assert_reachable, debug_fatal, fatal};
 use mysten_metrics::{monitored_future, monitored_scope, MonitoredFutureExt};
 use nonempty::NonEmpty;
 use parking_lot::Mutex;
@@ -36,7 +36,6 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::messages_checkpoint::CheckpointCommitment;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
-use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use tokio::sync::{mpsc, watch};
 use typed_store::rocks::{default_db_options, DBOptions, ReadWriteOptions};
 
