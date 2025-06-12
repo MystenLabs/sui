@@ -618,6 +618,7 @@ impl ConsensusOutputQuarantine {
     pub(super) fn commit(&mut self, epoch_store: &AuthorityPerEpochStore) -> SuiResult {
         let mut batch = epoch_store.db_batch()?;
         self.commit_with_batch(epoch_store, &mut batch)?;
+        batch.set_tag("commit_consensus_quarantine".to_string());
         batch.write()?;
         Ok(())
     }
