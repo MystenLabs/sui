@@ -112,8 +112,12 @@ impl ConsensusTxStatusCache {
                 .or_default()
                 .insert(transaction_position);
         }
+
+        // Get the final status from the map to ensure we notify with the correct status
+        // as the passed in status may have not been set as the final status.
+        let final_status = inner.transaction_status.get(&transaction_position).unwrap();
         self.status_notify_read
-            .notify(&transaction_position, &status);
+            .notify(&transaction_position, final_status);
     }
 
     pub async fn notify_read_transaction_status(
