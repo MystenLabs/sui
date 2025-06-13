@@ -393,3 +393,6 @@ impl<T: TransactionalStore> Indexer<T> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+pub mod testing;
