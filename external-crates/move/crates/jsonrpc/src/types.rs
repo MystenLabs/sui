@@ -3,17 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Implementation of the types and protocol for JSON RPC 2.0
-use std::collections::BTreeMap;
-
-use serde::{
-    Deserialize, Deserializer, Serialize, Serializer,
-    de::{DeserializeOwned, Visitor},
-};
-use serde_json::json;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::io::{
-    AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, BufWriter,
-};
 
 pub type RequestID = u64;
 
@@ -24,11 +15,8 @@ pub type BatchResponse<R> = Vec<Response<R>>;
 #[serde(deny_unknown_fields)]
 pub struct Request<A> {
     pub jsonrpc: TwoPointZero,
-
     pub method: String,
-
     pub params: A,
-
     pub id: RequestID,
 }
 
