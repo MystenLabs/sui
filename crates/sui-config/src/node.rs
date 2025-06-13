@@ -504,16 +504,17 @@ impl ExecutionCacheConfig {
     }
 
     pub fn backpressure_threshold(&self) -> u64 {
-        std::env::var("SUI_BACKPRESSURE_THRESHOLD")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or_else(|| match self {
-                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
-                ExecutionCacheConfig::WritebackCache {
-                    backpressure_threshold,
-                    ..
-                } => backpressure_threshold.unwrap_or(100_000),
-            })
+        200_000
+        // std::env::var("SUI_BACKPRESSURE_THRESHOLD")
+        //     .ok()
+        //     .and_then(|s| s.parse().ok())
+        //     .unwrap_or_else(|| match self {
+        //         ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+        //         ExecutionCacheConfig::WritebackCache {
+        //             backpressure_threshold,
+        //             ..
+        //         } => backpressure_threshold.unwrap_or(100_000),
+        //     })
     }
 
     pub fn backpressure_threshold_for_rpc(&self) -> u64 {
