@@ -74,7 +74,7 @@ pub struct DepInfo {
 
 impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
     pub fn new(
-        pinned: BTreeMap<EnvironmentName, DependencyInfo<F>>,
+        pinned: BTreeMap<EnvironmentName, DependencyInfo>,
         published: BTreeMap<EnvironmentName, Publication<F>>,
     ) -> Self {
         Self { pinned, published }
@@ -157,7 +157,7 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
     pub fn updated_deps_to_lockfile(
         &self,
         path: impl AsRef<Path>,
-        pinned_deps: BTreeMap<EnvironmentName, DependencyInfo<F>>,
+        pinned_deps: BTreeMap<EnvironmentName, DependencyInfo>,
         envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
     ) -> PackageResult<()> {
         let mut lockfile = self.clone();
@@ -211,7 +211,7 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
     }
 
     /// Update the pinned dependencies for the given environment.
-    pub fn update_pinned_dep_env(&mut self, pinned: BTreeMap<EnvironmentName, DependencyInfo<F>>) {
+    pub fn update_pinned_dep_env(&mut self, pinned: BTreeMap<EnvironmentName, DependencyInfo>) {
         self.pinned.extend(pinned);
     }
 }

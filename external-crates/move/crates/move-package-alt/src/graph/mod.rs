@@ -137,11 +137,11 @@ impl<F: MoveFlavor> PackageGraph<F> {
         &self,
         path: &PackagePath,
         env: &EnvironmentName,
-    ) -> PackageResult<BTreeMap<String, DependencyInfo<F>>> {
+    ) -> PackageResult<BTreeMap<String, DependencyInfo>> {
         let graph = &self.inner;
 
-        let mut new_pinned_deps: BTreeMap<EnvironmentName, DependencyInfo<F>> = BTreeMap::new();
-        let mut data: BTreeMap<String, DepInfo<F>> = BTreeMap::new();
+        let mut new_pinned_deps: BTreeMap<EnvironmentName, DependencyInfo> = BTreeMap::new();
+        let mut data: BTreeMap<String, DepInfo> = BTreeMap::new();
 
         let mut name_to_suffix: BTreeMap<PackageName, u8> = BTreeMap::new();
         let mut node_to_id: BTreeMap<NodeIndex, Identifier> = BTreeMap::new();

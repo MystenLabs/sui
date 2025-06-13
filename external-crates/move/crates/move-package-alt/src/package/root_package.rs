@@ -18,7 +18,7 @@ use super::{
 };
 use crate::{
     dependency::{DependencySet, PinnedDependencyInfo, pin},
-    errors::{ManifestError, ManifestErrorKind::EnvironmentNotFound, PackageError, PackageResult},
+    errors::{ManifestError, PackageError, PackageResult},
     flavor::MoveFlavor,
     graph::PackageGraph,
     package::{EnvironmentName, Package, PackageName},
@@ -134,7 +134,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     #[cfg(test)]
     pub async fn direct_dependencies(
         &self,
-    ) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo<F>>> {
+    ) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo>> {
         let mut output = BTreeMap::new();
         for env in self.environments().keys() {
             output.extend(self.root.direct_deps(env).await?);

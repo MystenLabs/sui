@@ -18,7 +18,7 @@ use super::{
 };
 use crate::{
     dependency::{DependencySet, PinnedDependencyInfo, pin},
-    errors::{ManifestError, ManifestErrorKind::EnvironmentNotFound, PackageError, PackageResult},
+    errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
 };
 use move_core_types::identifier::Identifier;
@@ -74,32 +74,32 @@ impl<F: MoveFlavor> Package<F> {
         &self.manifest
     }
 
-    // /// The resolved and pinned dependencies from the manifest for environment `env`
-    // pub async fn direct_deps(
-    //     &self,
-    //     env: &EnvironmentName,
-    // ) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo>> {
-    //     let mut deps = self.manifest.dependencies();
-    //
-    //     if self.manifest().environments().get(env).is_none() {
-    //         return Err(PackageError::Generic(format!(
-    //             "Package {} does not have `{env}` defined as an environment in its manifest",
-    //             self.name()
-    //         )));
-    //     }
-    //
-    //     let envs: BTreeMap<_, _> = self
-    //         .manifest()
-    //         .environments()
-    //         .iter()
-    //         .filter(|(e, _)| *e == env)
-    //         .map(|(env, id)| (env.clone(), id.clone()))
-    //         .collect();
-    //     let pinned_deps = pin(deps.clone(), &envs).await?;
-    //
-    //     Ok(pinned_deps
-    //         .into_iter()
-    //         .map(|(_, id, dep)| (id, dep))
-    //         .collect())
-    // }
+    /// The resolved and pinned dependencies from the manifest for environment `env`
+    pub async fn direct_deps(
+        &self,
+        env: &EnvironmentName,
+    ) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo>> {
+        let mut deps = self.manifest.dependencies();
+
+        if self.manifest().environments().get(env).is_none() {
+            return Err(PackageError::Generic(format!(
+                "Package {} does not have `{env}` defined as an environment in its manifest",
+                self.name()
+            )));
+        }
+
+        let envs: BTreeMap<_, _> = self
+            .manifest()
+            .environments()
+            .iter()
+            .filter(|(e, _)| *e == env)
+            .map(|(env, id)| (env.clone(), id.clone()))
+            .collect();
+        let pinned_deps = pin::<F>(deps.clone(), &envs).await?;
+
+        Ok(pinned_deps
+            .into_iter()
+            .map(|(_, id, dep)| (id, dep))
+            .collect())
+    }
 }
