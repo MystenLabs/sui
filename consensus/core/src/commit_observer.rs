@@ -259,16 +259,12 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    async fn test_handle_commit(#[values(true, false)] consensus_median_timestamp: bool) {
+    async fn test_handle_commit() {
         use crate::leader_schedule::LeaderSwapTable;
 
         telemetry_subscribers::init_for_testing();
         let num_authorities = 4;
-        let (mut context, _keys) = Context::new_for_test(num_authorities);
-        context
-            .protocol_config
-            .set_consensus_median_based_commit_timestamp_for_testing(consensus_median_timestamp);
-
+        let (context, _keys) = Context::new_for_test(num_authorities);
         let context = Arc::new(context);
 
         let mem_store = Arc::new(MemStore::new());
@@ -347,7 +343,7 @@ mod tests {
                 assert!(subdag.reputation_scores_desc.is_empty());
             }
 
-            let expected_ts = if consensus_median_timestamp {
+            let expected_ts = {
                 let block_refs = leaders[idx]
                     .ancestors()
                     .iter()
@@ -360,8 +356,6 @@ mod tests {
                     .into_iter()
                     .map(|block_opt| block_opt.expect("We should have all blocks in dag state."));
                 median_timestamp_by_stake(&context, blocks).unwrap()
-            } else {
-                leaders[idx].timestamp_ms()
             };
 
             let expected_ts = if idx == 0 {
