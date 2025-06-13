@@ -59,6 +59,15 @@ public fun shr(x: Integer, y: Integer): Integer {
 }
 
 #[spec_only]
+native public fun bit_or(x: Integer, y: Integer): Integer;
+#[spec_only]
+native public fun bit_and(x: Integer, y: Integer): Integer;
+#[spec_only]
+native public fun bit_xor(x: Integer, y: Integer): Integer;
+#[spec_only]
+native public fun bit_not(x: Integer): Integer;
+
+#[spec_only]
 native public fun lt(x: Integer, y: Integer): bool;
 #[spec_only]
 native public fun gt(x: Integer, y: Integer): bool;
