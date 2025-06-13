@@ -43,3 +43,10 @@ All pools support input token fees. To allow a permissionless pool to pay fees i
 For a pool with `USDC` as an asset, use the `DEEP/USDC` pool at `0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce` as the reference pool.
 
 For a pool with `SUI` as an asset, use the `DEEP/SUI` pool at `0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22` as the reference pool.
+
+### Update allowed versions
+
+The `update_allowed_versions()` function takes a pool and the registry, and updates the allowed contract versions within the pool.
+This is very important after contract upgrades to ensure the newest contract can be used on the pool.
+
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=update_allowed_versions noComments}
