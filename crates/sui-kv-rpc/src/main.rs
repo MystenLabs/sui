@@ -22,7 +22,7 @@ struct App {
     address: String,
     #[clap(default_value = "127.0.0.1")]
     metrics_host: String,
-    #[clap(default_value_t = 8081)]
+    #[clap(default_value_t = 9184)]
     metrics_port: usize,
 }
 
