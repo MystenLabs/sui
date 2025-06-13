@@ -98,7 +98,7 @@ pub struct ManifestDependencyReplacement {
 #[derive(Error, Debug)]
 #[error("{kind}")]
 pub struct ManifestError {
-    pub kind: ManifestErrorKind,
+    pub kind: Box<ManifestErrorKind>,
     location: ErrorLocation,
 }
 
@@ -136,6 +136,7 @@ impl<F: MoveFlavor> Manifest<F> {
     // TODO: probably return a more specific error
     pub fn read_from_file(path: impl AsRef<Path>) -> ManifestResult<Self> {
         debug!("Reading manifest from {:?}", path.as_ref());
+        debug!("Size {}", size_of::<ManifestError>());
 
         let (manifest, file_id) = TheFile::with_file(&path, toml_edit::de::from_str::<Self>)
             .map_err(ManifestError::with_file(&path))?;
@@ -244,14 +245,14 @@ pub fn digest(data: &[u8]) -> Digest {
 impl ManifestError {
     fn with_file<T: Into<ManifestErrorKind>>(path: impl AsRef<Path>) -> impl Fn(T) -> Self {
         move |e| ManifestError {
-            kind: e.into(),
+            kind: Box::new(e.into()),
             location: ErrorLocation::WholeFile(path.as_ref().to_path_buf()),
         }
     }
 
     fn with_span<T: Into<ManifestErrorKind>>(loc: &Location) -> impl Fn(T) -> Self {
         move |e| ManifestError {
-            kind: e.into(),
+            kind: Box::new(e.into()),
             location: ErrorLocation::AtLoc(loc.clone()),
         }
     }
@@ -263,7 +264,7 @@ impl ManifestError {
                 .map(|span| ErrorLocation::AtLoc(Location::new(file, span)))
                 .unwrap_or(ErrorLocation::WholeFile(file.path().to_path_buf()));
             ManifestError {
-                kind: e.into(),
+                kind: Box::new(e.into()),
                 location,
             }
         }
