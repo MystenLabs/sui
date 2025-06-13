@@ -1,8 +1,10 @@
 ---
 source: crates/move-package-alt/tests/test_runner.rs
 ---
-error: TOML parse error at line 6, column 5
-  |
-6 | A = { local = 1 }
-  |     ^^^^^^^^^^^^^
-invalid type: integer `1`, expected path string for key `local`
+error: Error while loading `"tests/data/non_string_local_dep_path/Move.toml"`
+  ┌─ "tests/data/non_string_local_dep_path/Move.toml":6:5
+  │
+6 │ A = { local = 1 }
+  │     ^^^^^^^^^^^^^
+  │
+  = invalid type: integer `1`, expected path string for key `local`
