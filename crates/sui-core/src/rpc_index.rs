@@ -668,20 +668,20 @@ impl IndexStoreTables {
                 }
             }
 
-            for object in tx.created_objects() {
-                // Coin metadata indexing - CoinMetadata and TreasuryCap are created in
-                // the same transaction so we don't need to worry about overriding any older value
-                // that may exist in the database (because there necessarily cannot be).
-                if let Some((key, value)) = try_create_coin_index_info(object) {
-                    use std::collections::hash_map::Entry;
+            // coin indexing
+            //
+            // coin indexing relies on the fact that CoinMetadata and TreasuryCap are created in
+            // the same transaction so we don't need to worry about overriding any older value
+            // that may exist in the database (because there necessarily cannot be).
+            for (key, value) in tx.created_objects().flat_map(try_create_coin_index_info) {
+                use std::collections::hash_map::Entry;
 
-                    match coin_index.entry(key) {
-                        Entry::Occupied(mut o) => {
-                            o.get_mut().merge(value);
-                        }
-                        Entry::Vacant(v) => {
-                            v.insert(value);
-                        }
+                match coin_index.entry(key) {
+                    Entry::Occupied(mut o) => {
+                        o.get_mut().merge(value);
+                    }
+                    Entry::Vacant(v) => {
+                        v.insert(value);
                     }
                 }
             }
