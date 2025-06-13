@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::PathBuf;
-use sui_move_build::{BuildConfig, SuiPackageHooks};
+use sui_move_build::BuildConfig;
 use sui_sdk::SuiClient;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{TransactionData, TransactionKind};
@@ -17,12 +17,11 @@ async fn test_dry_run_publish_with_mocked_coin() -> Result<(), anyhow::Error> {
     let client: SuiClient = context.get_client().await.unwrap();
 
     // Publish test coin package
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["tests", "data", "dummy_modules_publish"]);
     let compiled_package = BuildConfig::new_for_testing().build(&path)?;
     let compiled_modules_bytes = compiled_package
-        .get_package_base64(false)
+        .get_package_base64()
         .into_iter()
         .map(|b| b.to_vec().unwrap())
         .collect::<Vec<_>>();

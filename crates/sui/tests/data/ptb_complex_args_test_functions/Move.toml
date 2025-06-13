@@ -5,5 +5,3 @@ edition = "2024.beta"
 [dependencies]
 Sui = { local = "../../../../sui-framework/packages/sui-framework" }
 
-[addresses]
-test_functions = "0x0"

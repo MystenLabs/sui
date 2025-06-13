@@ -105,7 +105,6 @@ impl TestRunner {
             &sender_key,
             &gas_object_ids[0],
             base_package_name,
-            /* with_unpublished_deps */ false,
         )
         .await;
 

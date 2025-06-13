@@ -23,7 +23,7 @@ use std::{
 use vfs::VfsPath;
 
 use move_compiler::linters::LintLevel;
-use move_package::source_package::parsed_manifest::Dependencies;
+use move_package_alt::flavor::MoveFlavor;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum RunnerState {
@@ -45,13 +45,12 @@ impl SymbolicatorRunner {
     }
 
     /// Create a new runner
-    pub fn new(
+    pub fn new<F: MoveFlavor>(
         ide_files_root: VfsPath,
         symbols_map: Arc<Mutex<BTreeMap<PathBuf, Symbols>>>,
         packages_info: Arc<Mutex<CachedPackages>>,
         sender: Sender<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
         lint: LintLevel,
-        implicit_deps: Dependencies,
     ) -> Self {
         let mtx_cvar = Arc::new((Mutex::new(RunnerState::Wait), Condvar::new()));
         let thread_mtx_cvar = mtx_cvar.clone();
@@ -98,14 +97,13 @@ impl SymbolicatorRunner {
                         );
                         for (pkg_path, modified_files) in pkgs_to_analyze.into_iter() {
                             eprintln!("symbolication started");
-                            match get_symbols(
+                            match get_symbols::<F>(
                                 packages_info.clone(),
                                 ide_files_root.clone(),
                                 pkg_path.as_path(),
                                 Some(modified_files.into_iter().collect()),
                                 lint,
                                 None,
-                                implicit_deps.clone(),
                             ) {
                                 Ok((symbols_opt, lsp_diagnostics)) => {
                                     eprintln!("symbolication finished");

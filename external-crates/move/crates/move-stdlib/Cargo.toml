@@ -23,7 +23,9 @@ sha2.workspace = true
 anyhow.workspace = true
 hex.workspace = true
 move-stdlib-natives.workspace = true
-move-package.workspace = true
+move-package-alt-compilation.workspace = true
+move-package-alt.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 move-unit-test.workspace = true

@@ -52,7 +52,7 @@ pub async fn compile_package<W: Write, F: MoveFlavor>(
     BuildPlan::create(&root_pkg, build_config)?.compile(writer, |compiler| compiler)
 }
 
-pub async fn compile_from_root_package<W: Write, F: MoveFlavor>(
+pub fn compile_from_root_package<W: Write, F: MoveFlavor>(
     root_pkg: &RootPackage<F>,
     build_config: &BuildConfig,
     writer: &mut W,

@@ -67,6 +67,7 @@ sui-keys.workspace = true
 sui-source-validation.workspace = true
 sui-move.workspace = true
 sui-move-build.workspace = true
+sui-package-alt = { path = "../sui-package-alt" }
 sui-package-management.workspace = true
 sui-protocol-config.workspace = true
 shared-crypto.workspace = true
@@ -93,7 +94,8 @@ telemetry-subscribers.workspace = true
 move-analyzer.workspace = true
 move-bytecode-verifier-meter.workspace = true
 move-core-types.workspace = true
-move-package.workspace = true
+move-package-alt.workspace = true
+move-package-alt-compilation.workspace = true
 move-compiler.workspace = true
 csv.workspace = true
 move-vm-profiler.workspace = true

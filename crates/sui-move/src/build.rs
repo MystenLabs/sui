@@ -1,25 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::manage_package::resolve_lock_file_path;
 use clap::Parser;
-use move_cli::base;
-use move_package::BuildConfig as MoveBuildConfig;
-use std::{fs, path::Path};
-use sui_move_build::{implicit_deps, BuildConfig};
-use sui_package_management::system_package_versions::latest_system_packages;
+use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
+use std::path::Path;
+use sui_move_build::BuildConfig;
 
-const LAYOUTS_DIR: &str = "layouts";
-const STRUCT_LAYOUTS_FILENAME: &str = "struct_layouts.yaml";
+// const LAYOUTS_DIR: &str = "layouts";
+// const STRUCT_LAYOUTS_FILENAME: &str = "struct_layouts.yaml";
 
 #[derive(Parser)]
 #[group(id = "sui-move-build")]
 pub struct Build {
-    /// Include the contents of packages in dependencies that haven't been published (only relevant
-    /// when dumping bytecode as base64)
-    #[clap(long, global = true)]
-    pub with_unpublished_dependencies: bool,
-    /// Whether we are printing in base64.
     #[clap(long, global = true)]
     pub dump_bytecode_as_base64: bool,
     /// [Mainly for testing, not recommended for production]
@@ -48,10 +40,9 @@ impl Build {
         path: Option<&Path>,
         build_config: MoveBuildConfig,
     ) -> anyhow::Result<()> {
-        let rerooted_path = base::reroot_path(path)?;
-        let build_config = resolve_lock_file_path(build_config, Some(&rerooted_path))?;
+        let path = path.unwrap_or(Path::new("."));
         Self::execute_internal(
-            &rerooted_path,
+            path,
             build_config,
             self.generate_struct_layouts,
             self.chain_id.clone(),
@@ -59,37 +50,36 @@ impl Build {
     }
 
     pub fn execute_internal(
-        rerooted_path: &Path,
-        mut config: MoveBuildConfig,
-        generate_struct_layouts: bool,
+        path: &Path,
+        config: MoveBuildConfig,
+        _generate_struct_layouts: bool,
         chain_id: Option<String>,
     ) -> anyhow::Result<()> {
-        config.implicit_dependencies = implicit_deps(latest_system_packages());
-        let pkg = BuildConfig {
+        let _ = BuildConfig {
             config,
             run_bytecode_verifier: true,
             print_diags_to_stderr: true,
             chain_id,
         }
-        .build(rerooted_path)?;
+        .build(path)?;
 
-        if generate_struct_layouts {
-            let layout_str = serde_yaml::to_string(&pkg.generate_struct_layouts()).unwrap();
-            // store under <package_path>/build/<package_name>/layouts/struct_layouts.yaml
-            let dir_name = rerooted_path
-                .join("build")
-                .join(pkg.package.compiled_package_info.package_name.as_str())
-                .join(LAYOUTS_DIR);
-            let layout_filename = dir_name.join(STRUCT_LAYOUTS_FILENAME);
-            fs::create_dir_all(dir_name)?;
-            fs::write(layout_filename, layout_str)?
-        }
-
-        pkg.package
-            .compiled_package_info
-            .build_flags
-            .update_lock_file_toolchain_version(rerooted_path, env!("CARGO_PKG_VERSION").into())?;
-
+        // if generate_struct_layouts {
+        //     let layout_str = serde_yaml::to_string(&pkg.generate_struct_layouts()).unwrap();
+        //     // store under <package_path>/build/<package_name>/layouts/struct_layouts.yaml
+        //     let dir_name = rerooted_path
+        //         .join("build")
+        //         .join(pkg.package.compiled_package_info.package_name.as_str())
+        //         .join(LAYOUTS_DIR);
+        //     let layout_filename = dir_name.join(STRUCT_LAYOUTS_FILENAME);
+        //     fs::create_dir_all(dir_name)?;
+        //     fs::write(layout_filename, layout_str)?
+        // }
+        //
+        // pkg.package
+        //     .compiled_package_info
+        //     .build_flags
+        //     .update_lock_file_toolchain_version(rerooted_path, env!("CARGO_PKG_VERSION").into())?;
+        //
         Ok(())
     }
 }

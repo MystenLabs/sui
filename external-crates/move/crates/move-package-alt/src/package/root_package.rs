@@ -270,7 +270,10 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
                 pubfile
                     .published
                     .insert(self.environment.name().clone(), publish_data);
-                std::fs::write(&self.package_path, pubfile.render_as_toml())?;
+                std::fs::write(
+                    &self.package_path.publications_path(),
+                    pubfile.render_as_toml(),
+                )?;
             }
             PublicationSource::Ephemeral { file, pubs } => {
                 pubs.published.insert(package_id, publish_data.into());

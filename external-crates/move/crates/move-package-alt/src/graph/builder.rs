@@ -71,7 +71,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         env: &Environment,
         check_digests: bool,
     ) -> PackageResult<Option<PackageGraph<F>>> {
-        let Some(lockfile) = Lockfiles::read_from_dir(path)? else {
+        let Some(lockfile) = Lockfiles::read_from_dir::<F>(path)? else {
             return Ok(None);
         };
 
