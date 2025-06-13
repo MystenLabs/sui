@@ -102,6 +102,8 @@ impl<'de> Deserialize<'de> for TwoPointZero {
 
 #[test]
 fn deserialize() {
+    use serde_json::json;
+
     let value = json!({"result": 0});
     let x: JsonRpcResult<i32> = JsonRpcResult::deserialize(value).expect("foo");
     let JsonRpcResult::Ok { result } = x else {
@@ -110,5 +112,5 @@ fn deserialize() {
     assert_eq!(result, 0);
 
     let v2 = json!({"jsonrpc": "2.0", "id": 0, "result": 0});
-    let response: Response<i32> = Response::deserialize(v2).expect("bar");
+    let _response: Response<i32> = Response::deserialize(v2).expect("bar");
 }
