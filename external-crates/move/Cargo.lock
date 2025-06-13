@@ -1698,6 +1698,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9dbbfed4e59ba9750e15ba154fdfd9329cee16ff3df539c2666b70f58cc32105"
 
 [[package]]
+name = "jsonrpc"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "keccak"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2500,6 +2512,7 @@ dependencies = [
  "futures",
  "insta",
  "itertools 0.10.5",
+ "jsonrpc",
  "move-command-line-common",
  "move-core-types",
  "move-package",

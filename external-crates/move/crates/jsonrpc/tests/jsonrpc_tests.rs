@@ -11,7 +11,7 @@ mod jsonrpc_tests {
     use tracing::debug;
     use tracing_subscriber::EnvFilter;
 
-    use move_package_alt::jsonrpc::{
+    use jsonrpc::{
         client::{Endpoint, JsonRpcError},
         types::RemoteError,
     };

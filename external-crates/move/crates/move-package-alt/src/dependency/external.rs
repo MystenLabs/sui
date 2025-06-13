@@ -15,6 +15,7 @@ use std::{
 
 use futures::future::try_join_all;
 use itertools::{Itertools, izip};
+use jsonrpc::Endpoint;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::process::Command;
@@ -23,7 +24,6 @@ use tracing::{debug, info};
 use crate::{
     errors::{FileHandle, TheFile},
     flavor::MoveFlavor,
-    jsonrpc::Endpoint,
     package::{EnvironmentID, EnvironmentName, PackageName},
     schema::{ManifestDependencyInfo, ResolveRequest, ResolveResponse, ResolverDependencyInfo},
 };
