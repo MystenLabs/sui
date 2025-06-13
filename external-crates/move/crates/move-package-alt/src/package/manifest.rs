@@ -172,7 +172,7 @@ impl<F: MoveFlavor> Manifest<F> {
 
         // TODO: this drops everything besides the [UnpinnedDependencyInfo] (e.g. override,
         // published-at, etc).
-        for (env, _) in self.environments() {
+        for env in self.environments().keys() {
             for (pkg, dep) in self.dependencies.iter() {
                 deps.insert(env.clone(), pkg.clone(), dep.dependency_info.clone());
             }
