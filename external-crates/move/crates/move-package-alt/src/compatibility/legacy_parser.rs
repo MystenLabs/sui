@@ -382,8 +382,8 @@ fn parse_dependencies(tval: TV) -> Result<BTreeMap<PackageName, DefaultDependenc
             for (dep_name, dep) in table.into_iter() {
                 // TODO(manos): This could fail if we have names that are not `Identifier` compatible.
                 // Though this is a super rare case, we'll probably not handle it more complex until we need to.
+                let dep_name = dep_name.replace("-", "___");
                 let dep_name_ident = PackageName::new(dep_name)?;
-
                 let dep = parse_dependency(dep)?;
                 deps.insert(dep_name_ident, dep);
             }

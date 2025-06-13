@@ -24,6 +24,7 @@ use builder::PackageGraphBuilder;
 
 use derive_where::derive_where;
 use petgraph::{
+    algo::toposort,
     graph::{DiGraph, NodeIndex},
     visit::EdgeRef,
 };
@@ -51,7 +52,7 @@ pub struct PackageInfo<'a, F: MoveFlavor> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum NamedAddress {
     RootPackage(Option<OriginalID>),
-    Unpublished,
+    Unpublished { dummy_addr: OriginalID },
     Defined(OriginalID),
 }
 
@@ -163,7 +164,9 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
         if let Some(oid) = package.original_id() {
             NamedAddress::Defined(oid)
         } else {
-            NamedAddress::Unpublished
+            NamedAddress::Unpublished {
+                dummy_addr: package.dummy_addr.clone(),
+            }
         }
     }
 
@@ -221,6 +224,16 @@ impl<F: MoveFlavor> PackageGraph<F> {
         self.inner
             .node_indices()
             .map(|node| PackageInfo { graph: self, node })
+            .collect()
+    }
+
+    /// Return the sorted list of dependencies' name
+    pub(crate) fn sorted_deps(&self) -> Vec<&PackageName> {
+        let sorted = toposort(&self.inner, None).expect("to sort the graph");
+        sorted
+            .iter()
+            .flat_map(|x| self.inner.node_weight(*x))
+            .map(|x| x.name())
             .collect()
     }
 }

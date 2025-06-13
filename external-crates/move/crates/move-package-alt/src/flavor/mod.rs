@@ -13,7 +13,9 @@ use std::{
 
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::schema::{EnvironmentID, EnvironmentName, PackageName, ReplacementDependency};
+use crate::schema::{
+    EnvironmentID, EnvironmentName, PackageName, PublishAddresses, ReplacementDependency,
+};
 
 /// A [MoveFlavor] is used to parameterize the package management system. It defines the types and
 /// methods for package management that are specific to a particular instantiation of the Move

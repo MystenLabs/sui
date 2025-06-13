@@ -20,8 +20,16 @@ use serde::{Deserialize, Serialize};
 use sui_package_management::system_package_versions::{
     latest_system_packages, system_packages_for_protocol, SystemPackagesVersion, SYSTEM_GIT_REPO,
 };
+use sui_sdk::types::base_types::ObjectID;
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct SuiMetadata {
+    pub upgrade_cap: Option<ObjectID>,
+    pub version: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SuiFlavor;
 
 impl SuiFlavor {
@@ -58,7 +66,7 @@ impl MoveFlavor for SuiFlavor {
         "sui".to_string()
     }
 
-    type PublishedMetadata = (); // TODO
+    type PublishedMetadata = SuiMetadata;
 
     type AddressInfo = (); // TODO
 

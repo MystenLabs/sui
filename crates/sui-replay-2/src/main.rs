@@ -4,7 +4,11 @@
 use clap::*;
 use core::panic;
 use sui_replay_2::{
-    build::handle_build_command, handle_replay_config, print_effects_or_fork, Commands, Config,
+    // build::handle_build_command,
+    handle_replay_config,
+    print_effects_or_fork,
+    Commands,
+    Config,
 };
 use tracing::debug;
 
@@ -21,9 +25,10 @@ async fn main() -> anyhow::Result<()> {
     debug!("Parsed config: {:#?}", config);
 
     match config.command {
-        Some(Commands::Build(build_config)) => {
-            handle_build_command(build_config)?;
-        }
+        // Some(Commands::Build(build_config)) => {
+        //     handle_build_command(build_config)?;
+        // }
+        Some(_) => todo!(),
         None => {
             let output_root = handle_replay_config(&config.replay, VERSION).await?;
 

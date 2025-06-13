@@ -6,6 +6,7 @@ use move_package_alt::{
     flavor::MoveFlavor,
     graph::NamedAddress,
     package::{RootPackage, paths::PackagePath},
+    schema::OriginalID,
 };
 
 use colored::Colorize;
@@ -15,8 +16,6 @@ use crate::on_disk_package::{OnDiskCompiledPackage, OnDiskPackage};
 use move_package_alt::package::layout::SourcePackageLayout;
 
 use crate::layout::CompiledPackageLayout;
-
-use move_package_alt::schema::PublishedID;
 
 use anyhow::Result;
 use move_binary_format::CompiledModule;
@@ -45,6 +44,7 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
+use tracing::debug;
 use vfs::VfsPath;
 
 /// References file for documentation generation
@@ -65,7 +65,7 @@ pub struct CompiledPackage {
     /// filename -> doctext
     pub compiled_docs: Option<Vec<(String, String)>>,
     /// The list of published ids for the dependencies of this package
-    pub deps_published_ids: Vec<PublishedID>,
+    pub deps_published_ids: Vec<OriginalID>,
     /// The mapping of file hashes to file names and contents
     pub file_map: MappedFiles,
 }
@@ -197,7 +197,7 @@ impl CompiledPackage {
     }
 
     /// Return the published ids of the dependencies of this package
-    pub fn dependency_ids(&self) -> Vec<PublishedID> {
+    pub fn dependency_ids(&self) -> Vec<OriginalID> {
         self.deps_published_ids.clone()
     }
 }
@@ -341,7 +341,7 @@ fn _decorate_warnings(warning_diags: Diagnostics, files: Option<&MappedFiles>) {
     }
 }
 
-fn source_paths_for_config(package_path: &Path) -> Vec<PathBuf> {
+fn source_paths_for_config(package_path: &Path, config: &BuildConfig) -> Vec<PathBuf> {
     let mut places_to_look = Vec::new();
     let mut add_path = |layout_path: SourcePackageLayout| {
         let path = package_path.join(layout_path.path());
@@ -354,6 +354,10 @@ fn source_paths_for_config(package_path: &Path) -> Vec<PathBuf> {
     add_path(SourcePackageLayout::Sources);
     add_path(SourcePackageLayout::Scripts);
 
+    if config.test_mode {
+        add_path(SourcePackageLayout::Tests);
+    }
+
     places_to_look
         .into_iter()
         .filter(|path| path.exists())
@@ -361,8 +365,8 @@ fn source_paths_for_config(package_path: &Path) -> Vec<PathBuf> {
 }
 
 // Find all the source files for a package at the given path
-fn get_sources(path: &PackagePath) -> Result<Vec<FileName>> {
-    let places_to_look = source_paths_for_config(path.path());
+fn get_sources(path: &PackagePath, config: &BuildConfig) -> Result<Vec<FileName>> {
+    let places_to_look = source_paths_for_config(path.path(), config);
     Ok(find_move_filenames(&places_to_look, false)?
         .into_iter()
         .map(FileName::from)
@@ -441,6 +445,7 @@ pub fn build_all<W: Write, F: MoveFlavor>(
     build_config: &BuildConfig,
     compiler_driver: impl FnOnce(Compiler) -> Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
 ) -> Result<CompiledPackage> {
+    let deps_published_ids = root_pkg.deps_published_ids().clone();
     let project_root = root_pkg.path().as_ref().to_path_buf();
     let program_info_hook = SaveHook::new([SaveFlag::TypingInfo]);
     let package_name = Symbol::from(root_pkg.name().as_str());
@@ -449,8 +454,6 @@ pub fn build_all<W: Write, F: MoveFlavor>(
             let compiler = compiler.add_save_hook(&program_info_hook);
             compiler_driver(compiler)
         })?;
-
-    let published_ids = vec![];
 
     let mut all_compiled_units_vec = vec![];
     let mut root_compiled_units = vec![];
@@ -540,7 +543,7 @@ pub fn build_all<W: Write, F: MoveFlavor>(
         root_compiled_units,
         deps_compiled_units,
         compiled_docs: None,
-        deps_published_ids: published_ids,
+        deps_published_ids,
         file_map,
         // compiled_docs,
     };
@@ -568,23 +571,20 @@ pub(crate) fn build_for_driver<W: Write, T, F: MoveFlavor>(
         }
 
         let mut addresses: BTreeMap<Symbol, NumericalAddress> = BTreeMap::new();
-        let mut dummy_addr = 0x1000;
         for (dep_name, dep) in pkg.named_addresses()? {
             let name = dep_name.as_str().into();
 
             let addr = match dep {
                 NamedAddress::RootPackage(_) => AccountAddress::ZERO,
-                NamedAddress::Unpublished => {
-                    dummy_addr += 1;
-                    let addr = AccountAddress::from_suffix(dummy_addr);
+                NamedAddress::Unpublished { dummy_addr } => {
                     writeln!(
                         w,
                         "{} Using address 0x{} for unpublished dependency `{name}` in package `{}`",
                         "NOTE".bold().yellow(),
-                        addr.short_str_lossless(),
+                        dummy_addr.0.short_str_lossless(),
                         pkg.name()
                     )?;
-                    addr
+                    dummy_addr.0
                 }
                 NamedAddress::Defined(original_id) => original_id.0,
             };
@@ -602,9 +602,11 @@ pub(crate) fn build_for_driver<W: Write, T, F: MoveFlavor>(
             warning_filter: WarningFiltersBuilder::new_for_source(),
         };
 
+        debug!("Package name {:?}", name);
+        debug!("Named address map {:#?}", addresses);
         let paths = PackagePaths {
             name: Some((name, config)),
-            paths: get_sources(pkg.path())?,
+            paths: get_sources(pkg.path(), build_config)?,
             named_address_map: addresses,
         };
 

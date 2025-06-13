@@ -3,7 +3,8 @@
 
 use super::reroot_path;
 use clap::*;
-use move_package::BuildConfig;
+use move_package_alt_compilation::build_config::BuildConfig;
+
 use std::path::Path;
 
 /// Migrate to Move 2024 for the package at `path`. If no path is provided defaults to current directory.
@@ -13,12 +14,12 @@ pub struct Migrate;
 
 impl Migrate {
     pub fn execute(self, path: Option<&Path>, config: BuildConfig) -> anyhow::Result<()> {
-        let rerooted_path = reroot_path(path)?;
-        config.migrate_package(
-            &rerooted_path,
-            &mut std::io::stdout(),
-            &mut std::io::stdin().lock(),
-        )?;
+        // let rerooted_path = reroot_path(path)?;
+        // config.migrate_package(
+        //     &rerooted_path,
+        //     &mut std::io::stdout(),
+        //     &mut std::io::stdin().lock(),
+        // )?;
         Ok(())
     }
 }
