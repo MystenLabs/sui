@@ -3917,10 +3917,6 @@ impl ProtocolConfig {
             .consensus_round_prober_probe_accepted_rounds = val;
     }
 
-    pub fn set_consensus_linearize_subdag_v2_for_testing(&mut self, val: bool) {
-        self.feature_flags.consensus_linearize_subdag_v2 = val;
-    }
-
     pub fn set_mysticeti_fastpath_for_testing(&mut self, val: bool) {
         self.feature_flags.mysticeti_fastpath = val;
     }
