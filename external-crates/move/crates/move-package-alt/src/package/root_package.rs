@@ -63,6 +63,30 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         Ok(Self { root, dependencies })
     }
 
+    /// Only load the root manifest and ignore any dependencies. The `dependencies` field will be
+    /// empty.
+    pub async fn load_manifest(
+        path: impl AsRef<Path>,
+        env: Option<EnvironmentName>,
+    ) -> PackageResult<Self> {
+        let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
+        let root = Package::<F>::load_root(package_path.path()).await?;
+
+        if let Some(env) = env {
+            if root.manifest().environments().get(&env).is_none() {
+                return Err(PackageError::Generic(format!(
+                    "Package {} does not have `{env}` defined as an environment in its manifest",
+                    root.name(),
+                )));
+            }
+        }
+
+        Ok(Self {
+            root,
+            dependencies: BTreeMap::new(),
+        })
+    }
+
     /// Load the root package and check if the lockfile is up-to-date. If it is not, then
     /// all dependencies will be re-pinned.
     pub async fn load_and_repin(path: impl AsRef<Path>) -> PackageResult<Self> {

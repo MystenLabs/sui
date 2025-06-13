@@ -328,6 +328,10 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         for (name, dep) in package.package.direct_deps(env).await?.iter() {
             // TODO: to handle use-environment we need to traverse with a different env here
 
+            // TODO: is this the right thing to do?
+            // is this the place to do it?
+            // How we'd otherwise fetch this and dwl it into the existing checked out repo
+            //
             // If the parent dependency is a git dep and this dep is local we need to fetch this as
             // a git dep as well.
             let dep = match dep {

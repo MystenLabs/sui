@@ -27,25 +27,22 @@ pub struct UpdateDeps {
 
 impl UpdateDeps {
     pub async fn execute(&self) -> PackageResult<()> {
-        let mut root_package = RootPackage::<Vanilla>::load(
+        let root_package = RootPackage::<Vanilla>::load_manifest(
             self.path.as_ref().unwrap_or(&PathBuf::from(".")),
             self.environment.clone(),
         )
         .await?;
 
         let envs = if let Some(env) = &self.environment {
-            let entry = root_package
+            let envs = root_package
                 .environments()
-                .get_key_value(env)
+                .iter()
+                .filter(|(k, _)| k == &env)
                 .map(|x| (x.0.clone(), x.1.clone()))
-                .ok_or_else(|| {
-                    PackageError::Generic(
-                        "Environment {env} does not exist in this package's manifest".to_string(),
-                    )
-                })?;
-            &BTreeMap::from([entry])
+                .collect::<BTreeMap<_, _>>();
+            envs
         } else {
-            root_package.environments()
+            root_package.environments().clone()
         };
 
         let ending = if envs.len() == 1 {
@@ -56,7 +53,9 @@ impl UpdateDeps {
         let envs_str = envs.keys().cloned().collect::<Vec<_>>().join(", ");
         println!("Updating dependencies for {ending} {envs_str}");
 
-        root_package.update_deps_and_write_to_lockfile(envs).await?;
+        root_package
+            .update_deps_and_write_to_lockfile(&envs)
+            .await?;
 
         Ok(())
     }
