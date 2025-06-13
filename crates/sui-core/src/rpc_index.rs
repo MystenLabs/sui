@@ -803,14 +803,12 @@ impl IndexStoreTables {
         Ok(self
             .balance
             .safe_iter_with_bounds(Some(lower_bound), None)
-            .take_while(move |item| {
-                // If there's an error let if flow through
-                let Ok((key, _)) = item else {
-                    return true;
-                };
-
-                // Only take if owner matches
-                key.owner == owner
+            .scan((), move |_, item| {
+                match item {
+                    Ok((key, value)) if key.owner == owner => Some(Ok((key, value))),
+                    Ok(_) => None,          // Different owner, stop iteration
+                    Err(e) => Some(Err(e)), // Propagate error
+                }
             }))
     }
 }
