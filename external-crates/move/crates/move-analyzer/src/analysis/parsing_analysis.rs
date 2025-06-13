@@ -195,6 +195,14 @@ impl<'a> ParsingAnalysisContext<'a> {
         assert!(self.current_mod_ident_str.is_none());
         self.current_mod_ident_str = Some(mod_ident_str.clone());
 
+        if mod_use_defs.get(&mod_ident_str).is_none() {
+            // when doing full standalone compilation (vs. pre-compiling dependencies)
+            // we may have a module at parsing but no longer at typing
+            // in case there is a name conflict with a dependency
+            eprintln!("no typing-level module for {:?}", mod_ident_str);
+            return;
+        }
+
         let use_defs = mod_use_defs.remove(&mod_ident_str).unwrap();
         let old_defs = std::mem::replace(&mut self.use_defs, use_defs);
         let alias_lengths: BTreeMap<Position, usize> = BTreeMap::new();

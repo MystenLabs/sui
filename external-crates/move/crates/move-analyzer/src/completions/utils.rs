@@ -323,18 +323,15 @@ pub fn compute_cursor(
 ) {
     let cursor_info = Some((cursor_path, cursor_pos));
     let mut symbols_computation_data = SymbolsComputationData::new();
-    let mut symbols_computation_data_deps = SymbolsComputationData::new();
     // we only compute cursor context and tag it on the existing symbols to avoid spending time
     // recomputing all symbols (saves quite a bit of time when running the test suite)
     let mut cursor_context = compute_symbols_pre_process(
         &mut symbols_computation_data,
-        &mut symbols_computation_data_deps,
         compiled_pkg_info,
         cursor_info,
     );
     cursor_context = compute_symbols_parsed_program(
         &mut symbols_computation_data,
-        &mut symbols_computation_data_deps,
         compiled_pkg_info,
         cursor_context,
     );

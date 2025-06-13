@@ -15,7 +15,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FunctionDeclaration {
     pub seen_datatypes: BTreeSet<(ModuleIdent, DatatypeName)>,
     pub signature: IR::FunctionSignature,

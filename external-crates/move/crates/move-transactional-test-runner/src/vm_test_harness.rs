@@ -5,18 +5,18 @@
 use std::{collections::BTreeMap, path::Path};
 
 use crate::{
-    framework::{CompiledState, MaybeNamedCompiledModule, MoveTestAdapter, run_test_impl},
+    framework::{run_test_impl, CompiledState, MaybeNamedCompiledModule, MoveTestAdapter},
     tasks::{EmptyCommand, InitCommand, SyntaxChoice, TaskInput},
 };
-use anyhow::{Error, Result, anyhow};
+use anyhow::{anyhow, Error, Result};
 use async_trait::async_trait;
 use clap::Parser;
 use move_binary_format::{
-    CompiledModule,
     errors::{Location, VMError, VMResult},
+    CompiledModule,
 };
 use move_command_line_common::files::verify_and_create_named_address_mapping;
-use move_compiler::{FullyCompiledProgram, editions::Edition, shared::PackagePaths};
+use move_compiler::{editions::Edition, shared::PackagePaths, CompiledModuleInfoMap};
 use move_core_types::parsing::address::ParsedAddress;
 use move_core_types::{
     account_address::AccountAddress,
@@ -31,7 +31,7 @@ use move_vm_runtime::{
     move_vm::MoveVM,
     session::{SerializedReturnValues, Session},
 };
-use move_vm_test_utils::{InMemoryStorage, gas_schedule::GasStatus};
+use move_vm_test_utils::{gas_schedule::GasStatus, InMemoryStorage};
 use once_cell::sync::Lazy;
 use std::sync::Arc;
 
@@ -67,7 +67,7 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
 
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_module_infos_opt: Option<Arc<CompiledModuleInfoMap>>,
         task_opt: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
         _path: &Path,
     ) -> (Self, Option<String>) {
@@ -93,7 +93,7 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
         let mut adapter = Self {
             compiled_state: CompiledState::new(
                 named_address_mapping,
-                pre_compiled_deps,
+                pre_compiled_module_infos_opt,
                 None,
                 Some(compiler_edition),
                 None,
@@ -295,8 +295,8 @@ impl SimpleVMTestAdapter {
     }
 }
 
-pub static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
-    let program_res = move_compiler::construct_pre_compiled_lib(
+pub static PRECOMPILED_MOVE_STDLIB_MODULES_INFO: Lazy<CompiledModuleInfoMap> = Lazy::new(|| {
+    let module_infos = move_compiler::construct_precompiled_module_infos(
         vec![PackagePaths {
             name: None,
             paths: move_stdlib::source_files(),
@@ -307,8 +307,8 @@ pub static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         None,
     )
     .unwrap();
-    match program_res {
-        Ok(stdlib) => stdlib,
+    match module_infos {
+        Ok(modules_info) => modules_info,
         Err((files, errors)) => {
             eprintln!("!!!Standard library failed to compile!!!");
             move_compiler::diagnostics::report_diagnostics(&files, errors)
@@ -352,7 +352,7 @@ fn test_vm_config() -> VMConfig {
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     run_test_impl::<SimpleVMTestAdapter>(
         path,
-        Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())),
+        Some(Arc::new(PRECOMPILED_MOVE_STDLIB_MODULES_INFO.clone())),
         None,
     )
     .await

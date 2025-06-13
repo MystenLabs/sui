@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    FullyCompiledProgram,
     cfgir::{
         self,
         ast::{self as G, BasicBlock, BasicBlocks, BlockInfo},
@@ -153,11 +152,7 @@ impl<'env> Context<'env> {
 // Entry
 //**************************************************************************************************
 
-pub fn program(
-    compilation_env: &CompilationEnv,
-    _pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
-    prog: H::Program,
-) -> G::Program {
+pub fn program(compilation_env: &CompilationEnv, prog: H::Program) -> G::Program {
     let H::Program {
         modules: hmodules,
         warning_filters_table,

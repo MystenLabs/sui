@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::{
-    FullyCompiledProgram,
+    CompiledModuleInfoMap,
     diagnostics::warning_filters::WarningFilters,
     expansion::ast::{Fields, ModuleIdent},
     naming::ast as N,
@@ -57,13 +57,13 @@ pub struct SuiInfo {
 
 impl SuiInfo {
     pub fn new(
-        pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
         modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>,
         info: &TypingProgramInfo,
     ) -> Self {
         assert!(info.sui_flavor_info.is_none());
         let uid_holders = all_uid_holders(info);
-        let transferred = all_transferred(pre_compiled_lib, modules, info);
+        let transferred = all_transferred(pre_compiled_module_infos, modules, info);
         Self {
             uid_holders,
             transferred,
@@ -232,7 +232,7 @@ fn all_uid_holders(info: &TypingProgramInfo) -> BTreeMap<(ModuleIdent, DatatypeN
 }
 
 fn all_transferred(
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
     modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>,
     info: &TypingProgramInfo,
 ) -> BTreeMap<(ModuleIdent, DatatypeName), TransferKind> {
@@ -248,18 +248,22 @@ fn all_transferred(
             transferred.insert((mident, s), TransferKind::PublicTransfer(store_loc));
         }
 
-        let mdef = match modules.get(&mident) {
-            Some(mdef) => mdef,
-            None => pre_compiled_lib
-                .as_ref()
-                .unwrap()
-                .typing
-                .modules
-                .get(&mident)
-                .unwrap(),
-        };
-        for (_, _, fdef) in &mdef.functions {
-            add_private_transfers(&mut transferred, fdef);
+        match modules.get(&mident) {
+            Some(mdef) => {
+                for (_, _, fdef) in &mdef.functions {
+                    add_private_transfers(&mut transferred, fdef);
+                }
+            }
+            None => {
+                let module_info = pre_compiled_module_infos
+                    .as_ref()
+                    .unwrap()
+                    .get(&mident)
+                    .unwrap();
+                for (datatype_name, transfer_kind) in &module_info.private_transfers {
+                    transferred.insert((mident, datatype_name.clone()), transfer_kind.clone());
+                }
+            }
         }
     }
     transferred

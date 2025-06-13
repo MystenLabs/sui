@@ -6,7 +6,7 @@ use move_command_line_common::files::FileHash;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::{
-    collections::{BTreeMap, HashMap, hash_map},
+    collections::{hash_map, BTreeMap, HashMap},
     path::PathBuf,
     sync::Arc,
 };

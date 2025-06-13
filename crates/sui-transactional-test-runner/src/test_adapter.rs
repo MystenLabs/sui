@@ -21,7 +21,7 @@ use move_command_line_common::files::verify_and_create_named_address_mapping;
 use move_compiler::{
     editions::{Edition, Flavor},
     shared::{NumberFormat, NumericalAddress, PackageConfig, PackagePaths},
-    Flags, FullyCompiledProgram,
+    CompiledModuleInfoMap, Flags,
 };
 use move_core_types::ident_str;
 use move_core_types::parsing::address::ParsedAddress;
@@ -336,7 +336,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_module_infos_opt: Option<Arc<CompiledModuleInfoMap>>,
         task_opt: Option<
             move_transactional_test_runner::tasks::TaskInput<(
                 move_transactional_test_runner::tasks::InitCommand,
@@ -347,7 +347,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
     ) -> (Self, Option<String>) {
         let rng = StdRng::from_seed(RNG_SEED);
         assert!(
-            pre_compiled_deps.is_some(),
+            pre_compiled_module_infos_opt.is_some(),
             "Must populate 'pre_compiled_deps' with Sui framework"
         );
 
@@ -411,7 +411,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             read_replica,
             compiled_state: CompiledState::new(
                 named_address_mapping,
-                pre_compiled_deps,
+                pre_compiled_module_infos_opt,
                 Some(NumericalAddress::new(
                     AccountAddress::ZERO.into_bytes(),
                     NumberFormat::Hex,
@@ -2250,7 +2250,7 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
     map
 });
 
-pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
+pub static PRE_COMPILED: Lazy<CompiledModuleInfoMap> = Lazy::new(|| {
     // TODO invoke package system? Or otherwise pull the versions for these packages as per their
     // actual Move.toml files. They way they are treated here is odd, too, though.
     let sui_files: &Path = Path::new(DEFAULT_FRAMEWORK_PATH);
@@ -2284,7 +2284,7 @@ pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         buf.extend(["packages", "bridge", "sources"]);
         buf.to_string_lossy().to_string()
     };
-    let fully_compiled_res = move_compiler::construct_pre_compiled_lib(
+    let fully_compiled_res = move_compiler::construct_precompiled_module_infos(
         vec![PackagePaths {
             name: Some(("sui-framework".into(), config)),
             paths: vec![

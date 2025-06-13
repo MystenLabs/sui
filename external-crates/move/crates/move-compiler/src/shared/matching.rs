@@ -8,7 +8,7 @@ use crate::{
     ice,
     naming::ast::{self as N, Type, Var},
     parser::ast::{BinOp_, ConstantName, Field, VariantName},
-    shared::{CompilationEnv, program_info::ProgramInfo, unique_map::UniqueMap},
+    shared::{program_info::ProgramInfo, unique_map::UniqueMap, CompilationEnv},
     typing::ast::{self as T, MatchArm_, MatchPattern, UnannotatedPat_ as TP},
 };
 use move_ir_types::location::*;
