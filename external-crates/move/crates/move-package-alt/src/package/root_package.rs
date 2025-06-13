@@ -25,6 +25,7 @@ use crate::dependency::PinnedDependencyInfo;
 pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
     /// The root package itself as a Package
     root: Package<F>,
+    // direct_dependencies: BTreeMap<EnvironmentName, PackageGraph<F>>,
     /// A map from an environment in the manifest to its dependency graph.
     dependencies: BTreeMap<EnvironmentName, PackageGraph<F>>,
 }
@@ -110,6 +111,10 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         self.root.manifest()
     }
 
+    pub fn edition(&self) -> &str {
+        self.manifest().edition()
+    }
+
     /// The package's defined environments
     pub fn environments(&self) -> BTreeMap<EnvironmentName, EnvironmentID> {
         self.manifest().environments()
@@ -118,6 +123,10 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// Return the defined package name in the manifest
     pub fn package_name(&self) -> &PackageName {
         self.manifest().package_name()
+    }
+
+    pub fn root_pkg(&self) -> &Package<F> {
+        &self.root
     }
 
     // *** DEPENDENCIES RELATED FUNCTIONS ***

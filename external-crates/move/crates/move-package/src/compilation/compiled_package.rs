@@ -911,8 +911,9 @@ pub(crate) fn make_source_and_deps_for_compiler(
             ),
         )),
         paths: sources,
-        named_address_map: root_named_addrs,
+        named_address_map: root_named_addrs.clone(),
     };
+
     Ok((source_package_paths, deps_package_paths))
 }
 

@@ -10,16 +10,24 @@ use move_package_alt::{
     package::PackageName,
 };
 use serde::{Deserialize, Serialize};
+use sui_sdk::types::base_types::ObjectID;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SuiFlavor;
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct SuiMetadata {
+    pub upgrade_cap: Option<ObjectID>,
+    pub version: Option<u64>,
+}
 
 impl MoveFlavor for SuiFlavor {
     fn name() -> String {
         "sui".to_string()
     }
 
-    type PublishedMetadata = (); // TODO
+    type PublishedMetadata = SuiMetadata;
 
     type EnvironmentID = String; // TODO
 

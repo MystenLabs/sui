@@ -3,6 +3,10 @@
 
 #![allow(unused)]
 
+pub mod cli;
+pub use cli::Build;
+pub use cli::Publish;
+
 mod sui_flavor;
 
 pub use sui_flavor::SuiFlavor;
