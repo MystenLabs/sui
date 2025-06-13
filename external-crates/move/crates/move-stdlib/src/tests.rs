@@ -7,11 +7,13 @@ use std::{cmp::Ordering, path::Path};
 use tempfile::tempdir;
 use walkdir::{DirEntry, WalkDir};
 
-#[test]
-fn check_that_docs_are_updated() {
+#[tokio::test]
+async fn check_that_docs_are_updated() {
     let temp_dir = tempdir().unwrap();
 
-    crate::build_doc(temp_dir.path().to_string_lossy().to_string()).unwrap();
+    crate::build_doc(temp_dir.path().to_string_lossy().to_string())
+        .await
+        .unwrap();
 
     let res = check_dirs_not_diff(&temp_dir, crate::docs_full_path());
     assert!(

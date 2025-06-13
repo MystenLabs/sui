@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    io::BufRead,
+    borrow::Cow,
+    io::{BufRead, Write},
     path::{Path, PathBuf},
     process::Stdio,
 };
@@ -179,7 +180,6 @@ impl GitTree {
     /// Fails if `allow_dirty` is false and a dirty checkout of the directory already exists
     async fn checkout_repo(&self, allow_dirty: bool) -> GitResult<PathBuf> {
         let tree_path = self.path_to_tree();
-
         let mut fresh = false;
 
         // create repo if necessary
@@ -206,15 +206,24 @@ impl GitTree {
             fresh = true;
         }
 
+        let path_in_repo = self.path_in_repo().to_string_lossy();
+
         // Checkout directory if it does not exist already or if it exists but it has not been
         // checked out yet
         if !tree_path.exists() || fresh {
             // git sparse-checkout add <path>
-            let path_in_repo = self.path_in_repo().to_string_lossy();
 
-            self.run_git(&["sparse-checkout", "add", &path_in_repo])
+            update_sparse_checkout_file(&self.path_to_repo, path_in_repo)?;
+
+            // git checkout
+            self.run_git(&["checkout", "--quiet", self.sha.as_ref()])
                 .await?;
-
+        } else if tree_path.exists() && path_in_repo == "." {
+            // there are cases when a "local" dependency is first sparse checked out rather than
+            // the package with its root folders, so this makes sure that we still can check out
+            // the root folder
+            info!("Checking out all folders and files");
+            update_sparse_checkout_file(&self.path_to_repo, path_in_repo)?;
             // git checkout
             self.run_git(&["checkout", "--quiet", self.sha.as_ref()])
                 .await?;
@@ -482,6 +491,32 @@ async fn try_find_full_sha(repo: &str, rev: &str) -> GitResult<Option<GitSha>> {
     ))
 }
 
+/// This appends to the .git/info/sparse-checkout file the path to checkout. If the path is `.`, it
+/// will append a "/*" line to checkout all files and directories.
+///
+/// It's a workaround because `git sparse-checkout add .` does not work to add all files and
+/// directories.
+fn update_sparse_checkout_file(
+    repo_path: &Path,
+    path_in_repo: Cow<'_, str>,
+) -> Result<(), std::io::Error> {
+    let sparse_checkout_path = repo_path.join(".git").join("info").join("sparse-checkout");
+    let append_str = if path_in_repo == "." {
+        // we need to modify the .git/info/sparse-checkout file to append a /* line to
+        // allow to checkout all the files and directories.
+        // git sparse-checkout add . does not work
+        "/*"
+    } else {
+        &path_in_repo
+    };
+
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(&sparse_checkout_path)
+        .and_then(|mut file| writeln!(file, "{}", append_str))?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -491,6 +526,7 @@ mod tests {
     use std::fs;
     use std::path::Path;
     use tempfile::tempdir;
+    use test_log::test;
     use walkdir::DirEntry;
     use walkdir::WalkDir;
 
@@ -884,6 +920,80 @@ mod tests {
                 .unwrap()
                 .to_string(),
             &sha
+        );
+    }
+
+    #[test(tokio::test)]
+    async fn test_sparse_checkout_with_root_folder() {
+        let project = git::new("git_repo", |project| {
+            project
+                .file("Move.toml", &basic_manifest("a", "0.0.1"))
+                .file("sources/a.move", "// just a comment")
+        });
+        let cache_dir = tempdir().unwrap();
+        let cache = GitCache::new_from_dir(cache_dir.path());
+
+        let git_tree = cache
+            .resolve_to_tree(project.root_path_str(), &None, Some(PathBuf::from("")))
+            .await
+            .unwrap();
+
+        // Fetch the dependency
+        let checkout_path = git_tree.fetch().await.unwrap();
+
+        // Verify only packages/pkg_a was checked out
+        assert_exactly_paths(git_tree.repo_fs_path(), ["Move.toml", "sources/a.move"]);
+        assert_exactly_paths(&checkout_path, ["Move.toml", "sources/a.move"]);
+    }
+
+    #[test(tokio::test)]
+    async fn test_sparse_checkout_with_local_deps() {
+        // this test simulates the following structure:
+        // pkg A defines two local dependencies pkg B, and pkg C
+        // pkg D depends on pkg A
+
+        // when pkg D is fetched, it should fetch pkg A root folders, then B and C
+        let project = git::new("git_repo", |project| {
+            project
+                .file(
+                    "Move.toml",
+                    r#"[package]
+name = "a"
+version = "0.0.1"
+authors = ["me"]
+edition = "2024"
+[dependencies]
+b = { local = "packages/pkg_b" }
+c = { local = "packages/pkg_c" }
+"#,
+                )
+                .file("sources/a.move", "// just a comment")
+                .file("packages/pkg_b/Move.toml", &basic_manifest("b", "0.0.1"))
+                .file("packages/pkg_b/sources/b.move", "// just a comment")
+                .file("packages/pkg_c/Move.toml", &basic_manifest("c", "0.0.1"))
+                .file("packages/pkg_c/sources/c.move", "// just a comment")
+        });
+
+        let cache_dir = tempdir().unwrap();
+        let cache = GitCache::new_from_dir(cache_dir.path());
+        let git_tree = cache
+            .resolve_to_tree(project.root_path_str(), &None, Some(PathBuf::from("")))
+            .await
+            .unwrap();
+
+        // Fetch the dependency
+        let _ = git_tree.fetch().await.unwrap();
+        // Verify only packages/pkg_a was checked out
+        assert_exactly_paths(
+            git_tree.repo_fs_path(),
+            [
+                "Move.toml",
+                "sources/a.move",
+                "packages/pkg_b/Move.toml",
+                "packages/pkg_b/sources/b.move",
+                "packages/pkg_c/Move.toml",
+                "packages/pkg_c/sources/c.move",
+            ],
         );
     }
 }

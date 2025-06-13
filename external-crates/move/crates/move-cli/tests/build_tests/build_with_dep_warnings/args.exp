@@ -16,7 +16,7 @@ B0:
 Command `build -p dep`:
 BUILDING SomeDep
 warning[W09002]: unused variable
-  ┌─ ./sources/has_warning.move:2:20
+  ┌─ ./dep/sources/has_warning.move:2:20
   │
 2 │     public fun foo(x: u64): u64 {
   │                    ^ Unused parameter 'x'. Consider removing or prefixing with an underscore: '_x'

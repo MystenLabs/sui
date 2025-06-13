@@ -68,6 +68,15 @@ pub struct OnChainDepInfo {
 #[serde(try_from = "bool", into = "bool")]
 pub struct ConstTrue;
 
+impl PublishAddresses {
+    pub fn zero() -> Self {
+        Self {
+            published_at: PublishedID(AccountAddress::ZERO),
+            original_id: OriginalID(AccountAddress::ZERO),
+        }
+    }
+}
+
 impl From<u16> for OriginalID {
     fn from(value: u16) -> Self {
         Self(AccountAddress::from_suffix(value))

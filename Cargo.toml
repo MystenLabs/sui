@@ -42,6 +42,7 @@ exclude = [
   "external-crates/move/crates/move-model-2",
   "external-crates/move/crates/move-package",
   "external-crates/move/crates/move-package-alt",
+  "external-crates/move/crates/move-package-alt-compilation",
   "external-crates/move/crates/move-proc-macros",
   "external-crates/move/crates/move-regex-borrow-graph",
   "external-crates/move/crates/move-stackless-bytecode",
@@ -610,6 +611,7 @@ starlark = "0.13.0"
 
 
 # Move dependencies
+jsonrpc = { path = "external-crates/move/crates/jsonrpc" }
 move-binary-format = { path = "external-crates/move/crates/move-binary-format" }
 move-bytecode-utils = { path = "external-crates/move/crates/move-bytecode-utils" }
 move-bytecode-source-map = { path = "external-crates/move/crates/move-bytecode-source-map" }
@@ -620,7 +622,7 @@ move-core-types = { path = "external-crates/move/crates/move-core-types" }
 move-disassembler = { path = "external-crates/move/crates/move-disassembler" }
 move-package = { path = "external-crates/move/crates/move-package" }
 move-package-alt = { path = "external-crates/move/crates/move-package-alt" }
-jsonrpc = { path = "external-crates/move/crates/jsonrpc" }
+move-package-alt-compilation = { path = "external-crates/move/crates/move-package-alt-compilation" }
 move-unit-test = { path = "external-crates/move/crates/move-unit-test" }
 move-vm-config = { path = "external-crates/move/crates/move-vm-config" }
 move-vm-test-utils = { path = "external-crates/move/crates/move-vm-test-utils/", features = [

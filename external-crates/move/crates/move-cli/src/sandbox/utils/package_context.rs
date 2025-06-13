@@ -1,10 +1,18 @@
 // Copyright (c) The Diem Core Contributors
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
-use crate::{DEFAULT_BUILD_DIR, sandbox::utils::OnDiskStateView};
-use anyhow::Result;
-use move_package::{BuildConfig, compilation::compiled_package::CompiledPackage};
+
 use std::path::{Path, PathBuf};
+
+use anyhow::Result;
+
+use crate::{
+    DEFAULT_BUILD_DIR,
+    base::{find_env, reroot_path},
+    sandbox::utils::OnDiskStateView,
+};
+use move_package_alt::flavor::MoveFlavor;
+use move_package_alt_compilation::{build_config::BuildConfig, compiled_package::CompiledPackage};
 
 /// The PackageContext controls the package that the CLI is executing with respect to, and handles the
 /// creation of the `OnDiskStateView` with the package's dependencies.
@@ -14,16 +22,21 @@ pub struct PackageContext {
 }
 
 impl PackageContext {
-    pub fn new(path: &Option<PathBuf>, build_config: &BuildConfig) -> Result<Self> {
-        let path = path.as_deref().unwrap_or_else(|| Path::new("."));
+    pub async fn new<F: MoveFlavor>(
+        path: &Option<PathBuf>,
+        build_config: &BuildConfig,
+    ) -> Result<Self> {
+        let path = reroot_path(path.as_deref())?;
+        let env = find_env::<F>(&path, build_config)?;
         let build_dir = build_config
             .install_dir
             .as_ref()
             .unwrap_or(&PathBuf::from(DEFAULT_BUILD_DIR))
             .clone();
+
         let package = build_config
-            .clone()
-            .compile_package(path, &mut Vec::new())?;
+            .compile::<F, _>(&path, &env, &mut Vec::new())
+            .await?;
         Ok(PackageContext { package, build_dir })
     }
 
@@ -58,11 +71,5 @@ impl PackageContext {
 
     pub fn package(&self) -> &CompiledPackage {
         &self.package
-    }
-}
-
-impl Default for PackageContext {
-    fn default() -> Self {
-        Self::new(&None, &BuildConfig::default()).unwrap()
     }
 }

@@ -24,7 +24,7 @@ use sui_types::{
 
 use move_core_types::language_storage::TypeTag;
 
-use sui_move_build::{BuildConfig, SuiPackageHooks};
+use sui_move_build::BuildConfig;
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair},
     error::SuiError,
@@ -2792,25 +2792,21 @@ async fn test_object_no_id_error() {
                  && err_str.contains("First field of struct NotObject must be 'id'"));
 }
 
-pub fn build_test_package(test_dir: &str, with_unpublished_deps: bool) -> Vec<Vec<u8>> {
+pub fn build_test_package(test_dir: &str) -> Vec<Vec<u8>> {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", test_dir]);
     BuildConfig::new_for_testing()
         .build(&path)
         .unwrap()
-        .get_package_bytes(with_unpublished_deps)
+        .get_package_bytes()
 }
 
-pub fn build_package(
-    code_dir: &str,
-    with_unpublished_deps: bool,
-) -> (Vec<u8>, Vec<Vec<u8>>, Vec<ObjectID>) {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+pub fn build_package(code_dir: &str) -> (Vec<u8>, Vec<Vec<u8>>, Vec<ObjectID>) {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", code_dir]);
     let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
-    let digest = compiled_package.get_package_digest(with_unpublished_deps);
-    let modules = compiled_package.get_package_bytes(with_unpublished_deps);
+    let digest = compiled_package.get_package_digest();
+    let modules = compiled_package.get_package_bytes();
     let dependencies = compiled_package.get_dependency_storage_package_ids();
     (digest.to_vec(), modules, dependencies)
 }
@@ -2823,14 +2819,12 @@ pub async fn build_and_try_publish_test_package(
     test_dir: &str,
     gas_budget: u64,
     gas_price: u64,
-    with_unpublished_deps: bool,
 ) -> (Transaction, SignedTransactionEffects) {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", test_dir]);
 
     let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
-    let all_module_bytes = compiled_package.get_package_bytes(with_unpublished_deps);
+    let all_module_bytes = compiled_package.get_package_bytes();
     let dependencies = compiled_package.get_dependency_storage_package_ids();
 
     let gas_object = authority.get_object(gas_object_id).await;
@@ -2869,7 +2863,6 @@ pub async fn build_and_publish_test_package(
         sender_key,
         gas_object_id,
         test_dir,
-        with_unpublished_deps,
     )
     .await
     .0
@@ -2881,7 +2874,6 @@ pub async fn build_and_publish_test_package_with_upgrade_cap(
     sender_key: &AccountKeyPair,
     gas_object_id: &ObjectID,
     test_dir: &str,
-    with_unpublished_deps: bool,
 ) -> (ObjectRef, ObjectRef) {
     let gas_price = authority.reference_gas_price_for_testing().unwrap();
     let gas_budget = TEST_ONLY_GAS_UNIT_FOR_PUBLISH * gas_price;
@@ -2893,7 +2885,6 @@ pub async fn build_and_publish_test_package_with_upgrade_cap(
         test_dir,
         gas_budget,
         gas_price,
-        with_unpublished_deps,
     )
     .await
     .1

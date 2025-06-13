@@ -1,5 +1,5 @@
 Command `build`:
-INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY std
 BUILDING Test
 Command `disassemble --package Test --name m`:
 // Move bytecode v6

@@ -4,9 +4,9 @@
 use anyhow::{self, Context, ensure};
 use clap::*;
 use move_core_types::identifier::Identifier;
-use move_package::source_package::layout::SourcePackageLayout;
+use move_package_alt::package::layout::SourcePackageLayout;
 use std::io::{BufRead, BufReader};
-use std::{fmt::Display, fs::create_dir_all, io::Write, path::Path};
+use std::{fs::create_dir_all, io::Write, path::Path};
 
 pub const MOVE_STDLIB_ADDR_NAME: &str = "std";
 pub const MOVE_STDLIB_ADDR_VALUE: &str = "0x1";
@@ -22,21 +22,10 @@ pub struct New {
 
 impl New {
     pub fn execute_with_defaults(self, path: Option<&Path>) -> anyhow::Result<()> {
-        self.execute(
-            path,
-            std::iter::empty::<(&str, &str)>(),
-            std::iter::empty::<(&str, &str)>(),
-            "",
-        )
+        self.execute(path)
     }
 
-    pub fn execute(
-        self,
-        path: Option<&Path>,
-        deps: impl IntoIterator<Item = (impl Display, impl Display)>,
-        addrs: impl IntoIterator<Item = (impl Display, impl Display)>,
-        custom: &str, // anything else that needs to end up being in Move.toml (or empty string)
-    ) -> anyhow::Result<()> {
+    pub fn execute(self, path: Option<&Path>) -> anyhow::Result<()> {
         // TODO warn on build config flags
 
         ensure!(
@@ -47,8 +36,26 @@ impl New {
 
         let path = path.unwrap_or_else(|| Path::new(&self.name));
         create_dir_all(path.join(SourcePackageLayout::Sources.path()))?;
+        let mut w = std::fs::File::create(
+            path.join(SourcePackageLayout::Sources.path())
+                .join(format!("{}.move", self.name)),
+        )?;
 
-        self.write_move_toml(path, deps, addrs, custom)?;
+        writeln!(
+            w,
+            r#"// For Move coding conventions, see
+// https://docs.sui.io/concepts/sui-move-concepts/conventions
+
+/// Module: {name}
+module {name}::{name};
+
+
+public fun hello_world() {{
+
+}}"#,
+            name = self.name
+        )?;
+        self.write_move_toml(path)?;
         self.write_gitignore(path)?;
         Ok(())
     }
@@ -76,75 +83,45 @@ impl New {
     }
 
     /// create default `Move.toml`
-    fn write_move_toml(
-        &self,
-        path: &Path,
-        deps: impl IntoIterator<Item = (impl Display, impl Display)>,
-        addrs: impl IntoIterator<Item = (impl Display, impl Display)>,
-        custom: &str, // anything else that needs to end up being in Move.toml (or empty string)
-    ) -> anyhow::Result<()> {
+    fn write_move_toml(&self, path: &Path) -> anyhow::Result<()> {
         let Self { name } = self;
 
-        let mut w = std::fs::File::create(path.join(SourcePackageLayout::Manifest.path()))?;
-        writeln!(
-            w,
-            r#"[package]
+        let _ = std::fs::File::create(path.join(SourcePackageLayout::Manifest.path()))?;
+        let toml_content = r#"# Full documentation for Move.toml can be found at: docs.sui.io
+
+[package]
 name = "{name}"
-edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
+edition = "2024"         # use "2024" for Move 2024 edition
 # license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
 # authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
+# flavor = sui
 
-[dependencies]"#
-        )?;
-        for (dep_name, dep_val) in deps {
-            writeln!(w, "{dep_name} = {dep_val}")?;
-        }
+[environments]           # add the environment names and their chain ids here
+mainnet = "{MAINNET_CHAIN_ID}"
+testnet = "{TESTNET_CHAIN_ID}"
 
-        writeln!(
-            w,
-            r#"
-# For remote import, use the `{{ git = "...", subdir = "...", rev = "..." }}`.
-# Revision can be a branch, a tag, and a commit hash.
-# MyRemotePackage = {{ git = "https://some.remote/host.git", subdir = "remote/path", rev = "main" }}
+[dependencies]
+# Add your dependencies here or leave empty.
 
-# For local dependencies use `local = path`. Path is relative to the package root
-# Local = {{ local = "../path/to" }}
+# Depedency on local package in the directory `../bar`, which can be referred to in the Move code as "bar::module::function"
+# bar = { local = "../bar" }
 
-# To resolve a version conflict and force a specific version for dependency
-# override use `override = true`
-# Override = {{ local = "../conflicting/version", override = true }}
+# Git dependency
+# foo = { git = "https://example.com/foo.git", rev = "releases/v1", subdir = "foo" }
 
-[addresses]"#
-        )?;
+# Setting `override = true` forces your dependencies to use this version of the package.
+# This is required if you need to link against a different version from one of your dependencies, or if
+# two of your dependencies depend on different versions of the same package
+# foo = { git = "https://example.com/foo.git", rev = "releases/v1", override = true}
 
-        // write named addresses
-        for (addr_name, addr_val) in addrs {
-            writeln!(w, "{addr_name} = \"{addr_val}\"")?;
-        }
+[dep-replacements.mainnet]
+# Use to replace dependencies for specific environments
 
-        writeln!(
-            w,
-            r#"
-# Named addresses will be accessible in Move as `@name`. They're also exported:
-# for example, `std = "0x1"` is exported by the Standard Library.
-# alice = "0xA11CE"
+foo = { git = "https://example.com/foo.git", original-id = "0x12g0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", published-at = "0x12ga0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", use-environment = "mainnet_beta" }"#;
 
-[dev-dependencies]
-# The dev-dependencies section allows overriding dependencies for `--test` and
-# `--dev` modes. You can introduce test-only dependencies here.
-# Local = {{ local = "../path/to/dev-build" }}
-
-[dev-addresses]
-# The dev-addresses section allows overwriting named addresses for the `--test`
-# and `--dev` modes.
-# alice = "0xB0B"
-"#
-        )?;
-
-        // custom addition in the end
-        if !custom.is_empty() {
-            writeln!(w, "{}", custom)?;
-        }
+        let toml_content = toml_content.replace("{name}", &name.to_string());
+        let toml_path = path.join("Move.toml");
+        std::fs::write(&toml_path, toml_content)?;
 
         Ok(())
     }

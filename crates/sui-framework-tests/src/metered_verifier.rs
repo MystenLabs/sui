@@ -11,15 +11,12 @@ use std::{
 use sui_adapter::adapter::run_metered_move_bytecode_verifier;
 use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_framework::BuiltInFramework;
-use sui_move_build::{CompiledPackage, SuiPackageHooks};
+use sui_move_build::CompiledPackage;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::{
-    error::{SuiError, SuiResult},
-    metrics::BytecodeVerifierMetrics,
-};
+use sui_types::{error::SuiError, metrics::BytecodeVerifierMetrics};
 use sui_verifier::meter::SuiVerifierMeter;
 
-fn build(path: &Path) -> SuiResult<CompiledPackage> {
+fn build(path: &Path) -> anyhow::Result<CompiledPackage> {
     let mut config = sui_move_build::BuildConfig::new_for_testing();
     config.config.warnings_are_errors = true;
     config.build(path)
@@ -28,7 +25,6 @@ fn build(path: &Path) -> SuiResult<CompiledPackage> {
 #[test]
 #[cfg_attr(msim, ignore)]
 fn test_metered_move_bytecode_verifier() {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sui-framework/packages/sui-framework");
     let compiled_package = build(&path).unwrap();
@@ -193,15 +189,14 @@ fn test_metered_move_bytecode_verifier() {
 
     // Check shared meter logic works across all publish in PT
     let mut packages = vec![];
-    let with_unpublished_deps = false;
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/move/basics");
     let package = build(&path).unwrap();
-    packages.push(package.get_dependency_sorted_modules(with_unpublished_deps));
-    packages.push(package.get_dependency_sorted_modules(with_unpublished_deps));
+    packages.push(package.package.get_dependency_sorted_modules());
+    packages.push(package.package.get_dependency_sorted_modules());
 
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/move/coin");
     let package = build(&path).unwrap();
-    packages.push(package.get_dependency_sorted_modules(with_unpublished_deps));
+    packages.push(package.package.get_dependency_sorted_modules());
 
     let signing_config = VerifierSigningConfig::default();
     let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
@@ -230,8 +225,6 @@ fn test_metered_move_bytecode_verifier() {
 #[test]
 #[cfg_attr(msim, ignore)]
 fn test_meter_system_packages() {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-
     let signing_config = VerifierSigningConfig::default();
     let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
     let verifier_config =
@@ -286,8 +279,6 @@ fn test_meter_system_packages() {
 #[test]
 #[cfg_attr(msim, ignore)]
 fn test_build_and_verify_programmability_examples() {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-
     let signing_config = VerifierSigningConfig::default();
     let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
     let verifier_config =

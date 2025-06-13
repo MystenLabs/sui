@@ -81,7 +81,7 @@ async fn test_custom_coin_balance() {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["tests", "rpc", "data", "trusted_coin"]);
     let compiled_package = BuildConfig::new_for_testing().build(&path).unwrap();
-    let compiled_modules_bytes = compiled_package.get_package_bytes(false);
+    let compiled_modules_bytes = compiled_package.get_package_bytes();
     let dependencies = compiled_package.get_dependency_storage_package_ids();
 
     let gas_price = test_cluster.wallet.get_reference_gas_price().await.unwrap();

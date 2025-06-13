@@ -2,21 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
-use move_cli::base::{
-    self,
-    test::{self, UnitTestResult},
-};
-use move_package::BuildConfig;
+use move_cli::base::test::{self, UnitTestResult};
+use move_package_alt_compilation::build_config::BuildConfig;
 use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 use once_cell::sync::Lazy;
-use std::{cell::RefCell, collections::BTreeMap, path::Path, rc::Rc, sync::Arc};
-use sui_move_build::{decorate_warnings, implicit_deps};
+use std::{cell::RefCell, collections::BTreeMap, io::Write, path::Path, rc::Rc, sync::Arc};
+use sui_move_build::decorate_warnings;
 use sui_move_natives::{
     object_runtime::ObjectRuntime, test_scenario::InMemoryTestStore,
     transaction_context::TransactionContext, NativesCostTable,
 };
-use sui_package_management::system_package_versions::latest_system_packages;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{SuiAddress, TxContext},
@@ -52,10 +48,11 @@ impl Test {
         // save disassembly if trace execution is enabled
         let save_disassembly = self.test.trace_execution;
         // find manifest file directory from a given path or (if missing) from current dir
-        let rerooted_path = base::reroot_path(path)?;
+        // let rerooted_path = base::reroot_path(path)?;
+        let path = path.unwrap_or(Path::new("."));
         let unit_test_config = self.test.unit_test_config();
         run_move_unit_tests(
-            &rerooted_path,
+            &path,
             build_config,
             Some(unit_test_config),
             compute_coverage,
@@ -78,7 +75,7 @@ static SET_EXTENSION_HOOK: Lazy<()> =
 /// successfully started running the test, and the inner result indicatests whether all tests pass.
 pub fn run_move_unit_tests(
     path: &Path,
-    mut build_config: BuildConfig,
+    build_config: BuildConfig,
     config: Option<UnitTestingConfig>,
     compute_coverage: bool,
     save_disassembly: bool,
@@ -88,24 +85,31 @@ pub fn run_move_unit_tests(
 
     let config = config
         .unwrap_or_else(|| UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)));
-    build_config.implicit_dependencies = implicit_deps(latest_system_packages());
+    // build_config.implicit_dependencies = implicit_deps(latest_system_packages());
 
-    let result = move_cli::base::test::run_move_unit_tests(
-        path,
-        build_config,
-        UnitTestingConfig {
-            report_stacktrace_on_abort: true,
-            ..config
-        },
-        sui_move_natives::all_natives(
-            /* silent */ false,
-            &ProtocolConfig::get_for_max_version_UNSAFE(),
-        ),
-        Some(initial_cost_schedule_for_unit_tests()),
-        compute_coverage,
-        save_disassembly,
-        &mut std::io::stdout(),
-    );
+    let result = tokio::task::block_in_place(|| {
+        let mut writer: Box<dyn Write + Send> = Box::new(std::io::stdout());
+        tokio::runtime::Handle::current().block_on(move_cli::base::test::run_move_unit_tests::<
+            sui_package_alt::SuiFlavor,
+            Box<dyn Write + Send>,
+        >(
+            path,
+            build_config,
+            UnitTestingConfig {
+                report_stacktrace_on_abort: true,
+                ..config
+            },
+            sui_move_natives::all_natives(
+                /* silent */ false,
+                &ProtocolConfig::get_for_max_version_UNSAFE(),
+            ),
+            Some(initial_cost_schedule_for_unit_tests()),
+            compute_coverage,
+            save_disassembly,
+            &mut writer,
+        ))
+    });
+
     result.map(|(test_result, warning_diags)| {
         if test_result == UnitTestResult::Success {
             if let Some(diags) = warning_diags {

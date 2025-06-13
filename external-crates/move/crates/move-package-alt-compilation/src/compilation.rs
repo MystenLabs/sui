@@ -26,7 +26,10 @@ use move_compiler::{
     diagnostics::warning_filters::WarningFiltersBuilder,
     editions::{Edition, Flavor},
     linters,
-    shared::{PackageConfig, PackagePaths, SaveFlag, SaveHook, files::MappedFiles},
+    shared::{
+        PackageConfig, PackagePaths, SaveFlag, SaveHook, files::MappedFiles,
+        known_attributes::ModeAttribute,
+    },
     sui_mode,
 };
 use move_docgen::DocgenFlags;
@@ -44,9 +47,7 @@ pub async fn compile_package<W: Write, F: MoveFlavor>(
     env: &Environment,
     writer: &mut W,
 ) -> PackageResult<CompiledPackage> {
-    println!("Path to compile_package: {:?}", path);
     let root_pkg = RootPackage::<F>::load(path, env.clone()).await?;
-    println!("Hello");
     BuildPlan::create(root_pkg, build_config)?.compile(writer, |compiler| compiler)
 }
 
@@ -59,15 +60,18 @@ pub async fn compile_from_root_package<W: Write, F: MoveFlavor>(
 }
 
 pub fn compiler_flags(build_config: &BuildConfig) -> Flags {
-    let flags = if build_config.test_mode {
-        Flags::testing()
-    } else {
-        Flags::empty()
-    };
+    let flags =
+        if build_config.test_mode || build_config.modes.contains(&ModeAttribute::TEST.into()) {
+            Flags::testing()
+        } else {
+            Flags::empty()
+        };
+
     flags
         .set_warnings_are_errors(build_config.warnings_are_errors)
         .set_json_errors(build_config.json_errors)
         .set_silence_warnings(build_config.silence_warnings)
+        .set_modes(build_config.modes.clone())
 }
 
 pub fn build_all<W: Write, F: MoveFlavor>(
@@ -93,7 +97,7 @@ pub fn build_all<W: Write, F: MoveFlavor>(
 
     // TODO: improve/rework this? Renaming the root pkg to have a unique name for the compiler
     // this has to match whatever we're doing in build_for_driver function
-    let root_package_name = Symbol::from(format!("{}_root", package_name.as_str()));
+    let root_package_name = Symbol::from(format!("{}", package_name.as_str()));
 
     for mut annot_unit in all_compiled_units {
         let source_path = PathBuf::from(
@@ -196,6 +200,8 @@ pub fn build_for_driver<W: Write, T, F: MoveFlavor>(
 ) -> Result<T> {
     let packages = root_pkg.packages()?;
 
+    let cwd = std::env::current_dir()?;
+
     let mut package_paths: Vec<PackagePaths> = vec![];
 
     for (counter, pkg) in packages.into_iter().enumerate() {
@@ -217,15 +223,21 @@ pub fn build_for_driver<W: Write, T, F: MoveFlavor>(
 
         // TODO: improve/rework this? Renaming the root pkg to have a unique name for the compiler
         let safe_name = if pkg.is_root() {
-            Symbol::from(format!("{}_root", name))
+            Symbol::from(format!("{}", name))
         } else {
             Symbol::from(format!("{}_{}", name, counter))
         };
+
+        // let sources = get_sources(pkg.path(), build_config)?
+        //     .iter()
+        //     .map(|x| x.replace(cwd.to_str().unwrap(), ".").into())
+        //     .collect();
 
         debug!("Package name {:?} -- Safe name {:?}", name, safe_name);
         debug!("Named address map {:#?}", addresses);
         let paths = PackagePaths {
             name: Some((safe_name, config)),
+            // paths: sources,
             paths: get_sources(pkg.path(), build_config)?,
             named_address_map: addresses.inner,
         };

@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client_commands::{
-    implicit_deps_for_protocol_version, pkg_tree_shake, SuiClientCommands,
-};
+use crate::client_commands::SuiClientCommands;
 use crate::fire_drill::{run_fire_drill, FireDrill};
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
@@ -13,9 +11,8 @@ use anyhow::{anyhow, bail, ensure, Context};
 use clap::*;
 use colored::Colorize;
 use fastcrypto::traits::KeyPair;
-use move_analyzer::analyzer;
 use move_command_line_common::files::MOVE_COMPILED_EXTENSION;
-use move_package::BuildConfig;
+use move_package_alt_compilation::build_config::BuildConfig;
 use mysten_common::tempdir;
 use rand::rngs::OsRng;
 use std::collections::BTreeMap;
@@ -54,18 +51,10 @@ use sui_graphql_rpc::{
     test_infra::cluster::start_graphql_server_with_fn_rpc,
 };
 
-use move_core_types::account_address::AccountAddress;
-use serde_json::json;
 use sui_keys::key_derive::generate_new_key;
 use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
-use sui_move::manage_package::resolve_lock_file_path;
 use sui_move::{self, execute_move_command};
-use sui_move_build::{
-    check_conflicting_addresses, check_invalid_dependencies, check_unpublished_dependencies,
-    implicit_deps, BuildConfig as SuiBuildConfig, SuiPackageHooks,
-};
-use sui_package_management::system_package_versions::latest_system_packages;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_swarm::memory::Swarm;
@@ -384,7 +373,7 @@ pub enum SuiCommand {
 
 impl SuiCommand {
     pub async fn execute(self) -> Result<(), anyhow::Error> {
-        move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+        // move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
         match self {
             SuiCommand::Network {
                 config,
@@ -545,10 +534,10 @@ impl SuiCommand {
                         // If they didn't run with `--bytecode` correct this for them but warn them
                         // to let them know that we are changing it.
                         if !s.summary.bytecode {
-                            eprintln!("{}", 
-                                "[warning] `sui move summary --package-id <object_id>` only supports bytecode summaries. \
-                                 Falling back to producing a bytecode-based summary. To not get this warning you can run with `--bytecode`".yellow().bold()
-                            );
+                            eprintln!("{}",
+                            "[warning] `sui move summary --package-id <object_id>` only supports bytecode summaries. \
+                             Falling back to producing a bytecode-based summary. To not get this warning you can run with `--bytecode`".yellow().bold()
+                        );
                             s.summary.bytecode = true;
                         }
                         let root_package_id = s
@@ -571,7 +560,8 @@ impl SuiCommand {
                             build_config,
                             sui_move::Command::Summary(s),
                             Some(sui_move::CommandMeta::Summary(package_metadata)),
-                        )?;
+                        )
+                        .await?;
                         return Ok(());
                     }
                     sui_move::Command::Build(build) if build.dump_bytecode_as_base64 => {
@@ -581,83 +571,81 @@ impl SuiCommand {
                         // (e.g., testnet, mainnet) from the Move.lock under automated address management.
                         // In addition, tree shaking also requires a network as it needs to fetch
                         // on-chain linkage table of package dependencies.
-                        let (chain_id, client) = if build.ignore_chain {
-                            // for tests it's useful to ignore the chain id!
-                            (None, None)
-                        } else {
-                            get_chain_id_and_client(
-                                client_config,
-                                "sui move build --dump-bytecode-as-base64",
-                            )
-                            .await?
-                        };
+                        // let (chain_id, client) = if build.ignore_chain {
+                        //     // for tests it's useful to ignore the chain id!
+                        //     (None, None)
+                        // } else {
+                        //     get_chain_id_and_client(
+                        //         client_config,
+                        //         "sui move build --dump-bytecode-as-base64",
+                        //     )
+                        //     .await?
+                        // };
 
-                        let rerooted_path = move_cli::base::reroot_path(package_path.as_deref())?;
-                        let mut build_config =
-                            resolve_lock_file_path(build_config, Some(&rerooted_path))?;
+                        // let rerooted_path = move_cli::base::reroot_path(package_path.as_deref())?;
+                        // let mut build_config =
+                        //     resolve_lock_file_path(build_config, Some(&rerooted_path))?;
 
-                        let previous_id = if let Some(ref chain_id) = chain_id {
-                            sui_package_management::set_package_id(
-                                &rerooted_path,
-                                build_config.install_dir.clone(),
-                                chain_id,
-                                AccountAddress::ZERO,
-                            )?
-                        } else {
-                            None
-                        };
+                        // let previous_id = if let Some(ref chain_id) = chain_id {
+                        //     sui_package_management::set_package_id(
+                        //         &rerooted_path,
+                        //         build_config.install_dir.clone(),
+                        //         chain_id,
+                        //         AccountAddress::ZERO,
+                        //     )?
+                        // } else {
+                        //     None
+                        // };
 
-                        if let Some(client) = &client {
-                            let protocol_config =
-                                client.read_api().get_protocol_config(None).await?;
-                            build_config.implicit_dependencies =
-                                implicit_deps_for_protocol_version(
-                                    protocol_config.protocol_version,
-                                )?;
-                        } else {
-                            build_config.implicit_dependencies =
-                                implicit_deps(latest_system_packages());
-                        }
+                        // if let Some(client) = &client {
+                        //     let protocol_config =
+                        //         client.read_api().get_protocol_config(None).await?;
+                        //     // build_config.implicit_dependencies =
+                        //     //     implicit_deps_for_protocol_version(
+                        //     //         protocol_config.protocol_version,
+                        //     //     )?;
+                        // } else {
+                        //     // build_config.implicit_dependencies =
+                        //     //     implicit_deps(latest_system_packages());
+                        // }
 
-                        let mut pkg = SuiBuildConfig {
-                            config: build_config.clone(),
-                            run_bytecode_verifier: true,
-                            print_diags_to_stderr: true,
-                            chain_id: chain_id.clone(),
-                        }
-                        .build(&rerooted_path)?;
+                        // let mut pkg = SuiBuildConfig {
+                        //     config: build_config.clone(),
+                        //     run_bytecode_verifier: true,
+                        //     print_diags_to_stderr: true,
+                        //     chain_id: chain_id.clone(),
+                        // }
+                        // .build(&rerooted_path)?;
 
                         // Restore original ID, then check result.
-                        if let (Some(chain_id), Some(previous_id)) = (chain_id, previous_id) {
-                            let _ = sui_package_management::set_package_id(
-                                &rerooted_path,
-                                build_config.install_dir.clone(),
-                                &chain_id,
-                                previous_id,
-                            )?;
-                        }
+                        // if let (Some(chain_id), Some(previous_id)) = (chain_id, previous_id) {
+                        //     let _ = sui_package_management::set_package_id(
+                        //         &rerooted_path,
+                        //         build_config.install_dir.clone(),
+                        //         &chain_id,
+                        //         previous_id,
+                        //     )?;
+                        // }
 
-                        let with_unpublished_deps = build.with_unpublished_dependencies;
+                        // check_conflicting_addresses(&pkg.dependency_ids.conflicting, true)?;
+                        // check_invalid_dependencies(&pkg.dependency_ids.invalid)?;
+                        // if !with_unpublished_deps {
+                        //     check_unpublished_dependencies(&pkg.dependency_ids.unpublished)?;
+                        // }
 
-                        check_conflicting_addresses(&pkg.dependency_ids.conflicting, true)?;
-                        check_invalid_dependencies(&pkg.dependency_ids.invalid)?;
-                        if !with_unpublished_deps {
-                            check_unpublished_dependencies(&pkg.dependency_ids.unpublished)?;
-                        }
+                        // if let Some(client) = client {
+                        //     pkg_tree_shake(client.read_api(), with_unpublished_deps, &mut pkg)
+                        //         .await?;
+                        // }
 
-                        if let Some(client) = client {
-                            pkg_tree_shake(client.read_api(), with_unpublished_deps, &mut pkg)
-                                .await?;
-                        }
-
-                        println!(
-                            "{}",
-                            json!({
-                                "modules": pkg.get_package_base64(with_unpublished_deps),
-                                "dependencies": pkg.get_dependency_storage_package_ids(),
-                                "digest": pkg.get_package_digest(with_unpublished_deps),
-                            })
-                        );
+                        // println!(
+                        //     "{}",
+                        //     json!({
+                        //         "modules": pkg.get_package_base64(),
+                        //         "dependencies": pkg.get_dependency_storage_package_ids(),
+                        //         "digest": pkg.get_package_digest(),
+                        //     })
+                        // );
                         return Ok(());
                     }
                     _ => (),
@@ -676,7 +664,7 @@ impl SuiCommand {
                     build_config.chain_id = chain_id;
                 }
 
-                execute_move_command(package_path.as_deref(), build_config, cmd, None)
+                execute_move_command(package_path.as_deref(), build_config, cmd, None).await
             }
             SuiCommand::BridgeInitialize {
                 network_config,
@@ -766,7 +754,7 @@ impl SuiCommand {
             }
             SuiCommand::FireDrill { fire_drill } => run_fire_drill(fire_drill).await,
             SuiCommand::Analyzer => {
-                analyzer::run(implicit_deps(latest_system_packages()));
+                // analyzer::run(implicit_deps(latest_system_packages()));
                 Ok(())
             }
             SuiCommand::AnalyzeTrace {

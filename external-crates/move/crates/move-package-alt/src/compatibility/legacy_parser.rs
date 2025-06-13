@@ -292,7 +292,7 @@ fn parse_source_manifest(
     }
 }
 
-fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
+pub fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
     match tval {
         TV::Table(mut table) => {
             check_for_required_field_names(&table, &["name"])?;

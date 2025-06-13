@@ -2212,7 +2212,8 @@ dependencies = [
  "move-docgen",
  "move-ir-types",
  "move-model-2",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-stdlib",
  "move-stdlib-natives",
  "move-symbol-pool",
@@ -2227,7 +2228,11 @@ dependencies = [
  "serde_yaml",
  "similar",
  "tempfile",
+ "tokio",
  "toml_edit 0.22.24",
+ "tracing",
+ "tracing-subscriber",
+ "treeline",
  "walkdir",
 ]
 
@@ -2410,13 +2415,15 @@ dependencies = [
  "move-docgen",
  "move-ir-types",
  "move-model-2",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-symbol-pool",
  "num",
  "once_cell",
  "regex",
  "serde",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -2698,12 +2705,14 @@ dependencies = [
  "move-ir-types",
  "move-model",
  "move-model-2",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-stackless-bytecode",
  "move-stdlib",
  "move-symbol-pool",
  "move-vm-runtime",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -2720,12 +2729,14 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-docgen",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-stdlib-natives",
  "move-unit-test",
  "move-vm-runtime",
  "sha2",
  "tempfile",
+ "tokio",
  "walkdir",
 ]
 

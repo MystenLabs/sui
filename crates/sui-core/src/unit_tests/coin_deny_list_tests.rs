@@ -296,7 +296,6 @@ async fn new_authority_and_publish(path: &str) -> TestEnv {
         path,
         TEST_ONLY_GAS_UNIT_FOR_PUBLISH * rgp,
         rgp,
-        false,
     )
     .await;
     TestEnv {

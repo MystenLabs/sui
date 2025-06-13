@@ -4,13 +4,15 @@
 use anyhow::Result;
 use move_binary_format::{file_format::Visibility, CompiledModule};
 use move_compiler::editions::Edition;
-use move_package::{BuildConfig as MoveBuildConfig, LintFlag};
+use move_package_alt_compilation::{
+    build_config::BuildConfig as MoveBuildConfig, lint_flag::LintFlag,
+};
 use std::{
     collections::BTreeMap,
     env, fs,
     path::{Path, PathBuf},
 };
-use sui_move_build::{BuildConfig, SuiPackageHooks};
+use sui_move_build::BuildConfig;
 
 const CRATE_ROOT: &str = env!("CARGO_MANIFEST_DIR");
 const COMPILED_PACKAGES_DIR: &str = "packages_compiled";
@@ -19,7 +21,6 @@ const PUBLISHED_API_FILE: &str = "published_api.txt";
 
 #[test]
 fn build_system_packages() {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let tempdir = tempfile::tempdir().unwrap();
     let out_dir = if std::env::var_os("UPDATE").is_some() {
         let crate_root = Path::new(CRATE_ROOT);

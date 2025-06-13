@@ -334,9 +334,8 @@ impl SuiNSCluster {
 
         // (4) Publish the mock SuiNS package.
         let mut builder = ProgrammableTransactionBuilder::new();
-        let with_unpublished_deps = false;
         builder.publish_immutable(
-            pkg.get_package_bytes(with_unpublished_deps),
+            pkg.get_package_bytes(),
             pkg.get_dependency_storage_package_ids(),
         );
 
