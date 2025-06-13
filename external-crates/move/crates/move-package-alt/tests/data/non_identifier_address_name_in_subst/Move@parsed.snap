@@ -1,8 +1,10 @@
 ---
 source: crates/move-package-alt/tests/test_runner.rs
 ---
-error: Error while loading `"tests/data/non_identifier_address_name_in_subst/Move.toml"`: invalid type: map, expected a string
+error: Error while loading `"tests/data/non_identifier_address_name_in_subst/Move.toml"`
   ┌─ "tests/data/non_identifier_address_name_in_subst/Move.toml":6:34
   │
-6 │ A = { local = "a", rename-from = { "©" = "A"  } }
-  │                                  ^^^^^^^^^^^^^^
+6 │ A = { local = "a", rename-from = "©" }
+  │                                  ^^^
+  │
+  = Invalid identifier '©'
