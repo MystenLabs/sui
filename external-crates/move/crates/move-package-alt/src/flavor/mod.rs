@@ -28,26 +28,6 @@ pub trait MoveFlavor: Debug {
     /// to parse a manifest.
     fn name() -> String;
 
-    /// Additional flavor-specific dependency types. Currently we only support flavor-specific
-    /// dependencies that are already pinned (although in principle you could use an
-    /// external resolved to do resolution and pinning for flavor-specific deps)
-    type FlavorDependency<P: ?Sized>: Debug + Serialize + DeserializeOwned + Clone + PartialEq;
-
-    /// Pin a batch of [Self::FlavorDependency]s (see TODO). The keys of the returned map should be
-    /// the same as the keys of [dep].
-    //
-    // TODO: this interface means we can't batch dep-replacements together
-    fn pin(
-        &self,
-        deps: DependencySet<Self::FlavorDependency<Unpinned>>,
-    ) -> PackageResult<DependencySet<Self::FlavorDependency<Pinned>>>;
-
-    /// Fetch a batch [Self::FlavorDependency] (see TODO)
-    fn fetch(
-        &self,
-        deps: DependencySet<Self::FlavorDependency<Pinned>>,
-    ) -> PackageResult<DependencySet<PathBuf>>;
-
     /// A [PublishedMetadata] should contain all of the information that is generated
     /// during publication.
     //
@@ -71,5 +51,5 @@ pub trait MoveFlavor: Debug {
     fn implicit_deps(
         &self,
         environments: impl Iterator<Item = Self::EnvironmentID>,
-    ) -> DependencySet<PinnedDependencyInfo<Self>>;
+    ) -> DependencySet<PinnedDependencyInfo>;
 }

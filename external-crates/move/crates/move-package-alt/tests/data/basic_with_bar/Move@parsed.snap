@@ -91,9 +91,7 @@ Manifest {
                         rename_from: None,
                     },
                 ),
-                address_info: Some(
-                    (),
-                ),
+                address_info: None,
                 use_environment: Some(
                     "mainnet_alpha",
                 ),
