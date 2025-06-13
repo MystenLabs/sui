@@ -138,3 +138,204 @@ pub(super) fn processor<P: Processor + Send + Sync + 'static>(
         };
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::metrics::IndexerMetrics;
+    use std::{sync::Arc, time::Duration};
+    use sui_types::test_checkpoint_data_builder::TestCheckpointDataBuilder;
+    use tokio::{sync::mpsc, time::timeout};
+    use tokio_util::sync::CancellationToken;
+
+    use super::*;
+
+    pub struct StoredData {
+        pub value: u64,
+    }
+
+    pub struct DataPipeline;
+
+    impl Processor for DataPipeline {
+        const NAME: &'static str = "data";
+
+        type Value = StoredData;
+
+        fn process(&self, checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+            Ok(vec![
+                StoredData {
+                    value: checkpoint.checkpoint_summary.sequence_number * 10 + 1,
+                },
+                StoredData {
+                    value: checkpoint.checkpoint_summary.sequence_number * 10 + 2,
+                },
+            ])
+        }
+    }
+
+    #[tokio::test]
+    async fn test_processor_process_checkpoints() {
+        // Build two checkpoints using the test builder
+        let checkpoint1 = Arc::new(
+            TestCheckpointDataBuilder::new(1)
+                .with_epoch(2)
+                .with_network_total_transactions(5)
+                .with_timestamp_ms(1000000001)
+                .build_checkpoint(),
+        );
+        let checkpoint2 = Arc::new(
+            TestCheckpointDataBuilder::new(2)
+                .with_epoch(2)
+                .with_network_total_transactions(10)
+                .with_timestamp_ms(1000000002)
+                .build_checkpoint(),
+        );
+
+        // Set up the processor, channels, and metrics
+        let processor = Arc::new(DataPipeline);
+        let (data_tx, data_rx) = mpsc::channel(2);
+        let (indexed_tx, mut indexed_rx) = mpsc::channel(2);
+        let metrics = IndexerMetrics::new(&Default::default());
+        let cancel = CancellationToken::new();
+
+        // Spawn the processor task
+        let handle = super::processor(processor, data_rx, indexed_tx, metrics, cancel.clone());
+
+        // Send both checkpoints
+        data_tx.send(checkpoint1.clone()).await.unwrap();
+        data_tx.send(checkpoint2.clone()).await.unwrap();
+
+        // Receive and verify first checkpoint
+        let indexed1 = indexed_rx
+            .recv()
+            .await
+            .expect("Should receive first IndexedCheckpoint");
+        assert_eq!(indexed1.watermark.checkpoint_hi_inclusive, 1);
+        assert_eq!(indexed1.watermark.epoch_hi_inclusive, 2);
+        assert_eq!(indexed1.watermark.tx_hi, 5);
+        assert_eq!(indexed1.watermark.timestamp_ms_hi_inclusive, 1000000001);
+        assert_eq!(indexed1.values.len(), 2);
+        assert_eq!(indexed1.values[0].value, 11); // 1 * 10 + 1
+        assert_eq!(indexed1.values[1].value, 12); // 1 * 10 + 2
+
+        // Receive and verify second checkpoint
+        let indexed2 = indexed_rx
+            .recv()
+            .await
+            .expect("Should receive second IndexedCheckpoint");
+        assert_eq!(indexed2.watermark.checkpoint_hi_inclusive, 2);
+        assert_eq!(indexed2.watermark.epoch_hi_inclusive, 2);
+        assert_eq!(indexed2.watermark.tx_hi, 10);
+        assert_eq!(indexed2.watermark.timestamp_ms_hi_inclusive, 1000000002);
+        assert_eq!(indexed2.values.len(), 2);
+        assert_eq!(indexed2.values[0].value, 21); // 2 * 10 + 1
+        assert_eq!(indexed2.values[1].value, 22); // 2 * 10 + 2
+
+        let timeout_result = timeout(Duration::from_secs(1), indexed_rx.recv()).await;
+        assert!(
+            timeout_result.is_err(),
+            "Should timeout waiting for more checkpoints"
+        );
+
+        // Clean up
+        drop(data_tx);
+        let _ = handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_processor_does_not_process_checkpoint_after_cancellation() {
+        // Build two checkpoints using the test builder
+        let checkpoint1 = Arc::new(TestCheckpointDataBuilder::new(1).build_checkpoint());
+        let checkpoint2 = Arc::new(TestCheckpointDataBuilder::new(2).build_checkpoint());
+
+        // Set up the processor, channels, and metrics
+        let processor = Arc::new(DataPipeline);
+        let (data_tx, data_rx) = mpsc::channel(2);
+        let (indexed_tx, mut indexed_rx) = mpsc::channel(2);
+        let metrics = IndexerMetrics::new(&Default::default());
+        let cancel = CancellationToken::new();
+
+        // Spawn the processor task
+        let handle = super::processor(processor, data_rx, indexed_tx, metrics, cancel.clone());
+
+        // Send first checkpoint.
+        data_tx.send(checkpoint1.clone()).await.unwrap();
+
+        // Receive and verify first checkpoint
+        let indexed1 = indexed_rx
+            .recv()
+            .await
+            .expect("Should receive first IndexedCheckpoint");
+        assert_eq!(indexed1.watermark.checkpoint_hi_inclusive, 1);
+
+        // Cancel the processor
+        cancel.cancel();
+
+        // Send second checkpoint after cancellation
+        data_tx.send(checkpoint2.clone()).await.unwrap();
+
+        // Indexed channel is closed, and indexed_rx receives the last None result.
+        let next_result = indexed_rx.recv().await;
+        assert!(
+            next_result.is_none(),
+            "Channel should be closed after cancellation"
+        );
+
+        // Clean up
+        let _ = handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_processor_error_failed_to_process_checkpoint() {
+        // Create a pipeline that succeeds for checkpoint 1 but fails for others
+        struct ErrorPipeline;
+        impl Processor for ErrorPipeline {
+            const NAME: &'static str = "error";
+            type Value = StoredData;
+            fn process(
+                &self,
+                checkpoint: &Arc<CheckpointData>,
+            ) -> anyhow::Result<Vec<Self::Value>> {
+                if checkpoint.checkpoint_summary.sequence_number == 1 {
+                    Ok(vec![])
+                } else {
+                    anyhow::bail!("Test error");
+                }
+            }
+        }
+
+        // Set up test data
+        let checkpoint1 = Arc::new(TestCheckpointDataBuilder::new(1).build_checkpoint());
+        let checkpoint2 = Arc::new(TestCheckpointDataBuilder::new(2).build_checkpoint());
+
+        // Set up the processor, channels, and metrics
+        let processor = Arc::new(ErrorPipeline);
+        let (data_tx, data_rx) = mpsc::channel(1);
+        let (indexed_tx, mut indexed_rx) = mpsc::channel(1);
+        let metrics = IndexerMetrics::new(&Default::default());
+        let cancel = CancellationToken::new();
+
+        // Spawn the processor task
+        let handle = super::processor(processor, data_rx, indexed_tx, metrics, cancel.clone());
+
+        // Send and verify first checkpoint (should succeed)
+        data_tx.send(checkpoint1.clone()).await.unwrap();
+        let indexed1 = indexed_rx
+            .recv()
+            .await
+            .expect("Should receive first IndexedCheckpoint");
+        assert_eq!(indexed1.watermark.checkpoint_hi_inclusive, 1);
+
+        // Send second checkpoint (should fail and cause processor to stop)
+        data_tx.send(checkpoint2.clone()).await.unwrap();
+
+        // Verify that the channel is closed after the error
+        let next_result = indexed_rx.recv().await;
+        assert!(
+            next_result.is_none(),
+            "Channel should be closed after processing error"
+        );
+
+        // Clean up
+        let _ = handle.await;
+    }
+}
