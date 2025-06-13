@@ -19,7 +19,7 @@ use super::{
 };
 use crate::{
     dependency::{DependencySet, PinnedDependencyInfo},
-    errors::{ManifestError, PackageResult},
+    errors::PackageResult,
     flavor::MoveFlavor,
 };
 use move_core_types::identifier::Identifier;

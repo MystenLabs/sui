@@ -1,8 +1,10 @@
 ---
 source: crates/move-package-alt/tests/test_runner.rs
 ---
-error: TOML parse error at line 2, column 7
-  |
-2 | foo = { r = 0 }
-  |       ^^^^^^^^^
-invalid type: integer `0`, expected a map for key `r`
+error: Error while loading `"tests/data/invalid_external_nonobject/Move.toml"`
+  ┌─ "tests/data/invalid_external_nonobject/Move.toml":2:7
+  │
+2 │ foo = { r = 0 }
+  │       ^^^^^^^^^
+  │
+  = invalid type: integer `0`, expected a map for key `r`

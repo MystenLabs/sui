@@ -4,20 +4,20 @@ source: crates/move-package-alt/tests/test_runner.rs
 Manifest {
     package: PackageMetadata {
         name: Located {
-            file: "tests/data/flavor_sui/Move.toml",
-            value: Spanned {
+            loc: Location {
+                file: "tests/data/flavor_sui/Move.toml",
                 span: 17..23,
-                value: Identifier(
-                    "name",
-                ),
             },
+            value: Identifier(
+                "name",
+            ),
         },
         edition: Located {
-            file: "tests/data/flavor_sui/Move.toml",
-            value: Spanned {
+            loc: Location {
+                file: "tests/data/flavor_sui/Move.toml",
                 span: 34..45,
-                value: "2024.beta",
             },
+            value: "2024.beta",
         },
         metadata: (),
     },

@@ -209,7 +209,10 @@ impl TryFrom<RField> for ExternalDependency {
     /// Convert from [RField] (`{r.<res> = <data>}`) to [ExternalDependency] (`{ res, data }`)
     fn try_from(value: RField) -> Result<Self, Self::Error> {
         if value.r.len() != 1 {
-            return Err("Externally resolved dependencies should have the form `{r.<resolver-name> = <resolver-data>}`".to_string());
+            return Err(
+                "Externally resolved dependencies may only have one `r.<resolver>` field"
+                    .to_string(),
+            );
         }
 
         let (resolver, data) = value

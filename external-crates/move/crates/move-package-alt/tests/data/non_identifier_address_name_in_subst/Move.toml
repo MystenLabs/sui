@@ -3,4 +3,4 @@ name = "name"
 edition = "2024.beta"
 
 [dependencies]
-A = { local = "a", rename-from = { "©" = "A"  } }
+A = { local = "a", rename-from = "©" }

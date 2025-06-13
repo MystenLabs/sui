@@ -1,8 +1,10 @@
 ---
 source: crates/move-package-alt/tests/test_runner.rs
 ---
-error: TOML parse error at line 6, column 34
-  |
-6 | A = { local = "a", rename-from = { "©" = "A"  } }
-  |                                  ^^^^^^^^^^^^^^^
-invalid type: map, expected a string
+error: Error while loading `"tests/data/non_identifier_address_name_in_subst/Move.toml"`
+  ┌─ "tests/data/non_identifier_address_name_in_subst/Move.toml":6:34
+  │
+6 │ A = { local = "a", rename-from = "©" }
+  │                                  ^^^
+  │
+  = Invalid identifier '©'
