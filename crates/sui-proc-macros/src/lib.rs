@@ -64,7 +64,7 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                     let _all_module_bytes = build_config
                         .build(&path)
                         .unwrap()
-                        .get_package_bytes(/* with_unpublished_deps */ false);
+                        .get_package_bytes();
                 }
 
                 use std::sync::Arc;

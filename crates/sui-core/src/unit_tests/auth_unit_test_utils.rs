@@ -70,7 +70,7 @@ pub async fn publish_package_on_single_authority(
             .additional_named_addresses
             .insert(addr_name.to_string(), AccountAddress::from(obj_id));
     }
-    let modules = build_config.build(path).unwrap().get_package_bytes(false);
+    let modules = build_config.build(path).unwrap().get_package_bytes();
 
     let mut builder = ProgrammableTransactionBuilder::new();
     let cap = builder.publish_upgradeable(modules, dep_ids);
@@ -120,9 +120,8 @@ pub async fn upgrade_package_on_single_authority(
 ) -> SuiResult<(TransactionDigest, ObjectID)> {
     let package = build_test_modules_with_dep_addr(path, dep_original_addresses, dep_id_mapping);
 
-    let with_unpublished_deps = false;
-    let modules = package.get_package_bytes(with_unpublished_deps);
-    let digest = package.get_package_digest(with_unpublished_deps).to_vec();
+    let modules = package.get_package_bytes();
+    let digest = package.get_package_digest().to_vec();
 
     let rgp = state.epoch_store_for_testing().reference_gas_price();
     let data = TransactionData::new_upgrade(

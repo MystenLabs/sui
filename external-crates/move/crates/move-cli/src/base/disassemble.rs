@@ -6,7 +6,12 @@ use clap::*;
 use move_bytecode_source_map::utils::serialize_to_json_string;
 use move_compiler::compiled_unit::NamedCompiledModule;
 use move_disassembler::disassembler::Disassembler;
-use move_package::{BuildConfig, compilation::compiled_package::CompiledUnitWithSource};
+// use move_package::{BuildConfig, compilation::compiled_package::CompiledUnitWithSource};
+use crate::base::find_env;
+use move_package_alt::flavor::MoveFlavor;
+use move_package_alt_compilation::{
+    build_config::BuildConfig, compiled_package::CompiledUnitWithSource,
+};
 use std::path::Path;
 
 /// Disassemble the Move bytecode pointed to
@@ -31,8 +36,13 @@ pub struct Disassemble {
 }
 
 impl Disassemble {
-    pub fn execute(self, path: Option<&Path>, config: BuildConfig) -> anyhow::Result<()> {
-        let rerooted_path = reroot_path(path)?;
+    pub async fn execute<F: MoveFlavor>(
+        self,
+        path: Option<&Path>,
+        config: BuildConfig,
+    ) -> anyhow::Result<()> {
+        let path = reroot_path(path)?;
+        let env = find_env::<F>(&path, &config)?;
         let Self {
             interactive,
             package_name,
@@ -41,7 +51,7 @@ impl Disassemble {
             bytecode_map,
         } = self;
         // Make sure the package is built
-        let package = config.compile_package(&rerooted_path, &mut Vec::new())?;
+        let package = config.compile::<F, _>(&path, &env, &mut Vec::new()).await?;
         let needle_package = package_name
             .as_deref()
             .unwrap_or(package.compiled_package_info.package_name.as_str());

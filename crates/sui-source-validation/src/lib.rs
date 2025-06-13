@@ -109,7 +109,20 @@ impl ValidationMode {
     fn root_address(&self, package: &CompiledPackage) -> Result<Option<AccountAddress>, Error> {
         match self {
             Self::Root { at: Some(addr), .. } => Ok(Some(*addr)),
-            Self::Root { at: None, .. } => Ok(Some(*package.published_at.clone()?)),
+            Self::Root { at: None, .. } => {
+                let addr = package.published_at;
+
+                let address = if let Some(a) = addr {
+                    Some(AccountAddress::from_hex(a.to_hex()).map_err(|e| {
+                        Error::PublishedAt(sui_package_management::PublishedAtError::Invalid(
+                            format!("{e}"),
+                        ))
+                    })?)
+                } else {
+                    None
+                };
+                Ok(address)
+            }
             Self::Deps => Ok(None),
         }
     }
@@ -237,7 +250,13 @@ impl ValidationMode {
             // only keep modules that are actually used
             let deps_compiled_units: Vec<_> = deps_compiled_units
                 .into_iter()
-                .filter(|pkg| sui_package.dependency_ids.published.contains_key(&pkg.0))
+                //TODO!
+                // .filter(|pkg| {
+                //     sui_package
+                //         .dependency_ids
+                //         .published
+                //         .contains_key(&Symbol::from(pkg.0.as_str()))
+                // })
                 .collect();
 
             for (package, local_unit) in deps_compiled_units {
@@ -251,21 +270,25 @@ impl ValidationMode {
                     continue;
                 }
 
-                map.insert((address, module), (package, m.module.clone()));
-            }
-
-            // Include bytecode dependencies.
-            for (package, module) in sui_package.bytecode_deps.iter() {
-                let address = *module.address();
-                if address == AccountAddress::ZERO {
-                    continue;
-                }
-
                 map.insert(
-                    (address, Symbol::from(module.name().as_str())),
-                    (*package, module.clone()),
+                    (address, module),
+                    (Symbol::from(package.as_str()), m.module.clone()),
                 );
             }
+
+            // TODO! no more bytecode deps
+            // Include bytecode dependencies.
+            // for (package, module) in sui_package.bytecode_deps.iter() {
+            //     let address = *module.address();
+            //     if address == AccountAddress::ZERO {
+            //         continue;
+            //     }
+            //
+            //     map.insert(
+            //         (address, Symbol::from(module.name().as_str())),
+            //         (Symbol::from(package.as_str()), module.clone()),
+            //     );
+            // }
         }
 
         let Self::Root { at, .. } = self else {
@@ -459,5 +482,5 @@ fn substitute_root_address(
 
 /// The on-chain addresses for a source package's dependencies
 fn dependency_addresses(package: &CompiledPackage) -> impl Iterator<Item = AccountAddress> + '_ {
-    package.dependency_ids.published.values().map(|id| **id)
+    package.dependency_ids.iter().map(|id| **id)
 }

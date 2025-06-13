@@ -13,9 +13,11 @@ pub mod build_plan;
 pub mod compiled_package;
 pub mod layout;
 pub mod lint_flag;
+pub mod migrate;
 pub mod model_builder;
 pub mod on_disk_package;
 
+// TODO(manos): Replace calls with `BuildConfig(self)::compile`
 pub async fn compile_package<W: Write, F: MoveFlavor>(
     path: &Path,
     build_config: &BuildConfig,

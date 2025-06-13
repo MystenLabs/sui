@@ -126,7 +126,6 @@ async fn publish_move_random_package(
         "move_random",
         PUBLISH_BUDGET,
         rgp,
-        /* with_unpublished_deps */ false,
     )
     .await;
     let effects = response.1.into_data();
@@ -789,7 +788,6 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         "object_wrapping",
         TEST_ONLY_GAS_UNIT_FOR_PUBLISH * rgp * 2,
         rgp,
-        /* with_unpublished_deps */ false,
     )
     .await;
     let effects = response.1.into_data();
@@ -823,7 +821,6 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         "object_wrapping",
         budget,
         rgp,
-        /* with_unpublished_deps */ false,
     )
     .await;
     let effects = response.1.into_data();

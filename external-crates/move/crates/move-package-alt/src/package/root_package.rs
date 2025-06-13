@@ -162,6 +162,13 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         self.graph.packages()
     }
 
+    /// Return the direct dependencies of the root package. This contains only the immediate
+    /// dependencies that the root package declares, not transitive dependencies.
+    /// Returns an error if any direct dependency is unpublished.
+    pub fn direct_dependencies(&self) -> PackageResult<BTreeMap<OriginalID, PackageInfo<F>>> {
+        self.graph.direct_dependencies()
+    }
+
     /// Return the linkage table for the root package. This contains an entry for each package that
     /// this package depends on (transitively). Returns an error if any of the packages that this
     /// package depends on is unpublished.

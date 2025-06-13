@@ -13,10 +13,10 @@ sui move test -p example 2> /dev/null
 success: true
 exit_code: 0
 ----- stdout -----
-INCLUDING DEPENDENCY Bridge
-INCLUDING DEPENDENCY SuiSystem
-INCLUDING DEPENDENCY Sui
-INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY std
+INCLUDING DEPENDENCY sui
+INCLUDING DEPENDENCY sui_system
+INCLUDING DEPENDENCY bridge
 BUILDING example
 Running Move unit tests
 Test result: OK. Total tests: 0; passed: 0; failed: 0

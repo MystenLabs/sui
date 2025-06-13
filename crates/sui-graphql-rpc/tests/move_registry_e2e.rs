@@ -373,8 +373,8 @@ async fn upgrade_pkg(
     let compiled_package = BuildConfig::new_for_testing()
         .build(&PathBuf::from(package_path))
         .unwrap();
-    let digest = compiled_package.get_package_digest(false);
-    let modules = compiled_package.get_package_bytes(false);
+    let digest = compiled_package.get_package_digest();
+    let modules = compiled_package.get_package_bytes();
     let dependencies = compiled_package.get_dependency_storage_package_ids();
 
     let cap = builder

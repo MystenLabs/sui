@@ -1,6 +1,6 @@
 ---
 source: crates/sui/tests/shell_tests.rs
-description: tests/shell_tests/new_tests/manifest_template.sh
+description: tests/shell_tests/sui_move_new_tests/manifest_template.sh
 ---
 ----- script -----
 # Copyright (c) Mysten Labs, Inc.
@@ -13,41 +13,35 @@ cat example/Move.toml
 success: true
 exit_code: 0
 ----- stdout -----
+# Full documentation for Move.toml can be found at: docs.sui.io
+
 [package]
 name = "example"
-edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
+edition = "2024"         # use "2024" for Move 2024 edition
 # license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
 # authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
+# flavor = sui
+
+[environments]           # add the environment names and their chain ids here
+mainnet = "{MAINNET_CHAIN_ID}"
+testnet = "{TESTNET_CHAIN_ID}"
 
 [dependencies]
+# Add your dependencies here or leave empty.
 
-# For remote import, use the `{ git = "...", subdir = "...", rev = "..." }`.
-# Revision can be a branch, a tag, and a commit hash.
-# MyRemotePackage = { git = "https://some.remote/host.git", subdir = "remote/path", rev = "main" }
+# Depedency on local package in the directory `../bar`, which can be referred to in the Move code as "bar::module::function"
+# bar = { local = "../bar" }
 
-# For local dependencies use `local = path`. Path is relative to the package root
-# Local = { local = "../path/to" }
+# Git dependency
+# foo = { git = "https://example.com/foo.git", rev = "releases/v1", subdir = "foo" }
 
-# To resolve a version conflict and force a specific version for dependency
-# override use `override = true`
-# Override = { local = "../conflicting/version", override = true }
+# Setting `override = true` forces your dependencies to use this version of the package.
+# This is required if you need to link against a different version from one of your dependencies, or if
+# two of your dependencies depend on different versions of the same package
+# foo = { git = "https://example.com/foo.git", rev = "releases/v1", override = true}
 
-[addresses]
-example = "0x0"
+[dep-replacements.mainnet]
+# Use to replace dependencies for specific environments
 
-# Named addresses will be accessible in Move as `@name`. They're also exported:
-# for example, `std = "0x1"` is exported by the Standard Library.
-# alice = "0xA11CE"
-
-[dev-dependencies]
-# The dev-dependencies section allows overriding dependencies for `--test` and
-# `--dev` modes. You can introduce test-only dependencies here.
-# Local = { local = "../path/to/dev-build" }
-
-[dev-addresses]
-# The dev-addresses section allows overwriting named addresses for the `--test`
-# and `--dev` modes.
-# alice = "0xB0B"
-
-
+foo = { git = "https://example.com/foo.git", original-id = "0x12g0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", published-at = "0x12ga0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", use-environment = "mainnet_beta" }
 ----- stderr -----

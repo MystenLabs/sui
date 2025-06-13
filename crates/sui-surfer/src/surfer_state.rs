@@ -333,12 +333,12 @@ impl SurferState {
     pub async fn publish_package(&mut self, path: &Path) {
         let rgp = self.cluster.get_reference_gas_price().await;
         let package = BuildConfig::new_for_testing().build(path).unwrap();
-        let modules = package.get_package_bytes(false);
+        let modules = package.get_package_bytes();
         let tx_data = TransactionData::new_module(
             self.address,
             self.gas_object,
             modules,
-            package.dependency_ids.published.values().cloned().collect(),
+            package.dependency_ids,
             TEST_ONLY_GAS_UNIT_FOR_PUBLISH * rgp,
             rgp,
         );

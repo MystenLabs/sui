@@ -3997,7 +3997,6 @@ async fn test_iter_live_object_set() {
         &sender_key,
         &gas,
         "object_wrapping",
-        /* with_unpublished_deps */ false,
     )
     .await;
 
@@ -5655,7 +5654,7 @@ async fn test_for_inc_201_dev_inspect() {
     let modules = BuildConfig::new_for_testing()
         .build(&path)
         .unwrap()
-        .get_package_bytes(false);
+        .get_package_bytes();
 
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.command(Command::Publish(
@@ -5698,7 +5697,7 @@ async fn test_for_inc_201_dry_run() {
     let modules = BuildConfig::new_for_testing()
         .build(&path)
         .unwrap()
-        .get_package_bytes(false);
+        .get_package_bytes();
 
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.publish_immutable(modules, BuiltInFramework::all_package_ids());
@@ -5881,7 +5880,7 @@ async fn test_publish_transitive_dependencies_ok() {
     let modules = build_config
         .build(&package_c_path)
         .unwrap()
-        .get_package_bytes(/* with_unpublished_deps */ false);
+        .get_package_bytes();
 
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.publish_immutable(modules, vec![]);
@@ -5915,7 +5914,7 @@ async fn test_publish_transitive_dependencies_ok() {
     let modules = build_config
         .build(&package_b_path)
         .unwrap()
-        .get_package_bytes(/* with_unpublished_deps */ false);
+        .get_package_bytes();
 
     let mut builder = ProgrammableTransactionBuilder::new();
 
@@ -5952,7 +5951,7 @@ async fn test_publish_transitive_dependencies_ok() {
     let modules = build_config
         .build(&package_a_path)
         .unwrap()
-        .get_package_bytes(/* with_unpublished_deps */ false);
+        .get_package_bytes();
 
     let mut builder = ProgrammableTransactionBuilder::new();
 
@@ -5996,7 +5995,7 @@ async fn test_publish_transitive_dependencies_ok() {
     let modules = build_config
         .build(&package_root_path)
         .unwrap()
-        .get_package_bytes(/* with_unpublished_deps */ false);
+        .get_package_bytes();
 
     let mut builder = ProgrammableTransactionBuilder::new();
     let mut deps = BuiltInFramework::all_package_ids();
@@ -6041,7 +6040,7 @@ async fn test_publish_missing_dependency() {
     let modules = BuildConfig::new_for_testing()
         .build(&path)
         .unwrap()
-        .get_package_bytes(/* with_unpublished_deps */ false);
+        .get_package_bytes();
 
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.publish_immutable(modules, vec![SUI_FRAMEWORK_PACKAGE_ID]);
@@ -6088,7 +6087,7 @@ async fn test_publish_missing_transitive_dependency() {
     let modules = BuildConfig::new_for_testing()
         .build(&path)
         .unwrap()
-        .get_package_bytes(/* with_unpublished_deps */ false);
+        .get_package_bytes();
 
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.publish_immutable(modules, vec![MOVE_STDLIB_PACKAGE_ID]);
@@ -6135,7 +6134,7 @@ async fn test_publish_not_a_package_dependency() {
     let modules = BuildConfig::new_for_testing()
         .build(&path)
         .unwrap()
-        .get_package_bytes(/* with_unpublished_deps */ false);
+        .get_package_bytes();
 
     let mut builder = ProgrammableTransactionBuilder::new();
     let mut deps = BuiltInFramework::all_package_ids();
