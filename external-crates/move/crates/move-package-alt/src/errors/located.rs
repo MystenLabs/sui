@@ -44,10 +44,6 @@ impl Location {
     pub fn span(&self) -> &Range<usize> {
         &self.span
     }
-
-    pub fn path(&self) -> &Path {
-        self.file.path()
-    }
 }
 
 impl<T> Located<T> {
@@ -60,25 +56,6 @@ impl<T> Located<T> {
 
     pub fn location(&self) -> &Location {
         &self.loc
-    }
-
-    pub fn span(&self) -> &Range<usize> {
-        self.loc.span()
-    }
-
-    pub fn file(&self) -> FileHandle {
-        self.loc.file()
-    }
-    pub fn path(&self) -> &Path {
-        self.loc.path()
-    }
-
-    pub fn source(&self) -> &str {
-        self.loc.file().source()
-    }
-
-    pub fn into_inner(self) -> T {
-        self.value
     }
 }
 
@@ -115,25 +92,5 @@ impl<T> AsMut<T> for Located<T> {
 impl<T: PartialEq> PartialEq for Located<T> {
     fn eq(&self, other: &Self) -> bool {
         self.value.eq(&other.value)
-    }
-}
-
-impl<T: Eq> Eq for Located<T> {}
-
-impl<T: Hash> Hash for Located<T> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.value.hash(state);
-    }
-}
-
-impl<T: PartialOrd> PartialOrd for Located<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.value.partial_cmp(&other.value)
-    }
-}
-
-impl<T: Ord> Ord for Located<T> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.value.cmp(&other.value)
     }
 }

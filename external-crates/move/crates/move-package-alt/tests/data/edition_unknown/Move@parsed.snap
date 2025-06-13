@@ -7,4 +7,4 @@ error: Error while loading `"tests/data/edition_unknown/Move.toml"`
 3 │ edition = "foobar"
   │           ^^^^^^^^
   │
-  = unsupported edition 'foobar', expected one of '2024, 2024.beta, legacy'
+  = unsupported edition 'foobar', expected one of '2025, 2024, 2024.beta, legacy'

@@ -29,7 +29,7 @@ use super::*;
 use sha2::{Digest as ShaDigest, Sha256};
 
 // TODO: add 2025 edition
-const ALLOWED_EDITIONS: &[&str] = &["2024", "2024.beta", "legacy"];
+const ALLOWED_EDITIONS: &[&str] = &["2025", "2024", "2024.beta", "legacy"];
 
 // TODO: replace this with something more strongly typed
 type Digest = String;
@@ -116,7 +116,9 @@ pub enum ManifestErrorKind {
     InvalidEdition { edition: String, valid: String },
     #[error("externally resolved dependencies must have exactly one resolver field")]
     BadExternalDependency,
-    #[error("environment {env} is not in the [environments] table")]
+    #[error(
+        "dep-replacements.mainnet is invalid because mainnet is not in the [environments] table"
+    )]
     MissingEnvironment { env: EnvironmentName },
     #[error(
         // TODO: add a suggested environment (needs to be part of the flavor)
@@ -136,7 +138,6 @@ impl<F: MoveFlavor> Manifest<F> {
     // TODO: probably return a more specific error
     pub fn read_from_file(path: impl AsRef<Path>) -> ManifestResult<Self> {
         debug!("Reading manifest from {:?}", path.as_ref());
-        debug!("Size {}", size_of::<ManifestError>());
 
         let (manifest, file_id) = TheFile::with_file(&path, toml_edit::de::from_str::<Self>)
             .map_err(ManifestError::with_file(&path))?;
