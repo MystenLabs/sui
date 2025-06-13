@@ -5,7 +5,6 @@ use std::{collections::BTreeMap, fmt::Display, sync::Arc, sync::OnceLock};
 
 use self::known_attributes::AttributePosition;
 use crate::{
-    FullyCompiledProgram,
     expansion::ast::{AbilitySet, Attributes, ModuleIdent, Visibility},
     naming::ast::{
         self as N, DatatypeTypeParameter, EnumDefinition, FunctionSignature, ResolvedUseFuns,
@@ -17,6 +16,7 @@ use crate::{
     shared::{unique_map::UniqueMap, *},
     sui_mode::info::SuiInfo,
     typing::ast::{self as T},
+    CompiledModuleInfoMap,
 };
 use move_core_types::runtime_value;
 use move_ir_types::location::Loc;
@@ -85,7 +85,7 @@ pub enum NamedMemberKind {
 }
 
 macro_rules! program_info {
-    ($pre_compiled_lib:ident, $prog:ident, $pass:ident, $module_use_funs:ident) => {{
+    ($pre_compiled_module_infos:ident, $prog:ident, $pass:ident, $module_use_funs:ident) => {{
         let all_modules = $prog.modules.key_cloned_iter();
         let mut modules = UniqueMap::maybe_from_iter(all_modules.map(|(mident, mdef)| {
             let structs = mdef.structs.clone();
@@ -130,10 +130,11 @@ macro_rules! program_info {
             (mident, minfo)
         }))
         .unwrap();
-        if let Some(pre_compiled_lib) = $pre_compiled_lib {
-            for (mident, minfo) in pre_compiled_lib.$pass.info.modules.key_cloned_iter() {
+
+        if let Some(pre_compiled_module_infos) = $pre_compiled_module_infos {
+            for (mident, minfo) in pre_compiled_module_infos.iter() {
                 if !modules.contains_key(&mident) {
-                    modules.add(mident, minfo.clone()).unwrap();
+                    modules.add(mident.clone(), minfo.info.clone()).unwrap();
                 }
             }
         }
@@ -147,7 +148,7 @@ macro_rules! program_info {
 impl TypingProgramInfo {
     pub fn new(
         env: &CompilationEnv,
-        pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
         modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>,
         mut module_use_funs: BTreeMap<ModuleIdent, ResolvedUseFuns>,
     ) -> Self {
@@ -156,26 +157,32 @@ impl TypingProgramInfo {
         }
         let mut module_use_funs = Some(&mut module_use_funs);
         let prog = Prog { modules };
-        let pcl = pre_compiled_lib.clone();
-        let mut info = program_info!(pcl, prog, typing, module_use_funs);
+        let pcmi = pre_compiled_module_infos.clone();
+        let mut info = program_info!(pcmi, prog, typing, module_use_funs);
         // TODO we should really have an idea of root package flavor here
         // but this feels roughly equivalent
         if env
             .package_configs()
             .any(|(_, config)| config.flavor == Flavor::Sui)
         {
-            let sui_flavor_info = SuiInfo::new(pre_compiled_lib, modules, &info);
+            let sui_flavor_info = SuiInfo::new(pre_compiled_module_infos, modules, &info);
+            env.save_private_transfers(&sui_flavor_info.transferred);
             info.sui_flavor_info = Some(sui_flavor_info);
-        };
+        } else {
+            env.save_private_transfers(&BTreeMap::new());
+        }
         info
     }
 }
 
 impl NamingProgramInfo {
-    pub fn new(pre_compiled_lib: Option<Arc<FullyCompiledProgram>>, prog: &N::Program_) -> Self {
+    pub fn new(
+        pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
+        prog: &N::Program_,
+    ) -> Self {
         // use_funs will be populated later
         let mut module_use_funs: Option<&mut BTreeMap<ModuleIdent, ResolvedUseFuns>> = None;
-        program_info!(pre_compiled_lib, prog, naming, module_use_funs)
+        program_info!(pre_compiled_module_infos, prog, naming, module_use_funs)
     }
 
     pub fn set_use_funs(&mut self, module_use_funs: BTreeMap<ModuleIdent, ResolvedUseFuns>) {

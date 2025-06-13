@@ -15,22 +15,40 @@ use crate::{
         *,
     },
     editions::Edition,
-    expansion, hlir, interface_generator, naming,
-    parser::{self, *},
-    shared::{
-        CompilationEnv, Flags, IndexedPhysicalPackagePath, IndexedVfsPackagePath, NamedAddressMap,
-        NamedAddressMaps, NumericalAddress, PackageConfig, PackagePaths, SaveFlag, SaveHook,
-        files::{FilesSourceText, MappedFiles},
+    expansion::{self, ast::ModuleIdent, name_validation::ModuleMemberKind},
+    hlir, interface_generator,
+    naming::{
+        self,
+        ast::{Function, UseFuns},
+        translate::ResolvedModuleMember,
     },
-    to_bytecode,
+    parser::{
+        self,
+        ast::{DatatypeName, FunctionName},
+        *,
+    },
+    shared::{
+        files::{FilesSourceText, MappedFiles},
+        program_info::ModuleInfo,
+        unique_map::UniqueMap,
+        CompilationEnv, Flags, IndexedPhysicalPackagePath, IndexedVfsPackagePath, Name,
+        NamedAddressMap, NamedAddressMaps, NumericalAddress, PackageConfig, PackagePaths, SaveFlag,
+        SaveHook,
+    },
+    sui_mode::{self, info::TransferKind},
+    to_bytecode::{self, context::FunctionDeclaration},
     typing::{self, visitor::TypingVisitorObj},
     unit_test,
 };
 use move_command_line_common::files::{
-    DEBUG_INFO_EXTENSION, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, extension_equals,
-    find_filenames_and_keep_specified,
+    extension_equals, find_filenames_and_keep_specified, DEBUG_INFO_EXTENSION,
+    MOVE_COMPILED_EXTENSION, MOVE_EXTENSION,
 };
 use move_core_types::language_storage::ModuleId as CompiledModuleId;
+use move_ir_types::{
+    ast::{Ability, DatatypeTypeParameter},
+    location::sp,
+};
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use std::{
@@ -41,9 +59,9 @@ use std::{
     sync::Arc,
 };
 use vfs::{
-    VfsPath,
     impls::{memory::MemoryFS, physical::PhysicalFS},
     path::VfsFileType,
+    VfsPath,
 };
 
 //**************************************************************************************************
@@ -55,7 +73,7 @@ pub struct Compiler {
     targets: Vec<IndexedPhysicalPackagePath>,
     deps: Vec<IndexedPhysicalPackagePath>,
     interface_files_dir_opt: Option<String>,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
     compiled_module_named_address_mapping: BTreeMap<CompiledModuleId, String>,
     flags: Flags,
     visitors: Vec<Visitor>,
@@ -74,7 +92,7 @@ pub struct Compiler {
 
 pub struct SteppedCompiler<const P: Pass> {
     compilation_env: CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
     program: Option<PassResult>,
 }
 
@@ -96,21 +114,41 @@ enum PassResult {
     Typing(typing::ast::Program),
     HLIR(hlir::ast::Program),
     CFGIR(cfgir::ast::Program),
-    Compilation(Vec<AnnotatedCompiledUnit>, /* warnings */ Diagnostics),
+    Compilation(
+        Vec<AnnotatedCompiledUnit>,
+        Vec<ModuleIdent>,
+        /* warnings */ Diagnostics,
+    ),
 }
+
+pub type CompiledModuleInfoMap = BTreeMap<ModuleIdent, Arc<CompiledModuleInfo>>;
 
 #[derive(Clone)]
-pub struct FullyCompiledProgram {
-    pub files: MappedFiles,
-    pub parser: parser::ast::Program,
-    pub expansion: expansion::ast::Program,
-    pub naming: naming::ast::Program,
-    pub typing: typing::ast::Program,
-    pub hlir: hlir::ast::Program,
-    pub cfgir: cfgir::ast::Program,
-    pub compiled: Vec<AnnotatedCompiledUnit>,
+pub struct CompiledModuleInfo {
+    pub file_name: Symbol,
+    pub file_content: Arc<str>,
+    /// to compute address conflicts in expansion/translate.rs
+    /// (address map "inlined" into the module so that
+    /// modules are separated)
+    pub named_address_map: NamedAddressMap,
+    /// to create context in expansion/translate.rs
+    pub member_kinds: BTreeMap<Name, ModuleMemberKind>,
+    /// to build context in naming/translate.rs
+    pub resolved_members: BTreeMap<Symbol, ResolvedModuleMember>,
+    /// to extract macros in typing/translate.rs (need function bodies for this)
+    pub macro_infos: Option<(UseFuns, UniqueMap<FunctionName, Function>)>,
+    /// to construct program infos in shared/program_info.rs
+    pub info: ModuleInfo,
+    /// to process private transfers in sui_mode/info.rs
+    pub private_transfers: BTreeMap<DatatypeName, TransferKind>,
+    /// to process modules in to_bytecode/translate.rs
+    pub dependency_order: usize,
+    pub cfgir_datatype_decls:
+        BTreeMap<DatatypeName, (BTreeSet<Ability>, Vec<DatatypeTypeParameter>)>,
+    pub cfgir_fun_decls: BTreeMap<FunctionName, FunctionDeclaration>,
+    /// for transactional test runner in move-transactional-test-runner/src/framework.rs
+    pub compiled_unit: AnnotatedCompiledUnit,
 }
-
 pub enum Visitor {
     TypingVisitor(TypingVisitorObj),
     CFGIRVisitor(CFGIRVisitorObj),
@@ -191,7 +229,7 @@ impl Compiler {
             targets,
             deps,
             interface_files_dir_opt: None,
-            pre_compiled_lib: None,
+            pre_compiled_module_infos: None,
             compiled_module_named_address_mapping: BTreeMap::new(),
             flags: Flags::empty(),
             visitors: vec![],
@@ -247,18 +285,12 @@ impl Compiler {
         self
     }
 
-    pub fn set_pre_compiled_lib(mut self, pre_compiled_lib: Arc<FullyCompiledProgram>) -> Self {
-        assert!(self.pre_compiled_lib.is_none());
-        self.pre_compiled_lib = Some(pre_compiled_lib);
-        self
-    }
-
-    pub fn set_pre_compiled_lib_opt(
+    pub fn set_pre_compiled_module_infos_opt(
         mut self,
-        pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
     ) -> Self {
-        assert!(self.pre_compiled_lib.is_none());
-        self.pre_compiled_lib = pre_compiled_lib;
+        assert!(self.pre_compiled_module_infos.is_none());
+        self.pre_compiled_module_infos = pre_compiled_module_infos;
         self
     }
 
@@ -328,7 +360,7 @@ impl Compiler {
             targets,
             deps,
             interface_files_dir_opt,
-            pre_compiled_lib,
+            pre_compiled_module_infos,
             compiled_module_named_address_mapping,
             flags,
             visitors,
@@ -410,7 +442,7 @@ impl Compiler {
         let mapped_files = compilation_env.mapped_files().clone();
 
         let res: Result<_, (Pass, Diagnostics)> =
-            SteppedCompiler::new_at_parser(compilation_env, pre_compiled_lib, pprog)
+            SteppedCompiler::new_at_parser(compilation_env, pre_compiled_module_infos, pprog)
                 .run::<TARGET>();
 
         Ok((mapped_files, res))
@@ -493,19 +525,19 @@ impl<const P: Pass> SteppedCompiler<P> {
         );
         let Self {
             compilation_env,
-            pre_compiled_lib,
+            pre_compiled_module_infos,
             program,
         } = self;
         let new_prog = run(
             &compilation_env,
-            pre_compiled_lib.clone(),
+            pre_compiled_module_infos.clone(),
             program.unwrap(),
             TARGET,
         )?;
         assert!(new_prog.equivalent_pass() == TARGET);
         Ok(SteppedCompiler {
             compilation_env,
-            pre_compiled_lib,
+            pre_compiled_module_infos,
             program: Some(new_prog),
         })
     }
@@ -522,13 +554,13 @@ macro_rules! ast_stepped_compilers {
                 pub fn $at_ast(self, ast: $mod::ast::Program) -> SteppedCompiler<{$pass}> {
                     let Self {
                         compilation_env,
-                        pre_compiled_lib,
+                        pre_compiled_module_infos,
                         program,
                     } = self;
                     assert!(program.is_none());
                     SteppedCompiler::$new(
                         compilation_env,
-                        pre_compiled_lib,
+                        pre_compiled_module_infos,
                         ast
                     )
                 }
@@ -539,12 +571,12 @@ macro_rules! ast_stepped_compilers {
             impl<'a> SteppedCompiler<{$pass}> {
                 fn $new(
                     compilation_env: CompilationEnv,
-                    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+                    pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
                     ast: $mod::ast::Program,
                 ) -> Self {
                     Self {
                         compilation_env,
-                        pre_compiled_lib,
+                        pre_compiled_module_infos,
                         program: Some(PassResult::$result(ast)),
                     }
                 }
@@ -558,7 +590,7 @@ macro_rules! ast_stepped_compilers {
                 pub fn into_ast(self) -> (SteppedCompiler<EMPTY_COMPILER>, $mod::ast::Program) {
                     let Self {
                         compilation_env,
-                        pre_compiled_lib,
+                        pre_compiled_module_infos,
                         program,
                     } = self;
                     let ast = match program {
@@ -567,7 +599,7 @@ macro_rules! ast_stepped_compilers {
                     };
                     let next = SteppedCompiler {
                         compilation_env,
-                        pre_compiled_lib,
+                        pre_compiled_module_infos,
                         program: None,
                     };
                     (next, ast)
@@ -623,32 +655,34 @@ impl SteppedCompiler<PASS_COMPILATION> {
     pub fn into_compiled_units(self) -> (Vec<AnnotatedCompiledUnit>, Diagnostics) {
         let Self {
             compilation_env: _,
-            pre_compiled_lib: _,
+            pre_compiled_module_infos: _,
             program,
         } = self;
         match program {
-            Some(PassResult::Compilation(units, warnings)) => (units, warnings),
+            Some(PassResult::Compilation(units, _, warnings)) => (units, warnings),
             _ => panic!(),
         }
     }
 }
 
-/// Given a set of dependencies, precompile them and save the ASTs so that they can be used again
-/// to compile against without having to recompile these dependencies
-pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol>>(
+/// Given a set of dependencies, precompile them and save all data needed to compile
+/// against these dependencies without having to recompile them again.
+pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Into<Symbol>>(
     targets: Vec<PackagePaths<Paths, NamedAddress>>,
     interface_files_dir_opt: Option<String>,
     flags: Flags,
     vfs_root: Option<VfsPath>,
-) -> anyhow::Result<Result<FullyCompiledProgram, (MappedFiles, Diagnostics)>> {
+) -> anyhow::Result<Result<CompiledModuleInfoMap, (MappedFiles, Diagnostics)>> {
     let hook = SaveHook::new([
-        SaveFlag::Parser,
-        SaveFlag::Expansion,
-        SaveFlag::Naming,
-        SaveFlag::Typing,
-        SaveFlag::TypingInfo,
-        SaveFlag::HLIR,
-        SaveFlag::CFGIR,
+        SaveFlag::NamingInfo,
+        SaveFlag::ModuleNameAddresses,
+        SaveFlag::ModuleMembers,
+        SaveFlag::ModuleResolvedMembers,
+        SaveFlag::MacroInfos,
+        SaveFlag::PrivateTransfers,
+        SaveFlag::DependencyOrder,
+        SaveFlag::CFGIRDatatypeDecls,
+        SaveFlag::CFGIRFunDecls,
     ]);
     let (files, pprog_and_comments_res) = Compiler::from_package_paths(
         vfs_root,
@@ -670,16 +704,131 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
     let start = PassResult::Parser(ast);
     match run(&compilation_env, None, start, PASS_COMPILATION) {
         Err((_pass, errors)) => Ok(Err((files, errors))),
-        Ok(PassResult::Compilation(compiled, _)) => Ok(Ok(FullyCompiledProgram {
-            files,
-            parser: hook.take_parser_ast(),
-            expansion: hook.take_expansion_ast(),
-            naming: hook.take_naming_ast(),
-            typing: hook.take_typing_ast(),
-            hlir: hook.take_hlir_ast(),
-            cfgir: hook.take_cfgir_ast(),
-            compiled,
-        })),
+        Ok(PassResult::Compilation(compiled, mod_idents, _)) => {
+            let naming_info = hook.take_naming_info();
+            let mut module_named_addresses = hook.take_module_named_addresses();
+            let mut module_members = hook.take_module_members();
+            let mut module_resolved_members = hook.take_module_resolved_members();
+            let mut macro_infos = hook.take_macro_infos();
+            let private_transfers = hook.take_private_transfers();
+            let mut dependency_order = hook.take_dependency_order();
+            let cfgir_datatype_decls = hook.take_cfgir_datatype_decls();
+            let cfgir_fun_decls = hook.take_cfgir_fun_decls();
+
+            // private transfers by module rather than module/name pair
+            let mut private_transfers_by_module: BTreeMap<
+                expansion::ast::ModuleIdent,
+                BTreeMap<parser::ast::DatatypeName, sui_mode::info::TransferKind>,
+            > = BTreeMap::new();
+            for ((module_ident, datatype_name), transfer_kind) in private_transfers {
+                private_transfers_by_module
+                    .entry(module_ident)
+                    .or_insert_with(BTreeMap::new)
+                    .insert(datatype_name, transfer_kind);
+            }
+
+            // cfgir datatype decls by module rather than module/name pair
+            let mut cfgir_datatype_decls_by_module: BTreeMap<
+                expansion::ast::ModuleIdent,
+                BTreeMap<
+                    parser::ast::DatatypeName,
+                    (
+                        BTreeSet<move_ir_types::ast::Ability>,
+                        Vec<move_ir_types::ast::DatatypeTypeParameter>,
+                    ),
+                >,
+            > = BTreeMap::new();
+            for ((module_ident, datatype_name), (abilities, type_params)) in cfgir_datatype_decls {
+                cfgir_datatype_decls_by_module
+                    .entry(module_ident)
+                    .or_insert_with(BTreeMap::new)
+                    .insert(datatype_name, (abilities, type_params));
+            }
+
+            // cfgir fun decls by module rather than module/name pair
+            let mut cfgir_fun_decls_by_module: BTreeMap<
+                expansion::ast::ModuleIdent,
+                BTreeMap<parser::ast::FunctionName, FunctionDeclaration>,
+            > = BTreeMap::new();
+            for (
+                (module_ident, function_name),
+                FunctionDeclaration {
+                    seen_datatypes,
+                    signature,
+                },
+            ) in cfgir_fun_decls
+            {
+                cfgir_fun_decls_by_module
+                    .entry(module_ident)
+                    .or_insert_with(BTreeMap::new)
+                    .insert(
+                        function_name,
+                        FunctionDeclaration {
+                            seen_datatypes,
+                            signature,
+                        },
+                    );
+            }
+
+            let mut compiled_units_by_module = mod_idents
+                .into_iter()
+                .zip(compiled.into_iter())
+                .collect::<BTreeMap<_, _>>();
+
+            let precompiled_modules: CompiledModuleInfoMap = naming_info
+                 .modules
+                 .iter()
+                 .map(|(loc, mod_ident_key, module_info)| -> anyhow::Result<(ModuleIdent, Arc<CompiledModuleInfo>)> {
+                     let mod_ident = sp(loc, mod_ident_key.clone());
+
+                     let Some((file_name, file_content)) = files.get(&module_info.defined_loc.file_hash()) else {
+                        return Err(anyhow::anyhow!("file name not found for module: {:?}", mod_ident));
+                     };
+
+                     let named_address_map = module_named_addresses.remove(&mod_ident).unwrap_or_default();
+
+                     let member_kinds = module_members.remove(&mod_ident).unwrap_or_default();
+
+                     let resolved_members = module_resolved_members.remove(&mod_ident).unwrap_or_default();
+
+                     let macro_infos = macro_infos.remove(&mod_ident);
+
+                     let private_transfers = private_transfers_by_module.remove(&mod_ident).unwrap_or_default();
+
+                     let Some(dependency_order) = dependency_order.remove(&mod_ident) else {
+                        return Err(anyhow::anyhow!("dependency order not found for module: {:?}", mod_ident));
+                     };
+
+                     let cfgir_datatype_decls = cfgir_datatype_decls_by_module.remove(&mod_ident).unwrap_or_default();
+
+                     let cfgir_fun_decls = cfgir_fun_decls_by_module.remove(&mod_ident).unwrap_or_default();
+
+                     let compiled_unit = compiled_units_by_module
+                        .remove(&mod_ident)
+                        .ok_or_else(|| anyhow::anyhow!("compiled unit not found for module: {:?}", mod_ident))?;
+
+                     Ok((
+                         mod_ident,
+                         Arc::new(CompiledModuleInfo {
+                             file_name,
+                             file_content,
+                             named_address_map,
+                             member_kinds,
+                             resolved_members,
+                             macro_infos,
+                             info: module_info.clone(),
+                             private_transfers,
+                             dependency_order,
+                             cfgir_datatype_decls,
+                             cfgir_fun_decls,
+                             compiled_unit,
+                         }),
+                     ))
+                 })
+                 .collect::<anyhow::Result<_>>()?;
+
+            Ok(Ok(precompiled_modules))
+        }
         Ok(_) => unreachable!(),
     }
 }
@@ -920,7 +1069,7 @@ impl PassResult {
             PassResult::Typing(_) => PASS_TYPING,
             PassResult::HLIR(_) => PASS_HLIR,
             PassResult::CFGIR(_) => PASS_CFGIR,
-            PassResult::Compilation(_, _) => PASS_COMPILATION,
+            PassResult::Compilation(_, _, _) => PASS_COMPILATION,
         }
     }
 
@@ -934,6 +1083,7 @@ impl PassResult {
             }
             PassResult::Naming(prog) => {
                 compilation_env.save_naming_ast(prog);
+                compilation_env.save_naming_info(&prog.info);
             }
             PassResult::Typing(prog) => {
                 compilation_env.save_typing_ast(prog);
@@ -945,21 +1095,21 @@ impl PassResult {
             PassResult::CFGIR(prog) => {
                 compilation_env.save_cfgir_ast(prog);
             }
-            PassResult::Compilation(_, _) => (),
+            PassResult::Compilation(_, _, _) => (),
         }
     }
 }
 
 fn run(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
     cur: PassResult,
     until: Pass,
 ) -> Result<PassResult, (Pass, Diagnostics)> {
     #[growing_stack]
     fn rec(
         compilation_env: &CompilationEnv,
-        pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
         cur: PassResult,
         until: Pass,
     ) -> Result<PassResult, (Pass, Diagnostics)> {
@@ -981,35 +1131,45 @@ fn run(
                 let eprog = {
                     let prog = unit_test::filter_test_members::program(
                         compilation_env,
-                        pre_compiled_lib.clone(),
+                        pre_compiled_module_infos.clone(),
                         prog,
                     );
                     let prog = mode_attribute_filter::program(compilation_env, prog);
-                    expansion::translate::program(compilation_env, pre_compiled_lib.clone(), prog)
+                    expansion::translate::program(
+                        compilation_env,
+                        pre_compiled_module_infos.clone(),
+                        prog,
+                    )
                 };
                 rec(
                     compilation_env,
-                    pre_compiled_lib,
+                    pre_compiled_module_infos,
                     PassResult::Expansion(eprog),
                     until,
                 )
             }
             PassResult::Expansion(eprog) => {
-                let nprog =
-                    naming::translate::program(compilation_env, pre_compiled_lib.clone(), eprog);
+                let nprog = naming::translate::program(
+                    compilation_env,
+                    pre_compiled_module_infos.clone(),
+                    eprog,
+                );
                 rec(
                     compilation_env,
-                    pre_compiled_lib,
+                    pre_compiled_module_infos,
                     PassResult::Naming(nprog),
                     until,
                 )
             }
             PassResult::Naming(nprog) => {
-                let tprog =
-                    typing::translate::program(compilation_env, pre_compiled_lib.clone(), nprog);
+                let tprog = typing::translate::program(
+                    compilation_env,
+                    pre_compiled_module_infos.clone(),
+                    nprog,
+                );
                 rec(
                     compilation_env,
-                    pre_compiled_lib,
+                    pre_compiled_module_infos,
                     PassResult::Typing(tprog),
                     until,
                 )
@@ -1018,21 +1178,19 @@ fn run(
                 compilation_env
                     .check_diags_at_or_above_severity(Severity::BlockingError)
                     .map_err(|diags| (cur_pass, diags))?;
-                let hprog =
-                    hlir::translate::program(compilation_env, pre_compiled_lib.clone(), tprog);
+                let hprog = hlir::translate::program(compilation_env, tprog);
                 rec(
                     compilation_env,
-                    pre_compiled_lib,
+                    pre_compiled_module_infos,
                     PassResult::HLIR(hprog),
                     until,
                 )
             }
             PassResult::HLIR(hprog) => {
-                let cprog =
-                    cfgir::translate::program(compilation_env, pre_compiled_lib.clone(), hprog);
+                let cprog = cfgir::translate::program(compilation_env, hprog);
                 rec(
                     compilation_env,
-                    pre_compiled_lib,
+                    pre_compiled_module_infos,
                     PassResult::CFGIR(cprog),
                     until,
                 )
@@ -1042,9 +1200,9 @@ fn run(
                 compilation_env
                     .check_diags_at_or_above_severity(Severity::NonblockingError)
                     .map_err(|diags| (cur_pass, diags))?;
-                let compiled_units = to_bytecode::translate::program(
+                let (compiled_units, mod_idents) = to_bytecode::translate::program(
                     compilation_env,
-                    pre_compiled_lib.clone(),
+                    pre_compiled_module_infos.clone(),
                     cprog,
                 );
                 // Report any errors from bytecode generation
@@ -1055,13 +1213,15 @@ fn run(
                 assert!(until == PASS_COMPILATION);
                 rec(
                     compilation_env,
-                    pre_compiled_lib,
-                    PassResult::Compilation(compiled_units, warnings),
+                    pre_compiled_module_infos,
+                    PassResult::Compilation(compiled_units, mod_idents, warnings),
                     PASS_COMPILATION,
                 )
             }
-            PassResult::Compilation(_, _) => unreachable!("ICE Pass::Compilation is >= all passes"),
+            PassResult::Compilation(_, _, _) => {
+                unreachable!("ICE Pass::Compilation is >= all passes")
+            }
         }
     }
-    rec(compilation_env, pre_compiled_lib, cur, until)
+    rec(compilation_env, pre_compiled_module_infos, cur, until)
 }

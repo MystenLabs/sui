@@ -9,23 +9,35 @@ use crate::{
     },
     command_line as cli,
     diagnostics::{
-        DiagnosticReporter, Diagnostics, DiagnosticsFormat,
         codes::{DiagnosticsID, Severity},
         warning_filters::{
-            FILTER_ALL, FilterName, FilterPrefix, WarningFilter, WarningFiltersBuilder,
-            WarningFiltersScope, WarningFiltersTable,
+            FilterName, FilterPrefix, WarningFilter, WarningFiltersBuilder, WarningFiltersScope,
+            WarningFiltersTable, FILTER_ALL,
         },
+        DiagnosticReporter, Diagnostics, DiagnosticsFormat,
     },
-    editions::{Edition, FeatureGate, Flavor, check_feature_or_error, feature_edition_error_msg},
-    expansion::ast as E,
+    editions::{check_feature_or_error, feature_edition_error_msg, Edition, FeatureGate, Flavor},
+    expansion::{
+        ast::{self as E, ModuleIdent},
+        name_validation::ModuleMemberKind,
+    },
     hlir::ast as H,
-    naming::ast as N,
-    parser::ast as P,
+    naming::{
+        ast::{self as N, Function, UseFuns},
+        translate::ResolvedModuleMember,
+    },
+    parser::ast::{self as P, DatatypeName, FunctionName},
     shared::{
         files::{FileName, MappedFiles},
         ide::IDEInfo,
+        program_info::ModuleInfo,
+        unique_map::UniqueMap,
     },
-    sui_mode,
+    sui_mode::{
+        self,
+        info::{SuiInfo, TransferKind},
+    },
+    to_bytecode::context::{DatatypeDeclarations, FunctionDeclaration},
     typing::{
         ast as T,
         visitor::{TypingVisitor, TypingVisitorObj},
@@ -38,13 +50,13 @@ use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use petgraph::{algo::astar as petgraph_astar, graphmap::DiGraphMap};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fmt,
     hash::Hash,
     path::PathBuf,
     sync::{
-        Arc, Mutex, OnceLock, RwLock,
         atomic::{AtomicUsize, Ordering as AtomicOrdering},
+        Arc, Mutex, OnceLock, RwLock,
     },
 };
 use vfs::{VfsError, VfsPath};
@@ -67,8 +79,8 @@ pub use ast_debug::AstDebug;
 //**************************************************************************************************
 
 pub use move_core_types::parsing::parser::{
-    NumberFormat, parse_address_number as parse_address, parse_u8, parse_u16, parse_u32, parse_u64,
-    parse_u128, parse_u256,
+    parse_address_number as parse_address, parse_u128, parse_u16, parse_u256, parse_u32, parse_u64,
+    parse_u8, NumberFormat,
 };
 
 //**************************************************************************************************
@@ -176,7 +188,7 @@ pub fn shortest_cycle<'a, T: Ord + Hash>(
 pub type NamedAddressMap = BTreeMap<Symbol, NumericalAddress>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct NamedAddressMapIndex(usize);
+pub struct NamedAddressMapIndex(pub usize);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NamedAddressMaps(Vec<NamedAddressMap>);
@@ -539,6 +551,12 @@ impl CompilationEnv {
         }
     }
 
+    pub fn save_naming_info(&self, info: &program_info::NamingProgramInfo) {
+        for hook in &self.save_hooks {
+            hook.save_naming_info(info)
+        }
+    }
+
     pub fn save_typing_ast(&self, ast: &T::Program) {
         for hook in &self.save_hooks {
             hook.save_typing_ast(ast)
@@ -560,6 +578,81 @@ impl CompilationEnv {
     pub fn save_cfgir_ast(&self, ast: &G::Program) {
         for hook in &self.save_hooks {
             hook.save_cfgir_ast(ast)
+        }
+    }
+
+    pub fn save_module_named_addresses(
+        &self,
+        module_named_addresses: &BTreeMap<ModuleIdent, NamedAddressMap>,
+    ) {
+        for hook in &self.save_hooks {
+            hook.save_module_named_addresses(module_named_addresses)
+        }
+    }
+
+    pub fn save_module_members(
+        &self,
+        module_members: &UniqueMap<ModuleIdent, BTreeMap<Name, ModuleMemberKind>>,
+    ) {
+        for hook in &self.save_hooks {
+            hook.save_module_members(module_members)
+        }
+    }
+
+    pub fn save_module_resolved_members(
+        &self,
+        module_resolved_members: &BTreeMap<ModuleIdent, BTreeMap<Symbol, ResolvedModuleMember>>,
+    ) {
+        for hook in &self.save_hooks {
+            hook.save_module_resolved_members(module_resolved_members)
+        }
+    }
+
+    pub fn save_macro_infos(
+        &self,
+        macro_infos: &BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>,
+    ) {
+        for hook in &self.save_hooks {
+            hook.save_macro_infos(macro_infos)
+        }
+    }
+
+    pub fn save_module_info(
+        &self,
+        module_info: &BTreeMap<ModuleIdent, (ModuleInfo, Option<SuiInfo>)>,
+    ) {
+        for hook in &self.save_hooks {
+            hook.save_module_info(module_info)
+        }
+    }
+
+    pub fn save_private_transfers(
+        &self,
+        private_transfers: &BTreeMap<(ModuleIdent, DatatypeName), TransferKind>,
+    ) {
+        for hook in &self.save_hooks {
+            hook.save_private_transfers(private_transfers)
+        }
+    }
+
+    pub fn save_dependency_order(&self, dependency_order: &HashMap<ModuleIdent, usize>) {
+        for hook in &self.save_hooks {
+            hook.save_dependency_order(dependency_order)
+        }
+    }
+
+    pub fn save_cfgir_datatype_decls(&self, cfgir_datatype_decls: &DatatypeDeclarations) {
+        for hook in &self.save_hooks {
+            hook.save_cfgir_datatype_decls(cfgir_datatype_decls)
+        }
+    }
+
+    pub fn save_cfgir_fun_decls(
+        &self,
+        cfgir_fun_decls: &HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>,
+    ) {
+        for hook in &self.save_hooks {
+            hook.save_cfgir_fun_decls(cfgir_fun_decls)
         }
     }
 
@@ -937,10 +1030,20 @@ pub(crate) struct SavedInfo {
     parser: Option<P::Program>,
     expansion: Option<E::Program>,
     naming: Option<N::Program>,
+    naming_info: Option<program_info::NamingProgramInfo>,
     typing: Option<T::Program>,
     typing_info: Option<Arc<program_info::TypingProgramInfo>>,
     hlir: Option<H::Program>,
     cfgir: Option<G::Program>,
+    module_named_addresses: Option<BTreeMap<ModuleIdent, NamedAddressMap>>,
+    module_members: Option<UniqueMap<ModuleIdent, BTreeMap<Name, ModuleMemberKind>>>,
+    module_resolved_members: Option<BTreeMap<ModuleIdent, BTreeMap<Symbol, ResolvedModuleMember>>>,
+    macro_infos: Option<BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>>,
+    module_info: Option<BTreeMap<ModuleIdent, (ModuleInfo, Option<SuiInfo>)>>,
+    private_transfers: Option<BTreeMap<(ModuleIdent, DatatypeName), TransferKind>>,
+    dependency_order: Option<HashMap<ModuleIdent, usize>>,
+    cfgir_datatype_decls: Option<DatatypeDeclarations>,
+    cfgir_fun_decls: Option<HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>>,
 }
 
 #[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
@@ -948,10 +1051,20 @@ pub enum SaveFlag {
     Parser,
     Expansion,
     Naming,
+    NamingInfo,
     Typing,
     TypingInfo,
     HLIR,
     CFGIR,
+    ModuleNameAddresses,
+    ModuleMembers,
+    ModuleResolvedMembers,
+    MacroInfos,
+    ModuleInfo,
+    PrivateTransfers,
+    DependencyOrder,
+    CFGIRDatatypeDecls,
+    CFGIRFunDecls,
 }
 
 impl SaveHook {
@@ -962,10 +1075,20 @@ impl SaveHook {
             parser: None,
             expansion: None,
             naming: None,
+            naming_info: None,
             typing: None,
             typing_info: None,
             hlir: None,
             cfgir: None,
+            module_named_addresses: None,
+            module_members: None,
+            module_resolved_members: None,
+            macro_infos: None,
+            module_info: None,
+            private_transfers: None,
+            dependency_order: None,
+            cfgir_datatype_decls: None,
+            cfgir_fun_decls: None,
         })))
     }
 
@@ -987,6 +1110,13 @@ impl SaveHook {
         let mut r = self.0.lock().unwrap();
         if r.naming.is_none() && r.flags.contains(&SaveFlag::Naming) {
             r.naming = Some(ast.clone())
+        }
+    }
+
+    pub(crate) fn save_naming_info(&self, info: &program_info::NamingProgramInfo) {
+        let mut r = self.0.lock().unwrap();
+        if r.naming_info.is_none() && r.flags.contains(&SaveFlag::NamingInfo) {
+            r.naming_info = Some(info.clone())
         }
     }
 
@@ -1018,6 +1148,91 @@ impl SaveHook {
         }
     }
 
+    pub(crate) fn save_module_named_addresses(
+        &self,
+        module_named_addresses: &BTreeMap<ModuleIdent, NamedAddressMap>,
+    ) {
+        let mut r = self.0.lock().unwrap();
+        if r.module_named_addresses.is_none() && r.flags.contains(&SaveFlag::ModuleNameAddresses) {
+            r.module_named_addresses = Some(module_named_addresses.clone());
+        }
+    }
+
+    pub(crate) fn save_module_members(
+        &self,
+        module_members: &UniqueMap<ModuleIdent, BTreeMap<Name, ModuleMemberKind>>,
+    ) {
+        let mut r = self.0.lock().unwrap();
+        if r.module_members.is_none() && r.flags.contains(&SaveFlag::ModuleMembers) {
+            r.module_members = Some(module_members.clone());
+        }
+    }
+
+    pub(crate) fn save_module_resolved_members(
+        &self,
+        module_resolved_members: &BTreeMap<ModuleIdent, BTreeMap<Symbol, ResolvedModuleMember>>,
+    ) {
+        let mut r = self.0.lock().unwrap();
+        if r.module_resolved_members.is_none() && r.flags.contains(&SaveFlag::ModuleResolvedMembers)
+        {
+            r.module_resolved_members = Some(module_resolved_members.clone());
+        }
+    }
+
+    pub(crate) fn save_macro_infos(
+        &self,
+        macro_infos: &BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>,
+    ) {
+        let mut r = self.0.lock().unwrap();
+        if r.macro_infos.is_none() && r.flags.contains(&SaveFlag::MacroInfos) {
+            r.macro_infos = Some(macro_infos.clone());
+        }
+    }
+
+    pub(crate) fn save_module_info(
+        &self,
+        module_info: &BTreeMap<ModuleIdent, (ModuleInfo, Option<SuiInfo>)>,
+    ) {
+        let mut r = self.0.lock().unwrap();
+        if r.module_info.is_none() && r.flags.contains(&SaveFlag::ModuleInfo) {
+            r.module_info = Some(module_info.clone());
+        }
+    }
+
+    pub(crate) fn save_private_transfers(
+        &self,
+        private_transfers: &BTreeMap<(ModuleIdent, DatatypeName), TransferKind>,
+    ) {
+        let mut r = self.0.lock().unwrap();
+        if r.private_transfers.is_none() && r.flags.contains(&SaveFlag::PrivateTransfers) {
+            r.private_transfers = Some(private_transfers.clone());
+        }
+    }
+
+    pub(crate) fn save_dependency_order(&self, dependency_order: &HashMap<ModuleIdent, usize>) {
+        let mut r = self.0.lock().unwrap();
+        if r.dependency_order.is_none() && r.flags.contains(&SaveFlag::DependencyOrder) {
+            r.dependency_order = Some(dependency_order.clone());
+        }
+    }
+
+    pub(crate) fn save_cfgir_datatype_decls(&self, cfgir_datatype_decls: &DatatypeDeclarations) {
+        let mut r = self.0.lock().unwrap();
+        if r.cfgir_datatype_decls.is_none() && r.flags.contains(&SaveFlag::CFGIRDatatypeDecls) {
+            r.cfgir_datatype_decls = Some(cfgir_datatype_decls.clone());
+        }
+    }
+
+    pub(crate) fn save_cfgir_fun_decls(
+        &self,
+        cfgir_fun_decls: &HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>,
+    ) {
+        let mut r = self.0.lock().unwrap();
+        if r.cfgir_fun_decls.is_none() && r.flags.contains(&SaveFlag::CFGIRFunDecls) {
+            r.cfgir_fun_decls = Some(cfgir_fun_decls.clone());
+        }
+    }
+
     pub fn take_parser_ast(&self) -> P::Program {
         let mut r = self.0.lock().unwrap();
         assert!(
@@ -1043,6 +1258,15 @@ impl SaveHook {
             "Naming AST not saved. Please set the flag when creating the SaveHook"
         );
         r.naming.take().unwrap()
+    }
+
+    pub fn take_naming_info(&self) -> program_info::NamingProgramInfo {
+        let mut r = self.0.lock().unwrap();
+        assert!(
+            r.flags.contains(&SaveFlag::NamingInfo),
+            "Naming info not saved. Please set the flag when creating the SaveHook"
+        );
+        r.naming_info.take().unwrap()
     }
 
     pub fn take_typing_ast(&self) -> T::Program {
@@ -1079,6 +1303,93 @@ impl SaveHook {
             "CFGIR AST not saved. Please set the flag when creating the SaveHook"
         );
         r.cfgir.take().unwrap()
+    }
+
+    pub fn take_module_named_addresses(&self) -> BTreeMap<ModuleIdent, NamedAddressMap> {
+        let mut r = self.0.lock().unwrap();
+        assert!(
+            r.flags.contains(&SaveFlag::ModuleNameAddresses),
+            "Module named addresses not saved. Please set the flag when creating the SaveHook"
+        );
+        r.module_named_addresses.take().unwrap()
+    }
+
+    pub fn take_module_members(&self) -> UniqueMap<ModuleIdent, BTreeMap<Name, ModuleMemberKind>> {
+        let mut r = self.0.lock().unwrap();
+        assert!(
+            r.flags.contains(&SaveFlag::ModuleMembers),
+            "Module members not saved. Please set the flag when creating the SaveHook"
+        );
+        r.module_members.take().unwrap()
+    }
+
+    pub fn take_module_resolved_members(
+        &self,
+    ) -> BTreeMap<ModuleIdent, BTreeMap<Symbol, ResolvedModuleMember>> {
+        let mut r = self.0.lock().unwrap();
+        assert!(
+            r.flags.contains(&SaveFlag::ModuleResolvedMembers),
+            "Resolved module members not saved. Please set the flag when creating the SaveHook"
+        );
+        r.module_resolved_members.take().unwrap()
+    }
+
+    pub fn take_macro_infos(
+        &self,
+    ) -> BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)> {
+        let mut r = self.0.lock().unwrap();
+        assert!(
+            r.flags.contains(&SaveFlag::MacroInfos),
+            "Macro infos not saved. Please set the flag when creating the SaveHook"
+        );
+        r.macro_infos.take().unwrap()
+    }
+
+    pub fn take_module_info(&self) -> BTreeMap<ModuleIdent, (ModuleInfo, Option<SuiInfo>)> {
+        let mut r = self.0.lock().unwrap();
+        assert!(
+            r.flags.contains(&SaveFlag::ModuleInfo),
+            "Module info not saved. Please set the flag when creating the SaveHook"
+        );
+        r.module_info.take().unwrap()
+    }
+
+    pub fn take_private_transfers(&self) -> BTreeMap<(ModuleIdent, DatatypeName), TransferKind> {
+        let mut r = self.0.lock().unwrap();
+        assert!(
+            r.flags.contains(&SaveFlag::PrivateTransfers),
+            "Private transfers not saved. Please set the flag when creating the SaveHook"
+        );
+        r.private_transfers.take().unwrap()
+    }
+
+    pub fn take_dependency_order(&self) -> HashMap<ModuleIdent, usize> {
+        let mut r = self.0.lock().unwrap();
+        assert!(
+            r.flags.contains(&SaveFlag::DependencyOrder),
+            "Dependency order not saved. Please set the flag when creating the SaveHook"
+        );
+        r.dependency_order.take().unwrap()
+    }
+
+    pub fn take_cfgir_datatype_decls(&self) -> DatatypeDeclarations {
+        let mut r = self.0.lock().unwrap();
+        assert!(
+            r.flags.contains(&SaveFlag::CFGIRDatatypeDecls),
+            "CFGIR datatype decls not saved. Please set the flag when creating the SaveHook"
+        );
+        r.cfgir_datatype_decls.take().unwrap()
+    }
+
+    pub fn take_cfgir_fun_decls(
+        &self,
+    ) -> HashMap<(ModuleIdent, FunctionName), FunctionDeclaration> {
+        let mut r = self.0.lock().unwrap();
+        assert!(
+            r.flags.contains(&SaveFlag::CFGIRFunDecls),
+            "CFGIR fun decls not saved. Please set the flag when creating the SaveHook"
+        );
+        r.cfgir_fun_decls.take().unwrap()
     }
 }
 

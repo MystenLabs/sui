@@ -2,21 +2,23 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_ir_types::location::{Loc, sp};
+use move_ir_types::location::{sp, Loc};
 use move_symbol_pool::Symbol;
 
 use crate::{
-    command_line::compiler::FullyCompiledProgram,
     diag,
     diagnostics::DiagnosticReporter,
+    expansion::ast::Address,
     parser::{
         ast::{self as P, DocComment, NamePath, PathEntry},
-        filter::{FilterContext, filter_program},
+        filter::{filter_program, FilterContext},
     },
     shared::{
-        CompilationEnv,
         known_attributes::{self, AttributeKind_},
+        CompilationEnv,
     },
+    sui_mode::STD_ADDR_VALUE,
+    CompiledModuleInfoMap,
 };
 
 use std::sync::Arc;
@@ -91,11 +93,11 @@ pub const UNIT_TEST_POISON_FUN_NAME: Symbol = symbol!("unit_test_poison");
 // a test plan is created for use by the testing framework.
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
     prog: P::Program,
 ) -> P::Program {
     let reporter = compilation_env.diagnostic_reporter_at_top_level();
-    if !check_has_unit_test_module(compilation_env, &reporter, pre_compiled_lib, &prog) {
+    if !check_has_unit_test_module(compilation_env, &reporter, pre_compiled_module_infos, &prog) {
         return prog;
     }
 
@@ -128,11 +130,22 @@ fn has_stdlib_unit_test_module(prog: &P::Program) -> bool {
 fn check_has_unit_test_module(
     compilation_env: &CompilationEnv,
     reporter: &DiagnosticReporter,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
     prog: &P::Program,
 ) -> bool {
     let has_unit_test_module = has_stdlib_unit_test_module(prog)
-        || pre_compiled_lib.is_some_and(|p| has_stdlib_unit_test_module(&p.parser));
+        || pre_compiled_module_infos.is_some_and(|module_infos| {
+            module_infos.iter().any(|(sp!(_, mident), _)| {
+                mident.module.0.value == UNIT_TEST_MODULE_NAME
+                    && match mident.address {
+                        Address::Numerical {
+                            value: sp!(_, addr),
+                            ..
+                        } => addr == STD_ADDR_VALUE,
+                        Address::NamedUnassigned(_) => false,
+                    }
+            })
+        });
     if !has_unit_test_module && compilation_env.test_mode() {
         if let Some(P::PackageDefinition { def, .. }) = prog
             .source_definitions
