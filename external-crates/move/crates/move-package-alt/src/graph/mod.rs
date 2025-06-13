@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    dependency::PinnedDependencyInfo,
+    dependency::{PinnedDependencyInfo, git::PinnedGitDependency, local::LocalDependency},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::{
@@ -14,6 +14,7 @@ use crate::{
     },
 };
 use move_core_types::identifier::Identifier;
+use path_clean::PathClean;
 use petgraph::{
     graph::{DiGraph, NodeIndex},
     visit::EdgeRef,
@@ -326,6 +327,22 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         // Note: this loop could be parallel if we want parallel fetching:
         for (name, dep) in package.package.direct_deps(env).await?.iter() {
             // TODO: to handle use-environment we need to traverse with a different env here
+
+            // If the parent dependency is a git dep and this dep is local we need to fetch this as
+            // a git dep as well.
+            let dep = match dep {
+                PinnedDependencyInfo::Local(local) => {
+                    // If the parent dependency is a local dep, we need to convert it to a git dep
+                    // so that we can fetch it as a git dep.
+                    if let Some(dep) = package.pinned_dep.as_git_dep() {
+                        &convert(local, dep)
+                    } else {
+                        dep
+                    }
+                }
+                _ => dep,
+            };
+
             let future =
                 self.add_transitive_manifest_deps(dep, env, graph.clone(), visited.clone());
             let dep_index = Box::pin(future).await?;
@@ -379,4 +396,12 @@ impl<F: MoveFlavor> PackageCache<F> {
             dep
         )))
     }
+}
+
+pub fn convert(a: &LocalDependency, pinned_dep: PinnedGitDependency) -> PinnedDependencyInfo {
+    PinnedDependencyInfo::Git(PinnedGitDependency {
+        repo: pinned_dep.repo,
+        rev: pinned_dep.rev,
+        path: pinned_dep.path.join(a.relative_path()).clean(),
+    })
 }
