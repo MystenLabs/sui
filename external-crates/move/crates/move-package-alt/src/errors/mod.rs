@@ -10,11 +10,12 @@ pub use lockfile_error::LockfileError;
 
 mod located;
 mod thefile;
-pub use located::Located;
+pub use located::{Located, Location};
 pub use thefile::TheFile;
 
 mod files;
 pub use files::FileHandle;
+pub use files::Files;
 
 use std::fs;
 use std::path::Path;
@@ -69,7 +70,7 @@ pub enum PackageError {
 }
 
 impl PackageError {
-    pub fn to_diagnostic(&self) -> Diagnostic<usize> {
+    pub fn to_diagnostic(&self) -> Diagnostic<FileHandle> {
         match self {
             Self::Manifest(err) => err.to_diagnostic(),
             _ => Diagnostic::error()

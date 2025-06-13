@@ -1,9 +1,11 @@
 ---
 source: crates/move-package-alt/tests/test_runner.rs
 ---
-error: TOML parse error at line 5, column 1
-  |
-5 | [package]
-  | ^
-invalid table header
-duplicate key `package` in document root
+error: Error while loading `"tests/data/duplicate_top_level_field/Move.toml"`
+  ┌─ "tests/data/duplicate_top_level_field/Move.toml":5:1
+  │
+5 │ [package]
+  │ ^
+  │
+  = invalid table header
+    duplicate key `package` in document root

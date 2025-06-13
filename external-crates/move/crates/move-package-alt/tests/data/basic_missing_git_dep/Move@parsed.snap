@@ -1,8 +1,10 @@
 ---
 source: crates/move-package-alt/tests/test_runner.rs
 ---
-error: TOML parse error at line 11, column 7
-   |
-11 | foo = { rename-from = "Foo", override = true, rev = "releases/v1" }
-   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Invalid dependency; dependencies must have exactly one of the following fields: `git`, `r`, `local`, or `on-chain`
+error: Error while loading `"tests/data/basic_missing_git_dep/Move.toml"`
+   ┌─ "tests/data/basic_missing_git_dep/Move.toml":11:7
+   │
+11 │ foo = { rename-from = "Foo", override = true, rev = "releases/v1" }
+   │       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │
+   = Invalid dependency; dependencies must have exactly one of the following fields: `git`, `r`, `local`, or `on-chain`
