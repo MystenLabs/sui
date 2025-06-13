@@ -7,6 +7,10 @@ address_mapping.json
 summary_pkg
 External Command `cat package_summaries/summary_pkg/a.json`:
 {
+  "id": {
+    "address": "summary_pkg",
+    "name": "a"
+  },
   "doc": " This is a doc comment on a module",
   "immediate_dependencies": [
     {
@@ -101,6 +105,10 @@ External Command `cat package_summaries/summary_pkg/a.json`:
   "enums": {}
 }External Command `cat package_summaries/summary_pkg/b.json`:
 {
+  "id": {
+    "address": "summary_pkg",
+    "name": "b"
+  },
   "doc": " This is a doc comment on a module",
   "immediate_dependencies": [],
   "attributes": [
@@ -187,6 +195,9 @@ address_mapping.yaml
 summary_pkg
 External Command `cat package_summaries/0x0000000000000000000000000000000000000000000000000000000000c0ffee/a.yaml`:
 ---
+id:
+  address: "0x0000000000000000000000000000000000000000000000000000000000c0ffee"
+  name: a
 immediate_dependencies:
   - address: "0x0000000000000000000000000000000000000000000000000000000000c0ffee"
     name: b
@@ -228,6 +239,9 @@ structs:
 enums: {}
 External Command `cat package_summaries/0x0000000000000000000000000000000000000000000000000000000000c0ffee/b.yaml`:
 ---
+id:
+  address: "0x0000000000000000000000000000000000000000000000000000000000c0ffee"
+  name: b
 immediate_dependencies: []
 functions:
   f:
