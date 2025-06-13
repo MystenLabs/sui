@@ -1,0 +1,5 @@
+[package]
+name = "example"
+edition = "2024.beta"
+
+[environments]
