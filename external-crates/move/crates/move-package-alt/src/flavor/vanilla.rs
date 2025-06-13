@@ -44,28 +44,7 @@ impl MoveFlavor for Vanilla {
     fn implicit_deps(
         &self,
         environments: impl Iterator<Item = Self::EnvironmentID>,
-    ) -> DependencySet<PinnedDependencyInfo<Self>> {
+    ) -> DependencySet<PinnedDependencyInfo> {
         empty().collect()
-    }
-
-    // TODO: should be !, but that's not supported; instead
-    // should be some type that always gives an error during
-    // deserialization
-    type FlavorDependency<P: ?Sized> = VanillaDep;
-
-    fn pin(
-        &self,
-        deps: DependencySet<Self::FlavorDependency<Unpinned>>,
-    ) -> PackageResult<DependencySet<Self::FlavorDependency<Pinned>>> {
-        assert!(deps.is_empty(), "there are no vanilla-flavor dependencies");
-        Ok(DependencySet::new())
-    }
-
-    fn fetch(
-        &self,
-        deps: DependencySet<Self::FlavorDependency<Pinned>>,
-    ) -> PackageResult<DependencySet<PathBuf>> {
-        assert!(deps.is_empty(), "there are no vanilla-flavor dependencies");
-        Ok(DependencySet::new())
     }
 }

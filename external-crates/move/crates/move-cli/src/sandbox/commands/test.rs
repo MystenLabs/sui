@@ -229,12 +229,8 @@ pub fn run_one(
 
         if let Some(external_cmd) = args_line.strip_prefix('>') {
             let external_cmd = external_cmd.trim_start();
-            let mut cmd_iter = external_cmd.split_ascii_whitespace();
-
-            let external_program = cmd_iter.next().expect("empty external command");
-
-            let mut command = Command::new(external_program);
-            command.args(cmd_iter);
+            let mut command = Command::new("sh");
+            command.arg("-c").arg(external_cmd);
             if let Some(work_dir) = temp_dir.as_ref() {
                 command.current_dir(&work_dir.1);
             } else {

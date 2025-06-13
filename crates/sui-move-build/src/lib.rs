@@ -907,3 +907,43 @@ pub fn check_invalid_dependencies(invalid: &BTreeMap<Symbol, String>) -> Result<
         error: error_messages.join("\n"),
     })
 }
+
+pub fn check_conflicting_addresses(
+    conflicting: &BTreeMap<Symbol, (ObjectID, ObjectID)>,
+    dump_bytecode_base64: bool,
+) -> Result<(), SuiError> {
+    if conflicting.is_empty() {
+        return Ok(());
+    }
+
+    let suffix = if conflicting.len() == 1 { "" } else { "es" };
+
+    let err_msg = format!("found the following conflicting published package address{suffix}:");
+    let suggestion_message =
+        "You may want to:
+ - delete the published-at address in the `Move.toml` if the `Move.lock` address is correct; OR
+ - update the `Move.lock` address to be the same as the `Move.toml`; OR
+ - check that your `sui active-env` corresponds to the chain on which the package is published (i.e., devnet, testnet, mainnet); OR
+ - contact the maintainer if this package is a dependency and request resolving the conflict.";
+
+    let conflicting_addresses_msg = conflicting
+        .iter()
+        .map(|(_, (id_lock, id_manifest))| {
+            format!(
+                "  `Move.toml` contains published-at address \
+                 {id_manifest} but `Move.lock` file contains published-at address {id_lock}."
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let error = format!("{err_msg}\n{conflicting_addresses_msg}\n{suggestion_message}");
+
+    let err = if dump_bytecode_base64 {
+        SuiError::ModuleBuildFailure { error }
+    } else {
+        SuiError::ModulePublishFailure { error }
+    };
+
+    Err(err)
+}

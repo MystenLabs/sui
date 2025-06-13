@@ -95,9 +95,9 @@ struct RField {
 
 /// Requests from the package mananger to the external resolver
 #[derive(Serialize, Debug)]
-struct ResolveRequest<F: MoveFlavor> {
+struct ResolveRequest<EnvironmentID: Serialize> {
     #[serde(default)]
-    env: Option<F::EnvironmentID>,
+    env: EnvironmentID,
     data: toml::Value,
     #[serde(skip)]
     containing_file: FileHandle,
@@ -106,8 +106,8 @@ struct ResolveRequest<F: MoveFlavor> {
 /// Responses from the external resolver back to the package manager
 #[derive(Deserialize)]
 #[serde(bound = "")]
-struct ResolveResponse<F: MoveFlavor> {
-    result: UnpinnedDependencyInfo<F>,
+struct ResolveResponse {
+    result: UnpinnedDependencyInfo,
     warnings: Vec<String>,
 }
 
@@ -121,26 +121,23 @@ impl ExternalDependency {
     /// this method may also optimize by removing unnecessary dep-replacements.
     ///
     /// Expects all environments in [deps] to also be contained in [envs]
-    pub async fn resolve<F: MoveFlavor>(
-        deps: &mut DependencySet<UnpinnedDependencyInfo<F>>,
-        envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
+    pub async fn resolve<EnvironmentID: Serialize + Clone>(
+        deps: &mut DependencySet<UnpinnedDependencyInfo>,
+        envs: &BTreeMap<EnvironmentName, EnvironmentID>,
     ) -> ResolverResult<()> {
-        // we explode [deps] first so that we know exactly which deps are needed for each env.
-        deps.explode(envs.keys().cloned());
-
         // iterate over [deps] to collect queries for external resolvers
-        let mut requests: BTreeMap<ResolverName, DependencySet<ResolveRequest<F>>> =
+        let mut requests: BTreeMap<ResolverName, DependencySet<ResolveRequest<EnvironmentID>>> =
             BTreeMap::new();
 
         for (env, pkg, dep) in deps.iter() {
-            if let UnpinnedDependencyInfo::External::<F>(dep) = dep {
-                let env_id = env.map(|id| {
-                    envs.get(id)
-                        .expect("all environments must be in [envs]")
-                        .clone()
-                });
+            if let UnpinnedDependencyInfo::External(dep) = dep {
+                let env_id = envs
+                    .get(env)
+                    .expect("all environments must be in [envs]")
+                    .clone();
+
                 requests.entry(dep.resolver.clone()).or_default().insert(
-                    env.cloned(),
+                    env.clone(),
                     pkg.clone(),
                     ResolveRequest {
                         env: env_id,
@@ -250,10 +247,10 @@ impl From<ExternalDependency> for RField {
 /// externally resolved dependencies.
 ///
 /// Assumes `requests` is nonempty
-async fn resolve_single<F: MoveFlavor>(
+async fn resolve_single<E: Serialize>(
     resolver: ResolverName,
-    requests: DependencySet<ResolveRequest<F>>,
-) -> ResolverResult<DependencySet<UnpinnedDependencyInfo<F>>> {
+    requests: DependencySet<ResolveRequest<E>>,
+) -> ResolverResult<DependencySet<UnpinnedDependencyInfo>> {
     let mut command = Command::new(&resolver);
     command
         .arg(RESOLVE_ARG)
@@ -321,7 +318,7 @@ async fn resolve_single<F: MoveFlavor>(
         return Err(ResolverError::nonzero_exit(&resolver, output.status));
     }
 
-    let result: DependencySet<UnpinnedDependencyInfo<F>> = izip!(envs, pkgs, resps?).collect();
+    let result: DependencySet<UnpinnedDependencyInfo> = izip!(envs, pkgs, resps?).collect();
 
     // ensure no externally resolved responses
     for (_, _, dep) in result.iter() {

@@ -62,7 +62,8 @@ impl Model {
 
     pub fn summary_without_source(&self) -> &summary::Packages {
         self.summary.get_or_init(|| {
-            summary::Packages::from((&self.root_named_address_reverse_map, &self.compiled))
+            let context = summary::Context::new(self);
+            summary::Packages::from_normalized(&context, &self.compiled)
         })
     }
 }

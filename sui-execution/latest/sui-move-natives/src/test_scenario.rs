@@ -660,7 +660,7 @@ pub fn allocate_receiving_ticket_for_object(
     }
 
     let obj_value = inventories.objects.remove(&id).unwrap();
-    let Some(bytes) = obj_value.simple_serialize(&layout) else {
+    let Some(bytes) = obj_value.typed_serialize(&layout) else {
         return Ok(NativeResult::err(
             context.gas_used(),
             E_UNABLE_TO_ALLOCATE_RECEIVING_TICKET,
@@ -1015,7 +1015,7 @@ fn find_all_wrapped_objects<'a, 'i>(
             continue;
         };
 
-        let blob = value.borrow().simple_serialize(&layout).unwrap();
+        let blob = value.borrow().typed_serialize(&layout).unwrap();
         MoveValue::visit_deserialize(
             &blob,
             &annotated_layout,

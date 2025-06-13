@@ -497,6 +497,8 @@ pub enum SuiError {
     TransactionsNotFound { digests: Vec<TransactionDigest> },
     #[error("Could not find the referenced transaction events [{digest:?}].")]
     TransactionEventsNotFound { digest: TransactionDigest },
+    #[error("Could not find the referenced transaction effects [{digest:?}].")]
+    TransactionEffectsNotFound { digest: TransactionDigest },
     #[error(
         "Attempt to move to `Executed` state an transaction that has already been executed: {:?}.",
         digest
@@ -713,8 +715,8 @@ pub enum SuiError {
         "Validator consensus rounds are lagging behind. last committed leader round: {last_committed_round:?}, requested round: {round:?}"
     )]
     ValidatorConsensusLagging {
-        round: u64,
-        last_committed_round: u64,
+        round: u32,
+        last_committed_round: u32,
     },
 }
 

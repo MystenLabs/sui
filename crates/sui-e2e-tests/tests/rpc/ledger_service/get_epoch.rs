@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_macros::sim_test;
+use sui_rpc_api::field_mask::FieldMask;
+use sui_rpc_api::field_mask::FieldMaskUtil;
 use sui_rpc_api::proto::rpc::v2beta::ledger_service_client::LedgerServiceClient;
 use sui_rpc_api::proto::rpc::v2beta::GetEpochRequest;
 use test_cluster::TestClusterBuilder;
@@ -39,4 +41,15 @@ async fn get_epoch() {
 
     assert_eq!(epoch_0.epoch, Some(0));
     assert_eq!(epoch_0.first_checkpoint, Some(0));
+
+    //Ensure that fetching the system state for the epoch works
+    let epoch = client
+        .get_epoch(GetEpochRequest {
+            epoch: None,
+            read_mask: Some(FieldMask::from_paths(["system_state"])),
+        })
+        .await
+        .unwrap()
+        .into_inner();
+    assert!(epoch.system_state.is_some());
 }

@@ -5,4 +5,4 @@ error: TOML parse error at line 11, column 7
    |
 11 | foo = { rename-from = "Foo", override = true, rev = "releases/v1" }
    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-invalid dependency format
+Invalid dependency; dependencies must have exactly one of the following fields: `git`, `r`, `local`, or `on-chain`

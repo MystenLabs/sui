@@ -16,3 +16,4 @@ cd "$ROOT/crates/sui-protocol-config" && cargo insta test --review
 cd "$ROOT/crates/sui-swarm-config" && cargo insta test --review
 cd "$ROOT/crates/sui-open-rpc" && cargo run --example generate-json-rpc-spec -- record
 cd "$ROOT/crates/sui-core" && cargo run --example generate-format -- print > tests/staged/sui.yaml
+cd "$ROOT/crates/sui-graphql-rpc" && cargo insta test --review

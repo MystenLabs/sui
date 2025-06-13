@@ -22,6 +22,7 @@ move-vm-profiler.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
+move-core-types = { workspace = true, features = ["fuzzing"] }
 
 [features]
 default = []

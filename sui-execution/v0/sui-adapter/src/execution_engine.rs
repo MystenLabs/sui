@@ -505,6 +505,9 @@ mod checked {
             TransactionKind::EndOfEpochTransaction(_) => {
                 panic!("EndOfEpochTransaction should not exist in execution layer v0");
             }
+            TransactionKind::ProgrammableSystemTransaction(_) => {
+                panic!("ProgrammableSystemTransaction should not exist in execution layer v0");
+            }
         }
     }
 

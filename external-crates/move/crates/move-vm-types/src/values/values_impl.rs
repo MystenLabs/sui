@@ -3380,12 +3380,103 @@ impl Value {
         bcs::from_bytes_seed(SeedWrapper { layout }, blob).ok()
     }
 
-    pub fn simple_serialize(&self, layout: &MoveTypeLayout) -> Option<Vec<u8>> {
+    pub fn typed_serialize(&self, layout: &MoveTypeLayout) -> Option<Vec<u8>> {
         bcs::to_bytes(&AnnotatedValue {
             layout,
             val: &self.0,
         })
         .ok()
+    }
+
+    pub fn serialize(&self) -> Option<Vec<u8>> {
+        bcs::to_bytes(&self.0).ok()
+    }
+}
+
+impl serde::Serialize for ValueImpl {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            ValueImpl::U8(u) => serializer.serialize_u8(*u),
+            ValueImpl::U16(u) => serializer.serialize_u16(*u),
+            ValueImpl::U32(u) => serializer.serialize_u32(*u),
+            ValueImpl::U64(u) => serializer.serialize_u64(*u),
+            ValueImpl::U128(u) => serializer.serialize_u128(**u),
+            ValueImpl::U256(u) => u.serialize(serializer),
+            ValueImpl::Bool(b) => serializer.serialize_bool(*b),
+            ValueImpl::Address(a) => a.serialize(serializer),
+            ValueImpl::Container(container) => container.serialize(serializer),
+            v @ (ValueImpl::ContainerRef(_) | ValueImpl::IndexedRef(_) | ValueImpl::Invalid) => {
+                Err(invariant_violation::<S>(format!(
+                    "cannot serialize value {:?}",
+                    v
+                )))
+            }
+        }
+    }
+}
+
+impl serde::Serialize for Container {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Container::VecU8(r) => r.borrow().serialize(serializer),
+            Container::VecU16(r) => r.borrow().serialize(serializer),
+            Container::VecU32(r) => r.borrow().serialize(serializer),
+            Container::VecU64(r) => r.borrow().serialize(serializer),
+            Container::VecU128(r) => r.borrow().serialize(serializer),
+            Container::VecU256(r) => r.borrow().serialize(serializer),
+            Container::VecBool(r) => r.borrow().serialize(serializer),
+            Container::VecAddress(r) => r.borrow().serialize(serializer),
+            Container::Vec(r) => {
+                let v = r.borrow();
+                let mut s = serializer.serialize_seq(Some(v.len()))?;
+                for v in v.iter() {
+                    s.serialize_element(v)?;
+                }
+                s.end()
+            }
+            Container::Struct(r) => {
+                let v = r.borrow();
+                let mut t = serializer.serialize_tuple(v.len())?;
+                for val in v.iter() {
+                    t.serialize_element(&val)?;
+                }
+                t.end()
+            }
+            Container::Variant(r) => {
+                let (tag, values) = &*r.borrow();
+                let tag = if *tag as u64 > VARIANT_COUNT_MAX {
+                    return Err(serde::ser::Error::custom(format!(
+                        "Variant tag {} is greater than the maximum allowed value of {}",
+                        tag, VARIANT_COUNT_MAX
+                    )));
+                } else {
+                    *tag as u8
+                };
+
+                struct VariantsSerializer<'a>(&'a [ValueImpl]);
+                impl serde::Serialize for VariantsSerializer<'_> {
+                    fn serialize<S: serde::Serializer>(
+                        &self,
+                        serializer: S,
+                    ) -> Result<S::Ok, S::Error> {
+                        let mut t = serializer.serialize_tuple(self.0.len())?;
+                        for val in self.0.iter() {
+                            t.serialize_element(val)?;
+                        }
+                        t.end()
+                    }
+                }
+
+                let mut t = serializer.serialize_tuple(2)?;
+                t.serialize_element(&tag)?;
+                t.serialize_element(&VariantsSerializer(values))?;
+                t.end()
+            }
+            Container::Locals(_) => Err(invariant_violation::<S>(format!(
+                "Tried to serialize a locals container {:?}",
+                self
+            ))),
+        }
     }
 }
 
@@ -4101,12 +4192,12 @@ impl GlobalValue {
  *   Random generation of values that fit into a given layout.
  *
  **************************************************************************************/
-#[cfg(feature = "fuzzing")]
+#[cfg(any(test, feature = "fuzzing"))]
 pub mod prop {
     use super::*;
     use proptest::{collection::vec, prelude::*};
 
-    pub fn value_strategy_with_layout(layout: &MoveTypeLayout) -> impl Strategy<Value = Value> {
+    pub fn value_strategy_with_layout(layout: MoveTypeLayout) -> impl Strategy<Value = Value> {
         use MoveTypeLayout as L;
 
         match layout {
@@ -4120,7 +4211,7 @@ pub mod prop {
             L::Address => any::<AccountAddress>().prop_map(Value::address).boxed(),
             L::Signer => any::<AccountAddress>().prop_map(Value::signer).boxed(),
 
-            L::Vector(layout) => match &**layout {
+            L::Vector(layout) => match *layout {
                 L::U8 => vec(any::<u8>(), 0..10)
                     .prop_map(|vals| {
                         Value(ValueImpl::Container(Container::VecU8(Rc::new(
@@ -4187,15 +4278,15 @@ pub mod prop {
             },
 
             L::Struct(struct_layout) => struct_layout
-                .fields()
-                .iter()
+                .into_fields()
+                .into_iter()
                 .map(value_strategy_with_layout)
                 .collect::<Vec<_>>()
                 .prop_map(move |vals| Value::struct_(Struct::pack(vals)))
                 .boxed(),
 
             L::Enum(enum_layout) => {
-                let enum_layouts = (**enum_layout)
+                let enum_layouts = enum_layout
                     .clone()
                     .0
                     .into_iter()
@@ -4204,7 +4295,7 @@ pub mod prop {
                 proptest::sample::select(enum_layouts)
                     .prop_flat_map(move |(tag, layout)| {
                         layout
-                            .iter()
+                            .into_iter()
                             .map(value_strategy_with_layout)
                             .collect::<Vec<_>>()
                             .prop_map(move |v| Value::variant(Variant::pack(tag as u16, v)))
@@ -4240,7 +4331,7 @@ pub mod prop {
 
     pub fn layout_and_value_strategy() -> impl Strategy<Value = (MoveTypeLayout, Value)> {
         layout_strategy().no_shrink().prop_flat_map(|layout| {
-            let value_strategy = value_strategy_with_layout(&layout);
+            let value_strategy = value_strategy_with_layout(layout.clone());
             (Just(layout), value_strategy)
         })
     }

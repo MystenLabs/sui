@@ -340,10 +340,6 @@ impl LocalValidatorAggregatorProxy {
             .submit_transaction(
                 SubmitTxRequest {
                     transaction: tx.clone(),
-                    include_events: true,
-                    include_input_objects: false,
-                    include_output_objects: false,
-                    include_auxiliary_data: false,
                 },
                 SubmitTransactionOptions::default(),
             )

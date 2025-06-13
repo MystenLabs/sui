@@ -7,7 +7,7 @@ use arc_swap::{ArcSwapOption, Guard};
 use consensus_core::{ClientError, TransactionClient};
 use sui_types::{
     error::{SuiError, SuiResult},
-    messages_consensus::{ConsensusTransaction, ConsensusTransactionKind},
+    messages_consensus::{ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind},
 };
 use tap::prelude::*;
 use tokio::time::{sleep, Instant};
@@ -80,7 +80,7 @@ impl ConsensusClient for LazyMysticetiClient {
         &self,
         transactions: &[ConsensusTransaction],
         _epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<BlockStatusReceiver> {
+    ) -> SuiResult<(Vec<ConsensusPosition>, BlockStatusReceiver)> {
         // TODO(mysticeti): confirm comment is still true
         // The retrieved TransactionClient can be from the past epoch. Submit would fail after
         // Mysticeti shuts down, so there should be no correctness issue.
@@ -89,7 +89,7 @@ impl ConsensusClient for LazyMysticetiClient {
             .iter()
             .map(|t| bcs::to_bytes(t).expect("Serializing consensus transaction cannot fail"))
             .collect::<Vec<_>>();
-        let (block_ref, status_waiter) = client
+        let (block_ref, tx_indices, status_waiter) = client
             .as_ref()
             .expect("Client should always be returned")
             .submit(transactions_bytes)
@@ -129,6 +129,15 @@ impl ConsensusClient for LazyMysticetiClient {
             let transaction_key = SequencedConsensusTransactionKey::External(transactions[0].key());
             tracing::info!("Transaction {transaction_key:?} was included in {block_ref}",)
         };
-        Ok(status_waiter)
+
+        // Calculate consensus tx positions
+        let mut consensus_positions = Vec::new();
+        for index in tx_indices {
+            consensus_positions.push(ConsensusPosition {
+                index,
+                block: block_ref,
+            });
+        }
+        Ok((consensus_positions, status_waiter))
     }
 }

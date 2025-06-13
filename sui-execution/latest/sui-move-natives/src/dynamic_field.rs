@@ -131,7 +131,7 @@ pub fn hash_type_and_key(
         Ok(Some(layout)) => layout,
         _ => return Ok(NativeResult::err(cost, E_BCS_SERIALIZATION_FAILURE)),
     };
-    let Some(k_bytes) = k.simple_serialize(&k_layout) else {
+    let Some(k_bytes) = k.typed_serialize(&k_layout) else {
         return Ok(NativeResult::err(cost, E_BCS_SERIALIZATION_FAILURE));
     };
     let Ok(id) = derive_dynamic_field_id(parent, &k_tag, &k_bytes) else {
