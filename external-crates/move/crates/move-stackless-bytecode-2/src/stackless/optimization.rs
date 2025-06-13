@@ -11,14 +11,11 @@ use crate::{
 use std::{collections::BTreeMap, vec};
 
 pub fn inline_constants(function: &mut Function) {
-    println!("Inlining constants in function: {:?}", function);
     let mut constants = BTreeMap::new();
     let mut to_be_removed = vec![];
     // let mut operands_to_change = BTreeMap::new();
     let basic_blocks = function.basic_blocks.iter_mut();
-    println!("Basic blocks: {:?}", basic_blocks);
     basic_blocks.for_each(|(_, bb)| {
-        println!("Inlining block iter: {:?}", bb.label);
         inline_block(bb, &mut constants, &mut to_be_removed);
     });
 
@@ -36,7 +33,6 @@ fn inline_block<'a>(
     constants: &mut BTreeMap<AVar, Value>,
     to_be_removed: &mut Vec<(Label, Label)>,
 ) {
-    println!("Inlining block: {:?}", block.label);
     inline_instructions(
         block.label,
         &mut block.instructions,
@@ -51,7 +47,6 @@ fn inline_instructions<'a>(
     constants: &'_ mut BTreeMap<AVar, Value>,
     to_be_removed: &'_ mut Vec<(Label, Label)>,
 ) {
-    println!("Inlining instructions for block: {block_label}");
     instructions.iter_mut().for_each(|(index, instruction)| {
         process_instruction(block_label, *index, instruction, constants, to_be_removed)
     });
@@ -64,13 +59,11 @@ fn process_instruction<'a>(
     constants: &'_ mut BTreeMap<AVar, Value>,
     to_be_removed: &'_ mut Vec<(Label, Label)>,
 ) {
-    println!("Processing instruction: {inst:?} at block {bb_label}, index {index}");
     match inst {
         Instruction::Assign { lhs, rhs } => {
             match rhs {
                 // Looking for constants in the right-hand side of the assignment
                 RValue::Constant(val) => {
-                    println!("Constant found: {val:?}");
                     let register = lhs
                         .last()
                         .expect("Register expected in constant Assign")
@@ -79,7 +72,6 @@ fn process_instruction<'a>(
                     to_be_removed.push((bb_label, index));
                 }
                 RValue::Operand(Operand::Constant(val)) => {
-                    println!("Constant operand found: {val:?}");
                     let register = lhs
                         .last()
                         .expect("Register expected in constant operand Assign")
@@ -88,7 +80,6 @@ fn process_instruction<'a>(
                     to_be_removed.push((bb_label, index));
                 }
                 RValue::Operand(Operand::Immediate(val)) => {
-                    println!("Immediate operand found: {val:?}");
                     let register = lhs
                         .last()
                         .expect("Register expected in immediate operand Assign")
@@ -116,7 +107,6 @@ fn process_instruction<'a>(
                 RValue::Primitive { op, args } => match op {
                     PrimitiveOp::LdConst => {
                         if let Some(Constant(constant)) = args.first() {
-                            println!("Constant found in primitive: {constant:?}");
                             let register = lhs
                                 .last()
                                 .expect("Register expected in primitive Assign")
