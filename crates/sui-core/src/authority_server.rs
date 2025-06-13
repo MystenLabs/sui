@@ -1151,7 +1151,7 @@ impl ValidatorService {
                 ConsensusTxStatus::FastpathCertified | ConsensusTxStatus::Finalized => status,
             },
             NotifyReadConsensusTxStatusResult::Expired(round) => {
-                return Ok(WaitForEffectsResponse::Expired(round));
+                return Ok(WaitForEffectsResponse::Expired(round.into()));
             }
         };
         // Now that we know the transaction position is accepted by consensus,
@@ -1180,7 +1180,7 @@ impl ValidatorService {
                             continue;
                         }
                         NotifyReadConsensusTxStatusResult::Expired(round) => {
-                            return Ok(WaitForEffectsResponse::Expired(round));
+                            return Ok(WaitForEffectsResponse::Expired(round.into()));
                         }
                     }
                 },
