@@ -3929,10 +3929,6 @@ impl ProtocolConfig {
         self.feature_flags.accept_passkey_in_multisig = val;
     }
 
-    pub fn set_consensus_median_based_commit_timestamp_for_testing(&mut self, val: bool) {
-        self.feature_flags.consensus_median_based_commit_timestamp = val;
-    }
-
     pub fn set_consensus_batched_block_sync_for_testing(&mut self, val: bool) {
         self.feature_flags.consensus_batched_block_sync = val;
     }
