@@ -61,7 +61,7 @@ struct PackageMetadata<F: MoveFlavor> {
     metadata: F::PackageMetadata,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(bound = "")]
 #[serde(rename_all = "kebab-case")]
 pub struct ManifestDependency {
@@ -170,17 +170,22 @@ impl<F: MoveFlavor> Manifest<F> {
     pub fn dependencies(&self) -> DependencySet<UnpinnedDependencyInfo> {
         let mut deps = DependencySet::new();
 
-        for (name, dep) in &self.dependencies {
-            deps.insert(None, name.clone(), dep.dependency_info.clone());
-        }
+        // TODO: this drops everything besides the [UnpinnedDependencyInfo] (e.g. override,
+        // published-at, etc).
+        for env in self.environments().keys() {
+            for (pkg, dep) in self.dependencies.iter() {
+                deps.insert(env.clone(), pkg.clone(), dep.dependency_info.clone());
+            }
 
-        for (env, replacements) in &self.dep_replacements {
-            for (name, dep) in replacements {
-                if let Some(dep) = &dep.dependency {
-                    deps.insert(Some(env.clone()), name.clone(), dep.dependency_info.clone());
+            if let Some(replacements) = self.dep_replacements.get(env) {
+                for (pkg, dep) in replacements {
+                    if let Some(dep) = &dep.dependency {
+                        deps.insert(env.clone(), pkg.clone(), dep.dependency_info.clone());
+                    }
                 }
             }
         }
+
         deps
     }
 
