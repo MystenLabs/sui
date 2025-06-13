@@ -146,13 +146,15 @@ pub struct BalanceIndexInfo {
     pub balance_delta: i128,
 }
 
-impl BalanceIndexInfo {
-    fn from_coin_value(coin_value: u64) -> Self {
+impl From<u64> for BalanceIndexInfo {
+    fn from(coin_value: u64) -> Self {
         Self {
             balance_delta: coin_value as i128,
         }
     }
+}
 
+impl BalanceIndexInfo {
     fn invert(self) -> Self {
         // Check for potential overflow when negating i128::MIN
         assert!(
@@ -300,7 +302,7 @@ impl IndexStoreTables {
                 coin_type: struct_tag,
             };
 
-            let mut delta = BalanceIndexInfo::from_coin_value(value);
+            let mut delta = BalanceIndexInfo::from(value);
             if is_removal {
                 delta = delta.invert();
             }
@@ -1134,7 +1136,7 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
                 // Track balance for coins
                 if let Some((coin_type, value)) = get_balance_and_type_if_coin(&object)? {
                     let balance_key = BalanceKey { owner, coin_type };
-                    let balance_info = BalanceIndexInfo::from_coin_value(value);
+                    let balance_info = BalanceIndexInfo::from(value);
                     self.batch
                         .partial_merge_batch(&self.tables.balance, [(balance_key, balance_info)])?;
                 }
