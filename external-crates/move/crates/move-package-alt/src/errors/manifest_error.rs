@@ -14,7 +14,7 @@ use codespan_reporting::{
 };
 use thiserror::Error;
 
-use crate::package::PackageName;
+use crate::package::{EnvironmentName, PackageName};
 
 use super::FileHandle;
 
@@ -34,6 +34,13 @@ pub enum ManifestErrorKind {
     InvalidEdition { edition: String, valid: String },
     #[error("externally resolved dependencies must have exactly one resolver field")]
     BadExternalDependency,
+    #[error("environment {env} is not in the [environments] table")]
+    MissingEnvironment { env: EnvironmentName },
+    #[error(
+        // TODO: add a suggested environment (needs to be part of the flavor)
+        "you must define at least one environment in the [environments] section of `Move.toml`."
+    )]
+    NoEnvironments,
 }
 
 impl ManifestError {

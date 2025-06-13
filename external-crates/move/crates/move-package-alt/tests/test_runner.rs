@@ -16,6 +16,7 @@ use move_package_alt::{
     package::{lockfile::Lockfile, manifest::Manifest, paths::PackagePath},
 };
 use std::path::Path;
+use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
 /// Resolve the package contained in the same directory as [path], and snapshot a value based
@@ -129,10 +130,11 @@ fn _run_graph_test_wrapper(path: &Path) -> Result<String, Box<dyn std::error::Er
 async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String> {
     let manifest = Manifest::<Vanilla>::read_from_file(input_path).unwrap();
 
-    let deps: DependencySet<UnpinnedDependencyInfo<Vanilla>> = manifest.dependencies();
+    let deps: DependencySet<UnpinnedDependencyInfo> = manifest.dependencies();
+    debug!("{deps:?}");
 
     add_bindir();
-    let pinned = dependency::pin(&Vanilla, deps, manifest.environments()).await;
+    let pinned = dependency::pin::<Vanilla>(deps, manifest.environments()).await;
 
     let output = match pinned {
         Ok(ref deps) => format!("{deps:?}"),
