@@ -4,30 +4,25 @@
 
 use std::{
     collections::BTreeMap,
-    error::Error,
-    fmt::{self, Debug, Display, Formatter},
-    ops::Range,
     path::{Path, PathBuf},
 };
 
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
-    files::SimpleFiles,
     term::{
         self,
         termcolor::{ColorChoice, StandardStream},
     },
 };
 
-use derive_where::derive_where;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use thiserror::Error;
-use tracing::{debug, info};
+use tracing::debug;
 
 use crate::{
     dependency::{DependencySet, UnpinnedDependencyInfo},
-    errors::{FileHandle, Files, Located, Location, PackageResult, TheFile},
-    flavor::{MoveFlavor, Vanilla},
+    errors::{FileHandle, Files, Located, Location, TheFile},
+    flavor::MoveFlavor,
 };
 
 use super::*;
@@ -101,41 +96,37 @@ pub struct ManifestDependencyReplacement {
 }
 
 #[derive(Error, Debug)]
-pub enum ManifestError {
+#[error("{kind}")]
+pub struct ManifestError {
+    pub kind: ManifestErrorKind,
+    location: ErrorLocation,
+}
+
+#[derive(Debug)]
+enum ErrorLocation {
+    WholeFile(PathBuf),
+    AtLoc(Location),
+}
+
+#[derive(Error, Debug)]
+pub enum ManifestErrorKind {
     #[error("package name cannot be empty")]
-    EmptyPackageName { loc: Location },
-
-    #[error("unsupported edition '{}', expected one of '{valid}'", edition.as_ref())]
-    InvalidEdition {
-        edition: Located<String>,
-        valid: String,
-    },
-
+    EmptyPackageName,
+    #[error("unsupported edition '{edition}', expected one of '{valid}'")]
+    InvalidEdition { edition: String, valid: String },
     #[error("externally resolved dependencies must have exactly one resolver field")]
-    BadExternalDependency { loc: Location },
-
+    BadExternalDependency,
     #[error("environment {env} is not in the [environments] table")]
-    MissingEnvironment { env: EnvironmentName, loc: Location },
-
+    MissingEnvironment { env: EnvironmentName },
     #[error(
         // TODO: add a suggested environment (needs to be part of the flavor)
         "you must define at least one environment in the [environments] section of `Move.toml`."
     )]
-    NoEnvironments { file: FileHandle },
-
-    #[error("{}", source.message())]
-    ParseError {
-        file: FileHandle,
-        #[source]
-        source: toml_edit::de::Error,
-    },
-
-    #[error("unable to read file: {source}")]
-    IoError {
-        file: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
+    NoEnvironments,
+    #[error("{}", .0.message())]
+    ParseError(#[from] toml_edit::de::Error),
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
 }
 
 type ManifestResult<T> = Result<T, ManifestError>;
@@ -145,12 +136,11 @@ impl<F: MoveFlavor> Manifest<F> {
     // TODO: probably return a more specific error
     pub fn read_from_file(path: impl AsRef<Path>) -> ManifestResult<Self> {
         debug!("Reading manifest from {:?}", path.as_ref());
-        let contents = std::fs::read_to_string(&path).map_err(ManifestError::io_error(&path))?;
 
         let (manifest, file_id) = TheFile::with_file(&path, toml_edit::de::from_str::<Self>)
-            .map_err(ManifestError::io_error(&path))?;
+            .map_err(ManifestError::with_file(&path))?;
 
-        let manifest = manifest.map_err(ManifestError::toml_error(file_id))?;
+        let manifest = manifest.map_err(ManifestError::from_toml(file_id))?;
 
         manifest.validate_manifest(file_id)?;
         Ok(manifest)
@@ -163,49 +153,43 @@ impl<F: MoveFlavor> Manifest<F> {
         // Validate package name
         // TODO: this should be impossible now, since [Identifier]s can't be empty
         if self.package.name.as_ref().is_empty() {
-            return Err(ManifestError::EmptyPackageName {
-                loc: self.package.name.location().clone(),
-            });
+            return Err(ManifestError::with_span(self.package.name.location())(
+                ManifestErrorKind::EmptyPackageName,
+            ));
         }
 
         // Validate edition
         if !ALLOWED_EDITIONS.contains(&self.package.edition.as_ref().as_str()) {
-            return Err(ManifestError::InvalidEdition {
-                edition: self.package.edition.clone(),
-                valid: ALLOWED_EDITIONS.join(", ").to_string(),
-            });
+            return Err(ManifestError::with_span(self.package.edition.location())(
+                ManifestErrorKind::InvalidEdition {
+                    edition: self.package.edition.as_ref().clone(),
+                    valid: ALLOWED_EDITIONS.join(", ").to_string(),
+                },
+            ));
         }
 
         // Are there any environments?
         if self.environments().is_empty() {
-            return Err(ManifestError::NoEnvironments { file: handle });
+            return Err(ManifestError::with_file(handle.path())(
+                ManifestErrorKind::NoEnvironments,
+            ));
         }
 
         // Do all dep-replacements have valid environments?
         // TODO: maybe better to do by making an `Environment` type?
         for (env, entries) in self.dep_replacements.iter() {
             if !self.environments().contains_key(env) {
-                return Err(ManifestError::MissingEnvironment {
-                    loc: entries
-                        .first_key_value()
-                        .expect("dep-replacements.<env> only exists if it has a dep")
-                        .1
-                        .location()
-                        .clone(),
-                    env: env.clone(),
-                });
+                let loc = entries
+                    .first_key_value()
+                    .expect("dep-replacements.<env> only exists if it has a dep")
+                    .1
+                    .location();
+
+                return Err(ManifestError::with_span(loc)(
+                    ManifestErrorKind::MissingEnvironment { env: env.clone() },
+                ));
             }
         }
-
-        Ok(())
-    }
-
-    fn write_template(path: impl AsRef<Path>, name: &PackageName) -> PackageResult<()> {
-        std::fs::write(
-            path,
-            r###"
-            "###,
-        )?;
 
         Ok(())
     }
@@ -258,50 +242,41 @@ pub fn digest(data: &[u8]) -> Digest {
 }
 
 impl ManifestError {
-    fn io_error(path: impl AsRef<Path>) -> impl Fn(std::io::Error) -> ManifestError {
-        move |source| Self::IoError {
-            file: path.as_ref().to_path_buf(),
-            source,
+    fn with_file<T: Into<ManifestErrorKind>>(path: impl AsRef<Path>) -> impl Fn(T) -> Self {
+        move |e| ManifestError {
+            kind: e.into(),
+            location: ErrorLocation::WholeFile(path.as_ref().to_path_buf()),
         }
     }
 
-    fn toml_error(file: FileHandle) -> impl Fn(toml_edit::de::Error) -> ManifestError {
-        move |source| Self::ParseError { file, source }
-    }
-
-    fn file(&self) -> &Path {
-        match self {
-            ManifestError::EmptyPackageName { loc } => loc.path(),
-            ManifestError::InvalidEdition { edition, .. } => edition.path(),
-            ManifestError::BadExternalDependency { loc } => loc.path(),
-            ManifestError::MissingEnvironment { loc, .. } => loc.path(),
-            ManifestError::NoEnvironments { file } => file.path(),
-            ManifestError::ParseError { file, .. } => file.path(),
-            ManifestError::IoError { file, .. } => file,
+    fn with_span<T: Into<ManifestErrorKind>>(loc: &Location) -> impl Fn(T) -> Self {
+        move |e| ManifestError {
+            kind: e.into(),
+            location: ErrorLocation::AtLoc(loc.clone()),
         }
     }
 
-    fn location(&self) -> Option<Location> {
-        match self {
-            ManifestError::EmptyPackageName { loc } => Some(loc.clone()),
-            ManifestError::InvalidEdition { edition, .. } => Some(edition.location().clone()),
-            ManifestError::BadExternalDependency { loc } => Some(loc.clone()),
-            ManifestError::MissingEnvironment { env, loc } => Some(loc.clone()),
-            ManifestError::NoEnvironments { file } => None,
-            ManifestError::ParseError { file, source } => {
-                source.span().map(|span| Location::new(*file, span))
+    fn from_toml(file: FileHandle) -> impl Fn(toml_edit::de::Error) -> Self {
+        move |e| {
+            let location = e
+                .span()
+                .map(|span| ErrorLocation::AtLoc(Location::new(file, span)))
+                .unwrap_or(ErrorLocation::WholeFile(file.path().to_path_buf()));
+            ManifestError {
+                kind: e.into(),
+                location,
             }
-            ManifestError::IoError { file, source } => None,
         }
     }
 
     /// Convert this error into a codespan Diagnostic
     pub fn to_diagnostic(&self) -> Diagnostic<FileHandle> {
-        match self.location() {
-            None => Diagnostic::error()
-                .with_message(format!("Error while loading `{:?}`: {self}", self.file())),
-            Some(loc) => Diagnostic::error()
-                .with_message(format!("Error while loading `{:?}`", self.file()))
+        match &self.location {
+            ErrorLocation::WholeFile(path) => {
+                Diagnostic::error().with_message(format!("Error while loading `{path:?}`: {self}"))
+            }
+            ErrorLocation::AtLoc(loc) => Diagnostic::error()
+                .with_message(format!("Error while loading `{:?}`", loc.file()))
                 .with_labels(vec![Label::primary(loc.file(), loc.span().clone())])
                 .with_notes(vec![self.to_string()]),
         }
