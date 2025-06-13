@@ -108,11 +108,10 @@ fn pkg_path_of(pkg_name: &str) -> PathBuf {
 }
 
 fn build_pkg_at_path(path: &Path) -> (Vec<u8>, Vec<Vec<u8>>, Vec<ObjectID>) {
-    let with_unpublished_deps = false;
     let package = BuildConfig::new_for_testing().build(path).unwrap();
     (
-        package.get_package_digest(with_unpublished_deps).to_vec(),
-        package.get_package_bytes(with_unpublished_deps),
+        package.get_package_digest().to_vec(),
+        package.get_package_bytes(),
         package.get_published_dependencies_ids(),
     )
 }
@@ -125,11 +124,10 @@ pub fn build_upgrade_test_modules_with_dep_addr(
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", "move_upgrade", test_dir]);
     let package = build_test_modules_with_dep_addr(&path, dep_original_addresses, dep_ids);
-    let with_unpublished_deps = false;
     (
-        package.get_package_digest(with_unpublished_deps).to_vec(),
-        package.get_package_bytes(with_unpublished_deps),
-        package.dependency_ids.published.values().cloned().collect(),
+        package.get_package_digest().to_vec(),
+        package.get_package_bytes(),
+        package.dependency_ids,
     )
 }
 
@@ -188,7 +186,6 @@ impl UpgradeStateRunner {
             &sender_key,
             &gas_object_id,
             base_package_name,
-            /* with_unpublished_deps */ false,
         )
         .await;
 
@@ -1467,7 +1464,7 @@ async fn test_upgrade_max_packages() {
 
     //
     // Build and publish max number of packages allowed
-    let (_, modules, dependencies) = build_package("move_upgrade/base", false);
+    let (_, modules, dependencies) = build_package("move_upgrade/base");
 
     // push max number of packages allowed to publish
     let max_pub_cmd = authority
@@ -1488,7 +1485,7 @@ async fn test_upgrade_max_packages() {
     assert_eq!(effects.status(), &ExecutionStatus::Success);
 
     // collect package and upgrade caps
-    let (digest, modules, dep_ids) = build_package("move_upgrade/base", false);
+    let (digest, modules, dep_ids) = build_package("move_upgrade/base");
     let packages_and_upgrades = collect_packages_and_upgrade_caps(&authority, &effects).await;
     // (package id, upgrade cap ref, policy, digest, dep ids, modules)
     let mut package_upgrades: Vec<UpgradeData> = vec![];
@@ -1522,7 +1519,7 @@ async fn test_upgrade_more_than_max_packages_error() {
 
     //
     // Build and publish max number of packages allowed
-    let (_, modules, dependencies) = build_package("move_upgrade/base", false);
+    let (_, modules, dependencies) = build_package("move_upgrade/base");
 
     // push max number of packages allowed to publish
     let max_pub_cmd = authority
@@ -1543,7 +1540,7 @@ async fn test_upgrade_more_than_max_packages_error() {
     assert_eq!(effects.status(), &ExecutionStatus::Success);
 
     // collect package and upgrade caps
-    let (digest, modules, dep_ids) = build_package("move_upgrade/base", false);
+    let (digest, modules, dep_ids) = build_package("move_upgrade/base");
     let packages_and_upgrades = collect_packages_and_upgrade_caps(&authority, &effects).await;
     // (package id, upgrade cap ref, policy, digest, dep ids, modules)
     let mut package_upgrades: Vec<UpgradeData> = vec![];
@@ -1557,7 +1554,7 @@ async fn test_upgrade_more_than_max_packages_error() {
             modules: modules.clone(),
         });
     }
-    let (_, modules, dependencies) = build_package("object_basics", false);
+    let (_, modules, dependencies) = build_package("object_basics");
     let packages = vec![(modules, dependencies); 2];
 
     // Upgrade all packages

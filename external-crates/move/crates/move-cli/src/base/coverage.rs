@@ -9,7 +9,8 @@ use move_coverage::{
     lcov, source_coverage::SourceCoverageBuilder, summary::summarize_inst_cov,
 };
 use move_disassembler::disassembler::Disassembler;
-use move_package::BuildConfig;
+use move_package_alt_compilation::build_config::BuildConfig;
+
 use move_trace_format::format::MoveTraceReader;
 use std::{
     fs::File,
@@ -68,173 +69,173 @@ pub struct Coverage {
 }
 
 impl Coverage {
-    pub fn execute(self, path: Option<&Path>, config: BuildConfig) -> anyhow::Result<()> {
-        let path = reroot_path(path)?;
+    // pub fn execute(self, path: Option<&Path>, config: BuildConfig) -> anyhow::Result<()> {
+    //     let path = reroot_path(path)?;
+    //
+    //     // We treat lcov-format coverage differently because it requires traces to be present, and
+    //     // we don't use the old trace format for it.
+    //     if let CoverageSummaryOptions::Lcov { differential, test } = self.options {
+    //         return Self::output_lcov_coverage(path, config, differential, test);
+    //     }
+    //
+    //     let package = config.compile_package(&path, &mut Vec::new())?;
+    //     let modules = package.root_modules().map(|unit| &unit.unit.module);
+    //     let coverage_map = CoverageMap::from_binary_file(path.join(".coverage_map.mvcov"))?;
+    //     match self.options {
+    //         CoverageSummaryOptions::Source { module_name } => {
+    //             let unit = package.get_module_by_name_from_root(&module_name)?;
+    //             let source_path = &unit.source_path;
+    //             let NamedCompiledModule {
+    //                 module, source_map, ..
+    //             } = &unit.unit;
+    //             let source_coverage = SourceCoverageBuilder::new(module, &coverage_map, source_map);
+    //             source_coverage
+    //                 .compute_source_coverage(source_path)
+    //                 .output_source_coverage(&mut std::io::stdout())
+    //                 .unwrap();
+    //         }
+    //         CoverageSummaryOptions::Summary {
+    //             functions,
+    //             output_csv,
+    //             ..
+    //         } => {
+    //             let coverage_map = coverage_map.to_unified_exec_map();
+    //             if output_csv {
+    //                 format_csv_summary(
+    //                     modules,
+    //                     &coverage_map,
+    //                     summarize_inst_cov,
+    //                     &mut std::io::stdout(),
+    //                 )
+    //             } else {
+    //                 format_human_summary(
+    //                     modules,
+    //                     &coverage_map,
+    //                     summarize_inst_cov,
+    //                     &mut std::io::stdout(),
+    //                     functions,
+    //                 )
+    //             }
+    //         }
+    //         CoverageSummaryOptions::Bytecode { module_name } => {
+    //             let unit = package.get_module_by_name_from_root(&module_name)?;
+    //             let mut disassembler = Disassembler::from_unit(&unit.unit);
+    //             disassembler.add_coverage_map(coverage_map.to_unified_exec_map());
+    //             println!("{}", disassembler.disassemble()?);
+    //         }
+    //         CoverageSummaryOptions::Lcov { .. } => {
+    //             unreachable!()
+    //         }
+    //     }
+    //     Ok(())
+    // }
 
-        // We treat lcov-format coverage differently because it requires traces to be present, and
-        // we don't use the old trace format for it.
-        if let CoverageSummaryOptions::Lcov { differential, test } = self.options {
-            return Self::output_lcov_coverage(path, config, differential, test);
-        }
-
-        let package = config.compile_package(&path, &mut Vec::new())?;
-        let modules = package.root_modules().map(|unit| &unit.unit.module);
-        let coverage_map = CoverageMap::from_binary_file(path.join(".coverage_map.mvcov"))?;
-        match self.options {
-            CoverageSummaryOptions::Source { module_name } => {
-                let unit = package.get_module_by_name_from_root(&module_name)?;
-                let source_path = &unit.source_path;
-                let NamedCompiledModule {
-                    module, source_map, ..
-                } = &unit.unit;
-                let source_coverage = SourceCoverageBuilder::new(module, &coverage_map, source_map);
-                source_coverage
-                    .compute_source_coverage(source_path)
-                    .output_source_coverage(&mut std::io::stdout())
-                    .unwrap();
-            }
-            CoverageSummaryOptions::Summary {
-                functions,
-                output_csv,
-                ..
-            } => {
-                let coverage_map = coverage_map.to_unified_exec_map();
-                if output_csv {
-                    format_csv_summary(
-                        modules,
-                        &coverage_map,
-                        summarize_inst_cov,
-                        &mut std::io::stdout(),
-                    )
-                } else {
-                    format_human_summary(
-                        modules,
-                        &coverage_map,
-                        summarize_inst_cov,
-                        &mut std::io::stdout(),
-                        functions,
-                    )
-                }
-            }
-            CoverageSummaryOptions::Bytecode { module_name } => {
-                let unit = package.get_module_by_name_from_root(&module_name)?;
-                let mut disassembler = Disassembler::from_unit(&unit.unit);
-                disassembler.add_coverage_map(coverage_map.to_unified_exec_map());
-                println!("{}", disassembler.disassemble()?);
-            }
-            CoverageSummaryOptions::Lcov { .. } => {
-                unreachable!()
-            }
-        }
-        Ok(())
-    }
-
-    pub fn output_lcov_coverage(
-        path: PathBuf,
-        mut config: BuildConfig,
-        differential: Option<String>,
-        test: Option<String>,
-    ) -> anyhow::Result<()> {
-        // Make sure we always compile the package in test mode so we get correct source maps.
-        config.test_mode = true;
-        let package = config.compile_package(&path, &mut Vec::new())?;
-        let units: Vec<_> = package
-            .all_modules()
-            .cloned()
-            .map(|unit| (unit.unit, unit.source_path))
-            .collect();
-        let traces = path.join("traces");
-        let sanitize_name = |s: &str| s.replace("::", "__");
-        let trace_of_test = |test_name: &str| {
-            let trace_substr_name = format!("{}.", sanitize_name(test_name));
-            std::fs::read_dir(&traces)?
-                .filter_map(|entry| {
-                    let entry = entry.unwrap();
-                    let path = entry.path();
-                    if path.is_file()
-                        && path
-                            .file_name()
-                            .unwrap()
-                            .to_str()
-                            .unwrap()
-                            .contains(&trace_substr_name)
-                    {
-                        Some(path)
-                    } else {
-                        None
-                    }
-                })
-            .next()
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "No trace found for test {}. Please run with `--coverage` to generate traces.",
-                    test_name
-                )
-            })
-        };
-
-        if let Some(test_name) = test {
-            let mut coverage = lcov::PackageRecordKeeper::new(units, package.file_map.clone());
-            let trace_path = trace_of_test(&test_name)?;
-            let file = File::open(&trace_path)?;
-            let move_trace_reader = MoveTraceReader::new(file)?;
-            coverage.calculate_coverage(move_trace_reader);
-            std::fs::write(
-                &path.join(format!(
-                    "{}.{COVERAGE_FILE_NAME}",
-                    sanitize_name(&test_name)
-                )),
-                coverage.lcov_record_string(),
-            )?;
-        } else {
-            let mut coverage =
-                lcov::PackageRecordKeeper::new(units.clone(), package.file_map.clone());
-            let differential_test_path = differential
-                .as_ref()
-                .map(|s| trace_of_test(s))
-                .transpose()?;
-
-            for entry in std::fs::read_dir(&traces)? {
-                let entry = entry?;
-                let path = entry.path();
-                if path.is_file()
-                    && differential_test_path
-                        .as_ref()
-                        .is_none_or(|diff_path| diff_path != &path)
-                {
-                    let file = File::open(&path)?;
-                    let move_trace_reader = MoveTraceReader::new(file)?;
-                    coverage.calculate_coverage(move_trace_reader);
-                }
-            }
-
-            if let Some(differential_test_name) = differential {
-                let trace_path =
-                    differential_test_path.expect("Differential test path is already computed");
-                let file = File::open(&trace_path)?;
-                let move_trace_reader = MoveTraceReader::new(file)?;
-                let mut test_coverage =
-                    lcov::PackageRecordKeeper::new(units, package.file_map.clone());
-                test_coverage.calculate_coverage(move_trace_reader);
-
-                let differential_string =
-                    differential_coverage::differential_report(&coverage, &test_coverage)?;
-
-                std::fs::write(
-                    &path.join(format!(
-                        "{}.{DIFFERENTIAL}.{COVERAGE_FILE_NAME}",
-                        sanitize_name(&differential_test_name)
-                    )),
-                    differential_string,
-                )?;
-            } else {
-                std::fs::write(
-                    &path.join(COVERAGE_FILE_NAME),
-                    coverage.lcov_record_string(),
-                )?;
-            }
-        };
-
-        Ok(())
-    }
+    // pub fn output_lcov_coverage(
+    //     path: PathBuf,
+    //     mut config: BuildConfig,
+    //     differential: Option<String>,
+    //     test: Option<String>,
+    // ) -> anyhow::Result<()> {
+    //     // Make sure we always compile the package in test mode so we get correct source maps.
+    //     config.test_mode = true;
+    //     let package = config.compile_package(&path, &mut Vec::new())?;
+    //     let units: Vec<_> = package
+    //         .all_modules()
+    //         .cloned()
+    //         .map(|unit| (unit.unit, unit.source_path))
+    //         .collect();
+    //     let traces = path.join("traces");
+    //     let sanitize_name = |s: &str| s.replace("::", "__");
+    //     let trace_of_test = |test_name: &str| {
+    //         let trace_substr_name = format!("{}.", sanitize_name(test_name));
+    //         std::fs::read_dir(&traces)?
+    //             .filter_map(|entry| {
+    //                 let entry = entry.unwrap();
+    //                 let path = entry.path();
+    //                 if path.is_file()
+    //                     && path
+    //                         .file_name()
+    //                         .unwrap()
+    //                         .to_str()
+    //                         .unwrap()
+    //                         .contains(&trace_substr_name)
+    //                 {
+    //                     Some(path)
+    //                 } else {
+    //                     None
+    //                 }
+    //             })
+    //         .next()
+    //         .ok_or_else(|| {
+    //             anyhow::anyhow!(
+    //                 "No trace found for test {}. Please run with `--coverage` to generate traces.",
+    //                 test_name
+    //             )
+    //         })
+    //     };
+    //
+    //     if let Some(test_name) = test {
+    //         let mut coverage = lcov::PackageRecordKeeper::new(units, package.file_map.clone());
+    //         let trace_path = trace_of_test(&test_name)?;
+    //         let file = File::open(&trace_path)?;
+    //         let move_trace_reader = MoveTraceReader::new(file)?;
+    //         coverage.calculate_coverage(move_trace_reader);
+    //         std::fs::write(
+    //             &path.join(format!(
+    //                 "{}.{COVERAGE_FILE_NAME}",
+    //                 sanitize_name(&test_name)
+    //             )),
+    //             coverage.lcov_record_string(),
+    //         )?;
+    //     } else {
+    //         let mut coverage =
+    //             lcov::PackageRecordKeeper::new(units.clone(), package.file_map.clone());
+    //         let differential_test_path = differential
+    //             .as_ref()
+    //             .map(|s| trace_of_test(s))
+    //             .transpose()?;
+    //
+    //         for entry in std::fs::read_dir(&traces)? {
+    //             let entry = entry?;
+    //             let path = entry.path();
+    //             if path.is_file()
+    //                 && differential_test_path
+    //                     .as_ref()
+    //                     .is_none_or(|diff_path| diff_path != &path)
+    //             {
+    //                 let file = File::open(&path)?;
+    //                 let move_trace_reader = MoveTraceReader::new(file)?;
+    //                 coverage.calculate_coverage(move_trace_reader);
+    //             }
+    //         }
+    //
+    //         if let Some(differential_test_name) = differential {
+    //             let trace_path =
+    //                 differential_test_path.expect("Differential test path is already computed");
+    //             let file = File::open(&trace_path)?;
+    //             let move_trace_reader = MoveTraceReader::new(file)?;
+    //             let mut test_coverage =
+    //                 lcov::PackageRecordKeeper::new(units, package.file_map.clone());
+    //             test_coverage.calculate_coverage(move_trace_reader);
+    //
+    //             let differential_string =
+    //                 differential_coverage::differential_report(&coverage, &test_coverage)?;
+    //
+    //             std::fs::write(
+    //                 &path.join(format!(
+    //                     "{}.{DIFFERENTIAL}.{COVERAGE_FILE_NAME}",
+    //                     sanitize_name(&differential_test_name)
+    //                 )),
+    //                 differential_string,
+    //             )?;
+    //         } else {
+    //             std::fs::write(
+    //                 &path.join(COVERAGE_FILE_NAME),
+    //                 coverage.lcov_record_string(),
+    //             )?;
+    //         }
+    //     };
+    //
+    //     Ok(())
+    // }
 }

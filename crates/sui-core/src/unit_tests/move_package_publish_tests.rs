@@ -162,7 +162,7 @@ async fn test_publish_duplicate_modules() {
     let rgp = authority.reference_gas_price_for_testing().unwrap();
 
     // empty package
-    let mut modules = build_test_package("object_owner", /* with_unpublished_deps */ false);
+    let mut modules = build_test_package("object_owner");
     assert_eq!(modules.len(), 1);
     modules.push(modules[0].clone());
     let data = TransactionData::new_module(
@@ -326,8 +326,7 @@ async fn test_publish_extraneous_bytes_modules() {
     let rgp = authority.reference_gas_price_for_testing().unwrap();
 
     // test valid module bytes
-    let correct_modules =
-        build_test_package("object_owner", /* with_unpublished_deps */ false);
+    let correct_modules = build_test_package("object_owner");
     assert_eq!(correct_modules.len(), 1);
     let data = TransactionData::new_module(
         sender,
@@ -444,7 +443,7 @@ async fn test_publish_max_packages() {
     let gas_object_id = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas_object_id)]).await;
 
-    let (_, modules, dependencies) = build_package("object_basics", false);
+    let (_, modules, dependencies) = build_package("object_basics");
 
     // push max number of packages allowed to publish
     let max_pub_cmd = authority
@@ -472,7 +471,7 @@ async fn test_publish_more_than_max_packages_error() {
     let gas_object_id = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas_object_id)]).await;
 
-    let (_, modules, dependencies) = build_package("object_basics", false);
+    let (_, modules, dependencies) = build_package("object_basics");
 
     // push max number of packages allowed to publish
     let max_pub_cmd = authority

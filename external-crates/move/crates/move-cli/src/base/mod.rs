@@ -11,7 +11,7 @@ pub mod new;
 pub mod summary;
 pub mod test;
 
-use move_package::source_package::layout::SourcePackageLayout;
+use move_package_alt::package::layout::SourcePackageLayout;
 use std::path::{Path, PathBuf};
 
 pub fn reroot_path(path: Option<&Path>) -> anyhow::Result<PathBuf> {

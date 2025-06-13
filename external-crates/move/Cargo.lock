@@ -2206,7 +2206,8 @@ dependencies = [
  "move-docgen",
  "move-ir-types",
  "move-model-2",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-stdlib",
  "move-stdlib-natives",
  "move-symbol-pool",
@@ -2221,6 +2222,7 @@ dependencies = [
  "serde_yaml",
  "similar",
  "tempfile",
+ "tokio",
  "toml_edit 0.22.24",
  "walkdir",
 ]

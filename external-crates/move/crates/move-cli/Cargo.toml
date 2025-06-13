@@ -40,12 +40,14 @@ move-vm-runtime.workspace = true
 move-vm-profiler.workspace = true
 move-vm-test-utils.workspace = true
 move-binary-format.workspace = true
-move-package.workspace = true
+move-package-alt.workspace = true
+move-package-alt-compilation.workspace = true
 move-symbol-pool.workspace = true
 move-unit-test.workspace = true
 move-bytecode-viewer.workspace = true
 move-model-2.workspace = true
 move-trace-format.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true

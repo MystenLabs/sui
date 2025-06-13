@@ -7,7 +7,7 @@ use move_binary_format::CompiledModule;
 use move_command_line_common::files::{MOVE_COMPILED_EXTENSION, extension_equals, find_filenames};
 use move_core_types::account_address::AccountAddress;
 use move_model_2 as M2;
-use move_package::{BuildConfig, resolution::resolution_graph::ResolvedGraph};
+// use move_package::resolution::resolution_graph::ResolvedGraph;
 use move_symbol_pool::Symbol;
 use serde::Serialize;
 use std::{
@@ -48,78 +48,78 @@ pub enum SummaryOutputFormat {
 }
 
 impl Summary {
-    pub fn execute<T: Serialize + ?Sized, F: FnMut(&mut ResolvedGraph) -> anyhow::Result<()>>(
-        self,
-        path: Option<&Path>,
-        config: BuildConfig,
-        additional_metadata: Option<&T>,
-        address_derivation_fn_opt: Option<F>,
-    ) -> anyhow::Result<()> {
-        let model_source;
-        let model_compiled;
-
-        let (summary, address_mapping) = if self.bytecode {
-            let input_path = path.unwrap_or_else(|| Path::new("."));
-            let bytecode_files = find_filenames(&[input_path], |path| {
-                extension_equals(path, MOVE_COMPILED_EXTENSION)
-            })?;
-
-            let mut modules = Vec::new();
-            for bytecode_file in &bytecode_files {
-                let bytes = std::fs::read(bytecode_file)?;
-                modules.push(CompiledModule::deserialize_with_defaults(&bytes)?);
-            }
-
-            let mut seen_modules = BTreeSet::new();
-            for m in &modules {
-                if !seen_modules.insert(m.self_id()) {
-                    return Err(anyhow::anyhow!(
-                        "Duplicate module found: {}. One of these would be lost when producing summaries. \
-                         This is most likely because a module that occurs across packages but uses the same address value for the \
-                         package address (e.g., `0x0`) is present.",
-                        m.self_id()
-                    ));
-                }
-            }
-
-            model_compiled = M2::compiled_model::Model::from_compiled(&BTreeMap::new(), modules);
-            (
-                model_compiled.summary(),
-                model_compiled
-                    .packages()
-                    .map(|p| {
-                        (
-                            Symbol::from(p.address().to_canonical_string(/* with_prefix */ true)),
-                            p.address(),
-                        )
-                    })
-                    .collect::<BTreeMap<_, _>>(),
-            )
-        } else {
-            let mut resolved_graph = config.resolution_graph_for_package(
-                &reroot_path(path).unwrap(),
-                None,
-                &mut std::io::stdout(),
-            )?;
-            let original_address_mapping = resolved_graph.extract_named_address_mapping().collect();
-            if let Some(mut f) = address_derivation_fn_opt {
-                f(&mut resolved_graph)?;
-            }
-            model_source = BuildConfig::move_model_for_resolution_graph(
-                resolved_graph,
-                &mut std::io::stdout(),
-            )?;
-            (model_source.summary(), original_address_mapping)
-        };
-
-        self.output_summaries(summary, address_mapping, additional_metadata)?;
-
-        println!(
-            "\nSummary generation successful. Summaries stored in '{}'",
-            self.output_directory
-        );
-        Ok(())
-    }
+    // pub fn execute<T: Serialize + ?Sized, F: FnMut(&mut ResolvedGraph) -> anyhow::Result<()>>(
+    //     self,
+    //     path: Option<&Path>,
+    //     config: BuildConfig,
+    //     additional_metadata: Option<&T>,
+    //     address_derivation_fn_opt: Option<F>,
+    // ) -> anyhow::Result<()> {
+    //     let model_source;
+    //     let model_compiled;
+    //
+    //     let (summary, address_mapping) = if self.bytecode {
+    //         let input_path = path.unwrap_or_else(|| Path::new("."));
+    //         let bytecode_files = find_filenames(&[input_path], |path| {
+    //             extension_equals(path, MOVE_COMPILED_EXTENSION)
+    //         })?;
+    //
+    //         let mut modules = Vec::new();
+    //         for bytecode_file in &bytecode_files {
+    //             let bytes = std::fs::read(bytecode_file)?;
+    //             modules.push(CompiledModule::deserialize_with_defaults(&bytes)?);
+    //         }
+    //
+    //         let mut seen_modules = BTreeSet::new();
+    //         for m in &modules {
+    //             if !seen_modules.insert(m.self_id()) {
+    //                 return Err(anyhow::anyhow!(
+    //                     "Duplicate module found: {}. One of these would be lost when producing summaries. \
+    //                      This is most likely because a module that occurs across packages but uses the same address value for the \
+    //                      package address (e.g., `0x0`) is present.",
+    //                     m.self_id()
+    //                 ));
+    //             }
+    //         }
+    //
+    //         model_compiled = M2::compiled_model::Model::from_compiled(&BTreeMap::new(), modules);
+    //         (
+    //             model_compiled.summary(),
+    //             model_compiled
+    //                 .packages()
+    //                 .map(|p| {
+    //                     (
+    //                         Symbol::from(p.address().to_canonical_string(/* with_prefix */ true)),
+    //                         p.address(),
+    //                     )
+    //                 })
+    //                 .collect::<BTreeMap<_, _>>(),
+    //         )
+    //     } else {
+    //         let mut resolved_graph = config.resolution_graph_for_package(
+    //             &reroot_path(path).unwrap(),
+    //             None,
+    //             &mut std::io::stdout(),
+    //         )?;
+    //         let original_address_mapping = resolved_graph.extract_named_address_mapping().collect();
+    //         if let Some(mut f) = address_derivation_fn_opt {
+    //             f(&mut resolved_graph)?;
+    //         }
+    //         model_source = BuildConfig::move_model_for_resolution_graph(
+    //             resolved_graph,
+    //             &mut std::io::stdout(),
+    //         )?;
+    //         (model_source.summary(), original_address_mapping)
+    //     };
+    //
+    //     self.output_summaries(summary, address_mapping, additional_metadata)?;
+    //
+    //     println!(
+    //         "\nSummary generation successful. Summaries stored in '{}'",
+    //         self.output_directory
+    //     );
+    //     Ok(())
+    // }
 
     fn output_summaries<T: Serialize + ?Sized>(
         &self,

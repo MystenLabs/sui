@@ -45,7 +45,7 @@ impl PackagePublishTxGenerator {
                 )])
                 .build(&target_path)
                 .unwrap();
-                compiled_package.get_package_bytes(false)
+                compiled_package.get_package_bytes()
             } else {
                 let toml = parse_move_manifest_from_file(&target_path.join("Move.toml")).unwrap();
                 let package_name = toml.package.name.as_str();
@@ -95,7 +95,7 @@ impl PackagePublishTxGenerator {
         .build(&target_path)
         .unwrap();
 
-        compiled_package.dependency_ids.published = published_deps;
+        compiled_package.dependency_ids = published_deps.values().cloned().collect();
         Self { compiled_package }
     }
 }
