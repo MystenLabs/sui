@@ -27,14 +27,18 @@ pub struct PackageGraph<F: MoveFlavor> {
 /// A node in the package graph, containing a [Package] in a particular environment
 #[derive(Debug)]
 #[derive_where(Clone)]
-struct PackageNode<F: MoveFlavor> {
+pub struct PackageNode<F: MoveFlavor> {
     package: Arc<Package<F>>,
     use_env: EnvironmentName,
 }
 
 impl<F: MoveFlavor> PackageNode<F> {
-    fn name(&self) -> &PackageName {
+    pub fn name(&self) -> &PackageName {
         self.package.manifest().package_name()
+    }
+
+    pub fn package(&self) -> &Package<F> {
+        &self.package
     }
 }
 
@@ -106,5 +110,9 @@ impl<F: MoveFlavor> PackageGraph<F> {
         PackageGraphBuilder::new()
             .load_from_lockfile_ignore_digests(path, env)
             .await
+    }
+
+    pub fn nodes(&self) -> impl Iterator<Item = &PackageNode<F>> {
+        self.inner.node_weights()
     }
 }

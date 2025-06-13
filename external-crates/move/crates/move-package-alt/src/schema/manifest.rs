@@ -38,7 +38,7 @@ pub struct ParsedManifest {
 #[derive(Debug, Deserialize, Clone)]
 pub struct PackageMetadata {
     pub name: Spanned<PackageName>,
-    edition: String,
+    pub edition: String,
 }
 
 /// An entry in the `[dependencies]` section of a manifest
