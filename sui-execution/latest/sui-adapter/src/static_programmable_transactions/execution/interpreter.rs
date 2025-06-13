@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    adapter::substitute_package_id,
     execution_mode::ExecutionMode,
     gas_charger::GasCharger,
     sp,
@@ -222,28 +221,17 @@ fn execute_command<Mode: ExecutionMode>(
             vec![CtxValue::vec_pack(ty, items)?]
         }
         T::Command_::Publish(module_bytes, dep_ids) => {
-            let mut modules =
+            let modules =
                 context.deserialize_modules(&module_bytes, /* is upgrade */ false)?;
 
-            // It should be fine that this does not go through ExecutionContext::fresh_id since the Move
-            // runtime does not to know about new packages created, since Move objects and Move packages
-            // cannot interact
-            let runtime_id = if <Mode>::packages_are_predefined() {
-                // do not calculate or substitute id for predefined packages
-                (*modules[0].self_id().address()).into()
-            } else {
-                let id = context.tx_context.borrow_mut().fresh_id();
-                substitute_package_id(&mut modules, id)?;
-                id
-            };
-
-            context.publish_and_init_package(runtime_id, modules, &dep_ids, trace_builder_opt)?;
+            let runtime_id =
+                context.publish_and_init_package::<Mode>(modules, &dep_ids, trace_builder_opt)?;
 
             if <Mode>::packages_are_predefined() {
                 // no upgrade cap for genesis modules
                 std::vec![]
             } else {
-                std::vec![context.new_upgrade_cap(runtime_id)]
+                std::vec![context.new_upgrade_cap(runtime_id)?]
             }
         }
         T::Command_::Upgrade(module_bytes, dep_ids, current_package_id, upgrade_ticket) => {

@@ -574,10 +574,13 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         Ok(amount)
     }
 
-    pub fn new_upgrade_cap(&self, storage_id: ObjectID) -> CtxValue {
+    pub fn new_upgrade_cap(&mut self, storage_id: ObjectID) -> Result<CtxValue, ExecutionError> {
         let id = self.tx_context.borrow_mut().fresh_id();
+        object_runtime_mut!(self)?
+            .new_id(id)
+            .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
         let cap = UpgradeCap::new(id, storage_id);
-        CtxValue(Value::upgrade_cap(cap))
+        Ok(CtxValue(Value::upgrade_cap(cap)))
     }
 
     pub fn upgrade_receipt(
@@ -787,13 +790,24 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         Ok(())
     }
 
-    pub fn publish_and_init_package(
+    pub fn publish_and_init_package<Mode: ExecutionMode>(
         &mut self,
-        runtime_id: ObjectID,
-        modules: Vec<CompiledModule>,
+        mut modules: Vec<CompiledModule>,
         dep_ids: &[ObjectID],
         trace_builder_opt: Option<&mut MoveTraceBuilder>,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<ObjectID, ExecutionError> {
+        let runtime_id = if <Mode>::packages_are_predefined() {
+            // do not calculate or substitute id for predefined packages
+            (*modules[0].self_id().address()).into()
+        } else {
+            // It should be fine that this does not go through the object runtime since it does not
+            // need to know about new packages created, since Move objects and Move packages
+            // cannot interact
+            let id = self.tx_context.borrow_mut().fresh_id();
+            substitute_package_id(&mut modules, id)?;
+            id
+        };
+
         let dependencies = self.fetch_packages(dep_ids)?;
         let package = MovePackage::new_initial(
             &modules,
@@ -813,10 +827,13 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             .publish_and_verify_modules(runtime_id, &modules)
             .and_then(|_| self.init_modules(&modules, trace_builder_opt));
         self.env.linkage_view.reset_linkage()?;
-        if res.is_err() {
-            self.new_packages.pop();
+        match res {
+            Ok(()) => Ok(runtime_id),
+            Err(e) => {
+                self.new_packages.pop();
+                Err(e)
+            }
         }
-        res
     }
 
     pub fn upgrade(
@@ -833,6 +850,9 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         substitute_package_id(&mut modules, runtime_id)?;
 
         // Upgraded packages share their predecessor's runtime ID but get a new storage ID.
+        // It should be fine that this does not go through the object runtime since it does not
+        // need to know about new packages created, since Move objects and Move packages
+        // cannot interact
         let storage_id = self.tx_context.borrow_mut().fresh_id();
 
         let dependencies = self.fetch_packages(dep_ids)?;
