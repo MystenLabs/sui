@@ -4,12 +4,16 @@
 
 use move_stdlib::utils::time_it;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     // Generate documentation
     {
-        time_it("Generating stdlib documentation", || {
+        time_it("Generating stdlib documentation", async || {
             std::fs::remove_dir_all(move_stdlib::docs_full_path()).unwrap_or(());
-            move_stdlib::build_doc(move_stdlib::docs_full_path()).unwrap();
-        });
+            move_stdlib::build_doc(move_stdlib::docs_full_path())
+                .await
+                .unwrap();
+        })
+        .await;
     }
 }

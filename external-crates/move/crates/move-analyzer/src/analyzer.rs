@@ -13,7 +13,6 @@ use lsp_types::{
     request::Request as _,
 };
 use move_compiler::linters::LintLevel;
-use move_package::source_package::parsed_manifest::Dependencies;
 use std::{
     collections::BTreeMap,
     path::PathBuf,
@@ -36,6 +35,7 @@ use crate::{
     },
     vfs::on_text_document_sync_notification,
 };
+use move_package_alt::flavor::MoveFlavor;
 use url::Url;
 use vfs::{VfsPath, impls::memory::MemoryFS};
 
@@ -44,7 +44,7 @@ const LINT_DEFAULT: &str = "default";
 const LINT_ALL: &str = "all";
 
 #[allow(deprecated)]
-pub fn run(implicit_deps: Dependencies) {
+pub fn run<F: MoveFlavor>() {
     // stdio is used to communicate Language Server Protocol requests and responses.
     // stderr is used for logging (and, when Visual Studio Code is used to communicate with this
     // server, it captures this output in a dedicated "output channel").
@@ -152,13 +152,12 @@ pub fn run(implicit_deps: Dependencies) {
     };
     eprintln!("linting level {:?}", lint);
 
-    let symbolicator_runner = SymbolicatorRunner::new(
+    let symbolicator_runner = SymbolicatorRunner::new::<F>(
         ide_files_root.clone(),
         symbols_map.clone(),
         pkg_deps.clone(),
         diag_sender,
         lint,
-        implicit_deps.clone(),
     );
 
     // If initialization information from the client contains a path to the directory being
@@ -169,14 +168,13 @@ pub fn run(implicit_deps: Dependencies) {
     if let Some(uri) = initialize_params.root_uri {
         let build_path = uri.to_file_path().unwrap();
         if let Some(p) = SymbolicatorRunner::root_dir(&build_path) {
-            if let Ok((Some(new_symbols), _)) = symbols::get_symbols(
+            if let Ok((Some(new_symbols), _)) = symbols::get_symbols::<F>(
                 Arc::new(Mutex::new(CachedPackages::new())),
                 ide_files_root.clone(),
                 p.as_path(),
                 None,
                 lint,
                 None,
-                implicit_deps.clone(),
             ) {
                 let mut old_symbols_map = symbols_map.lock().unwrap();
                 old_symbols_map.insert(p, new_symbols);
@@ -277,7 +275,7 @@ pub fn run(implicit_deps: Dependencies) {
                         // a chance of completing pending requests (but should not accept new requests
                         // either which is handled inside on_requst) - instead it quits after receiving
                         // the exit notification from the client, which is handled below
-                        shutdown_req_received = on_request(&context, &request, ide_files_root.clone(), pkg_deps.clone(), shutdown_req_received, implicit_deps.clone());
+                        shutdown_req_received = on_request::<F>(&context, &request, ide_files_root.clone(), pkg_deps.clone(), shutdown_req_received);
                     }
                     Ok(Message::Response(response)) => on_response(&context, &response),
                     Ok(Message::Notification(notification)) => {
@@ -306,13 +304,12 @@ pub fn run(implicit_deps: Dependencies) {
 /// The reason why this information is also passed as an argument is that according to the LSP
 /// spec, if any additional requests are received after shutdownd then the LSP implementation
 /// should respond with a particular type of error.
-fn on_request(
+fn on_request<F: MoveFlavor>(
     context: &Context,
     request: &Request,
     ide_files_root: VfsPath,
     pkg_dependencies: Arc<Mutex<CachedPackages>>,
     shutdown_request_received: bool,
-    implicit_deps: Dependencies,
 ) -> bool {
     if shutdown_request_received {
         let response = lsp_server::Response::new_err(
@@ -330,13 +327,9 @@ fn on_request(
         return true;
     }
     match request.method.as_str() {
-        lsp_types::request::Completion::METHOD => on_completion_request(
-            context,
-            request,
-            ide_files_root.clone(),
-            pkg_dependencies,
-            implicit_deps,
-        ),
+        lsp_types::request::Completion::METHOD => {
+            on_completion_request::<F>(context, request, ide_files_root.clone(), pkg_dependencies)
+        }
         lsp_types::request::GotoDefinition::METHOD => {
             on_go_to_def_request(context, request);
         }
@@ -356,12 +349,11 @@ fn on_request(
             inlay_hints::on_inlay_hint_request(context, request);
         }
         lsp_types::request::CodeActionRequest::METHOD => {
-            code_action::on_code_action_request(
+            code_action::on_code_action_request::<F>(
                 context,
                 request,
                 ide_files_root.clone(),
                 pkg_dependencies,
-                implicit_deps,
             );
         }
         lsp_types::request::Shutdown::METHOD => {

@@ -26,7 +26,7 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 use move_ir_types::location::Loc;
-use move_package::compilation::compiled_package::CompiledUnitWithSource;
+use move_package_alt_compilation::compiled_package::CompiledUnitWithSource;
 use move_vm_test_utils::gas_schedule::Gas;
 use std::{
     collections::{BTreeMap, HashMap},

@@ -14,10 +14,8 @@ cd example && sui move test
 success: true
 exit_code: 0
 ----- stdout -----
-INCLUDING DEPENDENCY Bridge
-INCLUDING DEPENDENCY SuiSystem
-INCLUDING DEPENDENCY Sui
-INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY std
+INCLUDING DEPENDENCY sui
 BUILDING example
 Running Move unit tests
 Test result: OK. Total tests: 0; passed: 0; failed: 0

@@ -128,6 +128,7 @@ impl PTB {
         }
 
         let client = context.get_client().await?;
+        let active_env = context.get_active_env()?.alias.clone();
 
         let mut starting_addresses: BTreeMap<String, AddressData> = context
             .config
@@ -159,7 +160,8 @@ impl PTB {
             starting_addresses.extend(mvr_data);
         }
 
-        let (res, warnings) = Self::build_ptb(program, starting_addresses, client.clone()).await;
+        let (res, warnings) =
+            Self::build_ptb(program, starting_addresses, client.clone(), active_env).await;
 
         // Render warnings
         if !warnings.is_empty() {
@@ -292,11 +294,12 @@ impl PTB {
         program: Program,
         starting_addresses: BTreeMap<String, AddressData>,
         client: SuiClient,
+        active_env: String,
     ) -> (
         Result<ProgrammableTransaction, Vec<PTBError>>,
         Vec<PTBError>,
     ) {
-        let builder = PTBBuilder::new(starting_addresses, client.read_api());
+        let builder = PTBBuilder::new(starting_addresses, client.read_api(), active_env);
         builder.build(program).await
     }
 

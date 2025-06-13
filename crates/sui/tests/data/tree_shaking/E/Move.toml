@@ -1,10 +1,8 @@
 [package]
-name = "E"
-edition = "2024.beta"
+name = "e"
+edition = "2024"
 
 [dependencies]
-A = { local = "../A_v1", override = true }
-B = { local = "../B_A" }
+a = { local = "../A_v1", override = true }
+b = { local = "../B_A" }
 
-[addresses]
-e = "0x0"

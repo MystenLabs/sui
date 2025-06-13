@@ -3,7 +3,7 @@
 
 use clap::Parser;
 use move_cli::base::new;
-use move_package::source_package::layout::SourcePackageLayout;
+use move_package_alt::package::layout::SourcePackageLayout;
 use std::{fs::create_dir_all, io::Write, path::Path};
 
 #[derive(Parser)]
@@ -18,8 +18,7 @@ impl New {
         let name = &self.new.name.to_lowercase();
         let provided_name = &self.new.name.to_string();
 
-        self.new
-            .execute(path, [] as [(&str, &str); 0], [(name, "0x0")], "")?;
+        self.new.execute(path)?;
         let p = path.unwrap_or_else(|| Path::new(&provided_name));
         let mut w = std::fs::File::create(
             p.join(SourcePackageLayout::Sources.path())

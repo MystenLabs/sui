@@ -7,7 +7,9 @@ use std::collections::BTreeMap;
 use tracing::debug;
 
 use crate::{
+    compatibility::legacy_lockfile::convert_legacy_lockfile,
     errors::{FileHandle, PackageResult},
+    flavor::MoveFlavor,
     schema::{PackageID, ParsedLockfile, Pin},
 };
 
@@ -24,7 +26,7 @@ pub struct Lockfiles {
 
 impl Lockfiles {
     /// Read `Move.lock` from `path`; returning [None] if it doesn't exist
-    pub fn read_from_dir(path: &PackagePath) -> PackageResult<Option<Self>> {
+    pub fn read_from_dir<F: MoveFlavor>(path: &PackagePath) -> PackageResult<Option<Self>> {
         // Parse `Move.lock`
         debug!("reading lockfiles from {:?}", path);
         let lockfile_name = path.lockfile_path();
@@ -33,6 +35,7 @@ impl Lockfiles {
             return Ok(None);
         };
 
+        convert_legacy_lockfile::<F>(path)?;
         let file_id = FileHandle::new(lockfile_name)?;
         let main: ParsedLockfile = toml_edit::de::from_str(file_id.source())?;
 

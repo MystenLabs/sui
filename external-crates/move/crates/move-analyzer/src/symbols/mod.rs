@@ -94,7 +94,7 @@ use move_compiler::{
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
 };
 use move_ir_types::location::*;
-use move_package::source_package::parsed_manifest::Dependencies;
+use move_package_alt::flavor::MoveFlavor;
 use move_symbol_pool::Symbol;
 
 pub mod compilation;
@@ -153,14 +153,13 @@ pub type FileModules = BTreeMap<PathBuf, BTreeSet<ModuleDefs>>;
 /// everything. If `modified_files` is `Some`, we can retain cached user code for all Move files other than
 /// the ones in `modified_files` (if `modified_paths` contains a path not representing
 /// a Move file but rather a directory, then we conservatively do not re-use any cached info).
-pub fn get_symbols(
+pub fn get_symbols<F: MoveFlavor>(
     packages_info: Arc<Mutex<CachedPackages>>,
     ide_files_root: VfsPath,
     pkg_path: &Path,
     modified_files: Option<Vec<PathBuf>>,
     lint: LintLevel,
     cursor_info: Option<(&PathBuf, Position)>,
-    implicit_deps: Dependencies,
 ) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
     // helper function to avoid holding the lock for too long
     let has_pkg_entry = || {
@@ -184,13 +183,12 @@ pub fn get_symbols(
 
     loop {
         let compilation_start = Instant::now();
-        let (compiled_pkg_info_opt, ide_diagnostics) = get_compiled_pkg(
+        let (compiled_pkg_info_opt, ide_diagnostics) = get_compiled_pkg::<F>(
             packages_info.clone(),
             ide_files_root.clone(),
             pkg_path,
             modified_files.clone(),
             lint,
-            implicit_deps.clone(),
         )?;
         eprintln!("compilation complete in: {:?}", compilation_start.elapsed());
         let Some(compiled_pkg_info) = compiled_pkg_info_opt else {

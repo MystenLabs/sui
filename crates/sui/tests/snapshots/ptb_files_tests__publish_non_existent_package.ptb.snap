@@ -15,6 +15,5 @@ expression: "results.join(\"\\n\")"
    ╭────
  1 │ --publish not_a_valid_pkg 
    · ────────────┬────────────
-   ·             ╰── No such file or directory (os error 2)
+   ·             ╰── Cannot compile package: Invalid directory at `not_a_valid_pkg`
    ╰────
-

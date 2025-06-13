@@ -7,7 +7,8 @@ license = "Apache-2.0"
 
 [dependencies]
 move-docgen.workspace = true
-move-package.workspace = true
+move-package-alt.workspace = true
+move-package-alt-compilation.workspace = true
 move-binary-format.workspace = true
 move-compiler.workspace = true
 move-model-2.workspace = true
@@ -27,6 +28,7 @@ serde.workspace = true
 once_cell.workspace = true
 tempfile.workspace = true
 insta.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true

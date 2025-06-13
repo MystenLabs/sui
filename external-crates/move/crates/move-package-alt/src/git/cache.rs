@@ -473,8 +473,8 @@ async fn try_find_full_sha(repo: &str, rev: &str) -> GitResult<Option<GitSha>> {
     ))
 }
 
-/// This updates the .git/info/sparse-checkout file with the path to checkout. If the path is `.` or empty, it
-/// will add a "/*" line to checkout all files and directories.
+/// This updates the .git/info/sparse-checkout file with the path to checkout. If the path is `.` \
+/// or empty, it will add a "*" line to checkout all files and directories.
 ///
 /// It's a workaround because `git sparse-checkout add .` does not work to add all files and
 /// directories.
@@ -495,7 +495,7 @@ fn update_sparse_checkout_file(
     // For root checkout, we need to add the appropriate pattern
     let patterns_to_add: Vec<&str> = if path_in_repo == "." || path_in_repo.is_empty() {
         // Pattern to checkout everything including subdirectories
-        // "/*" means all files and directories in root
+        // "*" means all files and directories in root
         vec!["*"]
     } else {
         vec![&path_in_repo]

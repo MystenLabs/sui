@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
     sync::Arc,
@@ -121,7 +122,7 @@ impl OnDiskCompiledPackage {
             compiled_docs,
             file_map,
             // TODO: Let's remove this from CompiledPackage
-            deps_published_ids: vec![],
+            dependency_ids: BTreeMap::new(),
         })
     }
 

@@ -43,10 +43,17 @@ use move_compiler::{
     typing::ast::ModuleDefinition,
 };
 use move_ir_types::location::Loc;
-use move_package::{
-    compilation::{build_plan::BuildPlan, compiled_package::ModuleFormat},
-    resolution::resolution_graph::ResolvedGraph,
-    source_package::parsed_manifest::{Dependencies, PackageName},
+
+use move_package_alt::{
+    flavor::MoveFlavor,
+    package::RootPackage,
+    schema::{Environment, PackageName},
+};
+use move_package_alt_compilation::{
+    build_config::BuildConfig,
+    build_plan::BuildPlan,
+    compilation::{compiler_flags, make_deps_for_compiler},
+    source_discovery::get_sources,
 };
 
 pub const MANIFEST_FILE_NAME: &str = "Move.toml";
@@ -285,33 +292,24 @@ impl CachingResult {
 /// Builds a package at a given path and, if successful, returns parsed AST
 /// and typed AST as well as (regardless of success) diagnostics.
 /// See `get_symbols` for explanation of what `modified_files` parameter is.
-pub fn get_compiled_pkg(
+pub fn get_compiled_pkg<F: MoveFlavor>(
     packages_info: Arc<Mutex<CachedPackages>>,
     ide_files_root: VfsPath,
     pkg_path: &Path,
     modified_files: Option<Vec<PathBuf>>,
     lint: LintLevel,
-    implicit_deps: Dependencies,
 ) -> Result<(Option<CompiledPkgInfo>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
     let cached_deps_exist = has_precompiled_deps(pkg_path, packages_info.clone());
-    let build_config = move_package::BuildConfig {
+    let build_config = move_package_alt_compilation::build_config::BuildConfig {
         test_mode: true,
         install_dir: Some(tempdir().unwrap().path().to_path_buf()),
         default_flavor: Some(Flavor::Sui),
         lint_flag: lint.into(),
         force_lock_file: cached_deps_exist,
-        skip_fetch_latest_git_deps: cached_deps_exist,
-        implicit_dependencies: implicit_deps,
         ..Default::default()
     };
 
     eprintln!("symbolicating {:?}", pkg_path);
-
-    // resolution graph diagnostics are only needed for CLI commands so ignore them by passing a
-    // vector as the writer
-    let resolution_graph =
-        build_config.resolution_graph_for_package(pkg_path, None, &mut Vec::new())?;
-    let root_pkg_name = resolution_graph.graph.root_package_name;
 
     let overlay_fs_root = VfsPath::new(OverlayFS::new(&[
         VfsPath::new(MemoryFS::new()),
@@ -332,8 +330,15 @@ pub fn get_compiled_pkg(
         None
     };
 
+    let root_pkg = load_root_pkg::<F>(&build_config, &pkg_path.to_path_buf())?;
+    let root_pkg_name = Symbol::from(root_pkg.name().to_string());
+    let build_plan =
+        BuildPlan::create(&root_pkg, &build_config)?.set_compiler_vfs_root(overlay_fs_root.clone());
+
+    let root_pkg = load_root_pkg::<F>(&build_config, &pkg_path.to_path_buf())?;
+    let mapped_files_data = compute_mapped_files(root_pkg, &build_config, overlay_fs_root.clone())?;
     // Hash dependencies so we can check if something has changed.
-    let mapped_files_data = compute_mapped_files(&resolution_graph, overlay_fs_root.clone());
+    // TODO: do we still need this?
     let file_paths: Arc<BTreeMap<FileHash, PathBuf>> = Arc::new(
         mapped_files_data
             .files
@@ -342,109 +347,109 @@ pub fn get_compiled_pkg(
             .map(|(fhash, fpath)| (*fhash, fpath.clone()))
             .collect(),
     );
-    let build_plan =
-        BuildPlan::create(&resolution_graph)?.set_compiler_vfs_root(overlay_fs_root.clone());
+
     let mut parsed_ast = None;
     let mut typed_ast = None;
     let mut diagnostics = None;
 
-    let compiler_flags = resolution_graph.build_options.compiler_flags().clone();
-    let mut dependencies = build_plan.compute_dependencies();
-    let (mut caching_result, other_diags) =
-        if let Ok(deps_package_paths) = dependencies.make_deps_for_compiler() {
-            // Partition deps_package according whether src is available
-            let src_deps = deps_package_paths
-                .iter()
-                .filter_map(|(p, b)| {
-                    if let ModuleFormat::Source = b {
-                        p.name.as_ref().map(|(n, _)| (*n, p.clone()))
-                    } else {
-                        None
-                    }
-                })
-                .collect::<BTreeMap<_, _>>();
+    // TODO: we need to rework on loading the root pkg only once.
+    let root_pkg = load_root_pkg::<F>(&build_config, &pkg_path.to_path_buf())?;
+    let dependencies = root_pkg.packages()?;
 
-            let mut cached_packages = packages_info.lock().unwrap();
-            // need to extract all data from pkg_info first so that we can
-            // borrow it mutably later
-            let cached_pkg_info_opt = match cached_packages.pkg_info.get(pkg_path) {
-                Some(Some(d)) => {
-                    let mut hasher = Sha256::new();
-                    d.dep_hashes.iter().for_each(|h| {
-                        hasher.update(h.0);
-                    });
-                    let deps_hash = hasher_to_hash_string(hasher);
-                    if manifest_hash.is_some()
-                        && manifest_hash == d.manifest_hash
-                        && mapped_files_data.deps_hash == deps_hash
-                    {
-                        eprintln!("found cached deps for {:?}", pkg_path);
-                        Some(d)
-                    } else {
-                        eprintln!("found invalidated cached deps for {:?}", pkg_path);
-                        None
-                    }
-                }
-                _ => {
-                    eprintln!("no cached deps for {:?}", pkg_path);
+    let compiler_flags = compiler_flags(&build_config);
+    let (mut caching_result, other_diags) = if let Ok(deps_package_paths) =
+        make_deps_for_compiler(&mut Vec::new(), dependencies, &build_config)
+    {
+        let src_deps: BTreeMap<Symbol, PackagePaths> = deps_package_paths
+            .into_iter()
+            .filter_map(|p| p.name.as_ref().map(|(n, _)| (*n, p.clone())))
+            .collect();
+
+        let mut cached_packages = packages_info.lock().unwrap();
+        // need to extract all data from pkg_info first so that we can
+        // borrow it mutably later
+        let cached_pkg_info_opt = match cached_packages.pkg_info.get(pkg_path) {
+            Some(Some(d)) => {
+                let mut hasher = Sha256::new();
+                d.dep_hashes.iter().for_each(|h| {
+                    hasher.update(h.0);
+                });
+                let deps_hash = hasher_to_hash_string(hasher);
+                if manifest_hash.is_some()
+                    && manifest_hash == d.manifest_hash
+                    && mapped_files_data.deps_hash == deps_hash
+                {
+                    eprintln!("found cached deps for {:?}", pkg_path);
+                    Some(d)
+                } else {
+                    eprintln!("found invalidated cached deps for {:?}", pkg_path);
                     None
                 }
-            };
-
-            let other_diags = cached_packages
-                .pkg_info
-                .iter()
-                .filter_map(|(p, cached_pkg_info_opt)| {
-                    if p != pkg_path {
-                        cached_pkg_info_opt.as_ref().map(|c| c.lsp_diags.clone())
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-
-            let caching_result = match cached_pkg_info_opt {
-                Some(cached_pkg_info) => {
-                    dependencies.remove_deps(cached_pkg_info.dep_names.clone());
-                    let deps = cached_pkg_info.deps.clone();
-                    let analyzed_pkg_info = AnalyzedPkgInfo::new(
-                        deps,
-                        cached_pkg_info.dep_names.clone(),
-                        Some(cached_pkg_info.deps_symbols_data.clone()),
-                        Some(cached_pkg_info.program.clone()),
-                        cached_pkg_info.file_paths.clone(),
-                        cached_pkg_info.dep_hashes.clone(),
-                    );
-
-                    CachingResult::new(
-                        Some(analyzed_pkg_info),
-                        cached_pkg_info.edition,
-                        cached_pkg_info.compiler_info.clone(),
-                    )
-                }
-                None => {
-                    if let Some((program_deps, dep_names)) = compute_pre_compiled_dep_data(
-                        &mut cached_packages.compiled_dep_pkgs,
-                        mapped_files_data.dep_pkg_paths,
-                        src_deps,
-                        resolution_graph.root_package(),
-                        &resolution_graph.topological_order(),
-                        compiler_flags,
-                        overlay_fs_root.clone(),
-                    ) {
-                        let analyzed_pkg_info =
-                            AnalyzedPkgInfo::new_precompiled_only(program_deps, dep_names);
-                        CachingResult::new(Some(analyzed_pkg_info), None, None)
-                    } else {
-                        CachingResult::empty()
-                    }
-                }
-            };
-
-            (caching_result, other_diags)
-        } else {
-            (CachingResult::empty(), vec![])
+            }
+            _ => {
+                eprintln!("no cached deps for {:?}", pkg_path);
+                None
+            }
         };
+
+        let other_diags = cached_packages
+            .pkg_info
+            .iter()
+            .filter_map(|(p, cached_pkg_info_opt)| {
+                if p != pkg_path {
+                    cached_pkg_info_opt.as_ref().map(|c| c.lsp_diags.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let caching_result = match cached_pkg_info_opt {
+            Some(cached_pkg_info) => {
+                // TODO: do we need to do anything here?
+                // dependencies.remove_deps(cached_pkg_info.dep_names.clone());
+
+                let deps = cached_pkg_info.deps.clone();
+                let analyzed_pkg_info = AnalyzedPkgInfo::new(
+                    deps,
+                    cached_pkg_info.dep_names.clone(),
+                    Some(cached_pkg_info.deps_symbols_data.clone()),
+                    Some(cached_pkg_info.program.clone()),
+                    cached_pkg_info.file_paths.clone(),
+                    cached_pkg_info.dep_hashes.clone(),
+                );
+
+                CachingResult::new(
+                    Some(analyzed_pkg_info),
+                    cached_pkg_info.edition,
+                    cached_pkg_info.compiler_info.clone(),
+                )
+            }
+            None => {
+                let sorted_deps = root_pkg.sorted_deps();
+                let sorted_deps: Vec<PackageName> = sorted_deps.into_iter().cloned().collect();
+                if let Some((program_deps, dep_names)) = compute_pre_compiled_dep_data(
+                    &mut cached_packages.compiled_dep_pkgs,
+                    mapped_files_data.dep_pkg_paths,
+                    src_deps,
+                    root_pkg_name,
+                    &sorted_deps,
+                    compiler_flags,
+                    overlay_fs_root.clone(),
+                ) {
+                    let analyzed_pkg_info =
+                        AnalyzedPkgInfo::new_precompiled_only(program_deps, dep_names);
+                    CachingResult::new(Some(analyzed_pkg_info), None, None)
+                } else {
+                    CachingResult::empty()
+                }
+            }
+        };
+
+        (caching_result, other_diags)
+    } else {
+        (CachingResult::empty(), vec![])
+    };
 
     let (full_compilation, files_to_compile) = if let Some(cached_info) = &caching_result.pkg_deps {
         if cached_info.program.is_some() {
@@ -468,8 +473,8 @@ pub fn get_compiled_pkg(
     // (that no longer have failures/warnings) are reset
     let mut ide_diags = lsp_empty_diagnostics(mapped_files_data.files.file_name_mapping());
     if full_compilation || !files_to_compile.is_empty() {
-        build_plan.compile_with_driver_and_deps(
-            dependencies,
+        build_plan.compile_with_driver(
+            // dependencies,
             &mut std::io::sink(),
             |compiler| {
                 let compiler = compiler.set_ide_mode();
@@ -634,15 +639,16 @@ fn compute_pre_compiled_dep_data(
     let mut pre_compiled_modules = BTreeMap::new();
     let mut pre_compiled_names = BTreeSet::new();
     for pkg_name in topological_order.iter().rev() {
-        if *pkg_name == root_package_name {
+        let pkg_name = Symbol::from(pkg_name.to_string());
+        if pkg_name == root_package_name {
             continue;
         }
-        let Some(dep_path) = dep_paths.remove(pkg_name) else {
+        let Some(dep_path) = dep_paths.remove(&pkg_name) else {
             eprintln!("no dep path for {pkg_name}, no caching");
             // do non-cached path
             return None;
         };
-        let Some(dep_info) = src_deps.remove(pkg_name) else {
+        let Some(dep_info) = src_deps.remove(&pkg_name) else {
             eprintln!("no dep info for {pkg_name}, no caching");
             // do non-cached path
             return None;
@@ -730,15 +736,19 @@ fn has_precompiled_deps(pkg_path: &Path, pkg_dependencies: Arc<Mutex<CachedPacka
     pkg_deps.pkg_info.contains_key(pkg_path)
 }
 
-fn compute_mapped_files(resolved_graph: &ResolvedGraph, overlay_fs: VfsPath) -> MappedFilesData {
+fn compute_mapped_files<F: MoveFlavor>(
+    root_pkg: RootPackage<F>,
+    build_config: &BuildConfig,
+    overlay_fs: VfsPath,
+) -> anyhow::Result<MappedFilesData> {
     let mut mapped_files: MappedFiles = MappedFiles::empty();
     let mut hasher = Sha256::new();
     let mut dep_hashes = vec![];
     let mut dep_pkg_paths = BTreeMap::new();
 
-    for rpkg in resolved_graph.package_table.values() {
-        for f in rpkg.get_sources(&resolved_graph.build_options).unwrap() {
-            let is_dep = rpkg.package_path != resolved_graph.graph.root_path;
+    for rpkg in root_pkg.packages()? {
+        for f in get_sources(rpkg.path(), build_config).unwrap() {
+            let is_dep = !rpkg.is_root();
             // dunce does a better job of canonicalization on Windows
             let fname = dunce::canonicalize(f.as_str())
                 .map(|p| p.to_string_lossy().to_string())
@@ -754,7 +764,10 @@ fn compute_mapped_files(resolved_graph: &ResolvedGraph, overlay_fs: VfsPath) -> 
             if is_dep {
                 hasher.update(fhash.0);
                 dep_hashes.push(fhash);
-                dep_pkg_paths.insert(rpkg.source_package.package.name, rpkg.package_path.clone());
+                dep_pkg_paths.insert(
+                    rpkg.name().as_str().into(),
+                    rpkg.path().path().to_path_buf(),
+                );
             }
             // write to top layer of the overlay file system so that the content
             // is immutable for the duration of compilation and symbolication
@@ -764,12 +777,13 @@ fn compute_mapped_files(resolved_graph: &ResolvedGraph, overlay_fs: VfsPath) -> 
             mapped_files.add(fhash, fname.into(), Arc::from(contents.into_boxed_str()));
         }
     }
-    MappedFilesData::new(
+
+    Ok(MappedFilesData::new(
         mapped_files,
         hasher_to_hash_string(hasher),
         dep_hashes,
         dep_pkg_paths,
-    )
+    ))
 }
 
 /// Helper function to convert a hasher to a hash string
@@ -916,4 +930,47 @@ fn is_parsed_pkg_modified(
             .iter()
             .any(|mdef| is_parsed_mod_modified(mdef, modified_files, file_paths.clone())),
     }
+}
+
+fn load_root_pkg<F: MoveFlavor>(
+    build_config: &BuildConfig,
+    path: &PathBuf,
+) -> anyhow::Result<RootPackage<F>> {
+    let envs = RootPackage::<F>::environments(path)?;
+    let env = if let Some(ref e) = build_config.environment {
+        if let Some(env) = envs.get(e) {
+            Environment::new(e.to_string(), env.to_string())
+        } else {
+            anyhow::bail!(
+                "No environment named `{e}` in the manifest. Available environments are {:?}",
+                envs.keys()
+            );
+        }
+    } else {
+        let (name, id) = envs.first_key_value().expect("At least one default env");
+        Environment::new(name.to_string(), id.to_string())
+    };
+
+    // we need to block here to compile the package, which requires to fetch dependencies
+    let root_pkg = if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        // We're already in a tokio runtime
+        match handle.runtime_flavor() {
+            tokio::runtime::RuntimeFlavor::MultiThread => {
+                // Multi-threaded runtime, can use block_in_place
+                tokio::task::block_in_place(|| handle.block_on(RootPackage::<F>::load(path, env)))
+            }
+            _ => {
+                // Single-threaded or current-thread runtime, use futures::executor
+                futures::executor::block_on(RootPackage::<F>::load(path, env))
+            }
+        }
+    } else {
+        // No runtime exists, create one
+        let rt = tokio::runtime::Runtime::new()?;
+        rt.block_on(RootPackage::<F>::load(path, env))
+    }?;
+
+    root_pkg.save_to_disk()?;
+
+    Ok(root_pkg)
 }

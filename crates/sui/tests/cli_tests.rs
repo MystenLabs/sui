@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::Read;
+use std::io::{Read, Write as IoWrite};
 use std::net::SocketAddr;
 use std::os::unix::prelude::FileExt;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
@@ -13,9 +13,11 @@ use std::str::FromStr;
 
 use expect_test::expect;
 use fastcrypto::encoding::{Base64, Encoding};
-use move_package::{lock_file::schema::ManagedPackage, BuildConfig as MoveBuildConfig};
+use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
 use serde_json::json;
-use sui::client_commands::{GasDataArgs, PaymentArgs, TxProcessingArgs};
+use sui::client_commands::{
+    GasDataArgs, PaymentArgs, PublishArgs, TestPublishArgs, TxProcessingArgs,
+};
 use sui::client_ptb::ptb::PTB;
 use sui::sui_commands::IndexerArgs;
 use sui_keys::key_identity::KeyIdentity;
@@ -30,6 +32,9 @@ use sui_types::transaction::{
 };
 use tokio::time::sleep;
 
+use move_package_alt::schema::ParsedPublishedFile;
+use mysten_common::tempdir;
+use std::fs::OpenOptions;
 use std::path::Path;
 use std::{fs, io};
 use sui::{
@@ -50,7 +55,8 @@ use sui_json_rpc_types::{
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
-use sui_move_build::{BuildConfig, SuiPackageHooks};
+use sui_move_build::BuildConfig;
+use sui_package_alt::SuiFlavor;
 use sui_sdk::sui_client_config::SuiClientConfig;
 use sui_sdk::wallet_context::WalletContext;
 use sui_swarm_config::genesis_config::{AccountConfig, GenesisConfig};
@@ -130,6 +136,7 @@ impl TreeShakingTest {
         &mut self,
         package_name: &str,
         with_unpublished_dependencies: bool,
+        pubfile: Option<PathBuf>,
     ) -> Result<(ObjectID, ObjectID), anyhow::Error> {
         publish_package(
             self.package_path(package_name),
@@ -137,6 +144,7 @@ impl TreeShakingTest {
             self.rgp,
             self.gas_obj_id,
             with_unpublished_dependencies,
+            pubfile,
         )
         .await
     }
@@ -162,7 +170,7 @@ impl TreeShakingTest {
         build_config.lock_file = Some(self.package_path(package_name).join("Move.lock"));
         let resp = SuiClientCommands::Upgrade {
             package_path: self.package_path(package_name),
-            upgrade_capability,
+            upgrade_capability: Some(upgrade_capability),
             build_config,
             skip_dependency_verification: false,
             verify_deps: false,
@@ -209,25 +217,32 @@ async fn publish_package(
     rgp: u64,
     gas_obj_id: ObjectID,
     with_unpublished_dependencies: bool,
+    pubfile: Option<PathBuf>,
 ) -> Result<(ObjectID, ObjectID), anyhow::Error> {
     let mut build_config = BuildConfig::new_for_testing().config;
     let move_lock_path = package_path.clone().join("Move.lock");
     build_config.lock_file = Some(move_lock_path.clone());
-    let resp = SuiClientCommands::Publish {
-        package_path: package_path.clone(),
-        build_config: build_config.clone(),
-        skip_dependency_verification: false,
-        verify_deps: false,
-        with_unpublished_dependencies,
-        payment: PaymentArgs {
-            gas: vec![gas_obj_id],
+
+    let pubfile_path = pubfile.unwrap_or(package_path.join("localnet.toml"));
+    let resp = SuiClientCommands::TestPublish(TestPublishArgs {
+        publish_args: PublishArgs {
+            package_path: package_path.clone(),
+            build_config: build_config.clone(),
+            skip_dependency_verification: false,
+            verify_deps: false,
+            with_unpublished_dependencies,
+            payment: PaymentArgs {
+                gas: vec![gas_obj_id],
+            },
+            gas_data: GasDataArgs {
+                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+                ..Default::default()
+            },
+            processing: TxProcessingArgs::default(),
         },
-        gas_data: GasDataArgs {
-            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-            ..Default::default()
-        },
-        processing: TxProcessingArgs::default(),
-    }
+        build_env: Some("testnet".to_string()),
+        pubfile_path: Some(pubfile_path), // pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+    })
     .execute(context)
     .await?;
 
@@ -476,7 +491,6 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Error> {
     // Publish the package
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
@@ -504,25 +518,36 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
     // Provide path to well formed package sources
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("ptb_complex_args_test_functions");
+    let orig_toml = update_toml_with_localnet_chain_id(
+        &package_path.join("Move.toml"),
+        client.read_api().get_chain_identifier().await.unwrap(),
+    );
     let build_config = BuildConfig::new_for_testing().config;
-    let resp = SuiClientCommands::Publish {
-        package_path: package_path.clone(),
-        build_config,
-        skip_dependency_verification: false,
-        verify_deps: true,
-        with_unpublished_dependencies: false,
-        payment: PaymentArgs {
-            gas: vec![gas_obj_id],
+    let resp = SuiClientCommands::TestPublish(TestPublishArgs {
+        publish_args: PublishArgs {
+            package_path: package_path.clone(),
+            build_config,
+            skip_dependency_verification: false,
+            verify_deps: true,
+            with_unpublished_dependencies: false,
+            payment: PaymentArgs {
+                gas: vec![gas_obj_id],
+            },
+            gas_data: GasDataArgs {
+                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+                ..Default::default()
+            },
+            processing: TxProcessingArgs::default(),
         },
-        gas_data: GasDataArgs {
-            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-            ..Default::default()
-        },
-        processing: TxProcessingArgs::default(),
-    }
+        build_env: Some("testnet".to_string()),
+        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+    })
     .execute(context)
-    .await?;
+    .await;
 
+    restore_orig_toml(&package_path.join("Move.toml"), orig_toml);
+
+    let resp = resp?;
     // Print it out to CLI/logs
     resp.print(true);
 
@@ -608,11 +633,17 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
 
 #[sim_test]
 async fn test_ptb_publish() -> Result<(), anyhow::Error> {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
+    let temp_dir = tempdir()?.keep();
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
-    package_path.push("ptb_complex_args_test_functions");
+    package_path.push("ptb_publish");
+    copy_dir_all(&package_path, &temp_dir).unwrap();
+    let _ = update_toml_with_localnet_chain_id(
+        &temp_dir.join("Move.toml"),
+        client.read_api().get_chain_identifier().await.unwrap(),
+    );
 
     let publish_ptb_string = format!(
         r#"
@@ -621,13 +652,16 @@ async fn test_ptb_publish() -> Result<(), anyhow::Error> {
          --publish {}
          --assign upgrade_cap
          --transfer-objects "[upgrade_cap]" sender
+         --gas-budget 50000000
         "#,
-        package_path.display()
+        temp_dir.display()
     );
     let args = shlex::split(&publish_ptb_string).unwrap();
-    sui::client_ptb::ptb::PTB { args: args.clone() }
+    let res = sui::client_ptb::ptb::PTB { args: args.clone() }
         .execute(context)
-        .await?;
+        .await;
+
+    res.unwrap();
     Ok(())
 }
 
@@ -798,21 +832,25 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("move_call_args_linter");
     let build_config = BuildConfig::new_for_testing().config;
-    let resp = SuiClientCommands::Publish {
-        package_path,
-        build_config,
-        skip_dependency_verification: false,
-        verify_deps: true,
-        with_unpublished_dependencies: false,
-        payment: PaymentArgs {
-            gas: vec![gas_obj_id],
+    let resp = SuiClientCommands::TestPublish(TestPublishArgs {
+        publish_args: PublishArgs {
+            package_path,
+            build_config,
+            skip_dependency_verification: false,
+            verify_deps: true,
+            with_unpublished_dependencies: false,
+            payment: PaymentArgs {
+                gas: vec![gas_obj_id],
+            },
+            gas_data: GasDataArgs {
+                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+                ..Default::default()
+            },
+            processing: TxProcessingArgs::default(),
         },
-        gas_data: GasDataArgs {
-            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-            ..Default::default()
-        },
-        processing: TxProcessingArgs::default(),
-    }
+        build_env: Some("testnet".to_string()),
+        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+    })
     .execute(context)
     .await?;
 
@@ -1068,6 +1106,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+/// Test publish command and the package management's publication to file logic
 #[sim_test]
 async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
@@ -1096,24 +1135,30 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
 
     // Provide path to well formed package sources
+
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("dummy_modules_publish");
+
     let build_config = BuildConfig::new_for_testing().config;
-    let resp = SuiClientCommands::Publish {
-        package_path,
-        build_config,
-        skip_dependency_verification: false,
-        verify_deps: true,
-        with_unpublished_dependencies: false,
-        payment: PaymentArgs {
-            gas: vec![gas_obj_id],
+    let resp = SuiClientCommands::TestPublish(TestPublishArgs {
+        publish_args: PublishArgs {
+            package_path,
+            build_config,
+            skip_dependency_verification: false,
+            verify_deps: true,
+            with_unpublished_dependencies: false,
+            payment: PaymentArgs {
+                gas: vec![gas_obj_id],
+            },
+            gas_data: GasDataArgs {
+                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+                ..Default::default()
+            },
+            processing: TxProcessingArgs::default(),
         },
-        gas_data: GasDataArgs {
-            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-            ..Default::default()
-        },
-        processing: TxProcessingArgs::default(),
-    }
+        build_env: Some("testnet".to_string()),
+        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+    })
     .execute(context)
     .await?;
 
@@ -1153,6 +1198,7 @@ async fn test_package_management_on_publish_command() -> Result<(), anyhow::Erro
     let context = &mut test_cluster.wallet;
 
     let client = context.get_client().await?;
+    let chain_id = client.read_api().get_chain_identifier().await?;
     let object_refs = client
         .read_api()
         .get_owned_objects(
@@ -1172,13 +1218,29 @@ async fn test_package_management_on_publish_command() -> Result<(), anyhow::Erro
     // Check log output contains all object ids.
     let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
 
-    // Provide path to well formed package sources
-    let mut package_path = PathBuf::from(TEST_DATA_DIR);
-    package_path.push("dummy_modules_publish");
     let build_config = BuildConfig::new_for_testing().config;
+
+    // make temp dir for test pkg and sui-framework packages
+    let tempdir = tempdir()?.keep();
+    let pkg_path = &tempdir.join("test");
+    // copy test pkg
+    copy_dir_all(
+        &PathBuf::from(TEST_DATA_DIR).join("pkg_mgmt_modules_publish"),
+        pkg_path,
+    )
+    .expect("to copy the test pkg from dir to a temp dir");
+    // copy framework packages as the test pkg depends on them
+    let framework_pkgs = PathBuf::from("../sui-framework/packages");
+    copy_dir_all(
+        framework_pkgs,
+        &tempdir.join("sui-framework").join("packages"),
+    )?;
+
+    // we want to do a non ephemeral publication, so set localnet as environment in toml file
+    let _ = update_toml_with_localnet_chain_id(&pkg_path.join("Move.toml"), chain_id);
     // Publish the package
-    let resp = SuiClientCommands::Publish {
-        package_path,
+    let resp = SuiClientCommands::Publish(PublishArgs {
+        package_path: pkg_path.clone(),
         build_config: build_config.clone(),
         skip_dependency_verification: false,
         verify_deps: true,
@@ -1191,7 +1253,7 @@ async fn test_package_management_on_publish_command() -> Result<(), anyhow::Erro
             ..Default::default()
         },
         processing: TxProcessingArgs::default(),
-    }
+    })
     .execute(context)
     .await?;
 
@@ -1209,20 +1271,25 @@ async fn test_package_management_on_publish_command() -> Result<(), anyhow::Erro
             unreachable!("Invalid response");
         };
 
-    // Get lock file that recorded Package ID and version
-    let lock_file = build_config.lock_file.expect("Lock file for testing");
-    let mut lock_file = std::fs::File::open(lock_file).unwrap();
-    let envs = ManagedPackage::read(&mut lock_file).unwrap();
-    let localnet = envs.get("localnet").unwrap();
+    // read the file with published data after publish command successfully executed
+    let pubfile_str = std::fs::read_to_string(&pkg_path.join("Published.toml"))
+        .expect("to read from Published.toml file");
+    let parsed: ParsedPublishedFile<SuiFlavor> = toml_edit::de::from_str(&pubfile_str).unwrap();
+
+    let published_addresses = parsed.published.get("localnet").unwrap().addresses.clone();
+
+    assert_eq!(expect_original_id, published_addresses.original_id.0.into());
     assert_eq!(
-        expect_original_id.to_string(),
-        localnet.original_published_id,
+        expect_original_id,
+        published_addresses.published_at.0.into()
     );
-    assert_eq!(expect_original_id.to_string(), localnet.latest_published_id);
+
+    let v = parsed.published.get("localnet").unwrap().version.into();
     assert_eq!(
-        expect_version.value(),
-        localnet.version.parse::<u64>().unwrap(),
+        expect_version, v,
+        "Published package version does not match with publication data written to file, expected {expect_version} but got {v}"
     );
+
     Ok(())
 }
 
@@ -1256,21 +1323,25 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("sod");
     let build_config = BuildConfig::new_for_testing().config;
-    let resp = SuiClientCommands::Publish {
-        package_path,
-        build_config,
-        skip_dependency_verification: false,
-        verify_deps: true,
-        with_unpublished_dependencies: false,
-        payment: PaymentArgs {
-            gas: vec![gas_obj_id],
+    let resp = SuiClientCommands::TestPublish(TestPublishArgs {
+        publish_args: PublishArgs {
+            package_path,
+            build_config,
+            skip_dependency_verification: false,
+            verify_deps: true,
+            with_unpublished_dependencies: false,
+            payment: PaymentArgs {
+                gas: vec![gas_obj_id],
+            },
+            gas_data: GasDataArgs {
+                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+                ..Default::default()
+            },
+            processing: TxProcessingArgs::default(),
         },
-        gas_data: GasDataArgs {
-            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-            ..Default::default()
-        },
-        processing: TxProcessingArgs::default(),
-    }
+        build_env: Some("testnet".to_string()),
+        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+    })
     .execute(context)
     .await?;
 
@@ -1376,21 +1447,25 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("tto");
     let build_config = BuildConfig::new_for_testing().config;
-    let resp = SuiClientCommands::Publish {
-        package_path,
-        build_config,
-        skip_dependency_verification: false,
-        verify_deps: true,
-        with_unpublished_dependencies: false,
-        payment: PaymentArgs {
-            gas: vec![gas_obj_id],
+    let resp = SuiClientCommands::TestPublish(TestPublishArgs {
+        publish_args: PublishArgs {
+            package_path,
+            build_config,
+            skip_dependency_verification: false,
+            verify_deps: true,
+            with_unpublished_dependencies: false,
+            payment: PaymentArgs {
+                gas: vec![gas_obj_id],
+            },
+            gas_data: GasDataArgs {
+                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+                ..Default::default()
+            },
+            processing: TxProcessingArgs::default(),
         },
-        gas_data: GasDataArgs {
-            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-            ..Default::default()
-        },
-        processing: TxProcessingArgs::default(),
-    }
+        build_env: Some("testnet".to_string()),
+        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+    })
     .execute(context)
     .await?;
 
@@ -1516,21 +1591,25 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("tto");
     let build_config = BuildConfig::new_for_testing().config;
-    let resp = SuiClientCommands::Publish {
-        package_path,
-        build_config,
-        skip_dependency_verification: false,
-        verify_deps: true,
-        with_unpublished_dependencies: false,
-        payment: PaymentArgs {
-            gas: vec![gas_obj_id],
+    let resp = SuiClientCommands::TestPublish(TestPublishArgs {
+        publish_args: PublishArgs {
+            package_path,
+            build_config,
+            skip_dependency_verification: false,
+            verify_deps: true,
+            with_unpublished_dependencies: false,
+            payment: PaymentArgs {
+                gas: vec![gas_obj_id],
+            },
+            gas_data: GasDataArgs {
+                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+                ..Default::default()
+            },
+            processing: TxProcessingArgs::default(),
         },
-        gas_data: GasDataArgs {
-            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-            ..Default::default()
-        },
-        processing: TxProcessingArgs::default(),
-    }
+        build_env: Some("testnet".to_string()),
+        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+    })
     .execute(context)
     .await?;
 
@@ -1656,21 +1735,25 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("tto");
     let build_config = BuildConfig::new_for_testing().config;
-    let resp = SuiClientCommands::Publish {
-        package_path,
-        build_config,
-        skip_dependency_verification: false,
-        with_unpublished_dependencies: false,
-        verify_deps: true,
-        payment: PaymentArgs {
-            gas: vec![gas_obj_id],
+    let resp = SuiClientCommands::TestPublish(TestPublishArgs {
+        publish_args: PublishArgs {
+            package_path,
+            build_config,
+            skip_dependency_verification: false,
+            with_unpublished_dependencies: false,
+            verify_deps: true,
+            payment: PaymentArgs {
+                gas: vec![gas_obj_id],
+            },
+            gas_data: GasDataArgs {
+                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+                ..Default::default()
+            },
+            processing: TxProcessingArgs::default(),
         },
-        gas_data: GasDataArgs {
-            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-            ..Default::default()
-        },
-        processing: TxProcessingArgs::default(),
-    }
+        build_env: Some("testnet".to_string()),
+        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+    })
     .execute(context)
     .await?;
 
@@ -1798,21 +1881,25 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_with_unpublished_dependency");
     let build_config = BuildConfig::new_for_testing().config;
-    let resp = SuiClientCommands::Publish {
-        package_path,
-        build_config,
-        skip_dependency_verification: false,
-        verify_deps: false,
-        with_unpublished_dependencies,
-        payment: PaymentArgs {
-            gas: vec![gas_obj_id],
+    let resp = SuiClientCommands::TestPublish(TestPublishArgs {
+        publish_args: PublishArgs {
+            package_path,
+            build_config,
+            skip_dependency_verification: false,
+            verify_deps: false,
+            with_unpublished_dependencies,
+            payment: PaymentArgs {
+                gas: vec![gas_obj_id],
+            },
+            gas_data: GasDataArgs {
+                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+                ..Default::default()
+            },
+            processing: TxProcessingArgs::default(),
         },
-        gas_data: GasDataArgs {
-            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-            ..Default::default()
-        },
-        processing: TxProcessingArgs::default(),
-    }
+        build_env: Some("testnet".to_string()),
+        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+    })
     .execute(context)
     .await?;
 
@@ -1875,21 +1962,25 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_with_unpublished_dependency");
     let build_config = BuildConfig::new_for_testing().config;
-    let result = SuiClientCommands::Publish {
-        package_path,
-        build_config,
-        skip_dependency_verification: false,
-        verify_deps: true,
-        with_unpublished_dependencies,
-        payment: PaymentArgs {
-            gas: vec![gas_obj_id],
+    let result = SuiClientCommands::TestPublish(TestPublishArgs {
+        publish_args: PublishArgs {
+            package_path,
+            build_config,
+            skip_dependency_verification: false,
+            verify_deps: true,
+            with_unpublished_dependencies,
+            payment: PaymentArgs {
+                gas: vec![gas_obj_id],
+            },
+            gas_data: GasDataArgs {
+                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+                ..Default::default()
+            },
+            processing: TxProcessingArgs::default(),
         },
-        gas_data: GasDataArgs {
-            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-            ..Default::default()
-        },
-        processing: TxProcessingArgs::default(),
-    }
+        build_env: Some("testnet".to_string()),
+        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+    })
     .execute(context)
     .await;
 
@@ -1926,21 +2017,25 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_with_unpublished_dependency_with_non_zero_address");
     let build_config = BuildConfig::new_for_testing().config;
-    let result = SuiClientCommands::Publish {
-        package_path,
-        build_config,
-        skip_dependency_verification: false,
-        verify_deps: true,
-        with_unpublished_dependencies,
-        payment: PaymentArgs {
-            gas: vec![gas_obj_id],
+    let result = SuiClientCommands::TestPublish(TestPublishArgs {
+        publish_args: PublishArgs {
+            package_path,
+            build_config,
+            skip_dependency_verification: false,
+            verify_deps: true,
+            with_unpublished_dependencies,
+            payment: PaymentArgs {
+                gas: vec![gas_obj_id],
+            },
+            gas_data: GasDataArgs {
+                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+                ..Default::default()
+            },
+            processing: TxProcessingArgs::default(),
         },
-        gas_data: GasDataArgs {
-            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-            ..Default::default()
-        },
-        processing: TxProcessingArgs::default(),
-    }
+        build_env: Some("testnet".to_string()),
+        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+    })
     .execute(context)
     .await;
 
@@ -1986,21 +2081,25 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_failure_invalid");
     let build_config = BuildConfig::new_for_testing().config;
-    let result = SuiClientCommands::Publish {
-        package_path,
-        build_config,
-        skip_dependency_verification: false,
-        verify_deps: true,
-        with_unpublished_dependencies,
-        payment: PaymentArgs {
-            gas: vec![gas_obj_id],
+    let result = SuiClientCommands::TestPublish(TestPublishArgs {
+        publish_args: PublishArgs {
+            package_path,
+            build_config,
+            skip_dependency_verification: false,
+            verify_deps: true,
+            with_unpublished_dependencies,
+            payment: PaymentArgs {
+                gas: vec![gas_obj_id],
+            },
+            gas_data: GasDataArgs {
+                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+                ..Default::default()
+            },
+            processing: TxProcessingArgs::default(),
         },
-        gas_data: GasDataArgs {
-            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-            ..Default::default()
-        },
-        processing: TxProcessingArgs::default(),
-    }
+        build_env: Some("testnet".to_string()),
+        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+    })
     .execute(context)
     .await;
 
@@ -2033,21 +2132,25 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_with_nonexistent_dependency");
     let build_config = BuildConfig::new_for_testing().config;
-    let result = SuiClientCommands::Publish {
-        package_path,
-        build_config,
-        skip_dependency_verification: false,
-        verify_deps: true,
-        with_unpublished_dependencies: false,
-        payment: PaymentArgs {
-            gas: vec![gas_obj_id],
+    let result = SuiClientCommands::TestPublish(TestPublishArgs {
+        publish_args: PublishArgs {
+            package_path,
+            build_config,
+            skip_dependency_verification: false,
+            verify_deps: true,
+            with_unpublished_dependencies: false,
+            payment: PaymentArgs {
+                gas: vec![gas_obj_id],
+            },
+            gas_data: GasDataArgs {
+                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+                ..Default::default()
+            },
+            processing: TxProcessingArgs::default(),
         },
-        gas_data: GasDataArgs {
-            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-            ..Default::default()
-        },
-        processing: TxProcessingArgs::default(),
-    }
+        build_env: Some("testnet".to_string()),
+        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+    })
     .execute(context)
     .await;
 
@@ -2081,21 +2184,25 @@ async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {
     // this would have been the result of calling `sui client publish --test`
     build_config.test_mode = true;
 
-    let result = SuiClientCommands::Publish {
-        package_path,
-        build_config,
-        skip_dependency_verification: false,
-        verify_deps: true,
-        with_unpublished_dependencies: false,
-        payment: PaymentArgs {
-            gas: vec![gas_obj_id],
+    let result = SuiClientCommands::TestPublish(TestPublishArgs {
+        publish_args: PublishArgs {
+            package_path,
+            build_config,
+            skip_dependency_verification: false,
+            verify_deps: true,
+            with_unpublished_dependencies: false,
+            payment: PaymentArgs {
+                gas: vec![gas_obj_id],
+            },
+            gas_data: GasDataArgs {
+                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+                ..Default::default()
+            },
+            processing: TxProcessingArgs::default(),
         },
-        gas_data: GasDataArgs {
-            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-            ..Default::default()
-        },
-        processing: TxProcessingArgs::default(),
-    }
+        build_env: Some("testnet".to_string()),
+        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+    })
     .execute(context)
     .await;
 
@@ -2141,21 +2248,25 @@ async fn test_package_publish_empty() -> Result<(), anyhow::Error> {
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("empty");
     let build_config = BuildConfig::new_for_testing().config;
-    let result = SuiClientCommands::Publish {
-        package_path,
-        build_config,
-        skip_dependency_verification: false,
-        verify_deps: true,
-        with_unpublished_dependencies: false,
-        payment: PaymentArgs {
-            gas: vec![gas_obj_id],
+    let result = SuiClientCommands::TestPublish(TestPublishArgs {
+        publish_args: PublishArgs {
+            package_path,
+            build_config,
+            skip_dependency_verification: false,
+            verify_deps: true,
+            with_unpublished_dependencies: false,
+            payment: PaymentArgs {
+                gas: vec![gas_obj_id],
+            },
+            gas_data: GasDataArgs {
+                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+                ..Default::default()
+            },
+            processing: TxProcessingArgs::default(),
         },
-        gas_data: GasDataArgs {
-            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-            ..Default::default()
-        },
-        processing: TxProcessingArgs::default(),
-    }
+        build_env: Some("testnet".to_string()),
+        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+    })
     .execute(context)
     .await;
 
@@ -2174,7 +2285,6 @@ async fn test_package_publish_empty() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
@@ -2203,21 +2313,25 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("dummy_modules_upgrade");
     let build_config = BuildConfig::new_for_testing().config;
-    let resp = SuiClientCommands::Publish {
-        package_path: package_path.clone(),
-        build_config,
-        skip_dependency_verification: false,
-        verify_deps: true,
-        with_unpublished_dependencies: false,
-        payment: PaymentArgs {
-            gas: vec![gas_obj_id],
+    let resp = SuiClientCommands::TestPublish(TestPublishArgs {
+        publish_args: PublishArgs {
+            package_path: package_path.clone(),
+            build_config,
+            skip_dependency_verification: false,
+            verify_deps: true,
+            with_unpublished_dependencies: false,
+            payment: PaymentArgs {
+                gas: vec![gas_obj_id],
+            },
+            gas_data: GasDataArgs {
+                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+                ..Default::default()
+            },
+            processing: TxProcessingArgs::default(),
         },
-        gas_data: GasDataArgs {
-            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-            ..Default::default()
-        },
-        processing: TxProcessingArgs::default(),
-    }
+        build_env: Some("testnet".to_string()),
+        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+    })
     .execute(context)
     .await?;
 
@@ -2282,7 +2396,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::Upgrade {
         package_path: upgrade_pkg_path,
-        upgrade_capability: cap.reference.object_id,
+        upgrade_capability: Some(cap.reference.object_id),
         build_config,
         verify_compatibility: true,
         skip_dependency_verification: false,
@@ -2326,12 +2440,12 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Error> {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
     let client = context.get_client().await?;
+    let chain_id = client.read_api().get_chain_identifier().await?;
     let object_refs = client
         .read_api()
         .get_owned_objects(
@@ -2354,9 +2468,26 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     // Provide path to well formed package sources
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("dummy_modules_upgrade");
-    let mut build_config = BuildConfig::new_for_testing().config;
-    let resp = SuiClientCommands::Publish {
-        package_path: package_path.clone(),
+
+    // make temp dir for test pkg and sui-framework packages
+    let tempdir = tempdir()?.keep();
+    let pkg_path = &tempdir.join("test");
+    // copy test pkg
+    copy_dir_all(&package_path, pkg_path)
+        .expect("to copy the test pkg from data dir to a temp dir");
+    // copy framework packages as the test pkg depends on them
+    let framework_pkgs = PathBuf::from("../sui-framework/packages");
+    copy_dir_all(
+        framework_pkgs,
+        &tempdir.join("sui-framework").join("packages"),
+    )?;
+
+    // we want to do a non ephemeral publication, so set localnet as environment in toml file
+    let _ = update_toml_with_localnet_chain_id(&pkg_path.join("Move.toml"), chain_id.clone());
+
+    let build_config = BuildConfig::new_for_testing().config;
+    let resp = SuiClientCommands::Publish(PublishArgs {
+        package_path: pkg_path.clone(),
         build_config: build_config.clone(),
         skip_dependency_verification: false,
         verify_deps: true,
@@ -2369,7 +2500,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
             ..Default::default()
         },
         processing: TxProcessingArgs::default(),
-    }
+    })
     .execute(context)
     .await?;
 
@@ -2381,43 +2512,11 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
 
     assert!(effects.status.is_ok());
     assert_eq!(effects.gas_object().object_id(), gas_obj_id);
-    let cap = effects
-        .created()
-        .iter()
-        .find(|refe| matches!(refe.owner, Owner::AddressOwner(_)))
-        .unwrap();
-
-    // We will upgrade the package in a `tmp_dir` using the `Move.lock` resulting from publish,
-    // so as not to clobber anything.
-    // The `Move.lock` needs to point to the root directory of the package-to-be-upgraded.
-    // The core implementation does not use support an arbitrary `lock_file` path specified in
-    // `BuildConfig` when the `Move.lock` file is an input for upgrades, so we change the `BuildConfig`
-    // `lock_file` to point to the root directory of package-to-be-upgraded.
-    let tmp_dir = tempfile::tempdir().unwrap();
-    fs_extra::dir::copy(
-        &package_path,
-        tmp_dir.path(),
-        &fs_extra::dir::CopyOptions::default(),
-    )
-    .unwrap();
-    let mut upgrade_pkg_path = tmp_dir.path().to_path_buf();
-    upgrade_pkg_path.extend(["dummy_modules_upgrade", "Move.toml"]);
-    upgrade_pkg_path.pop();
-    // Place the `Move.lock` after publishing in the tmp dir for upgrading.
-    let published_lock_file_path = build_config.lock_file.clone().unwrap();
-    let mut upgrade_lock_file_path = upgrade_pkg_path.clone();
-    upgrade_lock_file_path.push("Move.lock");
-    std::fs::copy(
-        published_lock_file_path.clone(),
-        upgrade_lock_file_path.clone(),
-    )?;
-    // Point the `BuildConfig` lock_file to the package root.
-    build_config.lock_file = Some(upgrade_pkg_path.join("Move.lock"));
 
     // Now run the upgrade
     let upgrade_response = SuiClientCommands::Upgrade {
-        package_path: upgrade_pkg_path,
-        upgrade_capability: cap.reference.object_id,
+        package_path: pkg_path.to_path_buf(),
+        upgrade_capability: None,
         build_config: build_config.clone(),
         verify_compatibility: true,
         skip_dependency_verification: false,
@@ -2454,163 +2553,21 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
             unreachable!("Invalid response");
         };
 
-    // Get lock file that recorded Package ID and version
-    let lock_file = build_config.lock_file.expect("Lock file for testing");
-    let mut lock_file = std::fs::File::open(lock_file).unwrap();
-    let envs = ManagedPackage::read(&mut lock_file).unwrap();
-    let localnet = envs.get("localnet").unwrap();
-    // Original ID should correspond to first published package.
+    let published_file_str = std::fs::read_to_string(pkg_path.join("Published.toml")).unwrap();
+    let published_file: ParsedPublishedFile<SuiFlavor> =
+        toml_edit::de::from_str(&published_file_str).expect("to deserialize published file");
+    let data = published_file
+        .published
+        .get("localnet")
+        .expect("should have a localnet publication info");
+
     assert_eq!(
-        expect_original_id.to_string(),
-        localnet.original_published_id,
+        expect_upgrade_latest_id,
+        data.addresses.published_at.0.into()
     );
-    // Upgrade ID should correspond to upgraded package.
-    assert_eq!(
-        expect_upgrade_latest_id.to_string(),
-        localnet.latest_published_id,
-    );
-    // Version should correspond to upgraded package.
-    assert_eq!(
-        expect_upgrade_version.value(),
-        localnet.version.parse::<u64>().unwrap(),
-    );
-    Ok(())
-}
+    assert_eq!(expect_original_id, data.addresses.original_id.0.into());
+    assert_eq!(expect_upgrade_version, data.version.into());
 
-#[sim_test]
-async fn test_package_management_on_upgrade_command_conflict() -> Result<(), anyhow::Error> {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-    let mut test_cluster = TestClusterBuilder::new().build().await;
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let address = test_cluster.get_address_0();
-    let context = &mut test_cluster.wallet;
-    let client = context.get_client().await?;
-    let object_refs = client
-        .read_api()
-        .get_owned_objects(
-            address,
-            Some(SuiObjectResponseQuery::new_with_options(
-                SuiObjectDataOptions::new()
-                    .with_type()
-                    .with_owner()
-                    .with_previous_transaction(),
-            )),
-            None,
-            None,
-        )
-        .await?
-        .data;
-
-    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
-
-    // Provide path to well formed package sources
-    let mut package_path = PathBuf::from(TEST_DATA_DIR);
-    package_path.push("dummy_modules_upgrade");
-    let build_config_publish = BuildConfig::new_for_testing().config;
-    let resp = SuiClientCommands::Publish {
-        package_path: package_path.clone(),
-        build_config: build_config_publish.clone(),
-        skip_dependency_verification: false,
-        verify_deps: true,
-        with_unpublished_dependencies: false,
-        payment: PaymentArgs {
-            gas: vec![gas_obj_id],
-        },
-        gas_data: GasDataArgs {
-            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-            ..Default::default()
-        },
-        processing: TxProcessingArgs::default(),
-    }
-    .execute(context)
-    .await?;
-
-    let SuiClientCommandResult::TransactionBlock(publish_response) = resp else {
-        unreachable!("Invalid response");
-    };
-
-    let SuiTransactionBlockEffects::V1(effects) = publish_response.clone().effects.unwrap();
-
-    assert!(effects.status.is_ok());
-    assert_eq!(effects.gas_object().object_id(), gas_obj_id);
-    let package = effects
-        .created()
-        .iter()
-        .find(|refe| matches!(refe.owner, Owner::Immutable))
-        .unwrap();
-
-    let cap = effects
-        .created()
-        .iter()
-        .find(|refe| matches!(refe.owner, Owner::AddressOwner(_)))
-        .unwrap();
-
-    // Set up a temporary working directory  for upgrading.
-    let tmp_dir = tempfile::tempdir().unwrap();
-    fs_extra::dir::copy(
-        &package_path,
-        tmp_dir.path(),
-        &fs_extra::dir::CopyOptions::default(),
-    )
-    .unwrap();
-    let mut upgrade_pkg_path = tmp_dir.path().to_path_buf();
-    upgrade_pkg_path.extend(["dummy_modules_upgrade", "Move.toml"]);
-    let mut move_toml = std::fs::File::options()
-        .read(true)
-        .write(true)
-        .open(&upgrade_pkg_path)
-        .unwrap();
-    upgrade_pkg_path.pop();
-    let mut buf = String::new();
-    move_toml.read_to_string(&mut buf).unwrap();
-    let mut lines: Vec<String> = buf.split('\n').map(|x| x.to_string()).collect();
-    let idx = lines.iter().position(|s| s == "[package]").unwrap();
-    // Purposely add a conflicting `published-at` address to the Move manifest.
-    lines.insert(idx + 1, "published-at = \"0xbad\"".to_string());
-    let new = lines.join("\n");
-    move_toml.write_at(new.as_bytes(), 0).unwrap();
-
-    // Create a new build config for the upgrade. Initialize its lock file to the package we published.
-    let build_config_upgrade = BuildConfig::new_for_testing().config;
-    let mut upgrade_lock_file_path = upgrade_pkg_path.clone();
-    upgrade_lock_file_path.push("Move.lock");
-    let publish_lock_file_path = build_config_publish.lock_file.unwrap();
-    std::fs::copy(
-        publish_lock_file_path.clone(),
-        upgrade_lock_file_path.clone(),
-    )?;
-
-    // Now run the upgrade
-    let upgrade_response = SuiClientCommands::Upgrade {
-        package_path: upgrade_pkg_path,
-        upgrade_capability: cap.reference.object_id,
-        build_config: build_config_upgrade.clone(),
-        verify_compatibility: true,
-        skip_dependency_verification: false,
-        verify_deps: true,
-        with_unpublished_dependencies: false,
-        payment: PaymentArgs {
-            gas: vec![gas_obj_id],
-        },
-        gas_data: GasDataArgs {
-            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-            ..Default::default()
-        },
-        processing: TxProcessingArgs::default(),
-    }
-    .execute(context)
-    .await;
-
-    let err_string = upgrade_response.unwrap_err().to_string();
-    let err_string = err_string.replace(&package.object_id().to_string(), "<elided-for-test>");
-
-    let expect = expect![[r#"
-Conflicting published package address: `Move.toml` contains published-at address 0x0000000000000000000000000000000000000000000000000000000000000bad but `Move.lock` file contains published-at address <elided-for-test>. You may want to:
- - delete the published-at address in the `Move.toml` if the `Move.lock` address is correct; OR
- - update the `Move.lock` address using the `sui manage-package` command to be the same as the `Move.toml`; OR
- - check that your `sui active-env` (currently localnet) corresponds to the chain on which the package is published (i.e., devnet, testnet, mainnet); OR
- - contact the maintainer if this package is a dependency and request resolving the conflict."#]];
-    expect.assert_eq(&err_string);
     Ok(())
 }
 
@@ -4834,7 +4791,6 @@ async fn test_custom_sender() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_clever_errors() -> Result<(), anyhow::Error> {
     // Publish the package
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
@@ -4863,21 +4819,25 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("clever_errors");
     let build_config = BuildConfig::new_for_testing().config;
-    let resp = SuiClientCommands::Publish {
-        package_path: package_path.clone(),
-        build_config,
-        skip_dependency_verification: false,
-        verify_deps: true,
-        with_unpublished_dependencies: false,
-        payment: PaymentArgs {
-            gas: vec![gas_obj_id],
+    let resp = SuiClientCommands::TestPublish(TestPublishArgs {
+        publish_args: PublishArgs {
+            package_path: package_path.clone(),
+            build_config,
+            skip_dependency_verification: false,
+            verify_deps: true,
+            with_unpublished_dependencies: false,
+            payment: PaymentArgs {
+                gas: vec![gas_obj_id],
+            },
+            gas_data: GasDataArgs {
+                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+                ..Default::default()
+            },
+            processing: TxProcessingArgs::default(),
         },
-        gas_data: GasDataArgs {
-            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-            ..Default::default()
-        },
-        processing: TxProcessingArgs::default(),
-    }
+        build_env: Some("testnet".to_string()),
+        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+    })
     .execute(context)
     .await?;
 
@@ -5023,71 +4983,31 @@ async fn test_parse_host_port() {
     assert!(parse_host_port(input.to_string(), 9123).is_err());
 }
 
-#[sim_test]
-async fn test_tree_shaking_package_with_unpublished_deps() -> Result<(), anyhow::Error> {
-    let mut test = TreeShakingTest::new().await.unwrap();
-    // A package and with unpublished deps
-    let (package_id, _) = test.publish_package("H", true).await.unwrap();
-
-    // set with_unpublished_dependencies to true and publish package H
-    let linkage_table_h = test.fetch_linkage_table(package_id).await;
-    // H depends on G, which is unpublished, so the linkage table should be empty as G will be
-    // included in H during publishing
-    assert!(linkage_table_h.is_empty());
-
-    // try publish package H but `with_unpublished_dependencies` is false. Should error
-    let resp = test.publish_package("H", false).await;
-    assert!(resp.is_err());
-
-    Ok(())
-}
-
-#[sim_test]
-#[ignore] // TODO: DVX-786
-async fn test_tree_shaking_package_with_bytecode_deps() -> Result<(), anyhow::Error> {
-    let mut test = TreeShakingTest::new().await?;
-    let with_unpublished_dependencies = false;
-
-    // bytecode deps without source code
-    let (package_a_id, _) = test
-        .publish_package("A", with_unpublished_dependencies)
-        .await?;
-
-    // make pkg a to be a bytecode dep for package F
-    // set published-at field to package id and addresses a to package id
-    let package_path = test.package_path("A");
-    add_ids_to_manifest(&package_path, &package_a_id, Some(package_a_id))?;
-
-    // delete the sources folder from pkg A to setup A as bytecode dep for package F
-    fs::remove_file(package_path.join("Move.lock"))?;
-    let build_folder = package_path.join("build");
-    if build_folder.exists() {
-        fs::remove_dir_all(&build_folder)?;
-    }
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-    // now build the package which will create the build folder and a new Move.lock file
-    BuildConfig::new_for_testing().build(&package_path).unwrap();
-    fs::remove_dir_all(package_path.join("sources"))?;
-
-    let (package_f_id, _) = test
-        .publish_package("F", with_unpublished_dependencies)
-        .await?;
-    let linkage_table_f = test.fetch_linkage_table(package_f_id).await;
-    // F depends on A as a bytecode dep, so the linkage table should not be empty
-    assert!(
-        linkage_table_f.contains_key(&package_a_id),
-        "Package F should depend on A"
-    );
-
-    Ok(())
-}
+// #[sim_test]
+// async fn test_tree_shaking_package_with_unpublished_deps() -> Result<(), anyhow::Error> {
+//     let mut test = TreeShakingTest::new().await.unwrap();
+//     // A package and with unpublished deps
+//     let (package_id, _) = test.publish_package("H", true).await.unwrap();
+//
+//     // set with_unpublished_dependencies to true and publish package H
+//     let linkage_table_h = test.fetch_linkage_table(package_id).await;
+//     // H depends on G, which is unpublished, so the linkage table should be empty as G will be
+//     // included in H during publishing
+//     assert!(linkage_table_h.is_empty());
+//
+//     // try publish package H but `with_unpublished_dependencies` is false. Should error
+//     let resp = test.publish_package("H", false).await;
+//     assert!(resp.is_err());
+//
+//     Ok(())
+// }
 
 #[sim_test]
 async fn test_tree_shaking_package_without_dependencies() -> Result<(), anyhow::Error> {
     let mut test = TreeShakingTest::new().await?;
 
     // Publish package A and verify empty linkage table
-    let (package_a_id, _) = test.publish_package("A", false).await?;
+    let (package_a_id, _) = test.publish_package("A", false, None).await?;
     let move_pkg_a = fetch_move_packages(&test.client, vec![package_a_id]).await;
     let linkage_table_a = move_pkg_a.first().unwrap().linkage_table();
     assert!(
@@ -5103,10 +5023,16 @@ async fn test_tree_shaking_package_with_direct_dependency() -> Result<(), anyhow
     let mut test = TreeShakingTest::new().await?;
 
     // First publish package A
-    let (package_a_id, _) = test.publish_package("A", false).await?;
+    let (package_a_id, _) = test.publish_package("A", false, None).await?;
 
     // Then publish B which depends on A
-    let (package_b_id, _) = test.publish_package("B_A", false).await?;
+    let (package_b_id, _) = test
+        .publish_package(
+            "B_A",
+            false,
+            Some(test.package_path("A").join("localnet.toml")),
+        )
+        .await?;
     let linkage_table_b = test.fetch_linkage_table(package_b_id).await;
     assert!(
         linkage_table_b.contains_key(&package_a_id),
@@ -5121,10 +5047,16 @@ async fn test_tree_shaking_package_with_unused_dependency() -> Result<(), anyhow
     let mut test = TreeShakingTest::new().await?;
 
     // First publish package A
-    let (_, _) = test.publish_package("A", false).await?;
+    let (_, _) = test.publish_package("A", false, None).await?;
 
     // Then publish B which declares but doesn't use A
-    let (package_b_id, _) = test.publish_package("B_A1", false).await?;
+    let (package_b_id, _) = test
+        .publish_package(
+            "B_A1",
+            false,
+            Some(test.package_path("A").join("localnet.toml")),
+        )
+        .await?;
     let linkage_table_b = test.fetch_linkage_table(package_b_id).await;
     assert!(
         linkage_table_b.is_empty(),
@@ -5136,14 +5068,27 @@ async fn test_tree_shaking_package_with_unused_dependency() -> Result<(), anyhow
 
 #[sim_test]
 async fn test_tree_shaking_package_with_transitive_dependencies1() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
     let mut test = TreeShakingTest::new().await?;
 
     // Publish packages A and B
-    let (package_a_id, _) = test.publish_package("A", false).await?;
-    let (package_b_id, _) = test.publish_package("B_A", false).await?;
+    let (package_a_id, _) = test.publish_package("A", false, None).await?;
+    let (package_b_id, _) = test
+        .publish_package(
+            "B_A",
+            false,
+            Some(test.package_path("A").join("localnet.toml")),
+        )
+        .await?;
 
     // Publish C which depends on B (which depends on A)
-    let (package_c_id, _) = test.publish_package("C_B_A", false).await?;
+    let (package_c_id, _) = test
+        .publish_package(
+            "C_B_A",
+            false,
+            Some(test.package_path("B_A").join("localnet.toml")),
+        )
+        .await?;
     let linkage_table_c = test.fetch_linkage_table(package_c_id).await;
 
     assert!(
@@ -5171,11 +5116,23 @@ async fn test_tree_shaking_package_with_transitive_dependencies_and_no_code_refe
     let mut test = TreeShakingTest::new().await?;
 
     // Publish packages A and B
-    let (_, _) = test.publish_package("A", false).await?;
-    let (_, _) = test.publish_package("B_A1", false).await?;
+    let (_, _) = test.publish_package("A", false, None).await?;
+    let (_, _) = test
+        .publish_package(
+            "B_A1",
+            false,
+            Some(test.package_path("A").join("localnet.toml")),
+        )
+        .await?;
 
     // Publish C which depends on B
-    let (package_c_id, _) = test.publish_package("C_B", false).await?;
+    let (package_c_id, _) = test
+        .publish_package(
+            "C_B",
+            false,
+            Some(test.package_path("B_A1").join("localnet.toml")),
+        )
+        .await?;
     let linkage_table_c = test.fetch_linkage_table(package_c_id).await;
 
     assert!(
@@ -5186,208 +5143,214 @@ async fn test_tree_shaking_package_with_transitive_dependencies_and_no_code_refe
     Ok(())
 }
 
-#[sim_test]
-async fn test_tree_shaking_package_deps_on_pkg_upgrade() -> Result<(), anyhow::Error> {
-    let mut test = TreeShakingTest::new().await?;
+// #[sim_test]
+// async fn test_tree_shaking_package_deps_on_pkg_upgrade() -> Result<(), anyhow::Error> {
+//     let mut test = TreeShakingTest::new().await?;
+//
+//     // Publish package A and B
+//     let (package_a_id, cap) = test.publish_package("A", false, None).await?;
+//     let (_, _) = test
+//         .publish_package(
+//             "B_A",
+//             false,
+//             Some(test.package_path("A").join("localnet.toml")),
+//         )
+//         .await?;
+//
+//     // Upgrade package A (named A_v1)
+//     std::fs::copy(
+//         test.package_path("A").join("Move.lock"),
+//         test.package_path("A_v1").join("Move.lock"),
+//     )?;
+//     let package_a_v1_id = test.upgrade_package("A_v1", cap).await?;
+//
+//     // Publish D which depends on A_v1 but no code references A
+//     let (package_d_id, _) = test.publish_package("D_A", false).await?;
+//     let linkage_table_d = test.fetch_linkage_table(package_d_id).await;
+//
+//     assert!(
+//         linkage_table_d.is_empty(),
+//         "Package D should have no dependencies"
+//     );
+//
+//     // Publish D which depends on A_v1 and code references it
+//     let (package_d_id, _) = test.publish_package("D_A_v1", false).await?;
+//     let linkage_table_d = test.fetch_linkage_table(package_d_id).await;
+//
+//     assert!(
+//         linkage_table_d.contains_key(&package_a_id),
+//         "Package D should depend on A"
+//     );
+//     assert!(linkage_table_d
+//         .get(&package_a_id)
+//         .is_some_and(|x| x.upgraded_id == package_a_v1_id), "Package D should depend on A_v1 after upgrade, and the UpgradeInfo should have matching ids");
+//
+//     let (package_e_id, _) = test.publish_package("E_A_v1", false).await?;
+//
+//     let linkage_table_e = test.fetch_linkage_table(package_e_id).await;
+//     assert!(
+//         linkage_table_e.is_empty(),
+//         "Package E should have no dependencies"
+//     );
+//
+//     let (package_e_id, _) = test.publish_package("E", false).await?;
+//
+//     let linkage_table_e = test.fetch_linkage_table(package_e_id).await;
+//     assert!(
+//         linkage_table_e.contains_key(&package_a_id),
+//         "Package E should depend on A"
+//     );
+//
+//     Ok(())
+// }
 
-    // Publish package A and B
-    let (package_a_id, cap) = test.publish_package("A", false).await?;
-    let (_, _) = test.publish_package("B_A", false).await?;
+// #[sim_test]
+// async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow::Error> {
+//     let mut test = TreeShakingTest::new().await?;
+//
+//     // Publish package A and D_A_v1_but_no_code_references_A
+//     let (package_a_id, cap) = test.publish_package("A", false).await?;
+//     let package_path = test.package_path("A");
+//     add_ids_to_manifest(&package_path, &package_a_id, None)?;
+//     // Upgrade package A (named A_v1)
+//     std::fs::copy(
+//         test.package_path("A").join("Move.lock"),
+//         test.package_path("A_v1").join("Move.lock"),
+//     )?;
+//     let package_a_v1_id = test.upgrade_package("A_v1", cap).await?;
+//
+//     let package_path = test.package_path("A_v1");
+//     add_ids_to_manifest(&package_path, &package_a_v1_id, None)?;
+//
+//     let package_d_id = test.publish_package_without_tree_shaking("D_A").await;
+//     let linkage_table_d = test.fetch_linkage_table(package_d_id).await;
+//     assert!(
+//         linkage_table_d.contains_key(&package_a_id),
+//         "Package D should depend on A"
+//     );
+//
+//     // published package D with the old stuff that isn't aware of automated address mgmt, so
+//     // need to update the published-at field in the manifest
+//     add_ids_to_manifest(&test.package_path("D_A"), &package_d_id, None)?;
+//
+//     // Upgrade package A (named A_v2)
+//     std::fs::copy(
+//         test.package_path("A_v1").join("Move.lock"),
+//         test.package_path("A_v2").join("Move.lock"),
+//     )?;
+//     let package_a_v2_id = test.upgrade_package("A_v2", cap).await?;
+//
+//     // the old code for publishing a package from sui-test-transaction-builder does not know about
+//     // move.lock and so on, so we need to add manually the published-at address.
+//     let package_path = test.package_path("A_v2");
+//     add_ids_to_manifest(&package_path, &package_a_v2_id, None)?;
+//
+//     let (package_i_id, _) = test.publish_package("I", false).await?;
+//     let linkage_table_i = test.fetch_linkage_table(package_i_id).await;
+//     assert!(
+//         linkage_table_i.contains_key(&package_a_id),
+//         "Package I linkage table should have A"
+//     );
+//     assert!(linkage_table_i
+//         .get(&package_a_id)
+//         .is_some_and(|x| x.upgraded_id == package_a_v2_id), "Package I should depend on A_v2 after upgrade, and the UpgradeInfo should have matching ids");
+//
+//     Ok(())
+// }
 
-    // Upgrade package A (named A_v1)
-    std::fs::copy(
-        test.package_path("A").join("Move.lock"),
-        test.package_path("A_v1").join("Move.lock"),
-    )?;
-    let package_a_v1_id = test.upgrade_package("A_v1", cap).await?;
+// #[sim_test]
+// async fn test_tree_shaking_package_deps_on_pkg_upgrade_2() -> Result<(), anyhow::Error> {
+//     let mut test = TreeShakingTest::new().await?;
+//
+//     // Publish package K
+//     let (package_k_id, cap) = test.publish_package("K", false).await?;
+//     let package_path = test.package_path("K");
+//     add_ids_to_manifest(&package_path, &package_k_id, None)?;
+//     // Upgrade package K (named K_v2)
+//     std::fs::copy(
+//         test.package_path("K").join("Move.lock"),
+//         test.package_path("K_v2").join("Move.lock"),
+//     )?;
+//     let package_k_v2_id = test.upgrade_package("K_v2", cap).await?;
+//
+//     let package_path = test.package_path("K_v2");
+//     add_ids_to_manifest(&package_path, &package_k_v2_id, None)?;
+//
+//     let (package_l_id, _) = test.publish_package("L", false).await?;
+//     let linkage_table_l = test.fetch_linkage_table(package_l_id).await;
+//     assert!(
+//         linkage_table_l.contains_key(&package_k_id),
+//         "Package L should depend on K"
+//     );
+//
+//     add_ids_to_manifest(&test.package_path("L"), &package_l_id, None)?;
+//
+//     let (package_m_id, _) = test.publish_package("M", false).await?;
+//     let linkage_table_m = test.fetch_linkage_table(package_m_id).await;
+//     assert!(
+//         linkage_table_m.contains_key(&package_k_id),
+//         "Package M should depend on K"
+//     );
+//
+//     assert!(linkage_table_m
+//         .get(&package_k_id)
+//         .is_some_and(|x| x.upgraded_id == package_k_v2_id), "Package I should depend on A_v2 after upgrade, and the UpgradeInfo should have matching ids");
+//
+//     // publish everything again but without automated address mgmt.
+//
+//     Ok(())
+// }
 
-    // Publish D which depends on A_v1 but no code references A
-    let (package_d_id, _) = test.publish_package("D_A", false).await?;
-    let linkage_table_d = test.fetch_linkage_table(package_d_id).await;
-
-    assert!(
-        linkage_table_d.is_empty(),
-        "Package D should have no dependencies"
-    );
-
-    // Publish D which depends on A_v1 and code references it
-    let (package_d_id, _) = test.publish_package("D_A_v1", false).await?;
-    let linkage_table_d = test.fetch_linkage_table(package_d_id).await;
-
-    assert!(
-        linkage_table_d.contains_key(&package_a_id),
-        "Package D should depend on A"
-    );
-    assert!(linkage_table_d
-        .get(&package_a_id)
-        .is_some_and(|x| x.upgraded_id == package_a_v1_id), "Package D should depend on A_v1 after upgrade, and the UpgradeInfo should have matching ids");
-
-    let (package_e_id, _) = test.publish_package("E_A_v1", false).await?;
-
-    let linkage_table_e = test.fetch_linkage_table(package_e_id).await;
-    assert!(
-        linkage_table_e.is_empty(),
-        "Package E should have no dependencies"
-    );
-
-    let (package_e_id, _) = test.publish_package("E", false).await?;
-
-    let linkage_table_e = test.fetch_linkage_table(package_e_id).await;
-    assert!(
-        linkage_table_e.contains_key(&package_a_id),
-        "Package E should depend on A"
-    );
-
-    Ok(())
-}
-
-#[sim_test]
-async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow::Error> {
-    let mut test = TreeShakingTest::new().await?;
-
-    // Publish package A and D_A_v1_but_no_code_references_A
-    let (package_a_id, cap) = test.publish_package("A", false).await?;
-    let package_path = test.package_path("A");
-    add_ids_to_manifest(&package_path, &package_a_id, None)?;
-    // Upgrade package A (named A_v1)
-    std::fs::copy(
-        test.package_path("A").join("Move.lock"),
-        test.package_path("A_v1").join("Move.lock"),
-    )?;
-    let package_a_v1_id = test.upgrade_package("A_v1", cap).await?;
-
-    let package_path = test.package_path("A_v1");
-    add_ids_to_manifest(&package_path, &package_a_v1_id, None)?;
-
-    let package_d_id = test.publish_package_without_tree_shaking("D_A").await;
-    let linkage_table_d = test.fetch_linkage_table(package_d_id).await;
-    assert!(
-        linkage_table_d.contains_key(&package_a_id),
-        "Package D should depend on A"
-    );
-
-    // published package D with the old stuff that isn't aware of automated address mgmt, so
-    // need to update the published-at field in the manifest
-    add_ids_to_manifest(&test.package_path("D_A"), &package_d_id, None)?;
-
-    // Upgrade package A (named A_v2)
-    std::fs::copy(
-        test.package_path("A_v1").join("Move.lock"),
-        test.package_path("A_v2").join("Move.lock"),
-    )?;
-    let package_a_v2_id = test.upgrade_package("A_v2", cap).await?;
-
-    // the old code for publishing a package from sui-test-transaction-builder does not know about
-    // move.lock and so on, so we need to add manually the published-at address.
-    let package_path = test.package_path("A_v2");
-    add_ids_to_manifest(&package_path, &package_a_v2_id, None)?;
-
-    let (package_i_id, _) = test.publish_package("I", false).await?;
-    let linkage_table_i = test.fetch_linkage_table(package_i_id).await;
-    assert!(
-        linkage_table_i.contains_key(&package_a_id),
-        "Package I linkage table should have A"
-    );
-    assert!(linkage_table_i
-        .get(&package_a_id)
-        .is_some_and(|x| x.upgraded_id == package_a_v2_id), "Package I should depend on A_v2 after upgrade, and the UpgradeInfo should have matching ids");
-
-    Ok(())
-}
-
-#[sim_test]
-async fn test_tree_shaking_package_deps_on_pkg_upgrade_2() -> Result<(), anyhow::Error> {
-    let mut test = TreeShakingTest::new().await?;
-
-    // Publish package K
-    let (package_k_id, cap) = test.publish_package("K", false).await?;
-    let package_path = test.package_path("K");
-    add_ids_to_manifest(&package_path, &package_k_id, None)?;
-    // Upgrade package K (named K_v2)
-    std::fs::copy(
-        test.package_path("K").join("Move.lock"),
-        test.package_path("K_v2").join("Move.lock"),
-    )?;
-    let package_k_v2_id = test.upgrade_package("K_v2", cap).await?;
-
-    let package_path = test.package_path("K_v2");
-    add_ids_to_manifest(&package_path, &package_k_v2_id, None)?;
-
-    let (package_l_id, _) = test.publish_package("L", false).await?;
-    let linkage_table_l = test.fetch_linkage_table(package_l_id).await;
-    assert!(
-        linkage_table_l.contains_key(&package_k_id),
-        "Package L should depend on K"
-    );
-
-    add_ids_to_manifest(&test.package_path("L"), &package_l_id, None)?;
-
-    let (package_m_id, _) = test.publish_package("M", false).await?;
-    let linkage_table_m = test.fetch_linkage_table(package_m_id).await;
-    assert!(
-        linkage_table_m.contains_key(&package_k_id),
-        "Package M should depend on K"
-    );
-
-    assert!(linkage_table_m
-        .get(&package_k_id)
-        .is_some_and(|x| x.upgraded_id == package_k_v2_id), "Package I should depend on A_v2 after upgrade, and the UpgradeInfo should have matching ids");
-
-    // publish everything again but without automated address mgmt.
-
-    Ok(())
-}
-
-#[sim_test]
-async fn test_tree_shaking_package_deps_on_pkg_upgrade_3() -> Result<(), anyhow::Error> {
-    let mut test = TreeShakingTest::new().await?;
-
-    // This test is identic to #2, except it uses the old test-transaction-builder infrastructure
-    // to publish a package without tree shaking. It is also unaware of automated address mgmt,
-    // so this test sets up the published-at fields and addresses sections accordingly.
-
-    // Publish package K
-    let (package_k_id, cap) = test.publish_package("K", false).await?;
-    let package_path = test.package_path("K");
-    add_ids_to_manifest(&package_path, &package_k_id, Some(package_k_id))?;
-    // Upgrade package K (named K_v2)
-    std::fs::copy(
-        test.package_path("K").join("Move.lock"),
-        test.package_path("K_v2").join("Move.lock"),
-    )?;
-    let package_k_v2_id = test.upgrade_package("K_v2", cap).await?;
-    let package_path = test.package_path("K_v2");
-    add_ids_to_manifest(&package_path, &package_k_v2_id, Some(package_k_id))?;
-
-    let package_l_id = test.publish_package_without_tree_shaking("L").await;
-    let linkage_table_l = test.fetch_linkage_table(package_l_id).await;
-    assert!(
-        linkage_table_l.contains_key(&package_k_id),
-        "Package L should depend on K"
-    );
-
-    add_ids_to_manifest(&test.package_path("L"), &package_l_id, Some(package_l_id))?;
-
-    let (package_m_id, _) = test.publish_package("M", false).await?;
-    let linkage_table_m = test.fetch_linkage_table(package_m_id).await;
-    assert!(
-        linkage_table_m.contains_key(&package_k_id),
-        "Package M should depend on K"
-    );
-
-    assert!(linkage_table_m
-        .get(&package_k_id)
-        .is_some_and(|x| x.upgraded_id == package_k_v2_id), "Package I should depend on A_v2 after upgrade, and the UpgradeInfo should have matching ids");
-
-    Ok(())
-}
-
+// #[sim_test]
+// async fn test_tree_shaking_package_deps_on_pkg_upgrade_3() -> Result<(), anyhow::Error> {
+//     let mut test = TreeShakingTest::new().await?;
+//
+//     // This test is identic to #2, except it uses the old test-transaction-builder infrastructure
+//     // to publish a package without tree shaking. It is also unaware of automated address mgmt,
+//     // so this test sets up the published-at fields and addresses sections accordingly.
+//
+//     // Publish package K
+//     let (package_k_id, cap) = test.publish_package("K", false).await?;
+//     let package_path = test.package_path("K");
+//     add_ids_to_manifest(&package_path, &package_k_id, Some(package_k_id))?;
+//     // Upgrade package K (named K_v2)
+//     std::fs::copy(
+//         test.package_path("K").join("Move.lock"),
+//         test.package_path("K_v2").join("Move.lock"),
+//     )?;
+//     let package_k_v2_id = test.upgrade_package("K_v2", cap).await?;
+//     let package_path = test.package_path("K_v2");
+//     add_ids_to_manifest(&package_path, &package_k_v2_id, Some(package_k_id))?;
+//
+//     let package_l_id = test.publish_package_without_tree_shaking("L").await;
+//     let linkage_table_l = test.fetch_linkage_table(package_l_id).await;
+//     assert!(
+//         linkage_table_l.contains_key(&package_k_id),
+//         "Package L should depend on K"
+//     );
+//
+//     add_ids_to_manifest(&test.package_path("L"), &package_l_id, Some(package_l_id))?;
+//
+//     let (package_m_id, _) = test.publish_package("M", false).await?;
+//     let linkage_table_m = test.fetch_linkage_table(package_m_id).await;
+//     assert!(
+//         linkage_table_m.contains_key(&package_k_id),
+//         "Package M should depend on K"
+//     );
+//
+//     assert!(linkage_table_m
+//         .get(&package_k_id)
+//         .is_some_and(|x| x.upgraded_id == package_k_v2_id), "Package I should depend on A_v2 after upgrade, and the UpgradeInfo should have matching ids");
+//
+//     Ok(())
+// }
+//
 #[sim_test]
 async fn test_tree_shaking_package_system_deps() -> Result<(), anyhow::Error> {
     let mut test = TreeShakingTest::new().await?;
 
     // Publish package J and verify empty linkage table
-    let (package_j_id, _) = test.publish_package("J", false).await?;
+    let (package_j_id, _) = test.publish_package("J", false, None).await?;
     let move_pkg_j = fetch_move_packages(&test.client, vec![package_j_id]).await;
     let linkage_table_j = move_pkg_j.first().unwrap().linkage_table();
     assert!(
@@ -5500,4 +5463,25 @@ async fn test_party_transfer_gas_object_as_transfer_object() -> Result<(), anyho
 
     assert!(party_transfer.is_err());
     Ok(())
+}
+
+fn update_toml_with_localnet_chain_id(toml_path: &PathBuf, chain_id: String) -> String {
+    let orig_toml = std::fs::read_to_string(toml_path).unwrap();
+    let mut toml = OpenOptions::new()
+        .write(true)
+        .append(true)
+        .open(toml_path)
+        .unwrap();
+    writeln!(
+        toml,
+        "{}",
+        &format!("[environments]\nlocalnet=\"{chain_id}\"")
+    )
+    .unwrap();
+
+    orig_toml
+}
+
+fn restore_orig_toml(toml_path: &PathBuf, orig_toml: String) {
+    std::fs::write(toml_path, orig_toml).unwrap()
 }

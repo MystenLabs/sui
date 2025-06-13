@@ -2,8 +2,5 @@
 name = "PackageBasics"
 edition = "development"
 
-[addresses]
-std = "0x1"
-
 [dependencies]
 MoveStdlib = { local = "../../../../move-stdlib" }

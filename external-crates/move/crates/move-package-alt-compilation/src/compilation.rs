@@ -52,7 +52,7 @@ pub async fn compile_package<W: Write, F: MoveFlavor>(
     BuildPlan::create(&root_pkg, build_config)?.compile(writer, |compiler| compiler)
 }
 
-pub async fn compile_from_root_package<W: Write, F: MoveFlavor>(
+pub fn compile_from_root_package<W: Write, F: MoveFlavor>(
     root_pkg: &RootPackage<F>,
     build_config: &BuildConfig,
     writer: &mut W,
@@ -82,7 +82,7 @@ pub fn build_all<W: Write, F: MoveFlavor>(
     build_config: &BuildConfig,
     compiler_driver: impl FnOnce(Compiler) -> Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
 ) -> Result<CompiledPackage> {
-    let deps_published_ids = root_pkg.deps_published_ids().clone();
+    let deps_ids = root_pkg.deps_ids().clone();
     let project_root = root_pkg.path().as_ref().to_path_buf();
     let program_info_hook = SaveHook::new([SaveFlag::TypingInfo]);
     let package_name = Symbol::from(root_pkg.name().as_str());
@@ -183,7 +183,7 @@ pub fn build_all<W: Write, F: MoveFlavor>(
         root_compiled_units,
         deps_compiled_units,
         compiled_docs: None,
-        deps_published_ids,
+        dependency_ids: deps_ids,
         file_map,
         // compiled_docs,
     };

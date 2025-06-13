@@ -23,7 +23,8 @@ move-cli.workspace = true
 move-compiler.workspace = true
 move-disassembler.workspace = true
 move-ir-types.workspace = true
-move-package.workspace = true
+move-package-alt.workspace = true
+move-package-alt-compilation.workspace = true
 move-bytecode-source-map.workspace = true
 move-unit-test.workspace = true
 move-core-types.workspace = true
@@ -36,7 +37,7 @@ sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", packa
 sui-move-build.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
-sui-package-management.workspace = true
+sui-package-alt = { path = "../sui-package-alt" }
 better_any = "0.1.1"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
@@ -50,7 +51,7 @@ tempfile.workspace = true
 walkdir.workspace = true
 insta.workspace = true
 
-move-package.workspace = true
+move-package-alt.workspace = true
 
 mysten-metrics.workspace = true
 sui-macros.workspace = true

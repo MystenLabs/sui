@@ -1,0 +1,8 @@
+[package]
+name = "examples"
+version = "0.0.1"
+edition = "2024.beta"
+
+[dependencies]
+sui = { local = "../sui-framework/packages/sui-framework" }
+
