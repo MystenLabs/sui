@@ -459,7 +459,6 @@ mod test {
     use super::*;
     use crate::{
         block_manager::BlockManager,
-        block_verifier::NoopBlockVerifier,
         commit_observer::CommitObserver,
         context::Context,
         core::CoreSignals,
@@ -479,11 +478,7 @@ mod test {
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let block_manager = BlockManager::new(
-            context.clone(),
-            dag_state.clone(),
-            Arc::new(NoopBlockVerifier),
-        );
+        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
         let (blocks_sender, _blocks_receiver) =

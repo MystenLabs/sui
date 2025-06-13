@@ -10,7 +10,6 @@ use rand::{prelude::SliceRandom, rngs::StdRng, Rng, SeedableRng};
 use crate::{
     block::{BlockAPI, Slot},
     block_manager::BlockManager,
-    block_verifier::NoopBlockVerifier,
     commit::DecidedLeader,
     context::Context,
     dag_state::DagState,
@@ -197,11 +196,7 @@ fn authority_setup(num_authorities: usize, authority_index: u32) -> AuthorityTes
             .with_pipeline(true)
             .build();
 
-    let block_manager = BlockManager::new(
-        context.clone(),
-        dag_state.clone(),
-        Arc::new(NoopBlockVerifier),
-    );
+    let block_manager = BlockManager::new(context.clone(), dag_state.clone());
 
     AuthorityTestFixture {
         context,

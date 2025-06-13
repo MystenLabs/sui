@@ -636,7 +636,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
             }
         }
 
-        // 8. Make sure fetched block (and votes) timestamps are lower than current time.
+        // 8. Check if the block timestamps are lower than current time - this is for metrics only.
         for block in fetched_blocks.values().chain(vote_blocks.iter()) {
             let now_ms = inner.context.clock.timestamp_utc_ms();
             let forward_drift = block.timestamp_ms().saturating_sub(now_ms);
@@ -651,23 +651,6 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 .block_timestamp_drift_ms
                 .with_label_values(&[peer_hostname, "commit_syncer"])
                 .inc_by(forward_drift);
-
-            // We want to run the following checks only if the median based commit timestamp is not enabled.
-            if !inner
-                .context
-                .protocol_config
-                .consensus_median_based_commit_timestamp()
-            {
-                let forward_drift = Duration::from_millis(forward_drift);
-                if forward_drift >= inner.context.parameters.max_forward_time_drift {
-                    warn!(
-                        "Local clock is behind a quorum of peers: local ts {}, committed block ts {}",
-                        now_ms,
-                        block.timestamp_ms()
-                    );
-                }
-                sleep(forward_drift).await;
-            }
         }
 
         // 9. Now create certified commits by assigning the blocks to each commit.

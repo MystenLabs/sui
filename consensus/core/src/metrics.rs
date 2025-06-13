@@ -145,7 +145,6 @@ pub(crate) struct NodeMetrics {
     pub(crate) network_excluded_ancestors_count_by_authority: IntCounterVec,
     pub(crate) invalid_blocks: IntCounterVec,
     pub(crate) rejected_blocks: IntCounterVec,
-    pub(crate) rejected_future_blocks: IntCounterVec,
     pub(crate) subscribed_blocks: IntCounterVec,
     pub(crate) verified_blocks: IntCounterVec,
     pub(crate) committed_leaders_total: IntCounterVec,
@@ -492,12 +491,6 @@ impl NodeMetrics {
                 "rejected_blocks",
                 "Number of blocks rejected before verifications",
                 &["reason"],
-                registry,
-            ).unwrap(),
-            rejected_future_blocks: register_int_counter_vec_with_registry!(
-                "rejected_future_blocks",
-                "Number of blocks rejected because their timestamp is too far in the future",
-                &["authority"],
                 registry,
             ).unwrap(),
             subscribed_blocks: register_int_counter_vec_with_registry!(

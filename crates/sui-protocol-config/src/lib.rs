@@ -3917,20 +3917,12 @@ impl ProtocolConfig {
             .consensus_round_prober_probe_accepted_rounds = val;
     }
 
-    pub fn set_consensus_linearize_subdag_v2_for_testing(&mut self, val: bool) {
-        self.feature_flags.consensus_linearize_subdag_v2 = val;
-    }
-
     pub fn set_mysticeti_fastpath_for_testing(&mut self, val: bool) {
         self.feature_flags.mysticeti_fastpath = val;
     }
 
     pub fn set_accept_passkey_in_multisig_for_testing(&mut self, val: bool) {
         self.feature_flags.accept_passkey_in_multisig = val;
-    }
-
-    pub fn set_consensus_median_based_commit_timestamp_for_testing(&mut self, val: bool) {
-        self.feature_flags.consensus_median_based_commit_timestamp = val;
     }
 
     pub fn set_consensus_batched_block_sync_for_testing(&mut self, val: bool) {
