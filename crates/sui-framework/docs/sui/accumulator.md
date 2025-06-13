@@ -4,7 +4,7 @@ title: Module `sui::accumulator`
 
 
 
--  [Struct `Accumulator`](#sui_accumulator_Accumulator)
+-  [Struct `AccumulatorRoot`](#sui_accumulator_AccumulatorRoot)
 -  [Constants](#@Constants_0)
 -  [Function `create`](#sui_accumulator_create)
 
@@ -25,13 +25,13 @@ title: Module `sui::accumulator`
 
 
 
-<a name="sui_accumulator_Accumulator"></a>
+<a name="sui_accumulator_AccumulatorRoot"></a>
 
-## Struct `Accumulator`
+## Struct `AccumulatorRoot`
 
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="../sui/accumulator.md#sui_accumulator_Accumulator">Accumulator</a> <b>has</b> key
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a> <b>has</b> key
 </code></pre>
 
 
@@ -82,7 +82,7 @@ title: Module `sui::accumulator`
 
 <pre><code><b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_create">create</a>(ctx: &TxContext) {
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui/accumulator.md#sui_accumulator_ENotSystemAddress">ENotSystemAddress</a>);
-    <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(<a href="../sui/accumulator.md#sui_accumulator_Accumulator">Accumulator</a> {
+    <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a> {
         id: <a href="../sui/object.md#sui_object_sui_accumulator_root_object_id">object::sui_accumulator_root_object_id</a>(),
     })
 }
