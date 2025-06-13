@@ -79,7 +79,7 @@ impl FileHandle {
 
     /// Return the source code for the file at [id]
     pub fn source(&self) -> &'static String {
-        &FILES[self.id].source()
+        FILES[self.id].source()
     }
 
     fn simple_file(&self) -> &'static SimpleFile<DisplayPath, String> {
