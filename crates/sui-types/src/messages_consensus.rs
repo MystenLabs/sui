@@ -40,7 +40,7 @@ pub type TransactionIndex = u16;
 pub type TimestampMs = u64;
 
 /// The position of a transaction in consensus.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct ConsensusPosition {
     // Block containing a transaction.
     pub block: BlockRef,
