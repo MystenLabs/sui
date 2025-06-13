@@ -18,7 +18,9 @@ use sui_types::{
     base_types::TxContext,
     error::{ExecutionError, ExecutionErrorKind},
     execution::{ExecutionTiming, ResultWithTimings},
+    execution_status::PackageUpgradeError,
     metrics::LimitsMetrics,
+    move_package::MovePackage,
     object::Owner,
 };
 use tracing::instrument;
@@ -218,8 +220,59 @@ fn execute_command<Mode: ExecutionMode>(
             let items: Vec<CtxValue> = context.arguments(items)?;
             vec![CtxValue::vec_pack(ty, items)?]
         }
-        T::Command_::Publish(..) => todo!("RUNTIME"),
-        T::Command_::Upgrade(..) => todo!("RUNTIME"),
+        T::Command_::Publish(module_bytes, dep_ids) => {
+            let modules =
+                context.deserialize_modules(&module_bytes, /* is upgrade */ false)?;
+
+            let runtime_id =
+                context.publish_and_init_package::<Mode>(modules, &dep_ids, trace_builder_opt)?;
+
+            if <Mode>::packages_are_predefined() {
+                // no upgrade cap for genesis modules
+                std::vec![]
+            } else {
+                std::vec![context.new_upgrade_cap(runtime_id)?]
+            }
+        }
+        T::Command_::Upgrade(module_bytes, dep_ids, current_package_id, upgrade_ticket) => {
+            let upgrade_ticket = context
+                .argument::<CtxValue>(upgrade_ticket)?
+                .into_upgrade_ticket()?;
+            // Make sure the passed-in package ID matches the package ID in the `upgrade_ticket`.
+            if current_package_id != upgrade_ticket.package.bytes {
+                return Err(ExecutionError::from_kind(
+                    ExecutionErrorKind::PackageUpgradeError {
+                        upgrade_error: PackageUpgradeError::PackageIDDoesNotMatch {
+                            package_id: current_package_id,
+                            ticket_id: upgrade_ticket.package.bytes,
+                        },
+                    },
+                ));
+            }
+            // deserialize modules and charge gas
+            let modules = context.deserialize_modules(&module_bytes, /* is upgrade */ true)?;
+
+            let computed_digest = MovePackage::compute_digest_for_modules_and_deps(
+                &module_bytes,
+                &dep_ids,
+                /* hash_modules */ true,
+            )
+            .to_vec();
+            if computed_digest != upgrade_ticket.digest {
+                return Err(ExecutionError::from_kind(
+                    ExecutionErrorKind::PackageUpgradeError {
+                        upgrade_error: PackageUpgradeError::DigestDoesNotMatch {
+                            digest: computed_digest,
+                        },
+                    },
+                ));
+            }
+
+            let upgraded_package_id =
+                context.upgrade(modules, &dep_ids, current_package_id, upgrade_ticket.policy)?;
+
+            vec![context.upgrade_receipt(upgrade_ticket, upgraded_package_id)]
+        }
     };
     if Mode::TRACK_EXECUTION {
         let argument_updates = context.location_updates(args_to_update)?;
