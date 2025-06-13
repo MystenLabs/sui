@@ -59,8 +59,8 @@ use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_move::manage_package::resolve_lock_file_path;
 use sui_move::{self, execute_move_command};
 use sui_move_build::{
-    check_invalid_dependencies, check_unpublished_dependencies, implicit_deps,
-    BuildConfig as SuiBuildConfig, SuiPackageHooks,
+    check_conflicting_addresses, check_invalid_dependencies, check_unpublished_dependencies,
+    implicit_deps, BuildConfig as SuiBuildConfig, SuiPackageHooks,
 };
 use sui_package_management::system_package_versions::latest_system_packages;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
@@ -598,6 +598,7 @@ impl SuiCommand {
 
                         let with_unpublished_deps = build.with_unpublished_dependencies;
 
+                        check_conflicting_addresses(&pkg.dependency_ids.conflicting, true)?;
                         check_invalid_dependencies(&pkg.dependency_ids.invalid)?;
                         if !with_unpublished_deps {
                             check_unpublished_dependencies(&pkg.dependency_ids.unpublished)?;
@@ -777,7 +778,6 @@ async fn start(
             None => NonZeroUsize::new(1),
         }
         .ok_or_else(|| anyhow!("Committee size must be at least 1."))?;
-        println!("committee_size: {}", committee_size);
         swarm_builder = swarm_builder.committee_size(committee_size);
         let genesis_config = GenesisConfig::custom_genesis(1, 100);
         swarm_builder = swarm_builder.with_genesis_config(genesis_config);
