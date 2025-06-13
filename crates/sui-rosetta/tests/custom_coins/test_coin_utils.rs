@@ -137,7 +137,7 @@ pub async fn init_package(
 
     let move_build_config = BuildConfig::new_for_testing();
     let compiled_modules = move_build_config.build(path_buf.as_path())?;
-    let modules_bytes = compiled_modules.get_package_bytes(false);
+    let modules_bytes = compiled_modules.get_package_bytes();
 
     let tx_kind = client
         .transaction_builder()

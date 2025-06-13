@@ -1,19 +1,23 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base::reroot_path;
-use clap::*;
-use move_binary_format::CompiledModule;
-use move_command_line_common::files::{MOVE_COMPILED_EXTENSION, extension_equals, find_filenames};
-use move_core_types::account_address::AccountAddress;
-use move_model_2 as M2;
-use move_package::{BuildConfig, resolution::resolution_graph::ResolvedGraph};
-use move_symbol_pool::Symbol;
-use serde::Serialize;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
 };
+
+use clap::*;
+use serde::Serialize;
+
+use crate::base::{find_env, reroot_path};
+
+use move_binary_format::CompiledModule;
+use move_command_line_common::files::{MOVE_COMPILED_EXTENSION, extension_equals, find_filenames};
+use move_core_types::account_address::AccountAddress;
+use move_model_2 as M2;
+use move_package_alt::{flavor::MoveFlavor, package::RootPackage};
+use move_package_alt_compilation::build_config::BuildConfig;
+use move_symbol_pool::Symbol;
 
 const COMMAND_NAME: &str = "summary";
 const DEFAULT_OUTPUT_DIRECTORY: &str = "package_summaries";
@@ -48,19 +52,21 @@ pub enum SummaryOutputFormat {
 }
 
 impl Summary {
-    pub fn execute<T: Serialize + ?Sized, F: FnMut(&mut ResolvedGraph) -> anyhow::Result<()>>(
+    pub async fn execute<F: MoveFlavor, T: Serialize + ?Sized>(
         self,
         path: Option<&Path>,
         config: BuildConfig,
         additional_metadata: Option<&T>,
-        address_derivation_fn_opt: Option<F>,
+        // address_derivation_fn_opt: Option<F>,
     ) -> anyhow::Result<()> {
+        let path = reroot_path(path)?;
+        let env = find_env::<F>(&path, &config)?;
+
         let model_source;
         let model_compiled;
 
         let (summary, address_mapping) = if self.bytecode {
-            let input_path = path.unwrap_or_else(|| Path::new("."));
-            let bytecode_files = find_filenames(&[input_path], |path| {
+            let bytecode_files = find_filenames(&[path], |path| {
                 extension_equals(path, MOVE_COMPILED_EXTENSION)
             })?;
 
@@ -96,23 +102,43 @@ impl Summary {
                     .collect::<BTreeMap<_, _>>(),
             )
         } else {
-            let mut resolved_graph = config.resolution_graph_for_package(
-                &reroot_path(path).unwrap(),
-                None,
-                &mut std::io::stdout(),
-            )?;
-            let original_address_mapping = resolved_graph.extract_named_address_mapping().collect();
-            if let Some(mut f) = address_derivation_fn_opt {
-                f(&mut resolved_graph)?;
-            }
-            model_source = BuildConfig::move_model_for_resolution_graph(
-                resolved_graph,
-                &mut std::io::stdout(),
-            )?;
+            let root_pkg = RootPackage::<F>::load(&path, env).await?;
+            // Get named addresses from the root package graph
+            let named_addresses = root_pkg
+                .package_graph()
+                .root_package_info()
+                .named_addresses()?;
+
+            // Convert NamedAddress to AccountAddress mapping
+            let original_address_mapping = named_addresses
+                .into_iter()
+                .map(|(pkg_name, named_addr)| {
+                    let addr = match named_addr {
+                        move_package_alt::graph::NamedAddress::RootPackage(x) => {
+                            if let Some(x) = x {
+                                x.0
+                            } else {
+                                AccountAddress::ZERO
+                            }
+                        }
+                        move_package_alt::graph::NamedAddress::Unpublished { dummy_addr } => {
+                            dummy_addr.0
+                        }
+                        move_package_alt::graph::NamedAddress::Defined(original_id) => {
+                            original_id.0
+                        }
+                    };
+                    (Symbol::from(pkg_name.as_str()), addr)
+                })
+                .collect();
+
+            model_source = config
+                .move_model_from_root_pkg(root_pkg, &mut std::io::stdout())
+                .await?;
             (model_source.summary(), original_address_mapping)
         };
 
-        self.output_summaries(summary, address_mapping, additional_metadata)?;
+        self.output_summaries::<T>(summary, address_mapping, additional_metadata)?;
 
         println!(
             "\nSummary generation successful. Summaries stored in '{}'",

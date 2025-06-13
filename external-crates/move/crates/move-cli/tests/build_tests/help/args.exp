@@ -21,8 +21,6 @@ Options:
           Path to a package which the command should be run with respect to
   -v
           Print additional diagnostics if available
-  -d, --dev
-          Compile in 'dev' mode. The 'dev-addresses' and 'dev-dependencies' fields will be used if this flag is set. This flag is useful for development of packages that expose named addresses that are not set to a specific value
       --test
           Compile in 'test' mode. The 'dev-addresses' and 'dev-dependencies' fields will be used along with any code in the 'tests' directory
       --doc

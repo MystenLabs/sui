@@ -10,11 +10,13 @@ use move_command_line_common::{
 };
 use move_compiler::command_line::COLOR_MODE_ENV_VAR;
 use move_coverage::coverage_map::{CoverageMap, ExecCoverageMapWithModules};
-use move_package::{
-    BuildConfig,
-    compilation::{compiled_package::OnDiskCompiledPackage, package_layout::CompiledPackageLayout},
-    resolution::resolution_graph::ResolvedGraph,
-    source_package::{layout::SourcePackageLayout, manifest_parser::parse_move_manifest_from_file},
+
+use move_package_alt::{
+    flavor::{Vanilla, vanilla},
+    package::{RootPackage, layout::SourcePackageLayout, manifest::Manifest},
+};
+use move_package_alt_compilation::{
+    layout::CompiledPackageLayout, on_disk_package::OnDiskCompiledPackage,
 };
 use std::{
     collections::{BTreeMap, HashMap},
@@ -26,6 +28,7 @@ use std::{
     process::Command,
 };
 use tempfile::tempdir;
+use tracing::debug;
 
 // Basic datatest testing framework for the CLI. The `run_one` entrypoint expects
 // an `args.txt` file with arguments that the `move` binary understands (one set
@@ -60,20 +63,21 @@ fn collect_coverage(
     build_dir: &Path,
 ) -> anyhow::Result<ExecCoverageMapWithModules> {
     let canonical_build = build_dir.canonicalize().unwrap();
-    let package_name = parse_move_manifest_from_file(
-        &SourcePackageLayout::try_find_root(&canonical_build).unwrap(),
-    )?
-    .package
-    .name
-    .to_string();
-    let pkg = OnDiskCompiledPackage::from_path(
-        &build_dir
-            .join(package_name)
-            .join(CompiledPackageLayout::BuildInfo.path()),
-    )?
-    .into_compiled_package()?;
+
+    let pkg_root = &SourcePackageLayout::try_find_root(&canonical_build).unwrap();
+    let manifest =
+        Manifest::read_from_file(pkg_root.join(SourcePackageLayout::Manifest.path())).unwrap();
+
+    // TODO fix this
+    let package_name = manifest.package_name().to_string();
+
+    let pkg_path = &build_dir
+        .join(package_name)
+        .join(CompiledPackageLayout::BuildInfo.path());
+    let pkg = OnDiskCompiledPackage::from_path(pkg_path)?.into_compiled_package()?;
+
     let src_modules = pkg
-        .all_modules()
+        .all_compiled_units_with_source()
         .map(|unit| {
             let absolute_path = path_to_string(&unit.source_path.canonicalize()?)?;
             Ok((absolute_path, unit.unit.module.clone()))
@@ -99,16 +103,69 @@ fn collect_coverage(
 }
 
 fn determine_package_nest_depth(
-    resolution_graph: &ResolvedGraph,
+    root_pkg: &RootPackage<Vanilla>,
     pkg_dir: &Path,
 ) -> anyhow::Result<usize> {
     let mut depth = 0;
-    for (_, dep) in resolution_graph.package_table.iter() {
-        depth = std::cmp::max(
-            depth,
-            dep.package_path.strip_prefix(pkg_dir)?.components().count() + 1,
-        );
+    let packages = root_pkg.packages().unwrap();
+
+    debug!("Package dir: {}", pkg_dir.display());
+
+    // Canonicalize pkg_dir to get absolute path for comparison
+    let pkg_dir_canonical = pkg_dir.canonicalize()?;
+
+    for package in packages {
+        let path = package.path();
+
+        // Get the path of the dependency
+        let dep_path = path.path();
+
+        // Convert to relative path from pkg_dir
+        let relative_path = if dep_path.is_absolute() {
+            // If it's absolute, try to make it relative to pkg_dir
+            match dep_path.strip_prefix(&pkg_dir_canonical) {
+                Ok(rel) => rel.to_path_buf(),
+                Err(_) => {
+                    // If stripping fails, the dependency is outside pkg_dir
+                    // We need to compute how many ".." components are needed
+                    let dep_canonical = dep_path.canonicalize()?;
+
+                    // Find common ancestor and build relative path
+                    let pkg_components: Vec<_> = pkg_dir_canonical.components().collect();
+                    let dep_components: Vec<_> = dep_canonical.components().collect();
+
+                    // Find common prefix length
+                    let common_len = pkg_components
+                        .iter()
+                        .zip(dep_components.iter())
+                        .take_while(|(a, b)| a == b)
+                        .count();
+
+                    // Build relative path
+                    let mut relative = PathBuf::new();
+
+                    // Add ".." for each component we need to go up from pkg_dir
+                    for _ in common_len..pkg_components.len() {
+                        relative.push("..");
+                    }
+
+                    // Add the remaining components from dep path
+                    for component in &dep_components[common_len..] {
+                        relative.push(component);
+                    }
+
+                    relative
+                }
+            }
+        } else {
+            // If it's already relative, use it as is
+            dep_path.to_path_buf()
+        };
+
+        let components = relative_path.components().count() + 1;
+        depth = std::cmp::max(depth, components);
     }
+
     Ok(depth)
 }
 
@@ -130,20 +187,60 @@ fn copy_deps(tmp_dir: &Path, pkg_dir: &Path) -> anyhow::Result<PathBuf> {
     // Sometimes we run a test that isn't a package for metatests so if there isn't a package we
     // don't need to nest at all. Resolution graph diagnostics are only needed for CLI commands so
     // ignore them by passing a vector as the writer.
-    let package_resolution = match (BuildConfig {
-        dev_mode: true,
-        ..Default::default()
-    })
-    .resolution_graph_for_package(pkg_dir, None, &mut Vec::new())
-    {
-        Ok(pkg) => pkg,
-        Err(_) => return Ok(tmp_dir.to_path_buf()),
+    let rt = tokio::runtime::Runtime::new()?;
+    let Ok(root_pkg) = rt.block_on(RootPackage::<Vanilla>::load(
+        pkg_dir,
+        vanilla::default_environment(),
+    )) else {
+        // Ensure the temp directory exists before returning
+        fs::create_dir_all(tmp_dir)?;
+        return Ok(tmp_dir.to_path_buf());
     };
-    let package_nest_depth = determine_package_nest_depth(&package_resolution, pkg_dir)?;
+
+    // Canonicalize pkg_dir for consistent path operations
+    let pkg_dir_canonical = pkg_dir.canonicalize()?;
+    let package_nest_depth = determine_package_nest_depth(&root_pkg, &pkg_dir)?;
+
     let tmp_dir = pad_tmp_path(tmp_dir, package_nest_depth)?;
-    for (_, dep) in package_resolution.package_table.iter() {
-        let source_dep_path = &dep.package_path;
-        let dest_dep_path = tmp_dir.join(dep.package_path.strip_prefix(pkg_dir).unwrap());
+
+    for package in root_pkg.packages().unwrap() {
+        let source_dep_path = package.path().path();
+
+        // Convert to relative path from pkg_dir (same logic as in determine_package_nest_depth)
+        let relative_path = if source_dep_path.is_absolute() {
+            match source_dep_path.strip_prefix(&pkg_dir_canonical) {
+                Ok(rel) => rel.to_path_buf(),
+                Err(_) => {
+                    // If stripping fails, build relative path with ".." components
+                    let dep_canonical = source_dep_path.canonicalize()?;
+
+                    let pkg_components: Vec<_> = pkg_dir_canonical.components().collect();
+                    let dep_components: Vec<_> = dep_canonical.components().collect();
+
+                    let common_len = pkg_components
+                        .iter()
+                        .zip(dep_components.iter())
+                        .take_while(|(a, b)| a == b)
+                        .count();
+
+                    let mut relative = PathBuf::new();
+
+                    for _ in common_len..pkg_components.len() {
+                        relative.push("..");
+                    }
+
+                    for component in &dep_components[common_len..] {
+                        relative.push(component);
+                    }
+
+                    relative
+                }
+            }
+        } else {
+            source_dep_path.to_path_buf()
+        };
+
+        let dest_dep_path = tmp_dir.join(&relative_path);
         if !dest_dep_path.exists() {
             fs::create_dir_all(&dest_dep_path)?;
         }
@@ -359,11 +456,29 @@ pub fn run_all(
     let mut test_passed: u64 = 0;
     let mut cov_info = ExecCoverageMapWithModules::empty();
 
+    debug!("Find iflenames {:?}", args_path);
+    debug!("Current directory: {:?}", std::env::current_dir()?);
+
     // find `args.txt` and iterate over them
     for entry in find_filenames(&[args_path], |fpath| {
+        tracing::debug!("fpath: {}", fpath.display());
         fpath.file_name().expect("unexpected file entry path") == TEST_ARGS_FILENAME
     })? {
-        match run_one(Path::new(&entry), cli_binary, use_temp_dir, track_cov) {
+        tracing::debug!("Entry {entry}, {args_path:?}");
+        tracing::debug!(
+            "Current directory when processing entry: {:?}",
+            std::env::current_dir()?
+        );
+        // The entry path is already correct relative to the current directory
+        // since find_filenames returns paths that include the base directory
+        let entry_path = Path::new(&entry);
+        tracing::debug!(
+            "About to call run_one with path: {:?}, exists: {}",
+            entry_path,
+            entry_path.exists()
+        );
+
+        match run_one(&entry_path, cli_binary, use_temp_dir, track_cov) {
             Ok(cov_opt) => {
                 test_passed = test_passed.checked_add(1).unwrap();
                 if let Some(cov) = cov_opt {

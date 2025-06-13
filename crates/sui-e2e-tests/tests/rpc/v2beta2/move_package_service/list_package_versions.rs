@@ -55,7 +55,7 @@ async fn test_list_package_versions_with_upgrades() {
     let compiled_package = BuildConfig::new_for_testing()
         .build(&test_package_path)
         .unwrap();
-    let modules = compiled_package.get_package_bytes(false);
+    let modules = compiled_package.get_package_bytes();
     let dependencies = compiled_package.get_dependency_storage_package_ids();
 
     let address = cluster.get_address_0();
@@ -144,7 +144,7 @@ async fn test_list_package_versions_with_upgrades() {
 
     let policy = builder.pure(UpgradePolicy::COMPATIBLE).unwrap();
     let digest = builder
-        .pure(compiled_package.get_package_digest(false).to_vec())
+        .pure(compiled_package.get_package_digest().to_vec())
         .unwrap();
 
     let ticket = builder.programmable_move_call(
@@ -159,7 +159,7 @@ async fn test_list_package_versions_with_upgrades() {
         package_ids[0],
         ticket,
         compiled_package.get_dependency_storage_package_ids(),
-        compiled_package.get_package_bytes(false),
+        compiled_package.get_package_bytes(),
     );
 
     builder.programmable_move_call(
@@ -248,7 +248,7 @@ async fn test_list_package_versions_with_upgrades() {
 
     let policy = builder.pure(UpgradePolicy::COMPATIBLE).unwrap();
     let digest = builder
-        .pure(compiled_package.get_package_digest(false).to_vec())
+        .pure(compiled_package.get_package_digest().to_vec())
         .unwrap();
 
     let ticket = builder.programmable_move_call(
@@ -263,7 +263,7 @@ async fn test_list_package_versions_with_upgrades() {
         package_ids[1],
         ticket,
         compiled_package.get_dependency_storage_package_ids(),
-        compiled_package.get_package_bytes(false),
+        compiled_package.get_package_bytes(),
     );
 
     builder.programmable_move_call(

@@ -469,7 +469,7 @@ async fn publish_package(
     path: &Path,
 ) -> ObjectID {
     let compiled_package = BuildConfig::new_for_testing().build(path).unwrap();
-    let all_module_bytes = compiled_package.get_package_bytes(false);
+    let all_module_bytes = compiled_package.get_package_bytes();
     let dependencies = compiled_package.get_dependency_storage_package_ids();
     let gas = client
         .coin_read_api()

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    client_commands::{compile_package, upgrade_package},
+    client_commands::{find_environment, upgrade_package},
     client_ptb::{
         ast::{Argument as PTBArg, ASSIGN, GAS_BUDGET},
         error::{PTBError, PTBResult, Span, Spanned},
@@ -27,11 +27,10 @@ use move_core_types::{
         types::{ParsedStructType, ParsedType},
     },
 };
-use move_package::BuildConfig as MoveBuildConfig;
+use move_package_alt_compilation::{build_config::BuildConfig as MoveBuildConfig, compile_package};
 use std::{collections::BTreeMap, path::Path};
 use sui_json::{is_receiving_argument, primitive_type};
 use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiRawData};
-use sui_move::manage_package::resolve_lock_file_path;
 use sui_sdk::apis::ReadApi;
 use sui_types::{
     base_types::{is_primitive_type_tag, ObjectID, TxContext, TxContextKind},
@@ -47,6 +46,8 @@ use super::{
     ast::{ModuleAccess as PTBModuleAccess, ParsedPTBCommand, Program},
     ptb::AddressData,
 };
+use move_package_alt::package::RootPackage;
+use sui_package_alt::SuiFlavor;
 
 // ===========================================================================
 // Object Resolution
@@ -915,47 +916,37 @@ impl<'a> PTBBuilder<'a> {
                 self.last_command = Some(res);
             }
             ParsedPTBCommand::Publish(sp!(pkg_loc, package_path)) => {
-                let chain_id = self.reader.get_chain_identifier().await.ok();
-                let build_config = MoveBuildConfig::default();
-                let package_path = Path::new(&package_path);
-                let build_config = resolve_lock_file_path(build_config.clone(), Some(package_path))
+                let build_config =
+                    move_package_alt_compilation::build_config::BuildConfig::default();
+                let chain_id = self
+                    .reader
+                    .get_chain_identifier()
+                    .await
                     .map_err(|e| err!(pkg_loc, "{e}"))?;
-                let previous_id = if let Some(ref chain_id) = chain_id {
-                    sui_package_management::set_package_id(
-                        package_path,
-                        build_config.install_dir.clone(),
-                        chain_id,
-                        AccountAddress::ZERO,
-                    )
-                    .map_err(|e| err!(pkg_loc, "{e}"))?
-                } else {
-                    None
-                };
-                // Restore original ID, then check result.
-                if let (Some(chain_id), Some(previous_id)) = (chain_id, previous_id) {
-                    let _ = sui_package_management::set_package_id(
-                        package_path,
-                        build_config.install_dir.clone(),
-                        &chain_id,
-                        previous_id,
-                    )
-                    .map_err(|e| err!(pkg_loc, "{e}"))?;
-                }
-                let compiled_package = compile_package(
-                    self.reader,
-                    build_config.clone(),
-                    package_path,
-                    false, /* with_unpublished_dependencies */
-                    false, /* skip_dependency_verification */
+                let envs = RootPackage::<SuiFlavor>::environments(&package_path).unwrap();
+                let env =
+                    find_environment(build_config.environment.clone(), chain_id.clone(), envs)
+                        .map_err(|e| err!(pkg_loc, "{e}"))?;
+                let mut stdout = std::io::stdout();
+                let mut writer: &mut dyn std::io::Write = &mut stdout;
+                let compiled_package = compile_package::<&mut dyn std::io::Write, SuiFlavor>(
+                    &Path::new(&package_path),
+                    &build_config,
+                    &env,
+                    &mut writer,
                 )
                 .await
                 .map_err(|e| err!(pkg_loc, "{e}"))?;
 
-                let compiled_modules = compiled_package.get_package_bytes(false);
+                let compiled_modules = compiled_package.get_package_bytes();
 
                 let res = self.ptb.publish_upgradeable(
                     compiled_modules,
-                    compiled_package.get_published_dependencies_ids(),
+                    compiled_package
+                        .dependency_ids()
+                        .iter()
+                        .map(|x| x.0.into())
+                        .collect(),
                 );
                 self.last_command = Some(res);
             }
@@ -983,33 +974,10 @@ impl<'a> PTBBuilder<'a> {
                     )
                     .await?;
 
-                let chain_id = self.reader.get_chain_identifier().await.ok();
-                let build_config = MoveBuildConfig::default();
                 let package_path = Path::new(&package_path);
-                let build_config = resolve_lock_file_path(build_config.clone(), Some(package_path))
-                    .map_err(|e| err!(path_loc, "{e}"))?;
-                let previous_id = if let Some(ref chain_id) = chain_id {
-                    sui_package_management::set_package_id(
-                        package_path,
-                        build_config.install_dir.clone(),
-                        chain_id,
-                        AccountAddress::ZERO,
-                    )
-                    .map_err(|e| err!(path_loc, "{e}"))?
-                } else {
-                    None
-                };
-                // Restore original ID, then check result.
-                if let (Some(chain_id), Some(previous_id)) = (chain_id, previous_id) {
-                    let _ = sui_package_management::set_package_id(
-                        package_path,
-                        build_config.install_dir.clone(),
-                        &chain_id,
-                        previous_id,
-                    )
-                    .map_err(|e| err!(path_loc, "{e}"))?;
-                }
+                let build_config = MoveBuildConfig::default();
 
+                // TODO fix this call - env_alias might be wrong
                 let (upgrade_policy, compiled_package) = upgrade_package(
                     self.reader,
                     build_config.clone(),
@@ -1022,12 +990,11 @@ impl<'a> PTBBuilder<'a> {
                 .await
                 .map_err(|e| err!(path_loc, "{e}"))?;
 
-                let package_digest = compiled_package.get_package_digest(false);
+                let package_digest = compiled_package.get_package_digest();
                 let package_id = compiled_package
                     .published_at
-                    .as_ref()
-                    .map_err(|e| err!(path_loc, "{e}"))?;
-                let compiled_modules = compiled_package.get_package_bytes(false);
+                    .ok_or_else(|| err!(path_loc, "No published-at information"))?;
+                let compiled_modules = compiled_package.get_package_bytes();
                 // let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy, _) =
                 //     upgrade_result.map_err(|e| err!(path_loc, "{e}"))?;
 
@@ -1048,13 +1015,9 @@ impl<'a> PTBBuilder<'a> {
                     vec![upgrade_cap_arg, upgrade_arg, digest_arg],
                 ));
                 let upgrade_receipt = self.ptb.upgrade(
-                    *package_id,
+                    package_id,
                     upgrade_ticket,
-                    compiled_package
-                        .dependency_ids
-                        .published
-                        .into_values()
-                        .collect(),
+                    compiled_package.dependency_ids,
                     compiled_modules,
                 );
                 let res = self.ptb.command(Tx::Command::move_call(
