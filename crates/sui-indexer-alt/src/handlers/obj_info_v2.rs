@@ -275,7 +275,7 @@ impl Handler for ObjInfoV2 {
                 AND cp_sequence_number < {BigInt}
                 AND obsolete_at IS NOT NULL
 
-                UNION ALL
+                UNION
 
                 SELECT object_id, cp_sequence_number
                 FROM obj_info_v2
