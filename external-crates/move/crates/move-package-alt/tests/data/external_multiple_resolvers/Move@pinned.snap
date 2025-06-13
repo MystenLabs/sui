@@ -2,7 +2,13 @@
 source: crates/move-package-alt/tests/test_runner.rs
 ---
 {
-  "inner": {
+  "mock1": {
+    "local": "for-res-1"
+  },
+  "mock2": {
+    "local": "for-res-2"
+  },
+  "replacements": {
     "default": {
       "mock1": {
         "local": "for-res-1"
