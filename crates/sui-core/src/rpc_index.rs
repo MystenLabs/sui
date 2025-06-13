@@ -294,7 +294,7 @@ impl IndexStoreTables {
         is_removal: bool,
         balance_changes: &mut HashMap<BalanceKey, BalanceIndexInfo>,
     ) -> Result<(), StorageError> {
-        if let Some((struct_tag, value)) = extract_coin_balance(object)? {
+        if let Some((struct_tag, value)) = get_balance_and_type_if_coin(object)? {
             let key = BalanceKey {
                 owner: *owner,
                 coin_type: struct_tag,
@@ -1132,7 +1132,7 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
                     .insert_batch(&self.tables.owner, [(owner_key, owner_info)])?;
 
                 // Track balance for coins
-                if let Some((coin_type, value)) = extract_coin_balance(&object)? {
+                if let Some((coin_type, value)) = get_balance_and_type_if_coin(&object)? {
                     let balance_key = BalanceKey { owner, coin_type };
                     let balance_info = BalanceIndexInfo::from_coin_value(value);
                     self.batch
@@ -1249,7 +1249,7 @@ fn sparse_checkpoint_data_for_backfill(
     Ok(checkpoint_data)
 }
 
-fn extract_coin_balance(object: &Object) -> Result<Option<(StructTag, u64)>, StorageError> {
+fn get_balance_and_type_if_coin(object: &Object) -> Result<Option<(StructTag, u64)>, StorageError> {
     match Coin::extract_balance_if_coin(object) {
         Ok(Some((TypeTag::Struct(struct_tag), value))) => Ok(Some((*struct_tag, value))),
         Ok(Some(_)) => {
