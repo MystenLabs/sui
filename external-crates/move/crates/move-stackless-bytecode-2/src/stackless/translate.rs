@@ -49,12 +49,6 @@ pub(crate) fn package<K: SourceKind>(
     let package_name = package.name();
     let package_address = package.address();
 
-    println!(
-        "\nPackage: {} ({})",
-        package_name.unwrap_or(Symbol::from("Package name not found")),
-        package_address
-    );
-
     let m_modules = package.modules();
 
     let out_modules = m_modules
@@ -125,7 +119,7 @@ pub(crate) fn function<K: SourceKind>(
                 (label, inst)
             })
             .collect::<BTreeMap<_, _>>();
-        
+
         let label = block_id as usize;
         let bb = BasicBlock::from_instructions(label, block_instructions);
         if !ctxt.logical_stack.is_empty() {
@@ -175,7 +169,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         // pop        [reg_1: 10, reg_0: 0]
         // ret(2)     (reg_1, reg_0)
         IB::Ret => {
-            // TODO: check if this needs to be reversed? 
+            // TODO: check if this needs to be reversed?
             let returned_vars = function
                 .return_
                 .iter()

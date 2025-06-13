@@ -1,11 +1,6 @@
-use crate::{
-    stackless::{
-        ast::{
-            BasicBlock, Function, Instruction, Label, Operand,
-            Operand::{Constant},
-            PrimitiveOp, RValue, Value, Var as AVar,
-        },
-    },
+use crate::stackless::ast::{
+    BasicBlock, Function, Instruction, Label, Operand, Operand::Constant, PrimitiveOp, RValue,
+    Value, Var as AVar,
 };
 
 use std::{collections::BTreeMap, vec};
@@ -131,9 +126,7 @@ fn process_instruction<'a>(
                         }
                     }
                 },
-                _ => {
-                    println!("Unhandled RValue in Assign: {rhs:?}");
-                }
+                _ => {}
             }
         }
 
