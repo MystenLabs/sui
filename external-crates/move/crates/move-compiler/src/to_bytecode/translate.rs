@@ -4,7 +4,7 @@
 
 use super::{canonicalize_handles, context::*, optimize};
 use crate::{
-    FullyCompiledProgram,
+    CompiledModuleInfoMap,
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
@@ -38,36 +38,44 @@ type CollectedInfo = (Vec<(Mutability, Var, H::SingleType)>, Attributes);
 
 fn extract_decls(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
     prog: &G::Program,
 ) -> (
     HashMap<ModuleIdent, usize>,
     DatatypeDeclarations,
     HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>,
 ) {
-    let pre_compiled_modules = || {
-        pre_compiled_lib.iter().flat_map(|pre_compiled| {
-            pre_compiled
-                .cfgir
-                .modules
-                .key_cloned_iter()
-                .filter(|(mident, _m)| !prog.modules.contains_key(mident))
+    let pre_compiled_dependency_orders = || {
+        pre_compiled_module_infos.iter().flat_map(|module_infos| {
+            module_infos
+                .iter()
+                .filter(|(mident, _)| !prog.modules.contains_key(mident))
+                .map(|(mident, minfo)| (mident.clone(), minfo.dependency_order))
         })
     };
 
+    let all_dependency_orders = prog
+        .modules
+        .key_cloned_iter()
+        .map(|(m, mdef)| (m, mdef.dependency_order))
+        .chain(pre_compiled_dependency_orders())
+        .collect::<HashMap<_, _>>();
+    compilation_env.save_dependency_order(&all_dependency_orders);
+
     let mut max_ordering = 0;
-    let mut orderings: HashMap<ModuleIdent, usize> = pre_compiled_modules()
-        .map(|(m, mdef)| {
-            max_ordering = std::cmp::max(max_ordering, mdef.dependency_order);
-            (m, mdef.dependency_order)
+    let mut orderings: HashMap<ModuleIdent, usize> = pre_compiled_dependency_orders()
+        .map(|(mident, dependency_order)| {
+            max_ordering = std::cmp::max(max_ordering, dependency_order);
+            (mident, dependency_order)
         })
         .collect();
     for (m, mdef) in prog.modules.key_cloned_iter() {
         orderings.insert(m, mdef.dependency_order + 1 + max_ordering);
     }
 
-    let all_modules = || prog.modules.key_cloned_iter().chain(pre_compiled_modules());
-    let sdecls: DatatypeDeclarations = all_modules()
+    let sdecls: DatatypeDeclarations = prog
+        .modules
+        .key_cloned_iter()
         .flat_map(|(m, mdef)| {
             mdef.structs.key_cloned_iter().map(move |(s, sdef)| {
                 let key = (m, s);
@@ -77,7 +85,9 @@ fn extract_decls(
             })
         })
         .collect();
-    let edecls: DatatypeDeclarations = all_modules()
+    let edecls: DatatypeDeclarations = prog
+        .modules
+        .key_cloned_iter()
         .flat_map(|(m, mdef)| {
             mdef.enums.key_cloned_iter().map(move |(e, edef)| {
                 let key = (m, e);
@@ -87,9 +97,11 @@ fn extract_decls(
             })
         })
         .collect();
-    let ddecls: DatatypeDeclarations = sdecls.into_iter().chain(edecls).collect();
+    let mut ddecls: DatatypeDeclarations = sdecls.into_iter().chain(edecls).collect();
     let context = &mut Context::new(compilation_env, None, None);
-    let fdecls = all_modules()
+    let mut fdecls: HashMap<(ModuleIdent, FunctionName), FunctionDeclaration> = prog
+        .modules
+        .key_cloned_iter()
         .flat_map(|(m, mdef)| {
             mdef.functions
                 .key_cloned_iter()
@@ -118,6 +130,27 @@ fn extract_decls(
             )
         })
         .collect();
+
+    // add pre-compiled declaratinos if any
+    if let Some(pre_compiled_module_infos) = pre_compiled_module_infos {
+        for (mident, minfo) in pre_compiled_module_infos.iter() {
+            for (datatype_name, (abilities, type_parameters)) in minfo.cfgir_datatype_decls.iter() {
+                ddecls.insert(
+                    (mident.clone(), datatype_name.clone()),
+                    (abilities.clone(), type_parameters.clone()),
+                );
+            }
+            for (function_name, function_declaration) in minfo.cfgir_fun_decls.iter() {
+                fdecls.insert(
+                    (mident.clone(), function_name.clone()),
+                    function_declaration.clone(),
+                );
+            }
+        }
+    }
+
+    compilation_env.save_cfgir_datatype_decls(&ddecls);
+    compilation_env.save_cfgir_fun_decls(&fdecls);
     (orderings, ddecls, fdecls)
 }
 
@@ -127,12 +160,14 @@ fn extract_decls(
 
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
     prog: G::Program,
-) -> Vec<AnnotatedCompiledUnit> {
-    let mut units = vec![];
+) -> (Vec<AnnotatedCompiledUnit>, Vec<ModuleIdent>) {
+    let mut units = Vec::new();
+    let mut mod_idents = Vec::new();
     let reporter = compilation_env.diagnostic_reporter_at_top_level();
-    let (orderings, ddecls, fdecls) = extract_decls(compilation_env, pre_compiled_lib, &prog);
+    let (orderings, ddecls, fdecls) =
+        extract_decls(compilation_env, pre_compiled_module_infos, &prog);
     let G::Program {
         modules: gmodules,
         warning_filters_table,
@@ -154,13 +189,14 @@ pub fn program(
             &ddecls,
             &fdecls,
         ) {
-            units.push(unit)
+            units.push(unit);
+            mod_idents.push(m);
         }
     }
     // there are unsafe pointers into this table in the WarningFilters in the AST. Now that they
     // are gone, the table can safely be dropped.
     drop(warning_filters_table);
-    units
+    (units, mod_idents)
 }
 
 fn module(

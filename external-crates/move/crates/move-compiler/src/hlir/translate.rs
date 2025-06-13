@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    FullyCompiledProgram, debug_display, debug_display_verbose, diag,
+    debug_display, debug_display_verbose, diag,
     diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, warning_filters::WarningFilters},
     editions::{FeatureGate, Flavor},
     expansion::ast::{self as E, Fields, ModuleIdent, Mutability},
@@ -148,11 +148,7 @@ pub(super) struct Context<'env> {
 }
 
 impl<'env> Context<'env> {
-    pub fn new(
-        env: &'env CompilationEnv,
-        _pre_compiled_lib_opt: Option<Arc<FullyCompiledProgram>>,
-        prog: &T::Program,
-    ) -> Self {
+    pub fn new(env: &'env CompilationEnv, prog: &T::Program) -> Self {
         let debug = HLIRDebugFlags {
             match_variant_translation: false,
             function_translation: false,
@@ -311,14 +307,10 @@ impl MatchContext<true> for Context<'_> {
 // Entry
 //**************************************************************************************************
 
-pub fn program(
-    compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
-    prog: T::Program,
-) -> H::Program {
+pub fn program(compilation_env: &CompilationEnv, prog: T::Program) -> H::Program {
     detect_dead_code_analysis(compilation_env, &prog);
 
-    let mut context = Context::new(compilation_env, pre_compiled_lib, &prog);
+    let mut context = Context::new(compilation_env, &prog);
     let T::Program {
         modules: tmodules,
         warning_filters_table,

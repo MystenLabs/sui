@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    FullyCompiledProgram, debug_display, diag,
+    CompiledModuleInfoMap, debug_display, diag,
     diagnostics::{
         self, Diagnostic, DiagnosticReporter, Diagnostics,
         codes::{self, *},
@@ -405,7 +405,7 @@ pub type ModuleMembers = BTreeMap<ModuleIdent, BTreeMap<Symbol, ResolvedModuleMe
 
 pub fn build_member_map(
     env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
     prog: &E::Program,
 ) -> ModuleMembers {
     // NB: This checks if the element is present, and doesn't replace it if so. This is congruent
@@ -423,18 +423,8 @@ pub fn build_member_map(
     }
 
     use ResolvedModuleMember as M;
-    let all_modules = prog
-        .modules
-        .key_cloned_iter()
-        .chain(pre_compiled_lib.iter().flat_map(|pre_compiled| {
-            pre_compiled
-                .expansion
-                .modules
-                .key_cloned_iter()
-                .filter(|(mident, _m)| !prog.modules.contains_key(mident))
-        }));
     let mut all_members = BTreeMap::new();
-    for (mident, mdef) in all_modules {
+    for (mident, mdef) in prog.modules.key_cloned_iter() {
         let mut members = BTreeMap::new();
         for (name, sdef) in mdef.structs.key_cloned_iter() {
             let tyarg_arity = sdef.type_parameters.len();
@@ -516,6 +506,15 @@ pub fn build_member_map(
         }
         assert!(all_members.insert(mident, members).is_none());
     }
+
+    if let Some(pre_compiled_module_infos) = pre_compiled_module_infos {
+        all_members.extend(
+            pre_compiled_module_infos
+                .iter()
+                .map(|(mident, minfo)| (mident.clone(), minfo.resolved_members.clone())),
+        );
+    }
+
     all_members
 }
 
@@ -570,11 +569,12 @@ macro_rules! resolve_from_module_access {
 impl OuterContext {
     fn new(
         compilation_env: &CompilationEnv,
-        pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
         prog: &E::Program,
     ) -> Self {
         use ResolvedType as RT;
-        let module_members = build_member_map(compilation_env, pre_compiled_lib, prog);
+        let module_members = build_member_map(compilation_env, pre_compiled_module_infos, prog);
+        compilation_env.save_module_resolved_members(&module_members);
         let unscoped_types = N::BuiltinTypeName_::all_names()
             .iter()
             .map(|s| {
@@ -1658,17 +1658,18 @@ fn arity_string(arity: usize) -> &'static str {
 
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
     prog: E::Program,
 ) -> N::Program {
-    let outer_context = OuterContext::new(compilation_env, pre_compiled_lib.clone(), &prog);
+    let outer_context =
+        OuterContext::new(compilation_env, pre_compiled_module_infos.clone(), &prog);
     let E::Program {
         warning_filters_table,
         modules: emodules,
     } = prog;
     let modules = modules(compilation_env, &outer_context, emodules);
     let mut inner = N::Program_ { modules };
-    let mut info = NamingProgramInfo::new(pre_compiled_lib, &inner);
+    let mut info = NamingProgramInfo::new(pre_compiled_module_infos, &inner);
     super::resolve_use_funs::program(compilation_env, &mut info, &mut inner);
     N::Program {
         info,
