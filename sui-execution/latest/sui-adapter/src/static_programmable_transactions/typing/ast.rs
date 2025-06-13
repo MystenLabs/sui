@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::static_programmable_transactions::{loading::ast as L, spanned::Spanned};
+use crate::static_programmable_transactions::{
+    linkage::resolved_linkage::ResolvedLinkage, loading::ast as L, spanned::Spanned,
+};
 use move_vm_types::values::VectorSpecialization;
 use std::{cell::OnceCell, collections::BTreeMap, fmt};
 use sui_types::base_types::ObjectID;
@@ -42,8 +44,14 @@ pub enum Command_ {
     SplitCoins(/* Coin<T> */ Type, Argument, Vec<Argument>),
     MergeCoins(/* Coin<T> */ Type, Argument, Vec<Argument>),
     MakeMoveVec(/* T for vector<T> */ Type, Vec<Argument>),
-    Publish(Vec<Vec<u8>>, Vec<ObjectID>),
-    Upgrade(Vec<Vec<u8>>, Vec<ObjectID>, ObjectID, Argument),
+    Publish(Vec<Vec<u8>>, Vec<ObjectID>, ResolvedLinkage),
+    Upgrade(
+        Vec<Vec<u8>>,
+        Vec<ObjectID>,
+        ObjectID,
+        Argument,
+        ResolvedLinkage,
+    ),
 }
 
 pub type LoadedFunctionInstantiation = L::LoadedFunctionInstantiation;

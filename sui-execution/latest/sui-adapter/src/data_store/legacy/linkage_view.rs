@@ -336,4 +336,15 @@ impl PackageStore for LinkageView<'_> {
     fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Rc<MovePackage>>> {
         self.resolver.get_package(package_id)
     }
+
+    fn resolve_type_to_defining_id(
+        &self,
+        _module_address: ObjectID,
+        _module_name: &IdentStr,
+        _type_name: &IdentStr,
+    ) -> SuiResult<Option<ObjectID>> {
+        unimplemented!(
+            "resolve_type_to_defining_id is not implemented for LinkageView and should never be called"
+        )
+    }
 }
