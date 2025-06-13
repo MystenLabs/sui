@@ -9,16 +9,12 @@ use std::{
 };
 
 use crate::{
-    adapter::{new_native_extensions, substitute_package_id},
+    adapter,
     data_store::sui_data_store::SuiDataStore,
     execution_mode::ExecutionMode,
     gas_charger::GasCharger,
     gas_meter::SuiGasMeter,
-    programmable_transactions::{
-        context::finish,
-        execution::{check_compatibility, fetch_package, fetch_packages},
-    },
-    sp,
+    programmable_transactions as legacy_ptb, sp,
     static_programmable_transactions::{
         better_todo,
         env::Env,
@@ -178,7 +174,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             }
             None => None,
         };
-        let native_extensions = new_native_extensions(
+        let native_extensions = adapter::new_native_extensions(
             env.state_view.as_child_resolver(),
             input_object_map,
             !gas_charger.is_unmetered(),
@@ -352,7 +348,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             }
         }
 
-        finish(
+        legacy_ptb::context::finish(
             env.protocol_config,
             env.state_view,
             gas_charger,
@@ -692,14 +688,14 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     }
 
     fn fetch_package(&mut self, dependency_id: &ObjectID) -> Result<PackageObject, ExecutionError> {
-        fetch_package(&self.env.state_view, dependency_id)
+        legacy_ptb::execution::fetch_package(&self.env.state_view, dependency_id)
     }
 
     fn fetch_packages(
         &mut self,
         dependency_ids: &[ObjectID],
     ) -> Result<Vec<PackageObject>, ExecutionError> {
-        fetch_packages(&self.env.state_view, dependency_ids)
+        legacy_ptb::execution::fetch_packages(&self.env.state_view, dependency_ids)
     }
 
     fn publish_and_verify_modules(
@@ -804,7 +800,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             // need to know about new packages created, since Move objects and Move packages
             // cannot interact
             let id = self.tx_context.borrow_mut().fresh_id();
-            substitute_package_id(&mut modules, id)?;
+            adapter::substitute_package_id(&mut modules, id)?;
             id
         };
 
@@ -847,7 +843,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let current_package = self.fetch_package(&current_package_id)?;
 
         let runtime_id = current_package.move_package().original_package_id();
-        substitute_package_id(&mut modules, runtime_id)?;
+        adapter::substitute_package_id(&mut modules, runtime_id)?;
 
         // Upgraded packages share their predecessor's runtime ID but get a new storage ID.
         // It should be fine that this does not go through the object runtime since it does not
@@ -869,7 +865,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         self.env.linkage_view.reset_linkage()?;
         res?;
 
-        check_compatibility(
+        legacy_ptb::execution::check_compatibility(
             self.env.protocol_config,
             current_package.move_package(),
             &modules,
