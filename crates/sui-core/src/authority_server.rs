@@ -758,8 +758,16 @@ impl ValidatorService {
                         Ok(HandleCertificateResponseV3 {
                             effects: signed_effects.into_inner(),
                             events: response.events,
-                            input_objects: Some(response.input_objects),
-                            output_objects: Some(response.output_objects),
+                            input_objects: if response.input_objects.is_empty() {
+                                None
+                            } else {
+                                Some(response.input_objects)
+                            },
+                            output_objects: if response.output_objects.is_empty() {
+                                None
+                            } else {
+                                Some(response.output_objects)
+                            },
                             auxiliary_data: None,
                         })
                     })
