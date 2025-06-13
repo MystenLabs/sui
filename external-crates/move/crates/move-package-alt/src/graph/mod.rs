@@ -385,20 +385,28 @@ impl<F: MoveFlavor> PackageCache<F> {
             .or_default()
             .clone();
 
-        cell.get_or_init(async || {
-            Package::load(dep.clone()).await.ok().map(|package| {
-                Arc::new(PackageNode {
+        // First try to get cached result
+        if let Some(Some(cached)) = cell.get() {
+            return Ok(cached.clone());
+        }
+
+        // If not cached, load and cache
+        match Package::load(dep.clone()).await {
+            Ok(package) => {
+                let node = Arc::new(PackageNode {
                     package,
                     pinned_dep: dep.clone(),
-                })
-            })
-        })
-        .await
-        .clone()
-        .ok_or(PackageError::Generic(format!(
-            "TODO: couldn't fetch package {:#?}",
-            dep
-        )))
+                });
+
+                cell.get_or_init(async || Some(node.clone())).await;
+                Ok(node)
+            }
+            Err(e) => Err(PackageError::Generic(format!(
+                "Failed to load package from {}: {}",
+                dep.unfetched_path().display(),
+                e
+            ))),
+        }
     }
 }
 
