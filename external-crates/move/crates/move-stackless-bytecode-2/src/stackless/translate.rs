@@ -5,12 +5,13 @@ use crate::{
     cfg::{ControlFlowGraph, StacklessControlFlowGraph},
     stackless::{
         ast::{
-            self, BasicBlock, Instruction,
+            self, BasicBlock, Instruction, Operand,
             Operand::{Constant, Var},
             PrimitiveOp, RValue, Value,
-            Var::{Local, Register},
+            Var::Local,
         },
         context::Context,
+        optimization::inline_constants,
     },
 };
 
@@ -25,15 +26,7 @@ use move_model_2::{
 };
 use move_symbol_pool::Symbol;
 
-use std::{
-    collections::BTreeMap,
-    fmt::{Debug, Display},
-    hash::Hash,
-    result::Result::Ok,
-    vec,
-};
-
-use super::ast::Operand;
+use std::{collections::BTreeMap, result::Result::Ok, vec};
 
 // -------------------------------------------------------------------------------------------------
 // Stackless Bytecode Translation
@@ -84,7 +77,6 @@ pub(crate) fn module<K: SourceKind>(
     let module = module.compiled();
     let name = *module.name();
     let _module_address = module.address();
-    // println!("\nModule: {} ({})", name, _module_address);
 
     let mut functions = BTreeMap::new();
 
@@ -105,9 +97,7 @@ pub(crate) fn function<K: SourceKind>(
     function: &N::Function<Symbol>,
 ) -> anyhow::Result<ast::Function> {
     let name = function.name;
-    // println!("\nFunction: {}", name);
     let code = function.code();
-    // println!("Code: {:?}", code);
     if code.is_empty() {
         return Ok(ast::Function {
             name,
@@ -122,7 +112,6 @@ pub(crate) fn function<K: SourceKind>(
         let blk_start = cfg.block_start(block_id);
         let blk_end = cfg.block_end(block_id);
         let code_range = &code[blk_start as usize..(blk_end + 1) as usize];
-        // println!("Code {:?}", code_range);
         let block_instructions = code_range
             .iter()
             .enumerate()
@@ -130,7 +119,13 @@ pub(crate) fn function<K: SourceKind>(
             .collect::<Result<Vec<Vec<_>>, _>>()?
             .into_iter()
             .flatten()
-            .collect::<Vec<_>>();
+            .enumerate()
+            .map(|(i, inst)| {
+                let label = blk_start as usize + i;
+                (label, inst)
+            })
+            .collect::<BTreeMap<_, _>>();
+        
         let label = block_id as usize;
         let bb = BasicBlock::from_instructions(label, block_instructions);
         if !ctxt.logical_stack.is_empty() {
@@ -139,7 +134,9 @@ pub(crate) fn function<K: SourceKind>(
         basic_blocks.insert(label, bb);
     }
 
-    let function = ast::Function { name, basic_blocks };
+    let mut function = ast::Function { name, basic_blocks };
+
+    inline_constants(&mut function);
 
     Ok(function)
 }
@@ -178,12 +175,11 @@ pub(crate) fn bytecode<K: SourceKind>(
         // pop        [reg_1: 10, reg_0: 0]
         // ret(2)     (reg_1, reg_0)
         IB::Ret => {
-            // TODO: check if this needs to be reversed?
+            // TODO: check if this needs to be reversed? 
             let returned_vars = function
                 .return_
                 .iter()
-                .enumerate()
-                .map(|_| ctxt.pop_register())
+                .map(|_| Operand::Var(ctxt.pop_register()))
                 .collect::<Vec<_>>();
             let inst = Instruction::Return(returned_vars);
             Ok(vec![inst])
@@ -270,7 +266,6 @@ pub(crate) fn bytecode<K: SourceKind>(
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::LdConst,
-                    // TODO convert Vec<u8> to a typed const ?
                     args: vec![Constant(deserialize_constant(const_ref))],
                 },
                 lhs: vec![ctxt.push_register()],
@@ -340,35 +335,18 @@ pub(crate) fn bytecode<K: SourceKind>(
                 .functions
                 .get(&bx.function)
                 .unwrap_or_else(|| panic!("Function {} not found in module {}", bx.function, name));
-            // let params_len = function.parameters.len();
-            // println!(
-            //     "Calling function {} in module {} with params: {:?}",
-            //     function.name, name, function.parameters
-            // );
-            // let returned_len = function.return_.len();
-            // println!(
-            //     "Function {} returns: {:?}",
-            //     function.name, function.return_
-            // );
+
             let args = function
                 .parameters
                 .iter()
-                .enumerate()
-                .map(|(i, _)| Var(Register(ctxt.var_counter.last() - i)))
+                .map(|_| Var(ctxt.pop_register()))
                 .collect::<Vec<_>>();
-
-            // println!(
-            //     "Calling function {} with args: {:?}",
-            //     function.name, args
-            // );
 
             let lhs = function
                 .return_
                 .iter()
                 .map(|_| ctxt.push_register())
                 .collect::<Vec<_>>();
-
-            // println!("LHS: {:?}", lhs);
 
             let inst = Instruction::Assign {
                 lhs,
@@ -386,8 +364,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                 .fields
                 .0
                 .iter()
-                .enumerate()
-                .map(|(i, _)| Var(Register(ctxt.var_counter.last() - i)))
+                .map(|_| Var(ctxt.pop_register()))
                 .collect::<Vec<_>>();
             let inst = Instruction::Assign {
                 lhs: vec![ctxt.push_register()],
@@ -430,41 +407,35 @@ pub(crate) fn bytecode<K: SourceKind>(
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::WriteRef,
-                    args: vec![Var(ctxt.pop_register())],
+                    args: vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())],
                 },
-                lhs: vec![(ctxt.push_register())],
+                lhs: vec![],
             };
             Ok(vec![inst])
         }
 
         IB::FreezeRef => {
-            // TODO check FreezeRef?
-            let inst = Instruction::Assign {
-                rhs: RValue::Primitive {
-                    op: PrimitiveOp::FreezeRef,
-                    args: vec![Var(ctxt.pop_register())],
-                },
-                lhs: vec![ctxt.push_register()],
-            };
+            // TODO check FreezeRef
+            let inst = Instruction::Nop;
             Ok(vec![inst])
         }
 
-        IB::MutBorrowLoc(_local_index) => {
+        IB::MutBorrowLoc(local_index) => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::MutBorrowLoc,
-                    args: vec![Var(ctxt.pop_register())],
+                    args: vec![Var(Local(*local_index as usize))],
                 },
                 lhs: vec![ctxt.push_register()],
             };
             Ok(vec![inst])
         }
 
-        IB::ImmBorrowLoc(_local_index) => {
+        IB::ImmBorrowLoc(local_index) => {
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::ImmBorrowLoc,
-                    args: vec![Var(ctxt.pop_register())],
+                    args: vec![Var(Local(*local_index as usize))],
                 },
                 lhs: vec![ctxt.push_register()],
             };
@@ -506,8 +477,9 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::Sub => {
-            // TODO: check operand order
-            let args = vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())];
+            let subtraend = ctxt.pop_register();
+            let minuend = ctxt.pop_register();
+            let args = vec![Var(minuend), Var(subtraend)];
             let inst = Instruction::Assign {
                 lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive {
@@ -519,7 +491,9 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::Mul => {
-            let args = vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())];
+            let multiplier = ctxt.pop_register();
+            let multiplicand = ctxt.pop_register();
+            let args = vec![Var(multiplicand), Var(multiplier)];
             let inst = Instruction::Assign {
                 lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive {
@@ -531,7 +505,9 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::Mod => {
-            let args = vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())];
+            let divisor = ctxt.pop_register();
+            let dividend = ctxt.pop_register();
+            let args = vec![Var(dividend), Var(divisor)];
             let inst = Instruction::Assign {
                 lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive {
@@ -543,7 +519,9 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::Div => {
-            let args = vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())];
+            let divisor = ctxt.pop_register();
+            let dividend = ctxt.pop_register();
+            let args = vec![Var(dividend), Var(divisor)];
             let inst = Instruction::Assign {
                 lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive {
@@ -695,6 +673,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::Abort => {
+            ctxt.empty_stack();
             let inst = Instruction::Abort;
             Ok(vec![inst])
         }
@@ -708,7 +687,7 @@ pub(crate) fn bytecode<K: SourceKind>(
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::ShiftLeft,
-                    args: vec![Var(ctxt.pop_register())],
+                    args: vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())],
                 },
                 lhs: vec![ctxt.push_register()],
             };
@@ -719,7 +698,7 @@ pub(crate) fn bytecode<K: SourceKind>(
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::ShiftRight,
-                    args: vec![Var(ctxt.pop_register())],
+                    args: vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())],
                 },
                 lhs: vec![ctxt.push_register()],
             };
@@ -727,11 +706,15 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::VecPack(_bx) => {
+            let mut args = vec![];
+            for _ in 0.._bx.1 {
+                args.push(Var(ctxt.pop_register()));
+            }
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::VecPack,
                     // VecPack will always take one arg only
-                    args: vec![Var(ctxt.pop_register())],
+                    args,
                 },
                 lhs: vec![ctxt.push_register()],
             };
@@ -753,7 +736,7 @@ pub(crate) fn bytecode<K: SourceKind>(
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::VecImmBorrow,
-                    args: vec![Var(ctxt.pop_register())],
+                    args: vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())],
                 },
                 lhs: vec![ctxt.push_register()],
             };
@@ -764,7 +747,7 @@ pub(crate) fn bytecode<K: SourceKind>(
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::VecMutBorrow,
-                    args: vec![Var(ctxt.pop_register())],
+                    args: vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())],
                 },
                 lhs: vec![ctxt.push_register()],
             };
@@ -775,9 +758,10 @@ pub(crate) fn bytecode<K: SourceKind>(
             let inst = Instruction::Assign {
                 rhs: RValue::Primitive {
                     op: PrimitiveOp::VecPushBack,
-                    args: vec![Var(ctxt.pop_register())],
+                    // TODO check if this is ok for the SSA
+                    args: vec![Var(ctxt.pop_register()), Var(ctxt.pop_register())],
                 },
-                lhs: vec![ctxt.push_register()],
+                lhs: vec![],
             };
             Ok(vec![inst])
         }
@@ -793,21 +777,23 @@ pub(crate) fn bytecode<K: SourceKind>(
             Ok(vec![inst])
         }
 
-        IB::VecUnpack(_bx) => {
-            let inst = Instruction::Assign {
-                rhs: RValue::Primitive {
-                    op: PrimitiveOp::VecUnpack,
-                    args: vec![Var(ctxt.pop_register())],
-                },
-                lhs: vec![ctxt.push_register()],
+        IB::VecUnpack(bx) => {
+            let rhs = RValue::Primitive {
+                op: PrimitiveOp::VecUnpack,
+                args: vec![Var(ctxt.pop_register())],
             };
+            let mut lhs = vec![];
+            for _i in 0..bx.1 {
+                lhs.push(ctxt.push_register());
+            }
+            let inst = Instruction::Assign { rhs, lhs };
             Ok(vec![inst])
         }
 
         IB::VecSwap(_rc) => {
             let args = [0, 1, 2]
                 .iter()
-                .map(|i| Var(Register(ctxt.var_counter.last() - i)))
+                .map(|_| Var(ctxt.pop_register()))
                 .collect::<Vec<_>>();
             let inst = Instruction::Assign {
                 // TODO  check order of the registers
@@ -815,7 +801,8 @@ pub(crate) fn bytecode<K: SourceKind>(
                     op: PrimitiveOp::VecSwap,
                     args,
                 },
-                lhs: vec![ctxt.push_register()],
+                // TODO check if this is ok for the SSA
+                lhs: vec![],
             };
             Ok(vec![inst])
         }
@@ -904,8 +891,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                 .fields
                 .0
                 .iter()
-                .enumerate()
-                .map(|(i, _)| Register(ctxt.var_counter.next() + i))
+                .map(|_| ctxt.push_register())
                 .collect::<Vec<_>>();
             let inst = Instruction::Assign { lhs, rhs };
             Ok(vec![inst])
@@ -921,8 +907,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                 .fields
                 .0
                 .iter()
-                .enumerate()
-                .map(|(i, _)| Register(ctxt.var_counter.next() + i))
+                .map(|_| ctxt.push_register())
                 .collect::<Vec<_>>();
             let inst = Instruction::Assign { lhs, rhs };
             Ok(vec![inst])
@@ -969,8 +954,8 @@ pub(crate) fn bytecode<K: SourceKind>(
     }
 }
 
-fn deserialize_constant<S: Hash + Eq + Display + Debug>(constant: &N::Constant<S>) -> Value {
-    match constant.type_ {
+fn deserialize_constant(constant: &N::Constant<Symbol>) -> Value {
+    match &constant.type_ {
         N::Type::U8 => {
             Value::U8(bcs::from_bytes::<u8>(&constant.data).unwrap_or_else(|_| {
                 panic!("Failed to deserialize U8 constant: {:?}", constant.data)
@@ -1019,16 +1004,100 @@ fn deserialize_constant<S: Hash + Eq + Display + Debug>(constant: &N::Constant<S
             }
             Err(_) => panic!("Failed to deserialize Bool constant: {:?}", constant.data),
         },
-        N::Type::Vector(_) => {
-            // TODO finish this
-            Value::NotImplemented(format!("Not implemented vector: {:?}", constant.type_))
+        N::Type::Vector(bx) => {
+            // TODO finish to implement nested vectors
+            handle_vec(&bx, &constant.data)
+        }
+        N::Type::Datatype(_)
+        | N::Type::Reference(_, _)
+        | N::Type::Signer
+        | N::Type::TypeParameter(_) => {
+            Value::NotImplemented(format!("Unsupported constant type: {:?}", constant.type_))
+        }
+    }
+}
+
+fn handle_vec(ty: &Box<N::Type<Symbol>>, data: &Vec<u8>) -> Value {
+    match &**ty {
+        N::Type::U8 => {
+            let data = bcs::from_bytes::<Vec<u8>>(data)
+                .unwrap_or_else(|err| {
+                    panic!(
+                        "Failed to deserialize U8 vector: {:?}, Error: {}",
+                        data, err
+                    )
+                })
+                .iter()
+                .map(|e| Value::U8(*e))
+                .collect();
+            Value::Vector(data)
+        }
+        N::Type::U16 => {
+            let data = bcs::from_bytes::<Vec<u16>>(data)
+                .unwrap_or_else(|_| panic!("Failed to deserialize U16 vector: {:?}", data))
+                .iter()
+                .map(|e| Value::U16(*e))
+                .collect();
+            Value::Vector(data)
+        }
+        N::Type::U32 => {
+            let data = bcs::from_bytes::<Vec<u32>>(data)
+                .unwrap_or_else(|_| panic!("Failed to deserialize U32 vector: {:?}", data))
+                .iter()
+                .map(|e| Value::U32(*e))
+                .collect();
+            Value::Vector(data)
+        }
+        N::Type::U64 => {
+            let data = bcs::from_bytes::<Vec<u64>>(data)
+                .unwrap_or_else(|_| panic!("Failed to deserialize U64 vector: {:?}", data))
+                .iter()
+                .map(|e| Value::U64(*e))
+                .collect();
+            Value::Vector(data)
+        }
+        N::Type::U128 => {
+            let data = bcs::from_bytes::<Vec<u128>>(data)
+                .unwrap_or_else(|_| panic!("Failed to deserialize U128 vector: {:?}", data))
+                .iter()
+                .map(|e| Value::U128(*e))
+                .collect();
+            Value::Vector(data)
+        }
+        N::Type::U256 => {
+            let data = bcs::from_bytes::<Vec<U256>>(data)
+                .unwrap_or_else(|_| panic!("Failed to deserialize U256 vector: {:?}", data))
+                .iter()
+                .map(|e| Value::U256(*e))
+                .collect();
+            Value::Vector(data)
+        }
+        N::Type::Address => {
+            let data = bcs::from_bytes::<Vec<AccountAddress>>(data)
+                .unwrap_or_else(|_| panic!("Failed to deserialize Address vector: {:?}", data))
+                .iter()
+                .map(|e| Value::Address(*e))
+                .collect();
+            Value::Vector(data)
+        }
+        N::Type::Bool => {
+            let data = bcs::from_bytes::<Vec<bool>>(data)
+                .unwrap_or_else(|_| panic!("Failed to deserialize Bool vector: {:?}", data))
+                .iter()
+                .map(|e| if *e { Value::True } else { Value::False })
+                .collect();
+            Value::Vector(data)
+        }
+        N::Type::Vector(bx) => {
+            //TODO finish to implement nested vectors
+            Value::NotImplemented(format!("Nested vector type not yet supported: {:?}", bx))
         }
         N::Type::Datatype(_)
         | N::Type::Reference(_, _)
         | N::Type::Signer
         | N::Type::TypeParameter(_) => {
             // These types are not supported for immediate values
-            Value::NotImplemented(format!("Unsupported constant type: {:?}", constant.type_))
+            Value::NotImplemented(format!("Unsupported vector type: {:?}", ty))
         }
     }
 }

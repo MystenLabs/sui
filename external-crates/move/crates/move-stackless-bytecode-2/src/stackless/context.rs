@@ -47,6 +47,10 @@ impl<'a, K: SourceKind> Context<'a, K> {
         ast::Var::Register(reg_id)
     }
 
+    pub fn empty_stack(&mut self) {
+        self.logical_stack.clear();
+    }
+
     #[allow(unused)]
     pub fn get_locals_counter(&mut self) -> &mut Counter {
         &mut self.locals_counter
@@ -82,6 +86,7 @@ impl Counter {
         self.count
     }
 
+    #[allow(unused)]
     pub fn last(&self) -> usize {
         self.count - 1
     }

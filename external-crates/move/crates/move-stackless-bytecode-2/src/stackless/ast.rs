@@ -34,13 +34,14 @@ pub struct Function {
 #[derive(Debug, Clone)]
 #[allow(unused)]
 pub struct BasicBlock {
-    label: Label,
-    instructions: Vec<Instruction>,
+    pub label: Label,
+    pub instructions: BTreeMap<Label, Instruction>,
 }
 
 #[derive(Debug, Clone)]
 pub enum Instruction {
-    Return(Vec<Var>),
+    // TODO check this
+    Return(Vec<Operand>),
     Assign {
         lhs: Vec<Var>,
         rhs: RValue,
@@ -72,7 +73,7 @@ pub enum RValue {
         function: Symbol,
         args: Vec<Operand>,
     },
-    Constant(Constant),
+    Constant(Value),
     Primitive {
         op: PrimitiveOp,
         args: Vec<Operand>,
@@ -93,6 +94,7 @@ pub enum Value {
     Address(AccountAddress),
     Empty, // empty added for the pop
     NotImplemented(String),
+    Vector(Vec<Value>), // Added to represent vector values
 }
 
 #[derive(Debug, Clone)]
@@ -143,9 +145,6 @@ pub enum PrimitiveOp {
     VecPopBack,
     VecUnpack,
     VecSwap,
-    LdU16,
-    LdU32,
-    LdU256,
     CastU16,
     CastU32,
     CastU256,
@@ -161,15 +160,13 @@ pub enum PrimitiveOp {
     // MoveToDeprecated,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Ord, Eq, PartialEq, PartialOrd)]
 pub enum Var {
-    Local(usize), // Local from the original bytecode
+    Local(usize),    // Local from the original bytecode
     Register(usize), // Temporary variable index
-                  // Unused,          // Represents an unused variable
 }
 
 pub type Label = usize;
-pub type Constant = Vec<u8>;
 pub type PrimitiveOpId = usize;
 
 // -------------------------------------------------------------------------------------------------
@@ -180,11 +177,11 @@ impl BasicBlock {
     pub fn new(label: Label) -> Self {
         Self {
             label,
-            instructions: Vec::new(),
+            instructions: BTreeMap::new(),
         }
     }
 
-    pub fn from_instructions(label: Label, instructions: Vec<Instruction>) -> Self {
+    pub fn from_instructions(label: Label, instructions: BTreeMap<Label, Instruction>) -> Self {
         Self {
             label,
             instructions,
@@ -232,7 +229,7 @@ impl std::fmt::Display for Function {
 impl std::fmt::Display for BasicBlock {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "      Label LBL_{}:", self.label)?;
-        for instr in &self.instructions {
+        for (_label, instr) in &self.instructions {
             writeln!(f, "        {}", instr)?;
         }
         Ok(())
@@ -243,7 +240,13 @@ impl std::fmt::Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Instruction::Return(vars) => write!(f, "Return({})", comma_separated(vars)),
-            Instruction::Assign { lhs, rhs } => write!(f, "{} = {}", comma_separated(lhs), rhs),
+            Instruction::Assign { lhs, rhs } => write!(
+                f,
+                "{}{}{}",
+                comma_separated(lhs),
+                if lhs.is_empty() { "" } else { " = " },
+                rhs
+            ),
             Instruction::Jump(lbl) => write!(f, "Jump(LBL_{lbl})"),
             Instruction::JumpIf {
                 condition,
@@ -271,7 +274,7 @@ impl std::fmt::Display for Operand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Operand::Var(var) => write!(f, "{}", var),
-            Operand::Constant(constant) => write!(f, "Constant({:?})", constant),
+            Operand::Constant(constant) => write!(f, "{}", constant),
             Operand::Immediate(val) => write!(f, "{}", val),
         }
     }
@@ -300,6 +303,7 @@ impl std::fmt::Display for Value {
             Value::Empty => write!(f, "Empty"),
             Value::Address(addr) => write!(f, "Address({})", addr.to_canonical_string(true)),
             Value::NotImplemented(msg) => write!(f, "NotImplemented({})", msg),
+            Value::Vector(vec) => write!(f, "Vector[{}]", comma_separated(vec)),
         }
     }
 }
@@ -312,9 +316,13 @@ impl std::fmt::Display for RValue {
                 write!(f, "{}", comma_separated(args))?;
                 write!(f, ")")
             }
-            RValue::Constant(constant) => write!(f, "Constant({:?})", constant),
+            RValue::Constant(constant) => write!(f, "Constant {}", constant),
             RValue::Primitive { op, args } => write!(f, "{}({})", op, comma_separated(args)),
-            RValue::Operand(immediate) => write!(f, "{immediate}"),
+            RValue::Operand(op) => match op {
+                Operand::Var(var) => write!(f, "Var {}", var),
+                Operand::Constant(value) => write!(f, "Constant {}", value),
+                Operand::Immediate(immediate) => write!(f, "Immediate {}", immediate),
+            },
         }
     }
 }

@@ -4,30 +4,24 @@ source: crates/move-stackless-bytecode-2/tests/tests.rs
   Module: branch
     Function: is_even
       Label LBL_0:
-        reg_0 = U64(10)
-        lcl_2 = reg_0
-        reg_1 = lcl_0
-        reg_2 = U64(2)
-        reg_3 = Modulo(reg_2, reg_1)
-        reg_4 = U64(0)
-        reg_5 = Equal(reg_4, reg_3)
+        lcl_2 = Constant U64(10)
+        reg_1 = Var lcl_0
+        reg_3 = Modulo(reg_1, U64(2))
+        reg_5 = Equal(U64(0), reg_3)
         JumpIf(reg_5, LBL_8, LBL_13)
 
       Label LBL_8:
-        reg_6 = lcl_2
-        reg_7 = U64(20)
-        reg_8 = Add(reg_7, reg_6)
-        lcl_1 = reg_8
+        reg_6 = Var lcl_2
+        reg_8 = Add(U64(20), reg_6)
+        lcl_1 = Var reg_8
         Jump(LBL_17)
 
       Label LBL_13:
-        reg_9 = lcl_2
-        reg_10 = U64(30)
-        reg_11 = Add(reg_10, reg_9)
-        lcl_1 = reg_11
+        reg_9 = Var lcl_2
+        reg_11 = Add(U64(30), reg_9)
+        lcl_1 = Var reg_11
 
       Label LBL_17:
-        reg_12 = lcl_1
-        reg_13 = U64(13)
-        reg_14 = Multiply(reg_13, reg_12)
+        reg_12 = Var lcl_1
+        reg_14 = Multiply(reg_12, U64(13))
         Return(reg_14)
