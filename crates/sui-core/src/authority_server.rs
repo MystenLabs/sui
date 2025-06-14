@@ -1140,7 +1140,7 @@ impl ValidatorService {
         // we need to first make sure that this specific position is accepted by consensus,
         // either with fastpath certified or post-commit finalized.
         let first_status = consensus_tx_status_cache
-            .notify_read_transaction_status(request.transaction_position, None)
+            .notify_read_transaction_status_change(request.transaction_position, None)
             .await;
         debug!(
             tx_digest = ?request.transaction_digest,
@@ -1170,7 +1170,7 @@ impl ValidatorService {
         let (effects, fastpath_outputs) = loop {
             let transactions = [request.transaction_digest];
             tokio::select! {
-                second_status = consensus_tx_status_cache.notify_read_transaction_status(request.transaction_position, Some(cur_status)) => {
+                second_status = consensus_tx_status_cache.notify_read_transaction_status_change(request.transaction_position, Some(cur_status)) => {
                     debug!(
                         tx_digest = ?request.transaction_digest,
                         "Observed consensus transaction status: {:?}",
