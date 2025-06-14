@@ -3,7 +3,6 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use parking_lot::Mutex;
 use sui_types::base_types::SequenceNumber;
 use tokio::sync::watch;
 
@@ -22,7 +21,8 @@ use crate::execution_scheduler::balance_withdraw_scheduler::{
 pub(crate) struct NaiveBalanceWithdrawScheduler {
     balance_read: Arc<dyn AccountBalanceRead>,
     last_settled_version_sender: watch::Sender<SequenceNumber>,
-    last_settled_version_receiver: Mutex<Option<watch::Receiver<SequenceNumber>>>,
+    // We must keep a receiver alive to make sure sends go through and can update the last settled version.
+    _receiver: watch::Receiver<SequenceNumber>,
 }
 
 impl NaiveBalanceWithdrawScheduler {
@@ -31,12 +31,12 @@ impl NaiveBalanceWithdrawScheduler {
         balance_read: Arc<dyn AccountBalanceRead>,
         last_settled_accumulator_version: SequenceNumber,
     ) -> Arc<Self> {
-        let (last_settled_version_sender, last_settled_version_receiver) =
+        let (last_settled_version_sender, _receiver) =
             watch::channel(last_settled_accumulator_version);
         Arc::new(Self {
             balance_read,
             last_settled_version_sender,
-            last_settled_version_receiver: Mutex::new(Some(last_settled_version_receiver)),
+            _receiver,
         })
     }
 }
@@ -44,18 +44,12 @@ impl NaiveBalanceWithdrawScheduler {
 #[async_trait::async_trait]
 impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
     async fn schedule_withdraws(&self, withdraws: WithdrawReservations) {
-        let mut receiver = self.last_settled_version_receiver.lock().take().unwrap();
-        loop {
-            let last_settled_version = *receiver.borrow_and_update();
-            if last_settled_version >= withdraws.accumulator_version {
-                break;
-            }
+        let mut receiver = self.last_settled_version_sender.subscribe();
+        while *receiver.borrow_and_update() < withdraws.accumulator_version {
             if receiver.changed().await.is_err() {
-                *self.last_settled_version_receiver.lock() = Some(receiver);
                 return;
             }
         }
-        *self.last_settled_version_receiver.lock() = Some(receiver);
 
         let mut cur_balances = BTreeMap::new();
         for (withdraw, sender) in withdraws.withdraws.into_iter().zip(withdraws.senders) {
