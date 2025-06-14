@@ -94,10 +94,9 @@ impl LoopSummary {
 
         let mut stack: Vec<Frontier> = cfg
             .successors(root_block)
-            .iter()
             .map(|succ| Visit {
                 from_node: root_node,
-                to_block: *succ,
+                to_block: succ,
             })
             .collect();
 
@@ -140,9 +139,9 @@ impl LoopSummary {
                             parent: from_node,
                         });
 
-                        stack.extend(cfg.successors(to_block).iter().map(|succ| Visit {
+                        stack.extend(cfg.successors(to_block).map(|succ| Visit {
                             from_node: to_node,
-                            to_block: *succ,
+                            to_block: succ,
                         }));
                     }
                 },

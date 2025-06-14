@@ -353,7 +353,7 @@ impl FileRecordKeeper {
                     let loc = f_source_map.get_code_location(block_end).unwrap();
                     let line_no = file_mapping.start_position(&loc).line_offset() + 1;
                     block_id += 1;
-                    for &o in cfg.successors(cfg_block_id) {
+                    for o in cfg.successors(cfg_block_id) {
                         self.branches
                             .entry((index as u16, block_end))
                             .or_insert_with(|| BranchInfo::new(line_no, block_id - 1))
