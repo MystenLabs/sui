@@ -36,6 +36,7 @@ use prometheus::{
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use shared_object_version_manager::Assignable;
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Write;
@@ -5378,7 +5379,7 @@ impl AuthorityState {
         // This is because we do not sequence end-of-epoch transactions through consensus.
         epoch_store.assign_shared_object_versions_idempotent(
             self.get_object_cache_reader().as_ref(),
-            &[executable_tx.clone()],
+            std::iter::once(&Assignable::Transaction(&executable_tx)),
         )?;
 
         let input_objects =
