@@ -6,6 +6,7 @@ use crate::{
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
     execution_scheduler::{ExecutingGuard, PendingCertificateStats},
 };
+use mysten_common::debug_fatal;
 use mysten_metrics::spawn_monitored_task;
 use std::{
     collections::{BTreeSet, HashSet},
@@ -22,7 +23,7 @@ use sui_types::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
-use tracing::{debug, warn};
+use tracing::debug;
 
 use super::{
     overload_tracker::OverloadTracker, ExecutionSchedulerAPI, PendingCertificate, SchedulingSource,
@@ -233,8 +234,8 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
                 if cert.0.epoch() == epoch_store.epoch() {
                     Some(cert)
                 } else {
-                    warn!(
-                        "Ignoring enqueued certificate from wrong epoch. Expected={} Certificate={:?}",
+                    debug_fatal!(
+                        "Certs from wrong epoch. Expected={} Certificate={:?}",
                         epoch_store.epoch(),
                         cert.0.epoch(),
                     );
