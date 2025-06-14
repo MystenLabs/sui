@@ -7,6 +7,7 @@ use crate::{
         shared_object_version_manager::Schedulable, AuthorityMetrics, ExecutionEnv,
     },
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
+    execution_scheduler::balance_withdraw_scheduler::BalanceSettlement,
 };
 use enum_dispatch::enum_dispatch;
 use execution_scheduler_impl::ExecutionScheduler;
@@ -77,6 +78,8 @@ pub trait ExecutionSchedulerAPI {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     );
 
+    fn settle_balances(&self, settlement: BalanceSettlement);
+
     fn check_execution_overload(
         &self,
         overload_config: &AuthorityOverloadConfig,
@@ -131,6 +134,7 @@ impl ExecutionSchedulerWrapper {
                 object_cache_read,
                 transaction_cache_read,
                 tx_ready_certificates,
+                epoch_store.protocol_config().enable_accumulators(),
                 metrics,
             ))
         } else {

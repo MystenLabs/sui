@@ -7,11 +7,13 @@ use std::sync::Arc;
 
 #[cfg(test)]
 use parking_lot::RwLock;
-use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::{
+    accumulator_root::get_balance_from_account_for_testing,
+    base_types::{ObjectID, SequenceNumber},
+};
 
 use crate::execution_cache::ObjectCacheRead;
 
-#[allow(dead_code)]
 pub(crate) trait AccountBalanceRead: Send + Sync {
     fn get_account_balance(
         &self,
@@ -29,10 +31,7 @@ impl AccountBalanceRead for Arc<dyn ObjectCacheRead> {
         accumulator_version: SequenceNumber,
     ) -> u64 {
         self.find_object_lt_or_eq_version(*account_id, accumulator_version)
-            .map(|_obj| {
-                // TODO: Get the balance from the object.
-                0
-            })
+            .map(|obj| get_balance_from_account_for_testing(&obj))
             .unwrap_or_default()
     }
 }

@@ -15,8 +15,10 @@ pub(crate) mod scheduler;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+mod e2e_tests;
+
 /// The result of scheduling the withdraw reservations for a transaction.
-#[allow(dead_code)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum ScheduleResult {
     /// We know for sure that the withdraw reservations in this transactions all have enough balance.
@@ -34,18 +36,19 @@ pub(crate) enum ScheduleResult {
 
 /// Details regarding a balance settlement, generated when a settlement transaction has been executed
 /// and committed to the writeback cache.
-#[allow(dead_code)]
-pub(crate) struct BalanceSettlement {
+pub struct BalanceSettlement {
     /// The accumulator version at which the settlement was committed.
     /// i.e. the root accumulator object is now at this version after the settlement.
     pub accumulator_version: SequenceNumber,
     /// The balance changes for each account object ID.
+    /// This is currently unused because the naive scheduler
+    /// always load the latest balance during scheduling.
+    #[allow(unused)]
     pub balance_changes: BTreeMap<ObjectID, i128>,
 }
 
 /// Details regarding all balance withdraw reservations in a transaction.
-#[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct TxBalanceWithdraw {
     pub tx_digest: TransactionDigest,
     pub reservations: BTreeMap<ObjectID, Reservation>,
