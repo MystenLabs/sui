@@ -1272,11 +1272,11 @@ impl ConsensusBlockHandler {
             })
             .collect::<Vec<_>>();
         let mut executable_transactions = vec![];
-        for (idx, (block, transactions)) in parsed_transactions.into_iter().enumerate() {
-            for parsed in transactions {
+        for (block, transactions) in parsed_transactions.into_iter() {
+            for (txn_idx, parsed) in transactions.into_iter().enumerate() {
                 let position = ConsensusPosition {
                     block,
-                    index: idx as TransactionIndex,
+                    index: txn_idx as TransactionIndex,
                 };
                 if parsed.rejected {
                     // TODO(fastpath): avoid parsing blocks twice between handling commit and fastpath transactions?
@@ -1651,7 +1651,7 @@ mod tests {
 
         let backpressure_manager = BackpressureManager::new_for_tests();
         let block_handler = ConsensusBlockHandler::new(
-            epoch_store,
+            epoch_store.clone(),
             transaction_manager_sender,
             backpressure_manager.subscribe(),
             state.metrics.clone(),
@@ -1708,6 +1708,28 @@ mod tests {
                 }],
             })
             .await;
+
+        // Ensure the correct consensus status is set for the correct consensus position
+        let consensus_tx_status_cache = epoch_store.consensus_tx_status_cache.as_ref().unwrap();
+        for txn_idx in 0..transactions.len() {
+            let position = ConsensusPosition {
+                block: block.reference(),
+                index: txn_idx as TransactionIndex,
+            };
+            if rejected_transactions.contains(&(txn_idx as TransactionIndex)) {
+                // Expect rejected transactions to be marked as such.
+                assert_eq!(
+                    consensus_tx_status_cache.get_transaction_status(&position),
+                    Some(ConsensusTxStatus::Rejected)
+                );
+            } else {
+                // Expect non-rejected transactions to be marked as fastpath certified.
+                assert_eq!(
+                    consensus_tx_status_cache.get_transaction_status(&position),
+                    Some(ConsensusTxStatus::FastpathCertified)
+                );
+            }
+        }
 
         // THEN check for status of transactions that should have been executed.
         for (i, t) in transactions.iter().enumerate() {
