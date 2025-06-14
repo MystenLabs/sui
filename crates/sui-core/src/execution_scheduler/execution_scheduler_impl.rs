@@ -4,25 +4,32 @@
 use crate::{
     authority::{authority_per_epoch_store::AuthorityPerEpochStore, AuthorityMetrics},
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
-    execution_scheduler::{ExecutingGuard, PendingCertificateStats},
+    execution_scheduler::{
+        balance_withdraw_scheduler::{
+            scheduler::BalanceWithdrawScheduler, ScheduleResult, TxBalanceWithdraw,
+        },
+        ExecutingGuard, PendingCertificateStats,
+    },
 };
+use mysten_common::debug_fatal;
 use mysten_metrics::spawn_monitored_task;
 use std::{
-    collections::{BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     sync::Arc,
 };
 use sui_config::node::AuthorityOverloadConfig;
 use sui_types::{
     base_types::FullObjectID,
-    digests::TransactionEffectsDigest,
+    digests::{TransactionDigest, TransactionEffectsDigest},
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
     storage::InputKey,
     transaction::{SenderSignedData, TransactionDataAPI},
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
 };
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::{mpsc::UnboundedSender, oneshot};
 use tokio::time::Instant;
-use tracing::{debug, warn};
+use tracing::{debug, error};
 
 use super::{
     overload_tracker::OverloadTracker, ExecutionSchedulerAPI, PendingCertificate, SchedulingSource,
@@ -34,6 +41,7 @@ pub(crate) struct ExecutionScheduler {
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
     overload_tracker: Arc<OverloadTracker>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
+    balance_withdraw_scheduler: Option<Arc<BalanceWithdrawScheduler>>,
     metrics: Arc<AuthorityMetrics>,
 }
 
@@ -75,11 +83,20 @@ impl ExecutionScheduler {
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         tracing::info!("Creating new ExecutionScheduler");
+        // TODO: Actually check whether balance accumulator is enabled
+        // in protocol config.
+        let init_accumulator_version = object_cache_read
+            .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .map(|obj| obj.version());
+        let balance_withdraw_scheduler = init_accumulator_version.map(|version| {
+            BalanceWithdrawScheduler::new(Arc::new(object_cache_read.clone()), version)
+        });
         Self {
             object_cache_read,
             transaction_cache_read,
             overload_tracker: Arc::new(OverloadTracker::new()),
             tx_ready_certificates,
+            balance_withdraw_scheduler,
             metrics,
         }
     }
@@ -90,8 +107,41 @@ impl ExecutionScheduler {
         expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         scheduling_source: SchedulingSource,
+        withdraw_receiver: Option<oneshot::Receiver<ScheduleResult>>,
     ) {
         let enqueue_time = Instant::now();
+        let tx_digest = cert.digest();
+        let digests = [*tx_digest];
+
+        if let Some(withdraw_receiver) = withdraw_receiver {
+            tokio::select! {
+                withdraw_schedule_result = withdraw_receiver => {
+                    match withdraw_schedule_result {
+                        Ok(ScheduleResult::InsufficientBalance) => {
+                            debug!(?tx_digest, "Balance withdraw result: Insufficient balance");
+                            // TODO: Assign insufficient balance version.
+                        }
+                        Ok(ScheduleResult::SufficientBalance) => {
+                            debug!(?tx_digest, "Balance withdraw result: Success");
+                        }
+                        Ok(ScheduleResult::AlreadyScheduled) => {
+                            debug!(?tx_digest, "Balance withdraw result: Already scheduled");
+                            return;
+                        }
+                        Err(e) => {
+                            // This should only really happen if the system is exiting and sender gets dropped.
+                            error!(?tx_digest, "Balance withdraw result: Error: {:?}", e);
+                            return;
+                        }
+                    }
+                }
+                _ = self.transaction_cache_read.notify_read_executed_effects_digests(&digests) => {
+                    debug!(?tx_digest, "Transaction already executed");
+                    return;
+                }
+            }
+        }
+
         let tx_data = cert.transaction_data();
         let input_object_kinds = tx_data
             .input_objects()
@@ -114,6 +164,8 @@ impl ExecutionScheduler {
                 }
             }
             .into_iter()
+            // Balance withdraw dependencies are handled separately by the balance withdraw scheduler.
+            .filter(|key| key.id().id() != SUI_ACCUMULATOR_ROOT_OBJECT_ID)
             .collect();
         let receiving_object_keys: HashSet<_> = tx_data
             .receiving_objects()
@@ -133,11 +185,9 @@ impl ExecutionScheduler {
         .concat();
 
         let epoch = epoch_store.epoch();
-        let digest = cert.digest();
-        let digests = [*digest];
-        debug!(?digest, "Scheduled transaction in execution scheduler");
+        debug!(?tx_digest, "Scheduled transaction in execution scheduler");
         tracing::trace!(
-            ?digests,
+            ?tx_digest,
             "Waiting for input objects: {:?}",
             input_and_receiving_keys
         );
@@ -158,7 +208,7 @@ impl ExecutionScheduler {
                 .transaction_manager_num_enqueued_certificates
                 .with_label_values(&["ready"])
                 .inc();
-            debug!(?digest, "Input objects already available");
+            debug!(?tx_digest, "Input objects already available");
             self.send_transaction_for_execution(
                 &cert,
                 expected_effects_digest,
@@ -180,12 +230,12 @@ impl ExecutionScheduler {
                     self.metrics
                         .transaction_manager_transaction_queue_age_s
                         .observe(enqueue_time.elapsed().as_secs_f64());
-                    debug!(?digest, "Input objects available");
+                    debug!(?tx_digest, "Input objects available");
                     // TODO: Eventually we could fold execution_driver into the scheduler.
                     self.send_transaction_for_execution(&cert, expected_effects_digest, enqueue_time, scheduling_source);
                 }
             _ = self.transaction_cache_read.notify_read_executed_effects_digests(&digests) => {
-                debug!(?digests, "Transaction already executed");
+                debug!(?tx_digest, "Transaction already executed");
             }
         };
     }
@@ -214,6 +264,51 @@ impl ExecutionScheduler {
         };
         let _ = self.tx_ready_certificates.send(pending_cert);
     }
+
+    fn schedule_balance_withdraws(
+        &self,
+        certs: &[(
+            VerifiedExecutableTransaction,
+            Option<TransactionEffectsDigest>,
+        )],
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> BTreeMap<TransactionDigest, oneshot::Receiver<ScheduleResult>> {
+        let mut accumulator_versions = BTreeMap::new();
+        let mut prev_version = None;
+        for (cert, _) in certs {
+            let Some(withdraws) = Self::get_withdraws(cert) else {
+                continue;
+            };
+            let version = epoch_store
+                .get_assigned_shared_object_versions(&cert.key())
+                .unwrap()
+                .into_iter()
+                .find(|(key, _)| key.0 == SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                .map(|(_, version)| version)
+                .unwrap();
+            if let Some(prev_version) = prev_version {
+                // Transactions must be in order.
+                assert!(prev_version <= version);
+            }
+            prev_version = Some(version);
+            accumulator_versions
+                .entry(version)
+                .or_insert(Vec::new())
+                .push(withdraws);
+        }
+        let mut receivers = BTreeMap::new();
+        for (version, withdraws) in accumulator_versions {
+            if let Some(scheduler) = &self.balance_withdraw_scheduler {
+                receivers.extend(scheduler.schedule_withdraws(version, withdraws));
+            }
+        }
+        receivers
+    }
+
+    fn get_withdraws(_cert: &VerifiedExecutableTransaction) -> Option<TxBalanceWithdraw> {
+        // TODO: Implement this in transaction.rs.
+        None
+    }
 }
 
 impl ExecutionSchedulerAPI for ExecutionScheduler {
@@ -233,8 +328,8 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
                 if cert.0.epoch() == epoch_store.epoch() {
                     Some(cert)
                 } else {
-                    warn!(
-                        "Ignoring enqueued certificate from wrong epoch. Expected={} Certificate={:?}",
+                    debug_fatal!(
+                        "We should never enqueue certificate from wrong epoch. Expected={} Certificate={:?}",
                         epoch_store.epoch(),
                         cert.0.epoch(),
                     );
@@ -242,6 +337,7 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
                 }
             })
             .collect();
+        let mut withdraw_receivers = self.schedule_balance_withdraws(&certs, epoch_store);
         let digests: Vec<_> = certs.iter().map(|(cert, _)| *cert.digest()).collect();
         let executed = self
             .transaction_cache_read
@@ -261,12 +357,14 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
         for (cert, expected_effects_digest) in pending_certs {
             let scheduler = self.clone();
             let epoch_store = epoch_store.clone();
+            let withdraw_receiver = withdraw_receivers.remove(cert.digest());
             spawn_monitored_task!(
                 epoch_store.within_alive_epoch(scheduler.schedule_transaction(
                     cert,
                     expected_effects_digest,
                     &epoch_store,
                     scheduling_source,
+                    withdraw_receiver,
                 ))
             );
         }
