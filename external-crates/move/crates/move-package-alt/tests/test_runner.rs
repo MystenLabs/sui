@@ -12,8 +12,7 @@ use codespan_reporting::{
 use move_package_alt::{
     dependency::{self, DependencySet, UnpinnedDependencyInfo},
     flavor::Vanilla,
-    graph::PackageGraph,
-    package::{lockfile::Lockfile, manifest::Manifest, paths::PackagePath},
+    package::{RootPackage, lockfile::Lockfile, manifest::Manifest},
 };
 use std::path::Path;
 use tracing::debug;
@@ -96,6 +95,7 @@ impl Test<'_> {
                 };
                 contents
             }
+            "graph_to_lockfile" => run_graph_to_lockfile_test_wrapper(self.toml_path).unwrap(),
             "locked" => {
                 let lockfile = Lockfile::<Vanilla>::read_from_dir(self.toml_path.parent().unwrap());
                 match lockfile {
@@ -109,21 +109,17 @@ impl Test<'_> {
     }
 }
 
-async fn _run_graph_test(input_path: &Path) -> Result<String, Box<dyn std::error::Error>> {
-    let package_path = PackagePath::new(input_path.parent().unwrap().to_path_buf())?;
-    let package = PackageGraph::<Vanilla>::load_from_lockfile_ignore_digests(
-        &package_path,
-        &"mainnet".to_string(),
-    )
-    .await?;
-
-    let output = format!("{:#?}", package);
-    Ok(output)
+async fn run_graph_to_lockfile_test(
+    input_path: &Path,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let root_pkg = RootPackage::<Vanilla>::load(input_path.parent().unwrap(), None).await?;
+    let lockfile = root_pkg.dependencies_to_lockfile().await?;
+    Ok(lockfile.render_as_toml().to_string())
 }
 
-fn _run_graph_test_wrapper(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+fn run_graph_to_lockfile_test_wrapper(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let rt = tokio::runtime::Runtime::new()?;
-    let data = rt.block_on(_run_graph_test(path))?;
+    let data = rt.block_on(run_graph_to_lockfile_test(path))?;
     Ok(data)
 }
 
@@ -172,6 +168,9 @@ datatest_stable::harness!(
     run_test,
     "tests/data",
     r".*\.parsed$",
+    run_test,
+    "tests/data",
+    r".*\.graph_to_lockfile$",
     run_test,
     "tests/data",
     r".*\.locked$",

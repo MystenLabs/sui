@@ -14,7 +14,9 @@ use crate::{
     flavor::MoveFlavor,
     package::paths::PackagePath,
 };
+
 use derive_where::derive_where;
+use path_clean::PathClean;
 use serde::{Deserialize, Serialize};
 use serde_spanned::Spanned;
 

@@ -89,6 +89,16 @@ pub struct ManifestDependencyReplacement {
     use_environment: Option<EnvironmentName>,
 }
 
+impl<F: MoveFlavor> PackageMetadata<F> {
+    pub fn name(&self) -> &PackageName {
+        self.name.get_ref()
+    }
+
+    pub fn edition(&self) -> &str {
+        self.edition.get_ref()
+    }
+}
+
 impl<F: MoveFlavor> Manifest<F> {
     /// Read the manifest file at the given path, returning a [`Manifest`].
     pub fn read_from_file(path: impl AsRef<Path>) -> PackageResult<Self> {
@@ -191,6 +201,10 @@ impl<F: MoveFlavor> Manifest<F> {
 
     pub fn environments(&self) -> &BTreeMap<EnvironmentName, F::EnvironmentID> {
         &self.environments
+    }
+
+    pub fn package_name(&self) -> &PackageName {
+        self.package.name()
     }
 }
 

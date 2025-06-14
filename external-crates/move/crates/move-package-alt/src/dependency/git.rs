@@ -54,14 +54,14 @@ pub struct PinnedGitDependency {
 impl PinnedGitDependency {
     /// Fetch the given git dependency and return the path to the checked out repo
     pub async fn fetch(&self) -> PackageResult<PathBuf> {
-        let cache = GitCache::new(move_command_line_common::env::MOVE_HOME.to_string());
+        let cache = GitCache::new();
         let tree = cache.tree_for_sha(self.repo.clone(), self.rev.clone(), Some(self.path.clone()));
         Ok(tree.fetch().await?)
     }
 
     /// Return the path that `fetch` would return without actually fetching the data
     pub fn unfetched_path(&self) -> PathBuf {
-        let cache = GitCache::new(move_command_line_common::env::MOVE_HOME.to_string());
+        let cache = GitCache::new();
         let tree = cache.tree_for_sha(self.repo.clone(), self.rev.clone(), Some(self.path.clone()));
         tree.path_to_tree()
     }

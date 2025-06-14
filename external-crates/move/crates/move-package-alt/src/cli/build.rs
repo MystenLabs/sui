@@ -21,6 +21,8 @@ impl Build {
 
         let package = Package::<Vanilla>::load_root(path).await?;
 
+        // TODO: Implement the actual build logic here.
+
         Ok(())
     }
 }

@@ -1,11 +1,10 @@
 [package]
-name = "pkg_a"
-edition = "2024.beta"
+name = "pkg_git"
+edition = "2024"
 license = "Apache-2.0"
 authors = ["Move Team"]
-flavor = "vanilla"
+version = "0.0.1"
 
 [environments]
 mainnet = "35834a8a"
 testnet = "4c78adac"
-
