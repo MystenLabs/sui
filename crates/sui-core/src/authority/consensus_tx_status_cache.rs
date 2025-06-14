@@ -114,7 +114,9 @@ impl ConsensusTxStatusCache {
         self.status_notify_read.notify(&pos, &status);
     }
 
-    pub async fn notify_read_transaction_status(
+    /// Given a known previous status provided by `old_status`, this function will return a new
+    /// status once the transaction status has changed, or if the consensus position has expired.
+    pub async fn notify_read_transaction_status_change(
         &self,
         transaction_position: ConsensusPosition,
         old_status: Option<ConsensusTxStatus>,
@@ -205,7 +207,6 @@ mod tests {
 
     use super::*;
     use consensus_core::BlockRef;
-    use futures::FutureExt;
     use sui_types::messages_consensus::TransactionIndex;
 
     fn create_test_tx_position(round: u64, index: u64) -> ConsensusPosition {
@@ -228,7 +229,9 @@ mod tests {
         cache.set_transaction_status(tx_pos, ConsensusTxStatus::FastpathCertified);
 
         // Read status immediately
-        let result = cache.notify_read_transaction_status(tx_pos, None).await;
+        let result = cache
+            .notify_read_transaction_status_change(tx_pos, None)
+            .await;
         assert!(matches!(
             result,
             NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::FastpathCertified)
@@ -244,7 +247,7 @@ mod tests {
         let cache_clone = cache.clone();
         let handle = tokio::spawn(async move {
             cache_clone
-                .notify_read_transaction_status(tx_pos, None)
+                .notify_read_transaction_status_change(tx_pos, None)
                 .await
         });
 
@@ -276,7 +279,9 @@ mod tests {
             .await;
 
         // Try to read status - should be expired
-        let result = cache.notify_read_transaction_status(tx_pos, None).await;
+        let result = cache
+            .notify_read_transaction_status_change(tx_pos, None)
+            .await;
         assert!(matches!(
             result,
             NotifyReadConsensusTxStatusResult::Expired(_)
@@ -296,7 +301,10 @@ mod tests {
 
         // Read with old status
         let result = cache
-            .notify_read_transaction_status(tx_pos, Some(ConsensusTxStatus::FastpathCertified))
+            .notify_read_transaction_status_change(
+                tx_pos,
+                Some(ConsensusTxStatus::FastpathCertified),
+            )
             .await;
         assert!(matches!(
             result,
@@ -340,7 +348,7 @@ mod tests {
             let cache_clone = cache.clone();
             handles.push(tokio::spawn(async move {
                 cache_clone
-                    .notify_read_transaction_status(tx_pos, None)
+                    .notify_read_transaction_status_change(tx_pos, None)
                     .await
             }));
         }
@@ -363,26 +371,33 @@ mod tests {
 
     #[tokio::test]
     async fn test_out_of_order_status_updates() {
-        let cache = ConsensusTxStatusCache::new();
+        let cache = Arc::new(ConsensusTxStatusCache::new());
         let tx_pos = create_test_tx_position(1, 0);
 
-        // First update status to Rejected
-        cache.set_transaction_status(tx_pos, ConsensusTxStatus::Rejected);
-        let result = cache.notify_read_transaction_status(tx_pos, None).await;
+        // First update status to Finalized.
+        cache.set_transaction_status(tx_pos, ConsensusTxStatus::Finalized);
+        let result = cache
+            .notify_read_transaction_status_change(tx_pos, None)
+            .await;
         assert!(matches!(
             result,
-            NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Rejected)
+            NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Finalized)
         ));
 
-        // We should not receive a new status update since the new status is older than the old status.
+        let cache_clone = cache.clone();
+        let notify_read_task = tokio::spawn(async move {
+            cache_clone
+                .notify_read_transaction_status_change(tx_pos, Some(ConsensusTxStatus::Finalized))
+                .await
+        });
+
+        // We should never receive a new status update since the new status is older than the old status.
         cache.set_transaction_status(tx_pos, ConsensusTxStatus::FastpathCertified);
-        let result = cache
-            .notify_read_transaction_status(tx_pos, Some(ConsensusTxStatus::Rejected))
-            .now_or_never();
-        assert!(result.is_none());
+        let result = tokio::time::timeout(Duration::from_secs(3), notify_read_task).await;
+        assert!(result.is_err());
         assert_eq!(
             cache.get_transaction_status(&tx_pos),
-            Some(ConsensusTxStatus::Rejected)
+            Some(ConsensusTxStatus::Finalized)
         );
     }
 }
