@@ -5,7 +5,7 @@ module sui::accumulator;
 
 const ENotSystemAddress: u64 = 0;
 
-public struct Accumulator has key {
+public struct AccumulatorRoot has key {
     id: UID,
 }
 
@@ -13,7 +13,7 @@ public struct Accumulator has key {
 fun create(ctx: &TxContext) {
     assert!(ctx.sender() == @0x0, ENotSystemAddress);
 
-    transfer::share_object(Accumulator {
+    transfer::share_object(AccumulatorRoot {
         id: object::sui_accumulator_root_object_id(),
     })
 }
