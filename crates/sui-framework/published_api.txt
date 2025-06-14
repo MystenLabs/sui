@@ -1399,7 +1399,7 @@ transfer_impl
 receive_impl
 	fun
 	0x2::transfer
-Accumulator
+AccumulatorRoot
 	public struct
 	0x2::accumulator
 create
