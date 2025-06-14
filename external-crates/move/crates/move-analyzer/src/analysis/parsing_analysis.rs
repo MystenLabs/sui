@@ -119,6 +119,7 @@ impl<'a> ParsingAnalysisContext<'a> {
             | A::DefinesPrimitive(..)
             | A::Deprecation { .. }
             | A::Error { .. }
+            | A::Mode { .. }
             | A::Syntax { .. }
             | A::Allow { .. }
             | A::LintAllow { .. } => (),
@@ -128,8 +129,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                     self.parsed_attr_symbols(parsed);
                 }
             }
-            A::VerifyOnly => {}
-            A::Test | A::TestOnly | A::RandomTest => {}
+            A::Test | A::RandomTest => {}
             A::ExpectedFailure {
                 minor_status,
                 failure_kind,
@@ -203,7 +203,7 @@ impl<'a> ParsingAnalysisContext<'a> {
         mod_def
             .attributes
             .iter()
-            .for_each(|sp!(_, attrs)| attrs.iter().for_each(|a| self.attr_symbols(a)));
+            .for_each(|sp!(_, attrs)| attrs.0.iter().for_each(|a| self.attr_symbols(a)));
 
         // location of the latest use declaration (if any)
         let mut latest_use_loc = Loc::new(mod_def.loc.file_hash(), 0, 0);
@@ -241,9 +241,9 @@ impl<'a> ParsingAnalysisContext<'a> {
                         }
                     };
 
-                    fun.attributes
-                        .iter()
-                        .for_each(|sp!(_, attrs)| attrs.iter().for_each(|a| self.attr_symbols(a)));
+                    fun.attributes.iter().for_each(|sp!(_, attrs)| {
+                        attrs.0.iter().for_each(|a| self.attr_symbols(a))
+                    });
 
                     for (_, x, t) in fun.signature.parameters.iter() {
                         update_cursor!(IDENT, self.cursor, x, Parameter);
@@ -278,9 +278,9 @@ impl<'a> ParsingAnalysisContext<'a> {
                         }
                     };
 
-                    sdef.attributes
-                        .iter()
-                        .for_each(|sp!(_, attrs)| attrs.iter().for_each(|a| self.attr_symbols(a)));
+                    sdef.attributes.iter().for_each(|sp!(_, attrs)| {
+                        attrs.0.iter().for_each(|a| self.attr_symbols(a))
+                    });
 
                     match &sdef.fields {
                         P::StructFields::Named(v) => v.iter().for_each(|(_, x, t)| {
@@ -311,9 +311,9 @@ impl<'a> ParsingAnalysisContext<'a> {
                         }
                     };
 
-                    edef.attributes
-                        .iter()
-                        .for_each(|sp!(_, attrs)| attrs.iter().for_each(|a| self.attr_symbols(a)));
+                    edef.attributes.iter().for_each(|sp!(_, attrs)| {
+                        attrs.0.iter().for_each(|a| self.attr_symbols(a))
+                    });
 
                     let P::EnumDefinition { variants, .. } = edef;
                     for variant in variants {
@@ -363,9 +363,9 @@ impl<'a> ParsingAnalysisContext<'a> {
                         }
                     };
 
-                    c.attributes
-                        .iter()
-                        .for_each(|sp!(_, attrs)| attrs.iter().for_each(|a| self.attr_symbols(a)));
+                    c.attributes.iter().for_each(|sp!(_, attrs)| {
+                        attrs.0.iter().for_each(|a| self.attr_symbols(a))
+                    });
 
                     self.type_symbols(&c.signature);
                     self.exp_symbols(&c.value);
@@ -697,7 +697,7 @@ impl<'a> ParsingAnalysisContext<'a> {
         use_decl
             .attributes
             .iter()
-            .for_each(|sp!(_, attrs)| attrs.iter().for_each(|a| self.attr_symbols(a)));
+            .for_each(|sp!(_, attrs)| attrs.0.iter().for_each(|a| self.attr_symbols(a)));
 
         update_cursor!(self.cursor, sp(use_decl.loc, use_decl.use_.clone()), Use);
 

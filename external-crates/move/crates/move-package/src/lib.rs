@@ -17,9 +17,11 @@ use lock_file::LockFile;
 use move_compiler::{
     Flags,
     editions::{Edition, Flavor},
+    shared::known_attributes::ModeAttribute,
 };
 use move_core_types::account_address::AccountAddress;
 use move_model_2::source_model;
+use move_symbol_pool::Symbol;
 use resolution::{dependency_graph::DependencyGraphBuilder, resolution_graph::ResolvedGraph};
 use serde::{Deserialize, Serialize};
 use source_package::{
@@ -114,6 +116,17 @@ pub struct BuildConfig {
 
     #[clap(flatten)]
     pub lint_flag: LintFlag,
+
+    /// Arbitrary mode -- this will be used to enable or filter user-defined `#[mode(<MODE>)]`
+    /// annodations during compiltaion.
+    #[arg(
+        long = "mode",
+        value_name = "MODE",
+        value_parser = parse_symbol,
+        action = ArgAction::Append,
+        global = true
+    )]
+    pub modes: Vec<Symbol>,
 
     /// Additional dependencies to be automatically included in every package
     #[clap(skip)]
@@ -333,7 +346,7 @@ impl BuildConfig {
     }
 
     pub fn compiler_flags(&self) -> Flags {
-        let flags = if self.test_mode {
+        let flags = if self.test_mode || self.modes.contains(&ModeAttribute::TEST.into()) {
             Flags::testing()
         } else {
             Flags::empty()
@@ -342,6 +355,7 @@ impl BuildConfig {
             .set_warnings_are_errors(self.warnings_are_errors)
             .set_json_errors(self.json_errors)
             .set_silence_warnings(self.silence_warnings)
+            .set_modes(self.modes.clone())
     }
 
     pub fn update_lock_file_toolchain_version(
@@ -384,4 +398,8 @@ impl BuildConfig {
     pub fn publishable(&self) -> bool {
         self.compiler_flags().publishable()
     }
+}
+
+fn parse_symbol(s: &str) -> Result<Symbol, String> {
+    Ok(Symbol::from(s))
 }
