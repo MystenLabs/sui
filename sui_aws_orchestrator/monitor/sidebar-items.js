@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Grafana","LocalGrafana","Monitor","Prometheus"]};

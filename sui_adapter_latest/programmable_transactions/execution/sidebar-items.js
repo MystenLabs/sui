@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PrimitiveArgumentLayout"],"fn":["bcs_argument_validate","check_compatibility","check_private_generics","execute","execute_inner","fetch_package","fetch_packages","is_tx_context"]};

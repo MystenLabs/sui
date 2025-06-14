@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["transaction"],"mod":["drop_safety","input_arguments","memory_safety","move_functions"]};

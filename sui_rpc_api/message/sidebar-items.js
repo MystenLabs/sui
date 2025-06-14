@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["MessageField"],"trait":["MessageFields","MessageMerge","MessageMergeFrom"]};
