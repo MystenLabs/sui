@@ -22,10 +22,9 @@ use tracing::trace;
 
 pub struct SharedObjVerManager {}
 
-pub type AssignedTxAndVersions = Vec<(
-    TransactionKey,
-    Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
-)>;
+pub type AssignedVersions = Vec<(ConsensusObjectSequenceKey, SequenceNumber)>;
+
+pub type AssignedTxAndVersions = Vec<(TransactionKey, AssignedVersions)>;
 
 #[must_use]
 #[derive(Default)]
@@ -116,7 +115,7 @@ impl SharedObjVerManager {
         cert: &VerifiedExecutableTransaction,
         shared_input_next_versions: &mut HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
-    ) -> Vec<(ConsensusObjectSequenceKey, SequenceNumber)> {
+    ) -> AssignedVersions {
         let tx_digest = cert.digest();
 
         // Check if the transaction is cancelled due to congestion.

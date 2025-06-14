@@ -91,6 +91,7 @@ use super::execution_time_estimator::{ConsensusObservations, ExecutionTimeEstima
 use super::shared_object_congestion_tracker::{
     CongestionPerObjectDebt, SharedObjectCongestionTracker,
 };
+use super::shared_object_version_manager::AssignedVersions;
 use super::transaction_deferral::{transaction_deferral_within_limit, DeferralKey, DeferralReason};
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::execution_time_estimator::EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY;
@@ -1726,6 +1727,7 @@ impl AuthorityPerEpochStore {
         &self,
         key: &TransactionKey,
         objects: &[InputObjectKind],
+        assigned_versions: Option<&AssignedVersions>,
     ) -> SuiResult<BTreeSet<InputKey>> {
         let assigned_shared_versions = once_cell::unsync::OnceCell::<
             Option<HashMap<ConsensusObjectSequenceKey, SequenceNumber>>,
@@ -1741,8 +1743,12 @@ impl AuthorityPerEpochStore {
                     } => {
                         let assigned_shared_versions = assigned_shared_versions
                             .get_or_init(|| {
-                                self.get_assigned_shared_object_versions(key)
-                                    .map(|versions| versions.into_iter().collect())
+                                if let Some(assigned_versions) = assigned_versions {
+                                    Some(assigned_versions.iter().cloned().collect())
+                                } else {
+                                    self.get_assigned_shared_object_versions(key)
+                                        .map(|versions| versions.into_iter().collect())
+                                }
                             })
                             .as_ref()
                             // Shared version assignments could have been deleted if the tx just
@@ -2072,7 +2078,7 @@ impl AuthorityPerEpochStore {
     pub fn get_assigned_shared_object_versions(
         &self,
         key: &TransactionKey,
-    ) -> Option<Vec<(ConsensusObjectSequenceKey, SequenceNumber)>> {
+    ) -> Option<AssignedVersions> {
         self.consensus_output_cache
             .get_assigned_shared_object_versions(key)
     }

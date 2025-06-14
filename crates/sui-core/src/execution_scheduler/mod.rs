@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    authority::{authority_per_epoch_store::AuthorityPerEpochStore, AuthorityMetrics},
+    authority::{
+        authority_per_epoch_store::AuthorityPerEpochStore,
+        shared_object_version_manager::AssignedVersions, AuthorityMetrics,
+    },
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
 };
 use enum_dispatch::enum_dispatch;
@@ -49,6 +52,9 @@ pub struct PendingCertificate {
     // When executing from checkpoint, the certified effects digest is provided, so that forks can
     // be detected prior to committing the transaction.
     pub expected_effects_digest: Option<TransactionEffectsDigest>,
+    // The assigned versions for the shared objects in this certificate.
+    // TODO: Use this for all transactions and remove the shared version assignment map.
+    pub assigned_versions: Option<AssignedVersions>,
     // The input object this certificate is waiting for to become available in order to be executed.
     // This is only used by TransactionManager.
     pub waiting_input_objects: BTreeSet<InputKey>,
@@ -70,6 +76,7 @@ pub(crate) trait ExecutionSchedulerAPI {
         certs: Vec<(
             VerifiedExecutableTransaction,
             Option<TransactionEffectsDigest>,
+            Option<AssignedVersions>,
         )>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         scheduling_source: SchedulingSource,
@@ -81,7 +88,7 @@ pub(crate) trait ExecutionSchedulerAPI {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         scheduling_source: SchedulingSource,
     ) {
-        let certs = certs.into_iter().map(|cert| (cert, None)).collect();
+        let certs = certs.into_iter().map(|cert| (cert, None, None)).collect();
         self.enqueue_impl(certs, epoch_store, scheduling_source)
     }
 
@@ -92,9 +99,21 @@ pub(crate) trait ExecutionSchedulerAPI {
     ) {
         let certs = certs
             .into_iter()
-            .map(|(cert, fx)| (cert, Some(fx)))
+            .map(|(cert, fx)| (cert, Some(fx), None))
             .collect();
         // If we already have the effects, this cannot be from fastpath.
+        self.enqueue_impl(certs, epoch_store, SchedulingSource::NonFastPath)
+    }
+
+    fn enqueue_with_assigned_versions(
+        &self,
+        certs: Vec<(VerifiedExecutableTransaction, AssignedVersions)>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        let certs = certs
+            .into_iter()
+            .map(|(cert, assigned_versions)| (cert, None, Some(assigned_versions)))
+            .collect();
         self.enqueue_impl(certs, epoch_store, SchedulingSource::NonFastPath)
     }
 
