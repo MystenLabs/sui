@@ -154,6 +154,7 @@ impl Handler for ObjInfoV2 {
                 WHERE total_per_object > 2  -- Only if there are intermediates
                 AND rn_desc > 1             -- Not the latest
                 AND rn_asc > 1              -- Not the earliest
+                ORDER BY object_id, cp_sequence_number
             );
             ",
             from as i64,
