@@ -21,6 +21,7 @@ use sui_types::{
     crypto::{RandomnessPartialSignature, RandomnessRound, RandomnessSignature},
     digests::TransactionDigest,
     error::SuiError,
+    traffic_control::TrafficControlReconfigParams,
 };
 use telemetry_subscribers::TracingHandle;
 use tokio::sync::oneshot;
@@ -73,6 +74,9 @@ use tracing::info;
 // Get the estimated cost of a transaction
 //
 //  $ curl 'http://127.0.0.1:1337/get-tx-cost?tx=<tx_digest>'
+// Reconfigure traffic control policy
+//
+//  $ curl 'http://127.0.0.1:1337/traffic-control?error_threshold=100&spam_threshold=100&dry_run=true'
 
 const LOGGING_ROUTE: &str = "/logging";
 const TRACING_ROUTE: &str = "/enable-tracing";
@@ -87,6 +91,7 @@ const RANDOMNESS_INJECT_PARTIAL_SIGS_ROUTE: &str = "/randomness-inject-partial-s
 const RANDOMNESS_INJECT_FULL_SIG_ROUTE: &str = "/randomness-inject-full-sig";
 const GET_TX_COST_ROUTE: &str = "/get-tx-cost";
 const DUMP_CONSENSUS_TX_COST_ESTIMATES_ROUTE: &str = "/dump-consensus-tx-cost-estimates";
+const TRAFFIC_CONTROL: &str = "/traffic-control";
 
 struct AppState {
     node: Arc<SuiNode>,
@@ -131,6 +136,7 @@ pub async fn run_admin_server(node: Arc<SuiNode>, port: u16, tracing_handle: Tra
             DUMP_CONSENSUS_TX_COST_ESTIMATES_ROUTE,
             get(dump_consensus_tx_cost_estimates),
         )
+        .route(TRAFFIC_CONTROL, post(traffic_control))
         .with_state(Arc::new(app_state));
 
     let socket_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
@@ -496,4 +502,24 @@ async fn dump_consensus_tx_cost_estimates(
     let epoch_store = state.node.state().load_epoch_store_one_call_per_task();
     let estimates = epoch_store.get_consensus_tx_cost_estimates().await;
     (StatusCode::OK, format!("{:#?}", estimates))
+}
+
+async fn traffic_control(
+    State(state): State<Arc<AppState>>,
+    args: Query<TrafficControlReconfigParams>,
+) -> (StatusCode, String) {
+    let Query(params) = args;
+    match state.node.state().reconfigure_traffic_control(params).await {
+        Ok(updated_state) => (
+            StatusCode::OK,
+            format!(
+                "Traffic control configured with:\n\
+                 Error threshold: {:?}\n\
+                 Spam threshold: {:?}\n\
+                 Dry run: {:?}\n",
+                updated_state.error_threshold, updated_state.spam_threshold, updated_state.dry_run
+            ),
+        ),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
+    }
 }
