@@ -17,7 +17,6 @@ use crate::execution_scheduler::balance_withdraw_scheduler::{
 /// and then check if the balance is sufficient.
 /// This implementation is simple and easy to understand, but it is not efficient.
 /// It is only used to unblock further development of the balance withdraw scheduler.
-#[allow(dead_code)]
 pub(crate) struct NaiveBalanceWithdrawScheduler {
     balance_read: Arc<dyn AccountBalanceRead>,
     last_settled_version_sender: watch::Sender<SequenceNumber>,
@@ -26,7 +25,6 @@ pub(crate) struct NaiveBalanceWithdrawScheduler {
 }
 
 impl NaiveBalanceWithdrawScheduler {
-    #[allow(dead_code)]
     pub fn new(
         balance_read: Arc<dyn AccountBalanceRead>,
         last_settled_accumulator_version: SequenceNumber,

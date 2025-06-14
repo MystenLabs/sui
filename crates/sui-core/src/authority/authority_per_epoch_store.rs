@@ -74,6 +74,7 @@ use sui_types::transaction::{
     TransactionData, TransactionDataAPI, TransactionKey, TransactionKind, TxValidityCheckContext,
     VerifiedCertificate, VerifiedSignedTransaction, VerifiedTransaction,
 };
+use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use tap::TapOptional;
 use tokio::sync::{mpsc, OnceCell};
 use tokio::time::Instant;
@@ -2120,6 +2121,14 @@ impl AuthorityPerEpochStore {
     fn set_assigned_shared_object_versions(&self, versions: AssignedTxAndVersions) {
         self.consensus_output_cache
             .insert_shared_object_assignments(&versions);
+    }
+
+    pub fn set_insuffiicent_balance_withdraw(&self, key: &TransactionKey) {
+        self.consensus_output_cache.override_shared_object_version(
+            key,
+            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+            SequenceNumber::INSUFFICIENT_BALANCE,
+        );
     }
 
     /// Given list of certificates, assign versions for all shared objects used in them.

@@ -1250,9 +1250,11 @@ impl SequenceNumber {
     pub const CONGESTED: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 2);
     pub const RANDOMNESS_UNAVAILABLE: SequenceNumber =
         SequenceNumber(SequenceNumber::MAX.value() + 3);
+    pub const INSUFFICIENT_BALANCE: SequenceNumber =
+        SequenceNumber(SequenceNumber::MAX.value() + 4);
     // Used to represent a sequence number whose value is unknown.
     // For internal use only. This should never appear on chain.
-    pub const UNKNOWN: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 4);
+    pub const UNKNOWN: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 5);
 
     pub const fn new() -> Self {
         SequenceNumber(0)
@@ -1305,6 +1307,7 @@ impl SequenceNumber {
         self == &SequenceNumber::CANCELLED_READ
             || self == &SequenceNumber::CONGESTED
             || self == &SequenceNumber::RANDOMNESS_UNAVAILABLE
+            || self == &SequenceNumber::INSUFFICIENT_BALANCE
     }
 
     pub fn is_valid(&self) -> bool {

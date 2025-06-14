@@ -169,6 +169,7 @@ impl ExecutionSchedulerWrapper {
                 object_cache_read,
                 transaction_cache_read,
                 tx_ready_certificates,
+                epoch_store.protocol_config().enable_accumulators(),
                 metrics,
             ))
         } else {

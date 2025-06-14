@@ -11,21 +11,18 @@ use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver, Unbou
 use sui_types::{base_types::SequenceNumber, digests::TransactionDigest};
 use tokio::sync::oneshot;
 
-#[allow(dead_code)]
 #[async_trait::async_trait]
 pub(crate) trait BalanceWithdrawSchedulerTrait: Send + Sync {
     async fn schedule_withdraws(&self, withdraws: WithdrawReservations);
     async fn settle_balances(&self, settlement: BalanceSettlement);
 }
 
-#[allow(dead_code)]
 pub(crate) struct WithdrawReservations {
     pub accumulator_version: SequenceNumber,
     pub withdraws: Vec<TxBalanceWithdraw>,
     pub senders: Vec<oneshot::Sender<ScheduleResult>>,
 }
 
-#[allow(dead_code)]
 #[derive(Clone)]
 pub(crate) struct BalanceWithdrawScheduler {
     inner: Arc<dyn BalanceWithdrawSchedulerTrait>,
@@ -35,7 +32,6 @@ pub(crate) struct BalanceWithdrawScheduler {
 }
 
 impl WithdrawReservations {
-    #[allow(dead_code)]
     pub fn new(
         accumulator_version: SequenceNumber,
         withdraws: Vec<TxBalanceWithdraw>,
@@ -62,12 +58,11 @@ impl WithdrawReservations {
 }
 
 impl BalanceWithdrawScheduler {
-    #[allow(dead_code)]
     pub fn new(
         balance_read: Arc<dyn AccountBalanceRead>,
-        init_accumulator_version: SequenceNumber,
+        starting_accumulator_version: SequenceNumber,
     ) -> Arc<Self> {
-        let inner = NaiveBalanceWithdrawScheduler::new(balance_read, init_accumulator_version);
+        let inner = NaiveBalanceWithdrawScheduler::new(balance_read, starting_accumulator_version);
         let (withdraw_sender, withdraw_receiver) =
             unbounded_channel("withdraw_scheduler_withdraws");
         let (settlement_sender, settlement_receiver) =
@@ -81,7 +76,7 @@ impl BalanceWithdrawScheduler {
         tokio::spawn(
             scheduler
                 .clone()
-                .process_settlement_task(settlement_receiver, init_accumulator_version),
+                .process_settlement_task(settlement_receiver, starting_accumulator_version),
         );
         scheduler
     }
@@ -92,7 +87,6 @@ impl BalanceWithdrawScheduler {
     /// It must be called sequentially in order to correctly schedule withdraws.
     /// It is OK to call this function multiple times for the same accumulator version (which will happen between
     /// the calls to the function by ConsensusHandler and the CheckpointExecutor).
-    #[allow(dead_code)]
     pub fn schedule_withdraws(
         &self,
         accumulator_version: SequenceNumber,
@@ -141,9 +135,9 @@ impl BalanceWithdrawScheduler {
     async fn process_settlement_task(
         self: Arc<Self>,
         mut settlement_receiver: UnboundedReceiver<BalanceSettlement>,
-        init_accumulator_version: SequenceNumber,
+        starting_accumulator_version: SequenceNumber,
     ) {
-        let mut expected_version = init_accumulator_version.next();
+        let mut expected_version = starting_accumulator_version.next();
         let mut pending_settlements = BTreeMap::new();
         while let Some(settlement) = settlement_receiver.recv().await {
             pending_settlements.insert(settlement.accumulator_version, settlement);

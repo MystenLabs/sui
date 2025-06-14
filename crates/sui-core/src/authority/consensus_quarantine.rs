@@ -444,6 +444,22 @@ impl ConsensusOutputCache {
             .add(inserted_count as i64);
     }
 
+    pub fn override_shared_object_version(
+        &self,
+        key: &TransactionKey,
+        object_id: ObjectID,
+        new_version: SequenceNumber,
+    ) {
+        let mut versions = self.shared_version_assignments.get_mut(key).unwrap();
+        for ((id, _), version) in versions.iter_mut() {
+            if id == &object_id {
+                *version = new_version;
+                return;
+            }
+        }
+        unreachable!("{object_id:?} not found in shared_version_assignments for {key:?}");
+    }
+
     pub fn set_shared_object_versions_for_testing(
         &self,
         tx_digest: &TransactionDigest,

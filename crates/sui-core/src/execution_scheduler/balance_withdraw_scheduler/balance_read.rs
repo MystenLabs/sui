@@ -11,7 +11,6 @@ use sui_types::base_types::{ObjectID, SequenceNumber};
 
 use crate::execution_cache::ObjectCacheRead;
 
-#[allow(dead_code)]
 pub(crate) trait AccountBalanceRead: Send + Sync {
     fn get_account_balance(
         &self,
