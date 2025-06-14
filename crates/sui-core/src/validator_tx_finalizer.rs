@@ -193,7 +193,7 @@ where
                 }
             }
             Err(err) => {
-                error!(?tx_digest, ?err, "Failed to finalize transaction");
+                debug!(?tx_digest, "Failed to finalize transaction: {err}");
             }
         }
     }
