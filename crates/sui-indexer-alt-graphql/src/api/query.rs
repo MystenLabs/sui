@@ -16,7 +16,7 @@ use super::{
     types::{
         checkpoint::Checkpoint,
         epoch::Epoch,
-        move_package::{self, MovePackage, PackageKey},
+        move_package::{self, CheckpointFilter, MovePackage, PackageKey},
         object::{self, Object, ObjectKey, VersionFilter},
         protocol_configs::ProtocolConfigs,
         service_config::ServiceConfig,
@@ -256,6 +256,31 @@ impl Query {
             },
         )
         .await
+    }
+
+    /// Paginate all packages published on-chain, optionally bounded to packages published strictly after `filter.afterCheckpoint` and/or strictly before `filter.beforeCheckpoint`.
+    async fn packages(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<move_package::CPackage>,
+        last: Option<u64>,
+        before: Option<move_package::CPackage>,
+        filter: Option<CheckpointFilter>,
+    ) -> Result<Option<Connection<String, MovePackage>>, RpcError<move_package::Error>> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Query", "packages");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        Ok(Some(
+            MovePackage::paginate_by_checkpoint(
+                ctx,
+                self.scope(ctx)?,
+                page,
+                filter.unwrap_or_default(),
+            )
+            .await?,
+        ))
     }
 
     /// Paginate all versions of a package at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
