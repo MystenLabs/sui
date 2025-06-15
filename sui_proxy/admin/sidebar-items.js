@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["app","create_server_cert_default_allow","create_server_cert_enforce_peer","generate_self_cert","make_reqwest_client","server","shutdown_signal"],"struct":["CertKeyPair","Labels","ReqwestClient"]};

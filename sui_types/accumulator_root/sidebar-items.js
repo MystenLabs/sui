@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ACCUMULATOR_ROOT_CREATE_FUNC","ACCUMULATOR_ROOT_MODULE"],"fn":["get_accumulator_root_obj_initial_shared_version"]};

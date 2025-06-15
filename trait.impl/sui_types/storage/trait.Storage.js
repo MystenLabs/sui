@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["sui_adapter_latest",[["impl <a class=\"trait\" href=\"sui_types/storage/trait.Storage.html\" title=\"trait sui_types::storage::Storage\">Storage</a> for <a class=\"struct\" href=\"sui_adapter_latest/temporary_store/struct.TemporaryStore.html\" title=\"struct sui_adapter_latest::temporary_store::TemporaryStore\">TemporaryStore</a>&lt;'_&gt;"]]],["sui_adapter_v0",[["impl <a class=\"trait\" href=\"sui_types/storage/trait.Storage.html\" title=\"trait sui_types::storage::Storage\">Storage</a> for <a class=\"struct\" href=\"sui_adapter_v0/temporary_store/struct.TemporaryStore.html\" title=\"struct sui_adapter_v0::temporary_store::TemporaryStore\">TemporaryStore</a>&lt;'_&gt;"]]],["sui_adapter_v1",[["impl <a class=\"trait\" href=\"sui_types/storage/trait.Storage.html\" title=\"trait sui_types::storage::Storage\">Storage</a> for <a class=\"struct\" href=\"sui_adapter_v1/temporary_store/struct.TemporaryStore.html\" title=\"struct sui_adapter_v1::temporary_store::TemporaryStore\">TemporaryStore</a>&lt;'_&gt;"]]],["sui_adapter_v2",[["impl <a class=\"trait\" href=\"sui_types/storage/trait.Storage.html\" title=\"trait sui_types::storage::Storage\">Storage</a> for <a class=\"struct\" href=\"sui_adapter_v2/temporary_store/struct.TemporaryStore.html\" title=\"struct sui_adapter_v2::temporary_store::TemporaryStore\">TemporaryStore</a>&lt;'_&gt;"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[347,336,336,336]}
