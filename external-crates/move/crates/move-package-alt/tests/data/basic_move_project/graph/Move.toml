@@ -1,5 +1,5 @@
 [package]
-name = "pkg_a"
+name = "graph"
 edition = "2024.beta"
 license = "Apache-2.0"
 authors = ["Move Team"]
@@ -9,3 +9,6 @@ flavor = "vanilla"
 mainnet = "35834a8a"
 testnet = "4c78adac"
 
+[dependencies]
+nodeps = { local = "../nodeps" }
+depends_a_b = { local = "../depends_a_b" }

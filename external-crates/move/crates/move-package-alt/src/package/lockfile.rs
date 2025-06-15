@@ -73,6 +73,13 @@ pub struct DepInfo {
 }
 
 impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
+    pub fn new(
+        pinned: BTreeMap<EnvironmentName, DependencyInfo>,
+        published: BTreeMap<EnvironmentName, Publication<F>>,
+    ) -> Self {
+        Self { pinned, published }
+    }
+
     /// Read `Move.lock` and all `Move.<env>.lock` files from the directory at `path`.
     /// Returns a new empty [Lockfile] if `path` doesn't contain a `Move.lock`.
     pub fn read_from_dir(path: impl AsRef<Path>) -> PackageResult<Self> {
@@ -121,7 +128,7 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
     pub fn write_to(
         &self,
         path: impl AsRef<Path>,
-        envs: BTreeMap<EnvironmentName, F::EnvironmentID>,
+        envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
     ) -> PackageResult<()> {
         let mut output: Lockfile<F> = self.clone();
         let (pubs, locals): (BTreeMap<_, _>, BTreeMap<_, _>) = output
@@ -142,6 +149,22 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
         for chain in output.published.keys() {
             let _ = std::fs::remove_file(path.as_ref().join(format!("Move.{}.lock", chain)));
         }
+
+        Ok(())
+    }
+
+    /// Update the lockfile to the new pinned deps and write to disk.
+    pub fn updated_deps_to_lockfile(
+        &self,
+        path: impl AsRef<Path>,
+        pinned_deps: BTreeMap<EnvironmentName, DependencyInfo>,
+        envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
+    ) -> PackageResult<()> {
+        let mut lockfile = self.clone();
+        lockfile.update_pinned_dep_env(pinned_deps);
+
+        // Write the updated lockfile to disk
+        lockfile.write_to(path, envs)?;
 
         Ok(())
     }
@@ -185,6 +208,11 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
     /// Return a map that has an environment as key and the dependencies for that environment.
     pub fn pinned_deps(&self) -> &BTreeMap<EnvironmentName, DependencyInfo> {
         &self.pinned
+    }
+
+    /// Update the pinned dependencies for the given environment.
+    pub fn update_pinned_dep_env(&mut self, pinned: BTreeMap<EnvironmentName, DependencyInfo>) {
+        self.pinned.extend(pinned);
     }
 }
 
