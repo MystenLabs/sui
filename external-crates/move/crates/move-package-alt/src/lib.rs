@@ -13,5 +13,4 @@ pub mod errors;
 pub mod flavor;
 pub mod git;
 pub mod graph;
-pub mod jsonrpc;
 pub mod package;
