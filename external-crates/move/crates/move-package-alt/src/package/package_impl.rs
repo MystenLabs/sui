@@ -8,6 +8,7 @@ use std::{
     marker::PhantomData,
     path::{Path, PathBuf},
     process::Command,
+    sync::Arc,
 };
 
 use serde::{Deserialize, Serialize};
@@ -30,6 +31,11 @@ pub type EnvironmentID = String;
 
 pub type PackageName = Identifier;
 pub type AddressInfo = String;
+
+pub struct PackageInEnvironment<F: MoveFlavor> {
+    package: Arc<Package<F>>,
+    environment: EnvironmentName,
+}
 
 #[derive(Debug)]
 pub struct Package<F: MoveFlavor> {

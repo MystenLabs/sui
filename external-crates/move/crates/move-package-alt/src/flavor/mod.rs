@@ -38,9 +38,6 @@ pub trait MoveFlavor: Debug {
     /// the `package` section of the manifest
     type PackageMetadata: Debug + Serialize + DeserializeOwned + Clone;
 
-    /// An [AddressInfo] should give a unique identifier for a compiled package
-    type AddressInfo: Debug + Serialize + DeserializeOwned + Clone;
-
     /// An [EnvironmentID] uniquely identifies a place that a package can be published. For
     /// example, an environment ID might be a chain identifier
     //
