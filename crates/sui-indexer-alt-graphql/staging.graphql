@@ -39,6 +39,20 @@ type Checkpoint {
 }
 
 """
+Filter for paginating packages published within a range of checkpoints.
+"""
+input CheckpointFilter {
+	"""
+	Filter to packages that were published strictly after this checkpoint, defaults to fetching from the earliest checkpoint known to this RPC (this could be the genesis checkpoint, or some later checkpoint if data has been pruned).
+	"""
+	afterCheckpoint: UInt53
+	"""
+	Filter to packages published strictly before this checkpoint, defaults to fetching up to the latest checkpoint (inclusive).
+	"""
+	beforeCheckpoint: UInt53
+}
+
+"""
 ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ. Note that the milliseconds part is optional, and it may be omitted if its value is 0.
 """
 scalar DateTime
@@ -568,6 +582,10 @@ type Query {
 	Note that this interpretation of `version` and "latest" differs from the one used by `Query.object`, because non-system package upgrades generate objects with different IDs. To fetch a package using the versioning semantics of objects, use `Object.asMovePackage` nested under `Query.object`.
 	"""
 	package(address: SuiAddress!, version: UInt53, atCheckpoint: UInt53): MovePackage
+	"""
+	Paginate all packages published on-chain, optionally bounded to packages published strictly after `filter.afterCheckpoint` and/or strictly before `filter.beforeCheckpoint`.
+	"""
+	packages(first: Int, after: String, last: Int, before: String, filter: CheckpointFilter): MovePackageConnection
 	"""
 	Paginate all versions of a package at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
 	
