@@ -7,7 +7,6 @@ use std::{
     fmt::{self, Debug},
     marker::PhantomData,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 use serde::{Deserialize, Serialize};
@@ -18,12 +17,12 @@ use super::{
     paths::PackagePath,
 };
 use crate::{
-    dependency::{DependencySet, PinnedDependencyInfo},
-    errors::{ManifestError, PackageResult},
+    dependency::{DependencySet, PinnedDependencyInfo, pin},
+    errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
 };
 use move_core_types::identifier::Identifier;
-use tracing::debug;
+use tracing::{debug, info};
 
 pub type EnvironmentName = String;
 pub type EnvironmentID = String;
@@ -40,13 +39,14 @@ pub struct Package<F: MoveFlavor> {
 }
 
 impl<F: MoveFlavor> Package<F> {
-    /// Load a package from the manifest and lock files in directory [path].
+    /// Load a package from the manifest.
     /// Makes a best effort to translate old-style packages into the current format,
     ///
     /// Fails if [path] does not exist, or if it doesn't contain a manifest
     pub async fn load_root(path: impl AsRef<Path>) -> PackageResult<Self> {
-        let manifest = Manifest::read_from_file(path.as_ref())?;
         let path = PackagePath::new(path.as_ref().to_path_buf())?;
+        let manifest = Manifest::<F>::read_from_file(path.manifest_path())?;
+
         Ok(Self { manifest, path })
     }
 
@@ -65,16 +65,41 @@ impl<F: MoveFlavor> Package<F> {
         &self.path
     }
 
+    pub fn name(&self) -> &PackageName {
+        self.manifest().package_name()
+    }
+
     /// TODO: comment
     pub fn manifest(&self) -> &Manifest<F> {
         &self.manifest
     }
 
     /// The resolved and pinned dependencies from the manifest for environment `env`
-    pub fn direct_deps(
+    pub async fn direct_deps(
         &self,
         env: &EnvironmentName,
-    ) -> BTreeMap<PackageName, PinnedDependencyInfo> {
-        todo!()
+    ) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo>> {
+        let mut deps = self.manifest.dependencies();
+
+        if self.manifest().environments().get(env).is_none() {
+            return Err(PackageError::Generic(format!(
+                "Package {} does not have `{env}` defined as an environment in its manifest",
+                self.name()
+            )));
+        }
+
+        let envs: BTreeMap<_, _> = self
+            .manifest()
+            .environments()
+            .iter()
+            .filter(|(e, _)| *e == env)
+            .map(|(env, id)| (env.clone(), id.clone()))
+            .collect();
+        let pinned_deps = pin::<F>(deps.clone(), &envs).await?;
+
+        Ok(pinned_deps
+            .into_iter()
+            .map(|(_, id, dep)| (id, dep))
+            .collect())
     }
 }

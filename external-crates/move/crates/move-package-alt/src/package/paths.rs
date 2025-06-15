@@ -48,6 +48,14 @@ impl PackagePath {
     pub fn manifest_path(&self) -> PathBuf {
         self.0.join("Move.toml")
     }
+
+    pub fn lockfile_path(&self) -> PathBuf {
+        self.0.join("Move.lock")
+    }
+
+    pub fn lockfile_by_env_path(&self, env: &str) -> PathBuf {
+        self.0.join(format!("Move.{env}.lock"))
+    }
 }
 
 #[derive(Error, Debug)]
