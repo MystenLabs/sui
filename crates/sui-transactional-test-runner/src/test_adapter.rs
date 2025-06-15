@@ -41,6 +41,7 @@ use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serde::Deserialize;
 use serde_json::Value;
+use std::collections::HashSet;
 use std::fmt::{self, Write};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -1385,18 +1386,14 @@ impl SuiTestAdapter {
 
         let re = regex::Regex::new(r"@\{([^\}]+)\}").unwrap();
 
-        let unique_vars = re
+        let unique_vars: HashSet<_> = re
             .captures_iter(contents)
             .filter_map(|c| c.get(1).map(|m| m.as_str().to_string()))
-            .collect::<std::collections::HashSet<_>>();
+            .collect();
 
         for var_name in unique_vars {
             let Some(value) = variables.get(&var_name) else {
-                return Err(anyhow!(
-                    "Unknown variable: {}\nAllowed variable mappings are {:#?}",
-                    var_name,
-                    variables
-                ));
+                bail!("Unknown variable: {var_name}\nAllowed variable mappings are {variables:#?}");
             };
 
             let pattern = format!("@{{{}}}", var_name);
