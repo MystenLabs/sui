@@ -149,7 +149,27 @@ diesel::table! {
 }
 
 diesel::table! {
-    obj_info_v2 (object_id, cp_sequence_number) {
+    obj_info_deletion_reference (cp_sequence_number, object_id) {
+        object_id -> Bytea,
+        cp_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
+    obj_info_two_tables (cp_sequence_number, object_id) {
+        object_id -> Bytea,
+        cp_sequence_number -> Int8,
+        owner_kind -> Nullable<Int2>,
+        owner_id -> Nullable<Bytea>,
+        package -> Nullable<Bytea>,
+        module -> Nullable<Text>,
+        name -> Nullable<Text>,
+        instantiation -> Nullable<Bytea>,
+    }
+}
+
+diesel::table! {
+    obj_info_v2 (cp_sequence_number, object_id) {
         object_id -> Bytea,
         cp_sequence_number -> Int8,
         owner_kind -> Nullable<Int2>,
@@ -228,19 +248,6 @@ diesel::table! {
     }
 }
 
-diesel::table! {
-    watermarks (pipeline) {
-        pipeline -> Text,
-        epoch_hi_inclusive -> Int8,
-        checkpoint_hi_inclusive -> Int8,
-        tx_hi -> Int8,
-        timestamp_ms_hi_inclusive -> Int8,
-        reader_lo -> Int8,
-        pruner_timestamp -> Timestamp,
-        pruner_hi -> Int8,
-    }
-}
-
 diesel::allow_tables_to_appear_in_same_query!(
     coin_balance_buckets,
     cp_sequence_numbers,
@@ -256,6 +263,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     kv_protocol_configs,
     kv_transactions,
     obj_info,
+    obj_info_deletion_reference,
+    obj_info_two_tables,
     obj_info_v2,
     obj_versions,
     sum_displays,
@@ -265,5 +274,4 @@ diesel::allow_tables_to_appear_in_same_query!(
     tx_calls,
     tx_digests,
     tx_kinds,
-    watermarks,
 );

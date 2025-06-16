@@ -9,8 +9,8 @@ use handlers::{
     ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
     kv_epoch_ends::KvEpochEnds, kv_epoch_starts::KvEpochStarts, kv_feature_flags::KvFeatureFlags,
     kv_objects::KvObjects, kv_packages::KvPackages, kv_protocol_configs::KvProtocolConfigs,
-    kv_transactions::KvTransactions, obj_info::ObjInfo, obj_info_v2::ObjInfoV2,
-    obj_versions::ObjVersions, sum_displays::SumDisplays,
+    kv_transactions::KvTransactions, obj_info::ObjInfo, obj_info_2_table::ObjInfoTwoTable,
+    obj_info_v2::ObjInfoV2, obj_versions::ObjVersions, sum_displays::SumDisplays,
     tx_affected_addresses::TxAffectedAddresses, tx_affected_objects::TxAffectedObjects,
     tx_balance_changes::TxBalanceChanges, tx_calls::TxCalls, tx_digests::TxDigests,
     tx_kinds::TxKinds,
@@ -78,6 +78,7 @@ pub async fn setup_indexer(
         kv_transactions,
         obj_info,
         obj_info_v2,
+        obj_info_two_tables,
         obj_versions,
         tx_affected_addresses,
         tx_affected_objects,
@@ -196,6 +197,7 @@ pub async fn setup_indexer(
     add_consistent!(CoinBalanceBuckets::default(), coin_balance_buckets);
     add_consistent!(ObjInfo::default(), obj_info);
     add_consistent!(ObjInfoV2, obj_info_v2);
+    add_consistent!(ObjInfoTwoTable, obj_info_two_tables);
 
     // Summary tables (without write-ahead log)
     add_sequential!(SumDisplays, sum_displays);

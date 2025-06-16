@@ -117,6 +117,7 @@ pub struct PipelineLayer {
     pub coin_balance_buckets: Option<CommitterLayer>,
     pub obj_info: Option<CommitterLayer>,
     pub obj_info_v2: Option<CommitterLayer>,
+    pub obj_info_two_tables: Option<CommitterLayer>,
 
     // Sequential pipelines
     pub sum_displays: Option<SequentialLayer>,
@@ -280,6 +281,7 @@ impl PipelineLayer {
             coin_balance_buckets: Some(Default::default()),
             obj_info: Some(Default::default()),
             obj_info_v2: Some(Default::default()),
+            obj_info_two_tables: Some(Default::default()),
             sum_displays: Some(Default::default()),
             cp_sequence_numbers: Some(Default::default()),
             ev_emit_mod: Some(Default::default()),
@@ -403,6 +405,7 @@ impl Merge for PipelineLayer {
             coin_balance_buckets: self.coin_balance_buckets.merge(other.coin_balance_buckets),
             obj_info: self.obj_info.merge(other.obj_info),
             obj_info_v2: self.obj_info_v2.merge(other.obj_info_v2),
+            obj_info_two_tables: self.obj_info_two_tables.merge(other.obj_info_two_tables),
             sum_displays: self.sum_displays.merge(other.sum_displays),
             cp_sequence_numbers: self.cp_sequence_numbers.merge(other.cp_sequence_numbers),
             ev_emit_mod: self.ev_emit_mod.merge(other.ev_emit_mod),

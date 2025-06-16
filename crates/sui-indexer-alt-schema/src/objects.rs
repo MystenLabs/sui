@@ -10,7 +10,10 @@ use diesel::{
 use sui_field_count::FieldCount;
 use sui_types::object::{Object, Owner};
 
-use crate::schema::{coin_balance_buckets, kv_objects, obj_info, obj_info_v2, obj_versions};
+use crate::schema::{
+    coin_balance_buckets, kv_objects, obj_info, obj_info_deletion_reference, obj_info_two_tables,
+    obj_info_v2, obj_versions,
+};
 
 #[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
 #[diesel(table_name = kv_objects, primary_key(object_id, object_version))]
@@ -78,6 +81,28 @@ pub struct StoredObjInfoV2 {
     pub instantiation: Option<Vec<u8>>,
     pub obsolete_at: Option<i64>,
     pub marked_predecessor: bool,
+}
+
+#[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
+#[diesel(table_name = obj_info_two_tables, primary_key(object_id, cp_sequence_number))]
+#[diesel(treat_none_as_default_value = false)]
+pub struct StoredObjInfoTwoTable {
+    pub object_id: Vec<u8>,
+    pub cp_sequence_number: i64,
+    pub owner_kind: Option<StoredOwnerKind>,
+    pub owner_id: Option<Vec<u8>>,
+    pub package: Option<Vec<u8>>,
+    pub module: Option<String>,
+    pub name: Option<String>,
+    pub instantiation: Option<Vec<u8>>,
+}
+
+#[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
+#[diesel(table_name = obj_info_deletion_reference, primary_key(cp_sequence_number, object_id))]
+#[diesel(treat_none_as_default_value = false)]
+pub struct StoredObjInfoDeletionReference {
+    pub object_id: Vec<u8>,
+    pub cp_sequence_number: i64,
 }
 
 #[derive(Insertable, Queryable, Debug, Clone, FieldCount, Eq, PartialEq)]
@@ -168,6 +193,45 @@ impl StoredObjInfoV2 {
                 })?,
             obsolete_at: None,
             marked_predecessor: false,
+        })
+    }
+}
+
+impl StoredObjInfoTwoTable {
+    pub fn from_object(object: &Object, cp_sequence_number: i64) -> anyhow::Result<Self> {
+        let type_ = object.type_();
+        Ok(Self {
+            object_id: object.id().to_vec(),
+            cp_sequence_number,
+            owner_kind: Some(match object.owner() {
+                Owner::AddressOwner(_) => StoredOwnerKind::Address,
+                Owner::ObjectOwner(_) => StoredOwnerKind::Object,
+                Owner::Shared { .. } => StoredOwnerKind::Shared,
+                Owner::Immutable => StoredOwnerKind::Immutable,
+                // We do not distinguish between fastpath owned and consensus owned
+                // objects.
+                Owner::ConsensusAddressOwner { .. } => StoredOwnerKind::Address,
+            }),
+
+            owner_id: match object.owner() {
+                Owner::AddressOwner(a) => Some(a.to_vec()),
+                Owner::ObjectOwner(o) => Some(o.to_vec()),
+                Owner::Shared { .. } | Owner::Immutable { .. } => None,
+                Owner::ConsensusAddressOwner { owner, .. } => Some(owner.to_vec()),
+            },
+
+            package: type_.map(|t| t.address().to_vec()),
+            module: type_.map(|t| t.module().to_string()),
+            name: type_.map(|t| t.name().to_string()),
+            instantiation: type_
+                .map(|t| bcs::to_bytes(&t.type_params()))
+                .transpose()
+                .with_context(|| {
+                    format!(
+                        "Failed to serialize type parameters for {}",
+                        object.id().to_canonical_display(/* with_prefix */ true),
+                    )
+                })?,
         })
     }
 }
