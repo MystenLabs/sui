@@ -338,4 +338,69 @@ mod tests {
         // Clean up
         let _ = handle.await;
     }
+
+    // By default, Rust's async tests run on the single-threaded runtime.
+    // We need multi_thread here because our test uses std::thread::sleep which blocks the worker thread.
+    // The multi-threaded runtime allows other worker threads to continue processing while one is blocked.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn test_processor_concurrency() {
+        // Create a processor that simulates work by sleeping
+        struct SlowProcessor;
+        impl Processor for SlowProcessor {
+            const NAME: &'static str = "slow";
+            const FANOUT: usize = 3; // Small fanout for testing
+            type Value = StoredData;
+
+            fn process(
+                &self,
+                checkpoint: &Arc<CheckpointData>,
+            ) -> anyhow::Result<Vec<Self::Value>> {
+                // Simulate work by sleeping
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                Ok(vec![StoredData {
+                    value: checkpoint.checkpoint_summary.sequence_number,
+                }])
+            }
+        }
+
+        // Set up test data
+        let checkpoints: Vec<_> = (0..5)
+            .map(|i| Arc::new(TestCheckpointDataBuilder::new(i).build_checkpoint()))
+            .collect();
+
+        // Set up channels and metrics
+        let processor = Arc::new(SlowProcessor);
+        let (data_tx, data_rx) = mpsc::channel(10);
+        let (indexed_tx, mut indexed_rx) = mpsc::channel(10);
+        let metrics = IndexerMetrics::new(&Default::default());
+        let cancel = CancellationToken::new();
+
+        // Spawn processor task
+        let handle = super::processor(processor, data_rx, indexed_tx, metrics, cancel.clone());
+
+        // Send all checkpoints and measure time
+        let start = std::time::Instant::now();
+        for checkpoint in checkpoints {
+            data_tx.send(checkpoint).await.unwrap();
+        }
+        drop(data_tx);
+
+        // Receive all results
+        let mut received = Vec::new();
+        while let Some(indexed) = indexed_rx.recv().await {
+            received.push(indexed);
+        }
+
+        // Verify concurrency: total time should be less than sequential processing
+        // With FANOUT=3, 5 checkpoints should take ~1000ms (500ms * 2 (batches)) instead of 2500ms (500ms * 5).
+        // Adding small 200ms for some processing overhead.
+        let elapsed = start.elapsed();
+        assert!(elapsed < std::time::Duration::from_millis(1200));
+
+        // Verify results
+        assert_eq!(received.len(), 5);
+
+        // Clean up
+        let _ = handle.await;
+    }
 }
