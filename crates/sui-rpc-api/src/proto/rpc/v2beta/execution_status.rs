@@ -16,11 +16,20 @@ impl From<sui_sdk_types::ExecutionStatus> for super::ExecutionStatus {
                 error: None,
             },
             sui_sdk_types::ExecutionStatus::Failure { error, command } => {
-                let mut error = super::ExecutionError::from(error);
-                error.command = command;
+                let mut error_message = super::ExecutionError::from(error.clone());
+                error_message.command = command;
+                error_message.description = {
+                    let error = sui_types::execution_status::ExecutionFailureStatus::from(error);
+                    if let Some(command) = command {
+                        format!("{error:?} in command {command}")
+                    } else {
+                        format!("{error:?}")
+                    }
+                }
+                .pipe(Some);
                 Self {
                     success: Some(false),
-                    error: Some(error),
+                    error: Some(error_message),
                 }
             }
         }
