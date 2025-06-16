@@ -1,9 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::proto::google::rpc::bad_request::FieldViolation;
 use crate::proto::rpc::v2alpha::Balance;
 use crate::proto::rpc::v2alpha::ListBalancesRequest;
 use crate::proto::rpc::v2alpha::ListBalancesResponse;
+use crate::ErrorReason;
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
@@ -26,9 +28,17 @@ pub fn list_balances(
     let owner: Address = request
         .owner
         .as_ref()
-        .ok_or_else(|| RpcError::new(tonic::Code::InvalidArgument, "owner is required"))?
+        .ok_or_else(|| {
+            FieldViolation::new("owner")
+                .with_description("missing owner")
+                .with_reason(ErrorReason::FieldMissing)
+        })?
         .parse()
-        .map_err(|e| RpcError::new(tonic::Code::InvalidArgument, format!("invalid owner: {e}")))?;
+        .map_err(|e| {
+            FieldViolation::new("owner")
+                .with_description(format!("invalid owner: {e}"))
+                .with_reason(ErrorReason::FieldInvalid)
+        })?;
 
     let page_size = request
         .page_size
@@ -41,10 +51,10 @@ pub fn list_balances(
 
     if let Some(token) = &page_token {
         if token.owner != owner {
-            return Err(RpcError::new(
-                tonic::Code::InvalidArgument,
-                "invalid page_token",
-            ));
+            return Err(FieldViolation::new("page_token")
+                .with_description("page token owner does not match request owner")
+                .with_reason(ErrorReason::FieldInvalid)
+                .into());
         }
     }
 
@@ -79,7 +89,12 @@ pub fn list_balances(
 }
 
 fn decode_page_token(page_token: &[u8]) -> Result<PageToken> {
-    bcs::from_bytes(page_token).map_err(Into::into)
+    bcs::from_bytes(page_token).map_err(|e| {
+        FieldViolation::new("page_token")
+            .with_description(format!("invalid page token encoding: {e}"))
+            .with_reason(ErrorReason::FieldInvalid)
+            .into()
+    })
 }
 
 fn encode_page_token(page_token: PageToken) -> Bytes {

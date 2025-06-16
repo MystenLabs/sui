@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    proto::google::rpc::bad_request::FieldViolation,
     proto::rpc::v2alpha::{Balance, GetBalanceRequest, GetBalanceResponse},
-    Result, RpcError, RpcService,
+    ErrorReason, Result, RpcError, RpcService,
 };
 use sui_sdk_types::StructTag;
 use sui_types::base_types::SuiAddress;
@@ -17,26 +18,35 @@ pub fn get_balance(service: &RpcService, request: GetBalanceRequest) -> Result<G
         .indexes()
         .ok_or_else(RpcError::not_found)?;
 
-    let owner_str = request
+    let owner = request
         .owner
         .as_ref()
-        .ok_or_else(|| RpcError::new(tonic::Code::InvalidArgument, "owner is required"))?;
-
-    let owner = owner_str
+        .ok_or_else(|| {
+            FieldViolation::new("owner")
+                .with_description("missing owner")
+                .with_reason(ErrorReason::FieldMissing)
+        })?
         .parse::<SuiAddress>()
-        .map_err(|e| RpcError::new(tonic::Code::InvalidArgument, format!("invalid owner: {e}")))?;
+        .map_err(|e| {
+            FieldViolation::new("owner")
+                .with_description(format!("invalid owner: {e}"))
+                .with_reason(ErrorReason::FieldInvalid)
+        })?;
 
-    let coin_type_str = request
+    let coin_type = request
         .coin_type
         .as_ref()
-        .ok_or_else(|| RpcError::new(tonic::Code::InvalidArgument, "coin_type is required"))?;
-
-    let coin_type = coin_type_str.parse::<StructTag>().map_err(|e| {
-        RpcError::new(
-            tonic::Code::InvalidArgument,
-            format!("invalid coin_type: {e}"),
-        )
-    })?;
+        .ok_or_else(|| {
+            FieldViolation::new("coin_type")
+                .with_description("missing coin_type")
+                .with_reason(ErrorReason::FieldMissing)
+        })?
+        .parse::<StructTag>()
+        .map_err(|e| {
+            FieldViolation::new("coin_type")
+                .with_description(format!("invalid coin_type: {e}"))
+                .with_reason(ErrorReason::FieldInvalid)
+        })?;
 
     let core_coin_type = struct_tag_sdk_to_core(coin_type.clone())?;
 

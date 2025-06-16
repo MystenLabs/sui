@@ -268,12 +268,7 @@ async fn test_custom_coin_balance() {
         .into_inner();
 
     assert_eq!(
-        balance_response
-            .balance
-            .as_ref()
-            .unwrap()
-            .balance
-            .unwrap(),
+        balance_response.balance.as_ref().unwrap().balance.unwrap(),
         0,
         "Expected 0 balance for address_3 with TRUSTED coin type"
     );
@@ -446,8 +441,8 @@ async fn test_invalid_requests() {
     let error = result.unwrap_err();
     assert_eq!(error.code(), tonic::Code::InvalidArgument);
     assert!(
-        error.message().contains("owner is required"),
-        "Expected error message to contain 'owner is required', but got: {}",
+        error.message().contains("missing owner"),
+        "Expected error message to contain 'missing owner', but got: {}",
         error.message()
     );
 
@@ -463,8 +458,8 @@ async fn test_invalid_requests() {
     let error = result.unwrap_err();
     assert_eq!(error.code(), tonic::Code::InvalidArgument);
     assert!(
-        error.message().contains("coin_type is required"),
-        "Expected error message to contain 'coin_type is required', but got: {}",
+        error.message().contains("missing coin_type"),
+        "Expected error message to contain 'missing coin_type', but got: {}",
         error.message()
     );
 
@@ -533,8 +528,8 @@ async fn test_invalid_requests() {
     let error = result.unwrap_err();
     assert_eq!(error.code(), tonic::Code::InvalidArgument);
     assert!(
-        error.message().contains("owner is required"),
-        "Expected error message to contain 'owner is required', but got: {}",
+        error.message().contains("missing owner"),
+        "Expected error message to contain 'missing owner', but got: {}",
         error.message()
     );
 
@@ -548,7 +543,7 @@ async fn test_invalid_requests() {
         .await;
     assert!(result.is_err(), "Expected error for corrupted page token");
     let error = result.unwrap_err();
-    assert_eq!(error.code(), tonic::Code::Internal);
+    assert_eq!(error.code(), tonic::Code::InvalidArgument);
 }
 
 fn calculate_gas_used(gas_summary: &GasCostSummary) -> u64 {
