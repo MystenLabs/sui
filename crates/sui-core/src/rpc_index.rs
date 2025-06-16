@@ -1253,11 +1253,8 @@ fn get_balance_and_type_if_coin(object: &Object) -> Result<Option<(StructTag, u6
     match Coin::extract_balance_if_coin(object) {
         Ok(Some((TypeTag::Struct(struct_tag), value))) => Ok(Some((*struct_tag, value))),
         Ok(Some(_)) => {
-            // Non-struct type tag for a coin - this shouldn't happen
-            Err(StorageError::custom(format!(
-                "Coin object {} has non-struct type tag",
-                object.id()
-            )))
+            debug!("Coin object {} has non-struct type tag", object.id());
+            Ok(None)
         }
         Ok(None) => {
             // Not a coin
