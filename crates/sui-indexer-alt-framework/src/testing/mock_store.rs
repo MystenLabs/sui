@@ -47,6 +47,8 @@ pub struct MockStore {
     pub prune_failure_attempts: Arc<Mutex<HashMap<(u64, u64), usize>>>,
     /// Configuration for simulating connection failures in tests
     pub connection_failure: Arc<Mutex<ConnectionFailure>>,
+    /// Number of remaining failures for set_reader_watermark operation
+    pub set_reader_watermark_failure_attempts: Arc<Mutex<usize>>,
 }
 
 impl Default for MockStore {
@@ -56,6 +58,7 @@ impl Default for MockStore {
             data: Arc::new(Mutex::new(HashMap::new())),
             prune_failure_attempts: Arc::new(Mutex::new(HashMap::new())),
             connection_failure: Arc::new(Mutex::new(ConnectionFailure::default())),
+            set_reader_watermark_failure_attempts: Arc::new(Mutex::new(0)),
         }
     }
 }
@@ -126,6 +129,21 @@ impl Connection for MockConnection<'_> {
         _pipeline: &'static str,
         reader_lo: u64,
     ) -> anyhow::Result<bool> {
+        // Check for set_reader_watermark failure simulation
+        let should_fail = {
+            let mut attempts = self.0.set_reader_watermark_failure_attempts.lock().unwrap();
+            if *attempts > 0 {
+                *attempts -= 1;
+                true
+            } else {
+                false
+            }
+        };
+
+        if should_fail {
+            return Err(anyhow::anyhow!("set_reader_watermark failed"));
+        }
+
         let mut watermarks = self.0.watermarks.lock().unwrap();
         watermarks.reader_lo = reader_lo;
         watermarks.pruner_timestamp = SystemTime::now()
