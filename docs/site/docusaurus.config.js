@@ -152,7 +152,7 @@ const config = {
   ],
   scripts: [
     {
-      src: "https://www.clarity.ms/tag/s0jycwr855",
+      src: "/js/clarity.js",
       async: true,
     },
   ],
