@@ -257,6 +257,15 @@ fn merge_spans(cov: FunctionSourceCoverage) -> Vec<Span> {
         .uncovered_locations
         .iter()
         .filter_map(|loc| {
+            // TODO(macros/debug info): We filter out locations that do not match the file hash of
+            // the function here-- locations that are not in the same file as the function.
+            // These are the product of macro expansion.
+            //
+            // Once we have more rich debug info that captures the original "reference" location of
+            // the macro we should be able to include these locations as well by using the
+            // "referent location". But for now in order to avoid confusion and avoid referencing
+            // locations as "in the file" when they are not, we filter out any locations that don't
+            // match the file hash of the function we are currently processing.
             (loc.file_hash() == cov.fn_file_hash).then_some(Span::new(loc.start(), loc.end()))
         })
         .collect();
