@@ -13,6 +13,7 @@ use move_binary_format::{
     file_format::{CodeOffset, FunctionDefinitionIndex},
 };
 use move_bytecode_source_map::source_map::SourceMap;
+use move_command_line_common::files::FileHash;
 use move_core_types::identifier::Identifier;
 use move_ir_types::location::Loc;
 use serde::Serialize;
@@ -26,6 +27,7 @@ use std::{
 #[derive(Clone, Debug, Serialize)]
 pub struct FunctionSourceCoverage {
     pub fn_is_native: bool,
+    pub fn_file_hash: FileHash,
     pub uncovered_locations: Vec<Loc>,
 }
 
@@ -75,11 +77,13 @@ impl<'a> SourceCoverageBuilder<'a> {
                 let fn_handle = module.function_handle_at(function_def.function);
                 let fn_name = module.identifier_at(fn_handle.name).to_owned();
                 let function_def_idx = FunctionDefinitionIndex(function_def_idx as u16);
+                let fn_file_hash = source_map.definition_location.file_hash();
 
                 // If the function summary doesn't exist then that function hasn't been called yet.
                 let coverage = match &function_def.code {
                     None => Some(FunctionSourceCoverage {
                         fn_is_native: true,
+                        fn_file_hash,
                         uncovered_locations: Vec::new(),
                     }),
                     Some(code_unit) => {
@@ -94,6 +98,7 @@ impl<'a> SourceCoverageBuilder<'a> {
 
                                 FunctionSourceCoverage {
                                     fn_is_native: false,
+                                    fn_file_hash,
                                     uncovered_locations,
                                 }
                             }
@@ -116,6 +121,7 @@ impl<'a> SourceCoverageBuilder<'a> {
                                     .collect();
                                 FunctionSourceCoverage {
                                     fn_is_native: false,
+                                    fn_file_hash,
                                     uncovered_locations,
                                 }
                             }
@@ -250,7 +256,9 @@ fn merge_spans(cov: FunctionSourceCoverage) -> Vec<Span> {
     let mut covs: Vec<_> = cov
         .uncovered_locations
         .iter()
-        .map(|loc| Span::new(loc.start(), loc.end()))
+        .filter_map(|loc| {
+            (loc.file_hash() == cov.fn_file_hash).then_some(Span::new(loc.start(), loc.end()))
+        })
         .collect();
     covs.sort();
 
