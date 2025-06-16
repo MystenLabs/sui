@@ -1,16 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    cell::RefCell,
-    collections::{BTreeMap, BTreeSet},
-    rc::Rc,
-    sync::Arc,
-};
-
 use crate::{
     adapter,
-    data_store::sui_data_store::SuiDataStore,
+    data_store::linked_data_store::LinkedDataStore,
     execution_mode::ExecutionMode,
     gas_charger::GasCharger,
     gas_meter::SuiGasMeter,
@@ -21,6 +14,7 @@ use crate::{
         execution::values::{
             ByteValue, InitialInput, InputObjectMetadata, InputValue, Inputs, Local, Locals, Value,
         },
+        linkage::resolved_linkage::{ResolvedLinkage, RootedLinkage},
         typing::ast::{self as T, Type},
     },
 };
@@ -28,7 +22,6 @@ use indexmap::IndexMap;
 use move_binary_format::{
     CompiledModule,
     errors::{Location, PartialVMError, VMResult},
-    file_format::{CodeOffset, FunctionDefinitionIndex},
     file_format_common::VERSION_6,
 };
 use move_core_types::{
@@ -42,12 +35,18 @@ use move_vm_types::{
     gas::GasMeter,
     values::{VMValueCast, Value as VMValue},
 };
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet},
+    rc::Rc,
+    sync::Arc,
+};
 use sui_move_natives::object_runtime::{
     self, LoadedRuntimeObject, ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
 };
 use sui_types::{
     TypeTag,
-    base_types::{ObjectID, TxContext, TxContextKind},
+    base_types::{MoveObjectType, ObjectID, TxContext, TxContextKind},
     error::{ExecutionError, ExecutionErrorKind},
     execution::ExecutionResults,
     execution_config_utils::to_binary_config,
@@ -118,8 +117,6 @@ pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
     pub tx_context: Rc<RefCell<TxContext>>,
     /// The gas charger used for metering
     pub gas_charger: &'gas mut GasCharger,
-    /// Newly published packages
-    new_packages: Vec<MovePackage>,
     /// User events are claimed after each Move call
     user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
     // runtime data
@@ -189,7 +186,6 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             native_extensions,
             tx_context,
             gas_charger,
-            new_packages: vec![],
             user_events: vec![],
             gas,
             inputs,
@@ -243,7 +239,6 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             mut native_extensions,
             tx_context,
             gas_charger,
-            new_packages,
             user_events,
             ..
         } = self;
@@ -275,7 +270,12 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         loaded_runtime_objects.extend(loaded_child_objects);
 
         let mut written_objects = BTreeMap::new();
-        for package in new_packages {
+        for (_, package) in self.env.linkable_store.take_new_packages().into_iter() {
+            let Some(package) = Rc::into_inner(package) else {
+                invariant_violation!(
+                    "Package should have no outstanding references at end of execution"
+                );
+            };
             let package_obj = Object::new_from_package(package, tx_digest);
             let id = package_obj.id();
             created_object_ids.insert(id);
@@ -283,10 +283,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         }
 
         for (id, (recipient, ty, value)) in writes {
-            let ty: Type = {
-                let _ = ty;
-                better_todo!("OBJECT RUNTIME TYPETAG")
-            };
+            let ty: Type = env.load_type_from_struct(&ty.clone().into())?;
             let abilities = ty.abilities();
             let has_public_transfer = abilities.has_store();
             let Some(bytes) = value.serialize() else {
@@ -369,20 +366,15 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))
     }
 
-    pub fn take_user_events(
-        &mut self,
-        module_id: &ModuleId,
-        function: FunctionDefinitionIndex,
-        last_offset: CodeOffset,
-    ) -> Result<(), ExecutionError> {
+    pub fn take_user_events(&mut self, function: &T::LoadedFunction) -> Result<(), ExecutionError> {
         let events = object_runtime_mut!(self)?.take_user_events();
         let num_events = self.user_events.len() + events.len();
         let max_events = self.env.protocol_config.max_num_event_emit();
         if num_events as u64 > max_events {
             let err = max_event_error(max_events)
-                .at_code_offset(function, last_offset)
-                .finish(Location::Module(module_id.clone()));
-            return Err(self.env.convert_vm_error(err));
+                .at_code_offset(function.definition_index, function.instruction_length)
+                .finish(Location::Module(function.storage_id.clone()));
+            return Err(self.env.convert_linked_vm_error(err, &function.linkage));
         }
         let new_events = events
             .into_iter()
@@ -390,7 +382,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 let Some(bytes) = value.serialize() else {
                     invariant_violation!("Failed to serialize Move event");
                 };
-                Ok((module_id.clone(), tag, bytes))
+                Ok((function.storage_id.clone(), tag, bytes))
             })
             .collect::<Result<Vec<_>, ExecutionError>>()?;
         self.user_events.extend(new_events);
@@ -588,30 +580,27 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 Value::tx_context(self.tx_context.borrow().digest())?,
             )),
         }
-        let (index, last_instr) = {
-            let _ = &function;
-            // access FunctionDefinitionIndex and last instruction CodeOffset
-            better_todo!("LOADING")
-        };
         let result = self
             .execute_function_bypass_visibility(
-                &function.runtime_id,
+                &function.storage_id,
                 &function.name,
-                function.type_arguments,
+                &function.type_arguments,
                 args,
+                &function.linkage,
                 trace_builder_opt,
             )
             .map_err(|e| self.env.convert_vm_error(e))?;
-        self.take_user_events(&function.storage_id, index, last_instr)?;
+        self.take_user_events(&function)?;
         Ok(result)
     }
 
     pub fn execute_function_bypass_visibility(
         &mut self,
-        module: &ModuleId,
+        storage_id: &ModuleId,
         function_name: &IdentStr,
-        ty_args: Vec<Type>,
+        ty_args: &[Type],
         args: Vec<CtxValue>,
+        linkage: &RootedLinkage,
         tracer: Option<&mut MoveTraceBuilder>,
     ) -> VMResult<Vec<CtxValue>> {
         let ty_args = {
@@ -620,13 +609,13 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             better_todo!("LOADING")
         };
         let gas_status = self.gas_charger.move_gas_status_mut();
-        let mut data_store = SuiDataStore::new(self.env.linkage_view, &self.new_packages);
+        let mut data_store = LinkedDataStore::new(linkage, self.env.linkable_store);
         let values = self
             .env
             .vm
             .get_runtime()
             .execute_function_with_values_bypass_visibility(
-                module,
+                storage_id,
                 function_name,
                 ty_args,
                 args.into_iter().map(|v| v.0.into()).collect(),
@@ -686,6 +675,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         &mut self,
         package_id: ObjectID,
         modules: &[CompiledModule],
+        linkage: &RootedLinkage,
     ) -> Result<(), ExecutionError> {
         // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
         let binary_version = self.env.protocol_config.move_binary_format_version();
@@ -702,7 +692,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 bytes
             })
             .collect();
-        let mut data_store = SuiDataStore::new(self.env.linkage_view, &self.new_packages);
+        let mut data_store = LinkedDataStore::new(linkage, self.env.linkable_store);
         self.env
             .vm
             .get_runtime()
@@ -734,6 +724,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     fn init_modules(
         &mut self,
         modules: &[CompiledModule],
+        linkage: &RootedLinkage,
         mut trace_builder_opt: Option<&mut MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         let modules_to_init = modules.iter().filter_map(|module| {
@@ -755,8 +746,9 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 .execute_function_bypass_visibility(
                     &module_id,
                     INIT_FN_NAME,
-                    vec![],
+                    &[],
                     args,
+                    linkage,
                     trace_builder_opt.as_deref_mut(),
                 )
                 .map_err(|e| self.env.convert_vm_error(e))?;
@@ -774,6 +766,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         &mut self,
         mut modules: Vec<CompiledModule>,
         dep_ids: &[ObjectID],
+        linkage: ResolvedLinkage,
         trace_builder_opt: Option<&mut MoveTraceBuilder>,
     ) -> Result<ObjectID, ExecutionError> {
         let runtime_id = if <Mode>::packages_are_predefined() {
@@ -789,28 +782,29 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         };
 
         let dependencies = self.fetch_packages(dep_ids)?;
-        let package = MovePackage::new_initial(
+        let package = Rc::new(MovePackage::new_initial(
             &modules,
             self.env.protocol_config.max_move_package_size(),
             self.env.protocol_config.move_binary_format_version(),
             dependencies.iter().map(|p| p.move_package()),
-        )?;
+        )?);
+        let package_id = package.id();
 
         // Here we optimistically push the package that is being published/upgraded
         // and if there is an error of any kind (verification or module init) we
         // remove it.
         // The call to `pop_last_package` later is fine because we cannot re-enter and
         // the last package we pushed is the one we are verifying and running the init from
-        self.env.linkage_view.set_linkage(&package)?;
-        self.new_packages.push(package);
+        let linkage = RootedLinkage::new(*package_id, linkage);
+
+        self.env.linkable_store.push_package(package_id, package)?;
         let res = self
-            .publish_and_verify_modules(runtime_id, &modules)
-            .and_then(|_| self.init_modules(&modules, trace_builder_opt));
-        self.env.linkage_view.reset_linkage()?;
+            .publish_and_verify_modules(runtime_id, &modules, &linkage)
+            .and_then(|_| self.init_modules(&modules, &linkage, trace_builder_opt));
         match res {
             Ok(()) => Ok(runtime_id),
             Err(e) => {
-                self.new_packages.pop();
+                self.env.linkable_store.pop_package(package_id)?;
                 Err(e)
             }
         }
@@ -822,6 +816,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         dep_ids: &[ObjectID],
         current_package_id: ObjectID,
         upgrade_ticket_policy: u8,
+        linkage: ResolvedLinkage,
     ) -> Result<ObjectID, ExecutionError> {
         // Check that this package ID points to a package and get the package we're upgrading.
         let current_package = self.fetch_package(&current_package_id)?;
@@ -844,10 +839,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             dependencies.iter().map(|p| p.move_package()),
         )?;
 
-        self.env.linkage_view.set_linkage(&package)?;
-        let res = self.publish_and_verify_modules(runtime_id, &modules);
-        self.env.linkage_view.reset_linkage()?;
-        res?;
+        let linkage = RootedLinkage::new(*storage_id, linkage);
+        self.publish_and_verify_modules(runtime_id, &modules, &linkage)?;
 
         legacy_ptb::execution::check_compatibility(
             self.env.protocol_config,
@@ -856,7 +849,9 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             upgrade_ticket_policy,
         )?;
 
-        self.new_packages.push(package);
+        self.env
+            .linkable_store
+            .push_package(storage_id, Rc::new(package))?;
         Ok(storage_id)
     }
 
@@ -870,11 +865,12 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         ty: Type,
         object: CtxValue,
     ) -> Result<(), ExecutionError> {
-        let ty = {
-            let _ = ty;
-            // ty to vm type
-            better_todo!("OBJECT RUNTIME TYPETAG")
+        let tag = TypeTag::try_from(ty)
+            .map_err(|_| make_invariant_violation!("Unable to convert Type to TypeTag"))?;
+        let TypeTag::Struct(tag) = tag else {
+            invariant_violation!("Expected struct type tag");
         };
+        let ty = MoveObjectType::from(*tag);
         object_runtime_mut!(self)?
             .transfer(recipient, ty, object.0.into())
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;

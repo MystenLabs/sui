@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::data_store::{PackageStore, linkage_view::LinkageView};
+use crate::data_store::{PackageStore, legacy::linkage_view::LinkageView};
 use move_binary_format::errors::{Location, PartialVMError, PartialVMResult, VMResult};
 use move_core_types::{
     account_address::AccountAddress, identifier::IdentStr, language_storage::ModuleId,
@@ -110,5 +110,16 @@ impl PackageStore for SuiDataStore<'_, '_> {
             }
         }
         self.linkage_view.get_package(id)
+    }
+
+    fn resolve_type_to_defining_id(
+        &self,
+        _module_address: ObjectID,
+        _module_name: &IdentStr,
+        _type_name: &IdentStr,
+    ) -> SuiResult<Option<ObjectID>> {
+        unimplemented!(
+            "resolve_type_to_defining_id is not implemented for legacy::SuiDataStore and should never be called"
+        )
     }
 }

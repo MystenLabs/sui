@@ -11,7 +11,7 @@ use move_binary_format::{
     IndexKind,
     errors::{Location, PartialVMError, PartialVMResult, VMResult, verification_error},
     file_format::{
-        AbilitySet, Bytecode, CompiledModule, Constant, ConstantPoolIndex,
+        AbilitySet, Bytecode, CodeOffset, CompiledModule, Constant, ConstantPoolIndex,
         EnumDefInstantiationIndex, EnumDefinitionIndex, FieldHandleIndex, FieldInstantiationIndex,
         FunctionDefinition, FunctionDefinitionIndex, FunctionHandleIndex,
         FunctionInstantiationIndex, SignatureIndex, SignatureToken, StructDefInstantiationIndex,
@@ -918,6 +918,8 @@ impl Loader {
         let inst = LoadedFunctionInstantiation {
             parameters,
             return_,
+            instruction_length: func.code.len() as CodeOffset,
+            definition_index: func.index(),
         };
         Ok((compiled, loaded, func, inst))
     }

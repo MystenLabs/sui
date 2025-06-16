@@ -8,10 +8,10 @@ mod checked {
     use crate::{
         adapter::new_native_extensions,
         data_store::{
-            PackageStore, cached_data_store::CachedPackageStore, linkage_view::LinkageView,
-            sui_data_store::SuiDataStore,
+            PackageStore,
+            cached_package_store::CachedPackageStore,
+            legacy::{linkage_view::LinkageView, sui_data_store::SuiDataStore},
         },
-        error::convert_vm_error,
         execution_mode::ExecutionMode,
         execution_value::{
             CommandKind, ExecutionState, InputObjectMetadata, InputValue, ObjectContents,
@@ -31,6 +31,7 @@ mod checked {
         account_address::AccountAddress,
         identifier::IdentStr,
         language_storage::{ModuleId, StructTag, TypeTag},
+        resolver::MoveResolver,
         vm_status::StatusCode,
     };
     use move_trace_format::format::MoveTraceBuilder;
@@ -57,7 +58,7 @@ mod checked {
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
         coin::Coin,
-        error::{ExecutionError, ExecutionErrorKind, command_argument_error},
+        error::{ExecutionError, ExecutionErrorKind, SuiError, command_argument_error},
         event::Event,
         execution::{ExecutionResults, ExecutionResultsV2},
         execution_status::CommandArgumentError,
@@ -956,7 +957,7 @@ mod checked {
 
         /// Convert a VM Error to an execution one
         pub fn convert_vm_error(&self, error: VMError) -> ExecutionError {
-            crate::error::convert_vm_error(
+            convert_vm_error(
                 error,
                 self.vm,
                 &self.linkage_view,
@@ -1482,7 +1483,7 @@ mod checked {
 
         let tag: StructTag = type_.into();
         let type_ = load_type_from_struct(vm, linkage_view, new_packages, &tag).map_err(|e| {
-            crate::error::convert_vm_error(
+            convert_vm_error(
                 e,
                 vm,
                 linkage_view,
@@ -1491,7 +1492,7 @@ mod checked {
         })?;
         let has_public_transfer = if protocol_config.recompute_has_public_transfer_in_execution() {
             let abilities = vm.get_runtime().get_type_abilities(&type_).map_err(|e| {
-                crate::error::convert_vm_error(
+                convert_vm_error(
                     e,
                     vm,
                     linkage_view,
@@ -1750,7 +1751,7 @@ mod checked {
             .map(|obj: &LoadedRuntimeObject| obj.version);
 
         let type_tag = vm.get_runtime().get_type_tag(&type_).map_err(|e| {
-            crate::error::convert_vm_error(
+            convert_vm_error(
                 e,
                 vm,
                 linkage_view,
@@ -1809,5 +1810,30 @@ mod checked {
                 EitherError::Execution(e) => e,
             }
         }
+    }
+
+    fn convert_vm_error<S: MoveResolver<Err = SuiError>>(
+        error: VMError,
+        vm: &MoveVM,
+        state_view: &S,
+        resolve_abort_location_to_package_id: bool,
+    ) -> ExecutionError {
+        crate::error::convert_vm_error_impl(
+            error,
+            &|id: &ModuleId| {
+                if resolve_abort_location_to_package_id {
+                    state_view.relocate(id).unwrap_or_else(|_| id.clone())
+                } else {
+                    id.clone()
+                }
+            },
+            &|id, function| {
+                vm.load_module(id, state_view).ok().map(|module| {
+                    let fdef = module.function_def_at(function);
+                    let fhandle = module.function_handle_at(fdef.function);
+                    module.identifier_at(fhandle.name).to_string()
+                })
+            },
+        )
     }
 }
