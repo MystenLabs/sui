@@ -15,3 +15,4 @@ pub mod git;
 pub mod graph;
 pub mod jsonrpc;
 pub mod package;
+pub mod schema;
