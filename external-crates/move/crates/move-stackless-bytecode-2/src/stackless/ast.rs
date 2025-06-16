@@ -6,7 +6,7 @@ use crate::utils::comma_separated;
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, vec};
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -35,7 +35,7 @@ pub struct Function {
 #[allow(unused)]
 pub struct BasicBlock {
     pub label: Label,
-    pub instructions: BTreeMap<Label, Instruction>,
+    pub instructions: Vec<Instruction>,
 }
 
 #[derive(Debug, Clone)]
@@ -175,11 +175,11 @@ impl BasicBlock {
     pub fn new(label: Label) -> Self {
         Self {
             label,
-            instructions: BTreeMap::new(),
+            instructions: vec![],
         }
     }
 
-    pub fn from_instructions(label: Label, instructions: BTreeMap<Label, Instruction>) -> Self {
+    pub fn from_instructions(label: Label, instructions: Vec<Instruction>) -> Self {
         Self {
             label,
             instructions,
@@ -227,7 +227,7 @@ impl std::fmt::Display for Function {
 impl std::fmt::Display for BasicBlock {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "      Label LBL_{}:", self.label)?;
-        for (_label, instr) in &self.instructions {
+        for instr in &self.instructions {
             writeln!(f, "        {}", instr)?;
         }
         Ok(())
@@ -317,9 +317,9 @@ impl std::fmt::Display for RValue {
             // RValue::Constant(constant) => write!(f, "Constant {}", constant),
             RValue::Primitive { op, args } => write!(f, "{}({})", op, comma_separated(args)),
             RValue::Operand(op) => match op {
-                Operand::Var(var) => write!(f, "Var {}", var),
-                Operand::Constant(value) => write!(f, "Constant {}", value),
-                Operand::Immediate(immediate) => write!(f, "Immediate {}", immediate),
+                Operand::Var(var) => write!(f, "Var({})", var),
+                Operand::Constant(value) => write!(f, "Constant({})", value),
+                Operand::Immediate(immediate) => write!(f, "Immediate({})", immediate),
             },
         }
     }

@@ -22,8 +22,11 @@ pub struct Stackless {
     #[arg(name = "disassemble", long = "disassemble")]
     disassemble: bool,
 
-    #[arg(name = "module_path", long = "module")]
+    #[arg(name = "module-path", long = "module-path")]
     module_path: Option<PathBuf>,
+
+    #[arg(name = "optimize", long = "optimize")]
+    optimize: bool,
 }
 
 impl Stackless {
@@ -68,7 +71,7 @@ impl Stackless {
             return stackless.disassemble_source();
         }
 
-        let stackless_out = stackless.execute()?;
+        let stackless_out = stackless.execute(self.optimize)?;
         println!("{}", stackless_out);
 
         Ok(())
