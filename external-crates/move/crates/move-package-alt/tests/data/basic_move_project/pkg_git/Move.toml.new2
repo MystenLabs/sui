@@ -3,7 +3,6 @@ name = "pkg_git"
 edition = "2024"
 license = "Apache-2.0"
 authors = ["Move Team"]
-version = "0.0.3"
 
 [environments]
 mainnet = "35834a8a"

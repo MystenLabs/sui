@@ -44,9 +44,6 @@ pub struct Lockfile<F: MoveFlavor + fmt::Debug> {
 pub struct Publication<F: MoveFlavor + fmt::Debug> {
     #[serde(flatten)]
     metadata: F::PublishedMetadata,
-
-    // TODO: remove
-    dependencies: BTreeMap<PackageName, PinnedDependencyInfo>,
 }
 
 /// The `pinned.<environment>` section of the lockfile
