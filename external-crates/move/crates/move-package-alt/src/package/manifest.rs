@@ -283,18 +283,4 @@ impl ManifestError {
                 .with_notes(vec![self.to_string()]),
         }
     }
-
-    /// Emit this error to stderr
-    pub fn emit(&self) -> Result<(), codespan_reporting::files::Error> {
-        let writer = StandardStream::stderr(ColorChoice::Always);
-        let config = term::Config {
-            display_style: term::DisplayStyle::Rich,
-            chars: term::Chars::ascii(),
-            ..Default::default()
-        };
-
-        let diagnostic = self.to_diagnostic();
-        let e = term::emit(&mut writer.lock(), &config, &Files, &diagnostic);
-        e
-    }
 }
