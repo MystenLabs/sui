@@ -28,6 +28,8 @@ use sui_types::messages_checkpoint::VerifiedCheckpointContents;
 use sui_types::object::Object;
 use sui_types::storage::error::Error as StorageError;
 use sui_types::storage::error::Result;
+use sui_types::storage::BalanceInfo;
+use sui_types::storage::BalanceIterator;
 use sui_types::storage::CoinInfo;
 use sui_types::storage::DynamicFieldIndexInfo;
 use sui_types::storage::DynamicFieldKey;
@@ -581,5 +583,32 @@ impl RpcIndexes for RpcIndexStore {
                 },
             )
             .pipe(Ok)
+    }
+
+    fn get_balance(
+        &self,
+        owner: &SuiAddress,
+        coin_type: &StructTag,
+    ) -> sui_types::storage::error::Result<Option<BalanceInfo>> {
+        self.get_balance(owner, coin_type)?
+            .map(|info| info.into())
+            .pipe(Ok)
+    }
+
+    fn balance_iter(
+        &self,
+        owner: &SuiAddress,
+        cursor: Option<(SuiAddress, StructTag)>,
+    ) -> sui_types::storage::error::Result<BalanceIterator<'_>> {
+        let cursor_key =
+            cursor.map(|(owner, coin_type)| crate::rpc_index::BalanceKey { owner, coin_type });
+
+        Ok(Box::new(self.balance_iter(*owner, cursor_key)?.map(
+            |result| {
+                result
+                    .map(|(key, info)| (key.coin_type, info.into()))
+                    .map_err(Into::into)
+            },
+        )))
     }
 }
