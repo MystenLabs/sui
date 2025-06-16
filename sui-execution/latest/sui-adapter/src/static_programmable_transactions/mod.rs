@@ -20,6 +20,7 @@ pub use crate::data_store::legacy::linkage_view::LinkageView;
 
 pub mod env;
 pub mod execution;
+pub mod invariants;
 pub mod linkage;
 pub mod loading;
 pub mod spanned;
@@ -64,6 +65,7 @@ pub fn execute<Mode: ExecutionMode>(
     );
     let txn = loading::translate::transaction(&env, txn).map_err(|e| (e, vec![]))?;
     let txn = typing::translate_and_verify::<Mode>(&env, txn).map_err(|e| (e, vec![]))?;
+    invariants::verify::<Mode>(&env, &txn).map_err(|e| (e, vec![]))?;
     execution::interpreter::execute::<Mode>(
         &mut env,
         metrics,
