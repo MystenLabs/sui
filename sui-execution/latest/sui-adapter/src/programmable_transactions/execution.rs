@@ -1179,10 +1179,24 @@ mod checked {
                 FunctionKind::NonEntry
             }
             (Visibility::Private | Visibility::Friend, false) => {
-                return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::NonEntryFunctionInvoked,
-                    "Can only call `entry` or `public` functions",
-                ));
+                if cfg!(msim) {
+                    // Allow access to private address balance functions in simtests only.
+                    let function = module.function_handle_at(fdef.function);
+                    let function_name = module.identifier_at(function.name);
+                    if (function_name.as_str() == "send_to_account"
+                        || function_name.as_str() == "withdraw_from_account")
+                        && module_id.name().as_str() == "balance"
+                    {
+                        FunctionKind::NonEntry
+                    } else {
+                        return Err(ExecutionError::new_with_source(
+                            ExecutionErrorKind::NonEntryFunctionInvoked,
+                            "Can only call `entry` or `public` functions",
+                        ));
+                    }
+                } else {
+                    FunctionKind::NonEntry
+                }
             }
         };
         let signature = context
