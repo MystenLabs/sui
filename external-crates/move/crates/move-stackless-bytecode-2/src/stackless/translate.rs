@@ -11,7 +11,7 @@ use crate::{
             Var::Local,
         },
         context::Context,
-        optimization::inline_constants_and_immediates,
+        optimization::inline_immediates,
     },
 };
 
@@ -114,12 +114,7 @@ pub(crate) fn function<K: SourceKind>(
             .collect::<Result<Vec<Vec<_>>, _>>()?
             .into_iter()
             .flatten()
-            .enumerate()
-            .map(|(i, inst)| {
-                let label = blk_start as usize + i;
-                (label, inst)
-            })
-            .collect::<BTreeMap<_, _>>();
+            .collect::<Vec<_>>();
 
         let label = block_id as usize;
         let bb = BasicBlock::from_instructions(label, block_instructions);
@@ -131,7 +126,7 @@ pub(crate) fn function<K: SourceKind>(
 
     let mut function = ast::Function { name, basic_blocks };
 
-    if ctxt.optimize { inline_constants_and_immediates(&mut function) }
+    if ctxt.optimize { inline_immediates(&mut function) }
 
     Ok(function)
 }

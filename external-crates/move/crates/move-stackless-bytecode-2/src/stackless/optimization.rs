@@ -1,57 +1,38 @@
 use crate::stackless::ast::{
-    BasicBlock, Function, Instruction, Label, Operand, RValue,
-    Value, Var,
+    BasicBlock, Function, Instruction, Operand, RValue, Var
 };
 
 use std::{collections::BTreeMap, vec};
 
 struct Env {
-    constants: BTreeMap<Var, Operand>,
     immediates: BTreeMap<Var, Operand>,
-    to_be_removed: Vec<(Label, Label)>,
 }
 
-pub fn inline_constants_and_immediates(function: &mut Function) {
+pub fn inline_immediates(function: &mut Function) {
     let mut env = Env {
-        constants: BTreeMap::new(),
         immediates: BTreeMap::new(),
-        to_be_removed: vec![],
     };
 
     let basic_blocks = function.basic_blocks.iter_mut();
     basic_blocks.for_each(|(_, bb)| {
         inline_block(bb, &mut env);
     });
-
-    for (bb_label, key) in env.to_be_removed {
-        let bb = function
-            .basic_blocks
-            .get_mut(&bb_label)
-            .expect("Basic block not found");
-        bb.instructions.remove(&key);
-    }
 }
 
-fn inline_block<'a>(
-    block: &'a mut BasicBlock,
-    env: & mut Env,
-) {
-    block.instructions.iter_mut().for_each(|(index, inst)| {
-        process_instruction(
-            block.label,
-            *index,
-            inst,
-            env
-        );
-    });
-}
-
-fn process_instruction<'a>(
-    bb_label: Label,
-    index: Label,
-    inst: &'a mut Instruction,
+fn inline_block(
+    block: &mut BasicBlock,
     env: &mut Env,
 ) {
+    let instructions = std::mem::take(&mut block.instructions);
+    let instructions = instructions.iter().flat_map(|instr| process_instruction(instr, env)).collect::<Vec<_>>();
+    println!("New instructions for block {}: {:?}", block.label, instructions);
+    debug_assert!(std::mem::replace(&mut block.instructions, instructions).is_empty());
+}
+
+fn process_instruction(
+    inst: &Instruction,
+    env: &mut Env,
+) -> Option<Instruction>{
     match inst {
         Instruction::Assign { lhs, rhs } => {
             match rhs {
@@ -61,65 +42,65 @@ fn process_instruction<'a>(
                         .expect("Register expected in constant operand Assign")
                         .clone();
                     match operand {
-                        // Looking for a constant to be inlined
-                        Operand::Constant(_) => {
-                            env.constants.insert(register, operand.clone());
-                            env.to_be_removed.push((bb_label, index));
-                        }
                         // Looking for an immediate to be inlined
                         Operand::Immediate(_) => {
                             env.immediates.insert(register, operand.clone());
-                            env.to_be_removed.push((bb_label, index));
+                            None
                         }
                         // Matching a variable to be substituted
                         Operand::Var(var) => {
-                            if env.constants.contains_key(var) {
-                                *operand = env.constants.get(var).expect("Constant not found").clone();
+                            if env.immediates.contains_key(&var) {
+                                Some(Instruction::Assign { lhs: lhs.to_vec(), rhs: RValue::Operand(env.immediates.remove(&var).expect("Immediate not found")) })
                             }
-                            else if env.immediates.contains_key(var) {
-                                *operand = env.immediates.get(var).expect("Immediate not found").clone();
+                            else {
+                                Some(inst.clone())
                             }
+                        }
+                        Operand::Constant(_) => {
+                            Some(inst.clone())
                         }
                     }
                     
                 }
                 // Substituting constants and immediates in RValue
-                RValue::Primitive { op, args } => match op {
-                    _ => {
-                        for arg in args {
-                            match arg {
-                                Operand::Var(var) => {
-                                    if env.constants.contains_key(var) {
-                                        *arg = env.constants.get(var).expect("Constant not found").clone();
-                                    }
-                                    else if env.immediates.contains_key(var) {
-                                        *arg = env.immediates.get(var).expect("Immediate not found").clone();
-                                    }
+                RValue::Primitive { op, args } => {
+                    let mut new_args = vec![];
+                    for arg in args {
+                        match arg {
+                            Operand::Var(var) => {
+                                if env.immediates.contains_key(&var) {
+                                    new_args.push(env.immediates.remove(&var).expect("Immediate not found"));
                                 }
-                                _ => {}
+                                else {
+                                    new_args.push(Operand::Var(var.clone()));
+                                }
                             }
+                            _ => {new_args.push(arg.clone());}
                         }
                     }
+                    Some(Instruction::Assign { lhs: lhs.to_vec(), rhs: RValue::Primitive { op: op.clone(), args: new_args } })
                 },
-                _ => {}
+                _ => Some(inst.clone())
             }
         }
         // Substituting constants and immediates in return instruction
         Instruction::Return(operands) => {
+            let mut new_operands = vec![];
             for operand in operands {
                 match operand {
                     Operand::Var(var) => {
-                        if env.constants.contains_key(var) {
-                            *operand = env.constants.get(var).expect("Constant not found").clone();
+                        if env.immediates.contains_key(&var) {
+                            new_operands.push(env.immediates.remove(&var).expect("Immediate not found"));
                         }
-                        else if env.immediates.contains_key(var) {
-                            *operand = env.immediates.get(var).expect("Immediate not found").clone();
+                        else {
+                            new_operands.push(Operand::Var(var.clone()));
                         }
                     }
-                    _ => {}
+                    _ => {new_operands.push(operand.clone());}
                 }
             }
+            Some(Instruction::Return(new_operands))
         }
-        _ => {}
+        _ => Some(inst.clone())
     }
 }
