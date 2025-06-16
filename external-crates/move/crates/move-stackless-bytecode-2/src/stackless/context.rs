@@ -13,6 +13,7 @@ pub struct Context<'a, K: SourceKind> {
     pub locals_counter: Counter,
     pub model: &'a Model2<K>,
     pub logical_stack: Vec<usize>,
+    pub optimize: bool,
 }
 
 pub struct Counter {
@@ -30,6 +31,7 @@ impl<'a, K: SourceKind> Context<'a, K> {
             locals_counter: Counter::new(),
             model,
             logical_stack: vec![],
+            optimize: false,
         }
     }
 
@@ -51,9 +53,8 @@ impl<'a, K: SourceKind> Context<'a, K> {
         self.logical_stack.clear();
     }
 
-    #[allow(unused)]
-    pub fn get_locals_counter(&mut self) -> &mut Counter {
-        &mut self.locals_counter
+    pub fn optimize(&mut self, value: bool) {
+        self.optimize = value;
     }
 }
 

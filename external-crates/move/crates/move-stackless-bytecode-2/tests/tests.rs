@@ -41,7 +41,7 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
         .map(|name| name.into())
         .collect::<BTreeSet<Symbol>>();
 
-    let packages = generator.generate_stackless_bytecode()?;
+    let packages = generator.generate_stackless_bytecode(true)?;
 
     for pkg in &packages {
         let pkg_name = pkg.name;

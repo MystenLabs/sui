@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module counter::vector {
+module counter::vector_test {
 
     public fun create_empty(): vector<bool> {
         // An empty vector of bool elements.
@@ -25,8 +25,8 @@ module counter::vector {
         vv
     }
 
-    public fun tabulate_vector(): vector<u64> {
-        // A vector of u64 elements with values from 0 to 9.
-        vector::tabulate!(10, |i| i )
-    }
+    // public fun tabulate_vector(): vector<u64> {
+    //     // A vector of u64 elements with values from 0 to 9.
+    //     vector::tabulate!(10, |i| i )
+    // }
 }

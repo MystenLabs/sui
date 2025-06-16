@@ -11,27 +11,27 @@ source: crates/move-stackless-bytecode-2/tests/tests.rs
     Function: increment
       Label LBL_0:
         reg_0 = CopyLoc(lcl_0)
-        reg_1 = ImmBorrowField(reg_0)
-        reg_2 = ReadRef(reg_1)
-        reg_4 = Add(U64(1), reg_2)
-        reg_5 = Var lcl_0
-        reg_6 = MutBorrowField(reg_5)
-        WriteRef(reg_6, reg_4)
+        reg_1 = ImmBorrowField(reg_1)
+        reg_2 = ReadRef(reg_2)
+        reg_4 = Add(reg_4, U64(1))
+        reg_5 = MoveLoc(lcl_0)
+        reg_6 = MutBorrowField(reg_6)
+        WriteRef(reg_5, reg_0)
         Return()
 
 
     Function: set_value
       Label LBL_0:
-        reg_0 = Var lcl_1
-        reg_1 = Var lcl_0
-        reg_2 = MutBorrowField(reg_1)
-        WriteRef(reg_2, reg_0)
+        reg_0 = MoveLoc(lcl_1)
+        reg_1 = MoveLoc(lcl_0)
+        reg_2 = MutBorrowField(reg_2)
+        WriteRef(reg_1, reg_0)
         Return()
 
 
     Function: value
       Label LBL_0:
-        reg_0 = Var lcl_0
-        reg_1 = ImmBorrowField(reg_0)
-        reg_2 = ReadRef(reg_1)
-        Return(reg_2)
+        reg_0 = MoveLoc(lcl_0)
+        reg_1 = ImmBorrowField(reg_1)
+        reg_2 = ReadRef(reg_2)
+        Return(reg_0)

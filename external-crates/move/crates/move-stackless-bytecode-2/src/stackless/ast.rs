@@ -6,7 +6,7 @@ use crate::utils::comma_separated;
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, vec};
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -35,12 +35,11 @@ pub struct Function {
 #[allow(unused)]
 pub struct BasicBlock {
     pub label: Label,
-    pub instructions: BTreeMap<Label, Instruction>,
+    pub instructions: Vec<Instruction>,
 }
 
 #[derive(Debug, Clone)]
 pub enum Instruction {
-    // TODO check this
     Return(Vec<Operand>),
     Assign {
         lhs: Vec<Var>,
@@ -57,6 +56,7 @@ pub enum Instruction {
     VariantSwitch {
         cases: Vec<Label>,
     },
+    Drop(Var), // Drop an operand in the case of a Pop operation
     NotImplemented(String),
 }
 
@@ -73,7 +73,6 @@ pub enum RValue {
         function: Symbol,
         args: Vec<Operand>,
     },
-    Constant(Value),
     Primitive {
         op: PrimitiveOp,
         args: Vec<Operand>,
@@ -102,7 +101,6 @@ pub enum PrimitiveOp {
     CastU8,
     CastU64,
     CastU128,
-    LdConst,
     CopyLoc,
     MoveLoc,
     StoreLoc,
@@ -177,11 +175,11 @@ impl BasicBlock {
     pub fn new(label: Label) -> Self {
         Self {
             label,
-            instructions: BTreeMap::new(),
+            instructions: vec![],
         }
     }
 
-    pub fn from_instructions(label: Label, instructions: BTreeMap<Label, Instruction>) -> Self {
+    pub fn from_instructions(label: Label, instructions: Vec<Instruction>) -> Self {
         Self {
             label,
             instructions,
@@ -229,7 +227,7 @@ impl std::fmt::Display for Function {
 impl std::fmt::Display for BasicBlock {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "      Label LBL_{}:", self.label)?;
-        for (_label, instr) in &self.instructions {
+        for instr in &self.instructions {
             writeln!(f, "        {}", instr)?;
         }
         Ok(())
@@ -264,6 +262,7 @@ impl std::fmt::Display for Instruction {
                 }
                 write!(f, ")")
             }
+            Instruction::Drop(var) => write!(f, "Drop({})", var),
             Instruction::Nop => write!(f, "NoOperation"),
             Instruction::NotImplemented(instr) => write!(f, "Unimplemented({instr})"),
         }
@@ -316,12 +315,12 @@ impl std::fmt::Display for RValue {
                 write!(f, "{}", comma_separated(args))?;
                 write!(f, ")")
             }
-            RValue::Constant(constant) => write!(f, "Constant {}", constant),
+            // RValue::Constant(constant) => write!(f, "Constant {}", constant),
             RValue::Primitive { op, args } => write!(f, "{}({})", op, comma_separated(args)),
             RValue::Operand(op) => match op {
-                Operand::Var(var) => write!(f, "Var {}", var),
-                Operand::Constant(value) => write!(f, "Constant {}", value),
-                Operand::Immediate(immediate) => write!(f, "Immediate {}", immediate),
+                Operand::Var(var) => write!(f, "Var({})", var),
+                Operand::Constant(value) => write!(f, "Constant({})", value),
+                Operand::Immediate(immediate) => write!(f, "Immediate({})", immediate),
             },
         }
     }
