@@ -18,7 +18,7 @@ use super::{
 };
 use crate::{
     dependency::{DependencySet, PinnedDependencyInfo, pin},
-    errors::{ManifestError, PackageError, PackageResult},
+    errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     graph::PackageGraph,
     package::{EnvironmentName, Package, PackageName},

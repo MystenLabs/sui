@@ -230,11 +230,11 @@ impl<F: MoveFlavor> Manifest<F> {
 
 impl<F: MoveFlavor> PackageMetadata<F> {
     pub fn name(&self) -> &PackageName {
-        self.name.get_ref()
+        self.name.as_ref()
     }
 
     pub fn edition(&self) -> &str {
-        self.edition.get_ref()
+        self.edition.as_ref()
     }
 }
 
