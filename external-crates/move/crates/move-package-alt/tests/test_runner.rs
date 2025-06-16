@@ -5,12 +5,10 @@
 use anyhow::bail;
 use move_command_line_common::testing::insta_assert;
 
-use codespan_reporting::{
-    files::SimpleFiles,
-    term::{self, Config, termcolor::Buffer},
-};
+use codespan_reporting::term::{self, Config, termcolor::Buffer};
 use move_package_alt::{
     dependency::{self, DependencySet, UnpinnedDependencyInfo},
+    errors::Files,
     flavor::Vanilla,
     package::{RootPackage, lockfile::Lockfile, manifest::Manifest},
 };
@@ -75,16 +73,10 @@ impl Test<'_> {
                 let contents = match manifest.as_ref() {
                     Ok(m) => format!("{:#?}", m),
                     Err(_) => {
-                        let mut mapped_files = SimpleFiles::new();
-                        mapped_files.add(
-                            self.toml_path.to_str().unwrap(),
-                            std::fs::read_to_string(self.toml_path).unwrap(),
-                        );
-
                         if let Some(e) = manifest.as_ref().err() {
                             let diagnostic = e.to_diagnostic();
                             let mut writer = Buffer::no_color();
-                            term::emit(&mut writer, &Config::default(), &mapped_files, &diagnostic)
+                            term::emit(&mut writer, &Config::default(), &Files, &diagnostic)
                                 .unwrap();
                             let inner = writer.into_inner();
                             String::from_utf8(inner).unwrap_or_default()

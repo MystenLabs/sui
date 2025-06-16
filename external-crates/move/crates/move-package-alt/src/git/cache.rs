@@ -322,8 +322,8 @@ async fn find_default_branch_and_get_sha(repo_url: &str) -> GitResult<GitSha> {
 }
 
 /// Runs `git <args>` in `cwd`. Fails if there is an io failure or if `git` returns a non-zero
-/// exit status; returns the standard output.
-async fn run_git_cmd_with_args(args: &[&str], cwd: Option<&PathBuf>) -> GitResult<String> {
+/// exit status; returns the standard output and logs standard error to `info!`
+pub async fn run_git_cmd_with_args(args: &[&str], cwd: Option<&PathBuf>) -> GitResult<String> {
     // Run the git command
 
     let mut cmd = Command::new("git");

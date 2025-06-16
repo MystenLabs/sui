@@ -48,10 +48,3 @@ deps = {}
 source = { local = "." }
 manifest_digest = "..."
 deps = { bar = "bar", foo = "Foo_0", non = "Foo_1", std = "MoveStdlib", sui = "Sui" }
-
-[published.mainnet.dependencies]
-std = { git = "", rev = "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0", path = "" }
-
-[published.testnet.dependencies]
-std = { git = "", rev = "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0", path = "" }
-sui = { git = "", rev = "7a8d873f5a190aede5876fd0ccca79ac1e8bd2b0", path = "" }
