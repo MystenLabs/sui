@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 (function() {
   function initClarity() {
     (function(c,l,a,r,i,t,y){
