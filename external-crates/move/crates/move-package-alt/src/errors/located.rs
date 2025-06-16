@@ -22,50 +22,40 @@ use super::{FileHandle, PackageResult, TheFile};
 pub struct Located<T> {
     // TODO: use move-compiler::shared::files to avoid copying PathBufs everywhere
     #[serde(skip)]
-    file: FileHandle,
-
-    value: Spanned<T>,
+    loc: Location,
+    value: T,
 }
 
-impl<T> Located<T> {
-    pub fn new(value: T, file: FileHandle, span: Range<usize>) -> Self {
-        Self {
-            file,
-            value: Spanned::new(span, value),
-        }
-    }
+#[derive(Debug, Clone)]
+pub struct Location {
+    file: FileHandle,
+    span: Range<usize>,
+}
 
-    pub fn span(&self) -> Range<usize> {
-        self.value.span()
+impl Location {
+    pub fn new(file: FileHandle, span: Range<usize>) -> Self {
+        Self { file, span }
     }
 
     pub fn file(&self) -> FileHandle {
         self.file
     }
-    pub fn path(&self) -> &Path {
-        self.file.path()
+
+    pub fn span(&self) -> &Range<usize> {
+        &self.span
+    }
+}
+
+impl<T> Located<T> {
+    pub fn new(value: T, file: FileHandle, span: Range<usize>) -> Self {
+        Self {
+            loc: Location::new(file, span),
+            value,
+        }
     }
 
-    pub fn source(&self) -> &str {
-        self.file.source()
-    }
-
-    pub fn into_inner(self) -> T {
-        self.value.into_inner()
-    }
-
-    pub fn destructure(self) -> (T, FileHandle, Range<usize>) {
-        let span = self.value.span();
-        let value = self.value.into_inner();
-        (value, self.file, span)
-    }
-
-    pub fn get_ref(&self) -> &T {
-        self.value.get_ref()
-    }
-
-    pub fn get_mut(&mut self) -> &mut T {
-        self.value.get_mut()
+    pub fn location(&self) -> &Location {
+        &self.loc
     }
 }
 
@@ -79,44 +69,28 @@ where
     {
         let value: Spanned<T> = Spanned::<T>::deserialize(deserializer)?;
         let file = TheFile::handle();
-        Ok(Self { file, value })
+        let span = value.span();
+        Ok(Self {
+            value: value.into_inner(),
+            loc: Location::new(file, span),
+        })
     }
 }
 
 impl<T> AsRef<T> for Located<T> {
     fn as_ref(&self) -> &T {
-        self.value.as_ref()
+        &self.value
     }
 }
 
 impl<T> AsMut<T> for Located<T> {
     fn as_mut(&mut self) -> &mut T {
-        self.value.as_mut()
+        &mut self.value
     }
 }
 
 impl<T: PartialEq> PartialEq for Located<T> {
     fn eq(&self, other: &Self) -> bool {
         self.value.eq(&other.value)
-    }
-}
-
-impl<T: Eq> Eq for Located<T> {}
-
-impl<T: Hash> Hash for Located<T> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.value.hash(state);
-    }
-}
-
-impl<T: PartialOrd> PartialOrd for Located<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.value.partial_cmp(&other.value)
-    }
-}
-
-impl<T: Ord> Ord for Located<T> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.value.cmp(&other.value)
     }
 }

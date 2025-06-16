@@ -4,20 +4,20 @@ source: crates/move-package-alt/tests/test_runner.rs
 Manifest {
     package: PackageMetadata {
         name: Located {
-            file: "tests/data/basic_no_dep_override_git/Move.toml",
-            value: Spanned {
+            loc: Location {
+                file: "tests/data/basic_no_dep_override_git/Move.toml",
                 span: 17..26,
-                value: Identifier(
-                    "example",
-                ),
             },
+            value: Identifier(
+                "example",
+            ),
         },
         edition: Located {
-            file: "tests/data/basic_no_dep_override_git/Move.toml",
-            value: Spanned {
+            loc: Location {
+                file: "tests/data/basic_no_dep_override_git/Move.toml",
                 span: 37..48,
-                value: "2024.beta",
             },
+            value: "2024.beta",
         },
         metadata: (),
     },
@@ -50,12 +50,18 @@ Manifest {
         "mainnet": {
             Identifier(
                 "foo",
-            ): ManifestDependencyReplacement {
-                dependency: None,
-                address_info: None,
-                use_environment: Some(
-                    "mainnet_alpha",
-                ),
+            ): Located {
+                loc: Location {
+                    file: "tests/data/basic_no_dep_override_git/Move.toml",
+                    span: 309..515,
+                },
+                value: ManifestDependencyReplacement {
+                    dependency: None,
+                    address_info: None,
+                    use_environment: Some(
+                        "mainnet_alpha",
+                    ),
+                },
             },
         },
     },

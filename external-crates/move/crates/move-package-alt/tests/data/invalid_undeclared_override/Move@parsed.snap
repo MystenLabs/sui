@@ -1,0 +1,10 @@
+---
+source: crates/move-package-alt/tests/test_runner.rs
+---
+error: Error while loading `"tests/data/invalid_undeclared_override/Move.toml"`
+  ┌─ "tests/data/invalid_undeclared_override/Move.toml":9:15
+  │
+9 │ mainnet.bar = { git = "https://example.com/bar.git" }
+  │               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  │
+  = dep-replacements.mainnet is invalid because mainnet is not in the [environments] table

@@ -1,0 +1,10 @@
+---
+source: crates/move-package-alt/tests/test_runner.rs
+---
+error: Error while loading `"tests/data/invalid_no_envs/Move.toml"`
+  ┌─ "tests/data/invalid_no_envs/Move.toml":1:1
+  │
+1 │ [package]
+  │ ^
+  │
+  = missing field `environments`
