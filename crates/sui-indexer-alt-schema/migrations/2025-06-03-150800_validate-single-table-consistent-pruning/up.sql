@@ -43,25 +43,25 @@ CREATE INDEX IF NOT EXISTS obj_info_v2_owner_object_id_desc
 ON obj_info_v2 (owner_kind, owner_id, cp_sequence_number DESC, object_id DESC);
 
 CREATE INDEX IF NOT EXISTS obj_info_v2_pkg_object_id_desc
-ON obj_info (package, cp_sequence_number DESC, object_id DESC);
+ON obj_info_v2 (package, cp_sequence_number DESC, object_id DESC);
 
 CREATE INDEX IF NOT EXISTS obj_info_v2_mod_object_id_desc
 ON obj_info_v2 (package, module, cp_sequence_number DESC, object_id DESC);
 
 CREATE INDEX IF NOT EXISTS obj_info_v2_name_object_id_desc
-ON obj_info (package, module, name, cp_sequence_number DESC, object_id DESC);
+ON obj_info_v2 (package, module, name, cp_sequence_number DESC, object_id DESC);
 
 CREATE INDEX IF NOT EXISTS obj_info_v2_inst_object_id_desc
 ON obj_info_v2 (package, module, name, instantiation, cp_sequence_number DESC, object_id DESC);
 
 CREATE INDEX IF NOT EXISTS obj_info_v2_owner_pkg_object_id_desc
-ON obj_info (owner_kind, owner_id, package, cp_sequence_number DESC, object_id DESC);
+ON obj_info_v2 (owner_kind, owner_id, package, cp_sequence_number DESC, object_id DESC);
 
 CREATE INDEX IF NOT EXISTS obj_info_v2_owner_mod_object_id_desc
 ON obj_info_v2 (owner_kind, owner_id, package, module, cp_sequence_number DESC, object_id DESC);
 
 CREATE INDEX IF NOT EXISTS obj_info_v2_owner_name_object_id_desc
-ON obj_info (owner_kind, owner_id, package, module, name, cp_sequence_number DESC, object_id DESC);
+ON obj_info_v2 (owner_kind, owner_id, package, module, name, cp_sequence_number DESC, object_id DESC);
 
 CREATE INDEX IF NOT EXISTS obj_info_v2_owner_inst_object_id_desc
 ON obj_info_v2 (owner_kind, owner_id, package, module, name, instantiation, cp_sequence_number DESC, object_id DESC);
@@ -140,25 +140,25 @@ CREATE INDEX IF NOT EXISTS obj_info_two_tables_owner_object_id_desc
 ON obj_info_two_tables (owner_kind, owner_id, cp_sequence_number DESC, object_id DESC);
 
 CREATE INDEX IF NOT EXISTS obj_info_two_tables_pkg_object_id_desc
-ON obj_info (package, cp_sequence_number DESC, object_id DESC);
+ON obj_info_two_tables (package, cp_sequence_number DESC, object_id DESC);
 
 CREATE INDEX IF NOT EXISTS obj_info_two_tables_mod_object_id_desc
 ON obj_info_two_tables (package, module, cp_sequence_number DESC, object_id DESC);
 
 CREATE INDEX IF NOT EXISTS obj_info_two_tables_name_object_id_desc
-ON obj_info (package, module, name, cp_sequence_number DESC, object_id DESC);
+ON obj_info_two_tables (package, module, name, cp_sequence_number DESC, object_id DESC);
 
 CREATE INDEX IF NOT EXISTS obj_info_two_tables_inst_object_id_desc
 ON obj_info_two_tables (package, module, name, instantiation, cp_sequence_number DESC, object_id DESC);
 
 CREATE INDEX IF NOT EXISTS obj_info_two_tables_owner_pkg_object_id_desc
-ON obj_info (owner_kind, owner_id, package, cp_sequence_number DESC, object_id DESC);
+ON obj_info_two_tables (owner_kind, owner_id, package, cp_sequence_number DESC, object_id DESC);
 
 CREATE INDEX IF NOT EXISTS obj_info_two_tables_owner_mod_object_id_desc
 ON obj_info_two_tables (owner_kind, owner_id, package, module, cp_sequence_number DESC, object_id DESC);
 
 CREATE INDEX IF NOT EXISTS obj_info_two_tables_owner_name_object_id_desc
-ON obj_info (owner_kind, owner_id, package, module, name, cp_sequence_number DESC, object_id DESC);
+ON obj_info_two_tables (owner_kind, owner_id, package, module, name, cp_sequence_number DESC, object_id DESC);
 
 CREATE INDEX IF NOT EXISTS obj_info_two_tables_owner_inst_object_id_desc
-ON obj_info (owner_kind, owner_id, package, module, name, instantiation, cp_sequence_number DESC, object_id DESC);
+ON obj_info_two_tables (owner_kind, owner_id, package, module, name, instantiation, cp_sequence_number DESC, object_id DESC);
