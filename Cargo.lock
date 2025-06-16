@@ -7969,6 +7969,7 @@ dependencies = [
  "enum-compat-util",
  "ethnum",
  "hex",
+ "indexmap 2.8.0",
  "leb128",
  "move-proc-macros",
  "num",

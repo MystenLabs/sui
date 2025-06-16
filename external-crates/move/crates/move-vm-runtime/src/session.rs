@@ -8,7 +8,7 @@ use crate::{
 };
 use move_binary_format::{
     errors::*,
-    file_format::{AbilitySet, LocalIndex},
+    file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex},
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -309,4 +309,6 @@ impl<'r, S: MoveResolver> Session<'r, '_, S> {
 pub struct LoadedFunctionInstantiation {
     pub parameters: Vec<Type>,
     pub return_: Vec<Type>,
+    pub instruction_length: CodeOffset,
+    pub definition_index: FunctionDefinitionIndex,
 }

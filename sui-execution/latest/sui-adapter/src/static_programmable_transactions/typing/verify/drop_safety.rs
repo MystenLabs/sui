@@ -45,8 +45,8 @@ mod refine {
                 argument(used, target);
             }
             T::Command_::MakeMoveVec(_, xs) => arguments(used, xs),
-            T::Command_::Publish(_, _) => (),
-            T::Command_::Upgrade(_, _, _, x) => argument(used, x),
+            T::Command_::Publish(_, _, _) => (),
+            T::Command_::Upgrade(_, _, _, x, _) => argument(used, x),
         }
     }
 
@@ -187,10 +187,10 @@ mod verify {
                 consume_values(vs);
                 vec![Value]
             }
-            T::Command_::Publish(_, _) => {
+            T::Command_::Publish(_, _, _) => {
                 vec![]
             }
-            T::Command_::Upgrade(_, _, _, x) => {
+            T::Command_::Upgrade(_, _, _, x, _) => {
                 let v = argument(context, x)?;
                 consume_value(v);
                 vec![]

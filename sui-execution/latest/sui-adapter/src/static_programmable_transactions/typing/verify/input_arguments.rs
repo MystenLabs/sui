@@ -219,8 +219,8 @@ fn command(context: &mut Context, sp!(_, command): &T::Command) -> Result<(), Ex
             check_obj_usages(context, xs)?;
             check_gas_by_values(xs)?;
         }
-        T::Command_::Publish(_, _) => (),
-        T::Command_::Upgrade(_, _, _, x) => {
+        T::Command_::Publish(_, _, _) => (),
+        T::Command_::Upgrade(_, _, _, x, _) => {
             check_obj_usage(context, x)?;
             check_gas_by_value(x)?;
         }
