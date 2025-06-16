@@ -150,6 +150,12 @@ const config = {
       }),
     ],
   ],
+  scripts: [
+    {
+      src: "https://www.clarity.ms/tag/s0jycwr855",
+      async: true,
+    },
+  ],
   stylesheets: [
     {
       href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap",
