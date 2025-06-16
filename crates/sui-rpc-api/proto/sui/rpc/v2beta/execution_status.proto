@@ -19,6 +19,10 @@ message ExecutionError {
   // The command, if any, during which the error occurred.
   optional uint64 command = 1;
 
+  // A human readable description of the error
+  // TODO update field numbering before GA
+  optional string description = 15;
+
   enum ExecutionErrorKind {
     EXECUTION_ERROR_KIND_UNKNOWN = 0;
 

@@ -686,6 +686,10 @@ pub struct ExecutionError {
     /// The command, if any, during which the error occurred.
     #[prost(uint64, optional, tag = "1")]
     pub command: ::core::option::Option<u64>,
+    /// A human readable description of the error
+    /// TODO update field numbering before GA
+    #[prost(string, optional, tag = "15")]
+    pub description: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(enumeration = "execution_error::ExecutionErrorKind", optional, tag = "2")]
     pub kind: ::core::option::Option<i32>,
     /// Abort code from Move.
