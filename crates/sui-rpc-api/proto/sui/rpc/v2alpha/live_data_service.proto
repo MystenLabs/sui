@@ -132,7 +132,7 @@ message Balance {
   optional string coin_type = 1;
 
   // Shows the total balance of the coin in its smallest unit.
-  optional uint64 total_balance = 3;
+  optional uint64 balance = 3;
 }
 
 // Request message for `NodeService.ListDynamicFields`

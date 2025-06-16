@@ -93,7 +93,7 @@ fn balance_info_to_proto(
         coin_type: Some(
             sui_types::sui_sdk_types_conversions::struct_tag_core_to_sdk(coin_type)?.to_string(),
         ),
-        total_balance: Some(info.balance),
+        balance: Some(info.balance),
     })
 }
 

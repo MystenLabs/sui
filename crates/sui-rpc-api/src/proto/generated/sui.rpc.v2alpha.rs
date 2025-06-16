@@ -128,7 +128,7 @@ pub struct Balance {
     pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
     /// Shows the total balance of the coin in its smallest unit.
     #[prost(uint64, optional, tag = "3")]
-    pub total_balance: ::core::option::Option<u64>,
+    pub balance: ::core::option::Option<u64>,
 }
 /// Request message for `NodeService.ListDynamicFields`
 #[derive(Clone, PartialEq, ::prost::Message)]

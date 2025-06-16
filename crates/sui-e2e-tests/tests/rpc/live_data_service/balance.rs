@@ -272,7 +272,7 @@ async fn test_custom_coin_balance() {
             .balance
             .as_ref()
             .unwrap()
-            .total_balance
+            .balance
             .unwrap(),
         0,
         "Expected 0 balance for address_3 with TRUSTED coin type"
@@ -413,7 +413,7 @@ async fn test_fresh_address_with_no_coins() {
         .into_inner();
 
     // Should return zero balance
-    assert_eq!(0, response.balance.as_ref().unwrap().total_balance.unwrap());
+    assert_eq!(0, response.balance.as_ref().unwrap().balance.unwrap());
 
     // List all balances for fresh address
     let list_response = grpc_client
@@ -682,7 +682,7 @@ async fn verify_balances(
             .into_inner()
             .balance
             .unwrap()
-            .total_balance
+            .balance
             .unwrap();
 
         assert_eq!(
@@ -719,7 +719,7 @@ async fn verify_balances(
             .unwrap_or_else(|| panic!("Coin type {} not found in list_balances", coin_type));
 
         assert_eq!(
-            found.total_balance,
+            found.balance,
             Some(*expected_balance),
             "Balance mismatch in list_balances for {} at address {}",
             coin_type,
