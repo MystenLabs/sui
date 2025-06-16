@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
+use axum::routing::get;
+use axum::Router;
 use clap::Parser;
 use mysten_network::callback::CallbackLayer;
 use prometheus::Registry;
@@ -26,6 +28,10 @@ struct App {
     metrics_port: usize,
 }
 
+async fn health_check() -> &'static str {
+    "OK"
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let _guard = TelemetryConfig::new().with_env().init();
@@ -39,6 +45,16 @@ async fn main() -> Result<()> {
     mysten_metrics::init_metrics(&registry);
     let server = KvRpcServer::new(app.instance_id, server_version, &registry).await?;
     let addr = app.address.parse()?;
+
+    tokio::spawn(async {
+        let web_server = Router::new().route("/health", get(health_check));
+        let listener = tokio::net::TcpListener::bind("0.0.0.0:8081")
+            .await
+            .expect("can't bind to the healthcheck port");
+        axum::serve(listener, web_server.into_make_service())
+            .await
+            .expect("healh check service failed");
+    });
     Server::builder()
         .layer(CallbackLayer::new(RpcMetricsMakeCallbackHandler::new(
             Arc::new(RpcMetrics::new(&registry)),
