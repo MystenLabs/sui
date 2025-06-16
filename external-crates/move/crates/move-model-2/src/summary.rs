@@ -11,8 +11,7 @@ use move_binary_format::file_format;
 use move_compiler::{
     expansion::ast as E,
     naming::ast as N,
-    parser::ast as P,
-    parser::ast::DocComment,
+    parser::ast::{self as P, DocComment},
     shared::{known_attributes as KA, program_info::FunctionInfo},
 };
 use move_core_types::{account_address::AccountAddress, vm_status::StatusCode};
@@ -935,14 +934,15 @@ fn attribute(k: &KA::KnownAttribute) -> Attribute {
         KA::KnownAttribute::Testing(KA::TestingAttribute::Test) => {
             Attribute::Name(KA::TestingAttribute::TEST.into())
         }
-        KA::KnownAttribute::Testing(KA::TestingAttribute::TestOnly) => {
-            Attribute::Name(KA::TestingAttribute::TEST_ONLY.into())
-        }
         KA::KnownAttribute::Testing(KA::TestingAttribute::RandTest) => {
             Attribute::Name(KA::TestingAttribute::RAND_TEST.into())
         }
-        KA::KnownAttribute::Verification(KA::VerificationAttribute::VerifyOnly) => {
-            Attribute::Name(KA::VerificationAttribute::VERIFY_ONLY.into())
+        KA::KnownAttribute::Mode(KA::ModeAttribute { modes }) => {
+            let inner = modes
+                .iter()
+                .map(|(_, name)| Attribute::Name(*name))
+                .collect();
+            Attribute::Parameterized(KA::ModeAttribute::MODE.into(), inner)
         }
 
         // --- assigned or name ---

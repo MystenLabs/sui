@@ -13,9 +13,11 @@ use crate::{
     shared::{
         Name,
         known_attributes::{
-            self as A, AttributeKind_, AttributePosition, KnownAttribute, TestingAttribute,
+            self as A, AttributeKind, AttributeKind_, AttributePosition, KnownAttribute,
+            ModeAttribute, TestingAttribute,
         },
         unique_map::UniqueMap,
+        unique_set::UniqueSet,
     },
 };
 
@@ -27,19 +29,30 @@ pub fn expand_attributes(
     attr_position: AttributePosition,
     attribute_vec: Vec<P::Attributes>,
 ) -> E::Attributes {
-    let mut attr_map = UniqueMap::new();
+    let mut attributes: Vec<(AttributeKind, Spanned<KnownAttribute>)> = vec![];
     for sp!(_, attrs) in attribute_vec {
         let attrs = attrs
+            .0
             .into_iter()
             .filter_map(|attr| attribute(context, attr_position, attr))
             .collect::<Vec<_>>();
-        for attr in attrs {
-            if !validate_position(context, &attr_position, &attr)
-                || !no_conflicts(context, &attr_position, &attr_map, &attr)
-                || !insert_attribute(context, &mut attr_map, attr)
-            {
-                continue;
-            }
+        let attrs = attrs
+            .into_iter()
+            .filter(|attr| validate_position(context, &attr_position, attr))
+            .map(|attr| {
+                let attr_kind = sp(attr.loc, attr.value.attribute_kind());
+                (attr_kind, attr)
+            })
+            .collect::<Vec<_>>();
+        attributes.extend(attrs);
+    }
+
+    let attributes = collect_modes(context, &attr_position, attributes);
+
+    let mut attr_map = UniqueMap::new();
+    for (kind, attr) in attributes {
+        if no_conflicts(context, &attr_position, &attr_map, &attr) {
+            insert_attribute(context, &mut attr_map, kind, attr);
         }
     }
     attr_map
@@ -77,7 +90,68 @@ fn validate_position(
     }
 }
 
-// Checks there are no conlficting definitions (though does not check for duplicates)".
+/// Checks there are no mode conflicts, including duplicates or testing definitions. Returns the
+/// provided attributes with the modes combined, and reports diagnostics for duplicates.
+fn collect_modes(
+    context: &mut Context,
+    posn: &AttributePosition,
+    attributes: Vec<(AttributeKind, Spanned<KnownAttribute>)>,
+) -> Vec<(AttributeKind, Spanned<KnownAttribute>)> {
+    use AttributeKind_ as K;
+    let (mode_attrs, mut attributes): (Vec<(AttributeKind, Spanned<KnownAttribute>)>, _) =
+        attributes
+            .into_iter()
+            .partition(|(kind, _)| matches!(kind.value, K::Mode));
+    let mut modes: UniqueSet<Name> = UniqueSet::new();
+    let mut attr_loc = None;
+    for (_, mode) in mode_attrs {
+        let sp!(loc, KnownAttribute::Mode(mode_attr)) = mode else {
+            unreachable!()
+        };
+        let ModeAttribute { modes: new_modes } = mode_attr;
+        for mode in new_modes {
+            if let Err((_, prev_loc)) = modes.add(mode) {
+                let msg = format!("{posn} annotated with duplicate mode '{mode}'");
+                let prev_msg = "Previously annotated here";
+                let mut diag = diag!(
+                    Attributes::ValueWarning,
+                    (mode.loc, msg),
+                    (prev_loc, prev_msg)
+                );
+                let has_test_attribute = attributes
+                    .iter()
+                    .any(|(kind, _)| matches!(kind.value, K::Test | K::RandTest));
+                // Carve-out additional note for `test` and `random-test`
+                if mode.value.as_str() == ModeAttribute::TEST && has_test_attribute {
+                    let msg = format!(
+                        "Attributes '#[{}]' and '#[{}]' implicitly specify '#[{}({})]'",
+                        A::TestingAttribute::TEST,
+                        A::TestingAttribute::RAND_TEST,
+                        A::ModeAttribute::MODE,
+                        A::ModeAttribute::TEST
+                    );
+                    diag.add_note(msg);
+                }
+                context.add_diag(diag);
+            } else {
+                attr_loc.get_or_insert(loc);
+            }
+        }
+    }
+
+    if !modes.is_empty() {
+        let loc = attr_loc.expect("Bad logic in mode resolution");
+        let attr_kind = sp(loc, AttributeKind_::Mode);
+        let attr = KnownAttribute::Mode(ModeAttribute { modes });
+        attributes.push((attr_kind, sp(loc, attr)));
+    }
+    attributes
+}
+
+/// Returns true if there are no conflicting definitions, or false if there are.
+/// Checks there are no conflicting definitions (though does not check for duplicates), and reports
+/// diagnostics for duplicates.
+/// This also ensures that the modes are compatible for testing definitions.
 fn no_conflicts(
     context: &mut Context,
     posn: &AttributePosition,
@@ -105,32 +179,30 @@ fn no_conflicts(
         | KA::Diagnostic(..)
         | KA::Error(..)
         | KA::External(..)
-        | KA::Syntax(..)
-        | KA::Verification(..) => vec![],
+        | KA::Mode(..)
+        | KA::Syntax(..) => vec![],
         KA::Testing(test_attr) => match test_attr {
             crate::shared::known_attributes::TestingAttribute::ExpectedFailure(..) => vec![],
             crate::shared::known_attributes::TestingAttribute::Test => {
-                matching_kinds(attr_map, &[K::TestOnly, K::RandTest])
-            }
-            crate::shared::known_attributes::TestingAttribute::TestOnly => {
-                matching_kinds(attr_map, &[K::Test, K::RandTest])
+                matching_kinds(attr_map, &[K::RandTest])
             }
             crate::shared::known_attributes::TestingAttribute::RandTest => {
-                matching_kinds(attr_map, &[K::Test, K::TestOnly])
+                matching_kinds(attr_map, &[K::Test])
             }
         },
     };
     if !conflicts.is_empty() {
-        for (prev_loc, prev_kind) in conflicts {
+        for (conflict_loc, conflict_kind) in conflicts {
             let msg = format!(
-                "{posn} annotated as both #[{}] and #[{prev_kind}]. You need to declare it as either one or the other",
-                attr.name()
+                "{posn} annotated as both #[{}] and #[{conflict_kind}]. \
+                You need to declare it as either one or the other",
+                attr.name(),
             );
             let prev_msg = "Previously annotated here";
             context.add_diag(diag!(
                 Attributes::InvalidUsage,
                 (*attr_loc, msg),
-                (prev_loc, prev_msg)
+                (conflict_loc, prev_msg)
             ));
         }
         false
@@ -142,23 +214,22 @@ fn no_conflicts(
 fn insert_attribute(
     context: &mut Context,
     attr_map: &mut E::Attributes,
+    attr_kind: AttributeKind,
     sp!(attr_loc, attr): Spanned<KnownAttribute>,
-) -> bool {
-    let attr_kind = sp(attr_loc, attr.attribute_kind());
+) {
     if let Some(prev_loc) = attr_map.get_loc(&attr_kind) {
         let msg = format!("Duplicate attribute '{attr_kind}' attached to the same item");
         let prev_msg = "Attribute previously given here".to_string();
-        context.add_diag(diag!(
+        let diag = diag!(
             Attributes::Duplicate,
             (attr_loc, msg),
             (*prev_loc, prev_msg)
-        ));
-        false
+        );
+        context.add_diag(diag);
     } else {
         attr_map
             .add(attr_kind, sp(attr_loc, attr))
             .expect("ICE: failed insert");
-        true
     }
 }
 
@@ -216,14 +287,15 @@ fn attribute(
             let attrs = unique_ext_attributes(context, attrs);
             KA::External(A::ExternalAttribute { attrs })
         }
+        PA::Mode { modes } => KA::Mode(A::ModeAttribute { modes }),
         PA::Syntax { kind } => KA::Syntax(A::SyntaxAttribute { kind }),
-        PA::VerifyOnly => KA::Verification(A::VerificationAttribute::VerifyOnly),
+        // -- allow --
         PA::Allow { allow_set } => KA::Diagnostic(A::DiagnosticAttribute::Allow { allow_set }),
         PA::LintAllow { allow_set } => {
             KA::Diagnostic(A::DiagnosticAttribute::LintAllow { allow_set })
         }
+        // -- testing --
         PA::Test => KA::Testing(A::TestingAttribute::Test),
-        PA::TestOnly => KA::Testing(A::TestingAttribute::TestOnly),
         PA::ExpectedFailure {
             failure_kind,
             minor_status,

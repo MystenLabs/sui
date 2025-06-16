@@ -14,6 +14,16 @@ warning[W10007]: issue with attribute value
    │       Arguments are no longer supported in `#[test]` attributes
    │       Ignoring these arguments
 
+warning[W10007]: issue with attribute value
+   ┌─ tests/move_check/unit_test/multiple_errors.move:21:7
+   │
+20 │     #[test]
+   │       ---- Previously annotated here
+21 │     #[test]
+   │       ^^^^ function annotated with duplicate mode 'test'
+   │
+   = Attributes '#[test]' and '#[random_test]' implicitly specify '#[mode(test)]'
+
 error[E10001]: invalid duplicate attribute
    ┌─ tests/move_check/unit_test/multiple_errors.move:21:7
    │
@@ -22,13 +32,15 @@ error[E10001]: invalid duplicate attribute
 21 │     #[test]
    │       ^^^^ Duplicate attribute 'test' attached to the same item
 
-error[E10004]: invalid usage of known attribute
+warning[W10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/multiple_errors.move:26:7
    │
 25 │     #[test]
    │       ---- Previously annotated here
 26 │     #[test_only]
-   │       ^^^^^^^^^ function annotated as both #[test_only] and #[test]. You need to declare it as either one or the other
+   │       ^^^^^^^^^ function annotated with duplicate mode 'test'
+   │
+   = Attributes '#[test]' and '#[random_test]' implicitly specify '#[mode(test)]'
 
 warning[W10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/multiple_errors.move:31:5
