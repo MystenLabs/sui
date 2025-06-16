@@ -9,7 +9,7 @@ use sui_types::error::ExecutionError;
 
 pub mod defining_ids_in_types;
 
-pub fn verify<Mode: ExecutionMode>(
+pub fn transaction<Mode: ExecutionMode>(
     env: &env::Env,
     tt: &T::Transaction,
 ) -> Result<(), ExecutionError> {
