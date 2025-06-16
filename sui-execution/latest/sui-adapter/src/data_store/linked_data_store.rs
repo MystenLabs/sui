@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data_store::PackageStore, static_programmable_transactions::linkage::resolved_linkage::RootedLinkage,
+    data_store::PackageStore,
+    static_programmable_transactions::linkage::resolved_linkage::RootedLinkage,
 };
 use move_binary_format::errors::{Location, PartialVMError, PartialVMResult, VMResult};
 use move_core_types::{

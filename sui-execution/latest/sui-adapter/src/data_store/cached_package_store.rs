@@ -11,7 +11,7 @@ use std::{
 };
 use sui_types::{
     base_types::ObjectID,
-    error::{SuiError, SuiResult},
+    error::{ExecutionError, SuiResult},
     move_package::MovePackage,
     storage::BackingPackageStore,
 };
@@ -87,17 +87,21 @@ impl<'state> CachedPackageStore<'state> {
 
     /// Push a new package into the new packages. This is used to track packages that are being
     /// published or have been published.
-    pub fn push_package(&self, id: ObjectID, package: Rc<MovePackage>) -> SuiResult<()> {
+    pub fn push_package(
+        &self,
+        id: ObjectID,
+        package: Rc<MovePackage>,
+    ) -> Result<(), ExecutionError> {
         // Check that the package ID is not already present anywhere.
         debug_assert!(self.fetch_package(&id).unwrap().is_none());
 
         // Insert the package into the new packages
         // If the package already exists, we will overwrite it and signal an error.
         if self.new_packages.borrow_mut().insert(id, package).is_some() {
-            return Err(SuiError::from(make_invariant_violation!(
+            invariant_violation!(
                 "Package with ID {} already exists in the new packages. This should never happen.",
                 id
-            )));
+            );
         }
 
         Ok(())
@@ -108,18 +112,18 @@ impl<'state> CachedPackageStore<'state> {
     /// * The element being popped _must_ exist in the new packages.
     ///
     /// Otherwise this returns an invariant violation.
-    pub fn pop_package(&self, id: ObjectID) -> SuiResult<Rc<MovePackage>> {
+    pub fn pop_package(&self, id: ObjectID) -> Result<Rc<MovePackage>, ExecutionError> {
         if self
             .new_packages
             .borrow()
             .last()
             .is_none_or(|(pkg_id, _)| *pkg_id != id)
         {
-            return Err(SuiError::from(make_invariant_violation!(
+            make_invariant_violation!(
                 "Tried to pop package {} from new packages, but new packages was empty or \
-                 it is not the most recent package inserted. This should never happen.",
+                it is not the most recent package inserted. This should never happen.",
                 id
-            )));
+            );
         }
 
         let Some((pkg_id, pkg)) = self.new_packages.borrow_mut().pop() else {
@@ -134,6 +138,12 @@ impl<'state> CachedPackageStore<'state> {
         );
 
         Ok(pkg)
+    }
+
+    pub fn take_new_packages(&self) -> IndexMap<ObjectID, Rc<MovePackage>> {
+        // Take the new packages and clear the cache.
+        let mut new_packages = self.new_packages.borrow_mut();
+        std::mem::take(&mut *new_packages)
     }
 
     /// Get a package by its package ID (i.e., not original ID). This will first look in the new
