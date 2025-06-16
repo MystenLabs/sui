@@ -1,0 +1,9 @@
+Command `build -v --mode verify_only`:
+INCLUDING DEPENDENCY Dep
+BUILDING A
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ ./sources/l.move:16:3
+   │
+16 │ #[verify_only]
+   │   ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
+
