@@ -73,7 +73,6 @@ pub enum RValue {
         function: Symbol,
         args: Vec<Operand>,
     },
-    Constant(Value),
     Primitive {
         op: PrimitiveOp,
         args: Vec<Operand>,
@@ -102,7 +101,6 @@ pub enum PrimitiveOp {
     CastU8,
     CastU64,
     CastU128,
-    LdConst,
     CopyLoc,
     MoveLoc,
     StoreLoc,
@@ -316,7 +314,7 @@ impl std::fmt::Display for RValue {
                 write!(f, "{}", comma_separated(args))?;
                 write!(f, ")")
             }
-            RValue::Constant(constant) => write!(f, "Constant {}", constant),
+            // RValue::Constant(constant) => write!(f, "Constant {}", constant),
             RValue::Primitive { op, args } => write!(f, "{}({})", op, comma_separated(args)),
             RValue::Operand(op) => match op {
                 Operand::Var(var) => write!(f, "Var {}", var),

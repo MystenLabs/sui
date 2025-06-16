@@ -11,7 +11,7 @@ use crate::{
             Var::Local,
         },
         context::Context,
-        optimization::inline_constants,
+        optimization::inline_constants_and_immediates,
     },
 };
 
@@ -31,8 +31,9 @@ use std::{collections::BTreeMap, result::Result::Ok, vec};
 // -------------------------------------------------------------------------------------------------
 // Stackless Bytecode Translation
 // -------------------------------------------------------------------------------------------------
-pub(crate) fn packages<K: SourceKind>(model: &Model2<K>) -> anyhow::Result<Vec<ast::Package>> {
+pub(crate) fn packages<K: SourceKind>(model: &Model2<K>, optimize: bool) -> anyhow::Result<Vec<ast::Package>> {
     let mut context = Context::new(model);
+    context.optimize(optimize);
     let mut packages = vec![];
     let m_packages = model.packages();
     for m_package in m_packages {
@@ -130,7 +131,7 @@ pub(crate) fn function<K: SourceKind>(
 
     let mut function = ast::Function { name, basic_blocks };
 
-    inline_constants(&mut function);
+    if ctxt.optimize { inline_constants_and_immediates(&mut function) }
 
     Ok(function)
 }
@@ -258,10 +259,8 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::LdConst(const_ref) => {
             let inst = Instruction::Assign {
-                rhs: RValue::Primitive {
-                    op: PrimitiveOp::LdConst,
-                    args: vec![Constant(deserialize_constant(const_ref))],
-                },
+                // TODO should this be a RValue::Constant?
+                rhs: RValue::Operand(Constant(deserialize_constant(const_ref))),
                 lhs: vec![ctxt.push_register()],
             };
             Ok(vec![inst])
@@ -1090,7 +1089,7 @@ fn handle_vec(ty: &Box<N::Type<Symbol>>, data: &Vec<u8>) -> Value {
         | N::Type::Reference(_, _)
         | N::Type::Signer
         | N::Type::TypeParameter(_) => {
-            // These types are not supported for immediate values
+            // These types are not supported
             Value::NotImplemented(format!("Unsupported vector type: {:?}", ty))
         }
     }
