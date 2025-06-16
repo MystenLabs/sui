@@ -71,6 +71,65 @@ pub struct RegulatedCoinMetadata {
     #[prost(string, optional, tag = "3")]
     pub deny_cap_object: ::core::option::Option<::prost::alloc::string::String>,
 }
+/// Request message for `LiveDataService.GetBalance`.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetBalanceRequest {
+    /// Required. The owner's Sui address.
+    #[prost(string, optional, tag = "1")]
+    pub owner: ::core::option::Option<::prost::alloc::string::String>,
+    /// Required. The type names for the coin (e.g., 0x2::sui::SUI).
+    #[prost(string, optional, tag = "2")]
+    pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// Response message for `LiveDataService.GetBalance`.
+/// Return the total coin balance for one coin type, owned by the address owner.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetBalanceResponse {
+    /// The balance information for the requested coin type.
+    #[prost(message, optional, tag = "1")]
+    pub balance: ::core::option::Option<Balance>,
+}
+/// Request message for `LiveDataService.ListBalances`.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListBalancesRequest {
+    /// Required. The owner's Sui address.
+    #[prost(string, optional, tag = "1")]
+    pub owner: ::core::option::Option<::prost::alloc::string::String>,
+    /// The maximum number of balance entries to return. The service may return fewer than this value.
+    /// If unspecified, at most `50` entries will be returned.
+    /// The maximum value is `1000`; values above `1000` will be coerced to `1000`.
+    #[prost(uint32, optional, tag = "2")]
+    pub page_size: ::core::option::Option<u32>,
+    /// A page token, received from a previous `ListBalances` call.
+    /// Provide this to retrieve the subsequent page.
+    ///
+    /// When paginating, all other parameters provided to `ListBalances` must
+    /// match the call that provided the page token.
+    #[prost(bytes = "bytes", optional, tag = "3")]
+    pub page_token: ::core::option::Option<::prost::bytes::Bytes>,
+}
+/// Response message for `LiveDataService.ListBalances`.
+/// Return the total coin balance for all coin types, owned by the address owner.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListBalancesResponse {
+    /// The list of coin types and their respective balances.
+    #[prost(message, repeated, tag = "1")]
+    pub balances: ::prost::alloc::vec::Vec<Balance>,
+    /// A token, which can be sent as `page_token` to retrieve the next page.
+    /// If this field is omitted, there are no subsequent pages.
+    #[prost(bytes = "bytes", optional, tag = "2")]
+    pub next_page_token: ::core::option::Option<::prost::bytes::Bytes>,
+}
+/// Balance information for a specific coin type.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Balance {
+    /// The type of the coin (e.g., 0x2::sui::SUI).
+    #[prost(string, optional, tag = "1")]
+    pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
+    /// Shows the total balance of the coin in its smallest unit.
+    #[prost(uint64, optional, tag = "3")]
+    pub balance: ::core::option::Option<u64>,
+}
 /// Request message for `NodeService.ListDynamicFields`
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListDynamicFieldsRequest {
@@ -429,6 +488,58 @@ pub mod live_data_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        pub async fn get_balance(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetBalanceRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetBalanceResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.rpc.v2alpha.LiveDataService/GetBalance",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("sui.rpc.v2alpha.LiveDataService", "GetBalance"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn list_balances(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListBalancesRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListBalancesResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.rpc.v2alpha.LiveDataService/ListBalances",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("sui.rpc.v2alpha.LiveDataService", "ListBalances"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
         pub async fn simulate_transaction(
             &mut self,
             request: impl tonic::IntoRequest<super::SimulateTransactionRequest>,
@@ -521,6 +632,20 @@ pub mod live_data_service_server {
             request: tonic::Request<super::GetCoinInfoRequest>,
         ) -> std::result::Result<
             tonic::Response<super::GetCoinInfoResponse>,
+            tonic::Status,
+        >;
+        async fn get_balance(
+            &self,
+            request: tonic::Request<super::GetBalanceRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetBalanceResponse>,
+            tonic::Status,
+        >;
+        async fn list_balances(
+            &self,
+            request: tonic::Request<super::ListBalancesRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListBalancesResponse>,
             tonic::Status,
         >;
         async fn simulate_transaction(
@@ -736,6 +861,96 @@ pub mod live_data_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetCoinInfoSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.rpc.v2alpha.LiveDataService/GetBalance" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetBalanceSvc<T: LiveDataService>(pub Arc<T>);
+                    impl<
+                        T: LiveDataService,
+                    > tonic::server::UnaryService<super::GetBalanceRequest>
+                    for GetBalanceSvc<T> {
+                        type Response = super::GetBalanceResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetBalanceRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as LiveDataService>::get_balance(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetBalanceSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.rpc.v2alpha.LiveDataService/ListBalances" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListBalancesSvc<T: LiveDataService>(pub Arc<T>);
+                    impl<
+                        T: LiveDataService,
+                    > tonic::server::UnaryService<super::ListBalancesRequest>
+                    for ListBalancesSvc<T> {
+                        type Response = super::ListBalancesResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ListBalancesRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as LiveDataService>::list_balances(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ListBalancesSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

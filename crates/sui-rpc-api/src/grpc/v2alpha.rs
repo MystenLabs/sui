@@ -8,8 +8,12 @@ use crate::message::MessageMergeFrom;
 use crate::proto::rpc::v2alpha::live_data_service_server::LiveDataService;
 use crate::proto::rpc::v2alpha::signature_verification_service_server::SignatureVerificationService;
 use crate::proto::rpc::v2alpha::subscription_service_server::SubscriptionService;
+use crate::proto::rpc::v2alpha::GetBalanceRequest;
+use crate::proto::rpc::v2alpha::GetBalanceResponse;
 use crate::proto::rpc::v2alpha::GetCoinInfoRequest;
 use crate::proto::rpc::v2alpha::GetCoinInfoResponse;
+use crate::proto::rpc::v2alpha::ListBalancesRequest;
+use crate::proto::rpc::v2alpha::ListBalancesResponse;
 use crate::proto::rpc::v2alpha::ListDynamicFieldsRequest;
 use crate::proto::rpc::v2alpha::ListDynamicFieldsResponse;
 use crate::proto::rpc::v2alpha::ListOwnedObjectsRequest;
@@ -70,7 +74,9 @@ impl SubscriptionService for SubscriptionServiceHandle {
     }
 }
 
+mod get_balance;
 mod get_coin_info;
+mod list_balances;
 mod list_dynamic_fields;
 mod list_owned_objects;
 mod resolve;
@@ -101,6 +107,24 @@ impl LiveDataService for RpcService {
         request: tonic::Request<GetCoinInfoRequest>,
     ) -> Result<tonic::Response<GetCoinInfoResponse>, tonic::Status> {
         get_coin_info::get_coin_info(self, request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+
+    async fn get_balance(
+        &self,
+        request: tonic::Request<GetBalanceRequest>,
+    ) -> Result<tonic::Response<GetBalanceResponse>, tonic::Status> {
+        get_balance::get_balance(self, request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+
+    async fn list_balances(
+        &self,
+        request: tonic::Request<ListBalancesRequest>,
+    ) -> Result<tonic::Response<ListBalancesResponse>, tonic::Status> {
+        list_balances::list_balances(self, request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
