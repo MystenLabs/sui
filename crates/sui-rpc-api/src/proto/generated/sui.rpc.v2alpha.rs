@@ -77,8 +77,7 @@ pub struct GetBalanceRequest {
     /// Required. The owner's Sui address.
     #[prost(string, optional, tag = "1")]
     pub owner: ::core::option::Option<::prost::alloc::string::String>,
-    /// The type names for the coin (e.g., 0x2::sui::SUI).
-    /// If not specified, defaults to 0x2::sui::SUI.
+    /// Required. The type names for the coin (e.g., 0x2::sui::SUI).
     #[prost(string, optional, tag = "2")]
     pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
 }
@@ -127,7 +126,7 @@ pub struct Balance {
     /// The type of the coin (e.g., 0x2::sui::SUI).
     #[prost(string, optional, tag = "1")]
     pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
-    /// Shows the total balance of the coin in its smallest unit (mist).
+    /// Shows the total balance of the coin in its smallest unit.
     #[prost(uint64, optional, tag = "3")]
     pub total_balance: ::core::option::Option<u64>,
 }
