@@ -43,7 +43,8 @@ async fn test_operation_data_parsing_pay_sui() -> Result<(), anyhow::Error> {
         .for_each(|op| assert_eq!(op.type_, OperationType::PaySui));
     let metadata = ConstructionMetadata {
         sender,
-        coins: vec![gas],
+        gas_coins: vec![gas],
+        extra_gas_coins: vec![],
         objects: vec![],
         total_coin_value: 0,
         gas_price,
@@ -99,7 +100,8 @@ async fn test_operation_data_parsing_pay_coin() -> Result<(), anyhow::Error> {
         .for_each(|op| assert_eq!(op.type_, OperationType::PayCoin));
     let metadata = ConstructionMetadata {
         sender,
-        coins: vec![gas],
+        gas_coins: vec![gas],
+        extra_gas_coins: vec![],
         objects: vec![coin],
         total_coin_value: 0,
         gas_price,
