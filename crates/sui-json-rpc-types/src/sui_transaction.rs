@@ -2271,6 +2271,9 @@ impl SuiCallArg {
                     digest,
                 })
             }
+            CallArg::BalanceWithdraw(_) => {
+                todo!("Balance withdraws not yet supported in json rpc types")
+            }
         })
     }
 

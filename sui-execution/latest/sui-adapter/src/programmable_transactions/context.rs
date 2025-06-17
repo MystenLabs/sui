@@ -1634,6 +1634,9 @@ mod checked {
                 input_object_map,
                 obj_arg,
             )?,
+            CallArg::BalanceWithdraw(_) => {
+                todo!("Load balance withdraw call arg")
+            }
         })
     }
 

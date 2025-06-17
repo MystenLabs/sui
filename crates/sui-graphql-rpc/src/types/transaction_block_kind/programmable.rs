@@ -448,6 +448,8 @@ impl TransactionInput {
                     checkpoint_viewed_at,
                 },
             }),
+
+            N::BalanceWithdraw(_) => todo!("BalanceWithdraw is not supported for GraphQL"),
         }
     }
 }
