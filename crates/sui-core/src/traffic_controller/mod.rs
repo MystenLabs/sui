@@ -233,6 +233,9 @@ impl TrafficController {
             dry_run,
         } = params;
         if let Some(error_threshold) = error_threshold {
+            self.metrics
+                .error_client_threshold
+                .set(error_threshold as i64);
             Self::update_policy_threshold(
                 self.error_policy.as_ref().unwrap(),
                 error_threshold,
@@ -241,6 +244,9 @@ impl TrafficController {
             .await?;
         }
         if let Some(spam_threshold) = spam_threshold {
+            self.metrics
+                .spam_client_threshold
+                .set(spam_threshold as i64);
             Self::update_policy_threshold(
                 self.spam_policy.as_ref().unwrap(),
                 spam_threshold,
@@ -249,6 +255,7 @@ impl TrafficController {
             .await?;
         }
         if let Some(dry_run) = dry_run {
+            self.metrics.dry_run_enabled.set(dry_run as i64);
             self.policy_config.write().await.dry_run = dry_run;
         }
 
