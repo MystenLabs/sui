@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    VARIANT_COUNT_MAX,
+    VARIANT_TAG_MAX_VALUE,
     account_address::AccountAddress,
     annotated_visitor::{Error as VError, ValueDriver, Visitor, visit_struct, visit_value},
     identifier::Identifier,
@@ -482,7 +482,7 @@ impl<'d> serde::de::Visitor<'d> for DecoratedEnumFieldVisitor<'_> {
         A: serde::de::SeqAccess<'d>,
     {
         let tag = match seq.next_element_seed(&MoveTypeLayout::U8)? {
-            Some(MoveValue::U8(tag)) if tag as u64 <= VARIANT_COUNT_MAX => tag as u16,
+            Some(MoveValue::U8(tag)) if tag as u64 <= VARIANT_TAG_MAX_VALUE => tag as u16,
             Some(MoveValue::U8(tag)) => return Err(A::Error::invalid_length(tag as usize, &self)),
             Some(val) => {
                 return Err(A::Error::invalid_type(
