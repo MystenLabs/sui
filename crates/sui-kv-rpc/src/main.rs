@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
+use axum::routing::get;
+use axum::Router;
 use clap::Parser;
 use mysten_network::callback::CallbackLayer;
 use prometheus::Registry;
@@ -10,7 +12,7 @@ use sui_kv_rpc::KvRpcServer;
 use sui_rpc_api::proto::rpc::v2beta::ledger_service_server::LedgerServiceServer;
 use sui_rpc_api::{RpcMetrics, RpcMetricsMakeCallbackHandler, ServerVersion};
 use telemetry_subscribers::TelemetryConfig;
-use tonic::transport::Server;
+use tonic::transport::{Identity, Server, ServerTlsConfig};
 
 bin_version::bin_version!();
 
@@ -24,6 +26,14 @@ struct App {
     metrics_host: String,
     #[clap(default_value_t = 9184)]
     metrics_port: usize,
+    #[clap(long = "tls-cert", default_value = "")]
+    tls_cert: String,
+    #[clap(long = "tls-key", default_value = "")]
+    tls_key: String,
+}
+
+async fn health_check() -> &'static str {
+    "OK"
 }
 
 #[tokio::main]
@@ -39,7 +49,23 @@ async fn main() -> Result<()> {
     mysten_metrics::init_metrics(&registry);
     let server = KvRpcServer::new(app.instance_id, server_version, &registry).await?;
     let addr = app.address.parse()?;
-    Server::builder()
+    let mut builder = Server::builder();
+    if !app.tls_cert.is_empty() && !app.tls_key.is_empty() {
+        let identity =
+            Identity::from_pem(std::fs::read(app.tls_cert)?, std::fs::read(app.tls_key)?);
+        let tls_config = ServerTlsConfig::new().identity(identity);
+        builder = builder.tls_config(tls_config)?;
+    }
+    tokio::spawn(async {
+        let web_server = Router::new().route("/health", get(health_check));
+        let listener = tokio::net::TcpListener::bind("0.0.0.0:8081")
+            .await
+            .expect("can't bind to the healthcheck port");
+        axum::serve(listener, web_server.into_make_service())
+            .await
+            .expect("healh check service failed");
+    });
+    builder
         .layer(CallbackLayer::new(RpcMetricsMakeCallbackHandler::new(
             Arc::new(RpcMetrics::new(&registry)),
         )))
