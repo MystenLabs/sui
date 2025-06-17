@@ -580,16 +580,14 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 Value::tx_context(self.tx_context.borrow().digest())?,
             )),
         }
-        let result = self
-            .execute_function_bypass_visibility(
-                &function.storage_id,
-                &function.name,
-                &function.type_arguments,
-                args,
-                &function.linkage,
-                trace_builder_opt,
-            )
-            .map_err(|e| self.env.convert_vm_error(e))?;
+        let result = self.execute_function_bypass_visibility(
+            &function.storage_id,
+            &function.name,
+            &function.type_arguments,
+            args,
+            &function.linkage,
+            trace_builder_opt,
+        )?;
         self.take_user_events(&function)?;
         Ok(result)
     }
@@ -602,12 +600,15 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         args: Vec<CtxValue>,
         linkage: &RootedLinkage,
         tracer: Option<&mut MoveTraceBuilder>,
-    ) -> VMResult<Vec<CtxValue>> {
-        let ty_args = {
-            // load type arguments for VM
-            let _ = ty_args;
-            better_todo!("LOADING")
-        };
+    ) -> Result<Vec<CtxValue>, ExecutionError> {
+        let ty_args = ty_args
+            .iter()
+            .map(|ty| {
+                self.env
+                    .load_vm_type_from_adapter_type(ty)
+                    .map(|(vm_ty, _)| vm_ty)
+            })
+            .collect::<Result<_, _>>()?;
         let gas_status = self.gas_charger.move_gas_status_mut();
         let mut data_store = LinkedDataStore::new(linkage, self.env.linkable_store);
         let values = self
@@ -623,7 +624,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 &mut SuiGasMeter(gas_status),
                 &mut self.native_extensions,
                 tracer,
-            )?;
+            )
+            .map_err(|e| self.env.convert_linked_vm_error(e, linkage))?;
         Ok(values.into_iter().map(|v| CtxValue(v.into())).collect())
     }
 
@@ -702,7 +704,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 &mut data_store,
                 &mut SuiGasMeter(self.gas_charger.move_gas_status_mut()),
             )
-            .map_err(|e| self.env.convert_vm_error(e))?;
+            .map_err(|e| self.env.convert_linked_vm_error(e, linkage))?;
 
         // run the Sui verifier
         for module in modules {
@@ -742,16 +744,14 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             let args = vec![CtxValue(Value::tx_context(
                 self.tx_context.borrow().digest(),
             )?)];
-            let return_values = self
-                .execute_function_bypass_visibility(
-                    &module_id,
-                    INIT_FN_NAME,
-                    &[],
-                    args,
-                    linkage,
-                    trace_builder_opt.as_deref_mut(),
-                )
-                .map_err(|e| self.env.convert_vm_error(e))?;
+            let return_values = self.execute_function_bypass_visibility(
+                &module_id,
+                INIT_FN_NAME,
+                &[],
+                args,
+                linkage,
+                trace_builder_opt.as_deref_mut(),
+            )?;
 
             assert_invariant!(
                 return_values.is_empty(),
