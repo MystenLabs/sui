@@ -4,7 +4,7 @@
 use std::{fmt::Write, str::FromStr};
 
 use crate::{
-    VARIANT_COUNT_MAX,
+    VARIANT_TAG_MAX_VALUE,
     account_address::AccountAddress,
     annotated_value::{
         MoveEnumLayout, MoveFieldLayout, MoveStruct, MoveStructLayout, MoveTypeLayout, MoveValue,
@@ -416,10 +416,10 @@ fn out_of_range_enum_tag() {
     let mut bytes = serialize(value);
 
     // Invalid tag value
-    bytes[0] = VARIANT_COUNT_MAX as u8 + 1;
+    bytes[0] = VARIANT_TAG_MAX_VALUE as u8 + 1;
 
     assert_eq!(
-        "invalid variant tag: 128",
+        "invalid variant tag: 127",
         MoveValue::visit_deserialize(&bytes, &layout, &mut NullTraversal)
             .unwrap_err()
             .to_string(),

@@ -276,7 +276,7 @@ fn load_field_count(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u64> {
 }
 
 fn load_variant_tag(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u16> {
-    read_uleb_internal(cursor, VARIANT_COUNT_MAX)
+    read_uleb_internal(cursor, VARIANT_TAG_MAX_VALUE)
 }
 
 fn load_variant_count(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u64> {

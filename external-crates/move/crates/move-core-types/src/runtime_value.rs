@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    VARIANT_COUNT_MAX, account_address::AccountAddress, annotated_value as A, fmt_list, u256,
+    VARIANT_TAG_MAX_VALUE, account_address::AccountAddress, annotated_value as A, fmt_list, u256,
 };
 use anyhow::{Result as AResult, anyhow};
 use move_proc_macros::test_variant_order;
@@ -370,7 +370,7 @@ impl<'d> serde::de::Visitor<'d> for EnumFieldVisitor<'_> {
         A: serde::de::SeqAccess<'d>,
     {
         let tag = match seq.next_element_seed(&MoveTypeLayout::U8)? {
-            Some(MoveValue::U8(tag)) if tag as u64 <= VARIANT_COUNT_MAX => tag as u16,
+            Some(MoveValue::U8(tag)) if tag as u64 <= VARIANT_TAG_MAX_VALUE => tag as u16,
             Some(MoveValue::U8(tag)) => return Err(A::Error::invalid_length(tag as usize, &self)),
             Some(val) => {
                 return Err(A::Error::invalid_type(
@@ -447,10 +447,10 @@ impl serde::Serialize for MoveVariant {
     // in uleb encoding and we don't actually need to uleb encode it, but we can at a later date if
     // we want/need to.
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let tag = if self.tag as u64 > VARIANT_COUNT_MAX {
+        let tag = if self.tag as u64 > VARIANT_TAG_MAX_VALUE {
             return Err(serde::ser::Error::custom(format!(
                 "Variant tag {} is greater than the maximum allowed value of {}",
-                self.tag, VARIANT_COUNT_MAX
+                self.tag, VARIANT_TAG_MAX_VALUE
             )));
         } else {
             self.tag as u8

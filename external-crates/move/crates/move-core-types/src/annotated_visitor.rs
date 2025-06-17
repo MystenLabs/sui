@@ -4,7 +4,7 @@
 use std::io::{Cursor, Read};
 
 use crate::{
-    VARIANT_COUNT_MAX,
+    VARIANT_TAG_MAX_VALUE,
     account_address::AccountAddress,
     annotated_value::{MoveEnumLayout, MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
     identifier::IdentStr,
@@ -775,7 +775,7 @@ fn visit_variant<'c, 'b, 'l, V: Visitor<'b, 'l> + ?Sized>(
     // When we add true ULEB encoding for enum variants switch to this:
     // let tag = inner.read_leb128()?;
     let [tag] = inner.read_exact()?;
-    if tag >= VARIANT_COUNT_MAX as u8 {
+    if tag > VARIANT_TAG_MAX_VALUE as u8 {
         return Err(Error::UnexpectedVariantTag(tag as usize).into());
     }
     let variant_layout = layout
