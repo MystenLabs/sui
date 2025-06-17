@@ -142,20 +142,9 @@ pub(crate) fn bytecode<K: SourceKind>(
 ) -> Vec<Instruction> {
     use ast::PrimitiveOp as Op;
 
-    // macro_rules! assign {
-    //     ($rhs:expr, $lhs:expr) => {{
-    //         Instruction::Assign {
-    //             lhs: vec![$lhs],
-    //             rhs: $rhs,
-    //         }
-    //     }};
-    // }
-
     macro_rules! assign {
-    // match a rhs, then zero-or-more comma + lhs expressions, allow an optional trailing comma
     ($rhs:expr $(, $lhs:expr)* $(,)?) => {{
         Instruction::Assign {
-            // splice in all of the $lhs; if there were none, this becomes vec![]
             lhs: vec![$($lhs),*],
             rhs: $rhs,
         }
@@ -167,15 +156,6 @@ pub(crate) fn bytecode<K: SourceKind>(
             RValue::Operand(Operand::Immediate($val))
         };
     }
-
-    // macro_rules! primitiveOp {
-    //     ($op:expr, $rval:expr) => {
-    //         RValue::Primitive {
-    //             op: $op,
-    //             args: vec![$rval],
-    //         }
-    //     };
-    // }
 
     macro_rules! primitiveOp {
     ($op:expr, $($rval:expr),+ $(,)?) => {
@@ -350,11 +330,11 @@ pub(crate) fn bytecode<K: SourceKind>(
         )],
 
         IB::WriteRef => vec![assign!(
+            // TODO check if this is ok for the SSA
             primitiveOp!(Op::WriteRef, Var(ctxt.pop_register()), Var(ctxt.pop_register()))
         )],
 
         IB::FreezeRef => {
-            // TODO check FreezeRef
             let inst = Instruction::Nop;
             vec![inst]
         }
@@ -597,7 +577,6 @@ pub(crate) fn bytecode<K: SourceKind>(
                 .map(|_| Var(ctxt.pop_register()))
                 .collect::<Vec<_>>();
             let inst = Instruction::Assign {
-                // TODO  check order of the registers
                 rhs: RValue::Primitive {
                     op: Op::VecSwap,
                     args,
@@ -771,7 +750,6 @@ fn deserialize_constant(constant: &N::Constant<Symbol>) -> Value {
             Err(_) => panic!("Failed to deserialize Bool constant: {:?}", constant.data),
         },
         N::Type::Vector(bx) => {
-            // TODO finish to implement nested vectors
             handle_vec(&bx, &constant.data)
         }
         N::Type::Datatype(_)
