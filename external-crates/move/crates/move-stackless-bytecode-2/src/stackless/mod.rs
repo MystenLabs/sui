@@ -3,5 +3,5 @@
 
 pub mod ast;
 mod context;
-pub(crate) mod optimization;
+pub(crate) mod optimizations;
 pub(crate) mod translate;

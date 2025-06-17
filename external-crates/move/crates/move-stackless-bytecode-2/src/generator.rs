@@ -76,9 +76,10 @@ impl<S: SourceKind> StacklessBytecodeGenerator<S> {
         Ok(disassembled)
     }
 
-    // TODO: At some point this should hand back a set of stackless bytecode pacakges or similar --
-    // look at the old interface and mirror that as a start (?)
-    pub fn generate_stackless_bytecode(&self, optimize:bool) -> anyhow::Result<Vec<stackless::ast::Package>> {
+    pub fn generate_stackless_bytecode(
+        &self,
+        optimize: bool,
+    ) -> anyhow::Result<Vec<stackless::ast::Package>> {
         stackless::translate::packages(&self.model, optimize)
     }
 
@@ -167,8 +168,6 @@ impl<S: SourceKind> StacklessBytecodeGenerator<S> {
         Ok(())
     }
 
-    // TODO: The CLI execution should be this -- so that we know printing is happening there, not
-    // as part of the stackless bytecode interface itself.
     pub fn execute(&self, optimize: bool) -> anyhow::Result<String> {
         let packages = self.generate_stackless_bytecode(optimize)?;
         let out_string = packages
