@@ -15510,6 +15510,7 @@ dependencies = [
  "clap",
  "fastcrypto",
  "insta",
+ "move-core-types",
  "move-vm-config",
  "schemars",
  "serde",

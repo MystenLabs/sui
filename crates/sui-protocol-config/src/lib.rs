@@ -243,6 +243,7 @@ const MAX_PROTOCOL_VERSION: u64 = 86;
 // Version 84: Limit number of stored execution time observations between epochs.
 // Version 85: Enable party transfer in devnet.
 // Version 86: Use type tags in the object runtime and adapter instead of `Type`s.
+//             Make variant count limit explicit in protocol config.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3729,6 +3730,7 @@ impl ProtocolConfig {
                 }
                 86 => {
                     cfg.feature_flags.type_tags_in_object_runtime = true;
+                    cfg.max_move_enum_variants = Some(move_core_types::VARIANT_COUNT_MAX);
 
                     // Set a stake_weighted_median_threshold for congestion control.
                     cfg.feature_flags.per_object_congestion_control_mode =

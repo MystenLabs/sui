@@ -164,6 +164,7 @@ max_event_emit_size_total: 65536000
 max_move_vector_len: 262144
 max_move_identifier_len: 128
 max_move_value_depth: 128
+max_move_enum_variants: 127
 max_back_edges_per_function: 10000
 max_back_edges_per_module: 10000
 max_verifier_meter_ticks_per_function: 16000000

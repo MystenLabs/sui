@@ -170,6 +170,8 @@ pub const VARIANT_COUNT_MAX: u64 = {
     MVT::VARIANT_COUNT_MAX
 };
 
+pub const VARIANT_TAG_MAX_VALUE: u64 = VARIANT_COUNT_MAX - 1;
+
 #[allow(clippy::assertions_on_constants)]
 pub const JUMP_TABLE_INDEX_MAX: u64 = {
     assert!(
