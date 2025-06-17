@@ -26,7 +26,11 @@ pub trait CFG {
     fn successors(&self, label: Label) -> &BTreeSet<Label>;
 
     fn predecessors(&self, label: Label) -> &BTreeSet<Label>;
-    fn commands<'a>(&'a self, label: Label) -> Box<dyn Iterator<Item = (usize, &'a Command)> + 'a>;
+    fn commands(&self, label: Label) -> impl Iterator<Item = (usize, &Command)>;
+    fn block_start(&self, label: Label) -> usize;
+    fn block_end(&self, label: Label) -> usize;
+    fn num_commands(&self, label: Label) -> usize;
+    fn block_labels(&self) -> impl Iterator<Item = Label>;
     fn num_blocks(&self) -> usize;
     fn start_block(&self) -> Label;
 
@@ -239,8 +243,24 @@ impl<T: Deref<Target = BasicBlocks>> CFG for ForwardCFG<T> {
         self.predecessor_map.get(&label).unwrap()
     }
 
-    fn commands<'s>(&'s self, label: Label) -> Box<dyn Iterator<Item = (usize, &'s Command)> + 's> {
-        Box::new(self.block(label).iter().enumerate())
+    fn commands(&self, label: Label) -> impl Iterator<Item = (usize, &Command)> {
+        self.block(label).iter().enumerate()
+    }
+
+    fn block_start(&self, _label: Label) -> usize {
+        0
+    }
+
+    fn block_end(&self, label: Label) -> usize {
+        self.block(label).len().saturating_sub(1)
+    }
+
+    fn num_commands(&self, label: Label) -> usize {
+        self.block(label).len()
+    }
+
+    fn block_labels(&self) -> impl Iterator<Item = Label> {
+        self.blocks.keys().copied()
     }
 
     fn num_blocks(&self) -> usize {
@@ -622,8 +642,24 @@ impl<Blocks: Deref<Target = BasicBlocks>> CFG for ReverseCFG<'_, Blocks> {
         self.predecessor_map.get(&label).unwrap()
     }
 
-    fn commands<'s>(&'s self, label: Label) -> Box<dyn Iterator<Item = (usize, &'s Command)> + 's> {
-        Box::new(self.block(label).iter().enumerate().rev())
+    fn commands(&self, label: Label) -> impl Iterator<Item = (usize, &Command)> {
+        self.block(label).iter().enumerate().rev()
+    }
+
+    fn block_start(&self, label: Label) -> usize {
+        self.block(label).len().saturating_sub(1)
+    }
+
+    fn block_end(&self, _label: Label) -> usize {
+        0
+    }
+
+    fn num_commands(&self, label: Label) -> usize {
+        self.block(label).len()
+    }
+
+    fn block_labels(&self) -> impl Iterator<Item = Label> {
+        self.blocks().map(|(lbl, _)| *lbl)
     }
 
     fn num_blocks(&self) -> usize {

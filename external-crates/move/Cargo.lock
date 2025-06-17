@@ -2183,6 +2183,7 @@ dependencies = [
  "hex",
  "insta",
  "lsp-types",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-borrow-graph",
  "move-bytecode-source-map",
