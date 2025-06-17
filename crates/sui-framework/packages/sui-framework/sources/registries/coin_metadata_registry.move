@@ -1,3 +1,9 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+/// Defines the system object for managing coin metadata in a central
+/// registry.
+
 module sui::coin_metadata_registry;
 
 use std::string::String;
@@ -10,18 +16,32 @@ use sui::transfer::Receiving;
 use sui::vec_map::{Self, VecMap};
 use sui::vec_set::VecSet;
 
+// Allows calling `.add_dof(object, name, value)` on `UID`
 use fun dynamic_object_field::add as UID.add_dof;
+// Allows calling `.borrow_dof(object, name)` on `UID`
 use fun dynamic_object_field::borrow as UID.borrow_dof;
+// Allows calling `.borrow_dof_mut(object, name)` on `UID`
 use fun dynamic_object_field::borrow_mut as UID.borrow_dof_mut;
+// Allows calling `.exists_dof(object, name)` on `UID`
 use fun dynamic_object_field::exists_ as UID.exists_dof;
 
-const EMetadataNotFound: u64 = 0;
-const EAlreadyClaimed: u64 = 1;
-const ENotSystemAddress: u64 = 2;
-const EMetadataAlreadyExists: u64 = 3;
+#[error]
+const EMetadataNotFound: vector<u8> = b"No metadata found for this coin type";
+#[error]
+const EAlreadyClaimed: vector<u8> = b"Metadata cap already claimed";
+#[error]
+const ENotSystemAddress: vector<u8> = b"Only the system address can create the registry";
+#[error]
+const EMetadataAlreadyExists: vector<u8> = b"Metadata for this coin type already exists";
 
 const REGULATED_COIN_VARIANT: u8 = 0;
 
+/// Store only object that stores overrides for given coin types.
+/// This object is created with the hashes of all coin types that
+/// are regulated or have fixed supplies. The hashes are then
+/// "unwrapped" into a Table field that contains the coin type name
+/// to be used when migrating legacy metadata to the new
+/// `CoinMetadataRegistry`.
 public struct RegistryOverrides has store {
     regulated_hashes: VecSet<address>,
     fixed_supply_hashes: VecSet<address>,
@@ -29,27 +49,30 @@ public struct RegistryOverrides has store {
     fixed_supply_coins: Table<String, bool>,
 }
 
+/// System object found at address 0xc that stores coin metadata
 public struct CoinMetadataRegistry has key, store {
     id: UID,
     overrides: RegistryOverrides,
 }
 
+/// Store only object that enables more flexible metadata
+/// registration, allowing for additional fields to be added
+/// without changing the metadata structure.
+/// This is useful for future-proofing the metadata structure
+/// and allowing for additional information to be stored
+/// without requiring a new version of the metadata structure.
 #[allow(unused_field)]
 public struct ExtraField(TypeName, vector<u8>) has store;
 
-public fun coin_metadata_registry_id(): ID {
-    @0xc.to_id()
-}
-
-public fun id(registry: &CoinMetadataRegistry): ID {
-    registry.id.to_inner()
-}
-
-// === Coin Metadata ===
+/// Key used to access coin metadata hung off the `CoinMetadataRegistry`
+/// object. This key can be versioned to allow for future changes
+/// to the metadata object.
 public struct CoinMetadataKey<phantom T>() has copy, drop, store;
 
+/// Capability object that enables coin metadata to be updated.
 public struct MetadataCap<phantom T> has key, store { id: UID }
 
+/// Metadata object that stores information about a coin type.
 public struct Metadata<phantom T> has key, store {
     id: UID,
     decimals: u8,
@@ -64,12 +87,17 @@ public struct Metadata<phantom T> has key, store {
     extra_fields: VecMap<String, ExtraField>,
 }
 
+/// Supply state of a coin type, which can be fixed, fixed with override,
+/// or not fixed. This enables legacy coins that technically have a fixed supply
+/// to be registered as fixed supply coins, while allowing new coins to have a
+/// clear supply state where the registry stores the supply object itself.
 public enum SupplyState<phantom T> has store {
     Fixed(Supply<T>),
     FixedOverride,
     NotFixed,
 }
 
+/// Regulated state of a coin type, which can be regulated with a deny cap,
 public enum RegulatedState has copy, drop, store {
     Regulated { cap: ID, variant: u8 },
     LegacyRegulatedOverride,
@@ -81,7 +109,15 @@ public struct InitMetadata<phantom T> {
     metadata: Metadata<T>,
 }
 
-// called after create_currency_v2 to register the metadata
+public fun coin_metadata_registry_id(): ID {
+    @0xc.to_id()
+}
+
+public fun id(registry: &CoinMetadataRegistry): ID {
+    registry.id.to_inner()
+}
+
+// called after `create_currency_v2` to register the metadata
 public fun transfer_to_registry<T>(init: InitMetadata<T>) {
     let InitMetadata { metadata } = init;
 
@@ -91,7 +127,8 @@ public fun transfer_to_registry<T>(init: InitMetadata<T>) {
     );
 }
 
-/// TTO registration
+/// Enables the migration of legacy coin metadata to the new
+/// `CoinMetadataRegistry` object via TTO.
 public fun migrate_receiving<T>(
     registry: &mut CoinMetadataRegistry,
     metadata: Receiving<Metadata<T>>,
@@ -100,15 +137,19 @@ public fun migrate_receiving<T>(
     registry.register_metadata(received_metadata);
 }
 
-/// === Entry Setters ===
+// === Metadata Setters  ===
+
+/// Enables a metadata cap holder to update a coin's name.
 public fun set_name<T>(registry: &mut CoinMetadataRegistry, name: String, _: &MetadataCap<T>) {
     registry.metadata_mut<T>().name = name;
 }
 
+/// Enables a metadata cap holder to update a coin's symbol.
 public fun set_symbol<T>(registry: &mut CoinMetadataRegistry, symbol: String, _: &MetadataCap<T>) {
     registry.metadata_mut<T>().symbol = symbol;
 }
 
+/// Enables a metadata cap holder to update a coin's description.
 public fun set_description<T>(
     registry: &mut CoinMetadataRegistry,
     description: String,
@@ -117,6 +158,7 @@ public fun set_description<T>(
     registry.metadata_mut<T>().description = description;
 }
 
+/// Enables a metadata cap holder to update a coin's icon URL.
 public fun set_icon_url<T>(
     registry: &mut CoinMetadataRegistry,
     icon_url: String,
@@ -125,48 +167,12 @@ public fun set_icon_url<T>(
     registry.metadata_mut<T>().icon_url = icon_url;
 }
 
-/// === Internal Setters ===
-
-public(package) fun register_supply<T>(registry: &mut CoinMetadataRegistry, supply: Supply<T>) {
-    assert!(registry.exists<T>(), EMetadataNotFound);
-    match (registry.metadata_mut<T>().supply.swap(SupplyState::Fixed(supply))) {
-        SupplyState::Fixed(_supply) => {
-            abort
-        },
-        SupplyState::FixedOverride | SupplyState::NotFixed => {},
-    };
-}
-
-public(package) fun register_regulated<T>(registry: &mut CoinMetadataRegistry, deny_cap_id: ID) {
-    assert!(registry.exists<T>(), EMetadataNotFound);
-    registry.metadata_mut<T>().regulated =
-        RegulatedState::Regulated { cap: deny_cap_id, variant: REGULATED_COIN_VARIANT };
-}
-
-public(package) fun set_decimals<T>(metadata: &mut Metadata<T>, decimals: u8) {
-    metadata.decimals = decimals;
-}
-
-public(package) fun set_supply<T>(metadata: &mut Metadata<T>, supply: Supply<T>) {
-    match (metadata.supply.swap(SupplyState::Fixed(supply))) {
-        SupplyState::Fixed(_supply) => {
-            abort
-        },
-        SupplyState::FixedOverride | SupplyState::NotFixed => {},
-    };
-}
-
-public(package) fun set_regulated<T>(metadata: &mut Metadata<T>, deny_cap_id: ID) {
-    metadata.regulated =
-        RegulatedState::Regulated { cap: deny_cap_id, variant: REGULATED_COIN_VARIANT };
-}
-
-/// === Getters ===
-
 public fun metadata<T>(registry: &CoinMetadataRegistry): &Metadata<T> {
     assert!(registry.exists<T>(), EMetadataNotFound);
     registry.id.borrow_dof(CoinMetadataKey<T>())
 }
+
+// === Public getters  ===
 
 public fun decimals<T>(metadata: &Metadata<T>): u8 { metadata.decimals }
 
@@ -218,6 +224,42 @@ public fun to_inner_mut<T>(init: &mut InitMetadata<T>): &mut Metadata<T> {
 
 public fun to_inner<T>(init: &InitMetadata<T>): &Metadata<T> {
     &init.metadata
+}
+
+// === Internal registration functions  ===
+
+public(package) fun register_supply<T>(registry: &mut CoinMetadataRegistry, supply: Supply<T>) {
+    assert!(registry.exists<T>(), EMetadataNotFound);
+    match (registry.metadata_mut<T>().supply.swap(SupplyState::Fixed(supply))) {
+        SupplyState::Fixed(_supply) => {
+            abort
+        },
+        SupplyState::FixedOverride | SupplyState::NotFixed => {},
+    };
+}
+
+public(package) fun register_regulated<T>(registry: &mut CoinMetadataRegistry, deny_cap_id: ID) {
+    assert!(registry.exists<T>(), EMetadataNotFound);
+    registry.metadata_mut<T>().regulated =
+        RegulatedState::Regulated { cap: deny_cap_id, variant: REGULATED_COIN_VARIANT };
+}
+
+public(package) fun set_decimals<T>(metadata: &mut Metadata<T>, decimals: u8) {
+    metadata.decimals = decimals;
+}
+
+public(package) fun set_supply<T>(metadata: &mut Metadata<T>, supply: Supply<T>) {
+    match (metadata.supply.swap(SupplyState::Fixed(supply))) {
+        SupplyState::Fixed(_supply) => {
+            abort
+        },
+        SupplyState::FixedOverride | SupplyState::NotFixed => {},
+    };
+}
+
+public(package) fun set_regulated<T>(metadata: &mut Metadata<T>, deny_cap_id: ID) {
+    metadata.regulated =
+        RegulatedState::Regulated { cap: deny_cap_id, variant: REGULATED_COIN_VARIANT };
 }
 
 public(package) fun metadata_mut<T>(registry: &mut CoinMetadataRegistry): &mut Metadata<T> {
@@ -335,6 +377,10 @@ public(package) fun create_cap<T>(metadata: &mut Metadata<T>, ctx: &mut TxContex
     }
 }
 
+// === Override functions  ===
+
+/// Apply overrides to the metadata object based on the
+/// `CoinMetadataRegistry` overrides.
 fun apply_overrides<T>(registry: &mut CoinMetadataRegistry, metadata: &mut Metadata<T>) {
     let coin_address = std::type_name::get<T>().get_address().to_string();
 
@@ -353,7 +399,8 @@ fun apply_overrides<T>(registry: &mut CoinMetadataRegistry, metadata: &mut Metad
     };
 }
 
-// "unwrap" regulated hashes into the overrides table
+/// "unwrap" regulated hashes into the overrides table to be used for migration
+/// of legacy metadata to the new `CoinMetadataRegistry`.
 entry fun populate_regulated_overrides(
     registry: &mut CoinMetadataRegistry,
     mut coin_types: vector<String>,
@@ -377,7 +424,8 @@ entry fun populate_regulated_overrides(
     });
 }
 
-// "unwrap" fixed supply hashes into the overrides table
+// "unwrap" fixed supply hashes into the overrides table to be used for migration
+/// of legacy metadata to the new `CoinMetadataRegistry`.
 entry fun populate_fixed_supply_overrides(
     registry: &mut CoinMetadataRegistry,
     mut coin_types: vector<String>,
@@ -402,29 +450,29 @@ entry fun populate_fixed_supply_overrides(
 }
 
 // #[allow(unused_function)]
-// /// Create and share the singleton CoinMetadataRegistry
-// fun create(
-//     regulated_hashes: VecSet<address>,
-//     fixed_supply_hashes: VecSet<address>,
-//     ctx: &mut TxContext,
-// ) {
-//     assert!(ctx.sender() == @0x0, ENotSystemAddress);
+/// Create and share the singleton CoinMetadataRegistry
+fun create(
+    id: UID,
+    regulated_hashes: VecSet<address>,
+    fixed_supply_hashes: VecSet<address>,
+    ctx: &mut TxContext,
+) {
+    assert!(ctx.sender() == @0x0, ENotSystemAddress);
 
-//     let overrides = RegistryOverrides {
-//         regulated_hashes: regulated_hashes,
-//         fixed_supply_hashes: fixed_supply_hashes,
-//         regulated_coin_types: table::new(ctx),
-//         fixed_supply_coins: table::new(ctx),
-//         legacy_metadata_cap_owners: table::new(ctx),
-//     };
+    let overrides = RegistryOverrides {
+        regulated_hashes: regulated_hashes,
+        fixed_supply_hashes: fixed_supply_hashes,
+        regulated_coin_types: table::new(ctx),
+        fixed_supply_coins: table::new(ctx),
+    };
 
-//     let registry = CoinMetadataRegistry {
-//         id: object::sui_coin_metadata_registry_object_id(),
-//         overrides: overrides,
-//     };
+    let registry = CoinMetadataRegistry {
+        id,
+        overrides: overrides,
+    };
 
-//     transfer::share_object(registry);
-// }
+    transfer::share_object(registry);
+}
 
 #[test_only]
 public fun create_metadata_registry_for_testing(
