@@ -6,6 +6,7 @@ pub mod checkpoint_executor;
 mod checkpoint_output;
 mod metrics;
 
+use crate::accumulators::create_accumulator_update_transactions;
 use crate::authority::AuthorityState;
 use crate::authority_client::{make_network_authority_clients_with_network_config, AuthorityAPI};
 use crate::checkpoints::causal_order::CausalOrder;
@@ -16,6 +17,7 @@ pub use crate::checkpoints::checkpoint_output::{
 pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::consensus_manager::ReplayWaiter;
 use crate::execution_cache::TransactionCacheRead;
+use crate::execution_scheduler::ExecutionSchedulerAPI;
 use crate::global_state_hasher::GlobalStateHasher;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
 use diffy::create_patch;
@@ -66,7 +68,9 @@ use sui_types::messages_checkpoint::{CheckpointRequestV2, SignedCheckpointSummar
 use sui_types::messages_consensus::ConsensusTransactionKey;
 use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
-use sui_types::transaction::{TransactionDataAPI, TransactionKey, TransactionKind};
+use sui_types::transaction::{
+    TransactionDataAPI, TransactionKey, TransactionKind, VerifiedTransaction,
+};
 use tokio::{sync::Notify, task::JoinSet, time::timeout};
 use tracing::{debug, error, info, instrument, trace, warn};
 use typed_store::DBMapUtils;
@@ -1309,8 +1313,20 @@ impl CheckpointBuilder {
                 .resolve_checkpoint_transactions(pending.roots, &mut effects_in_current_checkpoint)
                 .await?;
             sorted_tx_effects_included_in_checkpoint.extend(txn_in_checkpoint);
+
+            if self.epoch_store.accumulators_enabled() {
+                let settlement_effects = self
+                    .construct_and_execute_settlement_transactions(
+                        &sorted_tx_effects_included_in_checkpoint,
+                        pending.details.checkpoint_height,
+                    )
+                    .await;
+
+                sorted_tx_effects_included_in_checkpoint.extend(settlement_effects);
+            }
             all_roots.extend(root_digests);
         }
+
         let new_checkpoints = self
             .create_checkpoints(
                 sorted_tx_effects_included_in_checkpoint,
@@ -1322,6 +1338,65 @@ impl CheckpointBuilder {
         self.write_checkpoints(last_details.checkpoint_height, new_checkpoints)
             .await?;
         Ok(highest_sequence)
+    }
+
+    async fn construct_and_execute_settlement_transactions(
+        &self,
+        sorted_tx_effects_included_in_checkpoint: &[TransactionEffects],
+        checkpoint_height: CheckpointHeight,
+    ) -> Vec<TransactionEffects> {
+        let _scope =
+            monitored_scope("CheckpointBuilder::construct_and_execute_settlement_transactions");
+
+        // All settlement transactions at the same height share the same assigned versions.
+        let assigned_versions = self
+            .epoch_store
+            .get_assigned_shared_object_versions(&TransactionKey::AccumulatorSettlement(
+                self.epoch_store.epoch(),
+                checkpoint_height,
+            ))
+            .expect("assigned versions should be available for accumulator settlement");
+
+        let settlement_txns: Vec<_> = create_accumulator_update_transactions(
+            &self.epoch_store,
+            checkpoint_height,
+            Some(self.effects_store.as_ref()),
+            sorted_tx_effects_included_in_checkpoint,
+        )
+        .into_iter()
+        .map(|tx| {
+            let tx = VerifiedTransaction::new_system_transaction(tx);
+            (
+                VerifiedExecutableTransaction::new_system(tx, self.epoch_store.epoch()),
+                assigned_versions.clone(),
+            )
+        })
+        .collect();
+
+        let settlement_digests: Vec<_> =
+            settlement_txns.iter().map(|(tx, _)| *tx.digest()).collect();
+
+        debug!(?settlement_digests, "created settlement transactions");
+
+        self.state
+            .execution_scheduler()
+            .enqueue_with_assigned_versions(settlement_txns, &self.epoch_store);
+
+        let settlement_effects = self
+            .effects_store
+            .notify_read_executed_effects(&settlement_digests)
+            .await;
+
+        for fx in settlement_effects.iter() {
+            assert!(
+                fx.status().is_ok(),
+                "settlement transaction cannot fail (digest: {:?}) {:#?}",
+                fx.transaction_digest(),
+                fx
+            );
+        }
+
+        settlement_effects
     }
 
     // Given the root transactions of a pending checkpoint, resolve the transactions should be included in
@@ -1661,11 +1736,22 @@ impl CheckpointBuilder {
                         // ConsensusCommitPrologue and AuthenticatorStateUpdate are guaranteed to be
                         // processed before we reach here.
                     }
+                    TransactionKind::ProgrammableSystemTransaction(_) => {
+                        // settlement transactions are added by checkpoint builder
+                    }
+                    TransactionKind::ChangeEpoch(_)
+                    | TransactionKind::Genesis(_)
+                    | TransactionKind::EndOfEpochTransaction(_) => {
+                        fatal!(
+                            "unexpected transaction in checkpoint effects: {:?}",
+                            transaction
+                        );
+                    }
                     TransactionKind::RandomnessStateUpdate(rsu) => {
                         randomness_rounds
                             .insert(*effects.transaction_digest(), rsu.randomness_round);
                     }
-                    _ => {
+                    TransactionKind::ProgrammableTransaction(_) => {
                         // Only transactions that are not roots should be included in the call to
                         // `consensus_messages_processed_notify`. roots come directly from the consensus
                         // commit and so are known to be processed already.
@@ -2862,6 +2948,7 @@ mod tests {
     use std::ops::Deref;
     use sui_macros::sim_test;
     use sui_protocol_config::{Chain, ProtocolConfig};
+    use sui_types::accumulator_event::AccumulatorEvent;
     use sui_types::base_types::{ObjectID, SequenceNumber, TransactionEffectsDigest};
     use sui_types::crypto::Signature;
     use sui_types::effects::{TransactionEffects, TransactionEvents};
@@ -3172,6 +3259,10 @@ mod tests {
             &'a self,
             _: &'a [TransactionDigest],
         ) -> BoxFuture<'a, Vec<Arc<crate::transaction_outputs::TransactionOutputs>>> {
+            unimplemented!()
+        }
+
+        fn take_accumulator_events(&self, _: &TransactionDigest) -> Option<Vec<AccumulatorEvent>> {
             unimplemented!()
         }
     }

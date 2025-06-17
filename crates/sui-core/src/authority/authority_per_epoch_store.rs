@@ -96,7 +96,7 @@ use super::transaction_deferral::{transaction_deferral_within_limit, DeferralKey
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::execution_time_estimator::EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY;
 use crate::authority::shared_object_version_manager::{
-    AssignedTxAndVersions, ConsensusSharedObjVerAssignment, SharedObjVerManager,
+    Assignable, AssignedTxAndVersions, ConsensusSharedObjVerAssignment, SharedObjVerManager,
 };
 use crate::authority::AuthorityMetrics;
 use crate::authority::ResolverWrapper;
@@ -2094,15 +2094,15 @@ impl AuthorityPerEpochStore {
     /// However, in the end we do not update the next_shared_object_versions table, which keeps
     /// this function idempotent. We should call this function when we are assigning shared object
     /// versions outside of consensus and do not want to taint the next_shared_object_versions table.
-    pub fn assign_shared_object_versions_idempotent(
+    pub fn assign_shared_object_versions_idempotent<'a>(
         &self,
         cache_reader: &dyn ObjectCacheRead,
-        certificates: &[VerifiedExecutableTransaction],
+        assignables: impl Iterator<Item = &'a Assignable<'a>> + Clone,
     ) -> SuiResult {
         let assigned_versions = SharedObjVerManager::assign_versions_from_consensus(
             self,
             cache_reader,
-            certificates.iter(),
+            assignables,
             &BTreeMap::new(),
         )?
         .assigned_versions;
@@ -2521,37 +2521,35 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult<Vec<Vec<GenericSignature>>> {
         assert_eq!(transactions.len(), digests.len());
 
-        let signatures: Vec<_> = {
+        fn is_signature_expected(transaction: &VerifiedTransaction) -> bool {
+            !matches!(
+                transaction.inner().transaction_data().kind(),
+                TransactionKind::RandomnessStateUpdate(_)
+                    | TransactionKind::ProgrammableSystemTransaction(_)
+            )
+        }
+
+        let result: Vec<_> = {
             let mut user_sigs = self
                 .consensus_output_cache
                 .user_signatures_for_checkpoints
                 .lock();
-            digests.iter().map(|d| user_sigs.remove(d)).collect()
+            digests
+                .iter()
+                .zip(transactions.iter())
+                .map(|(d, t)| {
+                    // Some transactions (RandomnessStateUpdate and settlement transactions) don't go through
+                    // consensus, but have system-generated signatures that are guaranteed to be the same,
+                    // so we can just pull them from the transaction.
+                    if is_signature_expected(t) {
+                        user_sigs.remove(d).expect("signature should be available")
+                    } else {
+                        t.tx_signatures().to_vec()
+                    }
+                })
+                .collect()
         };
 
-        let mut result = Vec::with_capacity(digests.len());
-        for (signatures, transaction) in signatures.into_iter().zip(transactions.iter()) {
-            let signatures = if let Some(signatures) = signatures {
-                signatures
-            } else if matches!(
-                transaction.inner().transaction_data().kind(),
-                TransactionKind::RandomnessStateUpdate(_)
-            ) {
-                // RandomnessStateUpdate transactions don't go through consensus, but
-                // have system-generated signatures that are guaranteed to be the same,
-                // so we can just pull it from the transaction.
-                transaction.tx_signatures().to_vec()
-            } else {
-                return Err(SuiError::from(
-                    format!(
-                        "Can not find user signature for checkpoint for transaction {:?}",
-                        transaction.key()
-                    )
-                    .as_str(),
-                ));
-            };
-            result.push(signatures);
-        }
         Ok(result)
     }
 
@@ -3473,7 +3471,8 @@ impl AuthorityPerEpochStore {
                 | Some(CancelConsensusCertificateReason::DkgFailed) => {
                     assert_reachable!("cancelled transactions");
                     let assigned_versions = SharedObjVerManager::assign_versions_for_certificate(
-                        txn,
+                        self,
+                        &Assignable::Transaction(txn),
                         &mut shared_input_next_version,
                         cancelled_txns,
                     );
@@ -3522,40 +3521,51 @@ impl AuthorityPerEpochStore {
         cache_reader: &dyn ObjectCacheRead,
         non_randomness_transactions: &[VerifiedExecutableTransaction],
         randomness_transactions: &[VerifiedExecutableTransaction],
+        commit_round: Option<u64>,
         randomness_round: Option<RandomnessRound>,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
         output: &mut ConsensusCommitOutput,
     ) -> SuiResult {
+        // For simplicity here, we always request assignment for settlement transactions, and then
+        // ignore it later if accumulators are not enabled.
+        let settlement = commit_round.map(|round| {
+            Assignable::AccumulatorSettlement(
+                self.epoch(),
+                self.calculate_pending_checkpoint_height(round),
+            )
+        });
+
         // If randomness_round is set, we know that eventually there will be a randomness state update transaction.
         // We create a placeholder transaction so that the SharedObjVerManager
         // can update the version of the randomness state object and use that version for randomness transactions.
-        let randomness_state_update = randomness_round.map(|round| {
-            VerifiedExecutableTransaction::new_system(
-                VerifiedTransaction::new_randomness_state_update(
-                    self.epoch(),
-                    round,
-                    // This is placeholder bytes, since this transaction does not exist yet.
-                    vec![],
-                    self.epoch_start_config()
-                        .randomness_obj_initial_shared_version()
-                        .expect("randomness obj initial shared version should be set if randomness_round is set"),
-                ),
+        let randomness_state_update =
+            randomness_round.map(|round| Assignable::RandomnessStateUpdate(self.epoch(), round));
+
+        let randomness_settlement = randomness_round.and(commit_round).map(|c| {
+            Assignable::AccumulatorSettlement(
                 self.epoch(),
+                self.calculate_pending_checkpoint_height(c) + 1,
             )
         });
-        let all_certs = non_randomness_transactions
+
+        let all_certs: Vec<_> = non_randomness_transactions
             .iter()
+            .map(Assignable::Transaction)
+            .chain(settlement)
             // randomness_state_update must be before randomness_transactions to make sure the version
             // of the randomness state object is updated before it is used in randomness transactions.
-            .chain(randomness_state_update.iter())
-            .chain(randomness_transactions.iter());
+            .chain(randomness_state_update)
+            .chain(randomness_transactions.iter().map(Assignable::Transaction))
+            .chain(randomness_settlement)
+            .collect();
+
         let ConsensusSharedObjVerAssignment {
             shared_input_next_versions,
             assigned_versions,
         } = SharedObjVerManager::assign_versions_from_consensus(
             self,
             cache_reader,
-            all_certs,
+            all_certs.iter(),
             cancelled_txns,
         )?;
 
@@ -3617,6 +3627,7 @@ impl AuthorityPerEpochStore {
             cache_reader,
             transactions,
             &[],
+            None,
             None,
             &BTreeMap::new(),
             &mut output,
@@ -3863,6 +3874,7 @@ impl AuthorityPerEpochStore {
             cache_reader,
             &verified_non_randomness_certificates,
             &verified_randomness_certificates,
+            Some(consensus_commit_info.round),
             randomness_round,
             &cancelled_txns,
             output,

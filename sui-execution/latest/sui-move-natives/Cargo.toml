@@ -7,6 +7,9 @@ description = "Move framework for sui platform"
 license = "Apache-2.0"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 better_any.workspace = true
 bcs.workspace = true

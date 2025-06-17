@@ -1399,12 +1399,6 @@ transfer_impl
 receive_impl
 	fun
 	0x2::transfer
-AccumulatorRoot
-	public struct
-	0x2::accumulator
-create
-	fun
-	0x2::accumulator
 Field
 	public struct
 	0x2::dynamic_field
@@ -1456,6 +1450,36 @@ has_child_object
 has_child_object_with_ty
 	public(package) fun
 	0x2::dynamic_field
+AccumulatorRoot
+	public struct
+	0x2::accumulator
+Key
+	public struct
+	0x2::accumulator
+AccumulatorU128
+	public struct
+	0x2::accumulator
+create
+	fun
+	0x2::accumulator
+get_accumulator_field_name
+	public(package) fun
+	0x2::accumulator
+get_accumulator_field_address
+	public(package) fun
+	0x2::accumulator
+emit_deposit_event
+	public(package) fun
+	0x2::accumulator
+emit_withdraw_event
+	public(package) fun
+	0x2::accumulator
+settlement_prologue
+	fun
+	0x2::accumulator
+settle_u128
+	fun
+	0x2::accumulator
 AuthenticatorState
 	public struct
 	0x2::authenticator_state
@@ -1587,6 +1611,12 @@ destroy_storage_rebates
 	0x2::balance
 destroy_supply
 	public(package) fun
+	0x2::balance
+send_to_account
+	fun
+	0x2::balance
+withdraw_from_account
+	fun
 	0x2::balance
 BCS
 	public struct

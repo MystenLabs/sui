@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::authority_store_tables::LiveObject;
+use sui_core::authority::shared_object_version_manager::Assignable;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_server::{ValidatorService, ValidatorServiceMetrics};
@@ -317,10 +318,11 @@ impl SingleValidator {
                 )
             })
             .collect();
+        let assignables: Vec<_> = transactions.iter().map(Assignable::Transaction).collect();
         self.epoch_store
             .assign_shared_object_versions_idempotent(
                 self.get_validator().get_object_cache_reader().as_ref(),
-                &transactions,
+                assignables.iter(),
             )
             .unwrap();
     }

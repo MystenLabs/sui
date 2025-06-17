@@ -105,7 +105,6 @@ pub(crate) trait ExecutionSchedulerAPI {
         self.enqueue_impl(certs, epoch_store, SchedulingSource::NonFastPath)
     }
 
-    #[allow(dead_code)]
     fn enqueue_with_assigned_versions(
         &self,
         certs: Vec<(VerifiedExecutableTransaction, AssignedVersions)>,
