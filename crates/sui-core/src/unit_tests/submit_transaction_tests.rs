@@ -66,7 +66,7 @@ impl TestContext {
         let server_handle = server.spawn_for_test().await.unwrap();
         let client = NetworkAuthorityClient::connect(
             server_handle.address(),
-            Some(authority.config.network_key_pair().public().to_owned()),
+            authority.config.network_key_pair().public().to_owned(),
         )
         .await
         .unwrap();

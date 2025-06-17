@@ -55,7 +55,7 @@ impl TestContext {
             .unwrap();
         let client = NetworkAuthorityClient::connect(
             server_handle.address(),
-            Some(state.config.network_key_pair().public().to_owned()),
+            state.config.network_key_pair().public().to_owned(),
         )
         .await
         .unwrap();
