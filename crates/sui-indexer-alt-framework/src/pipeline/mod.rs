@@ -154,3 +154,139 @@ impl Default for CommitterConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use sui_types::full_checkpoint_content::CheckpointData;
+
+    // Test implementation of Processor
+    struct TestProcessor;
+    impl Processor for TestProcessor {
+        const NAME: &'static str = "test";
+        type Value = i32;
+
+        fn process(&self, _checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+            Ok(vec![1, 2, 3])
+        }
+    }
+
+    #[test]
+    fn test_watermark_part_getters() {
+        let watermark = CommitterWatermark {
+            epoch_hi_inclusive: 1,
+            checkpoint_hi_inclusive: 100,
+            tx_hi: 1000,
+            timestamp_ms_hi_inclusive: 1234567890,
+        };
+
+        let part = WatermarkPart {
+            watermark,
+            batch_rows: 50,
+            total_rows: 200,
+        };
+
+        assert_eq!(part.checkpoint(), 100);
+        assert_eq!(part.timestamp_ms(), 1234567890);
+    }
+
+    #[test]
+    fn test_watermark_part_is_complete() {
+        let part = WatermarkPart {
+            watermark: CommitterWatermark::default(),
+            batch_rows: 200,
+            total_rows: 200,
+        };
+
+        assert!(part.is_complete());
+    }
+
+    #[test]
+    fn test_watermark_part_is_not_complete() {
+        let part = WatermarkPart {
+            watermark: CommitterWatermark::default(),
+            batch_rows: 199,
+            total_rows: 200,
+        };
+
+        assert!(!part.is_complete());
+    }
+
+    #[test]
+    fn test_watermark_part_becomes_complete_after_adding_new_batch() {
+        let mut part = WatermarkPart {
+            watermark: CommitterWatermark::default(),
+            batch_rows: 199,
+            total_rows: 200,
+        };
+
+        // Add a batch that makes it complete
+        part.add(WatermarkPart {
+            watermark: CommitterWatermark::default(),
+            batch_rows: 1,
+            total_rows: 200,
+        });
+
+        assert!(part.is_complete());
+        assert_eq!(part.batch_rows, 200);
+    }
+
+    #[test]
+    fn test_watermark_part_becomes_incomplete_after_taking_away_batch() {
+        let mut part = WatermarkPart {
+            watermark: CommitterWatermark::default(),
+            batch_rows: 200,
+            total_rows: 200,
+        };
+        assert!(part.is_complete(), "Initial part should be complete");
+
+        // Take away a portion of the batch
+        let extracted_part = part.take(10);
+
+        // Verify state of extracted part
+        assert!(!extracted_part.is_complete());
+        assert_eq!(extracted_part.batch_rows, 10);
+        assert_eq!(extracted_part.total_rows, 200);
+    }
+
+    #[test]
+    fn test_indexed_checkpoint() {
+        let epoch = 1;
+        let cp_sequence_number = 100;
+        let tx_hi = 1000;
+        let timestamp_ms = 1234567890;
+        let values = vec![1, 2, 3];
+
+        let checkpoint = IndexedCheckpoint::<TestProcessor>::new(
+            epoch,
+            cp_sequence_number,
+            tx_hi,
+            timestamp_ms,
+            values,
+        );
+
+        assert_eq!(checkpoint.len(), 3);
+        assert_eq!(checkpoint.checkpoint(), 100);
+    }
+
+    #[test]
+    fn test_indexed_checkpoint_with_empty_values() {
+        let epoch = 1;
+        let cp_sequence_number = 100;
+        let tx_hi = 1000;
+        let timestamp_ms = 1234567890;
+        let values: Vec<<TestProcessor as Processor>::Value> = vec![];
+
+        let checkpoint = IndexedCheckpoint::<TestProcessor>::new(
+            epoch,
+            cp_sequence_number,
+            tx_hi,
+            timestamp_ms,
+            values,
+        );
+
+        assert_eq!(checkpoint.len(), 0);
+        assert_eq!(checkpoint.checkpoint(), 100);
+    }
+}
