@@ -39,31 +39,12 @@ pub trait AbstractInterpreter {
     type InstructionIndex: Copy + Ord;
     type Instruction;
 
-    fn start(&mut self) -> Result<(), Self::Error>;
+    /// Joining two states together, this along with `execute` drives the analysis.
     fn join(
         &mut self,
         pre: &mut Self::State,
         post: &Self::State,
     ) -> Result<JoinResult, Self::Error>;
-
-    /// These visitors are to be used for bookkeeping. They should _not_ be used to modify the state
-    /// in any way related to the analysis.
-    fn visit_block_pre_execution(
-        &mut self,
-        block_id: Self::BlockId,
-        invariant: &mut BlockInvariant<Self::State>,
-    ) -> Result<(), Self::Error>;
-    fn visit_block_post_execution(
-        &mut self,
-        block_id: Self::BlockId,
-        invariant: &mut BlockInvariant<Self::State>,
-    ) -> Result<(), Self::Error>;
-    fn visit_successor(&mut self, block_id: Self::BlockId) -> Result<(), Self::Error>;
-    fn visit_back_edge(
-        &mut self,
-        from: Self::BlockId,
-        to: Self::BlockId,
-    ) -> Result<(), Self::Error>;
 
     /// Execute local@instr found at index local@index in the current basic block from pre-state
     /// local@pre.
@@ -83,6 +64,47 @@ pub trait AbstractInterpreter {
         offset: Self::InstructionIndex,
         instr: &Self::Instruction,
     ) -> Result<(), Self::Error>;
+
+    /// A visitor for starting the analysis. This is called before any blocks are processed.
+    fn start(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    /// A visitor intended for bookkeeping. They should _not_ be used to modify the state in any
+    /// way related to the analysis.
+    fn visit_block_pre_execution(
+        &mut self,
+        _block_id: Self::BlockId,
+        _invariant: &mut BlockInvariant<Self::State>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    /// A visitor intended for bookkeeping. They should _not_ be used to modify the state in any
+    /// way related to the analysis.
+    fn visit_block_post_execution(
+        &mut self,
+        _block_id: Self::BlockId,
+        _invariant: &mut BlockInvariant<Self::State>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    /// A visitor intended for bookkeeping. They should _not_ be used to modify the state in any
+    /// way related to the analysis.
+    fn visit_successor(&mut self, _block_id: Self::BlockId) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    /// A visitor intended for bookkeeping. They should _not_ be used to modify the state in any
+    /// way related to the analysis.
+    fn visit_back_edge(
+        &mut self,
+        _from: Self::BlockId,
+        _to: Self::BlockId,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 
 /// Analyze procedure local@function_context starting from pre-state local@initial_state.
