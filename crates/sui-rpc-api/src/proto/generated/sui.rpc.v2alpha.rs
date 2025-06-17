@@ -239,25 +239,81 @@ pub struct SimulateTransactionRequest {
     pub transaction: ::core::option::Option<super::v2beta::Transaction>,
     #[prost(message, optional, tag = "2")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
+    /// Specify whether checks should be ENABLED (default) or DISABLED by the vm while executing the transaction
+    #[prost(enumeration = "simulate_transaction_request::VmChecks", optional, tag = "3")]
+    pub checks: ::core::option::Option<i32>,
+    /// Perform gas selection based on a budget estimation and include the
+    /// selected gas payment and budget in the response.
+    ///
+    /// This option will be ignored if `checks` is `DISABLED`.
+    #[prost(bool, optional, tag = "4")]
+    pub do_gas_selection: ::core::option::Option<bool>,
+}
+/// Nested message and enum types in `SimulateTransactionRequest`.
+pub mod simulate_transaction_request {
+    /// buf:lint:ignore ENUM_ZERO_VALUE_SUFFIX
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash,
+        PartialOrd,
+        Ord,
+        ::prost::Enumeration
+    )]
+    #[repr(i32)]
+    pub enum VmChecks {
+        /// VM_CHECKS_UNKNOWN = 0;
+        Enabled = 0,
+        Disabled = 1,
+    }
+    impl VmChecks {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Self::Enabled => "ENABLED",
+                Self::Disabled => "DISABLED",
+            }
+        }
+        /// Creates an enum from field names used in the ProtoBuf definition.
+        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+            match value {
+                "ENABLED" => Some(Self::Enabled),
+                "DISABLED" => Some(Self::Disabled),
+                _ => None,
+            }
+        }
+    }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SimulateTransactionResponse {
     #[prost(message, optional, tag = "1")]
     pub transaction: ::core::option::Option<super::v2beta::ExecutedTransaction>,
+    #[prost(message, repeated, tag = "2")]
+    pub outputs: ::prost::alloc::vec::Vec<CommandResult>,
+}
+/// An intermediate result/output from the execution of a single command
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CommandResult {
+    #[prost(message, repeated, tag = "1")]
+    pub return_values: ::prost::alloc::vec::Vec<CommandOutput>,
+    #[prost(message, repeated, tag = "2")]
+    pub mutated_by_ref: ::prost::alloc::vec::Vec<CommandOutput>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ResolveTransactionRequest {
+pub struct CommandOutput {
     #[prost(message, optional, tag = "1")]
-    pub unresolved_transaction: ::core::option::Option<super::v2beta::Transaction>,
+    pub argument: ::core::option::Option<super::v2beta::Argument>,
     #[prost(message, optional, tag = "2")]
-    pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ResolveTransactionResponse {
-    #[prost(message, optional, tag = "1")]
-    pub transaction: ::core::option::Option<super::v2beta::Transaction>,
-    #[prost(message, optional, tag = "2")]
-    pub simulation: ::core::option::Option<SimulateTransactionResponse>,
+    pub value: ::core::option::Option<super::v2beta::Bcs>,
+    /// JSON rendering of the output.
+    #[prost(message, optional, boxed, tag = "3")]
+    pub json: ::core::option::Option<::prost::alloc::boxed::Box<::prost_types::Value>>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListOwnedObjectsRequest {
@@ -569,35 +625,6 @@ pub mod live_data_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
-        pub async fn resolve_transaction(
-            &mut self,
-            request: impl tonic::IntoRequest<super::ResolveTransactionRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::ResolveTransactionResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/sui.rpc.v2alpha.LiveDataService/ResolveTransaction",
-            );
-            let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "sui.rpc.v2alpha.LiveDataService",
-                        "ResolveTransaction",
-                    ),
-                );
-            self.inner.unary(req, path, codec).await
-        }
     }
 }
 /// Generated server implementations.
@@ -653,13 +680,6 @@ pub mod live_data_service_server {
             request: tonic::Request<super::SimulateTransactionRequest>,
         ) -> std::result::Result<
             tonic::Response<super::SimulateTransactionResponse>,
-            tonic::Status,
-        >;
-        async fn resolve_transaction(
-            &self,
-            request: tonic::Request<super::ResolveTransactionRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::ResolveTransactionResponse>,
             tonic::Status,
         >;
     }
@@ -1000,52 +1020,6 @@ pub mod live_data_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = SimulateTransactionSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            )
-                            .apply_max_message_size_config(
-                                max_decoding_message_size,
-                                max_encoding_message_size,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/sui.rpc.v2alpha.LiveDataService/ResolveTransaction" => {
-                    #[allow(non_camel_case_types)]
-                    struct ResolveTransactionSvc<T: LiveDataService>(pub Arc<T>);
-                    impl<
-                        T: LiveDataService,
-                    > tonic::server::UnaryService<super::ResolveTransactionRequest>
-                    for ResolveTransactionSvc<T> {
-                        type Response = super::ResolveTransactionResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::ResolveTransactionRequest>,
-                        ) -> Self::Future {
-                            let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as LiveDataService>::resolve_transaction(&inner, request)
-                                    .await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let method = ResolveTransactionSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

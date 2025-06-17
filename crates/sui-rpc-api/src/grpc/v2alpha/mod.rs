@@ -18,8 +18,6 @@ use crate::proto::rpc::v2alpha::ListDynamicFieldsRequest;
 use crate::proto::rpc::v2alpha::ListDynamicFieldsResponse;
 use crate::proto::rpc::v2alpha::ListOwnedObjectsRequest;
 use crate::proto::rpc::v2alpha::ListOwnedObjectsResponse;
-use crate::proto::rpc::v2alpha::ResolveTransactionRequest;
-use crate::proto::rpc::v2alpha::ResolveTransactionResponse;
 use crate::proto::rpc::v2alpha::SimulateTransactionRequest;
 use crate::proto::rpc::v2alpha::SimulateTransactionResponse;
 use crate::proto::rpc::v2alpha::SubscribeCheckpointsRequest;
@@ -79,8 +77,7 @@ mod get_coin_info;
 mod list_balances;
 mod list_dynamic_fields;
 mod list_owned_objects;
-mod resolve;
-mod simulate_transaction;
+mod simulate;
 
 #[tonic::async_trait]
 impl LiveDataService for RpcService {
@@ -133,16 +130,7 @@ impl LiveDataService for RpcService {
         &self,
         request: tonic::Request<SimulateTransactionRequest>,
     ) -> Result<tonic::Response<SimulateTransactionResponse>, tonic::Status> {
-        simulate_transaction::simulate_transaction(self, request.into_inner())
-            .map(tonic::Response::new)
-            .map_err(Into::into)
-    }
-
-    async fn resolve_transaction(
-        &self,
-        request: tonic::Request<ResolveTransactionRequest>,
-    ) -> Result<tonic::Response<ResolveTransactionResponse>, tonic::Status> {
-        resolve::resolve_transaction(self, request.into_inner())
+        simulate::simulate_transaction(self, request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)
     }

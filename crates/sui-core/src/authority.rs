@@ -66,6 +66,7 @@ use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_consensus::{AuthorityCapabilitiesV1, AuthorityCapabilitiesV2};
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::transaction_executor::SimulateTransactionResult;
+use sui_types::transaction_executor::VmChecks;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::RwLock;
@@ -2066,7 +2067,8 @@ impl AuthorityState {
 
     pub fn simulate_transaction(
         &self,
-        transaction: TransactionData,
+        mut transaction: TransactionData,
+        checks: VmChecks,
     ) -> SuiResult<SimulateTransactionResult> {
         if transaction.kind().is_system_tx() {
             return Err(SuiError::UnsupportedFeatureError {
@@ -2081,14 +2083,6 @@ impl AuthorityState {
             });
         }
 
-        self.simulate_transaction_impl(&epoch_store, transaction)
-    }
-
-    fn simulate_transaction_impl(
-        &self,
-        epoch_store: &AuthorityPerEpochStore,
-        transaction: TransactionData,
-    ) -> SuiResult<SimulateTransactionResult> {
         // Cheap validity checks for a transaction, including input size limits.
         transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
 
@@ -2104,93 +2098,98 @@ impl AuthorityState {
             self.get_backing_package_store().as_ref(),
         )?;
 
-        let (input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
-            // We don't want to cache this transaction since it's a dry run.
+        let (mut input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
+            // We don't want to cache this transaction since it's a simulation.
             None,
             &input_object_kinds,
             &receiving_object_refs,
             epoch_store.epoch(),
         )?;
 
-        // make a gas object if one was not provided
-        let mut gas_data = transaction.gas_data().clone();
-        let ((gas_status, checked_input_objects), mock_gas) = if transaction.gas().is_empty() {
-            let sender = transaction.sender();
-            // use a 1B sui coin
-            const MIST_TO_SUI: u64 = 1_000_000_000;
-            const DRY_RUN_SUI: u64 = 1_000_000_000;
-            let max_coin_value = MIST_TO_SUI * DRY_RUN_SUI;
-            let gas_object_id = ObjectID::MAX;
-            let gas_object = Object::new_move(
-                MoveObject::new_gas_coin(OBJECT_START_VERSION, gas_object_id, max_coin_value),
-                Owner::AddressOwner(sender),
+        // mock a gas object if one was not provided
+        let mock_gas_id = if transaction.gas().is_empty() {
+            let mock_gas_object = Object::new_move(
+                MoveObject::new_gas_coin(
+                    OBJECT_START_VERSION,
+                    ObjectID::MAX,
+                    DEV_INSPECT_GAS_COIN_VALUE,
+                ),
+                Owner::AddressOwner(transaction.gas_data().owner),
                 TransactionDigest::genesis_marker(),
             );
-            let gas_object_ref = gas_object.compute_object_reference();
-            gas_data.payment = vec![gas_object_ref];
-            (
-                sui_transaction_checks::check_transaction_input_with_given_gas(
-                    epoch_store.protocol_config(),
-                    epoch_store.reference_gas_price(),
-                    &transaction,
-                    input_objects,
-                    receiving_objects,
-                    gas_object,
-                    &self.metrics.bytecode_verifier_metrics,
-                    &self.config.verifier_signing_config,
-                )?,
-                Some(gas_object_id),
-            )
+            let mock_gas_object_ref = mock_gas_object.compute_object_reference();
+            transaction.gas_data_mut().payment = vec![mock_gas_object_ref];
+            input_objects.push(ObjectReadResult::new_from_gas_object(&mock_gas_object));
+            Some(mock_gas_object.id())
         } else {
-            (
-                sui_transaction_checks::check_transaction_input(
-                    epoch_store.protocol_config(),
-                    epoch_store.reference_gas_price(),
-                    &transaction,
-                    input_objects,
-                    &receiving_objects,
-                    &self.metrics.bytecode_verifier_metrics,
-                    &self.config.verifier_signing_config,
-                )?,
-                None,
-            )
+            None
         };
 
         let protocol_config = epoch_store.protocol_config();
-        let (kind, signer, _) = transaction.execution_parts();
 
-        let silent = true;
-        let executor = sui_execution::executor(protocol_config, silent, None)
-            .expect("Creating an executor should not fail here");
-
-        let expensive_checks = false;
-        let (inner_temp_store, _, effects, _timings, _execution_error) = executor
-            .execute_transaction_to_effects(
-                self.get_backing_store().as_ref(),
+        let (gas_status, checked_input_objects) = if checks.enabled() {
+            sui_transaction_checks::check_transaction_input(
+                epoch_store.protocol_config(),
+                epoch_store.reference_gas_price(),
+                &transaction,
+                input_objects,
+                &receiving_objects,
+                &self.metrics.bytecode_verifier_metrics,
+                &self.config.verifier_signing_config,
+            )?
+        } else {
+            let checked_input_objects = sui_transaction_checks::check_dev_inspect_input(
                 protocol_config,
-                self.metrics.limits_metrics.clone(),
-                expensive_checks,
-                self.config.certificate_deny_config.certificate_deny_set(),
-                &epoch_store.epoch_start_config().epoch_data().epoch_id(),
-                epoch_store
-                    .epoch_start_config()
-                    .epoch_data()
-                    .epoch_start_timestamp(),
-                checked_input_objects,
-                gas_data,
-                gas_status,
-                kind,
-                signer,
-                transaction.digest(),
-                &mut None,
-            );
+                transaction.kind(),
+                input_objects,
+                receiving_objects,
+            )?;
+            let gas_status = SuiGasStatus::new(
+                transaction.gas_budget(),
+                transaction.gas_price(),
+                epoch_store.reference_gas_price(),
+                protocol_config,
+            )?;
+
+            (gas_status, checked_input_objects)
+        };
+
+        // TODO see if we can spin up a VM once and reuse it
+        let executor = sui_execution::executor(
+            protocol_config,
+            true, // silent
+            None,
+        )
+        .expect("Creating an executor should not fail here");
+
+        let (kind, signer, gas_data) = transaction.execution_parts();
+        let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
+            self.get_backing_store().as_ref(),
+            protocol_config,
+            self.metrics.limits_metrics.clone(),
+            false, // expensive_checks
+            self.config.certificate_deny_config.certificate_deny_set(),
+            &epoch_store.epoch_start_config().epoch_data().epoch_id(),
+            epoch_store
+                .epoch_start_config()
+                .epoch_data()
+                .epoch_start_timestamp(),
+            checked_input_objects,
+            gas_data,
+            gas_status,
+            kind,
+            signer,
+            transaction.digest(),
+            checks.disabled(),
+        );
 
         Ok(SimulateTransactionResult {
             input_objects: inner_temp_store.input_objects,
             output_objects: inner_temp_store.written,
             events: effects.events_digest().map(|_| inner_temp_store.events),
             effects,
-            mock_gas_id: mock_gas,
+            execution_result,
+            mock_gas_id,
         })
     }
 

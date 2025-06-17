@@ -6,68 +6,47 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::error::ObjectNotFoundError;
-use crate::field_mask::FieldMaskTree;
-use crate::message::MessageMergeFrom;
 use crate::proto::google::rpc::bad_request::FieldViolation;
-use crate::proto::rpc::v2alpha::ResolveTransactionRequest;
-use crate::proto::rpc::v2alpha::ResolveTransactionResponse;
+use crate::proto::rpc::v2beta::Transaction;
 use crate::reader::StateReader;
 use crate::ErrorReason;
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
 use bytes::Bytes;
-use itertools::Itertools;
 use move_binary_format::normalized;
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk_types::Argument;
 use sui_sdk_types::Command;
 use sui_sdk_types::ObjectId;
-use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
-use sui_types::base_types::SuiAddress;
-use sui_types::effects::TransactionEffectsAPI;
-use sui_types::gas::GasCostSummary;
-use sui_types::gas_coin::GasCoin;
 use sui_types::move_package::MovePackage;
 use sui_types::transaction::CallArg;
 use sui_types::transaction::GasData;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::ProgrammableTransaction;
 use sui_types::transaction::TransactionData;
-use sui_types::transaction::TransactionDataAPI;
 use tap::Pipe;
 
 mod literal;
 
 pub fn resolve_transaction(
     service: &RpcService,
-    request: ResolveTransactionRequest,
-) -> Result<ResolveTransactionResponse> {
-    let executor = service
-        .executor
-        .as_ref()
-        .ok_or_else(|| RpcError::new(tonic::Code::Unimplemented, "no transaction executor"))?;
-
-    let read_mask = request
-        .read_mask
-        .map(FieldMaskTree::from)
-        .unwrap_or_else(FieldMaskTree::new_wildcard);
-
-    let unresolved_transaction = request.unresolved_transaction.ok_or_else(|| {
-        FieldViolation::new("unresolved_transaction").with_reason(ErrorReason::FieldMissing)
-    })?;
-
+    unresolved_transaction: &Transaction,
+    reference_gas_price: u64,
+    protocol_config: &ProtocolConfig,
+) -> Result<TransactionData> {
     let sender = unresolved_transaction.sender().parse().map_err(|e| {
-        FieldViolation::new("sender")
+        FieldViolation::new("transaction.sender")
             .with_description(format!("invalid sender: {e}"))
             .with_reason(ErrorReason::FieldInvalid)
     })?;
 
     let ptb = unresolved_transaction
         .kind
+        .as_ref()
         .and_then(|kind| {
-            kind.kind.and_then(|kind| match kind {
+            kind.kind.as_ref().and_then(|kind| match kind {
                 crate::proto::rpc::v2beta::transaction_kind::Kind::ProgrammableTransaction(ptb) => {
                     Some(ptb)
                 }
@@ -75,7 +54,7 @@ pub fn resolve_transaction(
             })
         })
         .ok_or_else(|| {
-            FieldViolation::new("unresolved_transaction.kind.programmable_transaction")
+            FieldViolation::new("transaction.kind.programmable_transaction")
                 .with_reason(ErrorReason::FieldMissing)
         })?;
 
@@ -90,32 +69,8 @@ pub fn resolve_transaction(
                 .with_reason(ErrorReason::FieldInvalid)
         })?;
 
-    // TODO make this more efficient
-    let (reference_gas_price, protocol_config) = {
-        let system_state = service.reader.get_system_state_summary()?;
-
-        let current_protocol_version = system_state.protocol_version;
-
-        let protocol_config = ProtocolConfig::get_for_version_if_supported(
-            current_protocol_version.into(),
-            service.reader.inner().get_chain_identifier()?.chain(),
-        )
-        .ok_or_else(|| {
-            RpcError::new(
-                tonic::Code::Internal,
-                "unable to get current protocol config",
-            )
-        })?;
-
-        (system_state.reference_gas_price, protocol_config)
-    };
-
-    let mut called_packages = called_packages(&service.reader, &protocol_config, &commands)?;
-    let user_provided_budget = unresolved_transaction
-        .gas_payment
-        .as_ref()
-        .and_then(|payment| payment.budget);
-    let mut resolved_transaction = resolve_unresolved_transaction(
+    let mut called_packages = called_packages(&service.reader, protocol_config, &commands)?;
+    resolve_unresolved_transaction(
         &service.reader,
         &mut called_packages,
         reference_gas_price,
@@ -123,73 +78,11 @@ pub fn resolve_transaction(
         sender,
         &ptb.inputs,
         commands,
-        unresolved_transaction.gas_payment,
-    )?;
-
-    // If the user didn't provide a budget we need to run a quick simulation in order to calculate
-    // a good estimated budget to use
-    let budget = if let Some(user_provided_budget) = user_provided_budget {
-        user_provided_budget
-    } else {
-        let simulation_result = executor
-            .simulate_transaction(resolved_transaction.clone())
-            .map_err(anyhow::Error::from)?;
-
-        let estimate = estimate_gas_budget_from_gas_cost(
-            simulation_result.effects.gas_cost_summary(),
-            reference_gas_price,
-        );
-        resolved_transaction.gas_data_mut().budget = estimate;
-        estimate
-    };
-
-    // If the user didn't provide any gas payment we need to do gas selection now
-    if resolved_transaction.gas_data().payment.is_empty() {
-        let input_objects = resolved_transaction
-            .input_objects()
-            .map_err(anyhow::Error::from)?
-            .iter()
-            .flat_map(|obj| match obj {
-                sui_types::transaction::InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => {
-                    Some(*id)
-                }
-                _ => None,
-            })
-            .collect_vec();
-        let gas_coins = select_gas(
-            &service.reader,
-            resolved_transaction.gas_data().owner,
-            budget,
-            protocol_config.max_gas_payment_objects(),
-            &input_objects,
-        )?;
-        resolved_transaction.gas_data_mut().payment = gas_coins;
-    }
-
-    let simulation = read_mask
-        .subtree("simulation")
-        .map(|mask| {
-            super::simulate_transaction::simulate_transaction_impl(
-                executor,
-                resolved_transaction.clone().try_into()?,
-                &mask,
-            )
-        })
-        .transpose()?;
-
-    let transaction = crate::proto::rpc::v2beta::Transaction::merge_from(
-        sui_sdk_types::Transaction::try_from(resolved_transaction)?,
-        &FieldMaskTree::new_wildcard(),
-    );
-
-    ResolveTransactionResponse {
-        transaction: Some(transaction),
-        simulation,
-    }
-    .pipe(Ok)
+        unresolved_transaction.gas_payment.as_ref(),
+    )
 }
 
-struct NormalizedPackages {
+pub(super) struct NormalizedPackages {
     pool: normalized::RcPool,
     packages: HashMap<ObjectId, NormalizedPackage>,
 }
@@ -200,7 +93,7 @@ struct NormalizedPackage {
     normalized_modules: BTreeMap<String, normalized::Module<normalized::RcIdentifier>>,
 }
 
-fn called_packages(
+pub(super) fn called_packages(
     reader: &StateReader,
     protocol_config: &ProtocolConfig,
     commands: &[Command],
@@ -263,10 +156,7 @@ fn resolve_unresolved_transaction(
     sender: sui_sdk_types::Address,
     unresolved_inputs: &[crate::proto::rpc::v2beta::Input],
     commands: Vec<Command>,
-    gas_payment: Option<crate::proto::rpc::v2beta::GasPayment>,
-    // optional string sender = 5;
-    // optional GasPayment gas_payment = 6;
-    // optional TransactionExpiration expiration = 7;
+    gas_payment: Option<&crate::proto::rpc::v2beta::GasPayment>,
 ) -> Result<TransactionData> {
     let gas_data = if let Some(unresolved_gas_payment) = gas_payment {
         let payment = unresolved_gas_payment
@@ -370,7 +260,7 @@ fn resolve_object_reference_with_object(
     Ok((id, v, d))
 }
 
-fn resolve_ptb(
+pub(super) fn resolve_ptb(
     reader: &StateReader,
     called_packages: &mut NormalizedPackages,
     unresolved_inputs: &[crate::proto::rpc::v2beta::Input],
@@ -771,75 +661,6 @@ fn find_arg_uses(
         }
         .map(|x| (command, x))
     })
-}
-
-/// Estimate the gas budget using the gas_cost_summary from a previous DryRun
-///
-/// The estimated gas budget is computed as following:
-/// * the maximum between A and B, where:
-///     A = computation cost + GAS_SAFE_OVERHEAD * reference gas price
-///     B = computation cost + storage cost - storage rebate + GAS_SAFE_OVERHEAD * reference gas price
-///     overhead
-///
-/// This gas estimate is computed similarly as in the TypeScript SDK
-fn estimate_gas_budget_from_gas_cost(
-    gas_cost_summary: &GasCostSummary,
-    reference_gas_price: u64,
-) -> u64 {
-    const GAS_SAFE_OVERHEAD: u64 = 1000;
-
-    let safe_overhead = GAS_SAFE_OVERHEAD * reference_gas_price;
-    let computation_cost_with_overhead = gas_cost_summary.computation_cost + safe_overhead;
-
-    let gas_usage = gas_cost_summary.net_gas_usage() + safe_overhead as i64;
-    computation_cost_with_overhead.max(if gas_usage < 0 { 0 } else { gas_usage as u64 })
-}
-
-fn select_gas(
-    reader: &StateReader,
-    owner: SuiAddress,
-    budget: u64,
-    max_gas_payment_objects: u32,
-    input_objects: &[ObjectID],
-) -> Result<Vec<ObjectRef>> {
-    let gas_coins = reader
-        .inner()
-        .indexes()
-        .ok_or_else(RpcError::not_found)?
-        .owned_objects_iter(owner, Some(GasCoin::type_()), None)?
-        // filter for objects which are not ConsensusAddress owned,
-        // since only Address owned can be used for gas payments today
-        .filter_ok(|info| info.start_version.is_none())
-        .filter_ok(|info| !input_objects.contains(&info.object_id))
-        .filter_map_ok(|info| reader.inner().get_object(&info.object_id))
-        .filter_map_ok(|object| {
-            GasCoin::try_from(&object)
-                .ok()
-                .map(|coin| (object.compute_object_reference(), coin.value()))
-        })
-        .take(max_gas_payment_objects as usize);
-
-    let mut selected_gas = vec![];
-    let mut selected_gas_value = 0;
-
-    for maybe_coin in gas_coins {
-        let (object_ref, value) =
-            maybe_coin.map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
-        selected_gas.push(object_ref);
-        selected_gas_value += value;
-    }
-
-    if selected_gas_value >= budget {
-        Ok(selected_gas)
-    } else {
-        Err(RpcError::new(
-            tonic::Code::InvalidArgument,
-            format!(
-                "unable to select sufficient gas coins from account {owner} \
-                    to satisfy required budget {budget}"
-            ),
-        ))
-    }
 }
 
 struct UnresolvedObjectReference {
