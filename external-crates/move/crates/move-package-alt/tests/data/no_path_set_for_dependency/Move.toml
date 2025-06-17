@@ -1,6 +1,6 @@
 [package]
 name = "name"
-edition = "2024.beta"
+edition = "2025"
 
 [dependencies]
 A = { }

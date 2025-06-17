@@ -6,4 +6,3 @@ authors = ["some author"]
 
 [environments]
 mainnet = "35834a8a"
-
