@@ -3,14 +3,20 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use async_trait::async_trait;
+use scoped_futures::ScopedBoxFuture;
 use tokio::time::Duration;
 
-use crate::store::{CommitterWatermark, Connection, PrunerWatermark, ReaderWatermark, Store};
+use crate::store::{
+    CommitterWatermark, Connection, PrunerWatermark, ReaderWatermark, Store, TransactionalStore,
+};
 
 #[derive(Default, Clone)]
 pub struct MockWatermark {
@@ -42,6 +48,9 @@ pub struct MockStore {
     pub watermarks: Arc<Mutex<MockWatermark>>,
     /// Stores the actual data, mapping checkpoint sequence numbers to transaction sequence numbers
     pub data: Arc<Mutex<HashMap<u64, Vec<u64>>>>,
+    /// Tracks the order of checkpoint processing for testing sequential processing
+    /// Each entry is the checkpoint number that was processed
+    pub sequential_checkpoint_data: Arc<Mutex<Vec<u64>>>,
     /// Controls pruning failure simulation for testing retry behavior.
     /// Maps from [from_checkpoint, to_checkpoint_exclusive) to number of remaining failure attempts.
     /// When a prune operation is attempted on a range, if there are remaining failures,
@@ -51,6 +60,8 @@ pub struct MockStore {
     pub connection_failure: Arc<Mutex<ConnectionFailure>>,
     /// Number of remaining failures for set_reader_watermark operation
     pub set_reader_watermark_failure_attempts: Arc<Mutex<usize>>,
+    /// Number of remaining failures for transaction operation
+    pub transaction_failure_attempts: Arc<AtomicUsize>,
 }
 
 impl Default for MockStore {
@@ -58,9 +69,11 @@ impl Default for MockStore {
         Self {
             watermarks: Arc::new(Mutex::new(MockWatermark::default())),
             data: Arc::new(Mutex::new(HashMap::new())),
+            sequential_checkpoint_data: Arc::new(Mutex::new(Vec::new())),
             prune_failure_attempts: Arc::new(Mutex::new(HashMap::new())),
             connection_failure: Arc::new(Mutex::new(ConnectionFailure::default())),
             set_reader_watermark_failure_attempts: Arc::new(Mutex::new(0)),
+            transaction_failure_attempts: Arc::new(AtomicUsize::new(0)),
         }
     }
 }
@@ -198,6 +211,33 @@ impl Store for MockStore {
     }
 }
 
+#[async_trait]
+impl TransactionalStore for MockStore {
+    async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
+    where
+        R: Send + 'a,
+        F: Send + 'a,
+        F: for<'r> FnOnce(
+            &'r mut Self::Connection<'_>,
+        ) -> ScopedBoxFuture<'a, 'r, anyhow::Result<R>>,
+    {
+        // Check if we should simulate a transaction failure
+        if let Ok(prev) = self.transaction_failure_attempts.fetch_update(
+            Ordering::SeqCst,
+            Ordering::SeqCst,
+            |x| if x > 0 { Some(x - 1) } else { None },
+        ) {
+            return Err(anyhow::anyhow!(
+                "Transaction failed, remaining failures: {}",
+                prev - 1
+            ));
+        }
+
+        let mut conn = self.connect().await?;
+        f(&mut conn).await
+    }
+}
+
 impl MockStore {
     /// Helper to configure connection failure simulation
     pub fn with_connection_failures(self, attempts: usize) -> Self {
@@ -206,6 +246,11 @@ impl MockStore {
             .unwrap()
             .connection_failure_attempts = attempts;
         self
+    }
+
+    /// Get the sequential checkpoint data for testing.
+    pub fn get_sequential_data(&self) -> Vec<u64> {
+        self.sequential_checkpoint_data.lock().unwrap().clone()
     }
 
     /// Helper to get the current watermark state for testing
