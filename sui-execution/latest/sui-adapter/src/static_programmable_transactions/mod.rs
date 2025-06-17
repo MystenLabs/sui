@@ -38,10 +38,10 @@ pub fn better_todo_<T>(s: String) -> T {
 
 pub fn execute<Mode: ExecutionMode>(
     protocol_config: &ProtocolConfig,
+    metrics: Arc<LimitsMetrics>,
     vm: &MoveVM,
     state_view: &mut dyn ExecutionState,
     package_store: &dyn BackingPackageStore,
-    metrics: Arc<LimitsMetrics>,
     tx_context: Rc<RefCell<TxContext>>,
     gas_charger: &mut GasCharger,
     txn: ProgrammableTransaction,
