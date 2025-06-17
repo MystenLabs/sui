@@ -8,6 +8,10 @@ import {
   SearchBox,
   RefinementList,
   useInfiniteHits,
+  Index,
+  Stats,
+  Pagination,
+  useStats,
 } from "react-instantsearch";
 
 const { decode } = require("he");
@@ -34,9 +38,10 @@ function getDeepestHierarchyLabel(hierarchy) {
   return lastValue || hierarchy.lvl6 || "";
 }
 
-function CustomHits() {
+function CustomHits({ label }) {
   const { items } = useInfiniteHits();
   const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
+  const { nbHits } = useStats();
 
   const grouped = items.reduce(
     (acc, hit) => {
@@ -52,43 +57,56 @@ function CustomHits() {
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  //setTotal(Object.keys(grouped).length);
+
   return (
-    <div>
-      {Object.entries(grouped).map(([key, group], index) => {
-        const isOpen = expanded[key] ?? false;
-        return (
-          <div className="border border-solid p-4 mb-4 rounded-lg" key={index}>
-            <button
-              className="font-bold text-left w-full"
-              onClick={() => toggle(key)}
-            >
-              {group[0].hierarchy?.lvl1 || "[no title]"}
-            </button>
-            {isOpen &&
-              group.map((hit, i) => {
-                const level = hit.type;
-                let sectionTitle = hit.lvl0;
-                if (level === "content") {
-                  sectionTitle = getDeepestHierarchyLabel(hit.hierarchy);
-                } else {
-                  sectionTitle = hit.hierarchy?.[level] || level;
-                }
-                return (
-                  <div key={i} className="mb-2">
-                    <a
-                      href={hit.url}
-                      className="text-sm text-blue-600 underline"
-                    >
-                      {sectionTitle}
-                    </a>
-                    <p>{hit.content ? truncateAtWord(hit.content) : ""}</p>
-                  </div>
-                );
-              })}
-          </div>
-        );
-      })}
-    </div>
+    <>
+      {nbHits > 0 && (
+        <div>
+          <h2>
+            {label} {nbHits}
+          </h2>
+          <RefinementList attribute="source" />
+          {Object.entries(grouped).map(([key, group], index) => {
+            const isOpen = expanded[key] ?? false;
+            return (
+              <div
+                className="border border-solid p-4 mb-4 rounded-lg"
+                key={index}
+              >
+                <button
+                  className="font-bold text-left w-full"
+                  onClick={() => toggle(key)}
+                >
+                  {group[0].hierarchy?.lvl1 || "[no title]"}
+                </button>
+                {isOpen &&
+                  group.map((hit, i) => {
+                    const level = hit.type;
+                    let sectionTitle = hit.lvl0;
+                    if (level === "content") {
+                      sectionTitle = getDeepestHierarchyLabel(hit.hierarchy);
+                    } else {
+                      sectionTitle = hit.hierarchy?.[level] || level;
+                    }
+                    return (
+                      <div key={i} className="mb-2">
+                        <a
+                          href={hit.url}
+                          className="text-sm text-blue-600 underline"
+                        >
+                          {sectionTitle}
+                        </a>
+                        <p>{hit.content ? truncateAtWord(hit.content) : ""}</p>
+                      </div>
+                    );
+                  })}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -101,8 +119,8 @@ function getQueryParam(key) {
 
 export default function Search() {
   const searchClient = algoliasearch(
-    "ZF283DJAYX",
-    "7f24db6c4ec06d6905592deb228f4460",
+    "M9JD2UP87M",
+    "826134b026a63bb35692f08f1dc85d1c",
   );
 
   const queryParam = getQueryParam("q");
@@ -110,10 +128,13 @@ export default function Search() {
   return (
     <InstantSearch
       searchClient={searchClient}
-      indexName="sui"
+      indexName="Sui Docs"
       future={{ preserveSharedStateOnUnmount: true }}
       initialUiState={{
-        sui: {
+        sui_docs: {
+          query: queryParam,
+        },
+        suins_docs: {
           query: queryParam,
         },
       }}
@@ -126,10 +147,21 @@ export default function Search() {
           <h1 className="text-lg pl-2 bg-sui-blue-dark rounded-t-lg text-white">
             Sources
           </h1>
-          <RefinementList attribute="source" />
         </div>
         <div className="col-span-9">
-          <CustomHits />
+          <Index indexName="sui_docs">
+            <CustomHits label="Sui docs" />
+            <Pagination />
+          </Index>
+          <Index indexName="suins_docs">
+            <CustomHits label="SuiNS docs" />
+          </Index>
+          <Index indexName="move_book">
+            <CustomHits label="The Move Book and Reference" />
+          </Index>
+          <Index indexName="dapp_kit">
+            <CustomHits label="SDK docs" />
+          </Index>
         </div>
       </div>
     </InstantSearch>

@@ -165,12 +165,12 @@ const config = {
     ({
       algolia: {
         // The application ID provided by Algolia
-        appId: "ZF283DJAYX",
+        appId: "M9JD2UP87M",
 
         // Public API key: it is safe to commit it
-        apiKey: "7f24db6c4ec06d6905592deb228f4460",
+        apiKey: "826134b026a63bb35692f08f1dc85d1c",
 
-        indexName: "sui",
+        indexName: "Sui Docs",
 
         // Optional: see doc section below
         contextualSearch: false,
@@ -188,10 +188,8 @@ const config = {
         //searchParameters: {},
 
         // Optional: path for search page that enabled by default (`false` to disable it)
-        searchPagePath: false,
-        searchParameters: {
-          facetFilters: ["language:en", ["filter1", "filter2"], "filter3"],
-        },
+        searchPagePath: "search2",
+        
         //... other Algolia params
       },
       image: "img/sui-doc-og.png",
