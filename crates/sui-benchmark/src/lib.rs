@@ -701,6 +701,9 @@ impl From<CallArg> for BenchMoveCallArg {
                     unimplemented!("Receiving is not supported for benchmarks")
                 }
             },
+            CallArg::BalanceWithdraw(_) => {
+                todo!("BalanceWithdraw is not supported for benchmarks")
+            }
         }
     }
 }
