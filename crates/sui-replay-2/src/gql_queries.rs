@@ -13,18 +13,17 @@ use crate::{data_store::DataStore, replay_interface::EpochData};
 use cynic::QueryBuilder;
 use fastcrypto::encoding::{Base64 as CryptoBase64, Encoding};
 
+// Register the schema which was loaded in the build.rs call.
+#[cynic::schema("rpc")]
 mod schema {
-    cynic::use_schema!("../sui-indexer-alt-graphql/schema.graphql");
-    cynic::impl_scalar!(u64, UInt53);
-
     use chrono::{DateTime as ChronoDateTime, Utc};
+    cynic::impl_scalar!(u64, UInt53);
     cynic::impl_scalar!(ChronoDateTime<Utc>, DateTime);
-
-    // cynic::impl_scalar!(String, Base64);
 }
 
 pub mod epoch_query {
     use super::*;
+    use anyhow::anyhow;
     use chrono::{DateTime as ChronoDateTime, Utc};
 
     #[derive(cynic::QueryVariables)]
@@ -34,7 +33,6 @@ pub mod epoch_query {
 
     #[derive(cynic::QueryFragment)]
     #[cynic(variables = "EpochDataArgs")]
-    #[cynic(schema_path = "../sui-indexer-alt-graphql/schema.graphql")]
     pub struct Query {
         #[arguments(epochId: $epoch)]
         epoch: Option<Epoch>,
@@ -45,16 +43,14 @@ pub mod epoch_query {
     pub struct BigInt(String);
 
     #[derive(cynic::QueryFragment)]
-    #[cynic(schema_path = "../sui-indexer-alt-graphql/schema.graphql")]
     pub struct Epoch {
         epoch_id: u64,
         protocol_configs: Option<ProtocolConfigs>,
-        reference_gas_price: Option<epoch_query::BigInt>,
+        reference_gas_price: Option<BigInt>,
         start_timestamp: Option<ChronoDateTime<Utc>>,
     }
 
     #[derive(cynic::QueryFragment)]
-    #[cynic(schema_path = "../sui-indexer-alt-graphql/schema.graphql")]
     pub struct ProtocolConfigs {
         protocol_version: u64,
     }
@@ -68,7 +64,7 @@ pub mod epoch_query {
         let epoch = response
             .data
             .and_then(|epoch| epoch.epoch)
-            .ok_or(anyhow::anyhow!(format!(
+            .ok_or(anyhow!(format!(
                 "Canot find epoch info for epoch {}",
                 epoch_id
             )))?;
@@ -77,14 +73,14 @@ pub mod epoch_query {
             protocol_version: epoch
                 .protocol_configs
                 .map(|config| config.protocol_version)
-                .ok_or(anyhow::anyhow!(format!(
+                .ok_or(anyhow!(format!(
                     "Canot find epoch info for epoch {}",
                     epoch_id
                 )))?,
             rgp: epoch
                 .reference_gas_price
                 .map(|rgp| rgp.0)
-                .ok_or(anyhow::anyhow!(format!(
+                .ok_or(anyhow!(format!(
                     "Canot find epoch info for epoch {}",
                     epoch_id
                 )))?
@@ -93,7 +89,7 @@ pub mod epoch_query {
             start_timestamp: epoch
                 .start_timestamp
                 .map(|ts| ts.timestamp_millis() as u64)
-                .ok_or(anyhow::anyhow!(format!(
+                .ok_or(anyhow!(format!(
                     "Canot find epoch info for epoch {}",
                     epoch_id
                 )))?,
@@ -116,31 +112,25 @@ pub mod txn_query {
     }
 
     #[derive(cynic::QueryFragment)]
-    #[cynic(
-        schema_path = "../sui-indexer-alt-graphql/schema.graphql",
-        variables = "TransactionDataArgs"
-    )]
+    #[cynic(variables = "TransactionDataArgs")]
     pub struct Query {
         #[arguments(digest: $digest)]
         transaction: Option<Transaction>,
     }
 
     #[derive(cynic::QueryFragment)]
-    #[cynic(schema_path = "../sui-indexer-alt-graphql/schema.graphql")]
     pub struct Transaction {
         transaction_bcs: Option<Base64>,
         effects: Option<TransactionEffects>,
     }
 
     #[derive(cynic::QueryFragment)]
-    #[cynic(schema_path = "../sui-indexer-alt-graphql/schema.graphql")]
     pub struct TransactionEffects {
         checkpoint: Option<Checkpoint>,
         effects_bcs: Option<Base64>,
     }
 
     #[derive(cynic::QueryFragment)]
-    #[cynic(schema_path = "../sui-indexer-alt-graphql/schema.graphql")]
     pub struct Checkpoint {
         sequence_number: u64,
     }
@@ -221,6 +211,7 @@ pub mod object_query {
     use sui_types::object::Object;
 
     use super::*;
+    use crate::replay_interface;
 
     #[derive(cynic::Scalar, Debug, Clone)]
     #[cynic(graphql_type = "SuiAddress")]
@@ -231,10 +222,7 @@ pub mod object_query {
     pub struct Base64(pub String);
 
     #[derive(cynic::InputObject, Debug)]
-    #[cynic(
-        schema_path = "../sui-indexer-alt-graphql/schema.graphql",
-        graphql_type = "ObjectKey"
-    )]
+    #[cynic(graphql_type = "ObjectKey")]
     pub struct ObjectKey {
         pub address: SuiAddress,
         pub version: Option<u64>,
@@ -248,22 +236,14 @@ pub mod object_query {
     }
 
     #[derive(cynic::QueryFragment)]
-    #[cynic(
-        schema_path = "../sui-indexer-alt-graphql/schema.graphql",
-        variables = "MultiGetObjectsVars",
-        graphql_type = "Query"
-    )]
+    #[cynic(variables = "MultiGetObjectsVars", graphql_type = "Query")]
     pub struct MultiGetObjectsQuery {
         #[arguments(keys: $keys)]
         pub multi_get_objects: Vec<Option<ObjectFragment>>,
     }
 
     #[derive(cynic::QueryFragment)]
-    #[cynic(
-        schema_path = "../sui-indexer-alt-graphql/schema.graphql",
-        graphql_type = "Object",
-        schema_module = "crate::gql_queries::schema"
-    )]
+    #[cynic(graphql_type = "Object", schema_module = "crate::gql_queries::schema")]
     pub struct ObjectFragment {
         pub address: SuiAddress,
         pub object_bcs: Option<Base64>,
@@ -275,7 +255,7 @@ pub mod object_query {
     const MAX_KEYS_SIZE: usize = 30;
 
     pub async fn query(
-        keys: &[crate::replay_interface::ObjectKey],
+        keys: &[replay_interface::ObjectKey],
         data_store: &DataStore,
     ) -> Result<Vec<Option<Object>>, anyhow::Error> {
         let mut keys = keys
@@ -327,20 +307,20 @@ pub mod object_query {
         Ok(objects)
     }
 
-    impl From<crate::replay_interface::ObjectKey> for ObjectKey {
-        fn from(key: crate::replay_interface::ObjectKey) -> Self {
+    impl From<replay_interface::ObjectKey> for ObjectKey {
+        fn from(key: replay_interface::ObjectKey) -> Self {
             ObjectKey {
                 address: SuiAddress(key.object_id.to_string()),
                 version: match key.version_query {
-                    crate::replay_interface::VersionQuery::Version(v) => Some(v),
+                    replay_interface::VersionQuery::Version(v) => Some(v),
                     _ => None,
                 },
                 root_version: match key.version_query {
-                    crate::replay_interface::VersionQuery::RootVersion(v) => Some(v),
+                    replay_interface::VersionQuery::RootVersion(v) => Some(v),
                     _ => None,
                 },
                 at_checkpoint: match key.version_query {
-                    crate::replay_interface::VersionQuery::AtCheckpoint(v) => Some(v),
+                    replay_interface::VersionQuery::AtCheckpoint(v) => Some(v),
                     _ => None,
                 },
             }

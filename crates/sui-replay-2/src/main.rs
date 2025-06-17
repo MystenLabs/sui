@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
+use anyhow::bail;
 use clap::*;
 use core::panic;
 use move_trace_format::format::MoveTraceBuilder;
@@ -16,7 +18,10 @@ use sui_replay_2::{
 use sui_types::{effects::TransactionEffects, gas::SuiGasStatus};
 use tracing::debug;
 
-fn main() {
+// Define the `GIT_REVISION` and `VERSION` consts
+bin_version::bin_version!();
+
+fn main() -> anyhow::Result<()> {
     let _guard = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
@@ -37,7 +42,12 @@ fn main() {
     let digests = if let Some(digests_path) = digests_path {
         // read digests from file
         std::fs::read_to_string(digests_path.clone())
-            .unwrap_or_else(|e| panic!("Failed to read digests file {:?}: {:?}", digests_path, e))
+            .map_err(|e| {
+                anyhow!(
+                    "Failed to read digests file {}: {e}",
+                    digests_path.display(),
+                )
+            })?
             .lines()
             .map(|s| s.trim().to_string())
             .collect::<Vec<_>>()
@@ -45,17 +55,21 @@ fn main() {
         // single digest provided
         vec![tx_digest]
     } else {
-        panic!("Either --digest or --digests-path must be provided");
+        bail!("either --digest or --digests-path must be provided");
     };
 
+    debug!("Binary version: {VERSION}");
+
     // `DataStore` implements `TransactionStore`, `EpochStore` and `ObjectStore`
-    let data_store =
-        DataStore::new(node).unwrap_or_else(|e| panic!("Failed to create data store: {:?}", e));
+    let data_store = DataStore::new(node, VERSION)
+        .map_err(|e| anyhow!("Failed to create data store: {:?}", e))?;
 
     // load and replay transactions
     for tx_digest in digests {
         replay_transaction(&tx_digest, &data_store, trace.clone(), show_effects, verify);
     }
+
+    Ok(())
 }
 
 //

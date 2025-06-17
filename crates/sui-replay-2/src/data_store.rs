@@ -15,6 +15,7 @@ use crate::{
 use anyhow::Context;
 use cynic::GraphQlResponse;
 use cynic::Operation;
+use reqwest::header::USER_AGENT;
 use std::{cell::RefCell, collections::BTreeMap};
 use sui_types::{
     base_types::ObjectID,
@@ -42,6 +43,8 @@ pub struct DataStore {
     // Keep the epoch data considering its small size and footprint
     epoch_map: RefCell<BTreeMap<EpochId, EpochData>>,
     // TODO: define a system package map?
+    /// The binary's version passed to the User-Agent header in GQL query requests
+    version: String,
 }
 
 impl TransactionStore for DataStore {
@@ -83,7 +86,7 @@ impl ObjectStore for DataStore {
 }
 
 impl DataStore {
-    pub fn new(node: Node) -> Result<Self, anyhow::Error> {
+    pub fn new(node: Node, version: &str) -> Result<Self, anyhow::Error> {
         debug!("Start stores creation");
         let client = reqwest::Client::new();
         let url = match node {
@@ -104,6 +107,7 @@ impl DataStore {
             node,
             epoch_map,
             rpc,
+            version: version.to_string(),
         })
     }
 
@@ -126,6 +130,7 @@ impl DataStore {
     {
         self.client
             .post(self.rpc.clone())
+            .header(USER_AGENT, format!("sui-replay-v{}", &self.version))
             .json(&operation)
             .send()
             .await
