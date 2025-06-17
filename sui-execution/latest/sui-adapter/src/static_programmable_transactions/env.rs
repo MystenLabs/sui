@@ -139,7 +139,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         &self,
         ty: &Type,
     ) -> Result<annotated_value::MoveTypeLayout, ExecutionError> {
-        let (ty, linkage) = self.load_vm_type(ty)?;
+        let (ty, linkage) = self.load_vm_type_from_adapter_type(ty)?;
         self.vm
             .get_runtime()
             .type_to_fully_annotated_layout(&ty)
@@ -150,7 +150,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         &self,
         ty: &Type,
     ) -> Result<runtime_value::MoveTypeLayout, ExecutionError> {
-        let (ty, linkage) = self.load_vm_type(ty)?;
+        let (ty, linkage) = self.load_vm_type_from_adapter_type(ty)?;
         self.vm
             .get_runtime()
             .type_to_type_layout(&ty)
@@ -178,7 +178,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         let mut data_store = LinkedDataStore::new(&linkage, self.linkable_store);
         let loaded_type_arguments = type_arguments
             .iter()
-            .map(|ty| self.load_vm_type(ty).map(|(ty, _)| ty))
+            .map(|ty| self.load_vm_type_from_adapter_type(ty).map(|(ty, _)| ty))
             .collect::<Result<Vec<_>, _>>()?;
         let runtime_signature = self
             .vm
@@ -277,7 +277,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
     }
 
     /// Takes an adapter Type and returns a VM runtime Type and the linkage for it.
-    fn load_vm_type(
+    pub fn load_vm_type_from_adapter_type(
         &self,
         ty: &Type,
     ) -> Result<(vm_runtime_type::Type, RootedLinkage), ExecutionError> {
