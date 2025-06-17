@@ -8,6 +8,7 @@ use crate::{
 use sui_types::error::ExecutionError;
 
 pub mod ast;
+pub mod invariant_checks;
 pub mod translate;
 pub mod verify;
 
@@ -17,5 +18,6 @@ pub fn translate_and_verify<Mode: ExecutionMode>(
 ) -> Result<ast::Transaction, ExecutionError> {
     let mut ast = translate::transaction(env, lt)?;
     verify::transaction::<Mode>(env, &mut ast)?;
+    invariant_checks::transaction::<Mode>(env, &ast)?;
     Ok(ast)
 }
