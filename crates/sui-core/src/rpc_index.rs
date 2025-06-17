@@ -525,7 +525,11 @@ impl IndexStoreTables {
                             object,
                             resolver,
                             &tx.output_objects.as_slice() as _,
-                        )? {
+                        )
+                        .inspect_err(|e| tracing::error!("error getting dynamic field info: {e}"))
+                        .ok()
+                        .flatten()
+                        {
                             let field_key = DynamicFieldKey::new(*parent, object.id());
 
                             batch.insert_batch(&self.dynamic_field, [(field_key, field_info)])?;
@@ -948,7 +952,11 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
                     &object,
                     self.resolver.as_mut(),
                     self.object_store,
-                )? {
+                )
+                .inspect_err(|e| tracing::error!("error getting dynamic field info: {e}"))
+                .ok()
+                .flatten()
+                {
                     let field_key = DynamicFieldKey::new(parent, object.id());
 
                     self.batch
