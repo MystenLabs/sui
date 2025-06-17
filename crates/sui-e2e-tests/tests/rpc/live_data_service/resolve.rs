@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prost_types::FieldMask;
 use shared_crypto::intent::Intent;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
 use sui_rpc_api::proto::rpc::v2alpha::live_data_service_client::LiveDataServiceClient;
-use sui_rpc_api::proto::rpc::v2alpha::ResolveTransactionRequest;
+use sui_rpc_api::proto::rpc::v2alpha::SimulateTransactionRequest;
 use sui_rpc_api::proto::rpc::v2beta::Argument;
 use sui_rpc_api::proto::rpc::v2beta::Command;
 use sui_rpc_api::proto::rpc::v2beta::GasPayment;
@@ -21,47 +20,33 @@ use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
 use test_cluster::TestClusterBuilder;
 
-fn build_resolve_request(transaction: Transaction, simulate: bool) -> ResolveTransactionRequest {
-    let read_mask = if simulate {
-        Some(FieldMask {
-            paths: vec!["simulation".to_string()],
-        })
-    } else {
-        None
-    };
-    ResolveTransactionRequest {
-        unresolved_transaction: Some(transaction),
-        read_mask,
-    }
-}
-
 fn proto_to_response(
-    proto: sui_rpc_api::proto::rpc::v2alpha::ResolveTransactionResponse,
+    proto: sui_rpc_api::proto::rpc::v2alpha::SimulateTransactionResponse,
 ) -> (
     sui_types::transaction::TransactionData,
-    Option<(
-        sui_types::effects::TransactionEffects,
-        Option<sui_types::effects::TransactionEvents>,
-    )>,
+    sui_types::effects::TransactionEffects,
+    Option<sui_types::effects::TransactionEvents>,
 ) {
-    let effects_and_events = proto.simulation.map(|simulation| {
-        let txn = simulation.transaction.unwrap();
-        (
-            txn.effects.unwrap().bcs.unwrap().deserialize().unwrap(),
-            txn.events
-                .map(|events| events.bcs.unwrap().deserialize().unwrap()),
-        )
-    });
-    (
-        proto
-            .transaction
-            .unwrap()
-            .bcs
-            .unwrap()
-            .deserialize()
-            .unwrap(),
-        effects_and_events,
-    )
+    let executed_transaction = proto.transaction.unwrap();
+    let transaction = executed_transaction
+        .transaction
+        .unwrap()
+        .bcs
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    let effects = executed_transaction
+        .effects
+        .unwrap()
+        .bcs
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    let events = executed_transaction
+        .events
+        .map(|events| events.bcs.unwrap().deserialize().unwrap());
+
+    (transaction, effects, events)
 }
 
 #[sim_test]
@@ -100,11 +85,15 @@ async fn resolve_transaction_simple_transfer() {
     };
 
     let resolved = alpha_client
-        .resolve_transaction(build_resolve_request(unresolved_transaction, true))
+        .simulate_transaction(SimulateTransactionRequest {
+            transaction: Some(unresolved_transaction),
+            do_gas_selection: Some(true),
+            ..Default::default()
+        })
         .await
         .unwrap()
         .into_inner();
-    let (transaction, effects_and_events) = proto_to_response(resolved);
+    let (transaction, effects_from_simulation, _events) = proto_to_response(resolved);
 
     let signed_transaction = test_cluster.wallet.sign_transaction(&transaction);
     let effects = client
@@ -114,7 +103,7 @@ async fn resolve_transaction_simple_transfer() {
         .effects;
 
     assert!(effects.status().is_ok());
-    assert_eq!(effects_and_events.unwrap().0, effects,);
+    assert_eq!(effects_from_simulation, effects);
 }
 
 #[sim_test]
@@ -157,11 +146,15 @@ async fn resolve_transaction_transfer_with_sponsor() {
     };
 
     let resolved = alpha_client
-        .resolve_transaction(build_resolve_request(unresolved_transaction, true))
+        .simulate_transaction(SimulateTransactionRequest {
+            transaction: Some(unresolved_transaction),
+            do_gas_selection: Some(true),
+            ..Default::default()
+        })
         .await
         .unwrap()
         .into_inner();
-    let (transaction, effects_and_events) = proto_to_response(resolved);
+    let (transaction, effects_from_simulation, _events) = proto_to_response(resolved);
 
     let sender_sig = test_cluster
         .wallet
@@ -185,7 +178,7 @@ async fn resolve_transaction_transfer_with_sponsor() {
         .effects;
 
     assert!(effects.status().is_ok());
-    assert_eq!(effects_and_events.unwrap().0, effects);
+    assert_eq!(effects_from_simulation, effects);
 }
 
 #[sim_test]
@@ -218,11 +211,15 @@ async fn resolve_transaction_borrowed_shared_object() {
     };
 
     let resolved = alpha_client
-        .resolve_transaction(build_resolve_request(unresolved_transaction, true))
+        .simulate_transaction(SimulateTransactionRequest {
+            transaction: Some(unresolved_transaction),
+            do_gas_selection: Some(true),
+            ..Default::default()
+        })
         .await
         .unwrap()
         .into_inner();
-    let (transaction, _effects_and_events) = proto_to_response(resolved);
+    let (transaction, _effects, _events) = proto_to_response(resolved);
 
     let signed_transaction = test_cluster.wallet.sign_transaction(&transaction);
     let effects = client
@@ -282,11 +279,15 @@ async fn resolve_transaction_mutable_shared_object() {
     };
 
     let resolved = alpha_client
-        .resolve_transaction(build_resolve_request(unresolved_transaction, true))
+        .simulate_transaction(SimulateTransactionRequest {
+            transaction: Some(unresolved_transaction),
+            do_gas_selection: Some(true),
+            ..Default::default()
+        })
         .await
         .unwrap()
         .into_inner();
-    let (transaction, effects_and_events) = proto_to_response(resolved);
+    let (transaction, effects_from_simulation, _events) = proto_to_response(resolved);
 
     let signed_transaction = test_cluster.wallet.sign_transaction(&transaction);
     let effects = client
@@ -296,7 +297,7 @@ async fn resolve_transaction_mutable_shared_object() {
         .effects;
 
     assert!(effects.status().is_ok());
-    assert_eq!(effects_and_events.unwrap().0, effects);
+    assert_eq!(effects_from_simulation, effects);
 }
 
 #[sim_test]
@@ -327,7 +328,11 @@ async fn resolve_transaction_insufficient_gas() {
     };
 
     let error = alpha_client
-        .resolve_transaction(build_resolve_request(unresolved_transaction, false))
+        .simulate_transaction(SimulateTransactionRequest {
+            transaction: Some(unresolved_transaction),
+            do_gas_selection: Some(true),
+            ..Default::default()
+        })
         .await
         .unwrap_err();
 
