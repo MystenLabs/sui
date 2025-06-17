@@ -156,7 +156,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    obj_info_two_tables (cp_sequence_number, object_id) {
+    obj_info_two_tables (object_id, cp_sequence_number) {
         object_id -> Bytea,
         cp_sequence_number -> Int8,
         owner_kind -> Nullable<Int2>,
@@ -169,7 +169,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    obj_info_v2 (cp_sequence_number, object_id) {
+    obj_info_v2 (object_id, cp_sequence_number) {
         object_id -> Bytea,
         cp_sequence_number -> Int8,
         owner_kind -> Nullable<Int2>,

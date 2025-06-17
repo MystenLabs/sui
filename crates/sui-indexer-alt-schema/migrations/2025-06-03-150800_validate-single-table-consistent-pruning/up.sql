@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS obj_info_v2
     name                        TEXT,
     -- The type's type parameters, as a BCS-encoded array of TypeTags.
     instantiation               BYTEA,
-    PRIMARY KEY (cp_sequence_number, object_id)
+    PRIMARY KEY (object_id, cp_sequence_number)
 );
 
 CREATE INDEX IF NOT EXISTS obj_info_v2_owner_object_id_desc
@@ -86,6 +86,7 @@ CREATE INDEX obj_info_v2_unflagged_predecessors
 ON obj_info_v2 (object_id, cp_sequence_number DESC)
 WHERE obsolete_at IS NULL;
 
+CREATE INDEX obj_info_v2_cp_sequence_number ON obj_info_v2 (cp_sequence_number, object_id);
 
 
 
@@ -133,7 +134,7 @@ CREATE TABLE IF NOT EXISTS obj_info_two_tables
     name                        TEXT,
     -- The type's type parameters, as a BCS-encoded array of TypeTags.
     instantiation               BYTEA,
-    PRIMARY KEY (cp_sequence_number, object_id)
+    PRIMARY KEY (object_id, cp_sequence_number)
 );
 
 CREATE INDEX IF NOT EXISTS obj_info_two_tables_owner_object_id_desc
