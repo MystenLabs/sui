@@ -1044,10 +1044,16 @@ fn try_create_dynamic_field_info(
         return Ok(None);
     }
 
-    let layout = resolver
-        .get_annotated_layout(&move_object.type_().clone().into())
-        .map_err(StorageError::custom)?
-        .into_layout();
+    let layout = match resolver.get_annotated_layout(&move_object.type_().clone().into()) {
+        Ok(annotated_layout) => annotated_layout.into_layout(),
+        Err(e) => {
+            tracing::error!(
+                "unable to load layout for type `{:?}`: {e}",
+                move_object.type_()
+            );
+            return Ok(None);
+        }
+    };
 
     let field = DFV::FieldVisitor::deserialize(move_object.contents(), &layout)
         .map_err(StorageError::custom)?;
