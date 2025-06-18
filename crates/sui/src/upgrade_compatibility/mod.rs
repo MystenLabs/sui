@@ -716,7 +716,9 @@ pub(crate) async fn check_compatibility(
         UpgradePolicy::try_from(upgrade_policy).map_err(|_| anyhow!("Invalid upgrade policy"))?;
 
     compare_packages(
-        AccountAddress::from(package_id),
+        *existing_package
+            .to_move_package(u64::MAX /* safe as this pkg comes from the network */)?
+            .original_package_id(),
         existing_modules,
         new_package,
         package_path,
