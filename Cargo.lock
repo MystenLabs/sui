@@ -14952,6 +14952,7 @@ name = "sui-kv-rpc"
 version = "1.51.0"
 dependencies = [
  "anyhow",
+ "axum 0.8.3",
  "bin-version",
  "clap",
  "mysten-metrics",
