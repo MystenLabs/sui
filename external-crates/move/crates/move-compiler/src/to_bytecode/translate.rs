@@ -4,7 +4,6 @@
 
 use super::{canonicalize_handles, context::*, optimize};
 use crate::{
-    CompiledModuleInfoMap,
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
@@ -20,6 +19,7 @@ use crate::{
         ModuleName, TargetKind, UnaryOp, UnaryOp_, VariantName,
     },
     shared::{known_attributes::AttributeKind_, unique_map::UniqueMap, *},
+    CompiledModuleInfoMap,
 };
 use move_binary_format::file_format as F;
 use move_bytecode_source_map::source_map::SourceMap;
@@ -50,7 +50,7 @@ fn extract_decls(
             module_infos
                 .iter()
                 .filter(|(mident, _)| !prog.modules.contains_key(mident))
-                .map(|(mident, minfo)| (mident.clone(), minfo.dependency_order))
+                .map(|(mident, minfo)| (*mident, minfo.dependency_order))
         })
     };
 
@@ -136,15 +136,12 @@ fn extract_decls(
         for (mident, minfo) in pre_compiled_module_infos.iter() {
             for (datatype_name, (abilities, type_parameters)) in minfo.cfgir_datatype_decls.iter() {
                 ddecls.insert(
-                    (mident.clone(), datatype_name.clone()),
+                    (*mident, *datatype_name),
                     (abilities.clone(), type_parameters.clone()),
                 );
             }
             for (function_name, function_declaration) in minfo.cfgir_fun_decls.iter() {
-                fdecls.insert(
-                    (mident.clone(), function_name.clone()),
-                    function_declaration.clone(),
-                );
+                fdecls.insert((*mident, *function_name), function_declaration.clone());
             }
         }
     }
@@ -1077,9 +1074,9 @@ fn convert_unpack_type(unpack_type: H::UnpackType) -> IR::UnpackType {
 
 #[growing_stack]
 fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
+    use Value_ as V;
     use H::UnannotatedExp_ as E;
     use IR::Bytecode_ as B;
-    use Value_ as V;
     let sp!(loc, e_) = e.exp;
     match e_ {
         E::Unreachable => panic!("ICE should not compile dead code"),
@@ -1283,8 +1280,8 @@ fn module_call(
 }
 
 fn unary_op(code: &mut IR::BytecodeBlock, sp!(loc, op_): UnaryOp) {
-    use IR::Bytecode_ as B;
     use UnaryOp_ as O;
+    use IR::Bytecode_ as B;
     code.push(sp(
         loc,
         match op_ {
