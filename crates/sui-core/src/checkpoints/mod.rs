@@ -31,7 +31,7 @@ use sui_network::default_mysten_network_config;
 use sui_types::base_types::ConciseableName;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution::ExecutionTimeObservationKey;
-use sui_types::messages_checkpoint::CheckpointCommitment;
+use sui_types::messages_checkpoint::{CheckpointArtifacts, CheckpointCommitment};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use tokio::sync::{mpsc, watch};
 use typed_store::rocks::{default_db_options, DBOptions, ReadWriteOptions};
@@ -51,7 +51,7 @@ use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::committee::StakeUnit;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
-use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
+use sui_types::effects::{ObjectChange, TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
 use sui_types::message_envelope::Message;
@@ -1844,6 +1844,10 @@ impl CheckpointBuilder {
                 .copied()
                 .collect();
 
+            let artifacts = CheckpointArtifacts::from(&effects);
+            let artifacts_digest = CheckpointCommitment::from(artifacts.digest());
+            info!("Artifacts digest: {:?}", artifacts_digest);
+
             let summary = CheckpointSummary::new(
                 self.epoch_store.protocol_config(),
                 epoch,
@@ -1855,6 +1859,7 @@ impl CheckpointBuilder {
                 end_of_epoch_data,
                 timestamp_ms,
                 matching_randomness_rounds,
+                vec![artifacts_digest],
             );
             summary.report_checkpoint_age(
                 &self.metrics.last_created_checkpoint_age,

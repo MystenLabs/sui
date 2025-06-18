@@ -247,6 +247,8 @@ pub mod checkpoint_commitment {
         /// An elliptic curve multiset hash attesting to the set of objects that
         /// comprise the live state of the Sui blockchain.
         EcmhLiveObjectSet = 1,
+        /// A digest of the checkpoint artifacts.
+        CheckpointArtifactsDigest = 2,
     }
     impl CheckpointCommitmentKind {
         /// String value of the enum field names used in the ProtoBuf definition.
@@ -257,6 +259,7 @@ pub mod checkpoint_commitment {
             match self {
                 Self::Unknown => "CHECKPOINT_COMMITMENT_KIND_UNKNOWN",
                 Self::EcmhLiveObjectSet => "ECMH_LIVE_OBJECT_SET",
+                Self::CheckpointArtifactsDigest => "CHECKPOINT_ARTIFACTS_DIGEST",
             }
         }
         /// Creates an enum from field names used in the ProtoBuf definition.
@@ -264,6 +267,7 @@ pub mod checkpoint_commitment {
             match value {
                 "CHECKPOINT_COMMITMENT_KIND_UNKNOWN" => Some(Self::Unknown),
                 "ECMH_LIVE_OBJECT_SET" => Some(Self::EcmhLiveObjectSet),
+                "CHECKPOINT_ARTIFACTS_DIGEST" => Some(Self::CheckpointArtifactsDigest),
                 _ => None,
             }
         }

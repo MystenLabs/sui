@@ -94,6 +94,9 @@ message CheckpointCommitment {
     // An elliptic curve multiset hash attesting to the set of objects that
     // comprise the live state of the Sui blockchain.
     ECMH_LIVE_OBJECT_SET = 1;
+
+    // A digest of the checkpoint artifacts.
+    CHECKPOINT_ARTIFACTS_DIGEST = 2;
   }
 
   optional CheckpointCommitmentKind kind = 1;

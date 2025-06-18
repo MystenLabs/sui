@@ -5597,6 +5597,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "grpc-reader"
+version = "1.50.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "fastcrypto",
+ "hex",
+ "rand 0.8.5",
+ "shared-crypto",
+ "sui-json-rpc-types",
+ "sui-rpc-api",
+ "sui-sdk",
+ "sui-types",
+ "tokio",
+]
+
+[[package]]
 name = "guppy"
 version = "0.17.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12396,6 +12413,8 @@ dependencies = [
  "fastcrypto",
  "serde",
  "serde_repr",
+ "thiserror 1.0.69",
+ "tracing",
 ]
 
 [[package]]
@@ -14180,7 +14199,7 @@ dependencies = [
 [[package]]
 name = "sui-graphql-client"
 version = "0.0.4"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=7d485ababecf7282dc7d772316ccdb07b9b24753#7d485ababecf7282dc7d772316ccdb07b9b24753"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=6820f04ef77f050a0a892bed40a537861cd295f9#6820f04ef77f050a0a892bed40a537861cd295f9"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -14204,7 +14223,7 @@ dependencies = [
 [[package]]
 name = "sui-graphql-client-build"
 version = "0.0.4"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=7d485ababecf7282dc7d772316ccdb07b9b24753#7d485ababecf7282dc7d772316ccdb07b9b24753"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=6820f04ef77f050a0a892bed40a537861cd295f9#6820f04ef77f050a0a892bed40a537861cd295f9"
 dependencies = [
  "cynic-codegen",
 ]
@@ -15813,7 +15832,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.0.4"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=7d485ababecf7282dc7d772316ccdb07b9b24753#7d485ababecf7282dc7d772316ccdb07b9b24753"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=6820f04ef77f050a0a892bed40a537861cd295f9#6820f04ef77f050a0a892bed40a537861cd295f9"
 dependencies = [
  "base64ct",
  "bcs",

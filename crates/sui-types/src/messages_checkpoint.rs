@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::base_types::ObjectID;
 use crate::base_types::{
     random_object_ref, ExecutionData, ExecutionDigests, VerifiedExecutionData,
 };
@@ -10,7 +11,7 @@ use crate::crypto::{
     AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo, RandomnessRound,
 };
 use crate::digests::Digest;
-use crate::effects::{TestEffectsBuilder, TransactionEffectsAPI};
+use crate::effects::{ObjectChange, TestEffectsBuilder, TransactionEffects, TransactionEffectsAPI};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
 use crate::global_state_hash::GlobalStateHash;
@@ -23,6 +24,7 @@ use crate::transaction::{Transaction, TransactionData};
 use crate::{base_types::AuthorityName, committee::Committee, error::SuiError};
 use anyhow::Result;
 use fastcrypto::hash::MultisetHash;
+use fastcrypto::hash::Blake2b256;
 use mysten_metrics::histogram::Histogram as MystenHistogram;
 use once_cell::sync::OnceCell;
 use prometheus::Histogram;
@@ -30,6 +32,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use shared_crypto::intent::{Intent, IntentScope};
+use shared_crypto::merkle::merkle_root;
+use std::collections::BTreeMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -119,15 +123,100 @@ impl Default for ECMHLiveObjectSetDigest {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum CheckpointArtifact {
+    // Object state before and after this checkpoint for all touched objects
+    AccumulatedObjectChange(ObjectChange),
+    // Execution digests for all transactions in this checkpoint
+    ExecutionDigests(ExecutionDigests),
+    // More things? Events?
+}
+
+#[derive(Debug)]
+pub struct CheckpointArtifacts {
+    pub contents: Vec<CheckpointArtifact>,
+}
+
+impl From<&Vec<TransactionEffects>> for CheckpointArtifacts {
+    fn from(effects: &Vec<TransactionEffects>) -> Self {
+        let all_object_changes = effects
+            .iter()
+            .map(|e| e.object_changes())
+            .collect::<Vec<_>>();
+
+        let mut net_object_changes: BTreeMap<ObjectID, ObjectChange> = BTreeMap::new();
+        for object_changes in all_object_changes {
+            for object_change in object_changes {
+                if let Some(existing_object_change) = net_object_changes.get(&object_change.id) {
+                    net_object_changes.insert(
+                        object_change.id,
+                        ObjectChange {
+                            id: object_change.id,
+                            input_version: existing_object_change.input_version,
+                            input_digest: existing_object_change.input_digest,
+                            output_version: object_change.output_version,
+                            output_digest: object_change.output_digest,
+                            id_operation: object_change.id_operation,
+                        },
+                    );
+                } else {
+                    net_object_changes.insert(object_change.id, object_change);
+                }
+            }
+        }
+
+        let object_artifacts = net_object_changes
+            .into_values()
+            .map(|object_change| CheckpointArtifact::AccumulatedObjectChange(object_change))
+            .collect::<Vec<_>>();
+        let execution_digest_artifacts = effects
+            .iter()
+            .map(|e| CheckpointArtifact::ExecutionDigests(e.execution_digests()))
+            .collect::<Vec<_>>();
+        let artifacts = [object_artifacts, execution_digest_artifacts].concat();
+
+        Self { contents: artifacts }
+    }
+}
+
+impl CheckpointArtifacts {
+    pub fn digest(&self) -> CheckpointArtifactsDigest {
+        CheckpointArtifactsDigest::from(
+            merkle_root::<Blake2b256, _>(
+                self.contents.iter().map(|a| bcs::to_bytes(a).unwrap()),
+            )
+        )
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+pub struct CheckpointArtifactsDigest {
+    pub digest: Digest,
+}
+
+impl From<[u8; 32]> for CheckpointArtifactsDigest {
+    fn from(digest: [u8; 32]) -> Self {
+        Self {
+            digest: Digest::new(digest),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
 pub enum CheckpointCommitment {
     ECMHLiveObjectSetDigest(ECMHLiveObjectSetDigest),
-    // Other commitment types (e.g. merkle roots) go here.
+    CheckpointArtifactsDigest(CheckpointArtifactsDigest),
 }
 
 impl From<ECMHLiveObjectSetDigest> for CheckpointCommitment {
     fn from(d: ECMHLiveObjectSetDigest) -> Self {
         Self::ECMHLiveObjectSetDigest(d)
+    }
+}
+
+impl From<CheckpointArtifactsDigest> for CheckpointCommitment {
+    fn from(d: CheckpointArtifactsDigest) -> Self {
+        Self::CheckpointArtifactsDigest(d)
     }
 }
 
@@ -211,6 +300,7 @@ impl CheckpointSummary {
         end_of_epoch_data: Option<EndOfEpochData>,
         timestamp_ms: CheckpointTimestamp,
         randomness_rounds: Vec<RandomnessRound>,
+        checkpoint_commitments: Vec<CheckpointCommitment>,
     ) -> CheckpointSummary {
         let content_digest = *transactions.digest();
 
@@ -235,7 +325,7 @@ impl CheckpointSummary {
             end_of_epoch_data,
             timestamp_ms,
             version_specific_data,
-            checkpoint_commitments: Default::default(),
+            checkpoint_commitments,
         }
     }
 
@@ -796,6 +886,7 @@ mod tests {
                         None,
                         0,
                         Vec::new(),
+                        Vec::new(),
                     ),
                     k,
                     name,
@@ -831,6 +922,7 @@ mod tests {
             GasCostSummary::default(),
             None,
             0,
+            Vec::new(),
             Vec::new(),
         );
 
@@ -873,6 +965,7 @@ mod tests {
                         None,
                         0,
                         Vec::new(),
+                        Vec::new(),
                     ),
                     k,
                     name,
@@ -912,6 +1005,7 @@ mod tests {
             GasCostSummary::default(),
             None,
             100,
+            Vec::new(),
             Vec::new(),
         )
     }

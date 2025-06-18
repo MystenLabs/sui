@@ -579,6 +579,7 @@ impl TestCheckpointDataBuilder {
             None,
             0,
             vec![],
+            vec![],
         );
         let (committee, keys) = Committee::new_simple_test_committee();
         let checkpoint_cert = CertifiedCheckpointSummary::new_from_keypairs_for_testing(
