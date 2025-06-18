@@ -10,8 +10,8 @@ use crate::{
     },
     naming::ast as N,
     parser::ast as P,
-    shared::string_utils::format_oxford_list,
     shared::Name,
+    shared::string_utils::format_oxford_list,
     typing::ast as T,
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
 };

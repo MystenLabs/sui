@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diag,
-    diagnostics::{codes::*, Diagnostic},
+    CompiledModuleInfoMap, diag,
+    diagnostics::{Diagnostic, codes::*},
     editions::{FeatureGate, Flavor},
     expansion::ast::{
         AbilitySet, DottedUsage, Fields, Friend, ModuleAccess_, ModuleIdent, ModuleIdent_,
@@ -13,7 +13,7 @@ use crate::{
     ice, ice_assert,
     naming::ast::{
         self as N, BlockLabel, DatatypeTypeParameter, Function, IndexSyntaxMethods,
-        ResolvedUseFuns, TParam, TParamID, Type, TypeName, TypeName_, Type_, UseFuns,
+        ResolvedUseFuns, TParam, TParamID, Type, Type_, TypeName, TypeName_, UseFuns,
     },
     parser::ast::{
         Ability_, BinOp, BinOp_, ConstantName, DatatypeName, DocComment, Field, FunctionName,
@@ -34,14 +34,13 @@ use crate::{
     typing::{
         ast::{self as T},
         core::{
-            self, global_use_funs, public_testing_visibility, report_visibility_error, Context,
-            ModuleContext, PublicForTesting, ResolvedFunctionType, Subst,
+            self, Context, ModuleContext, PublicForTesting, ResolvedFunctionType, Subst,
+            global_use_funs, public_testing_visibility, report_visibility_error,
         },
         dependency_ordering, expand, infinite_instantiations, macro_expand, match_analysis,
         recursive_datatypes,
         syntax_methods::validate_syntax_methods,
     },
-    CompiledModuleInfoMap,
 };
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
@@ -2975,8 +2974,8 @@ fn check_mutation(context: &mut Context, loc: Loc, given_ref: Type, rvalue_ty: &
 //**************************************************************************************************
 
 fn resolve_field(context: &mut Context, loc: Loc, ty: Type, field: &Field) -> Type {
-    use TypeName_::*;
     use Type_::*;
+    use TypeName_::*;
     const UNINFERRED_MSG: &str =
         "Could not infer the type before field access. Try annotating here";
     let msg = || format!("Unbound field '{}'", field);
@@ -3859,8 +3858,8 @@ fn exp_to_borrow_(
     base_type: Type,
     warn_on_constant: bool,
 ) -> Box<T::Exp> {
-    use Type_::*;
     use T::UnannotatedExp_ as TE;
+    use Type_::*;
     if warn_on_constant {
         warn_on_constant_borrow(context, eb.exp.loc, &eb)
     };
@@ -4016,8 +4015,8 @@ fn type_to_type_name_(
     error_msg: String,
     report_error: bool,
 ) -> Option<TypeName> {
-    use TypeName_ as TN;
     use Type_ as Ty;
+    use TypeName_ as TN;
     match &ty.value {
         Ty::Apply(_, tn @ sp!(_, TN::ModuleType(_, _) | TN::Builtin(_)), _) => Some(*tn),
         t => {

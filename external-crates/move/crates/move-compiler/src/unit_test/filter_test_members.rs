@@ -2,23 +2,22 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_ir_types::location::{sp, Loc};
+use move_ir_types::location::{Loc, sp};
 use move_symbol_pool::Symbol;
 
 use crate::{
-    diag,
+    CompiledModuleInfoMap, diag,
     diagnostics::DiagnosticReporter,
     expansion::ast::Address,
     parser::{
         ast::{self as P, DocComment, NamePath, PathEntry},
-        filter::{filter_program, FilterContext},
+        filter::{FilterContext, filter_program},
     },
     shared::{
-        known_attributes::{self, AttributeKind_},
         CompilationEnv,
+        known_attributes::{self, AttributeKind_},
     },
     sui_mode::STD_ADDR_VALUE,
-    CompiledModuleInfoMap,
 };
 
 use std::sync::Arc;

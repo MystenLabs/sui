@@ -28,12 +28,12 @@ use crate::{
         *,
     },
     shared::{
-        files::{FilesSourceText, MappedFiles},
-        program_info::ModuleInfo,
-        unique_map::UniqueMap,
         CompilationEnv, Flags, IndexedPhysicalPackagePath, IndexedVfsPackagePath, Name,
         NamedAddressMap, NamedAddressMaps, NumericalAddress, PackageConfig, PackagePaths, SaveFlag,
         SaveHook,
+        files::{FilesSourceText, MappedFiles},
+        program_info::ModuleInfo,
+        unique_map::UniqueMap,
     },
     sui_mode::{self, info::TransferKind},
     to_bytecode::{self, context::FunctionDeclaration},
@@ -41,8 +41,8 @@ use crate::{
     unit_test,
 };
 use move_command_line_common::files::{
-    extension_equals, find_filenames_and_keep_specified, DEBUG_INFO_EXTENSION,
-    MOVE_COMPILED_EXTENSION, MOVE_EXTENSION,
+    DEBUG_INFO_EXTENSION, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, extension_equals,
+    find_filenames_and_keep_specified,
 };
 use move_core_types::language_storage::ModuleId as CompiledModuleId;
 use move_ir_types::{
@@ -59,9 +59,9 @@ use std::{
     sync::Arc,
 };
 use vfs::{
+    VfsPath,
     impls::{memory::MemoryFS, physical::PhysicalFS},
     path::VfsFileType,
-    VfsPath,
 };
 
 //**************************************************************************************************
