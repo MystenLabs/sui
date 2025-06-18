@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_tests::{send_consensus, send_consensus_no_execution};
+use crate::authority::shared_object_version_manager::Schedulable;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::authority_aggregator::authority_aggregator_tests::{
@@ -431,7 +432,9 @@ async fn test_execution_with_dependencies() {
     for cert in executed_shared_certs.iter() {
         let assigned_versions = send_consensus_no_execution(&authorities[3], cert).await;
         certs.push((
-            VerifiedExecutableTransaction::new_from_certificate(cert.clone()),
+            Schedulable::Transaction(VerifiedExecutableTransaction::new_from_certificate(
+                cert.clone(),
+            )),
             ExecutionEnv::new().with_assigned_versions(assigned_versions),
         ));
     }
@@ -446,7 +449,7 @@ async fn test_execution_with_dependencies() {
     for cert in executed_owned_certs.iter().rev() {
         authorities[3].enqueue_transactions_for_execution(
             vec![(
-                VerifiedExecutableTransaction::new_from_certificate(cert.clone()),
+                VerifiedExecutableTransaction::new_from_certificate(cert.clone()).into(),
                 ExecutionEnv::new(),
             )],
             &authorities[3].epoch_store_for_testing(),

@@ -388,7 +388,7 @@ pub async fn enqueue_all_and_execute_all(
             .iter()
             .map(|(cert, env)| {
                 (
-                    VerifiedExecutableTransaction::new_from_certificate(cert.clone()),
+                    VerifiedExecutableTransaction::new_from_certificate(cert.clone()).into(),
                     env.clone(),
                 )
             })
@@ -415,7 +415,7 @@ pub async fn execute_sequenced_certificate_to_effects(
     };
     authority.enqueue_transactions_for_execution(
         vec![(
-            VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
+            VerifiedExecutableTransaction::new_from_certificate(certificate.clone()).into(),
             env.clone(),
         )],
         &authority.epoch_store_for_testing(),
@@ -461,7 +461,7 @@ pub async fn send_consensus(
 
     authority
         .execution_scheduler()
-        .enqueue(certs, &authority.epoch_store_for_testing());
+        .enqueue_transactions(certs, &authority.epoch_store_for_testing());
 
     assigned_versions
 }
@@ -496,7 +496,7 @@ pub async fn send_batch_consensus_no_execution(
     authority: &AuthorityState,
     certificates: &[VerifiedCertificate],
     skip_consensus_commit_prologue_in_test: bool,
-) -> (Vec<VerifiedExecutableTransaction>, AssignedTxAndVersions) {
+) -> (Vec<Schedulable>, AssignedTxAndVersions) {
     let transactions = certificates
         .iter()
         .map(|cert| {

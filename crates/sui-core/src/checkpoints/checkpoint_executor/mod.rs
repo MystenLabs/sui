@@ -811,7 +811,7 @@ impl CheckpointExecutor {
 
         // Enqueue unexecuted transactions with their expected effects digests
         self.execution_scheduler
-            .enqueue(unexecuted_txns, &self.epoch_store);
+            .enqueue_transactions(unexecuted_txns, &self.epoch_store);
 
         unexecuted_tx_digests
     }
@@ -862,7 +862,7 @@ impl CheckpointExecutor {
             change_epoch_fx.digest(),
             assigned_versions
         );
-        self.execution_scheduler.enqueue(
+        self.execution_scheduler.enqueue_transactions(
             vec![(
                 change_epoch_tx.clone(),
                 ExecutionEnv {

@@ -3,7 +3,8 @@
 
 use crate::{
     authority::{
-        authority_per_epoch_store::AuthorityPerEpochStore, AuthorityMetrics, ExecutionEnv,
+        authority_per_epoch_store::AuthorityPerEpochStore,
+        shared_object_version_manager::Schedulable, AuthorityMetrics, ExecutionEnv,
     },
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
     execution_scheduler::{ExecutingGuard, PendingCertificateStats},
@@ -217,6 +218,55 @@ impl ExecutionScheduler {
 impl ExecutionSchedulerAPI for ExecutionScheduler {
     fn enqueue(
         &self,
+        certs: Vec<(Schedulable, ExecutionEnv)>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        // schedule all transactions immediately
+        let mut txns = Vec::with_capacity(certs.len());
+        let mut rest = Vec::new();
+
+        for (schedulable, env) in certs {
+            if let Schedulable::Transaction(tx) = schedulable {
+                txns.push((tx, env));
+            } else {
+                rest.push((schedulable, env));
+            }
+        }
+
+        self.enqueue_transactions(txns, epoch_store);
+
+        if rest.is_empty() {
+            return;
+        }
+
+        let rest_keys = rest
+            .iter()
+            .map(|(schedulable, _)| schedulable.key())
+            .collect::<Vec<_>>();
+
+        let scheduler = self.clone();
+        let epoch_store = epoch_store.clone();
+        spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
+            let rest_digests = epoch_store
+                .notify_read_executed_digests(&rest_keys)
+                .await
+                .expect("db error");
+            let rest_transactions = scheduler
+                .transaction_cache_read
+                .multi_get_transaction_blocks(&rest_digests)
+                .into_iter()
+                .map(|tx| {
+                    let tx = tx.expect("tx must exist").as_ref().clone();
+                    VerifiedExecutableTransaction::new_system(tx, epoch_store.epoch())
+                })
+                .zip(rest.into_iter().map(|(_, env)| env))
+                .collect::<Vec<_>>();
+            scheduler.enqueue_transactions(rest_transactions, &epoch_store);
+        }));
+    }
+
+    fn enqueue_transactions(
+        &self,
         certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
@@ -389,7 +439,7 @@ mod test {
         assert_eq!(execution_scheduler.num_pending_certificates(), 0);
 
         // Enqueue empty vec should not crash.
-        execution_scheduler.enqueue(vec![], &state.epoch_store_for_testing());
+        execution_scheduler.enqueue_transactions(vec![], &state.epoch_store_for_testing());
         // scheduler should output no transaction.
         assert!(rx_ready_certificates
             .try_recv()
@@ -398,7 +448,7 @@ mod test {
         // Enqueue a transaction with existing gas object, empty input.
         let transaction = make_transaction(gas_objects[0].clone(), vec![]);
         let tx_start_time = Instant::now();
-        execution_scheduler.enqueue(
+        execution_scheduler.enqueue_transactions(
             vec![(
                 transaction.clone(),
                 ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
@@ -430,7 +480,7 @@ mod test {
         );
         let transaction = make_transaction(gas_object_new.clone(), vec![]);
         let tx_start_time = Instant::now();
-        execution_scheduler.enqueue(
+        execution_scheduler.enqueue_transactions(
             vec![(
                 transaction.clone(),
                 ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
@@ -446,7 +496,7 @@ mod test {
         assert_eq!(execution_scheduler.num_pending_certificates(), 1);
 
         // Duplicated enqueue is allowed.
-        execution_scheduler.enqueue(
+        execution_scheduler.enqueue_transactions(
             vec![(
                 transaction.clone(),
                 ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
@@ -607,7 +657,7 @@ mod test {
             ),
         ];
 
-        execution_scheduler.enqueue(
+        execution_scheduler.enqueue_transactions(
             vec![
                 (
                     transaction_read_0.clone(),
@@ -737,7 +787,7 @@ mod test {
         for (i, (_, txn)) in object_arguments.iter().enumerate() {
             // scheduler should output no transaction yet since waiting on receiving object or
             // ImmOrOwnedObject input.
-            execution_scheduler.enqueue(
+            execution_scheduler.enqueue_transactions(
                 vec![(
                     txn.clone(),
                     ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
@@ -821,7 +871,7 @@ mod test {
         );
 
         // scheduler should output no transaction yet since waiting on receiving object.
-        execution_scheduler.enqueue(
+        execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction0.clone(),
                 ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
@@ -833,7 +883,7 @@ mod test {
         assert_eq!(execution_scheduler.num_pending_certificates(), 1);
 
         // scheduler should output no transaction yet since waiting on receiving object.
-        execution_scheduler.enqueue(
+        execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction1.clone(),
                 ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
@@ -845,7 +895,7 @@ mod test {
         assert_eq!(execution_scheduler.num_pending_certificates(), 2);
 
         // Duplicate enqueue of receiving object is allowed.
-        execution_scheduler.enqueue(
+        execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction0.clone(),
                 ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
@@ -929,7 +979,7 @@ mod test {
         );
 
         // scheduler should output no transaction yet since waiting on receiving object.
-        execution_scheduler.enqueue(
+        execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction0.clone(),
                 ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
@@ -941,7 +991,7 @@ mod test {
         assert_eq!(execution_scheduler.num_pending_certificates(), 1);
 
         // scheduler should output no transaction yet since waiting on receiving object.
-        execution_scheduler.enqueue(
+        execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction1.clone(),
                 ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
@@ -954,7 +1004,7 @@ mod test {
 
         // Different transaction with a duplicate receiving object reference is allowed.
         // Both transaction's will be outputted once the receiving object is available.
-        execution_scheduler.enqueue(
+        execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction01.clone(),
                 ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
@@ -981,7 +1031,7 @@ mod test {
 
         // Enqueue a transaction with a receiving object that is available at the time it is enqueued.
         // This should be immediately available.
-        execution_scheduler.enqueue(
+        execution_scheduler.enqueue_transactions(
             vec![(
                 tx1.clone(),
                 ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
@@ -1058,21 +1108,21 @@ mod test {
         );
 
         // scheduler should output no transaction yet since waiting on receiving object.
-        execution_scheduler.enqueue(
+        execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction0.clone(),
                 ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
             )],
             &state.epoch_store_for_testing(),
         );
-        execution_scheduler.enqueue(
+        execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction01.clone(),
                 ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
             )],
             &state.epoch_store_for_testing(),
         );
-        execution_scheduler.enqueue(
+        execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction1.clone(),
                 ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
@@ -1156,7 +1206,7 @@ mod test {
             ),
         ];
 
-        execution_scheduler.enqueue(
+        execution_scheduler.enqueue_transactions(
             vec![(
                 cancelled_transaction.clone(),
                 ExecutionEnv {

@@ -49,7 +49,7 @@ use crate::{
         backpressure::{BackpressureManager, BackpressureSubscriber},
         consensus_tx_status_cache::ConsensusTxStatus,
         epoch_start_configuration::EpochStartConfigTrait,
-        shared_object_version_manager::AssignedTxAndVersions,
+        shared_object_version_manager::{AssignedTxAndVersions, Schedulable},
         AuthorityMetrics, AuthorityState, ExecutionEnv,
     },
     checkpoints::{CheckpointService, CheckpointServiceNotify},
@@ -877,7 +877,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 pub(crate) struct TransactionManagerSender {
     // Using unbounded channel to avoid blocking consensus commit and transaction handler.
     sender: monitored_mpsc::UnboundedSender<(
-        Vec<VerifiedExecutableTransaction>,
+        Vec<Schedulable>,
         AssignedTxAndVersions,
         SchedulingSource,
     )>,
@@ -895,7 +895,7 @@ impl TransactionManagerSender {
 
     fn send(
         &self,
-        transactions: Vec<VerifiedExecutableTransaction>,
+        transactions: Vec<Schedulable>,
         assigned_versions: AssignedTxAndVersions,
         scheduling_source: SchedulingSource,
     ) {
@@ -906,7 +906,7 @@ impl TransactionManagerSender {
 
     async fn run(
         mut recv: monitored_mpsc::UnboundedReceiver<(
-            Vec<VerifiedExecutableTransaction>,
+            Vec<Schedulable>,
             AssignedTxAndVersions,
             SchedulingSource,
         )>,
@@ -1331,12 +1331,12 @@ impl ConsensusBlockHandler {
                         continue;
                     }
                     let tx = VerifiedTransaction::new_unchecked(*tx);
-                    executable_transactions.push(
+                    executable_transactions.push(Schedulable::Transaction(
                         VerifiedExecutableTransaction::new_from_consensus(
                             tx,
                             self.epoch_store.epoch(),
                         ),
-                    );
+                    ));
                 }
             }
         }

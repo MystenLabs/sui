@@ -65,7 +65,8 @@ use crate::consensus_adapter::ConnectionMonitorStatusForTests;
 use crate::{
     authority::{
         authority_per_epoch_store::AuthorityPerEpochStore,
-        consensus_tx_status_cache::NotifyReadConsensusTxStatusResult, ExecutionEnv,
+        consensus_tx_status_cache::NotifyReadConsensusTxStatusResult,
+        shared_object_version_manager::Schedulable, ExecutionEnv,
     },
     checkpoints::CheckpointStore,
     execution_scheduler::SchedulingSource,
@@ -867,6 +868,7 @@ impl ValidatorService {
                         None
                     }
                 })
+                .map(|(tx, env)| (Schedulable::Transaction(tx), env))
                 .collect::<Vec<_>>();
             if !certificates_without_shared_objects.is_empty() {
                 self.state.enqueue_transactions_for_execution(

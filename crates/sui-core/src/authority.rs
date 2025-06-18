@@ -1293,7 +1293,7 @@ impl AuthorityState {
             // For owned object transactions, they can be enqueued for execution immediately.
             self.enqueue_transactions_for_execution(
                 vec![(
-                    transaction.clone(),
+                    Schedulable::Transaction(transaction.clone()),
                     ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
                 )],
                 epoch_store,
@@ -1674,13 +1674,12 @@ impl AuthorityState {
             monitored_scope("Execution::commit_certificate");
         let _metrics_guard = self.metrics.commit_certificate_latency.start_timer();
 
-        let tx_key = certificate.key();
         let tx_digest = certificate.digest();
         let output_keys = transaction_outputs.output_keys.clone();
 
         // The insertion to epoch_store is not atomic with the insertion to the perpetual store. This is OK because
         // we insert to the epoch store first. And during lookups we always look up in the perpetual store first.
-        epoch_store.insert_tx_key(&tx_key, tx_digest)?;
+        epoch_store.insert_executed_in_epoch(tx_digest);
 
         // Allow testing what happens if we crash here.
         fail_point!("crash");
@@ -3247,7 +3246,7 @@ impl AuthorityState {
     /// TODO: Cleanup this function.
     pub fn enqueue_transactions_for_execution(
         &self,
-        txns: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
+        txns: Vec<(Schedulable, ExecutionEnv)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
         self.execution_scheduler.enqueue(txns, epoch_store)
@@ -5603,6 +5602,7 @@ impl RandomnessRoundReceiver {
             );
             return;
         }
+        let key = TransactionKey::RandomnessRound(epoch, round);
         let transaction = VerifiedTransaction::new_randomness_state_update(
             epoch,
             round,
@@ -5627,13 +5627,21 @@ impl RandomnessRoundReceiver {
             .get_cache_commit()
             .persist_transaction(&transaction);
 
-        self.authority_state.execution_scheduler().enqueue(
-            vec![(
-                transaction,
-                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
-            )],
-            &epoch_store,
-        );
+        // Notify the scheduler that the transaction key now has a known digest
+        if epoch_store.insert_tx_key(key, digest).is_err() {
+            warn!("epoch ended while handling new randomness");
+        }
+
+        // TODO: delete this when transaction manager is deleted
+        match self.authority_state.execution_scheduler().as_ref() {
+            ExecutionSchedulerWrapper::ExecutionScheduler(_) => {}
+            ExecutionSchedulerWrapper::TransactionManager(manager) => {
+                // Notifies transaction manager about transaction and output objects committed.
+                // This provides necessary information to transaction manager to start executing
+                // additional ready transactions.
+                manager.notify_transaction_key(&epoch_store, key, digest);
+            }
+        }
 
         let authority_state = self.authority_state.clone();
         spawn_monitored_task!(async move {

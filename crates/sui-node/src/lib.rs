@@ -31,6 +31,7 @@ use sui_core::authority::authority_store_tables::{
 use sui_core::authority::backpressure::BackpressureManager;
 use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::authority::execution_time_estimator::ExecutionTimeObserver;
+use sui_core::authority::shared_object_version_manager::Schedulable;
 use sui_core::authority::ExecutionEnv;
 use sui_core::authority::RandomnessRoundReceiver;
 use sui_core::consensus_adapter::ConsensusClient;
@@ -1585,7 +1586,7 @@ impl SuiNode {
                         .expect("db error")
                     {
                         pending_consensus_certificates.push((
-                            tx,
+                            Schedulable::Transaction(tx),
                             ExecutionEnv {
                                 expected_effects_digest: Some(fx_digest),
                                 scheduling_source: SchedulingSource::NonFastPath,
@@ -1594,7 +1595,7 @@ impl SuiNode {
                         ));
                     } else {
                         additional_certs.push((
-                            tx,
+                            Schedulable::Transaction(tx),
                             ExecutionEnv::default()
                                 .with_scheduling_source(SchedulingSource::NonFastPath),
                         ));
@@ -1606,7 +1607,8 @@ impl SuiNode {
 
         let digests = pending_consensus_certificates
             .iter()
-            .map(|(tx, _)| *tx.digest())
+            // unwrap_digest okay because only user certs are in pending_consensus_certificates
+            .map(|(tx, _)| *tx.key().unwrap_digest())
             .collect::<Vec<_>>();
 
         info!(

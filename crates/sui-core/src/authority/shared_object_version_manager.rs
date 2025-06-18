@@ -46,6 +46,30 @@ pub enum Schedulable<T = VerifiedExecutableTransaction> {
     RandomnessStateUpdate(EpochId, RandomnessRound),
 }
 
+impl From<VerifiedExecutableTransaction> for Schedulable<VerifiedExecutableTransaction> {
+    fn from(tx: VerifiedExecutableTransaction) -> Self {
+        Schedulable::Transaction(tx)
+    }
+}
+
+// AsTx is like Deref, in that it allows us to use either refs or values in Schedulable.
+// Deref does not work because it conflicts with the impl of Deref for VerifiedExecutableTransaction.
+pub trait AsTx {
+    fn as_tx(&self) -> &VerifiedExecutableTransaction;
+}
+
+impl AsTx for VerifiedExecutableTransaction {
+    fn as_tx(&self) -> &VerifiedExecutableTransaction {
+        self
+    }
+}
+
+impl AsTx for &'_ VerifiedExecutableTransaction {
+    fn as_tx(&self) -> &VerifiedExecutableTransaction {
+        self
+    }
+}
+
 impl Schedulable<&'_ VerifiedExecutableTransaction> {
     // Cannot use the blanket ToOwned trait impl because it just calls clone.
     pub fn to_owned_schedulable(&self) -> Schedulable<VerifiedExecutableTransaction> {
@@ -59,15 +83,25 @@ impl Schedulable<&'_ VerifiedExecutableTransaction> {
 }
 
 impl<T> Schedulable<T> {
+    pub fn as_tx(&self) -> Option<&VerifiedExecutableTransaction>
+    where
+        T: AsTx,
+    {
+        match self {
+            Schedulable::Transaction(tx) => Some(tx.as_tx()),
+            Schedulable::RandomnessStateUpdate(_, _) => None,
+        }
+    }
+
     pub fn shared_input_objects(
         &self,
         epoch_store: &AuthorityPerEpochStore,
     ) -> impl Iterator<Item = SharedInputObject> + '_
     where
-        T: std::ops::Deref<Target = VerifiedExecutableTransaction>,
+        T: AsTx,
     {
         match self {
-            Schedulable::Transaction(tx) => Either::Left(tx.deref().shared_input_objects()),
+            Schedulable::Transaction(tx) => Either::Left(tx.as_tx().shared_input_objects()),
             Schedulable::RandomnessStateUpdate(_, _) => {
                 Either::Right(std::iter::once(SharedInputObject {
                     id: SUI_RANDOMNESS_STATE_OBJECT_ID,
@@ -83,20 +117,20 @@ impl<T> Schedulable<T> {
 
     pub fn contains_shared_object(&self) -> bool
     where
-        T: std::ops::Deref<Target = VerifiedExecutableTransaction>,
+        T: AsTx,
     {
         match self {
-            Schedulable::Transaction(tx) => tx.deref().contains_shared_object(),
+            Schedulable::Transaction(tx) => tx.as_tx().contains_shared_object(),
             Schedulable::RandomnessStateUpdate(_, _) => true,
         }
     }
 
     pub fn non_shared_input_object_keys(&self) -> Vec<ObjectKey>
     where
-        T: std::ops::Deref<Target = VerifiedExecutableTransaction>,
+        T: AsTx,
     {
         match self {
-            Schedulable::Transaction(tx) => transaction_non_shared_input_object_keys(tx.deref())
+            Schedulable::Transaction(tx) => transaction_non_shared_input_object_keys(tx.as_tx())
                 .expect("Transaction input should have been verified"),
             Schedulable::RandomnessStateUpdate(_, _) => vec![],
         }
@@ -104,30 +138,20 @@ impl<T> Schedulable<T> {
 
     pub fn receiving_object_keys(&self) -> Vec<ObjectKey>
     where
-        T: std::ops::Deref<Target = VerifiedExecutableTransaction>,
+        T: AsTx,
     {
         match self {
-            Schedulable::Transaction(tx) => transaction_receiving_object_keys(tx.deref()),
+            Schedulable::Transaction(tx) => transaction_receiving_object_keys(tx.as_tx()),
             Schedulable::RandomnessStateUpdate(_, _) => vec![],
         }
     }
-}
 
-impl Schedulable<VerifiedExecutableTransaction> {
-    pub fn key(&self) -> TransactionKey {
+    pub fn key(&self) -> TransactionKey
+    where
+        T: AsTx,
+    {
         match self {
-            Schedulable::Transaction(tx) => tx.inner().key(),
-            Schedulable::RandomnessStateUpdate(epoch, round) => {
-                TransactionKey::RandomnessRound(*epoch, *round)
-            }
-        }
-    }
-}
-
-impl Schedulable<&'_ VerifiedExecutableTransaction> {
-    pub fn key(&self) -> TransactionKey {
-        match self {
-            Schedulable::Transaction(tx) => tx.key(),
+            Schedulable::Transaction(tx) => tx.as_tx().key(),
             Schedulable::RandomnessStateUpdate(epoch, round) => {
                 TransactionKey::RandomnessRound(*epoch, *round)
             }
@@ -150,7 +174,7 @@ impl SharedObjVerManager {
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
     ) -> SuiResult<ConsensusSharedObjVerAssignment>
     where
-        T: std::ops::Deref<Target = VerifiedExecutableTransaction> + 'a,
+        T: AsTx + 'a,
     {
         let mut shared_input_next_versions = get_or_init_versions(
             assignables
@@ -230,7 +254,7 @@ impl SharedObjVerManager {
 
     pub fn assign_versions_for_certificate(
         epoch_store: &AuthorityPerEpochStore,
-        assignable: &Schedulable<impl std::ops::Deref<Target = VerifiedExecutableTransaction>>,
+        assignable: &Schedulable<impl AsTx>,
         shared_input_next_versions: &mut HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
     ) -> AssignedVersions {
@@ -413,7 +437,7 @@ mod tests {
         let epoch_store = authority.epoch_store_for_testing();
         let assignables = certs
             .iter()
-            .map(|cert| Schedulable::Transaction(cert))
+            .map(Schedulable::Transaction)
             .collect::<Vec<_>>();
         let ConsensusSharedObjVerAssignment {
             shared_input_next_versions,
@@ -503,7 +527,7 @@ mod tests {
         ];
         let assignables = certs
             .iter()
-            .map(|cert| Schedulable::Transaction(cert))
+            .map(Schedulable::Transaction)
             .collect::<Vec<_>>();
         let ConsensusSharedObjVerAssignment {
             shared_input_next_versions,
@@ -651,7 +675,7 @@ mod tests {
 
         let assignables = certs
             .iter()
-            .map(|cert| Schedulable::Transaction(cert))
+            .map(Schedulable::Transaction)
             .collect::<Vec<_>>();
 
         // Run version assignment logic.

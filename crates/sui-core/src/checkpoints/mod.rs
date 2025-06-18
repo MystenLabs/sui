@@ -3132,8 +3132,6 @@ mod tests {
         let epoch_store = state.epoch_store_for_testing();
         let effects = e(digest, dependencies, gas_used);
         store.insert(digest, effects.clone());
-        epoch_store
-            .insert_tx_key(&TransactionKey::Digest(digest), &digest)
-            .expect("Inserting cert fx and sigs should not fail");
+        epoch_store.insert_executed_in_epoch(&digest);
     }
 }

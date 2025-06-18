@@ -19,7 +19,7 @@ use sui_types::{
     fp_ensure,
     message_envelope::Message,
     storage::InputKey,
-    transaction::TransactionDataAPI,
+    transaction::{TransactionDataAPI, TransactionKey},
 };
 use sui_types::{executable_transaction::VerifiedExecutableTransaction, fp_bail};
 use tokio::sync::mpsc::UnboundedSender;
@@ -27,7 +27,11 @@ use tokio::time::Instant;
 use tracing::{error, info, instrument, trace, warn};
 
 use crate::{
-    authority::authority_per_epoch_store::AuthorityPerEpochStore, execution_cache::ObjectCacheRead,
+    authority::{
+        authority_per_epoch_store::AuthorityPerEpochStore,
+        shared_object_version_manager::Schedulable,
+    },
+    execution_cache::ObjectCacheRead,
 };
 use crate::{
     authority::{AuthorityMetrics, ExecutionEnv},
@@ -221,6 +225,9 @@ struct Inner {
 
     // Transactions that have all input objects available, but have not finished execution.
     executing_certificates: HashSet<TransactionDigest>,
+
+    // Transactions for which we do not have a digest or transaction yet
+    pending_transaction_keys: HashMap<TransactionKey, ExecutionEnv>,
 }
 
 impl Inner {
@@ -232,6 +239,7 @@ impl Inner {
             available_objects_cache: AvailableObjectsCache::new(metrics),
             pending_certificates: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
             executing_certificates: HashSet::with_capacity(MIN_HASHMAP_CAPACITY),
+            pending_transaction_keys: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
         }
     }
 
@@ -340,6 +348,40 @@ impl TransactionManager {
         *inner = Inner::new(new_epoch, self.metrics.clone());
     }
 
+    pub(crate) fn notify_transaction_key(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        key: TransactionKey,
+        digest: TransactionDigest,
+    ) {
+        assert!(
+            !matches!(key, TransactionKey::Digest(_)),
+            "useless notify_transaction_key"
+        );
+
+        let certs = {
+            let reconfig_lock = self.inner.read();
+            let mut inner = reconfig_lock.write();
+            if let Some(env) = inner.pending_transaction_keys.remove(&key) {
+                // we were waiting on the key, so load the transaction
+                let transaction = self
+                    .transaction_cache_read
+                    .get_transaction_block(&digest)
+                    .expect("tx must exist")
+                    .as_ref()
+                    .clone();
+                let cert =
+                    VerifiedExecutableTransaction::new_system(transaction, epoch_store.epoch());
+                Some(vec![(cert, env)])
+            } else {
+                None
+            }
+        };
+        if let Some(certs) = certs {
+            self.enqueue_transactions(certs, epoch_store);
+        }
+    }
+
     #[instrument(level = "trace", skip_all)]
     pub(crate) fn notify_commit(
         &self,
@@ -382,6 +424,60 @@ impl TransactionManager {
 
 impl ExecutionSchedulerAPI for TransactionManager {
     fn enqueue(
+        &self,
+        certs: Vec<(Schedulable, ExecutionEnv)>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        // schedule all transacctions immediately
+        let mut txns = Vec::with_capacity(certs.len());
+        let mut rest = Vec::new();
+
+        for (schedulable, env) in certs {
+            if let Schedulable::Transaction(tx) = schedulable {
+                txns.push((tx, env));
+            } else {
+                rest.push((schedulable, env));
+            }
+        }
+
+        self.enqueue_transactions(txns, epoch_store);
+
+        let executable = {
+            let reconfig_lock = self.inner.read();
+
+            let mut executable = Vec::with_capacity(rest.len());
+            let mut inner = reconfig_lock.write();
+            for (schedulable, env) in rest {
+                debug_assert!(!matches!(schedulable, Schedulable::Transaction(_)));
+                let key = schedulable.key();
+
+                let Ok(digest) = epoch_store.tx_key_to_digest(&key) else {
+                    warn!("Epoch ended, not enqueueing any more transactions");
+                    return;
+                };
+
+                if let Some(digest) = digest {
+                    let transaction = self
+                        .transaction_cache_read
+                        .get_transaction_block(&digest)
+                        .expect("tx must exist")
+                        .as_ref()
+                        .clone();
+                    executable.push((
+                        VerifiedExecutableTransaction::new_system(transaction, epoch_store.epoch()),
+                        env,
+                    ));
+                } else {
+                    inner.pending_transaction_keys.insert(key, env);
+                }
+            }
+            executable
+        };
+
+        self.enqueue_transactions(executable, epoch_store);
+    }
+
+    fn enqueue_transactions(
         &self,
         certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,

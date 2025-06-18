@@ -281,7 +281,8 @@ impl LocalAuthorityClient {
                     .await?;
                 state.enqueue_transactions_for_execution(
                     vec![(
-                        VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
+                        VerifiedExecutableTransaction::new_from_certificate(certificate.clone())
+                            .into(),
                         ExecutionEnv::default(),
                     )],
                     &epoch_store,

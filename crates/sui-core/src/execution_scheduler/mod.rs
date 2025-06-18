@@ -3,7 +3,8 @@
 
 use crate::{
     authority::{
-        authority_per_epoch_store::AuthorityPerEpochStore, AuthorityMetrics, ExecutionEnv,
+        authority_per_epoch_store::AuthorityPerEpochStore,
+        shared_object_version_manager::Schedulable, AuthorityMetrics, ExecutionEnv,
     },
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
 };
@@ -63,9 +64,15 @@ pub struct ExecutingGuard {
 
 #[enum_dispatch]
 pub(crate) trait ExecutionSchedulerAPI {
-    fn enqueue(
+    fn enqueue_transactions(
         &self,
         certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    );
+
+    fn enqueue(
+        &self,
+        certs: Vec<(Schedulable, ExecutionEnv)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     );
 

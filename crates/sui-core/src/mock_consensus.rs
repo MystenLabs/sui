@@ -98,7 +98,8 @@ impl MockConsensusClient {
                             vec![(
                                 VerifiedExecutableTransaction::new_from_certificate(
                                     VerifiedCertificate::new_unchecked(*tx.clone()),
-                                ),
+                                )
+                                .into(),
                                 env,
                             )],
                             &epoch_store,
@@ -112,7 +113,8 @@ impl MockConsensusClient {
                                 VerifiedExecutableTransaction::new_from_consensus(
                                     VerifiedTransaction::new_unchecked(*tx.clone()),
                                     0,
-                                ),
+                                )
+                                .into(),
                                 env,
                             )],
                             &epoch_store,

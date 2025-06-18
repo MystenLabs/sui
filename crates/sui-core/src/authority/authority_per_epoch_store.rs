@@ -1642,24 +1642,31 @@ impl AuthorityPerEpochStore {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub fn insert_tx_key(
-        &self,
-        tx_key: &TransactionKey,
-        tx_digest: &TransactionDigest,
-    ) -> SuiResult {
-        let _metrics_scope =
-            mysten_metrics::monitored_scope("AuthorityPerEpochStore::insert_tx_key");
-        let tables = self.tables()?;
-
+    pub fn insert_executed_in_epoch(&self, tx_digest: &TransactionDigest) {
         self.consensus_output_cache
             .insert_executed_in_epoch(*tx_digest);
+    }
 
-        if !matches!(tx_key, TransactionKey::Digest(_)) {
-            tables.transaction_key_to_digest.insert(tx_key, tx_digest)?;
-            self.executed_digests_notify_read.notify(tx_key, tx_digest);
-        }
+    pub fn insert_tx_key(&self, tx_key: TransactionKey, tx_digest: TransactionDigest) -> SuiResult {
+        let _metrics_scope =
+            mysten_metrics::monitored_scope("AuthorityPerEpochStore::insert_tx_key");
 
+        assert!(
+            !matches!(tx_key, TransactionKey::Digest(_)),
+            "useless to insert a digest key"
+        );
+        let tables = self.tables()?;
+        tables
+            .transaction_key_to_digest
+            .insert(&tx_key, &tx_digest)?;
+        self.executed_digests_notify_read
+            .notify(&tx_key, &tx_digest);
         Ok(())
+    }
+
+    pub fn tx_key_to_digest(&self, key: &TransactionKey) -> SuiResult<Option<TransactionDigest>> {
+        let tables = self.tables()?;
+        Ok(tables.transaction_key_to_digest.get(key).expect("db error"))
     }
 
     pub fn revert_executed_transaction(&self, tx_digest: &TransactionDigest) -> SuiResult {
@@ -3320,21 +3327,10 @@ impl AuthorityPerEpochStore {
             non_randomness_roots.extend(roots.into_iter());
 
             if let Some(randomness_round) = randomness_round {
-                let key = TransactionKey::RandomnessRound(self.epoch(), randomness_round);
-
-                // During crash recovery, the randomness update transaction may already have been
-                // created and executed before the crash. If it is available locally, we need to
-                // ensure it is executed.
-                if let Some(digest) = self.tables()?.transaction_key_to_digest.get(&key)? {
-                    if let Some(tx) = tx_reader.get_transaction_block(&digest) {
-                        info!("Randomness update transaction {:?} already exists, scheduling for execution", digest);
-                        let tx =
-                            VerifiedExecutableTransaction::new_system((*tx).clone(), self.epoch());
-                        verified_randomness_transactions.push(Schedulable::Transaction(tx));
-                    }
-                }
-
-                randomness_roots.insert(key);
+                randomness_roots.insert(TransactionKey::RandomnessRound(
+                    self.epoch(),
+                    randomness_round,
+                ));
             }
 
             // Determine whether to write pending checkpoint for user tx with randomness.
@@ -3458,7 +3454,7 @@ impl AuthorityPerEpochStore {
                         &mut shared_input_next_version,
                         cancelled_txns,
                     );
-                    version_assignment.push((key.unwrap_digest(), assigned_versions));
+                    version_assignment.push((*key.unwrap_digest(), assigned_versions));
                 }
                 None => {}
             }
@@ -3501,19 +3497,14 @@ impl AuthorityPerEpochStore {
     fn process_consensus_transaction_shared_object_versions(
         &self,
         cache_reader: &dyn ObjectCacheRead,
-        non_randomness_transactions: &[VerifiedExecutableTransaction],
-        randomness_transactions: &[VerifiedExecutableTransaction],
-        randomness_state_update: Option<Schedulable<&VerifiedExecutableTransaction>>,
+        non_randomness_transactions: &[Schedulable],
+        randomness_transactions: &[Schedulable],
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
         output: &mut ConsensusCommitOutput,
     ) -> SuiResult<AssignedTxAndVersions> {
         let all_certs: Vec<_> = non_randomness_transactions
             .iter()
-            .map(Schedulable::Transaction)
-            // randomness_state_update must be before randomness_transactions to make sure the version
-            // of the randomness state object is updated before it is used in randomness transactions.
-            .chain(randomness_state_update.clone())
-            .chain(randomness_transactions.iter().map(Schedulable::Transaction))
+            .chain(randomness_transactions.iter())
             .collect();
 
         let ConsensusSharedObjVerAssignment {
@@ -3522,7 +3513,7 @@ impl AuthorityPerEpochStore {
         } = SharedObjVerManager::assign_versions_from_consensus(
             self,
             cache_reader,
-            all_certs.iter(),
+            all_certs.into_iter(),
             cancelled_txns,
         )?;
 
@@ -3577,11 +3568,15 @@ impl AuthorityPerEpochStore {
         transactions: &[VerifiedExecutableTransaction],
     ) -> SuiResult<AssignedTxAndVersions> {
         let mut output = ConsensusCommitOutput::new(0);
+        let transactions: Vec<_> = transactions
+            .iter()
+            .cloned()
+            .map(Schedulable::Transaction)
+            .collect();
         let assigned_versions = self.process_consensus_transaction_shared_object_versions(
             cache_reader,
-            transactions,
+            &transactions,
             &[],
-            None,
             &BTreeMap::new(),
             &mut output,
         )?;
@@ -3669,7 +3664,12 @@ impl AuthorityPerEpochStore {
         let mut verified_non_randomness_certificates =
             VecDeque::with_capacity(non_randomness_transactions.len() + 1);
         let mut verified_randomness_certificates =
-            VecDeque::with_capacity(randomness_transactions.len());
+            VecDeque::with_capacity(randomness_transactions.len() + 1);
+
+        if let Some(round) = randomness_round {
+            verified_randomness_certificates
+                .push_back(Schedulable::RandomnessStateUpdate(self.epoch(), round));
+        }
 
         for entry in non_randomness_transactions
             .iter()
@@ -3824,19 +3824,13 @@ impl AuthorityPerEpochStore {
             verified_non_randomness_certificates.into();
         let verified_randomness_certificates: Vec<_> = verified_randomness_certificates.into();
 
-        // If randomness_round is set, we know that eventually there will be a randomness state update transaction.
-        let randomness_state_update =
-            randomness_round.map(|round| Schedulable::RandomnessStateUpdate(self.epoch(), round));
-
-        let (additional_schedulables, assigned_tx_and_versions) = self
-            .process_consensus_transaction_shared_object_versions(
-                cache_reader,
-                &verified_non_randomness_certificates,
-                &verified_randomness_certificates,
-                randomness_state_update,
-                &cancelled_txns,
-                output,
-            )?;
+        let assigned_tx_and_versions = self.process_consensus_transaction_shared_object_versions(
+            cache_reader,
+            &verified_non_randomness_certificates,
+            &verified_randomness_certificates,
+            &cancelled_txns,
+            output,
+        )?;
 
         let (lock, final_round) = self.process_end_of_publish_transactions_and_reconfig(
             output,

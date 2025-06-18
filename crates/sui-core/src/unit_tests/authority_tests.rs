@@ -5059,6 +5059,8 @@ async fn test_consensus_commit_prologue_generation() {
     assert_eq!(processed_consensus_transactions.len(), 3);
     assert!(matches!(
         processed_consensus_transactions[0]
+            .as_tx()
+            .unwrap()
             .data()
             .transaction_data()
             .kind(),
@@ -6296,6 +6298,7 @@ async fn test_consensus_handler_per_object_congestion_control(
     let scheduled_txns = send_batch_consensus_no_execution(&authority, &certificates, true).await;
     assert_eq!(scheduled_txns.0.len(), 2 + non_congested_tx_count as usize);
     for cert in scheduled_txns.0.iter() {
+        let cert = cert.as_tx().unwrap();
         assert!(
             cert.data().transaction_data().gas_price() >= 4000
                 || cert
@@ -6362,6 +6365,7 @@ async fn test_consensus_handler_per_object_congestion_control(
         send_batch_consensus_no_execution(&authority, &new_certificates, true).await;
     assert_eq!(scheduled_txns.0.len(), 2 + non_congested_tx_count as usize);
     for cert in scheduled_txns.0.iter() {
+        let cert = cert.as_tx().unwrap();
         assert!(
             cert.data().transaction_data().gas_price() >= 2000
                 || cert
@@ -6530,18 +6534,44 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     assert_eq!(scheduled_txns.len(), 2);
     // Note that consensus handler also generates consensus commit prologue transaction, and it must be the first one.
     assert!(matches!(
-        scheduled_txns[0].data().transaction_data().kind(),
+        scheduled_txns[0]
+            .as_tx()
+            .unwrap()
+            .data()
+            .transaction_data()
+            .kind(),
         TransactionKind::ConsensusCommitPrologueV4(..)
     ));
-    assert!(scheduled_txns[1].data().transaction_data().gas_price() == 2000);
+    assert!(
+        scheduled_txns[1]
+            .as_tx()
+            .unwrap()
+            .data()
+            .transaction_data()
+            .gas_price()
+            == 2000
+    );
 
     let (scheduled_txns, _) = send_batch_consensus_no_execution(&authority, &[], false).await;
     assert_eq!(scheduled_txns.len(), 2);
     assert!(matches!(
-        scheduled_txns[0].data().transaction_data().kind(),
+        scheduled_txns[0]
+            .as_tx()
+            .unwrap()
+            .data()
+            .transaction_data()
+            .kind(),
         TransactionKind::ConsensusCommitPrologueV4(..)
     ));
-    assert!(scheduled_txns[1].data().transaction_data().gas_price() == 2000);
+    assert!(
+        scheduled_txns[1]
+            .as_tx()
+            .unwrap()
+            .data()
+            .transaction_data()
+            .gas_price()
+            == 2000
+    );
 
     // Run consensus round 3. 2 user transactions will come out with 1 transaction being cancelled.
     let (scheduled_txns, assigned_versions) =
@@ -6610,8 +6640,12 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     assert_eq!(cancellation_reason, SequenceNumber::CONGESTED);
 
     // Consensus commit prologue contains cancelled txn shared object version assignment.
-    if let TransactionKind::ConsensusCommitPrologueV4(prologue_txn) =
-        scheduled_txns[0].data().transaction_data().kind()
+    if let TransactionKind::ConsensusCommitPrologueV4(prologue_txn) = scheduled_txns[0]
+        .as_tx()
+        .unwrap()
+        .data()
+        .transaction_data()
+        .kind()
     {
         match &prologue_txn.consensus_determined_version_assignments {
             ConsensusDeterminedVersionAssignments::CancelledTransactions(assignment) => {

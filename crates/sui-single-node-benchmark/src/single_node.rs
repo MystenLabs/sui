@@ -174,7 +174,8 @@ impl SingleValidator {
                     // it expects consensus to do so. However we don't have consensus, hence the manual enqueue.
                     self.get_validator().enqueue_transactions_for_execution(
                         vec![(
-                            VerifiedExecutableTransaction::new_from_certificate(cert.clone()),
+                            VerifiedExecutableTransaction::new_from_certificate(cert.clone())
+                                .into(),
                             ExecutionEnv::new().with_assigned_versions(assigned_versions.clone()),
                         )],
                         &self.epoch_store,

@@ -257,7 +257,7 @@ async fn test_fast_path_then_consensus_execution_e2e() {
     );
 
     let tx_digest = *cert.digest();
-    state.execution_scheduler().enqueue(
+    state.execution_scheduler().enqueue_transactions(
         vec![(
             cert.clone(),
             ExecutionEnv::default().with_scheduling_source(SchedulingSource::MysticetiFastPath),
@@ -284,7 +284,7 @@ async fn test_fast_path_then_consensus_execution_e2e() {
         .get_transaction_cache_reader()
         .is_tx_already_executed(&tx_digest));
 
-    state.execution_scheduler().enqueue(
+    state.execution_scheduler().enqueue_transactions(
         vec![(
             cert.clone(),
             ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
@@ -335,7 +335,7 @@ async fn test_consensus_then_fast_path_execution_e2e() {
     );
 
     let tx_digest = *cert.digest();
-    state.execution_scheduler().enqueue(
+    state.execution_scheduler().enqueue_transactions(
         vec![(
             cert.clone(),
             ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
@@ -355,7 +355,7 @@ async fn test_consensus_then_fast_path_execution_e2e() {
         .get_transaction_cache_reader()
         .is_tx_already_executed(&tx_digest));
 
-    state.execution_scheduler().enqueue(
+    state.execution_scheduler().enqueue_transactions(
         vec![(
             cert.clone(),
             ExecutionEnv::default().with_scheduling_source(SchedulingSource::MysticetiFastPath),
