@@ -114,7 +114,6 @@ pub(crate) fn function<K: SourceKind>(
             .iter()
             .enumerate()
             .map(|(i, op)| bytecode(ctxt, op, blk_start as usize + i, function))
-            .flatten()
             .collect::<Vec<_>>();
 
         let label = block_id as usize;
@@ -139,7 +138,7 @@ pub(crate) fn bytecode<K: SourceKind>(
     op: &IB<Symbol>,
     pc: usize,
     function: &N::Function<Symbol>,
-) -> Vec<Instruction> {
+) -> Instruction {
     use ast::PrimitiveOp as Op;
 
     macro_rules! assign {
@@ -167,7 +166,7 @@ pub(crate) fn bytecode<K: SourceKind>(
 }
 
     match op {
-        IB::Pop => vec![Instruction::Drop(ctxt.pop_register())],
+        IB::Pop => Instruction::Drop(ctxt.pop_register()),
 
         IB::Ret => {
             // TODO: check if this needs to be reversed?
@@ -177,7 +176,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                 .map(|_| Operand::Var(ctxt.pop_register()))
                 .collect::<Vec<_>>();
             let inst = Instruction::Return(returned_vars);
-            vec![inst]
+            inst
         }
 
         IB::BrTrue(code_offset) => {
@@ -186,7 +185,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                 then_label: *code_offset as usize,
                 else_label: pc + 1,
             };
-            vec![inst]
+            inst
         }
 
         IB::BrFalse(code_offset) => {
@@ -195,58 +194,58 @@ pub(crate) fn bytecode<K: SourceKind>(
                 then_label: pc + 1,
                 else_label: *code_offset as usize,
             };
-            vec![inst]
+            inst
         }
 
         IB::Branch(code_offset) => {
             let inst = Instruction::Jump(*code_offset as usize);
-            vec![inst]
+            inst
         }
 
-        IB::LdU8(value) => vec![assign!(imm!(Value::U8(*value)), ctxt.push_register())],
+        IB::LdU8(value) => assign!(imm!(Value::U8(*value)), ctxt.push_register()),
 
-        IB::LdU64(value) => vec![assign!(imm!(Value::U64(*value)), ctxt.push_register())],
+        IB::LdU64(value) => assign!(imm!(Value::U64(*value)), ctxt.push_register()),
 
-        IB::LdU128(bx) => vec![assign!(imm!(Value::U128(*(*bx))), ctxt.push_register())],
+        IB::LdU128(bx) => assign!(imm!(Value::U128(*(*bx))), ctxt.push_register()),
 
-        IB::CastU8 => vec![assign!(
+        IB::CastU8 => assign!(
             primitiveOp!(Op::CastU8, Var(ctxt.pop_register())),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::CastU64 => vec![assign!(
+        IB::CastU64 => assign!(
             primitiveOp!(Op::CastU64, Var(ctxt.pop_register())),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::CastU128 => vec![assign!(
+        IB::CastU128 => assign!(
             primitiveOp!(Op::CastU128, Var(ctxt.pop_register())),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::LdConst(const_ref) => vec![assign!(
+        IB::LdConst(const_ref) => assign!(
             RValue::Operand(Constant(deserialize_constant(const_ref))),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::LdTrue => vec![assign!(imm!(Value::True), ctxt.push_register())],
+        IB::LdTrue => assign!(imm!(Value::True), ctxt.push_register()),
 
-        IB::LdFalse => vec![assign!(imm!(Value::False), ctxt.push_register())],
+        IB::LdFalse => assign!(imm!(Value::False), ctxt.push_register()),
 
-        IB::CopyLoc(loc) => vec![assign!(
+        IB::CopyLoc(loc) => assign!(
             primitiveOp!(Op::CopyLoc, Var(Local(*loc as usize))),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::MoveLoc(loc) => vec![assign!(
+        IB::MoveLoc(loc) => assign!(
             primitiveOp!(Op::MoveLoc, Var(Local(*loc as usize))),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::StLoc(loc) => vec![assign!(
+        IB::StLoc(loc) => assign!(
             RValue::Operand(Operand::Var(ctxt.pop_register())),
             Local(*loc as usize)
-        )],
+        ),
 
         IB::Call(bx) => {
             let name = &bx.module.name;
@@ -287,7 +286,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                     args,
                 },
             };
-            vec![inst]
+            inst
         }
 
         IB::Pack(_struct_ref) => {
@@ -302,7 +301,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                 lhs: vec![ctxt.push_register()],
                 rhs: RValue::Primitive { op: Op::Pack, args },
             };
-            vec![inst]
+            inst
         }
 
         IB::Unpack(bx) => {
@@ -318,245 +317,245 @@ pub(crate) fn bytecode<K: SourceKind>(
                 .map(|_| ctxt.push_register())
                 .collect::<Vec<_>>();
             let inst = Instruction::Assign { rhs, lhs };
-            vec![inst]
+            inst
         }
 
-        IB::ReadRef => vec![assign!(
+        IB::ReadRef => assign!(
             primitiveOp!(Op::ReadRef, Var(ctxt.pop_register())),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::WriteRef => vec![assign!(
+        IB::WriteRef => assign!(
             // TODO check if this is ok for the SSA
             primitiveOp!(Op::WriteRef, Var(ctxt.pop_register()), Var(ctxt.pop_register()))
-        )],
+        ),
 
         IB::FreezeRef => {
             let inst = Instruction::Nop;
-            vec![inst]
+            inst
         }
 
-        IB::MutBorrowLoc(local_index) => vec![assign!(
+        IB::MutBorrowLoc(local_index) => assign!(
             primitiveOp!(Op::MutBorrowLoc, Var(Local(*local_index as usize))),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::ImmBorrowLoc(local_index) => vec![assign!(
+        IB::ImmBorrowLoc(local_index) => assign!(
             primitiveOp!(Op::ImmBorrowLoc, Var(Local(*local_index as usize))),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::MutBorrowField(_field_ref) => vec![assign!(
+        IB::MutBorrowField(_field_ref) => assign!(
             primitiveOp!(Op::MutBorrowField, Var(ctxt.pop_register())),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::ImmBorrowField(_field_ref) => vec![assign!(
+        IB::ImmBorrowField(_field_ref) => assign!(
             primitiveOp!(Op::ImmBorrowField, Var(ctxt.pop_register())),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::Add => vec![assign!(
+        IB::Add => assign!(
             primitiveOp!(Op::Add, Var(ctxt.pop_register()), Var(ctxt.pop_register())),
             ctxt.push_register()
-        )],
+        ),
 
         IB::Sub => {
             let subtraend = ctxt.pop_register();
             let minuend = ctxt.pop_register();
-            vec![assign!(
+            assign!(
                 primitiveOp!(Op::Subtract, Var(minuend), Var(subtraend)),
                 ctxt.push_register()
-            )]
+            )
         }
 
         IB::Mul => {
             let multiplier = ctxt.pop_register();
             let multiplicand = ctxt.pop_register();
-            vec![assign!(
+            assign!(
                 primitiveOp!(Op::Multiply, Var(multiplicand), Var(multiplier)),
                 ctxt.push_register()
-            )]
+            )
         }
 
         IB::Mod => {
             let divisor = ctxt.pop_register();
             let dividend = ctxt.pop_register();
-            vec![assign!(
+            assign!(
                 primitiveOp!(Op::Modulo, Var(dividend), Var(divisor)),
                 ctxt.push_register()
-            )]
+            )
         }
 
         IB::Div => {
             let divisor = ctxt.pop_register();
             let dividend = ctxt.pop_register();
-            vec![assign!(
+            assign!(
                 primitiveOp!(Op::Divide, Var(dividend), Var(divisor)),
                 ctxt.push_register()
-            )]
+            )
         }
 
-        IB::BitOr => vec![assign!(
+        IB::BitOr => assign!(
             primitiveOp!(
                 Op::BitOr,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
             ),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::BitAnd => vec![assign!(
+        IB::BitAnd => assign!(
             primitiveOp!(
                 Op::BitAnd,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
             ),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::Xor => vec![assign!(
+        IB::Xor => assign!(
             primitiveOp!(Op::Xor, Var(ctxt.pop_register()), Var(ctxt.pop_register())),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::Or => vec![assign!(
+        IB::Or => assign!(
             primitiveOp!(Op::Or, Var(ctxt.pop_register()), Var(ctxt.pop_register())),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::And => vec![assign!(
+        IB::And => assign!(
             primitiveOp!(Op::And, Var(ctxt.pop_register()), Var(ctxt.pop_register())),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::Not => vec![assign!(
+        IB::Not => assign!(
             primitiveOp!(Op::Not, Var(ctxt.pop_register())),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::Eq => vec![assign!(
+        IB::Eq => assign!(
             primitiveOp!(
                 Op::Equal,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
             ),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::Neq => vec![assign!(
+        IB::Neq => assign!(
             primitiveOp!(
                 Op::NotEqual,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
             ),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::Lt => vec![assign!(
+        IB::Lt => assign!(
             primitiveOp!(
                 Op::LessThan,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
             ),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::Gt => vec![assign!(
+        IB::Gt => assign!(
             primitiveOp!(
                 Op::GreaterThan,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
             ),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::Le => vec![assign!(
+        IB::Le => assign!(
             primitiveOp!(
                 Op::LessThanOrEqual,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
             ),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::Ge => vec![assign!(
+        IB::Ge => assign!(
             primitiveOp!(
                 Op::GreaterThanOrEqual,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
             ),
             ctxt.push_register()
-        )],
+        ),
 
         IB::Abort => {
             ctxt.empty_stack();
             let inst = Instruction::Abort;
-            vec![inst]
+            inst
         }
 
         IB::Nop => {
             let inst = Instruction::Nop;
-            vec![inst]
+            inst
         }
 
-        IB::Shl => vec![assign!(
+        IB::Shl => assign!(
             primitiveOp!(
                 Op::ShiftLeft,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
             ),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::Shr => vec![assign!(
+        IB::Shr => assign!(
             primitiveOp!(
                 Op::ShiftRight,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
             ),
             ctxt.push_register()
-        )],
+        ),
 
         IB::VecPack(_bx) => {
             let mut args = vec![];
             for _ in 0.._bx.1 {
                 args.push(Var(ctxt.pop_register()));
             }
-            vec![assign!(
+            assign!(
                 RValue::Primitive {
                     op: Op::VecPack,
                     args,
                 },
                 ctxt.push_register()
-            )]
+            )
         }
 
-        IB::VecLen(_rc) => vec![assign!(
+        IB::VecLen(_rc) => assign!(
             primitiveOp!(Op::VecLen, Var(ctxt.pop_register())),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::VecImmBorrow(_rc) => vec![assign!(
+        IB::VecImmBorrow(_rc) => assign!(
             primitiveOp!(Op::VecImmBorrow, Var(ctxt.pop_register()), Var(ctxt.pop_register())),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::VecMutBorrow(_rc) => vec![assign!(
+        IB::VecMutBorrow(_rc) => assign!(
             primitiveOp!(Op::VecMutBorrow, Var(ctxt.pop_register()), Var(ctxt.pop_register())),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::VecPushBack(_rc) => vec![assign!(primitiveOp!(
+        IB::VecPushBack(_rc) => assign!(primitiveOp!(
             Op::VecPushBack,
             Var(ctxt.pop_register()),
             Var(ctxt.pop_register())
-        ))],
+        )),
 
-        IB::VecPopBack(_rc) => vec![assign!(
+        IB::VecPopBack(_rc) => assign!(
             primitiveOp!(Op::VecPopBack, Var(ctxt.pop_register())),
             ctxt.push_register()
-        )],
+        ),
 
         IB::VecUnpack(bx) => {
             let rhs = primitiveOp!(Op::VecUnpack, Var(ctxt.pop_register()));
@@ -565,7 +564,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                 lhs.push(ctxt.push_register());
             }
             let inst = Instruction::Assign { rhs, lhs };
-            vec![inst]
+            inst
         }
 
         IB::VecSwap(_rc) => {
@@ -581,29 +580,29 @@ pub(crate) fn bytecode<K: SourceKind>(
                 // TODO check if this is ok for the SSA
                 lhs: vec![],
             };
-            vec![inst]
+            inst
         }
 
-        IB::LdU16(value) => vec![assign!(imm!(Value::U16(*value)), ctxt.push_register())],
+        IB::LdU16(value) => assign!(imm!(Value::U16(*value)), ctxt.push_register()),
 
-        IB::LdU32(value) => vec![assign!(imm!(Value::U32(*value)), ctxt.push_register())],
+        IB::LdU32(value) => assign!(imm!(Value::U32(*value)), ctxt.push_register()),
 
-        IB::LdU256(_bx) => vec![assign!(imm!(Value::U256(*(*_bx))), ctxt.push_register())],
+        IB::LdU256(_bx) => assign!(imm!(Value::U256(*(*_bx))), ctxt.push_register()),
 
-        IB::CastU16 => vec![assign!(
+        IB::CastU16 => assign!(
             primitiveOp!(Op::CastU16, Var(ctxt.pop_register())),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::CastU32 => vec![assign!(
+        IB::CastU32 => assign!(
             primitiveOp!(Op::CastU32, Var(ctxt.pop_register())),
             ctxt.push_register()
-        )],
+        ),
 
-        IB::CastU256 => vec![assign!(
+        IB::CastU256 => assign!(
             primitiveOp!(Op::CastU256, Var(ctxt.pop_register())),
             ctxt.push_register()
-        )],
+        ),
 
         IB::PackVariant(bx) => {
             let args = bx
@@ -621,7 +620,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                     args,
                 },
             };
-            vec![inst]
+            inst
         }
         IB::UnpackVariant(bx) => {
             let rhs = RValue::Primitive {
@@ -636,7 +635,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                 .map(|_| ctxt.push_register())
                 .collect::<Vec<_>>();
             let inst = Instruction::Assign { lhs, rhs };
-            vec![inst]
+            inst
         }
 
         IB::UnpackVariantImmRef(bx) => {
@@ -652,7 +651,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                 .map(|_| ctxt.push_register())
                 .collect::<Vec<_>>();
             let inst = Instruction::Assign { lhs, rhs };
-            vec![inst]
+            inst
         }
 
         IB::UnpackVariantMutRef(bx) => {
@@ -669,7 +668,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                 .map(|_| ctxt.push_register())
                 .collect::<Vec<_>>();
             let inst = Instruction::Assign { lhs, rhs };
-            vec![inst]
+            inst
         }
 
         IB::VariantSwitch(jt) => {
@@ -680,19 +679,19 @@ pub(crate) fn bytecode<K: SourceKind>(
                     .map(|offset| *offset as usize)
                     .collect::<Vec<_>>(),
             };
-            vec![inst]
+            inst
         }
 
         // ******** DEPRECATED BYTECODES ********
         IB::MutBorrowGlobalDeprecated(_bx) => {
-            vec![Instruction::NotImplemented(format!("{:?}", op))]
+            Instruction::NotImplemented(format!("{:?}", op))
         }
         IB::ImmBorrowGlobalDeprecated(_bx) => {
-            vec![Instruction::NotImplemented(format!("{:?}", op))]
+            Instruction::NotImplemented(format!("{:?}", op))
         }
-        IB::ExistsDeprecated(_bx) => vec![Instruction::NotImplemented(format!("{:?}", op))],
-        IB::MoveFromDeprecated(_bx) => vec![Instruction::NotImplemented(format!("{:?}", op))],
-        IB::MoveToDeprecated(_bx) => vec![Instruction::NotImplemented(format!("{:?}", op))],
+        IB::ExistsDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
+        IB::MoveFromDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
+        IB::MoveToDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
     }
 }
 
