@@ -29,7 +29,7 @@ pub use object_change::{
 };
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentScope};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 pub use test_effects_builder::TestEffectsBuilder;
 
 mod effects_v1;
@@ -130,7 +130,7 @@ impl TransactionEffects {
         executed_epoch: EpochId,
         gas_used: GasCostSummary,
         shared_objects: Vec<SharedInput>,
-        loaded_per_epoch_config_objects: BTreeSet<ObjectID>,
+        loaded_per_epoch_config_objects: BTreeMap<ObjectID, Option<SequenceNumber>>,
         transaction_digest: TransactionDigest,
         lamport_version: SequenceNumber,
         changed_objects: BTreeMap<ObjectID, EffectsObjectChange>,

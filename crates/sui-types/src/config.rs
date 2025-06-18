@@ -87,6 +87,20 @@ pub fn is_setting(tag: &StructTag) -> bool {
         && type_params.len() == 1
 }
 
+/// Returns true if the given `tag` is a `Config` struct.
+pub fn is_config(tag: &StructTag) -> bool {
+    let StructTag {
+        address,
+        module,
+        name,
+        type_params,
+    } = tag;
+    *address == SUI_FRAMEWORK_ADDRESS
+        && module.as_ident_str() == CONFIG_MODULE_NAME
+        && name.as_ident_str() == CONFIG_STRUCT_NAME
+        && type_params.len() == 1
+}
+
 impl<V> Setting<V> {
     /// Calls `SettingData::read_value` on the setting's data.
     /// The `data` should never be `None`, but for safety, this method returns `None` if it is.
