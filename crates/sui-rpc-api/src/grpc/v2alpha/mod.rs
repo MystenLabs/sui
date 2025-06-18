@@ -4,7 +4,6 @@
 use std::pin::Pin;
 
 use crate::field_mask::FieldMaskTree;
-use crate::message::MessageMergeFrom;
 use crate::proto::rpc::v2alpha::live_data_service_server::LiveDataService;
 use crate::proto::rpc::v2alpha::move_package_service_server::MovePackageService;
 use crate::proto::rpc::v2alpha::signature_verification_service_server::SignatureVerificationService;
@@ -30,7 +29,6 @@ use crate::proto::rpc::v2alpha::{
     GetModuleRequest, GetModuleResponse, GetPackageRequest, GetPackageResponse,
     ListPackageVersionsRequest, ListPackageVersionsResponse,
 };
-use crate::proto::rpc::v2beta::Checkpoint;
 use crate::subscription::SubscriptionServiceHandle;
 use crate::RpcService;
 
@@ -59,12 +57,20 @@ impl SubscriptionService for SubscriptionServiceHandle {
 
         let response = Box::pin(async_stream::stream! {
             while let Some(checkpoint) = receiver.recv().await {
-                let Some(cursor) = checkpoint.sequence_number else {
-                    yield Err(tonic::Status::internal("unable to determine cursor"));
-                    break;
+                let cursor = checkpoint.checkpoint_summary.sequence_number;
+
+                let checkpoint = match crate::grpc::v2beta::ledger_service::get_checkpoint::checkpoint_data_to_checkpoint_proto(
+                    checkpoint.as_ref().to_owned(), // TODO optimize so checkpoint isn't cloned
+                    &read_mask
+                ) {
+                    Ok(checkpoint) => checkpoint,
+                    Err(e) => {
+                        tracing::error!("unable to convert checkpoint to proto: {e:?}");
+                        yield Err(tonic::Status::internal("unable to convert checkpoint to proto {e:?}"));
+                        break;
+                    }
                 };
 
-                let checkpoint = Checkpoint::merge_from(checkpoint.as_ref(), &read_mask);
                 let response = SubscribeCheckpointsResponse {
                     cursor: Some(cursor),
                     checkpoint: Some(checkpoint),

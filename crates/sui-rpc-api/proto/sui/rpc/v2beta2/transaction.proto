@@ -1,0 +1,489 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta2;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "sui/rpc/v2beta2/argument.proto";
+import "sui/rpc/v2beta2/bcs.proto";
+import "sui/rpc/v2beta2/input.proto";
+import "sui/rpc/v2beta2/object.proto";
+import "sui/rpc/v2beta2/object_reference.proto";
+
+// A transaction.
+message Transaction {
+  // This Transaction serialized as BCS.
+  optional Bcs bcs = 1;
+
+  // The digest of this Transaction.
+  optional string digest = 2;
+
+  // Version of this Transaction.
+  optional int32 version = 3;
+
+  optional TransactionKind kind = 4;
+  optional string sender = 5;
+  optional GasPayment gas_payment = 6;
+  optional TransactionExpiration expiration = 7;
+}
+
+// Payment information for executing a transaction.
+message GasPayment {
+  // Set of gas objects to use for payment.
+  repeated ObjectReference objects = 1;
+
+  // Owner of the gas objects, either the transaction sender or a sponsor.
+  optional string owner = 2;
+
+  // Gas unit price to use when charging for computation.
+  //
+  // Must be greater than or equal to the network's current RGP (reference gas price).
+  optional uint64 price = 3;
+
+  // Total budget willing to spend for the execution of a transaction.
+  optional uint64 budget = 4;
+}
+
+// A TTL for a transaction.
+message TransactionExpiration {
+  enum TransactionExpirationKind {
+    TRANSACTION_EXPIRATION_KIND_UNKNOWN = 0;
+
+    // The transaction has no expiration.
+    NONE = 1;
+
+    // Validators won't sign and execute transaction unless the expiration epoch
+    // is greater than or equal to the current epoch.
+    EPOCH = 2;
+  }
+
+  optional TransactionExpirationKind kind = 1;
+
+  optional uint64 epoch = 2;
+}
+
+// Transaction type.
+message TransactionKind {
+  oneof kind {
+    // A user transaction comprised of a list of native commands and Move calls.
+    ProgrammableTransaction programmable_transaction = 2;
+
+    // System Transactions
+
+    // System transaction used to end an epoch.
+    //
+    // The `ChangeEpoch` variant is now deprecated (but the `ChangeEpoch` struct is still used by
+    // `EndOfEpochTransaction`).
+    ChangeEpoch change_epoch = 100;
+
+    // Transaction used to initialize the chain state.
+    //
+    // Only valid if in the genesis checkpoint (0) and if this is the very first transaction ever
+    // executed on the chain.
+    GenesisTransaction genesis = 101;
+
+    // V1 consensus commit update.
+    ConsensusCommitPrologue consensus_commit_prologue_v1 = 102;
+
+    // Update set of valid JWKs used for zklogin.
+    AuthenticatorStateUpdate authenticator_state_update = 103;
+
+    // Set of operations to run at the end of the epoch to close out the current epoch and start
+    // the next one.
+    EndOfEpochTransaction end_of_epoch = 104;
+
+    // Randomness update.
+    RandomnessStateUpdate randomness_state_update = 105;
+
+    // V2 consensus commit update.
+    ConsensusCommitPrologue consensus_commit_prologue_v2 = 106;
+
+    // V3 consensus commit update.
+    ConsensusCommitPrologue consensus_commit_prologue_v3 = 107;
+
+    // V4 consensus commit update.
+    ConsensusCommitPrologue consensus_commit_prologue_v4 = 108;
+  }
+}
+
+// A user transaction.
+//
+// Contains a series of native commands and Move calls where the results of one command can be
+// used in future commands.
+message ProgrammableTransaction {
+  // Input objects or primitive values.
+  repeated Input inputs = 1;
+
+  // The commands to be executed sequentially. A failure in any command
+  // results in the failure of the entire transaction.
+  repeated Command commands = 2;
+}
+
+// A single command in a programmable transaction.
+message Command {
+  oneof command {
+    // A call to either an entry or a public Move function.
+    MoveCall move_call = 1;
+
+    // `(Vec<forall T:key+store. T>, address)`
+    // It sends n-objects to the specified address. These objects must have store
+    // (public transfer) and either the previous owner must be an address or the object must
+    // be newly created.
+    TransferObjects transfer_objects = 2;
+
+    // `(&mut Coin<T>, Vec<u64>)` -> `Vec<Coin<T>>`
+    // It splits off some amounts into new coins with those amounts.
+    SplitCoins split_coins = 3;
+
+    // `(&mut Coin<T>, Vec<Coin<T>>)`
+    // It merges n-coins into the first coin.
+    MergeCoins merge_coins = 4;
+
+    // Publishes a Move package. It takes the package bytes and a list of the package's transitive
+    // dependencies to link against on chain.
+    Publish publish = 5;
+
+    // `forall T: Vec<T> -> vector<T>`
+    // Given n-values of the same type, it constructs a vector. For non-objects or an empty vector,
+    // the type tag must be specified.
+    MakeMoveVector make_move_vector = 6;
+
+    // Upgrades a Move package.
+    // Takes (in order):
+    // 1. A vector of serialized modules for the package.
+    // 2. A vector of object ids for the transitive dependencies of the new package.
+    // 3. The object ID of the package being upgraded.
+    // 4. An argument holding the `UpgradeTicket` that must have been produced from an earlier command in the same
+    //    programmable transaction.
+    Upgrade upgrade = 7;
+  }
+}
+
+// Command to call a Move function.
+//
+// Functions that can be called by a `MoveCall` command are those that have a function signature
+// that is either `entry` or `public` (which don't have a reference return type).
+message MoveCall {
+  // The package containing the module and function.
+  optional string package = 1;
+  // The specific module in the package containing the function.
+  optional string module = 2;
+  // The function to be called.
+  optional string function = 3;
+  // The type arguments to the function.
+  repeated string type_arguments = 4;
+  // The arguments to the function.
+  repeated Argument arguments = 5;
+}
+
+// Command to transfer ownership of a set of objects to an address.
+message TransferObjects {
+  // Set of objects to transfer.
+  repeated Argument objects = 1;
+  // The address to transfer ownership to.
+  optional Argument address = 2;
+}
+
+// Command to split a single coin object into multiple coins.
+message SplitCoins {
+  // The coin to split.
+  optional Argument coin = 1;
+  // The amounts to split off.
+  repeated Argument amounts = 2;
+}
+
+// Command to merge multiple coins of the same type into a single coin.
+message MergeCoins {
+  // Coin to merge coins into.
+  optional Argument coin = 1;
+
+  // Set of coins to merge into `coin`.
+  //
+  // All listed coins must be of the same type and be the same type as `coin`
+  repeated Argument coins_to_merge = 2;
+}
+
+// Command to publish a new Move package.
+message Publish {
+  // The serialized Move modules.
+  repeated bytes modules = 1;
+
+  // Set of packages that the to-be published package depends on.
+  repeated string dependencies = 2;
+}
+
+// Command to build a Move vector out of a set of individual elements.
+message MakeMoveVector {
+  // Type of the individual elements.
+  //
+  // This is required to be set when the type can't be inferred, for example when the set of
+  // provided arguments are all pure input values.
+  optional string element_type = 1;
+
+  // The set individual elements to build the vector with.
+  repeated Argument elements = 2;
+}
+
+// Command to upgrade an already published package.
+message Upgrade {
+  // The serialized Move modules.
+  repeated bytes modules = 1;
+  // Set of packages that the to-be published package depends on.
+  repeated string dependencies = 2;
+  // Package ID of the package to upgrade.
+  optional string package = 3;
+  // Ticket authorizing the upgrade.
+  optional Argument ticket = 4;
+}
+
+// Randomness update.
+message RandomnessStateUpdate {
+  // Epoch of the randomness state update transaction.
+  optional uint64 epoch = 1;
+
+  // Randomness round of the update.
+  optional uint64 randomness_round = 2;
+
+  // Updated random bytes.
+  optional bytes random_bytes = 3;
+
+  // The initial version of the randomness object that it was shared at.
+  optional uint64 randomness_object_initial_shared_version = 4;
+}
+
+// System transaction used to change the epoch.
+message ChangeEpoch {
+  // The next (to become) epoch ID.
+  optional uint64 epoch = 1;
+  // The protocol version in effect in the new epoch.
+  optional uint64 protocol_version = 2;
+  // The total amount of gas charged for storage during the epoch.
+  optional uint64 storage_charge = 3;
+  // The total amount of gas charged for computation during the epoch.
+  optional uint64 computation_charge = 4;
+  // The amount of storage rebate refunded to the txn senders.
+  optional uint64 storage_rebate = 5;
+  // The non-refundable storage fee.
+  optional uint64 non_refundable_storage_fee = 6;
+  // Unix timestamp when epoch started.
+  optional google.protobuf.Timestamp epoch_start_timestamp = 7;
+  // System packages (specifically framework and Move stdlib) that are written before the new
+  // epoch starts. This tracks framework upgrades on chain. When executing the `ChangeEpoch` txn,
+  // the validator must write out the following modules.  Modules are provided with the version they
+  // will be upgraded to, their modules in serialized form (which include their package ID), and
+  // a list of their transitive dependencies.
+  repeated SystemPackage system_packages = 8;
+}
+
+// System package.
+message SystemPackage {
+  // Version of the package.
+  optional uint64 version = 1;
+  // Move modules.
+  repeated bytes modules = 2;
+  // Package dependencies.
+  repeated string dependencies = 3;
+}
+
+// The genesis transaction.
+message GenesisTransaction {
+  // Set of genesis objects.
+  repeated Object objects = 1;
+}
+
+// Consensus commit prologue system transaction.
+//
+// This message can represent V1, V2, and V3 prologue types.
+message ConsensusCommitPrologue {
+  // Epoch of the commit prologue transaction.
+  //
+  // Present in V1, V2, V3, V4.
+  optional uint64 epoch = 1;
+
+  // Consensus round of the commit.
+  //
+  // Present in V1, V2, V3, V4.
+  optional uint64 round = 2;
+
+  // Unix timestamp from consensus.
+  //
+  // Present in V1, V2, V3, V4.
+  optional google.protobuf.Timestamp commit_timestamp = 3;
+
+  // Digest of consensus output.
+  //
+  // Present in V2, V3, V4.
+  optional string consensus_commit_digest = 4;
+
+  // The sub DAG index of the consensus commit. This field is populated if there
+  // are multiple consensus commits per round.
+  //
+  // Present in V3, V4.
+  optional uint64 sub_dag_index = 5;
+
+  // Stores consensus handler determined shared object version assignments.
+  //
+  // Present in V3, V4.
+  optional ConsensusDeterminedVersionAssignments consensus_determined_version_assignments = 6;
+
+  // Digest of any additional state computed by the consensus handler.
+  // Used to detect forking bugs as early as possible.
+  //
+  // Present in V4.
+  optional string additional_state_digest = 7;
+}
+
+// Object version assignment from consensus.
+message VersionAssignment {
+  // `ObjectId` of the object.
+  optional string object_id = 1;
+  // start version of the consensus stream for this object
+  optional uint64 start_version = 2;
+  // Assigned version.
+  optional uint64 version = 3;
+}
+
+// A transaction that was canceled.
+message CanceledTransaction {
+  // Digest of the canceled transaction.
+  optional string digest = 1;
+  // List of object version assignments.
+  repeated VersionAssignment version_assignments = 2;
+}
+
+// Version assignments performed by consensus.
+message ConsensusDeterminedVersionAssignments {
+  // Version of this message
+  optional int32 version = 1;
+
+  // Canceled transaction version assignment.
+  repeated CanceledTransaction canceled_transactions = 3;
+}
+
+// Update the set of valid JWKs.
+message AuthenticatorStateUpdate {
+  // Epoch of the authenticator state update transaction.
+  optional uint64 epoch = 1;
+  // Consensus round of the authenticator state update.
+  optional uint64 round = 2;
+  // Newly active JWKs.
+  repeated ActiveJwk new_active_jwks = 3;
+  // The initial version of the authenticator object that it was shared at.
+  optional uint64 authenticator_object_initial_shared_version = 4;
+}
+
+// A new JWK.
+message ActiveJwk {
+  // Identifier used to uniquely identify a JWK.
+  optional JwkId id = 1;
+  // The JWK.
+  optional Jwk jwk = 2;
+  // Most recent epoch in which the JWK was validated.
+  optional uint64 epoch = 3;
+}
+
+// Key to uniquely identify a JWK.
+message JwkId {
+  // The issuer or identity of the OIDC provider.
+  optional string iss = 1;
+  // A key ID used to uniquely identify a key from an OIDC provider.
+  optional string kid = 2;
+}
+
+// A JSON web key.
+//
+// Struct that contains info for a JWK. A list of them for different kinds can
+// be retrieved from the JWK endpoint (for example, <https://www.googleapis.com/oauth2/v3/certs>).
+// The JWK is used to verify the JWT token.
+message Jwk {
+  // Key type parameter, https://datatracker.ietf.org/doc/html/rfc7517#section-4.1.
+  optional string kty = 1;
+  // RSA public exponent, https://datatracker.ietf.org/doc/html/rfc7517#section-9.3.
+  optional string e = 2;
+  // RSA modulus, https://datatracker.ietf.org/doc/html/rfc7517#section-9.3.
+  optional string n = 3;
+  // Algorithm parameter, https://datatracker.ietf.org/doc/html/rfc7517#section-4.4.
+  optional string alg = 4;
+}
+
+// Set of operations run at the end of the epoch to close out the current epoch
+// and start the next one.
+message EndOfEpochTransaction {
+  repeated EndOfEpochTransactionKind transactions = 1;
+}
+
+// Operation run at the end of an epoch.
+message EndOfEpochTransactionKind {
+  oneof kind {
+    // End the epoch and start the next one.
+    ChangeEpoch change_epoch = 2;
+
+    // Expire JWKs used for zklogin.
+    AuthenticatorStateExpire authenticator_state_expire = 3;
+
+    // Execution time observations from the committee to preserve cross epoch
+    ExecutionTimeObservations execution_time_observations = 4;
+
+    // Use higher field numbers for kinds which happen infrequently.
+
+    // Create and initialize the authenticator object used for zklogin.
+    google.protobuf.Empty authenticator_state_create = 200;
+    // Create and initialize the randomness object.
+    google.protobuf.Empty randomness_state_create = 201;
+    // Create and initialize the deny list object.
+    google.protobuf.Empty deny_list_state_create = 202;
+    // Create and initialize the bridge object.
+    string bridge_state_create = 203;
+    // Initialize the bridge committee.
+    uint64 bridge_committee_init = 204;
+    // Create the accumulator root object.
+    google.protobuf.Empty accumulator_root_create = 205;
+  }
+}
+
+// Expire old JWKs.
+message AuthenticatorStateExpire {
+  // Expire JWKs that have a lower epoch than this.
+  optional uint64 min_epoch = 1;
+  // The initial version of the authenticator object that it was shared at.
+  optional uint64 authenticator_object_initial_shared_version = 2;
+}
+
+message ExecutionTimeObservations {
+  // Version of this ExecutionTimeObservations
+  optional int32 version = 1;
+
+  repeated ExecutionTimeObservation observations = 2;
+}
+
+message ExecutionTimeObservation {
+  enum ExecutionTimeObservationKind {
+    EXECUTION_TIME_OBSERVATION_KIND_UNKNOWN = 0;
+
+    MOVE_ENTRY_POINT = 1;
+    TRANSFER_OBJECTS = 2;
+    SPLIT_COINS = 3;
+    MERGE_COINS = 4;
+    PUBLISH = 5;
+    MAKE_MOVE_VECTOR = 6;
+    UPGRADE = 7;
+  }
+
+  optional ExecutionTimeObservationKind kind = 1;
+
+  optional MoveCall move_entry_point = 2;
+
+  repeated ValidatorExecutionTimeObservation validator_observations = 3;
+}
+
+message ValidatorExecutionTimeObservation {
+  // Bls12381 public key of the validator
+  optional bytes validator = 1;
+
+  // Duration of an execution observation
+  optional google.protobuf.Duration duration = 2;
+}

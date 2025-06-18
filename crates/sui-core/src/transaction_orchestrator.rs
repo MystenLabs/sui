@@ -39,7 +39,7 @@ use sui_types::quorum_driver_types::{
 };
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::{TransactionData, VerifiedTransaction};
-use sui_types::transaction_executor::{SimulateTransactionResult, VmChecks};
+use sui_types::transaction_executor::{SimulateTransactionResult, TransactionChecks};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tokio::task::JoinHandle;
@@ -706,7 +706,7 @@ where
     fn simulate_transaction(
         &self,
         transaction: TransactionData,
-        checks: VmChecks,
+        checks: TransactionChecks,
     ) -> Result<SimulateTransactionResult, SuiError> {
         self.validator_state
             .simulate_transaction(transaction, checks)

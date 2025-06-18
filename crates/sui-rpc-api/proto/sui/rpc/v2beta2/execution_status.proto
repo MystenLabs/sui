@@ -1,0 +1,374 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta2;
+
+// The status of an executed transaction.
+message ExecutionStatus {
+  // Indicates if the transaction was successful or not.
+  optional bool success = 1;
+
+  // The error if `success` is false.
+  optional ExecutionError error = 2;
+}
+
+// An error that can occur during the execution of a transaction.
+message ExecutionError {
+  // A human readable description of the error
+  optional string description = 1;
+
+  // The command, if any, during which the error occurred.
+  optional uint64 command = 2;
+
+  enum ExecutionErrorKind {
+    EXECUTION_ERROR_KIND_UNKNOWN = 0;
+
+    // Insufficient gas.
+    INSUFFICIENT_GAS = 1;
+
+    // Invalid `Gas` object.
+    INVALID_GAS_OBJECT = 2;
+
+    // Invariant violation.
+    INVARIANT_VIOLATION = 3;
+
+    // Attempted to use feature that is not supported yet.
+    FEATURE_NOT_YET_SUPPORTED = 4;
+
+    // Move object is larger than the maximum allowed size.
+    OBJECT_TOO_BIG = 5;
+
+    // Package is larger than the maximum allowed size.
+    PACKAGE_TOO_BIG = 6;
+
+    // Circular object ownership.
+    CIRCULAR_OBJECT_OWNERSHIP = 7;
+
+    //
+    // Coin errors.
+    //
+
+    // Insufficient coin balance for requested operation.
+    INSUFFICIENT_COIN_BALANCE = 8;
+
+    // Coin balance overflowed an u64.
+    COIN_BALANCE_OVERFLOW = 9;
+
+    //
+    // Publish/Upgrade errors.
+    //
+
+    // Publish error, non-zero address.
+    // The modules in the package must have their self-addresses set to zero.
+    PUBLISH_ERROR_NON_ZERO_ADDRESS = 10;
+
+    // Sui Move bytecode verification error.
+    SUI_MOVE_VERIFICATION_ERROR = 11;
+
+    //
+    // MoveVm errors.
+    //
+
+    // Error from a non-abort instruction.
+    // Possible causes:
+    //     Arithmetic error, stack overflow, max value depth, or similar.
+    MOVE_PRIMITIVE_RUNTIME_ERROR = 12;
+
+    // Move runtime abort.
+    MOVE_ABORT = 13;
+
+    // Bytecode verification error.
+    VM_VERIFICATION_OR_DESERIALIZATION_ERROR = 14;
+
+    // MoveVm invariant violation.
+    VM_INVARIANT_VIOLATION = 15;
+
+    //
+    // Programmable transaction errors.
+    //
+
+    // Function not found.
+    FUNCTION_NOT_FOUND = 16;
+
+    // Parity mismatch for Move function.
+    // The number of arguments does not match the number of parameters.
+    ARITY_MISMATCH = 17;
+
+    // Type parity mismatch for Move function.
+    // Mismatch between the number of actual versus expected type arguments.
+    TYPE_ARITY_MISMATCH = 18;
+
+    // Non-entry function invoked. Move Call must start with an entry function.
+    NON_ENTRY_FUNCTION_INVOKED = 19;
+
+    // Invalid command argument.
+    COMMAND_ARGUMENT_ERROR = 20;
+
+    // Type argument error.
+    TYPE_ARGUMENT_ERROR = 21;
+
+    // Unused result without the drop ability.
+    UNUSED_VALUE_WITHOUT_DROP = 22;
+
+    // Invalid public Move function signature.
+    // Unsupported return type for return value.
+    INVALID_PUBLIC_FUNCTION_RETURN_TYPE = 23;
+
+    // Invalid transfer object, object does not have public transfer.
+    INVALID_TRANSFER_OBJECT = 24;
+
+    //
+    // Post-execution errors.
+    //
+
+    // Effects from the transaction are too large.
+    EFFECTS_TOO_LARGE = 25;
+
+    // Publish or Upgrade is missing dependency.
+    PUBLISH_UPGRADE_MISSING_DEPENDENCY = 26;
+
+    // Publish or upgrade dependency downgrade.
+    //
+    // Indirect (transitive) dependency of published or upgraded package has been assigned an
+    // on-chain version that is less than the version required by one of the package's
+    // transitive dependencies.
+    PUBLISH_UPGRADE_DEPENDENCY_DOWNGRADE = 27;
+
+    // Invalid package upgrade.
+    PACKAGE_UPGRADE_ERROR = 28;
+
+    // Indicates the transaction tried to write objects too large to storage.
+    WRITTEN_OBJECTS_TOO_LARGE = 29;
+
+    // Certificate is on the deny list.
+    CERTIFICATE_DENIED = 30;
+
+    // Sui Move bytecode verification timed out.
+    SUI_MOVE_VERIFICATION_TIMEDOUT = 31;
+
+    // The requested shared object operation is not allowed.
+    SHARED_OBJECT_OPERATION_NOT_ALLOWED = 32;
+
+    // Requested shared object has been deleted.
+    INPUT_OBJECT_DELETED = 33;
+
+    // Certificate is canceled due to congestion on shared objects.
+    EXECUTION_CANCELED_DUE_TO_SHARED_OBJECT_CONGESTION = 34;
+
+    // Address is denied for this coin type.
+    ADDRESS_DENIED_FOR_COIN = 35;
+
+    // Coin type is globally paused for use.
+    COIN_TYPE_GLOBAL_PAUSE = 36;
+
+    // Certificate is canceled because randomness could not be generated this epoch.
+    EXECUTION_CANCELED_DUE_TO_RANDOMNESS_UNAVAILABLE = 37;
+
+    MOVE_VECTOR_ELEM_TOO_BIG = 38;
+
+    MOVE_RAW_VALUE_TOO_BIG = 39;
+
+    INVALID_LINKAGE = 40;
+  }
+
+  optional ExecutionErrorKind kind = 3;
+
+  oneof error_details {
+    MoveAbort abort = 4;
+    SizeError size_error = 5;
+    CommandArgumentError command_argument_error = 6;
+    TypeArgumentError type_argument_error = 7;
+    PackageUpgradeError package_upgrade_error = 8;
+    IndexError index_error = 9;
+    string object_id = 10;
+    CoinDenyListError coin_deny_list_error = 11;
+    // Set of objects that were congested, leading to the transaction's cancellation.
+    CongestedObjects congested_objects = 12;
+  }
+}
+
+message MoveAbort {
+  optional uint64 abort_code = 1;
+  // Location in Move where the error occurred.
+  optional MoveLocation location = 2;
+  // Extra error information if abort code is a "Clever Error"
+  optional CleverError clever_error = 3;
+}
+
+// Location in Move bytecode where an error occurred.
+message MoveLocation {
+  // The package ID.
+  optional string package = 1;
+  // The module name.
+  optional string module = 2;
+  // The function index.
+  optional uint32 function = 3;
+  // Offset of the instruction where the error occurred.
+  optional uint32 instruction = 4;
+  // The name of the function, if available.
+  optional string function_name = 5;
+}
+
+message CleverError {
+  optional uint64 error_code = 1;
+  optional uint64 line_number = 2;
+  optional string constant_name = 3;
+  optional string constant_type = 4;
+  oneof value {
+    string rendered = 5;
+    bytes raw = 6;
+  }
+}
+
+// A size error.
+message SizeError {
+  // The offending size.
+  optional uint64 size = 1;
+  // The maximum allowable size.
+  optional uint64 max_size = 2;
+}
+
+message IndexError {
+  // Index of an input or result.
+  optional uint32 index = 1;
+
+  // Index of a subresult.
+  optional uint32 subresult = 2;
+}
+
+message CoinDenyListError {
+  // Denied address.
+  optional string address = 1;
+  // Coin type.
+  optional string coin_type = 2;
+}
+
+// Set of objects that were congested, leading to the transaction's cancellation.
+message CongestedObjects {
+  repeated string objects = 1;
+}
+
+// An error with an argument to a command.
+message CommandArgumentError {
+  // Position of the problematic argument.
+  optional uint32 argument = 1;
+
+  enum CommandArgumentErrorKind {
+    COMMAND_ARGUMENT_ERROR_KIND_UNKNOWN = 0;
+
+    // The type of the value does not match the expected type.
+    TYPE_MISMATCH = 1;
+
+    // The argument cannot be deserialized into a value of the specified type.
+    INVALID_BCS_BYTES = 2;
+
+    // The argument cannot be instantiated from raw bytes.
+    INVALID_USAGE_OF_PURE_ARGUMENT = 3;
+
+    // Invalid argument to private entry function.
+    // Private entry functions cannot take arguments from other Move functions.
+    INVALID_ARGUMENT_TO_PRIVATE_ENTRY_FUNCTION = 4;
+
+    // Out of bounds access to input or results.
+    //
+    // `index` field will be set indicating the invalid index value.
+    INDEX_OUT_OF_BOUNDS = 5;
+
+    // Out of bounds access to subresult.
+    //
+    // `index` and `subresult` fields will be set indicating the invalid index value.
+    SECONDARY_INDEX_OUT_OF_BOUNDS = 6;
+
+    // Invalid usage of result.
+    // Expected a single result but found either no return value or multiple.
+    // `index` field will be set indicating the invalid index value.
+    INVALID_RESULT_ARITY = 7;
+
+    // Invalid usage of gas coin.
+    // The gas coin can only be used by-value with a `TransferObject` command.
+    INVALID_GAS_COIN_USAGE = 8;
+
+    // Invalid usage of Move value.
+    //    - Mutably borrowed values require unique usage.
+    //    - Immutably borrowed values cannot be taken or borrowed mutably.
+    //    - Taken values cannot be used again.
+    INVALID_VALUE_USAGE = 9;
+
+    // Immutable objects cannot be passed by-value.
+    INVALID_OBJECT_BY_VALUE = 10;
+
+    // Immutable objects cannot be passed by mutable reference, `&mut`.
+    INVALID_OBJECT_BY_MUT_REF = 11;
+
+    // Shared object operations such as wrapping, freezing, or converting to owned are not
+    // allowed.
+    SHARED_OBJECT_OPERATION_NOT_ALLOWED = 12;
+
+    // Invalid argument arity. Expected a single argument but found a result that expanded to
+    // multiple arguments.
+    INVALID_ARGUMENT_ARITY = 13;
+  }
+
+  optional CommandArgumentErrorKind kind = 2;
+
+  optional IndexError index_error = 3;
+}
+
+// An error with upgrading a package.
+message PackageUpgradeError {
+  enum PackageUpgradeErrorKind {
+    PACKAGE_UPGRADE_ERROR_KIND_UNKNOWN = 0;
+
+    // Unable to fetch package.
+    UNABLE_TO_FETCH_PACKAGE = 1;
+
+    // Object is not a package.
+    NOT_A_PACKAGE = 2;
+
+    // Package upgrade is incompatible with previous version.
+    INCOMPATIBLE_UPGRADE = 3;
+
+    // Digest in upgrade ticket and computed digest differ.
+    DIGETS_DOES_NOT_MATCH = 4;
+
+    // Upgrade policy is not valid.
+    UNKNOWN_UPGRADE_POLICY = 5;
+
+    // Package ID does not match `PackageId` in upgrade ticket.
+    PACKAGE_ID_DOES_NOT_MATCH = 6;
+  }
+
+  optional PackageUpgradeErrorKind kind = 1;
+
+  // The Package Id.
+  optional string package_id = 2;
+
+  // A digest.
+  optional string digest = 3;
+
+  // The policy.
+  optional uint32 policy = 4;
+
+  // The ticket Id.
+  optional string ticket_id = 5;
+}
+
+// Type argument error.
+message TypeArgumentError {
+  // Index of the problematic type argument.
+  optional uint32 type_argument = 1;
+
+  enum TypeArgumentErrorKind {
+    TYPE_ARGUMENT_ERROR_KIND_UNKNOWN = 0;
+
+    // A type was not found in the module specified.
+    TYPE_NOT_FOUND = 1;
+
+    // A type provided did not match the specified constraint.
+    CONSTRAINT_NOT_SATISFIED = 2;
+  }
+
+  optional TypeArgumentErrorKind kind = 2;
+}

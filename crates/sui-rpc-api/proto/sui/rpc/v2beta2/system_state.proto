@@ -1,0 +1,340 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta2;
+
+message SystemState {
+  // The version of the system state data structure type.
+  optional uint64 version = 1;
+
+  // The epoch id
+  optional uint64 epoch = 2;
+
+  // The protocol version
+  optional uint64 protocol_version = 3;
+
+  // Information about the validators
+  optional ValidatorSet validators = 4;
+
+  // Storage Fund info
+  optional StorageFund storage_fund = 5;
+
+  // Set of system config parameters
+  optional SystemParameters parameters = 6;
+
+  // The reference gas price for this epoch
+  optional uint64 reference_gas_price = 7;
+
+  // A list of the records of validator reporting each other.
+  //
+  // There is an entry in this list for each validator that has been reported
+  // at least once. Each record contains all the validators that reported
+  // them. If a validator has never been reported they don't have a record in this list.
+  // This lists persists across epoch: a peer continues being in a reported state until the
+  // reporter doesn't explicitly remove their report.
+  repeated ValidatorReportRecord validator_report_records = 8;
+
+  // Schedule of stake subsidies given out each epoch.
+  optional StakeSubsidy stake_subsidy = 9;
+
+  // Whether the system is running in a downgraded safe mode due to a non-recoverable bug.
+  // This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode.
+  // It can be reset once we are able to successfully execute advance_epoch.
+  // The rest of the fields starting with `safe_mode_` are accumulated during safe mode
+  // when advance_epoch_safe_mode is executed. They will eventually be processed once we
+  // are out of safe mode.
+  optional bool safe_mode = 10;
+
+  // Storage rewards accumulated during safe_mode
+  optional uint64 safe_mode_storage_rewards = 11;
+
+  // Computation rewards accumulated during safe_mode
+  optional uint64 safe_mode_computation_rewards = 12;
+
+  // Storage rebates paid out during safe_mode
+  optional uint64 safe_mode_storage_rebates = 13;
+
+  // Nonrefundable storage fees accumulated during safe_mode
+  optional uint64 safe_mode_non_refundable_storage_fee = 14;
+
+  // Unix timestamp of when this this epoch started
+  optional uint64 epoch_start_timestamp_ms = 15;
+
+  // Any extra fields that's not defined statically.
+  optional MoveTable extra_fields = 16;
+}
+
+message ValidatorReportRecord {
+  // The address of the validator being reported
+  optional string reported = 1;
+
+  // The list of validator (addresses) that are reporting on the validator specified by `reported`
+  repeated string reporters = 2;
+}
+
+message SystemParameters {
+  // The duration of an epoch, in milliseconds.
+  optional uint64 epoch_duration_ms = 1;
+
+  // The starting epoch in which stake subsidies start being paid out
+  optional uint64 stake_subsidy_start_epoch = 2;
+
+  // Minimum number of active validators at any moment.
+  optional uint64 min_validator_count = 3;
+
+  // Maximum number of active validators at any moment.
+  // We do not allow the number of validators in any epoch to go above this.
+  optional uint64 max_validator_count = 4;
+
+  // Deprecated.
+  // Lower-bound on the amount of stake required to become a validator.
+  optional uint64 min_validator_joining_stake = 5;
+
+  // Deprecated.
+  // Validators with stake amount below `validator_low_stake_threshold` are considered to
+  // have low stake and will be escorted out of the validator set after being below this
+  // threshold for more than `validator_low_stake_grace_period` number of epochs.
+  optional uint64 validator_low_stake_threshold = 6;
+
+  // Deprecated.
+  // Validators with stake below `validator_very_low_stake_threshold` will be removed
+  // immediately at epoch change, no grace period.
+  optional uint64 validator_very_low_stake_threshold = 7;
+
+  // A validator can have stake below `validator_low_stake_threshold`
+  // for this many epochs before being kicked out.
+  optional uint64 validator_low_stake_grace_period = 8;
+
+  // Any extra fields that are not defined statically.
+  optional MoveTable extra_fields = 9;
+}
+
+// A message that represents a Move `0x2::table::Table` or `0x2::bag::Bag`
+message MoveTable {
+  // The UID of the table or bag
+  optional string id = 1;
+
+  // The size or number of key-value pairs in the table or bag
+  optional uint64 size = 2;
+}
+
+message StakeSubsidy {
+  // Balance of SUI set aside for stake subsidies that will be drawn down over time.
+  optional uint64 balance = 1;
+
+  // Count of the number of times stake subsidies have been distributed.
+  optional uint64 distribution_counter = 2;
+
+  // The amount of stake subsidy to be drawn down per distribution.
+  // This amount decays and decreases over time.
+  optional uint64 current_distribution_amount = 3;
+
+  // Number of distributions to occur before the distribution amount decays.
+  optional uint64 stake_subsidy_period_length = 4;
+
+  // The rate at which the distribution amount decays at the end of each
+  // period. Expressed in basis points.
+  optional uint32 stake_subsidy_decrease_rate = 5;
+
+  // Any extra fields that's not defined statically.
+  optional MoveTable extra_fields = 6;
+}
+
+// Struct representing the onchain storage fund.
+message StorageFund {
+  // This is the sum of `storage_rebate` of
+  // all objects currently stored on-chain. To maintain this invariant, the only inflow of this
+  // balance is storage charges collected from transactions, and the only outflow is storage rebates
+  // of transactions, including both the portion refunded to the transaction senders as well as
+  // the non-refundable portion taken out and put into `non_refundable_balance`.
+  optional uint64 total_object_storage_rebates = 1;
+
+  // Represents any remaining inflow of the storage fund that should not
+  // be taken out of the fund.
+  optional uint64 non_refundable_balance = 2;
+}
+
+message ValidatorSet {
+  // Total amount of stake from all active validators at the beginning of the epoch.
+  // Written only once per epoch, in `advance_epoch` function.
+  optional uint64 total_stake = 1;
+
+  // The current list of active validators.
+  repeated Validator active_validators = 2;
+
+  // List of new validator candidates added during the current epoch.
+  // They will be processed at the end of the epoch.
+  //
+  // key: u64 (index), value: 0x3::validator::Validator
+  optional MoveTable pending_active_validators = 3;
+
+  // Removal requests from the validators. Each element is an index
+  // pointing to `active_validators`.
+  repeated uint64 pending_removals = 4;
+
+  // Mappings from staking pool's ID to the sui address of a validator.
+  //
+  // key: address (staking pool Id), value: address (sui address of the validator)
+  optional MoveTable staking_pool_mappings = 5;
+
+  // Mapping from a staking pool ID to the inactive validator that has that pool as its staking pool.
+  // When a validator is deactivated the validator is removed from `active_validators` it
+  // is added to this table so that stakers can continue to withdraw their stake from it.
+  //
+  // key: address (staking pool Id), value: 0x3::validator_wrapper::ValidatorWrapper
+  optional MoveTable inactive_validators = 6;
+  // Table storing preactive/candidate validators, mapping their addresses to their `Validator ` structs.
+  // When an address calls `request_add_validator_candidate`, they get added to this table and become a preactive
+  // validator.
+  // When the candidate has met the min stake requirement, they can call `request_add_validator` to
+  // officially add them to the active validator set `active_validators` next epoch.
+  //
+  // key: address (sui address of the validator), value: 0x3::validator_wrapper::ValidatorWrapper
+  optional MoveTable validator_candidates = 7;
+
+  // Table storing the number of epochs during which a validator's stake has been below the low stake threshold.
+  map<string, uint64> at_risk_validators = 8;
+
+  // Any extra fields that's not defined statically.
+  optional MoveTable extra_fields = 9;
+}
+
+// Definition of a Validator in the system contracts
+//
+// Note: fields of ValidatorMetadata are flattened into this type
+message Validator {
+  // A unique human-readable name of this validator.
+  optional string name = 1;
+
+  // The Sui Address of the validator. This is the sender that created the Validator object,
+  // and also the address to send validator/coins to during withdraws.
+  optional string address = 2;
+
+  optional string description = 3;
+
+  optional string image_url = 4;
+
+  optional string project_url = 5;
+
+  // Reserve field for protocol key scheme
+  reserved 6;
+  // The public key bytes corresponding to the private key that the validator
+  // holds to sign transactions. For now, this is the same as AuthorityName.
+  optional bytes protocol_public_key = 7;
+
+  // This is a proof that the validator has ownership of the protocol private key
+  optional bytes proof_of_possession = 8;
+
+  // Reserve field for network key scheme
+  reserved 9;
+  // The public key bytes corresponding to the private key that the validator
+  // uses to establish TLS connections
+  optional bytes network_public_key = 10;
+  // Reserve field for worker key scheme
+  reserved 11;
+  // The public key bytes correstponding to the Narwhal Worker
+  optional bytes worker_public_key = 12;
+  // The network address of the validator (could also contain extra info such as port, DNS and etc.).
+  optional string network_address = 13;
+  // The address of the validator used for p2p activities such as state sync (could also contain extra info such as port, DNS and etc.).
+  optional string p2p_address = 14;
+  // The address of the narwhal primary
+  optional string primary_address = 15;
+  // The address of the narwhal worker
+  optional string worker_address = 16;
+
+  // "next_epoch" metadata only takes effects in the next epoch.
+  // If none, current value will stay unchanged.
+  // Reserve field for protocol key scheme
+  reserved 17;
+  optional bytes next_epoch_protocol_public_key = 18;
+  optional bytes next_epoch_proof_of_possession = 19;
+  // Reserve field for network key scheme
+  reserved 20;
+  optional bytes next_epoch_network_public_key = 21;
+  // Reserve field for worker key scheme
+  reserved 22;
+  optional bytes next_epoch_worker_public_key = 23;
+  optional string next_epoch_network_address = 24;
+  optional string next_epoch_p2p_address = 25;
+  optional string next_epoch_primary_address = 26;
+  optional string next_epoch_worker_address = 27;
+
+  // Any extra fields that's not defined statically in the `ValidatorMetadata` struct
+  optional MoveTable metadata_extra_fields = 28;
+
+  // The voting power of this validator, which might be different from its
+  // stake amount.
+  optional uint64 voting_power = 29;
+
+  // The ID of this validator's current valid `UnverifiedValidatorOperationCap`
+  optional string operation_cap_id = 30;
+
+  // Gas price quote, updated only at end of epoch.
+  optional uint64 gas_price = 31;
+
+  // Staking pool for this validator.
+  optional StakingPool staking_pool = 32;
+
+  // Commission rate of the validator, in basis point.
+  optional uint64 commission_rate = 33;
+
+  // Total amount of stake that would be active in the next epoch.
+  optional uint64 next_epoch_stake = 34;
+
+  // This validator's gas price quote for the next epoch.
+  optional uint64 next_epoch_gas_price = 35;
+
+  // The commission rate of the validator starting the next epoch, in basis point.
+  optional uint64 next_epoch_commission_rate = 36;
+
+  // Any extra fields that's not defined statically.
+  optional MoveTable extra_fields = 37;
+}
+
+// A staking pool embedded in each validator struct in the system state object.
+message StakingPool {
+  // UID of the StakingPool object
+  optional string id = 1;
+
+  // The epoch at which this pool became active.
+  // The value is `None` if the pool is pre-active and `Some(<epoch_number>)` if active or inactive.
+  optional uint64 activation_epoch = 2;
+
+  // The epoch at which this staking pool ceased to be active. `None` = {pre-active, active},
+  // `Some(<epoch_number>)` if in-active, and it was de-activated at epoch `<epoch_number>`.
+  optional uint64 deactivation_epoch = 3;
+
+  // The total number of SUI tokens in this pool, including the SUI in the rewards_pool, as well as in all the principal
+  // in the `StakedSui` object, updated at epoch boundaries.
+  optional uint64 sui_balance = 4;
+
+  // The epoch stake rewards will be added here at the end of each epoch.
+  optional uint64 rewards_pool = 5;
+
+  // Total number of pool tokens issued by the pool.
+  optional uint64 pool_token_balance = 6;
+
+  // Exchange rate history of previous epochs.
+  //
+  // The entries start from the `activation_epoch` of this pool and contains exchange rates at the beginning of each epoch,
+  // i.e., right after the rewards for the previous epoch have been deposited into the pool.
+  //
+  // key: u64 (epoch number), value: PoolTokenExchangeRate
+  optional MoveTable exchange_rates = 7;
+
+  // Pending stake amount for this epoch, emptied at epoch boundaries.
+  optional uint64 pending_stake = 8;
+
+  // Pending stake withdrawn during the current epoch, emptied at epoch boundaries.
+  // This includes both the principal and rewards SUI withdrawn.
+  optional uint64 pending_total_sui_withdraw = 9;
+
+  // Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.
+  optional uint64 pending_pool_token_withdraw = 10;
+
+  // Any extra fields that's not defined statically.
+  optional MoveTable extra_fields = 11;
+}
