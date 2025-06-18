@@ -2,16 +2,16 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use criterion::{measurement::Measurement, Criterion};
+use criterion::{Criterion, measurement::Measurement};
 use move_binary_format::CompiledModule;
 use move_compiler::{
-    command_line::compiler::CompiledModuleInfoMap, editions::Edition, shared::PackagePaths,
-    Compiler,
+    Compiler, command_line::compiler::CompiledModuleInfoMap, editions::Edition,
+    shared::PackagePaths,
 };
 use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
-    language_storage::{ModuleId, CORE_CODE_ADDRESS},
+    language_storage::{CORE_CODE_ADDRESS, ModuleId},
 };
 
 use move_vm_runtime::move_vm::MoveVM;

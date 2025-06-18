@@ -3,12 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    debug_display, diag,
+    CompiledModuleInfoMap, debug_display, diag,
     diagnostics::{
-        self,
+        self, Diagnostic, DiagnosticReporter, Diagnostics,
         codes::{self, *},
         warning_filters::WarningFilters,
-        Diagnostic, DiagnosticReporter, Diagnostics,
     },
     editions::FeatureGate,
     expansion::{
@@ -22,7 +21,7 @@ use crate::{
         syntax_methods::resolve_syntax_attributes,
     },
     parser::ast::{
-        self as P, ConstantName, DatatypeName, Field, FunctionName, VariantName, MACRO_MODIFIER,
+        self as P, ConstantName, DatatypeName, Field, FunctionName, MACRO_MODIFIER, VariantName,
     },
     shared::{
         ide::{EllipsisMatchEntries, IDEAnnotation, IDEInfo},
@@ -30,7 +29,6 @@ use crate::{
         unique_map::UniqueMap,
         *,
     },
-    CompiledModuleInfoMap,
 };
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
@@ -444,12 +442,14 @@ pub fn build_member_map(
                 tyarg_arity,
                 field_info,
             };
-            assert!(members
-                .insert(
-                    name.value(),
-                    M::Datatype(ResolvedDatatype::Struct(Box::new(struct_def)))
-                )
-                .is_none())
+            assert!(
+                members
+                    .insert(
+                        name.value(),
+                        M::Datatype(ResolvedDatatype::Struct(Box::new(struct_def)))
+                    )
+                    .is_none()
+            )
         }
         for (enum_name, edef) in mdef.enums.key_cloned_iter() {
             let tyarg_arity = edef.type_parameters.len();
@@ -790,8 +790,8 @@ impl<'outer, 'env> Context<'outer, 'env> {
     }
 
     fn resolve_call_subject(&mut self, sp!(mloc, ma_): E::ModuleAccess) -> ResolvedCallSubject {
-        use ErrorKind as EK;
         use E::ModuleAccess_ as EA;
+        use ErrorKind as EK;
         use N::BuiltinFunction_ as B;
         match ma_ {
             EA::ModuleAccess(m, n) => {
@@ -2422,9 +2422,9 @@ fn types(context: &mut Context, case: TypeAnnotation, tys: Vec<E::Type>) -> Vec<
 }
 
 fn type_(context: &mut Context, case: TypeAnnotation, sp!(loc, ety_): E::Type) -> N::Type {
-    use ResolvedType as RT;
     use E::Type_ as ET;
-    use N::{TypeName_ as NN, Type_ as NT};
+    use N::{Type_ as NT, TypeName_ as NN};
+    use ResolvedType as RT;
     let ty_ = match ety_ {
         ET::Unit => NT::Unit,
         ET::Multiple(tys) => NT::multiple_(
@@ -3720,8 +3720,8 @@ fn lvalue(
     case: LValueCase,
     sp!(loc, l_): E::LValue,
 ) -> Option<N::LValue> {
-    use LValueCase as C;
     use E::LValue_ as EL;
+    use LValueCase as C;
     use N::LValue_ as NL;
     let nl_ = match l_ {
         EL::Var(mut_, sp!(_, E::ModuleAccess_::Name(n)), None) => {
