@@ -42,7 +42,7 @@ use sui_types::{
     error::{ExecutionError, ExecutionErrorKind},
     execution_status::TypeArgumentError,
     gas_coin::GasCoin,
-    move_package::{UpgradeReceipt, UpgradeTicket},
+    move_package::{UpgradeCap, UpgradeReceipt, UpgradeTicket},
     object::Object,
     type_input::{StructInput, TypeInput},
 };
@@ -56,6 +56,7 @@ pub struct Env<'pc, 'vm, 'state, 'linkage> {
     gas_coin_type: OnceCell<Type>,
     upgrade_ticket_type: OnceCell<Type>,
     upgrade_receipt_type: OnceCell<Type>,
+    upgrade_cap_type: OnceCell<Type>,
 }
 
 macro_rules! get_or_init_ty {
@@ -87,6 +88,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             gas_coin_type: OnceCell::new(),
             upgrade_ticket_type: OnceCell::new(),
             upgrade_receipt_type: OnceCell::new(),
+            upgrade_cap_type: OnceCell::new(),
         }
     }
 
@@ -251,6 +253,10 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
 
     pub fn upgrade_receipt_type(&self) -> Result<Type, ExecutionError> {
         get_or_init_ty!(self, upgrade_receipt_type, UpgradeReceipt::type_())
+    }
+
+    pub fn upgrade_cap_type(&self) -> Result<Type, ExecutionError> {
+        get_or_init_ty!(self, upgrade_cap_type, UpgradeCap::type_())
     }
 
     pub fn vector_type(&self, element_type: Type) -> Result<Type, ExecutionError> {

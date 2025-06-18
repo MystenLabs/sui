@@ -134,7 +134,7 @@ fn command<Mode: ExecutionMode>(
             let coin_is_dirty = argument(env, context, coin);
             debug_assert!(!amounts_are_dirty);
             let is_dirty = amounts_are_dirty || coin_is_dirty;
-            debug_assert!(result.len() == amounts.len());
+            debug_assert_eq!(result.len(), amounts.len());
             context
                 .results
                 .push(vec![IsDirty::Fixed { is_dirty }; result.len()]);
@@ -150,17 +150,23 @@ fn command<Mode: ExecutionMode>(
         }
         T::Command_::MakeMoveVec(_, args) => {
             let is_dirty = arguments(env, context, args);
-            debug_assert!(result.len() == 1);
+            debug_assert_eq!(result.len(), 1);
             context.results.push(vec![IsDirty::Fixed { is_dirty }]);
         }
         T::Command_::Publish(_, _, _) => {
-            debug_assert!(result.is_empty());
-            context.results.push(vec![]);
+            debug_assert_eq!(Mode::packages_are_predefined(), result.is_empty());
+            debug_assert_eq!(!Mode::packages_are_predefined(), result.len() == 1);
+            let result = result
+                .iter()
+                .map(|_| IsDirty::Fixed { is_dirty: false })
+                .collect::<Vec<_>>();
+            context.results.push(result);
         }
         T::Command_::Upgrade(_, _, _, ticket, _) => {
+            debug_assert_eq!(result.len(), 1);
+            let result = vec![IsDirty::Fixed { is_dirty: false }];
             argument(env, context, ticket);
-            debug_assert!(result.is_empty());
-            context.results.push(vec![]);
+            context.results.push(result);
         }
     }
     Ok(())
