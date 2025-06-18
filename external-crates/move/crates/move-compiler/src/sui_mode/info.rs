@@ -10,7 +10,6 @@ use std::{
 };
 
 use crate::{
-    CompiledModuleInfoMap,
     diagnostics::warning_filters::WarningFilters,
     expansion::ast::{Fields, ModuleIdent},
     naming::ast as N,
@@ -24,6 +23,7 @@ use crate::{
         UID_TYPE_NAME,
     },
     typing::{ast as T, visitor::TypingVisitorContext},
+    CompiledModuleInfoMap,
 };
 use move_ir_types::location::Loc;
 use move_proc_macros::growing_stack;
@@ -261,7 +261,7 @@ fn all_transferred(
                     .get(&mident)
                     .unwrap();
                 for (datatype_name, transfer_kind) in &module_info.private_transfers {
-                    transferred.insert((mident, datatype_name.clone()), transfer_kind.clone());
+                    transferred.insert((mident, *datatype_name), *transfer_kind);
                 }
             }
         }

@@ -3,13 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    CompiledModuleInfoMap, diag,
+    diag,
     diagnostics::{
-        Diagnostic, DiagnosticReporter, Diagnostics,
         warning_filters::{
-            FILTER_DEPRECATED, FILTER_UNUSED_STRUCT_FIELD, WarningFilters, WarningFiltersBuilder,
-            WarningFiltersTable,
+            WarningFilters, WarningFiltersBuilder, WarningFiltersTable, FILTER_DEPRECATED,
+            FILTER_UNUSED_STRUCT_FIELD,
         },
+        Diagnostic, DiagnosticReporter, Diagnostics,
     },
     editions::{self, Edition, FeatureGate, Flavor},
     expansion::{
@@ -21,23 +21,23 @@ use crate::{
         attributes::expand_attributes,
         byte_string, hex_string,
         name_validation::{
-            IMPLICIT_STD_MEMBERS, IMPLICIT_STD_MODULES, IMPLICIT_SUI_MEMBERS, IMPLICIT_SUI_MODULES,
-            ModuleMemberKind, NameCase, check_restricted_name_all_cases, check_valid_address_name,
+            check_restricted_name_all_cases, check_valid_address_name,
             check_valid_function_parameter_name, check_valid_local_name,
             check_valid_module_member_alias, check_valid_module_member_name,
-            check_valid_type_parameter_name, valid_local_variable_name,
+            check_valid_type_parameter_name, valid_local_variable_name, ModuleMemberKind, NameCase,
+            IMPLICIT_STD_MEMBERS, IMPLICIT_STD_MODULES, IMPLICIT_SUI_MEMBERS, IMPLICIT_SUI_MODULES,
         },
         path_expander::{
-            Access, LegacyPathExpander, ModuleAccessResult, Move2024PathExpander, PathExpander,
-            access_result,
+            access_result, Access, LegacyPathExpander, ModuleAccessResult, Move2024PathExpander,
+            PathExpander,
         },
         translate::known_attributes::{DiagnosticAttribute, KnownAttribute},
     },
     ice, ice_assert,
     parser::ast::{
-        self as P, Ability, BlockLabel, ConstantName, DatatypeName, ENTRY_MODIFIER, Field,
-        FieldBindings, FunctionName, MACRO_MODIFIER, ModuleName, NATIVE_MODIFIER, NameAccess, Var,
-        VariantName,
+        self as P, Ability, BlockLabel, ConstantName, DatatypeName, Field, FieldBindings,
+        FunctionName, ModuleName, NameAccess, Var, VariantName, ENTRY_MODIFIER, MACRO_MODIFIER,
+        NATIVE_MODIFIER,
     },
     shared::{
         ide::{IDEAnnotation, IDEInfo},
@@ -46,9 +46,10 @@ use crate::{
         unique_map::UniqueMap,
         *,
     },
+    CompiledModuleInfoMap,
 };
 use move_core_types::account_address::AccountAddress;
-use move_core_types::parsing::parser::{parse_u16, parse_u32, parse_u256};
+use move_core_types::parsing::parser::{parse_u16, parse_u256, parse_u32};
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
@@ -914,7 +915,7 @@ fn module(
         duplicate_module(context, module_map, mident, old_loc)
     }
     context.address = None;
-    Some(mident.clone())
+    Some(mident)
 }
 
 fn set_module_address(

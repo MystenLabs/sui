@@ -723,7 +723,7 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
             for ((module_ident, datatype_name), transfer_kind) in private_transfers {
                 private_transfers_by_module
                     .entry(module_ident)
-                    .or_insert_with(BTreeMap::new)
+                    .or_default()
                     .insert(datatype_name, transfer_kind);
             }
 
@@ -741,7 +741,7 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
             for ((module_ident, datatype_name), (abilities, type_params)) in cfgir_datatype_decls {
                 cfgir_datatype_decls_by_module
                     .entry(module_ident)
-                    .or_insert_with(BTreeMap::new)
+                    .or_default()
                     .insert(datatype_name, (abilities, type_params));
             }
 
@@ -760,7 +760,7 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
             {
                 cfgir_fun_decls_by_module
                     .entry(module_ident)
-                    .or_insert_with(BTreeMap::new)
+                    .or_default()
                     .insert(
                         function_name,
                         FunctionDeclaration {
@@ -772,14 +772,14 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
 
             let mut compiled_units_by_module = mod_idents
                 .into_iter()
-                .zip(compiled.into_iter())
+                .zip(compiled)
                 .collect::<BTreeMap<_, _>>();
 
             let precompiled_modules: CompiledModuleInfoMap = naming_info
                  .modules
                  .iter()
                  .map(|(loc, mod_ident_key, module_info)| -> anyhow::Result<(ModuleIdent, Arc<CompiledModuleInfo>)> {
-                     let mod_ident = sp(loc, mod_ident_key.clone());
+                     let mod_ident = sp(loc, *mod_ident_key);
 
                      let Some((file_name, file_content)) = files.get(&module_info.defined_loc.file_hash()) else {
                         return Err(anyhow::anyhow!("file name not found for module: {:?}", mod_ident));
