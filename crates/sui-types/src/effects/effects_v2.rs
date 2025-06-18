@@ -17,9 +17,9 @@ use crate::gas::GasCostSummary;
 use crate::is_system_package;
 use crate::object::{Owner, OBJECT_START_VERSION};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 #[cfg(debug_assertions)]
 use std::collections::HashSet;
-use std::collections::{BTreeMap, BTreeSet};
 
 /// The response from processing a transaction or a certified transaction
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -144,7 +144,8 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                         // We can not expose the per epoch config object as input shared object,
                         // since it does not require sequencing, and hence shall not be considered
                         // as a normal input shared object.
-                        UnchangedSharedKind::PerEpochConfig => None,
+                        UnchangedSharedKind::PerEpochConfigDEPRECATED
+                        | UnchangedSharedKind::PerEpochConfigWithSeqno(_) => None,
                     }),
             )
             .collect()
@@ -535,7 +536,9 @@ impl TransactionEffectsV2 {
         executed_epoch: EpochId,
         gas_used: GasCostSummary,
         shared_objects: Vec<SharedInput>,
-        loaded_per_epoch_config_objects: BTreeSet<ObjectID>,
+        // Note that either all sequence numbers are `Some` or all are `None`. Determined by the
+        // `include_epoch_stable_sequence_number_in_effects` flag in the protocol config.
+        unsequenced_per_epoch_config_objects: BTreeMap<ObjectID, Option<SequenceNumber>>,
         transaction_digest: TransactionDigest,
         lamport_version: SequenceNumber,
         changed_objects: BTreeMap<ObjectID, EffectsObjectChange>,
@@ -543,6 +546,15 @@ impl TransactionEffectsV2 {
         events_digest: Option<TransactionEventsDigest>,
         dependencies: Vec<TransactionDigest>,
     ) -> Self {
+        // All sequence numbers in `unsequenced_per_epoch_config_objects` are all `Some` or all `None`
+        debug_assert!(
+            unsequenced_per_epoch_config_objects
+                .iter()
+                .all(|(_, v)| v.is_some())
+                || unsequenced_per_epoch_config_objects
+                    .iter()
+                    .all(|(_, v)| v.is_none())
+        );
         let unchanged_shared_objects = shared_objects
             .into_iter()
             .filter_map(|shared_input| match shared_input {
@@ -567,9 +579,16 @@ impl TransactionEffectsV2 {
                 }
             })
             .chain(
-                loaded_per_epoch_config_objects
+                unsequenced_per_epoch_config_objects
                     .into_iter()
-                    .map(|id| (id, UnchangedSharedKind::PerEpochConfig)),
+                    .map(|(id, version_opt)| {
+                        (
+                            id,
+                            version_opt
+                                .map(UnchangedSharedKind::PerEpochConfigWithSeqno)
+                                .unwrap_or(UnchangedSharedKind::PerEpochConfigDEPRECATED),
+                        )
+                    }),
             )
             .collect();
         let changed_objects: Vec<_> = changed_objects.into_iter().collect();
@@ -730,6 +749,9 @@ pub enum UnchangedSharedKind {
     ReadConsensusStreamEnded(SequenceNumber),
     /// Shared objects in cancelled transaction. The sequence number embed cancellation reason.
     Cancelled(SequenceNumber),
+    /// DEPRECATED: Use `PerEpochConfigWithSeqno` instead.
     /// Read of a per-epoch config object that should remain the same during an epoch.
-    PerEpochConfig,
+    PerEpochConfigDEPRECATED,
+    /// Read of a per-epoch config and it's starting sequence number in the epoch.
+    PerEpochConfigWithSeqno(SequenceNumber),
 }
