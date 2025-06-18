@@ -7,6 +7,7 @@ pub use checked::*;
 mod checked {
 
     use crate::execution_mode::{self, ExecutionMode};
+    use crate::execution_value::SuiResolver;
     use move_binary_format::CompiledModule;
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::move_vm::MoveVM;
@@ -157,6 +158,7 @@ mod checked {
 
         let deny_cert = is_certificate_denied(&transaction_digest, certificate_deny_set);
         let (gas_cost_summary, execution_result, timings) = execute_transaction::<Mode>(
+            store,
             &mut temporary_store,
             transaction_kind,
             &mut gas_charger,
@@ -283,6 +285,7 @@ mod checked {
             metrics,
             move_vm,
             &mut temporary_store,
+            store.as_backing_package_store(),
             tx_context,
             &mut gas_charger,
             pt,
@@ -295,6 +298,7 @@ mod checked {
 
     #[instrument(name = "tx_execute", level = "debug", skip_all)]
     fn execute_transaction<Mode: ExecutionMode>(
+        store: &dyn BackingStore,
         temporary_store: &mut TemporaryStore<'_>,
         transaction_kind: TransactionKind,
         gas_charger: &mut GasCharger,
@@ -360,6 +364,7 @@ mod checked {
                         }
                     } else {
                         execution_loop::<Mode>(
+                            store,
                             temporary_store,
                             transaction_kind,
                             tx_ctx,
@@ -587,6 +592,7 @@ mod checked {
 
     #[instrument(level = "debug", skip_all)]
     fn execution_loop<Mode: ExecutionMode>(
+        store: &dyn BackingStore,
         temporary_store: &mut TemporaryStore<'_>,
         transaction_kind: TransactionKind,
         tx_ctx: Rc<RefCell<TxContext>>,
@@ -603,6 +609,7 @@ mod checked {
                     builder,
                     change_epoch,
                     temporary_store,
+                    store,
                     tx_ctx,
                     move_vm,
                     gas_charger,
@@ -637,6 +644,7 @@ mod checked {
                 setup_consensus_commit(
                     prologue.commit_timestamp_ms,
                     temporary_store,
+                    store,
                     tx_ctx,
                     move_vm,
                     gas_charger,
@@ -651,6 +659,7 @@ mod checked {
                 setup_consensus_commit(
                     prologue.commit_timestamp_ms,
                     temporary_store,
+                    store,
                     tx_ctx,
                     move_vm,
                     gas_charger,
@@ -665,6 +674,7 @@ mod checked {
                 setup_consensus_commit(
                     prologue.commit_timestamp_ms,
                     temporary_store,
+                    store,
                     tx_ctx,
                     move_vm,
                     gas_charger,
@@ -679,6 +689,7 @@ mod checked {
                 setup_consensus_commit(
                     prologue.commit_timestamp_ms,
                     temporary_store,
+                    store,
                     tx_ctx,
                     move_vm,
                     gas_charger,
@@ -696,6 +707,7 @@ mod checked {
                     metrics,
                     move_vm,
                     temporary_store,
+                    store.as_backing_package_store(),
                     tx_ctx,
                     gas_charger,
                     pt,
@@ -713,6 +725,7 @@ mod checked {
                                 builder,
                                 change_epoch,
                                 temporary_store,
+                                store,
                                 tx_ctx,
                                 move_vm,
                                 gas_charger,
@@ -772,6 +785,7 @@ mod checked {
                 setup_authenticator_state_update(
                     auth_state_update,
                     temporary_store,
+                    store,
                     tx_ctx,
                     move_vm,
                     gas_charger,
@@ -786,6 +800,7 @@ mod checked {
                 setup_randomness_state_update(
                     randomness_state_update,
                     temporary_store,
+                    store,
                     tx_ctx,
                     move_vm,
                     gas_charger,
@@ -942,6 +957,7 @@ mod checked {
         builder: ProgrammableTransactionBuilder,
         change_epoch: ChangeEpoch,
         temporary_store: &mut TemporaryStore<'_>,
+        store: &dyn BackingStore,
         tx_ctx: Rc<RefCell<TxContext>>,
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
@@ -966,6 +982,7 @@ mod checked {
             metrics.clone(),
             move_vm,
             temporary_store,
+            store.as_backing_package_store(),
             tx_ctx.clone(),
             gas_charger,
             advance_epoch_pt,
@@ -996,6 +1013,7 @@ mod checked {
                     metrics.clone(),
                     move_vm,
                     temporary_store,
+                    store.as_backing_package_store(),
                     tx_ctx.clone(),
                     gas_charger,
                     advance_epoch_safe_mode_pt,
@@ -1016,6 +1034,7 @@ mod checked {
             process_system_packages(
                 change_epoch,
                 temporary_store,
+                store,
                 tx_ctx,
                 &new_vm,
                 gas_charger,
@@ -1027,6 +1046,7 @@ mod checked {
             process_system_packages(
                 change_epoch,
                 temporary_store,
+                store,
                 tx_ctx,
                 move_vm,
                 gas_charger,
@@ -1041,6 +1061,7 @@ mod checked {
     fn process_system_packages(
         change_epoch: ChangeEpoch,
         temporary_store: &mut TemporaryStore<'_>,
+        store: &dyn BackingStore,
         tx_ctx: Rc<RefCell<TxContext>>,
         move_vm: &MoveVM,
         gas_charger: &mut GasCharger,
@@ -1071,6 +1092,7 @@ mod checked {
                     metrics.clone(),
                     move_vm,
                     temporary_store,
+                    store.as_backing_package_store(),
                     tx_ctx.clone(),
                     gas_charger,
                     publish_pt,
@@ -1112,6 +1134,7 @@ mod checked {
     fn setup_consensus_commit(
         consensus_commit_timestamp_ms: CheckpointTimestamp,
         temporary_store: &mut TemporaryStore<'_>,
+        store: &dyn BackingStore,
         tx_ctx: Rc<RefCell<TxContext>>,
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
@@ -1142,6 +1165,7 @@ mod checked {
             metrics,
             move_vm,
             temporary_store,
+            store.as_backing_package_store(),
             tx_ctx,
             gas_charger,
             pt,
@@ -1253,6 +1277,7 @@ mod checked {
     fn setup_authenticator_state_update(
         update: AuthenticatorStateUpdate,
         temporary_store: &mut TemporaryStore<'_>,
+        store: &dyn BackingStore,
         tx_ctx: Rc<RefCell<TxContext>>,
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
@@ -1287,6 +1312,7 @@ mod checked {
             metrics,
             move_vm,
             temporary_store,
+            store.as_backing_package_store(),
             tx_ctx,
             gas_charger,
             pt,
@@ -1322,6 +1348,7 @@ mod checked {
     fn setup_randomness_state_update(
         update: RandomnessStateUpdate,
         temporary_store: &mut TemporaryStore<'_>,
+        store: &dyn BackingStore,
         tx_ctx: Rc<RefCell<TxContext>>,
         move_vm: &Arc<MoveVM>,
         gas_charger: &mut GasCharger,
@@ -1357,6 +1384,7 @@ mod checked {
             metrics,
             move_vm,
             temporary_store,
+            store.as_backing_package_store(),
             tx_ctx,
             gas_charger,
             pt,
