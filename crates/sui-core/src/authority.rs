@@ -11,6 +11,8 @@ use crate::execution_scheduler::ExecutionSchedulerWrapper;
 use crate::execution_scheduler::SchedulingSource;
 use crate::jsonrpc_index::CoinIndexKey2;
 use crate::rpc_index::RpcIndexStore;
+use crate::traffic_controller::metrics::TrafficControllerMetrics;
+use crate::traffic_controller::TrafficController;
 use crate::transaction_outputs::TransactionOutputs;
 use crate::verify_indexes::{fix_indexes, verify_indexes};
 use anyhow::anyhow;
@@ -65,6 +67,9 @@ use sui_types::layout_resolver::into_struct_layout;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_consensus::{AuthorityCapabilitiesV1, AuthorityCapabilitiesV2};
 use sui_types::object::bounded_visitor::BoundedVisitor;
+use sui_types::traffic_control::{
+    PolicyConfig, RemoteFirewallConfig, TrafficControlReconfigParams,
+};
 use sui_types::transaction_executor::SimulateTransactionResult;
 use sui_types::transaction_executor::VmChecks;
 use tap::TapFallible;
@@ -865,6 +870,9 @@ pub struct AuthorityState {
     chain_identifier: ChainIdentifier,
 
     pub(crate) congestion_tracker: Arc<CongestionTracker>,
+
+    /// Traffic controller for Sui core servers (json-rpc, validator service)
+    pub traffic_controller: Option<Arc<TrafficController>>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1583,6 +1591,19 @@ impl AuthorityState {
                 .observe(effects.gas_cost_summary().computation_cost as f64 / elapsed);
         };
         Ok((effects, execution_error_opt))
+    }
+
+    pub async fn reconfigure_traffic_control(
+        &self,
+        params: TrafficControlReconfigParams,
+    ) -> Result<TrafficControlReconfigParams, SuiError> {
+        if let Some(traffic_controller) = self.traffic_controller.as_ref() {
+            traffic_controller.admin_reconfigure(params).await
+        } else {
+            Err(SuiError::InvalidAdminRequest(
+                "Traffic controller is not configured on this node".to_string(),
+            ))
+        }
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -2979,6 +3000,7 @@ impl AuthorityState {
     }
 
     #[allow(clippy::disallowed_methods)] // allow unbounded_channel()
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
@@ -2997,6 +3019,8 @@ impl AuthorityState {
         validator_tx_finalizer: Option<Arc<ValidatorTxFinalizer<NetworkAuthorityClient>>>,
         chain_identifier: ChainIdentifier,
         pruner_db: Option<Arc<AuthorityPrunerTables>>,
+        policy_config: Option<PolicyConfig>,
+        firewall_config: Option<RemoteFirewallConfig>,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
 
@@ -3031,6 +3055,20 @@ impl AuthorityState {
         let input_loader =
             TransactionInputLoader::new(execution_cache_trait_pointers.object_cache_reader.clone());
         let epoch = epoch_store.epoch();
+        let traffic_controller_metrics =
+            Arc::new(TrafficControllerMetrics::new(prometheus_registry));
+        let traffic_controller = if let Some(policy_config) = policy_config {
+            Some(Arc::new(
+                TrafficController::init(
+                    policy_config,
+                    traffic_controller_metrics,
+                    firewall_config.clone(),
+                )
+                .await,
+            ))
+        } else {
+            None
+        };
         let state = Arc::new(AuthorityState {
             name,
             secret,
@@ -3054,6 +3092,7 @@ impl AuthorityState {
             validator_tx_finalizer,
             chain_identifier,
             congestion_tracker: Arc::new(CongestionTracker::new()),
+            traffic_controller,
         });
 
         let state_clone = Arc::downgrade(&state);
