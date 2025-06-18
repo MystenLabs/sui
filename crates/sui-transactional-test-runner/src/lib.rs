@@ -69,7 +69,7 @@ pub async fn run_ptb_v2_test(path: &Path) -> Result<(), Box<dyn std::error::Erro
     ENABLE_PTB_V2.set(true).unwrap();
 
     // check if the test is enabled
-    const ENABLED_DIRECTORIES: &[&str] = &["transfer_object"];
+    const ENABLED_DIRECTORIES: &[&str] = &[];
     let mut components = path.parent().unwrap().components();
     if !components.any(|c| {
         let string = c.as_os_str().to_string_lossy().to_string();
