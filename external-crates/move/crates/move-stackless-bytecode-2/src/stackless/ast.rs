@@ -40,7 +40,6 @@ pub struct BasicBlock {
 
 #[derive(Debug, Clone)]
 pub enum Instruction {
-    // TODO check this
     Return(Vec<Operand>),
     Assign {
         lhs: Vec<Var>,
@@ -57,6 +56,7 @@ pub enum Instruction {
     VariantSwitch {
         cases: Vec<Label>,
     },
+    Drop(Var), // Drop an operand in the case of a Pop operation
     NotImplemented(String),
 }
 
@@ -262,6 +262,7 @@ impl std::fmt::Display for Instruction {
                 }
                 write!(f, ")")
             }
+            Instruction::Drop(var) => write!(f, "Drop({})", var),
             Instruction::Nop => write!(f, "NoOperation"),
             Instruction::NotImplemented(instr) => write!(f, "Unimplemented({instr})"),
         }

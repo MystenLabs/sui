@@ -167,10 +167,7 @@ pub(crate) fn bytecode<K: SourceKind>(
 }
 
     match op {
-        IB::Pop => {
-            ctxt.pop_register();
-            vec![]
-        }
+        IB::Pop => vec![Instruction::Drop(ctxt.pop_register())],
 
         IB::Ret => {
             // TODO: check if this needs to be reversed?
