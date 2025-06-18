@@ -1,0 +1,12 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta2;
+
+enum ErrorReason {
+  ERROR_REASON_UNKNOWN = 0;
+  FIELD_INVALID = 1;
+  FIELD_MISSING = 2;
+}

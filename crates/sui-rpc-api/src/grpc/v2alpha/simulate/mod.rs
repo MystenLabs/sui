@@ -27,7 +27,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction_executor::SimulateTransactionResult;
-use sui_types::transaction_executor::VmChecks;
+use sui_types::transaction_executor::TransactionChecks;
 
 mod resolve;
 
@@ -51,7 +51,7 @@ pub fn simulate_transaction(
         .as_ref()
         .ok_or_else(|| FieldViolation::new("transaction").with_reason(ErrorReason::FieldMissing))?;
 
-    let checks = VmChecks::from(request.checks());
+    let checks = TransactionChecks::from(request.checks());
 
     // TODO make this more efficient
     let (reference_gas_price, protocol_config) = {
@@ -101,7 +101,7 @@ pub fn simulate_transaction(
     if request.do_gas_selection() && checks.enabled() {
         let budget = {
             let simulation_result = executor
-                .simulate_transaction(transaction.clone(), VmChecks::Enabled)
+                .simulate_transaction(transaction.clone(), TransactionChecks::Enabled)
                 .map_err(anyhow::Error::from)?;
 
             let estimate = estimate_gas_budget_from_gas_cost(
@@ -277,7 +277,9 @@ impl From<sui_types::transaction::Argument> for crate::proto::rpc::v2beta::Argum
     }
 }
 
-impl From<crate::proto::rpc::v2alpha::simulate_transaction_request::VmChecks> for VmChecks {
+impl From<crate::proto::rpc::v2alpha::simulate_transaction_request::VmChecks>
+    for TransactionChecks
+{
     fn from(value: crate::proto::rpc::v2alpha::simulate_transaction_request::VmChecks) -> Self {
         match value {
             crate::proto::rpc::v2alpha::simulate_transaction_request::VmChecks::Enabled => {

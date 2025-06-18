@@ -1,0 +1,16 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta2;
+
+// Reference to an object.
+message ObjectReference {
+  // The object id of this object.
+  optional string object_id = 1;
+  // The version of this object.
+  optional uint64 version = 2;
+  // The digest of this object.
+  optional string digest = 3;
+}

@@ -3,3 +3,4 @@
 
 pub mod v2alpha;
 pub mod v2beta;
+pub mod v2beta2;
