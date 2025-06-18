@@ -187,7 +187,9 @@ export function Creategame({ onCreated }: { onCreated: (id: string) => void }) {
         transaction: tx,
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await client.waitForTransaction({
+        digest: txResult.digest
+      });
 
       const eventsResult = await client.queryEvents({
         query: { Transaction: txResult.digest },
