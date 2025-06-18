@@ -28,8 +28,9 @@ impl ThresholdClock {
         }
     }
 
-    /// Add the block reference that have been accepted and advance the round accordingly.
-    pub(crate) fn add_block(&mut self, block: BlockRef) {
+    /// Adds the block reference that have been accepted and advance the round accordingly.
+    /// Returns true when the round has advanced.
+    pub(crate) fn add_block(&mut self, block: BlockRef) -> bool {
         match block.round.cmp(&self.round) {
             // Blocks with round less then what we currently build are irrelevant here
             Ordering::Less => {}
@@ -46,16 +47,14 @@ impl ThresholdClock {
                     self.round = block.round + 1;
 
                     // now record the time of receipt from last quorum
-                    let now = Instant::now();
-                    self.context
-                        .metrics
-                        .node_metrics
-                        .quorum_receive_latency
-                        .observe(now.duration_since(self.quorum_ts).as_secs_f64());
-                    self.quorum_ts = now;
+                    self.quorum_ts = Instant::now();
+
+                    return true;
                 }
             }
         }
+
+        false
     }
 
     /// Add the block references that have been successfully processed and advance the round accordingly. If the round
