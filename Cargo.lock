@@ -8718,6 +8718,7 @@ dependencies = [
  "bcs",
  "bytes",
  "eyre",
+ "fastcrypto",
  "futures",
  "http 1.1.0",
  "http-body 1.0.1",
@@ -8727,9 +8728,12 @@ dependencies = [
  "once_cell",
  "pin-project-lite",
  "prometheus",
+ "rand 0.8.5",
+ "rustls 0.23.25",
  "serde",
  "snap",
  "sui-http",
+ "sui-tls",
  "tokio",
  "tokio-rustls 0.26.2",
  "tokio-stream",
@@ -13802,7 +13806,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.0.4"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=b64827452de2e3f9e62ee8f3cb456a93c2b66b53#b64827452de2e3f9e62ee8f3cb456a93c2b66b53"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=1eed1b281702de4290a0e492600ce2a1fd45a331#1eed1b281702de4290a0e492600ce2a1fd45a331"
 dependencies = [
  "ark-bn254",
  "ark-ff",
@@ -13952,6 +13956,7 @@ dependencies = [
  "futures",
  "indexmap 2.8.0",
  "insta",
+ "itertools 0.13.0",
  "jsonrpsee",
  "move-binary-format",
  "move-core-types",
@@ -14948,6 +14953,7 @@ name = "sui-kv-rpc"
 version = "1.51.0"
 dependencies = [
  "anyhow",
+ "axum 0.8.3",
  "bin-version",
  "clap",
  "mysten-metrics",
@@ -15844,7 +15850,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.0.4"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=b64827452de2e3f9e62ee8f3cb456a93c2b66b53#b64827452de2e3f9e62ee8f3cb456a93c2b66b53"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=1eed1b281702de4290a0e492600ce2a1fd45a331#1eed1b281702de4290a0e492600ce2a1fd45a331"
 dependencies = [
  "base64ct",
  "bcs",

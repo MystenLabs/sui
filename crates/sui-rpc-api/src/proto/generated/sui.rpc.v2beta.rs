@@ -538,7 +538,11 @@ pub mod unchanged_shared_object {
         /// canceled.
         Canceled = 4,
         /// Read of a per-epoch config object that should remain the same during an epoch.
+        /// This has been deprecated in favor of `PER_EPOCH_CONFIG_WITH_SEQUENCE_NUMBER`.
         PerEpochConfig = 5,
+        /// Read of a per-epoch config object that should remain the same during an epoch.
+        /// This contains the sequence number config at the start of the epoch.
+        PerEpochConfigWithSequenceNumber = 6,
     }
     impl UnchangedSharedObjectKind {
         /// String value of the enum field names used in the ProtoBuf definition.
@@ -553,6 +557,9 @@ pub mod unchanged_shared_object {
                 Self::ReadDeleted => "READ_DELETED",
                 Self::Canceled => "CANCELED",
                 Self::PerEpochConfig => "PER_EPOCH_CONFIG",
+                Self::PerEpochConfigWithSequenceNumber => {
+                    "PER_EPOCH_CONFIG_WITH_SEQUENCE_NUMBER"
+                }
             }
         }
         /// Creates an enum from field names used in the ProtoBuf definition.
@@ -564,6 +571,9 @@ pub mod unchanged_shared_object {
                 "READ_DELETED" => Some(Self::ReadDeleted),
                 "CANCELED" => Some(Self::Canceled),
                 "PER_EPOCH_CONFIG" => Some(Self::PerEpochConfig),
+                "PER_EPOCH_CONFIG_WITH_SEQUENCE_NUMBER" => {
+                    Some(Self::PerEpochConfigWithSequenceNumber)
+                }
                 _ => None,
             }
         }

@@ -13,6 +13,7 @@ use move_binary_format::CompiledModule;
 use move_command_line_common::files::FileHash;
 use move_compiler::diagnostics::report_diagnostics_to_buffer;
 use move_compiler::shared::files::{FileName, FilesSourceText};
+use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use sui_move_build::BuildConfig;
 use sui_move_build::CompiledPackage;
@@ -21,7 +22,13 @@ use sui_types::move_package::UpgradePolicy;
 #[test]
 fn test_all() {
     let (mods_v1, pkg_v2, path) = get_packages("all");
-    let result = compare_packages(mods_v1, pkg_v2, path, UpgradePolicy::Compatible);
+    let result = compare_packages(
+        AccountAddress::ZERO,
+        mods_v1,
+        pkg_v2,
+        path,
+        UpgradePolicy::Compatible,
+    );
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -31,7 +38,13 @@ fn test_all() {
 #[test]
 fn test_declarations_missing() {
     let (pkg_v1, pkg_v2, path) = get_packages("declaration_errors");
-    let result = compare_packages(pkg_v1, pkg_v2, path, UpgradePolicy::Compatible);
+    let result = compare_packages(
+        AccountAddress::ZERO,
+        pkg_v1,
+        pkg_v2,
+        path,
+        UpgradePolicy::Compatible,
+    );
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -41,7 +54,13 @@ fn test_declarations_missing() {
 #[test]
 fn test_function() {
     let (pkg_v1, pkg_v2, path) = get_packages("function_errors");
-    let result = compare_packages(pkg_v1, pkg_v2, path, UpgradePolicy::Compatible);
+    let result = compare_packages(
+        AccountAddress::ZERO,
+        pkg_v1,
+        pkg_v2,
+        path,
+        UpgradePolicy::Compatible,
+    );
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -51,7 +70,13 @@ fn test_function() {
 #[test]
 fn test_struct() {
     let (pkg_v1, pkg_v2, path) = get_packages("struct_errors");
-    let result = compare_packages(pkg_v1, pkg_v2, path, UpgradePolicy::Compatible);
+    let result = compare_packages(
+        AccountAddress::ZERO,
+        pkg_v1,
+        pkg_v2,
+        path,
+        UpgradePolicy::Compatible,
+    );
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -61,7 +86,13 @@ fn test_struct() {
 #[test]
 fn test_enum() {
     let (pkg_v1, pkg_v2, path) = get_packages("enum_errors");
-    let result = compare_packages(pkg_v1, pkg_v2, path, UpgradePolicy::Compatible);
+    let result = compare_packages(
+        AccountAddress::ZERO,
+        pkg_v1,
+        pkg_v2,
+        path,
+        UpgradePolicy::Compatible,
+    );
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -71,7 +102,13 @@ fn test_enum() {
 #[test]
 fn test_type_param() {
     let (pkg_v1, pkg_v2, path) = get_packages("type_param_errors");
-    let result = compare_packages(pkg_v1, pkg_v2, path, UpgradePolicy::Compatible);
+    let result = compare_packages(
+        AccountAddress::ZERO,
+        pkg_v1,
+        pkg_v2,
+        path,
+        UpgradePolicy::Compatible,
+    );
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -81,7 +118,13 @@ fn test_type_param() {
 #[test]
 fn test_additive() {
     let (pkg_v1, pkg_v2, p) = get_packages("additive_errors");
-    let result = compare_packages(pkg_v1, pkg_v2, p, UpgradePolicy::Additive);
+    let result = compare_packages(
+        AccountAddress::ZERO,
+        pkg_v1,
+        pkg_v2,
+        p,
+        UpgradePolicy::Additive,
+    );
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -91,7 +134,13 @@ fn test_additive() {
 #[test]
 fn test_deponly() {
     let (pkg_v1, pkg_v2, p) = get_packages("deponly_errors");
-    let result = compare_packages(pkg_v1, pkg_v2, p, UpgradePolicy::DepOnly);
+    let result = compare_packages(
+        AccountAddress::ZERO,
+        pkg_v1,
+        pkg_v2,
+        p,
+        UpgradePolicy::DepOnly,
+    );
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -105,7 +154,13 @@ fn test_version_mismatch() {
     pkg_v1[0].version = 1; // previous version was 1
     pkg_v2.package.root_compiled_units[0].unit.module.version = 0; // downgraded to version 0
 
-    let result = compare_packages(pkg_v1, pkg_v2, p, UpgradePolicy::Additive);
+    let result = compare_packages(
+        AccountAddress::ZERO,
+        pkg_v1,
+        pkg_v2,
+        p,
+        UpgradePolicy::Additive,
+    );
     assert!(result.is_err());
     assert_snapshot!(normalize_path(result.unwrap_err().to_string()));
 }
@@ -114,14 +169,28 @@ fn test_version_mismatch() {
 fn test_friend_link_ok() {
     let (pkg_v1, pkg_v2, path) = get_packages("friend_linking");
     // upgrade compatibility ignores friend linking
-    assert!(compare_packages(pkg_v1, pkg_v2, path, UpgradePolicy::Compatible).is_ok());
+    assert!(compare_packages(
+        AccountAddress::ZERO,
+        pkg_v1,
+        pkg_v2,
+        path,
+        UpgradePolicy::Compatible
+    )
+    .is_ok());
 }
 
 #[test]
 fn test_entry_linking_ok() {
     let (pkg_v1, pkg_v2, path) = get_packages("entry_linking");
     // upgrade compatibility ignores entry linking
-    assert!(compare_packages(pkg_v1, pkg_v2, path, UpgradePolicy::Compatible).is_ok());
+    assert!(compare_packages(
+        AccountAddress::ZERO,
+        pkg_v1,
+        pkg_v2,
+        path,
+        UpgradePolicy::Compatible
+    )
+    .is_ok());
 }
 
 #[test]
@@ -167,6 +236,35 @@ fn test_missing_module_toml() {
         .unwrap();
         assert_snapshot!(malformed_pkg, normalize_path(output));
     }
+}
+
+#[test]
+fn test_address_change() {
+    // mismatched address on upgrade should fail
+    let (pkg_v1, pkg_v2, path) = get_packages("address_change");
+    let result = compare_packages(
+        AccountAddress::from_str("0x2").unwrap(), // mismatched "on-chain" address
+        pkg_v1,
+        pkg_v2,
+        path,
+        UpgradePolicy::Compatible,
+    );
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert_snapshot!(normalize_path(err.to_string()));
+
+    // with correct address, should not error
+    let (pkg_v1, pkg_v2, path) = get_packages("address_change");
+    let result = compare_packages(
+        AccountAddress::from_str("0x1").unwrap(), // correct "on-chain" address, matches address set in v1 package
+        pkg_v1,
+        pkg_v2,
+        path,
+        UpgradePolicy::Compatible,
+    );
+
+    assert!(result.is_ok());
 }
 
 #[test]

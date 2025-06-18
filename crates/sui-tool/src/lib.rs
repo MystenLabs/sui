@@ -91,7 +91,6 @@ pub enum SnapshotVerifyMode {
 // This functions requires at least one of genesis or fullnode_rpc to be `Some`.
 async fn make_clients(
     sui_client: &Arc<SuiClient>,
-    use_tls: bool,
 ) -> Result<BTreeMap<AuthorityName, (Multiaddr, NetworkAuthorityClient)>> {
     let mut net_config = default_mysten_network_config();
     net_config.connect_timeout = Some(Duration::from_secs(5));
@@ -104,17 +103,14 @@ async fn make_clients(
         .active_validators;
 
     for validator in active_validators {
-        let mut net_addr = Multiaddr::try_from(validator.net_address).unwrap();
+        let net_addr = Multiaddr::try_from(validator.net_address).unwrap();
         let tls_config = sui_tls::create_rustls_client_config(
             sui_types::crypto::NetworkPublicKey::from_bytes(&validator.network_pubkey_bytes)?,
             sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
             None,
         );
-        if use_tls {
-            net_addr = net_addr.rewrite_http_to_https();
-        }
         let channel = net_config
-            .connect_lazy(&net_addr, use_tls.then_some(tls_config))
+            .connect_lazy(&net_addr, tls_config)
             .map_err(|err| anyhow!(err.to_string()))?;
         let client = NetworkAuthorityClient::new(channel);
         let public_key_bytes =
@@ -375,10 +371,9 @@ pub async fn get_transaction_block(
     tx_digest: TransactionDigest,
     show_input_tx: bool,
     fullnode_rpc: String,
-    use_tls: bool,
 ) -> Result<String> {
     let sui_client = Arc::new(SuiClientBuilder::default().build(fullnode_rpc).await?);
-    let clients = make_clients(&sui_client, use_tls).await?;
+    let clients = make_clients(&sui_client).await?;
     let timer = Instant::now();
     let responses = join_all(clients.iter().map(|(name, (address, client))| async {
         let result = client

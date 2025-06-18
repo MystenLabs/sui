@@ -3422,7 +3422,7 @@ impl AuthorityState {
     /// Advance the epoch store to the next epoch for testing only.
     /// This only manually sets all the places where we have the epoch number.
     /// It doesn't properly reconfigure the node, hence should be only used for testing.
-    pub async fn reconfigure_for_testing(&self) {
+    pub async fn reconfigure_for_testing(self: &Arc<AuthorityState>) {
         let mut execution_lock = self.execution_lock_for_reconfiguration().await;
         let epoch_store = self.epoch_store_for_testing().clone();
         let protocol_config = epoch_store.protocol_config().clone();
@@ -3434,16 +3434,7 @@ impl AuthorityState {
         // across epochs.
         let _guard =
             ProtocolConfig::apply_overrides_for_testing(move |_, _| protocol_config.clone());
-        let new_epoch_store = epoch_store.new_at_next_epoch_for_testing(
-            self.get_backing_package_store().clone(),
-            self.get_object_store().clone(),
-            &self.config.expensive_safety_check_config,
-            self.checkpoint_store
-                .get_epoch_last_checkpoint(epoch_store.epoch())
-                .unwrap()
-                .map(|c| *c.sequence_number())
-                .unwrap_or_default(),
-        );
+        let new_epoch_store = epoch_store.new_at_next_epoch_for_testing(self).await;
         let new_epoch = new_epoch_store.epoch();
         match self.execution_scheduler.as_ref() {
             ExecutionSchedulerWrapper::ExecutionScheduler(_) => {}
