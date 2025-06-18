@@ -561,10 +561,9 @@ impl From<UnchangedSharedKind> for crate::effects::UnchangedSharedKind {
             }
             UnchangedSharedKind::Canceled { version } => Self::Cancelled(version.into()),
             UnchangedSharedKind::PerEpochConfig => Self::PerEpochConfigDEPRECATED,
-            // TODO(tzakian): add this into the SDK
-            // UnchangedSharedKind::PerEpochConfigWithSequenceNumber(seqno) => {
-            //     Self::PerEpochConfigWithSeqno(seqno.into())
-            // }
+            UnchangedSharedKind::PerEpochConfigWithSequenceNumber { version } => {
+                Self::PerEpochConfigWithSeqno(version.into())
+            }
         }
     }
 }
@@ -592,10 +591,10 @@ impl From<crate::effects::UnchangedSharedKind> for UnchangedSharedKind {
                 version: version.into(),
             },
             crate::effects::UnchangedSharedKind::PerEpochConfigDEPRECATED => Self::PerEpochConfig,
-            // TODO(tzakian): add this into the SDK
-            crate::effects::UnchangedSharedKind::PerEpochConfigWithSeqno(_seqno) => {
-                todo!()
-                // Self::PerEpochConfigWithSequenceNumber(seqno.into())
+            crate::effects::UnchangedSharedKind::PerEpochConfigWithSeqno(seqno) => {
+                Self::PerEpochConfigWithSequenceNumber {
+                    version: seqno.into(),
+                }
             }
         }
     }

@@ -1308,10 +1308,10 @@ impl AuthorityPerEpochStore {
         );
         let new_epoch = self
             .new_at_next_epoch(
-            self.name,
-            next_committee,
-            self.epoch_start_configuration
-                .new_at_next_epoch_for_testing(),
+                self.name,
+                next_committee,
+                self.epoch_start_configuration
+                    .new_at_next_epoch_for_testing(),
                 authority.get_backing_package_store().clone(),
                 authority.get_object_store().clone(),
                 &authority.config.expensive_safety_check_config,
@@ -1321,7 +1321,7 @@ impl AuthorityPerEpochStore {
                     .unwrap()
                     .map(|c| *c.sequence_number())
                     .unwrap_or_default(),
-        )
+            )
             .expect("failed to create new authority per epoch store");
 
         // Set up randomness manager for the next epoch if randomness is enabled.
