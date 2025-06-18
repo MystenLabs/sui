@@ -1,0 +1,59 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta2;
+
+import "google/protobuf/struct.proto";
+import "sui/rpc/v2beta2/bcs.proto";
+import "sui/rpc/v2beta2/move_package.proto";
+import "sui/rpc/v2beta2/owner.proto";
+
+// An object on the Sui blockchain.
+message Object {
+  // This Object serialized as BCS.
+  optional Bcs bcs = 1;
+
+  // `ObjectId` for this object.
+  optional string object_id = 2;
+
+  // Version of the object.
+  optional uint64 version = 3;
+
+  // The digest of this Object.
+  optional string digest = 4;
+
+  // Owner of the object.
+  optional Owner owner = 5;
+
+  // The type of this object.
+  //
+  // This will be 'package' for packages and a StructTag for move structs.
+  optional string object_type = 6;
+
+  // DEPRECATED this field is no longer used to determine whether a tx can transfer this
+  // object. Instead, it is always calculated from the objects type when loaded in execution.
+  //
+  // Only set for Move structs
+  optional bool has_public_transfer = 7;
+
+  // BCS bytes of a Move struct value.
+  //
+  // Only set for Move structs
+  optional Bcs contents = 8;
+
+  // Package information for Move Packages
+  optional Package package = 9;
+
+  // The digest of the transaction that created or last mutated this object
+  optional string previous_transaction = 10;
+
+  // The amount of SUI to rebate if this object gets deleted.
+  // This number is re-calculated each time the object is mutated based on
+  // the present storage gas price.
+  optional uint64 storage_rebate = 11;
+
+  // JSON rendering of the object.
+  optional google.protobuf.Value json = 100;
+}

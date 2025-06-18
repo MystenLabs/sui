@@ -73,7 +73,7 @@ use sui_types::traffic_control::{
     PolicyConfig, RemoteFirewallConfig, TrafficControlReconfigParams,
 };
 use sui_types::transaction_executor::SimulateTransactionResult;
-use sui_types::transaction_executor::VmChecks;
+use sui_types::transaction_executor::TransactionChecks;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::RwLock;
@@ -2151,7 +2151,7 @@ impl AuthorityState {
     pub fn simulate_transaction(
         &self,
         mut transaction: TransactionData,
-        checks: VmChecks,
+        checks: TransactionChecks,
     ) -> SuiResult<SimulateTransactionResult> {
         if transaction.kind().is_system_tx() {
             return Err(SuiError::UnsupportedFeatureError {

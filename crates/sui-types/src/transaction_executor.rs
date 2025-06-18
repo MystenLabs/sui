@@ -28,7 +28,7 @@ pub trait TransactionExecutor: Send + Sync {
     fn simulate_transaction(
         &self,
         transaction: TransactionData,
-        checks: VmChecks,
+        checks: TransactionChecks,
     ) -> Result<SimulateTransactionResult, SuiError>;
 }
 
@@ -42,13 +42,13 @@ pub struct SimulateTransactionResult {
 }
 
 #[derive(Default, Debug, Copy, Clone)]
-pub enum VmChecks {
+pub enum TransactionChecks {
     #[default]
     Enabled,
     Disabled,
 }
 
-impl VmChecks {
+impl TransactionChecks {
     pub fn disabled(self) -> bool {
         matches!(self, Self::Disabled)
     }

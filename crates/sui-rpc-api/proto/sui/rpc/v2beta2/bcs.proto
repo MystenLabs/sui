@@ -1,0 +1,17 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta2;
+
+// `Bcs` contains an arbitrary type that is serialized using the
+// [BCS](https://mystenlabs.github.io/sui-rust-sdk/sui_sdk_types/index.html#bcs)
+// format as well as a name that identifies the type of the serialized value.
+message Bcs {
+  // Name that identifies the type of the serialized value.
+  optional string name = 1;
+
+  // Bytes of a BCS serialized value.
+  optional bytes value = 2;
+}

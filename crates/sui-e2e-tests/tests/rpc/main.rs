@@ -21,6 +21,7 @@ mod move_package_service;
 mod signature_verification_service;
 mod subscription_service;
 mod transaction_execution_service;
+mod v2beta2;
 
 async fn transfer_coin(
     context: &sui_sdk::wallet_context::WalletContext,

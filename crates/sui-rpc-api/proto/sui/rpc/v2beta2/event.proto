@@ -1,0 +1,44 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta2;
+
+import "google/protobuf/struct.proto";
+import "sui/rpc/v2beta2/bcs.proto";
+
+// Events emitted during the successful execution of a transaction.
+message TransactionEvents {
+  // This TransactionEvents serialized as BCS.
+  optional Bcs bcs = 1;
+
+  // The digest of this TransactionEvents.
+  optional string digest = 2;
+
+  // Set of events emitted by a transaction.
+  repeated Event events = 3;
+}
+
+// An event.
+message Event {
+  // Package ID of the top-level function invoked by a `MoveCall` command that triggered this
+  // event to be emitted.
+  optional string package_id = 1;
+
+  // Module name of the top-level function invoked by a `MoveCall` command that triggered this
+  // event to be emitted.
+  optional string module = 2;
+
+  // Address of the account that sent the transaction where this event was emitted.
+  optional string sender = 3;
+
+  // The type of the event emitted.
+  optional string event_type = 4;
+
+  // BCS serialized bytes of the event.
+  optional Bcs contents = 5;
+
+  // JSON rendering of the event.
+  optional google.protobuf.Value json = 6;
+}
