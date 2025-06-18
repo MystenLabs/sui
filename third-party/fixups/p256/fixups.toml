@@ -1,0 +1,3 @@
+# not sure why this isn't picked up
+extra_srcs = ["README.md"]
+buildscript = []
