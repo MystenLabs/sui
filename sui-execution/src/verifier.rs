@@ -40,6 +40,17 @@ pub trait Verifier {
             return Ok(());
         };
 
+        for module in &modules {
+            for identifier in module.identifiers() {
+                if identifier.is_self() {
+                    return Err(sui_types::error::UserInputError::InvalidIdentifier {
+                        error: format!("invalid identifier: {}", identifier),
+                    }
+                    .into());
+                }
+            }
+        }
+
         self.meter_compiled_modules(protocol_config, &modules, meter)
     }
 }
