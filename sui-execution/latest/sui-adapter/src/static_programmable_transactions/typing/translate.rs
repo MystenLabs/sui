@@ -3,6 +3,7 @@
 
 use super::{ast as T, env::Env};
 use crate::{
+    execution_mode::ExecutionMode,
     programmable_transactions::context::EitherError,
     static_programmable_transactions::{
         loading::ast::{self as L, InputArg, Type},
@@ -105,7 +106,10 @@ impl Context {
     }
 }
 
-pub fn transaction(env: &Env, lt: L::Transaction) -> Result<T::Transaction, ExecutionError> {
+pub fn transaction<Mode: ExecutionMode>(
+    env: &Env,
+    lt: L::Transaction,
+) -> Result<T::Transaction, ExecutionError> {
     let L::Transaction { inputs, commands } = lt;
     let mut context = Context::new(inputs);
     let commands = commands
@@ -114,7 +118,9 @@ pub fn transaction(env: &Env, lt: L::Transaction) -> Result<T::Transaction, Exec
         .map(|(i, c)| {
             let idx = i as u16;
             context.current_command = idx;
-            let (c, tys) = command(env, &mut context, c).map_err(|e| e.with_command_index(i))?;
+            let (c, tys) =
+                command::<Mode>(env, &mut context, c).map_err(|e| e.with_command_index(i))?;
+            context.results.push(tys.clone());
             Ok((sp(idx, c), tys))
         })
         .collect::<Result<Vec<_>, ExecutionError>>()?;
@@ -125,7 +131,7 @@ pub fn transaction(env: &Env, lt: L::Transaction) -> Result<T::Transaction, Exec
     Ok(ast)
 }
 
-fn command(
+fn command<Mode: ExecutionMode>(
     env: &Env,
     context: &mut Context,
     command: L::Command,
@@ -245,7 +251,13 @@ fn command(
             )
         }
         L::Command::Publish(items, object_ids, linkage) => {
-            (T::Command_::Publish(items, object_ids, linkage), vec![])
+            let result = if Mode::packages_are_predefined() {
+                // If packages are predefined, no upgrade cap is made
+                vec![]
+            } else {
+                vec![env.upgrade_cap_type()?.clone()]
+            };
+            (T::Command_::Publish(items, object_ids, linkage), result)
         }
         L::Command::Upgrade(items, object_ids, object_id, la, linkage) => {
             let location = one_location(context, 0, la)?;

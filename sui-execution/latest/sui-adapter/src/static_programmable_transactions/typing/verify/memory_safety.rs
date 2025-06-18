@@ -207,9 +207,10 @@ impl Context {
 pub fn verify(_env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
     let mut context = Context::new(ast)?;
     let commands = &ast.commands;
-    for (c, _t) in commands {
-        let result = command(&mut context, c).map_err(|e| e.with_command_index(c.idx as usize))?;
-        assert_invariant!(result.len() == _t.len(), "result length mismatch");
+    for (c, t) in commands {
+        let result =
+            command(&mut context, c, t).map_err(|e| e.with_command_index(c.idx as usize))?;
+        assert_invariant!(result.len() == t.len(), "result length mismatch");
         context.results.push(result.into_iter().map(Some).collect());
     }
 
@@ -245,6 +246,7 @@ pub fn verify(_env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
 fn command(
     context: &mut Context,
     sp!(_, command): &T::Command,
+    result_tys: &[T::Type],
 ) -> Result<Vec<Value>, ExecutionError> {
     Ok(match command {
         T::Command_::MoveCall(mc) => {
@@ -282,13 +284,11 @@ fn command(
             consume_values(context, vs)?;
             vec![Value::NonRef]
         }
-        T::Command_::Publish(_, _, _) => {
-            vec![]
-        }
+        T::Command_::Publish(_, _, _) => result_tys.iter().map(|_| Value::NonRef).collect(),
         T::Command_::Upgrade(_, _, _, x, _) => {
             let v = argument(context, x)?;
             consume_value(context, v)?;
-            vec![]
+            vec![Value::NonRef]
         }
     })
 }
