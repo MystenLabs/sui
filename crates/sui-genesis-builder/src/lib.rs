@@ -36,7 +36,6 @@ use sui_types::governance::StakedSui;
 use sui_types::id::UID;
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
-use sui_types::is_system_package;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary,
@@ -49,7 +48,11 @@ use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState, SuiSyste
 use sui_types::transaction::{
     CallArg, CheckedInputObjects, Command, InputObjectKind, ObjectReadResult, Transaction,
 };
-use sui_types::{BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
+use sui_types::{is_system_package, SUI_COIN_METADATA_REGISTRY_OBJECT_ID};
+use sui_types::{
+    BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID, SUI_COIN_METADATA_REGISTRY_ADDRESS,
+    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
+};
 use tracing::trace;
 use validator_info::{GenesisValidatorInfo, GenesisValidatorMetadata, ValidatorInfo};
 
@@ -329,6 +332,11 @@ impl Builder {
         assert_eq!(
             protocol_config.enable_bridge(),
             unsigned_genesis.has_bridge_object()
+        );
+
+        assert_eq!(
+            protocol_config.enable_coin_metadata_registry(),
+            unsigned_genesis.coin_metadata_registry_object(),
         );
 
         assert_eq!(
@@ -1168,6 +1176,25 @@ pub fn generate_genesis_system_object(
                 BRIDGE_CREATE_FUNCTION_NAME.to_owned(),
                 vec![],
                 vec![bridge_uid, bridge_chain_id],
+            );
+        }
+
+        if protocol_config.enable_coin_metadata_registry() {
+            let registry_uid = builder
+                .input(CallArg::Pure(
+                    UID::new(SUI_COIN_METADATA_REGISTRY_OBJECT_ID).to_bcs_bytes(),
+                ))
+                .unwrap();
+            // TODO: figure out where to get these hashes from.
+            let regulated_hashes = builder.pure(_regulated_hashes).unwrap();
+            let fixed_supply_hashes = builder.pure(_fixed_supply_hashes).unwrap();
+
+            builder.programmable_move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                COIN_METADATA_REGISTRY_MODULE_NAME.to_owned(),
+                COIN_METADATA_REGISTRY_CREATE_FUNCTION_NAME.to_owned(),
+                vec![],
+                vec![registry_uid, regulated_hashes, fixed_supply_hashes],
             );
         }
 

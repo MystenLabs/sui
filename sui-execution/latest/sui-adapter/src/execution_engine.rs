@@ -17,6 +17,9 @@ mod checked {
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
         BALANCE_MODULE_NAME,
     };
+    use sui_types::coin_metadata_registry::{
+        COIN_METADATA_REGISTRY_CREATE_FUNCTION_NAME, COIN_METADATA_REGISTRY_MODULE_NAME,
+    };
     use sui_types::gas_coin::GAS;
     use sui_types::messages_checkpoint::CheckpointTimestamp;
     use sui_types::metrics::LimitsMetrics;
@@ -26,7 +29,11 @@ mod checked {
         RANDOMNESS_MODULE_NAME, RANDOMNESS_STATE_CREATE_FUNCTION_NAME,
         RANDOMNESS_STATE_UPDATE_FUNCTION_NAME,
     };
-    use sui_types::{BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
+    use sui_types::{
+        BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID, SUI_COIN_METADATA_REGISTRY_ADDRESS,
+        SUI_RANDOMNESS_STATE_OBJECT_ID,
+    };
+
     use tracing::{info, instrument, trace, warn};
 
     use crate::adapter::new_move_vm;
@@ -751,6 +758,10 @@ mod checked {
                             assert!(protocol_config.random_beacon());
                             builder = setup_randomness_state_create(builder);
                         }
+                        EndOfEpochTransactionKind::CoinMetadataRegistryCreate => {
+                            assert!(protocol_config.enable_coin_metadata_registry());
+                            builder = setup_coin_metadata_registry_create(builder);
+                        }
                         EndOfEpochTransactionKind::DenyListStateCreate => {
                             assert!(protocol_config.enable_coin_deny_list_v1());
                             builder = setup_coin_deny_list_state_create(builder);
@@ -1202,6 +1213,21 @@ mod checked {
                 vec![],
             )
             .expect("Unable to generate randomness_state_create transaction!");
+        builder
+    }
+
+    fn setup_coin_metadata_registry_create(
+        mut builder: ProgrammableTransactionBuilder,
+    ) -> ProgrammableTransactionBuilder {
+        builder
+            .move_call(
+                SUI_COIN_METADATA_REGISTRY_ADDRESS.into(),
+                COIN_METADATA_REGISTRY_MODULE_NAME.to_owned(),
+                COIN_METADATA_REGISTRY_CREATE_FUNCTION_NAME.to_owned(),
+                vec![],
+                vec![],
+            )
+            .expect("Unable to generate coin_metadata_registry_create transaction!");
         builder
     }
 

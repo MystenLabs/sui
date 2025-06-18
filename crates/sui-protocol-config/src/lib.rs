@@ -450,6 +450,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     bridge: bool,
 
+    // Enable coin metadata registry protocol
+    #[serde(skip_serializing_if = "is_false")]
+    enable_coin_metadata_registry: bool,
+
     #[serde(skip_serializing_if = "is_false")]
     enable_effects_v2: bool,
 
@@ -1737,6 +1741,10 @@ impl ProtocolConfig {
             assert!(self.feature_flags.end_of_epoch_transaction_supported);
         }
         ret
+    }
+
+    pub fn enable_coin_metadata_registry(&self) -> bool {
+        self.feature_flags.enable_coin_metadata_registry
     }
 
     pub fn should_try_to_finalize_bridge_committee(&self) -> bool {
