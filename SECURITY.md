@@ -1,5 +1,5 @@
 # Introduction
-
+Romeo Rosete
 We appreciate your participation in keeping the Sui network secure. This doc includes details on Sui's Bug Bounty Program, including information on how to report an issue, what bug bounties are available, and who is eligible for bounties.
 
 The program is run in partnership with [HackenProof](https://hackenproof.com/). More information is available on [their site](https://hackenproof.com/programs/sui-protocol).
