@@ -18,7 +18,6 @@ use crate::{
 use move_binary_format::{
     file_format::JumpTableInner, normalized as N, normalized::Bytecode as IB,
 };
-use move_core_types::{account_address::AccountAddress, u256::U256};
 
 use move_model_2::{
     model::{Model as Model2, Module, Package},
@@ -142,13 +141,13 @@ pub(crate) fn bytecode<K: SourceKind>(
     use ast::PrimitiveOp as Op;
 
     macro_rules! assign {
-    ($rhs:expr $(, $lhs:expr)* $(,)?) => {{
-        Instruction::Assign {
-            lhs: vec![$($lhs),*],
-            rhs: $rhs,
-        }
-    }};
-}
+        ($rhs:expr $(, $lhs:expr)* $(,)?) => {{
+            Instruction::Assign {
+                lhs: vec![$($lhs),*],
+                rhs: $rhs,
+            }
+        }};
+    }
 
     macro_rules! imm {
         ($val:expr) => {
@@ -156,14 +155,14 @@ pub(crate) fn bytecode<K: SourceKind>(
         };
     }
 
-    macro_rules! primitiveOp {
-    ($op:expr, $($rval:expr),+ $(,)?) => {
-        RValue::Primitive {
-            op: $op,
-            args: vec![$($rval),+],
-        }
-    };
-}
+    macro_rules! primitive_op {
+        ($op:expr, $($rval:expr),+ $(,)?) => {
+            RValue::Primitive {
+                op: $op,
+                args: vec![$($rval),+],
+            }
+        };
+    }
 
     match op {
         IB::Pop => Instruction::Drop(ctxt.pop_register()),
@@ -209,22 +208,22 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::LdU128(bx) => assign!(imm!(Value::U128(*(*bx))), ctxt.push_register()),
 
         IB::CastU8 => assign!(
-            primitiveOp!(Op::CastU8, Var(ctxt.pop_register())),
+            primitive_op!(Op::CastU8, Var(ctxt.pop_register())),
             ctxt.push_register()
         ),
 
         IB::CastU64 => assign!(
-            primitiveOp!(Op::CastU64, Var(ctxt.pop_register())),
+            primitive_op!(Op::CastU64, Var(ctxt.pop_register())),
             ctxt.push_register()
         ),
 
         IB::CastU128 => assign!(
-            primitiveOp!(Op::CastU128, Var(ctxt.pop_register())),
+            primitive_op!(Op::CastU128, Var(ctxt.pop_register())),
             ctxt.push_register()
         ),
 
         IB::LdConst(const_ref) => assign!(
-            RValue::Operand(Constant(deserialize_constant(const_ref))),
+            RValue::Operand(Constant(const_ref.data.clone())),
             ctxt.push_register()
         ),
 
@@ -233,12 +232,12 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::LdFalse => assign!(imm!(Value::False), ctxt.push_register()),
 
         IB::CopyLoc(loc) => assign!(
-            primitiveOp!(Op::CopyLoc, Var(Local(*loc as usize))),
+            primitive_op!(Op::CopyLoc, Var(Local(*loc as usize))),
             ctxt.push_register()
         ),
 
         IB::MoveLoc(loc) => assign!(
-            primitiveOp!(Op::MoveLoc, Var(Local(*loc as usize))),
+            primitive_op!(Op::MoveLoc, Var(Local(*loc as usize))),
             ctxt.push_register()
         ),
 
@@ -321,13 +320,17 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::ReadRef => assign!(
-            primitiveOp!(Op::ReadRef, Var(ctxt.pop_register())),
+            primitive_op!(Op::ReadRef, Var(ctxt.pop_register())),
             ctxt.push_register()
         ),
 
         IB::WriteRef => assign!(
             // TODO check if this is ok for the SSA
-            primitiveOp!(Op::WriteRef, Var(ctxt.pop_register()), Var(ctxt.pop_register()))
+            primitive_op!(
+                Op::WriteRef,
+                Var(ctxt.pop_register()),
+                Var(ctxt.pop_register())
+            )
         ),
 
         IB::FreezeRef => {
@@ -336,27 +339,27 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::MutBorrowLoc(local_index) => assign!(
-            primitiveOp!(Op::MutBorrowLoc, Var(Local(*local_index as usize))),
+            primitive_op!(Op::MutBorrowLoc, Var(Local(*local_index as usize))),
             ctxt.push_register()
         ),
 
         IB::ImmBorrowLoc(local_index) => assign!(
-            primitiveOp!(Op::ImmBorrowLoc, Var(Local(*local_index as usize))),
+            primitive_op!(Op::ImmBorrowLoc, Var(Local(*local_index as usize))),
             ctxt.push_register()
         ),
 
         IB::MutBorrowField(_field_ref) => assign!(
-            primitiveOp!(Op::MutBorrowField, Var(ctxt.pop_register())),
+            primitive_op!(Op::MutBorrowField, Var(ctxt.pop_register())),
             ctxt.push_register()
         ),
 
         IB::ImmBorrowField(_field_ref) => assign!(
-            primitiveOp!(Op::ImmBorrowField, Var(ctxt.pop_register())),
+            primitive_op!(Op::ImmBorrowField, Var(ctxt.pop_register())),
             ctxt.push_register()
         ),
 
         IB::Add => assign!(
-            primitiveOp!(Op::Add, Var(ctxt.pop_register()), Var(ctxt.pop_register())),
+            primitive_op!(Op::Add, Var(ctxt.pop_register()), Var(ctxt.pop_register())),
             ctxt.push_register()
         ),
 
@@ -364,7 +367,7 @@ pub(crate) fn bytecode<K: SourceKind>(
             let subtraend = ctxt.pop_register();
             let minuend = ctxt.pop_register();
             assign!(
-                primitiveOp!(Op::Subtract, Var(minuend), Var(subtraend)),
+                primitive_op!(Op::Subtract, Var(minuend), Var(subtraend)),
                 ctxt.push_register()
             )
         }
@@ -373,7 +376,7 @@ pub(crate) fn bytecode<K: SourceKind>(
             let multiplier = ctxt.pop_register();
             let multiplicand = ctxt.pop_register();
             assign!(
-                primitiveOp!(Op::Multiply, Var(multiplicand), Var(multiplier)),
+                primitive_op!(Op::Multiply, Var(multiplicand), Var(multiplier)),
                 ctxt.push_register()
             )
         }
@@ -382,7 +385,7 @@ pub(crate) fn bytecode<K: SourceKind>(
             let divisor = ctxt.pop_register();
             let dividend = ctxt.pop_register();
             assign!(
-                primitiveOp!(Op::Modulo, Var(dividend), Var(divisor)),
+                primitive_op!(Op::Modulo, Var(dividend), Var(divisor)),
                 ctxt.push_register()
             )
         }
@@ -391,13 +394,13 @@ pub(crate) fn bytecode<K: SourceKind>(
             let divisor = ctxt.pop_register();
             let dividend = ctxt.pop_register();
             assign!(
-                primitiveOp!(Op::Divide, Var(dividend), Var(divisor)),
+                primitive_op!(Op::Divide, Var(dividend), Var(divisor)),
                 ctxt.push_register()
             )
         }
 
         IB::BitOr => assign!(
-            primitiveOp!(
+            primitive_op!(
                 Op::BitOr,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
@@ -406,7 +409,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         ),
 
         IB::BitAnd => assign!(
-            primitiveOp!(
+            primitive_op!(
                 Op::BitAnd,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
@@ -415,27 +418,27 @@ pub(crate) fn bytecode<K: SourceKind>(
         ),
 
         IB::Xor => assign!(
-            primitiveOp!(Op::Xor, Var(ctxt.pop_register()), Var(ctxt.pop_register())),
+            primitive_op!(Op::Xor, Var(ctxt.pop_register()), Var(ctxt.pop_register())),
             ctxt.push_register()
         ),
 
         IB::Or => assign!(
-            primitiveOp!(Op::Or, Var(ctxt.pop_register()), Var(ctxt.pop_register())),
+            primitive_op!(Op::Or, Var(ctxt.pop_register()), Var(ctxt.pop_register())),
             ctxt.push_register()
         ),
 
         IB::And => assign!(
-            primitiveOp!(Op::And, Var(ctxt.pop_register()), Var(ctxt.pop_register())),
+            primitive_op!(Op::And, Var(ctxt.pop_register()), Var(ctxt.pop_register())),
             ctxt.push_register()
         ),
 
         IB::Not => assign!(
-            primitiveOp!(Op::Not, Var(ctxt.pop_register())),
+            primitive_op!(Op::Not, Var(ctxt.pop_register())),
             ctxt.push_register()
         ),
 
         IB::Eq => assign!(
-            primitiveOp!(
+            primitive_op!(
                 Op::Equal,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
@@ -444,7 +447,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         ),
 
         IB::Neq => assign!(
-            primitiveOp!(
+            primitive_op!(
                 Op::NotEqual,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
@@ -453,7 +456,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         ),
 
         IB::Lt => assign!(
-            primitiveOp!(
+            primitive_op!(
                 Op::LessThan,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
@@ -462,7 +465,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         ),
 
         IB::Gt => assign!(
-            primitiveOp!(
+            primitive_op!(
                 Op::GreaterThan,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
@@ -471,7 +474,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         ),
 
         IB::Le => assign!(
-            primitiveOp!(
+            primitive_op!(
                 Op::LessThanOrEqual,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
@@ -480,7 +483,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         ),
 
         IB::Ge => assign!(
-            primitiveOp!(
+            primitive_op!(
                 Op::GreaterThanOrEqual,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
@@ -500,7 +503,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::Shl => assign!(
-            primitiveOp!(
+            primitive_op!(
                 Op::ShiftLeft,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
@@ -509,7 +512,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         ),
 
         IB::Shr => assign!(
-            primitiveOp!(
+            primitive_op!(
                 Op::ShiftRight,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
@@ -532,33 +535,41 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::VecLen(_rc) => assign!(
-            primitiveOp!(Op::VecLen, Var(ctxt.pop_register())),
+            primitive_op!(Op::VecLen, Var(ctxt.pop_register())),
             ctxt.push_register()
         ),
 
         IB::VecImmBorrow(_rc) => assign!(
-            primitiveOp!(Op::VecImmBorrow, Var(ctxt.pop_register()), Var(ctxt.pop_register())),
+            primitive_op!(
+                Op::VecImmBorrow,
+                Var(ctxt.pop_register()),
+                Var(ctxt.pop_register())
+            ),
             ctxt.push_register()
         ),
 
         IB::VecMutBorrow(_rc) => assign!(
-            primitiveOp!(Op::VecMutBorrow, Var(ctxt.pop_register()), Var(ctxt.pop_register())),
+            primitive_op!(
+                Op::VecMutBorrow,
+                Var(ctxt.pop_register()),
+                Var(ctxt.pop_register())
+            ),
             ctxt.push_register()
         ),
 
-        IB::VecPushBack(_rc) => assign!(primitiveOp!(
+        IB::VecPushBack(_rc) => assign!(primitive_op!(
             Op::VecPushBack,
             Var(ctxt.pop_register()),
             Var(ctxt.pop_register())
         )),
 
         IB::VecPopBack(_rc) => assign!(
-            primitiveOp!(Op::VecPopBack, Var(ctxt.pop_register())),
+            primitive_op!(Op::VecPopBack, Var(ctxt.pop_register())),
             ctxt.push_register()
         ),
 
         IB::VecUnpack(bx) => {
-            let rhs = primitiveOp!(Op::VecUnpack, Var(ctxt.pop_register()));
+            let rhs = primitive_op!(Op::VecUnpack, Var(ctxt.pop_register()));
             let mut lhs = vec![];
             for _i in 0..bx.1 {
                 lhs.push(ctxt.push_register());
@@ -590,17 +601,17 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::LdU256(_bx) => assign!(imm!(Value::U256(*(*_bx))), ctxt.push_register()),
 
         IB::CastU16 => assign!(
-            primitiveOp!(Op::CastU16, Var(ctxt.pop_register())),
+            primitive_op!(Op::CastU16, Var(ctxt.pop_register())),
             ctxt.push_register()
         ),
 
         IB::CastU32 => assign!(
-            primitiveOp!(Op::CastU32, Var(ctxt.pop_register())),
+            primitive_op!(Op::CastU32, Var(ctxt.pop_register())),
             ctxt.push_register()
         ),
 
         IB::CastU256 => assign!(
-            primitiveOp!(Op::CastU256, Var(ctxt.pop_register())),
+            primitive_op!(Op::CastU256, Var(ctxt.pop_register())),
             ctxt.push_register()
         ),
 
@@ -683,161 +694,10 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         // ******** DEPRECATED BYTECODES ********
-        IB::MutBorrowGlobalDeprecated(_bx) => {
-            Instruction::NotImplemented(format!("{:?}", op))
-        }
-        IB::ImmBorrowGlobalDeprecated(_bx) => {
-            Instruction::NotImplemented(format!("{:?}", op))
-        }
+        IB::MutBorrowGlobalDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
+        IB::ImmBorrowGlobalDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
         IB::ExistsDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
         IB::MoveFromDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
         IB::MoveToDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
-    }
-}
-
-fn deserialize_constant(constant: &N::Constant<Symbol>) -> Value {
-    match &constant.type_ {
-        N::Type::U8 => {
-            Value::U8(bcs::from_bytes::<u8>(&constant.data).unwrap_or_else(|_| {
-                panic!("Failed to deserialize U8 constant: {:?}", constant.data)
-            }))
-        }
-        N::Type::U16 => {
-            Value::U16(bcs::from_bytes::<u16>(&constant.data).unwrap_or_else(|_| {
-                panic!("Failed to deserialize U16 constant: {:?}", constant.data)
-            }))
-        }
-        N::Type::U32 => {
-            Value::U32(bcs::from_bytes::<u32>(&constant.data).unwrap_or_else(|_| {
-                panic!("Failed to deserialize U32 constant: {:?}", constant.data)
-            }))
-        }
-        N::Type::U64 => {
-            Value::U64(bcs::from_bytes::<u64>(&constant.data).unwrap_or_else(|_| {
-                panic!("Failed to deserialize U64 constant: {:?}", constant.data)
-            }))
-        }
-        N::Type::U128 => {
-            Value::U128(bcs::from_bytes::<u128>(&constant.data).unwrap_or_else(|_| {
-                panic!("Failed to deserialize U128 constant: {:?}", constant.data)
-            }))
-        }
-        N::Type::U256 => {
-            Value::U256(bcs::from_bytes::<U256>(&constant.data).unwrap_or_else(|_| {
-                panic!("Failed to deserialize U256 constant: {:?}", constant.data)
-            }))
-        }
-        N::Type::Address => Value::Address(
-            bcs::from_bytes::<AccountAddress>(&constant.data).unwrap_or_else(|_| {
-                panic!(
-                    "Failed to deserialize Address constant: {:?}",
-                    constant.data
-                )
-            }),
-        ),
-        N::Type::Bool => match bcs::from_bytes::<bool>(&constant.data) {
-            Ok(value) => {
-                if value {
-                    Value::True
-                } else {
-                    Value::False
-                }
-            }
-            Err(_) => panic!("Failed to deserialize Bool constant: {:?}", constant.data),
-        },
-        N::Type::Vector(bx) => {
-            handle_vec(&bx, &constant.data)
-        }
-        N::Type::Datatype(_)
-        | N::Type::Reference(_, _)
-        | N::Type::Signer
-        | N::Type::TypeParameter(_) => {
-            Value::NotImplemented(format!("Unsupported constant type: {:?}", constant.type_))
-        }
-    }
-}
-
-fn handle_vec(ty: &Box<N::Type<Symbol>>, data: &Vec<u8>) -> Value {
-    match &**ty {
-        N::Type::U8 => {
-            let data = bcs::from_bytes::<Vec<u8>>(data)
-                .unwrap_or_else(|err| {
-                    panic!(
-                        "Failed to deserialize U8 vector: {:?}, Error: {}",
-                        data, err
-                    )
-                })
-                .iter()
-                .map(|e| Value::U8(*e))
-                .collect();
-            Value::Vector(data)
-        }
-        N::Type::U16 => {
-            let data = bcs::from_bytes::<Vec<u16>>(data)
-                .unwrap_or_else(|_| panic!("Failed to deserialize U16 vector: {:?}", data))
-                .iter()
-                .map(|e| Value::U16(*e))
-                .collect();
-            Value::Vector(data)
-        }
-        N::Type::U32 => {
-            let data = bcs::from_bytes::<Vec<u32>>(data)
-                .unwrap_or_else(|_| panic!("Failed to deserialize U32 vector: {:?}", data))
-                .iter()
-                .map(|e| Value::U32(*e))
-                .collect();
-            Value::Vector(data)
-        }
-        N::Type::U64 => {
-            let data = bcs::from_bytes::<Vec<u64>>(data)
-                .unwrap_or_else(|_| panic!("Failed to deserialize U64 vector: {:?}", data))
-                .iter()
-                .map(|e| Value::U64(*e))
-                .collect();
-            Value::Vector(data)
-        }
-        N::Type::U128 => {
-            let data = bcs::from_bytes::<Vec<u128>>(data)
-                .unwrap_or_else(|_| panic!("Failed to deserialize U128 vector: {:?}", data))
-                .iter()
-                .map(|e| Value::U128(*e))
-                .collect();
-            Value::Vector(data)
-        }
-        N::Type::U256 => {
-            let data = bcs::from_bytes::<Vec<U256>>(data)
-                .unwrap_or_else(|_| panic!("Failed to deserialize U256 vector: {:?}", data))
-                .iter()
-                .map(|e| Value::U256(*e))
-                .collect();
-            Value::Vector(data)
-        }
-        N::Type::Address => {
-            let data = bcs::from_bytes::<Vec<AccountAddress>>(data)
-                .unwrap_or_else(|_| panic!("Failed to deserialize Address vector: {:?}", data))
-                .iter()
-                .map(|e| Value::Address(*e))
-                .collect();
-            Value::Vector(data)
-        }
-        N::Type::Bool => {
-            let data = bcs::from_bytes::<Vec<bool>>(data)
-                .unwrap_or_else(|_| panic!("Failed to deserialize Bool vector: {:?}", data))
-                .iter()
-                .map(|e| if *e { Value::True } else { Value::False })
-                .collect();
-            Value::Vector(data)
-        }
-        N::Type::Vector(bx) => {
-            //TODO finish to implement nested vectors
-            Value::NotImplemented(format!("Nested vector type not yet supported: {:?}", bx))
-        }
-        N::Type::Datatype(_)
-        | N::Type::Reference(_, _)
-        | N::Type::Signer
-        | N::Type::TypeParameter(_) => {
-            // These types are not supported
-            Value::NotImplemented(format!("Unsupported vector type: {:?}", ty))
-        }
     }
 }

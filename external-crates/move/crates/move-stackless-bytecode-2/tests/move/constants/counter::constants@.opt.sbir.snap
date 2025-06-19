@@ -1,0 +1,57 @@
+---
+source: crates/move-stackless-bytecode-2/tests/tests.rs
+---
+  Module: constants
+    Function: compute
+      Label LBL_0:
+        lcl_4 = Operand(Immediate(U64(0)))
+        lcl_3 = Operand(Immediate(U64(0)))
+        reg_2 = CopyLoc(Var(lcl_0))
+        reg_3 = Operand(Constant([100, 0, 0, 0, 0, 0, 0, 0]))
+        reg_4 = LessThan(Var(reg_4), Var(reg_3))
+        JumpIf(reg_2, LBL_8, LBL_13)
+
+      Label LBL_8:
+        reg_5 = CopyLoc(Var(lcl_1))
+        reg_7 = LessThan(Var(reg_7), Immediate(U64(10)))
+        lcl_2 = Operand(Var(reg_5))
+        Jump(LBL_15)
+
+      Label LBL_13:
+        lcl_2 = Operand(Immediate(False))
+
+      Label LBL_15:
+        reg_9 = MoveLoc(Var(lcl_2))
+        JumpIf(reg_9, LBL_17, LBL_32)
+
+      Label LBL_17:
+        reg_10 = CopyLoc(Var(lcl_3))
+        reg_11 = CopyLoc(Var(lcl_1))
+        reg_12 = LessThan(Var(reg_12), Var(reg_11))
+        JumpIf(reg_10, LBL_21, LBL_34)
+
+      Label LBL_21:
+        reg_13 = MoveLoc(Var(lcl_4))
+        reg_14 = CopyLoc(Var(lcl_0))
+        reg_15 = Add(Var(reg_15), Var(reg_14))
+        reg_16 = Operand(Constant([1, 0, 0, 0, 0, 0, 0, 0]))
+        reg_17 = Add(Var(reg_17), Var(reg_16))
+        lcl_4 = Operand(Var(reg_13))
+        reg_18 = MoveLoc(Var(lcl_3))
+        reg_20 = Add(Var(reg_20), Immediate(U64(1)))
+        lcl_3 = Operand(Var(reg_18))
+        Jump(LBL_17)
+
+      Label LBL_32:
+        reg_21 = Operand(Constant([100, 0, 0, 0, 0, 0, 0, 0]))
+        lcl_4 = Operand(Var(reg_21))
+
+      Label LBL_34:
+        reg_22 = MoveLoc(Var(lcl_4))
+        reg_23 = MoveLoc(Var(lcl_0))
+        reg_24 = Multiply(Var(reg_22), Var(reg_23))
+        reg_25 = MoveLoc(Var(lcl_1))
+        reg_26 = Add(Var(reg_26), Var(reg_25))
+        reg_27 = Operand(Constant([0, 0, 0, 0, 0, 0, 0, 0]))
+        reg_28 = Add(Var(reg_28), Var(reg_27))
+        Return(Var(reg_24))
