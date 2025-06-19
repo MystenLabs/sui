@@ -21,21 +21,21 @@ ParsedManifest {
         },
     },
     dependencies: {
-        Identifier(
-            "A",
-        ): Spanned {
-            span: 97..132,
-            value: DefaultDependency {
-                dependency_info: Local(
-                    LocalDepInfo {
-                        local: "a",
-                    },
-                ),
-                is_override: false,
-                rename_from: Some(
-                    "©",
-                ),
-            },
+        Spanned {
+            span: 93..94,
+            value: Identifier(
+                "A",
+            ),
+        }: DefaultDependency {
+            dependency_info: Local(
+                LocalDepInfo {
+                    local: "a",
+                },
+            ),
+            is_override: false,
+            rename_from: Some(
+                "©",
+            ),
         },
     },
     dep_replacements: {},

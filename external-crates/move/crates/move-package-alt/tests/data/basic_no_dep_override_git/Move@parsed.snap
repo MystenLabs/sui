@@ -28,25 +28,25 @@ ParsedManifest {
         },
     },
     dependencies: {
-        Identifier(
-            "foo",
-        ): Spanned {
-            span: 171..269,
-            value: DefaultDependency {
-                dependency_info: Git(
-                    ManifestGitDependency {
-                        repo: "https://example.com/foo.git",
-                        rev: Some(
-                            "releases/v1",
-                        ),
-                        path: "",
-                    },
-                ),
-                is_override: true,
-                rename_from: Some(
-                    "Foo",
-                ),
-            },
+        Spanned {
+            span: 165..168,
+            value: Identifier(
+                "foo",
+            ),
+        }: DefaultDependency {
+            dependency_info: Git(
+                ManifestGitDependency {
+                    repo: "https://example.com/foo.git",
+                    rev: Some(
+                        "releases/v1",
+                    ),
+                    path: "",
+                },
+            ),
+            is_override: true,
+            rename_from: Some(
+                "Foo",
+            ),
         },
     },
     dep_replacements: {

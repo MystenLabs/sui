@@ -28,42 +28,42 @@ ParsedManifest {
         },
     },
     dependencies: {
-        Identifier(
-            "foo",
-        ): Spanned {
-            span: 190..287,
-            value: DefaultDependency {
-                dependency_info: Git(
-                    ManifestGitDependency {
-                        repo: "https://example.com/foo.git",
-                        rev: Some(
-                            "releases/v1",
-                        ),
-                        path: "",
-                    },
-                ),
-                is_override: true,
-                rename_from: Some(
-                    "Foo",
-                ),
-            },
+        Spanned {
+            span: 184..187,
+            value: Identifier(
+                "foo",
+            ),
+        }: DefaultDependency {
+            dependency_info: Git(
+                ManifestGitDependency {
+                    repo: "https://example.com/foo.git",
+                    rev: Some(
+                        "releases/v1",
+                    ),
+                    path: "",
+                },
+            ),
+            is_override: true,
+            rename_from: Some(
+                "Foo",
+            ),
         },
-        Identifier(
-            "qwer",
-        ): Spanned {
-            span: 295..318,
-            value: DefaultDependency {
-                dependency_info: External(
-                    ExternalDependency {
-                        resolver: "mvr",
-                        data: String(
-                            "@pkg/qwer",
-                        ),
-                    },
-                ),
-                is_override: false,
-                rename_from: None,
-            },
+        Spanned {
+            span: 288..292,
+            value: Identifier(
+                "qwer",
+            ),
+        }: DefaultDependency {
+            dependency_info: External(
+                ExternalDependency {
+                    resolver: "mvr",
+                    data: String(
+                        "@pkg/qwer",
+                    ),
+                },
+            ),
+            is_override: false,
+            rename_from: None,
         },
     },
     dep_replacements: {

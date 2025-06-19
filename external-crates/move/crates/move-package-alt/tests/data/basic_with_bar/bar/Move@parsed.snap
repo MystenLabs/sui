@@ -21,19 +21,19 @@ ParsedManifest {
         },
     },
     dependencies: {
-        Identifier(
-            "Sui",
-        ): Spanned {
-            span: 167..250,
-            value: DefaultDependency {
-                dependency_info: Local(
-                    LocalDepInfo {
-                        local: "../../../../../../../../../crates/sui-framework/packages/sui-framework",
-                    },
-                ),
-                is_override: false,
-                rename_from: None,
-            },
+        Spanned {
+            span: 161..164,
+            value: Identifier(
+                "Sui",
+            ),
+        }: DefaultDependency {
+            dependency_info: Local(
+                LocalDepInfo {
+                    local: "../../../../../../../../../crates/sui-framework/packages/sui-framework",
+                },
+            ),
+            is_override: false,
+            rename_from: None,
         },
     },
     dep_replacements: {},

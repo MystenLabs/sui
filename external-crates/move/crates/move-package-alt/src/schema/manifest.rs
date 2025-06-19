@@ -26,7 +26,7 @@ pub struct ParsedManifest {
     pub environments: BTreeMap<Spanned<EnvironmentName>, Spanned<EnvironmentID>>,
 
     #[serde(default)]
-    pub dependencies: BTreeMap<PackageName, Spanned<DefaultDependency>>,
+    pub dependencies: BTreeMap<Spanned<PackageName>, DefaultDependency>,
 
     /// Replace dependencies for the given environment.
     #[serde(default)]

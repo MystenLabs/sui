@@ -178,13 +178,13 @@ fn combine_deps(
                 Dependency::from_default_with_replacement(
                     file,
                     env.as_ref().clone(),
-                    default.as_ref().clone(),
+                    default.clone(),
                     replacement.into_inner(),
                 )?
             } else {
-                Dependency::from_default(file, env.as_ref().clone(), default.as_ref().clone())
+                Dependency::from_default(file, env.as_ref().clone(), default.clone())
             };
-            result.insert(env.as_ref().clone(), pkg.clone(), combined);
+            result.insert(env.as_ref().clone(), pkg.as_ref().clone(), combined);
         }
 
         for (pkg, dep) in replacements {

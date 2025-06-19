@@ -28,56 +28,56 @@ ParsedManifest {
         },
     },
     dependencies: {
-        Identifier(
-            "bar",
-        ): Spanned {
-            span: 307..326,
-            value: DefaultDependency {
-                dependency_info: Local(
-                    LocalDepInfo {
-                        local: "./bar",
-                    },
-                ),
-                is_override: false,
-                rename_from: None,
-            },
+        Spanned {
+            span: 301..304,
+            value: Identifier(
+                "bar",
+            ),
+        }: DefaultDependency {
+            dependency_info: Local(
+                LocalDepInfo {
+                    local: "./bar",
+                },
+            ),
+            is_override: false,
+            rename_from: None,
         },
-        Identifier(
-            "foo",
-        ): Spanned {
-            span: 171..269,
-            value: DefaultDependency {
-                dependency_info: Git(
-                    ManifestGitDependency {
-                        repo: "https://example.com/foo.git",
-                        rev: Some(
-                            "releases/v1",
-                        ),
-                        path: "",
-                    },
-                ),
-                is_override: true,
-                rename_from: Some(
-                    "Foo",
-                ),
-            },
+        Spanned {
+            span: 165..168,
+            value: Identifier(
+                "foo",
+            ),
+        }: DefaultDependency {
+            dependency_info: Git(
+                ManifestGitDependency {
+                    repo: "https://example.com/foo.git",
+                    rev: Some(
+                        "releases/v1",
+                    ),
+                    path: "",
+                },
+            ),
+            is_override: true,
+            rename_from: Some(
+                "Foo",
+            ),
         },
-        Identifier(
-            "qwer",
-        ): Spanned {
-            span: 277..300,
-            value: DefaultDependency {
-                dependency_info: External(
-                    ExternalDependency {
-                        resolver: "mvr",
-                        data: String(
-                            "@pkg/qwer",
-                        ),
-                    },
-                ),
-                is_override: false,
-                rename_from: None,
-            },
+        Spanned {
+            span: 270..274,
+            value: Identifier(
+                "qwer",
+            ),
+        }: DefaultDependency {
+            dependency_info: External(
+                ExternalDependency {
+                    resolver: "mvr",
+                    data: String(
+                        "@pkg/qwer",
+                    ),
+                },
+            ),
+            is_override: false,
+            rename_from: None,
         },
     },
     dep_replacements: {
