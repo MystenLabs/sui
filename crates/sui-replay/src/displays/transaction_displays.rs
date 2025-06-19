@@ -80,7 +80,7 @@ impl Display for Pretty<'_, FullPTB> {
                     CallArg::BalanceWithdraw(r) => {
                         builder.push_record(vec![format!(
                             "{i:<3} Balance Withdraw reservation from {:?} and max amount {:?}",
-                            r.withdraw_from, r.max_amount
+                            r.withdraw_from, r.reservation
                         )]);
                     }
                 };

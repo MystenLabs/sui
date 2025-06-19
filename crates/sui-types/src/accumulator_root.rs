@@ -55,7 +55,7 @@ impl MoveTypeTagTrait for AccumulatorKey {
     }
 }
 
-// TODO: This may not be the actual way of organizing balance accounts.
+// TODO(address-balances): This may not be the actual way of organizing balance accounts.
 // Fix it when we have the Move code.
 pub fn derive_balance_account_object_id(
     owner: SuiAddress,

@@ -117,10 +117,18 @@ pub enum ObjectArg {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum Reservation {
+    // Reserve the entire balance.
+    EntireBalance,
+    // Reserve a specific amount of the balance.
+    MaxAmount(u64),
+}
+
+// TODO(address-balances): Rename the structs and enums.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct BalanceWithdrawArg {
-    /// The maximum amount of the balance to withdraw.
-    /// If None, reserve the entire balance.
-    pub max_amount: Option<u64>,
+    /// The reservation of the balance to withdraw.
+    pub reservation: Reservation,
     /// The source of the balance to withdraw.
     pub withdraw_from: WithdrawFrom,
 }
@@ -128,8 +136,9 @@ pub struct BalanceWithdrawArg {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum WithdrawFrom {
     /// Withdraw from the sender of the transaction, with balance type T as T in Balance<T>.
+    // TODO(address-balances): Use TypeInput instead of TypeTag.
     Sender(TypeTag),
-    // TODO: Add more options here, such as Sponsor.
+    // TODO(address-balances): Add more options here, such as Sponsor, or even multi-party withdraws.
 }
 
 fn type_input_validity_check(
@@ -2146,9 +2155,8 @@ pub trait TransactionDataAPI {
 
     fn receiving_objects(&self) -> Vec<ObjectRef>;
 
-    /// Returns a map from balance account object ID to the total reserved amount of the balance to withdraw.
-    /// None indicates that the entire balance is reserved.
-    fn balance_withdraws(&self) -> UserInputResult<BTreeMap<ObjectID, Option<u64>>>;
+    /// Returns a map from balance account object ID to the reservation of the balance to withdraw.
+    fn balance_withdraws(&self) -> UserInputResult<BTreeMap<ObjectID, Reservation>>;
 
     // A cheap way to quickly check if the transaction has balance withdraws.
     fn has_balance_withdraws(&self) -> bool;
@@ -2255,10 +2263,11 @@ impl TransactionDataAPI for TransactionDataV1 {
         self.kind.receiving_objects()
     }
 
-    fn balance_withdraws(&self) -> UserInputResult<BTreeMap<ObjectID, Option<u64>>> {
+    fn balance_withdraws(&self) -> UserInputResult<BTreeMap<ObjectID, Reservation>> {
         let mut withdraws = Vec::new();
-        // TODO: Once we support paying gas using address balances, we add gas reservations here.
-        // TODO: Use a protocol config parameter for max_withdraws.
+        // TODO(address-balances): Once we support paying gas using address balances,
+        // we add gas reservations here.
+        // TODO(address-balances): Use a protocol config parameter for max_withdraws.
         let max_withdraws = 10;
         if let TransactionKind::ProgrammableTransaction(pt) = &self.kind {
             for input in &pt.inputs {
@@ -2284,20 +2293,23 @@ impl TransactionDataAPI for TransactionDataV1 {
                         error: e.to_string(),
                     }
                 })?;
-            let entry = withdraw_map.entry(account_id).or_insert(Some(0));
-            match (&*entry, withdraw.max_amount) {
-                (Some(cur_reservation), Some(max_amount)) => {
+            let entry = withdraw_map
+                .entry(account_id)
+                .or_insert(Reservation::MaxAmount(0));
+            match (&*entry, withdraw.reservation) {
+                (Reservation::MaxAmount(cur_reservation), Reservation::MaxAmount(max_amount)) => {
                     let new_amount = max_amount.checked_add(*cur_reservation).ok_or(
                         UserInputError::InvalidWithdrawReservation {
                             error: "Balance withdraw reservation overflow".to_string(),
                         },
                     )?;
-                    *entry = Some(new_amount);
+                    *entry = Reservation::MaxAmount(new_amount);
                 }
-                (Some(_), None) | (None, Some(_)) => {
-                    *entry = None;
+                (Reservation::MaxAmount(_), Reservation::EntireBalance)
+                | (Reservation::EntireBalance, Reservation::MaxAmount(_)) => {
+                    *entry = Reservation::EntireBalance;
                 }
-                (None, None) => {
+                (Reservation::EntireBalance, Reservation::EntireBalance) => {
                     return Err(UserInputError::InvalidWithdrawReservation {
                         error: "Cannot reserve entire balance twice on the same account"
                             .to_string(),

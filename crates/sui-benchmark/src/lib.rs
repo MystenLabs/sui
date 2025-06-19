@@ -702,6 +702,7 @@ impl From<CallArg> for BenchMoveCallArg {
                 }
             },
             CallArg::BalanceWithdraw(_) => {
+                // TODO(address-balances): Support BalanceWithdraw in benchmarks.
                 todo!("BalanceWithdraw is not supported for benchmarks")
             }
         }
