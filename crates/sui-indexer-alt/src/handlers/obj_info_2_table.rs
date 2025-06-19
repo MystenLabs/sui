@@ -171,77 +171,53 @@ impl Handler for ObjInfoTwoTable {
         to_exclusive: u64,
         conn: &mut Connection<'a>,
     ) -> Result<usize> {
-        #[derive(QueryableByName)]
-        struct ToPrune {
-            #[diesel(sql_type = diesel::sql_types::Bytea)]
-            object_id: Vec<u8>,
-            #[diesel(sql_type = diesel::sql_types::BigInt)]
-            cp_sequence_number: i64,
-        }
-
-        let to_prune = postgres::sql_query!(
-            "
-            SELECT object_id, cp_sequence_number
-            FROM obj_info_deletion_reference
-            WHERE cp_sequence_number >= {BigInt} AND cp_sequence_number < {BigInt}
-            ",
-            from as i64,
-            to_exclusive as i64
-        )
-        .get_results::<ToPrune>(conn)
-        .await?;
-
-        let values = to_prune
-            .iter()
-            .map(|row| {
-                let object_id = ObjectID::from_bytes(&row.object_id).unwrap();
-                let object_id_hex = hex::encode(object_id);
-                format!(
-                    "('\\x{}'::BYTEA, {}::BIGINT)",
-                    object_id_hex, row.cp_sequence_number
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(",");
-
-        if values.is_empty() {
-            return Ok(0);
-        }
-
+        // 1. Find all deletion references in range
+        // 2. Find and delete previous versions of objects
+        // 3. Delete the deletion references themselves
         let query = format!(
             "
-            WITH modifications(object_id, cp_sequence_number) AS (
-                VALUES {}
+            WITH deletion_refs AS (
+                SELECT object_id, cp_sequence_number
+                FROM obj_info_deletion_reference
+                WHERE cp_sequence_number >= {} AND cp_sequence_number < {}
+            ),
+            deleted_objects AS (
+                DELETE FROM obj_info_two_tables oi
+                WHERE EXISTS (
+                    SELECT 1 FROM deletion_refs dr
+                    WHERE dr.object_id = oi.object_id
+                    AND oi.cp_sequence_number = (
+                        SELECT oi2.cp_sequence_number
+                        FROM obj_info_two_tables oi2
+                        WHERE oi2.object_id = dr.object_id
+                        AND oi2.cp_sequence_number < dr.cp_sequence_number
+                        ORDER BY oi2.cp_sequence_number DESC
+                        LIMIT 1
+                    )
+                )
+                RETURNING oi.object_id
+            ),
+            deleted_refs AS (
+                DELETE FROM obj_info_deletion_reference
+                WHERE cp_sequence_number >= {} AND cp_sequence_number < {}
+                RETURNING 0
             )
-            DELETE FROM obj_info_two_tables oi
-            USING modifications m
-            WHERE oi.object_id = m.object_id
-                AND oi.cp_sequence_number = (
-                SELECT oi2.cp_sequence_number
-                FROM obj_info_two_tables oi2
-                WHERE oi2.object_id = m.object_id
-                AND oi2.cp_sequence_number < m.cp_sequence_number
-                ORDER BY oi2.cp_sequence_number DESC
-                LIMIT 1
-                );
+            SELECT count(*) FROM deleted_objects
             ",
-            values,
+            from, to_exclusive, from, to_exclusive
         );
 
-        let rows_deleted = diesel::sql_query(query).execute(conn).await?;
+        #[derive(QueryableByName)]
+        struct CountResult {
+            #[diesel(sql_type = diesel::sql_types::BigInt)]
+            count: i64,
+        }
 
-        postgres::sql_query!(
-            "
-            DELETE FROM obj_info_deletion_reference
-            WHERE cp_sequence_number >= {BigInt} AND cp_sequence_number < {BigInt}
-            ",
-            from as i64,
-            to_exclusive as i64
-        )
-        .execute(conn)
-        .await?;
+        let result = diesel::sql_query(query)
+            .get_result::<CountResult>(conn)
+            .await?;
 
-        Ok(rows_deleted)
+        Ok(result.count as usize)
     }
 }
 
