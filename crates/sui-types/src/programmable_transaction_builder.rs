@@ -125,6 +125,7 @@ impl ProgrammableTransactionBuilder {
             CallArg::Pure(bytes) => Ok(self.pure_bytes(bytes, /* force separate */ false)),
             CallArg::Object(obj) => self.obj(obj),
             CallArg::BalanceWithdraw(_) => {
+                // TODO(address-balances): Add support for balance withdraws.
                 todo!("Convert balance withdraw reservation to argument")
             }
         }
