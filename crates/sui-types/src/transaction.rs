@@ -142,6 +142,24 @@ pub enum WithdrawFrom {
     // TODO(address-balances): Add more options here, such as Sponsor, or even multi-party withdraws.
 }
 
+impl BalanceWithdrawArg {
+    #[allow(unused)]
+    pub fn new_with_amount(amount: u64, type_tag: TypeTag) -> Self {
+        Self {
+            reservation: Reservation::MaxAmount(amount),
+            withdraw_from: WithdrawFrom::Sender(type_tag),
+        }
+    }
+
+    #[allow(unused)]
+    pub fn new_with_entire_balance(type_tag: TypeTag) -> Self {
+        Self {
+            reservation: Reservation::EntireBalance,
+            withdraw_from: WithdrawFrom::Sender(type_tag),
+        }
+    }
+}
+
 fn type_input_validity_check(
     tag: &TypeInput,
     config: &ProtocolConfig,
