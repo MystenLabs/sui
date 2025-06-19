@@ -140,26 +140,25 @@ pub struct BalanceWithdrawArg {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum WithdrawFrom {
     /// Withdraw from the sender of the transaction, with balance type T as T in Balance<T>.
-    // TODO(address-balances): Use TypeInput instead of TypeTag.
     // TODO(address-balances): Consider hoisting the type tag to BalanceWithdrawArg.
-    Sender(TypeTag),
+    Sender(TypeInput),
     // TODO(address-balances): Add more options here, such as Sponsor, or even multi-party withdraws.
 }
 
 impl BalanceWithdrawArg {
     #[allow(unused)]
-    pub fn new_with_amount(amount: u64, type_tag: TypeTag) -> Self {
+    pub fn new_with_amount(amount: u64, balance_type: TypeInput) -> Self {
         Self {
             reservation: Reservation::MaxAmount(amount),
-            withdraw_from: WithdrawFrom::Sender(type_tag),
+            withdraw_from: WithdrawFrom::Sender(balance_type),
         }
     }
 
     #[allow(unused)]
-    pub fn new_with_entire_balance(type_tag: TypeTag) -> Self {
+    pub fn new_with_entire_balance(balance_type: TypeInput) -> Self {
         Self {
             reservation: Reservation::EntireBalance,
-            withdraw_from: WithdrawFrom::Sender(type_tag),
+            withdraw_from: WithdrawFrom::Sender(balance_type),
         }
     }
 }
@@ -2316,12 +2315,10 @@ impl TransactionDataAPI for TransactionDataV1 {
                     });
                 }
             }
-            let WithdrawFrom::Sender(type_tag) = withdraw.withdraw_from;
-            let account_id =
-                derive_balance_account_object_id(self.sender(), type_tag).map_err(|e| {
-                    UserInputError::InvalidWithdrawReservation {
-                        error: e.to_string(),
-                    }
+            let WithdrawFrom::Sender(balance_type) = withdraw.withdraw_from;
+            let account_id = derive_balance_account_object_id(self.sender(), balance_type)
+                .map_err(|e| UserInputError::InvalidWithdrawReservation {
+                    error: e.to_string(),
                 })?;
             let entry = withdraw_map
                 .entry(account_id)
