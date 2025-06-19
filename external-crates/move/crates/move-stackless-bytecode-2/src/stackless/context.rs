@@ -35,22 +35,16 @@ impl<'a, K: SourceKind> Context<'a, K> {
         }
     }
 
-    pub fn pop_register(&mut self) -> ast::Var {
-        let reg_id = self
-            .logical_stack
+    pub fn pop_register(&mut self) -> ast::RegId {
+        self.logical_stack
             .pop()
-            .expect("Popped a register and there was none");
-        ast::Var::Register(reg_id)
+            .expect("Popped a register and there was none")
     }
 
-    pub fn push_register(&mut self) -> ast::Var {
+    pub fn push_register(&mut self) -> ast::RegId {
         let reg_id = self.var_counter.next();
         self.logical_stack.push(reg_id);
-        ast::Var::Register(reg_id)
-    }
-
-    pub fn empty_stack(&mut self) {
-        self.logical_stack.clear();
+        reg_id
     }
 
     pub fn optimize(&mut self, value: bool) {

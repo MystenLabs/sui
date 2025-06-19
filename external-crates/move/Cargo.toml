@@ -29,12 +29,17 @@ members = [
 
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
+aes-gcm = "0.8.0"
 anyhow = "1.0.52"
 append-only-vec = "0.1.7"
 arbitrary = { version = "1.1.7", features = ["derive", "derive_arbitrary"] }
 async-trait = "0.1.42"
 bcs = "0.1.4"
 better_any = "0.1.1"
+bitvec = "0.19.4"
+byteorder = "1.4.3"
+bytes = "1.0.1"
+chrono = "0.4.19"
 clap = { version = "4", features = ["derive"] }
 codespan = "0.11.1"
 codespan-reporting = "0.11.1"
@@ -46,6 +51,7 @@ crossterm = "0.25.0"
 curve25519-dalek = { version = "0.1.0", package = "curve25519-dalek-fiat", default-features = false, features = ["std", "u64_backend"] }
 datatest-stable = "0.1.1"
 derive-where = "1.2.7"
+digest = "0.9.0"
 dir-diff = "0.3.2"
 dirs-next = "2.0.0"
 dunce = "1.0.2"
@@ -55,8 +61,10 @@ fail = "0.4.0"
 file_diff = "1.0.0"
 futures = "0.3.12"
 getrandom = "0.2.9"
+heck = "0.3.2"
 hex = "0.4.3"
 hex-literal = "0.3.4"
+hkdf = "0.10.0"
 im = "15.1.0"
 indexmap = "2.8.0"
 internment = { version = "0.5.0", features = ["arc"] }
@@ -67,6 +75,8 @@ libfuzzer-sys = "0.4"
 log = { version = "0.4.14", features = ["serde"] }
 lsp-server = "0.7.6"
 lsp-types = "0.95.1"
+memory-stats = "1.0.0"
+mirai-annotations = "1.10.1"
 named-lock = "0.2.0"
 num = "0.4.0"
 num_cpus = "1.13.0"
@@ -91,7 +101,9 @@ ratatui = "0.29.0"
 rayon = "1.10.0"
 ref-cast = "1.0.6"
 regex = "1.5.5"
+ripemd160 = "0.9.1"
 serde = { version = "1.0.124", features = ["derive"] }
+serde-name = "0.1.1"
 serde-reflection = "0.5"
 serde_bytes = "0.11.5"
 serde_json = "1.0.64"
@@ -100,15 +112,20 @@ serde_yaml = "0.8.26"
 serde_with = "3.9.0"
 sha2 = "0.9.3"
 sha3 = "0.9.1"
+shell-words = "1.0.0"
+simplelog = "0.9.0"
 similar = "2.4.0"
 smallvec = "1.6.1"
 stacker = "0.1.15"
+static_assertions = "1.1.0"
 strum = { version = "0.27.1", features = ["derive"] }
 strum_macros = "0.27.1"
+syn = { version = "1.0.64", features = ["derive"] }
 tempfile = "3.2.0"
 tera = "1.16.0"
 test-log = { version = "0.2.17", features = ["trace"] }
 thiserror = "1.0.24"
+tiny-keccak = { version = "2.0.2", features = ["sha3"] }
 tokio = { version = "1.44.2", features = ["full"] }
 toml = "0.5.8"
 toml_edit = { version = "0.22.24", features = ["serde", "default"] }
@@ -121,10 +138,14 @@ variant_count = "1.1.0"
 vfs = "0.10.0"
 walkdir = "2.3.1"
 whoami = { version = "1.2.1" }
+x25519-dalek = { version = "0.1.0", package = "x25519-dalek-fiat", default-features = false, features = ["std", "u64_backend"] }
+z3tracer = "0.8.0"
 inline_colorization = "0.1.6"
 insta = "1.42.0"
 zstd = "0.13.2"
 lcov = "0.8.1"
+
+bytecode-interpreter-crypto = { path = "crates/bytecode-interpreter-crypto" }
 enum-compat-util = { path = "crates/enum-compat-util" }
 invalid-mutations = { path = "crates/invalid-mutations" }
 jsonrpc = { path = "crates/jsonrpc" }
@@ -137,6 +158,7 @@ move-borrow-graph = { path = "crates/move-borrow-graph" }
 move-bytecode-source-map = { path = "crates/move-bytecode-source-map" }
 move-bytecode-utils = { path = "crates/move-bytecode-utils" }
 move-bytecode-verifier = { path = "crates/move-bytecode-verifier" }
+move-bytecode-verifier-analyzer = { path = "crates/move-bytecode-verifier-analyzer" }
 move-bytecode-verifier-meter = { path = "crates/move-bytecode-verifier-meter" }
 move-bytecode-viewer = { path = "crates/move-bytecode-viewer" }
 move-cli = { path = "crates/move-cli" }
@@ -146,6 +168,7 @@ move-core-types = { path = "crates/move-core-types" }
 move-coverage = { path = "crates/move-coverage" }
 move-disassembler = { path = "crates/move-disassembler" }
 move-docgen = { path = "crates/move-docgen" }
+move-docgen-tests = { path = "crates/move-docgen-tests" }
 move-ir-compiler = { path = "crates/move-ir-compiler" }
 move-ir-to-bytecode = { path = "crates/move-ir-to-bytecode" }
 move-ir-to-bytecode-syntax = { path = "crates/move-ir-to-bytecode-syntax" }
@@ -174,6 +197,11 @@ debug = true
 
 [profile.dev]
 debug = true
+
+[profile.test.package.move-vm-integration-tests]
+# opt-level 2 for move-compiler reduces the size of some of its
+# (recursive) stack frames by up to 10x, avoiding stack overflows.
+opt-level = 3
 
 # use release settings to reduce memory pressure in the linking step in CI
 [profile.ci]
