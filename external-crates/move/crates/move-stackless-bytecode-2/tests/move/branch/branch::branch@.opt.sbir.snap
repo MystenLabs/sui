@@ -1,0 +1,27 @@
+---
+source: crates/move-stackless-bytecode-2/tests/tests.rs
+---
+  Module: branch
+    Function: is_even
+      Label LBL_0:
+        lcl_2 = Operand(Immediate(U64(10)))
+        reg_1 = MoveLoc(Var(lcl_0))
+        reg_3 = Modulo(Var(reg_1), Immediate(U64(2)))
+        reg_5 = Equal(Var(reg_5), Immediate(U64(0)))
+        JumpIf(reg_3, LBL_8, LBL_13)
+
+      Label LBL_8:
+        reg_6 = MoveLoc(Var(lcl_2))
+        reg_8 = Add(Var(reg_8), Immediate(U64(20)))
+        lcl_1 = Operand(Var(reg_6))
+        Jump(LBL_17)
+
+      Label LBL_13:
+        reg_9 = MoveLoc(Var(lcl_2))
+        reg_11 = Add(Var(reg_11), Immediate(U64(30)))
+        lcl_1 = Operand(Var(reg_9))
+
+      Label LBL_17:
+        reg_12 = MoveLoc(Var(lcl_1))
+        reg_14 = Multiply(Var(reg_12), Immediate(U64(13)))
+        Return(Var(reg_14))

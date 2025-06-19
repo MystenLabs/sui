@@ -63,7 +63,7 @@ pub enum Instruction {
 #[derive(Debug, Clone)]
 pub enum Operand {
     Var(Var),
-    Constant(Value),
+    Constant(Vec<u8>), // Representing constants as byte vectors
     Immediate(Value),
 }
 
@@ -272,9 +272,9 @@ impl std::fmt::Display for Instruction {
 impl std::fmt::Display for Operand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Operand::Var(var) => write!(f, "{}", var),
-            Operand::Constant(constant) => write!(f, "{}", constant),
-            Operand::Immediate(val) => write!(f, "{}", val),
+            Operand::Var(var) => write!(f, "Var({})", var),
+            Operand::Constant(constant) => write!(f, "Constant({:?})", constant),
+            Operand::Immediate(val) => write!(f, "Immediate({})", val),
         }
     }
 }
@@ -317,11 +317,7 @@ impl std::fmt::Display for RValue {
             }
             // RValue::Constant(constant) => write!(f, "Constant {}", constant),
             RValue::Primitive { op, args } => write!(f, "{}({})", op, comma_separated(args)),
-            RValue::Operand(op) => match op {
-                Operand::Var(var) => write!(f, "Var({})", var),
-                Operand::Constant(value) => write!(f, "Constant({})", value),
-                Operand::Immediate(immediate) => write!(f, "Immediate({})", immediate),
-            },
+            RValue::Operand(op) => write!(f, "Operand({})", op),
         }
     }
 }

@@ -41,7 +41,7 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
         .map(|name| name.into())
         .collect::<BTreeSet<Symbol>>();
 
-    let packages = generator.generate_stackless_bytecode(true)?;
+        let packages = generator.generate_stackless_bytecode(/* optimize */ true)?;
 
     for pkg in &packages {
         let pkg_name = pkg.name;
@@ -53,7 +53,25 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
                     input_path: file_path,
                     contents: stackless_bytecode,
                     name: name,
-                    suffix: ".sbir",
+                    suffix: ".opt.sbir",
+                };
+            }
+        }
+    }
+    
+        let packages = generator.generate_stackless_bytecode(/* optimize */ false)?;
+
+    for pkg in &packages {
+        let pkg_name = pkg.name;
+        for (module_name, module) in &pkg.modules {
+            if test_module_names.contains(module_name) {
+                let name = format!("{}::{}", pkg_name.expect("NO PACKAGE NAME"), module_name);
+                let stackless_bytecode = format!("{}", module);
+                insta_assert! {
+                    input_path: file_path,
+                    contents: stackless_bytecode,
+                    name: name,
+                    suffix: ".no_opt.sbir",
                 };
             }
         }
