@@ -115,7 +115,7 @@ use crate::epoch::randomness::{
 };
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::execution_cache::cache_types::CacheResult;
-use crate::execution_cache::{ObjectCacheRead, TransactionCacheRead};
+use crate::execution_cache::ObjectCacheRead;
 use crate::fallback_fetch::do_fallback_lookup;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::post_consensus_tx_reorder::PostConsensusTxReorder;
@@ -3024,7 +3024,6 @@ impl AuthorityPerEpochStore {
         consensus_stats: &ExecutionIndicesWithStats,
         checkpoint_service: &Arc<C>,
         cache_reader: &dyn ObjectCacheRead,
-        tx_reader: &dyn TransactionCacheRead,
         consensus_commit_info: &ConsensusCommitInfo,
         authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<(Vec<Schedulable>, AssignedTxAndVersions)> {
@@ -3249,7 +3248,7 @@ impl AuthorityPerEpochStore {
 
         let (
             verified_non_randomness_transactions,
-            mut verified_randomness_transactions,
+            verified_randomness_transactions,
             notifications,
             lock,
             final_round,
@@ -3537,7 +3536,6 @@ impl AuthorityPerEpochStore {
         transactions: Vec<SequencedConsensusTransaction>,
         checkpoint_service: &Arc<C>,
         cache_reader: &dyn ObjectCacheRead,
-        tx_reader: &dyn TransactionCacheRead,
         authority_metrics: &Arc<AuthorityMetrics>,
         skip_consensus_commit_prologue_in_test: bool,
     ) -> SuiResult<(Vec<Schedulable>, AssignedTxAndVersions)> {
@@ -3546,7 +3544,6 @@ impl AuthorityPerEpochStore {
             &ExecutionIndicesWithStats::default(),
             checkpoint_service,
             cache_reader,
-            tx_reader,
             &ConsensusCommitInfo::new_for_test(
                 if self.randomness_state_enabled() {
                     self.get_highest_pending_checkpoint_height() / 2 + 1
