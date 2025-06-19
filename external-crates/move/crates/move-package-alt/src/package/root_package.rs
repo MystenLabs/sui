@@ -317,6 +317,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_lockfile_deps() {
+        // TODO: this should really be an insta test
         let (temp_dir, root_path) = setup_test_move_project().await;
 
         let pkg_path = root_path.join("packages").join("graph");
