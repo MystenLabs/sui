@@ -150,14 +150,14 @@ pub(crate) fn bytecode<K: SourceKind>(
     // }
 
     macro_rules! assign {
-    ([$($lhs:expr),*] = $rhs:expr) => {{
-        let rhs = $rhs;
-        Instruction::Assign {
-            lhs: vec![$($lhs),*],
-            rhs: rhs,
-        }
-    }};
-}
+        ([$($lhs:expr),*] = $rhs:expr) => {{
+            let rhs = $rhs;
+            Instruction::Assign {
+                lhs: vec![$($lhs),*],
+                rhs: rhs,
+            }
+        }};
+    }
 
     macro_rules! imm {
         ($val:expr) => {
