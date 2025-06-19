@@ -101,6 +101,11 @@ impl<F: MoveFlavor> Lockfiles<F> {
     pub fn published_for_env(&self, env: &EnvironmentName) -> Option<Publication<F>> {
         self.main.published.get(env).cloned()
     }
+
+    // TODO: ignores ephemerals and should probably be removed
+    pub fn render_main_lockfile(&self) -> String {
+        self.main.render_as_toml()
+    }
 }
 
 #[cfg(test)]

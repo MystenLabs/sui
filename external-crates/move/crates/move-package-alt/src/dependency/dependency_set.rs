@@ -23,7 +23,7 @@ use crate::package::{EnvironmentName, PackageName};
 /// names.
 ///
 /// For convenience, iteration produces (EnvironmentName, PackageName, T) triples
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[derive_where(Default)]
 pub struct DependencySet<T> {
     inner: BTreeMap<EnvironmentName, BTreeMap<PackageName, T>>,
@@ -191,14 +191,6 @@ impl<T> Extend<(EnvironmentName, PackageName, T)> for DependencySet<T> {
         for (env, pack, value) in iter {
             self.insert(env, pack, value);
         }
-    }
-}
-
-impl<T: Serialize> fmt::Debug for DependencySet<T> {
-    /// Format [self] as toml for easy reading and diffing
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let json = serde_json::to_string_pretty(self).expect("dependency set should serialize");
-        write!(f, "{json}")
     }
 }
 
