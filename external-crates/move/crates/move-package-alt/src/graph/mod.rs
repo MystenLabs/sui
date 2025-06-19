@@ -181,7 +181,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         if let Some(pins) = pins {
             // First pass: create nodes for all packages
             for (pkg_id, pin) in pins.iter() {
-                let dep = Dependency::from_pin(lockfile.file(), pin);
+                let dep = Dependency::from_pin(lockfile.file(), env, pin);
                 let package = self.cache.fetch(&dep).await?;
                 let package_manifest_digest = package.manifest().digest();
                 if check_digests && package_manifest_digest != &pin.manifest_digest {

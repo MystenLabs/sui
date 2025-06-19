@@ -8,7 +8,7 @@ use toml_edit::{
 
 use crate::{flavor::MoveFlavor, git::GitSha};
 
-use super::{Address, EnvironmentName, LocalDepInfo, OnChainDepInfo, PackageName};
+use super::{Address, EnvironmentID, EnvironmentName, LocalDepInfo, OnChainDepInfo, PackageName};
 
 /// An identifier for a node in the package graph, used to index into the
 /// `[pinned.<environment>]` table
@@ -29,9 +29,12 @@ pub struct ParsedLockfile<F: MoveFlavor> {
 /// A serialized entry in the `[published.<environment>]` table of the lockfile
 #[derive(Debug, Serialize, Deserialize)]
 #[derive_where(Clone)]
+#[serde(rename_all = "kebab-case")]
+#[serde(deny_unknown_fields)]
 pub struct Publication<F: MoveFlavor> {
     pub published_at: Address,
     pub original_id: Address,
+    pub chain_id: EnvironmentID,
 
     #[serde(flatten)]
     pub metadata: F::PublishedMetadata,
@@ -54,7 +57,7 @@ pub struct Pin {
     /// ```
     ///
     /// then use_environment for the `b` dependency would be `foo`
-    pub use_environment: EnvironmentName,
+    pub use_environment: Option<EnvironmentName>,
 
     /// Contains the package's manifest digest. This is used to verify if a manifest has changed
     /// and re-pinning is required.
@@ -66,6 +69,7 @@ pub struct Pin {
 
 /// A serialized pinned dependency in a lockfile
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
 pub enum LockfileDependencyInfo {
     Local(LocalDepInfo),
     OnChain(OnChainDepInfo),

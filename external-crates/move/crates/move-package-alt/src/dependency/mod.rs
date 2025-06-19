@@ -122,7 +122,7 @@ impl Dependency<Pinned> {
         }
     }
 
-    pub fn from_pin(containing_file: FileHandle, pin: &Pin) -> Self {
+    pub fn from_pin(containing_file: FileHandle, env: &EnvironmentName, pin: &Pin) -> Self {
         let dep_info = match &pin.source {
             LockfileDependencyInfo::Local(loc) => Pinned::Local(loc.clone()),
             LockfileDependencyInfo::OnChain(chain) => Pinned::OnChain(chain.clone()),
@@ -131,7 +131,7 @@ impl Dependency<Pinned> {
 
         Self {
             dep_info,
-            use_environment: pin.use_environment.clone(),
+            use_environment: pin.use_environment.clone().unwrap_or(env.clone()),
             is_override: false, // TODO
             published_at: None, // TODO
             containing_file,

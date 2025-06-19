@@ -17,6 +17,7 @@ use toml_edit::{
     DocumentMut, InlineTable, Item, KeyMut, Table, Value,
     visit_mut::{VisitMut, visit_table_like_kv_mut, visit_table_mut},
 };
+use tracing::debug;
 
 use crate::{
     dependency::{Dependency, DependencySet, Pinned, PinnedDependencyInfo},
@@ -47,15 +48,17 @@ impl<F: MoveFlavor> Lockfiles<F> {
     /// Read `Move.lock` from `path`; returning [None] if it doesn't exist
     pub fn read_from_dir(path: &PackagePath) -> PackageResult<Option<Self>> {
         // Parse `Move.lock`
-        let lockfile_name = path.as_ref().join("Move.lock");
+        debug!("reading lockfiles from {:?}", path);
+        let lockfile_name = path.lockfile_path();
         if !lockfile_name.exists() {
             return Ok(None);
         };
 
-        let file_id = FileHandle::new(path)?;
+        let file_id = FileHandle::new(lockfile_name)?;
         let main: ParsedLockfile<F> = toml_edit::de::from_str(file_id.source())?;
 
         // Parse all `.Move.<env>.lock`
+        debug!("reading ephemeral lockfiles");
         let mut ephemeral = BTreeMap::new();
         for (env, path) in path.env_lockfiles()? {
             let file_id = FileHandle::new(path)?;
