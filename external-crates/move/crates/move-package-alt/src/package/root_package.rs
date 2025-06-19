@@ -98,8 +98,15 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         Ok(Self { root, dependencies })
     }
 
-    /// Read the lockfile from the root directory
+    /// Read the lockfile from the root directory, returning an empty structure if none exists
     pub fn load_lockfile(&self) -> PackageResult<ParsedLockfile<F>> {
+        let path = self.package_path().lockfile_path();
+        debug!("loading lockfile {:?}", path);
+
+        if !path.exists() {
+            return Ok(ParsedLockfile::<F>::default());
+        }
+
         let file = FileHandle::new(self.package_path().lockfile_path())?;
         Ok(toml_edit::de::from_str(file.source())?)
     }
@@ -156,6 +163,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             lockfile.pinned.insert(env.clone(), pinned_deps);
         }
 
+        debug!("writing lockfile {:?}", self.package_path().lockfile_path());
         std::fs::write(
             self.package_path().lockfile_path(),
             lockfile.render_as_toml(),
