@@ -363,7 +363,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             None => AdapterInitConfig::default(),
         };
         protocol_config
-            .set_enable_ptb_execution_v2_for_testing(ENABLE_PTB_V2.get().copied().unwrap());
+            .set_enable_ptb_execution_v2_for_testing(ENABLE_PTB_V2.get().copied().unwrap_or(false));
 
         let (
             executor,
