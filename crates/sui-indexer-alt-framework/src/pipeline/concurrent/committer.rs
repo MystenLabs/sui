@@ -1,11 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    sync::atomic::{AtomicUsize, Ordering},
-    sync::Arc,
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use backoff::ExponentialBackoff;
 use tokio::{sync::mpsc, task::JoinHandle};
@@ -222,7 +218,10 @@ pub(super) fn committer<H: Handler + 'static>(
 mod tests {
     use std::{
         collections::HashMap,
-        sync::{Arc, Mutex},
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc, Mutex,
+        },
     };
 
     use async_trait::async_trait;
@@ -666,5 +665,61 @@ mod tests {
         // Clean up
         drop(setup.batch_tx);
         let _ = setup.committer_handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_watermark_channel_closed() {
+        let store = MockStore {
+            watermarks: Arc::new(Mutex::new(MockWatermark::default())),
+            ..Default::default()
+        };
+        let setup = setup_test(store, false).await;
+
+        let batch = BatchedRows {
+            values: vec![StoredData {
+                cp_sequence_number: 1,
+                tx_sequence_numbers: vec![1, 2, 3],
+                ..Default::default()
+            }],
+            watermark: vec![WatermarkPart {
+                watermark: CommitterWatermark {
+                    epoch_hi_inclusive: 0,
+                    checkpoint_hi_inclusive: 1,
+                    tx_hi: 3,
+                    timestamp_ms_hi_inclusive: 1000,
+                },
+                batch_rows: 1,
+                total_rows: 1,
+            }],
+        };
+
+        // Send the batch
+        setup.batch_tx.send(batch).await.unwrap();
+
+        // Wait for processing.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Close the watermark channel by dropping the receiver
+        drop(setup.watermark_rx);
+
+        // Wait a bit more for the committer to handle the channel closure
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // Verify data was still committed despite watermark channel closure
+        {
+            let data = setup.store.data.lock().unwrap();
+            assert_eq!(data.get(&1).unwrap(), &vec![1, 2, 3]);
+        }
+
+        // Close the batch channel to allow the committer to terminate
+        drop(setup.batch_tx);
+
+        // Verify the committer task has terminated due to watermark channel closure
+        // The task should exit gracefully when it can't send watermarks (returns Break::Cancel)
+        let result = setup.committer_handle.await;
+        assert!(
+            result.is_ok(),
+            "Committer should terminate gracefully when watermark channel is closed"
+        );
     }
 }
