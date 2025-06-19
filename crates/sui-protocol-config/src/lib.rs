@@ -720,6 +720,10 @@ struct FeatureFlags {
     // Rethrow type layout errors during serialization instead of trying to convert them.
     #[serde(skip_serializing_if = "is_false")]
     include_epoch_stable_sequence_number_in_effects: bool,
+
+    // Enable statically type checked ptb execution
+    #[serde(skip_serializing_if = "is_false")]
+    enable_ptb_execution_v2: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2070,6 +2074,10 @@ impl ProtocolConfig {
     pub fn include_epoch_stable_sequence_number_in_effects(&self) -> bool {
         self.feature_flags
             .include_epoch_stable_sequence_number_in_effects
+    }
+
+    pub fn enable_ptb_execution_v2(&self) -> bool {
+        self.feature_flags.enable_ptb_execution_v2
     }
 }
 
@@ -3941,6 +3949,10 @@ impl ProtocolConfig {
 
     pub fn set_consensus_batched_block_sync_for_testing(&mut self, val: bool) {
         self.feature_flags.consensus_batched_block_sync = val;
+    }
+
+    pub fn set_enable_ptb_execution_v2_for_testing(&mut self, val: bool) {
+        self.feature_flags.enable_ptb_execution_v2 = val;
     }
 
     pub fn push_aliased_addresses_for_testing(
