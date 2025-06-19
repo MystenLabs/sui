@@ -38,6 +38,7 @@ pub type Digest = String;
 pub struct Manifest<F: MoveFlavor> {
     inner: ParsedManifest,
     digest: Digest,
+    dependencies: DependencySet<Dependency<Combined>>,
     // TODO: remove <F>
     phantom: PhantomData<F>,
 }
@@ -78,7 +79,7 @@ pub enum ManifestErrorKind {
     IoError(#[from] std::io::Error),
 }
 
-type ManifestResult<T> = Result<T, ManifestError>;
+pub type ManifestResult<T> = Result<T, ManifestError>;
 
 impl<F: MoveFlavor> Manifest<F> {
     /// Read the manifest file at the given path, returning a [`Manifest`].
@@ -89,19 +90,47 @@ impl<F: MoveFlavor> Manifest<F> {
         let parsed: ParsedManifest =
             toml_edit::de::from_str(file_id.source()).map_err(ManifestError::from_toml(file_id))?;
 
+        let dependencies = combine_deps(file_id, &parsed)?;
+
         let result = Self {
             inner: parsed,
             digest: format!("{:X}", Sha256::digest(file_id.source().as_ref())),
+            dependencies,
             phantom: PhantomData,
         };
         result.validate_manifest(file_id)?;
         Ok(result)
     }
 
+    /// The combined entries of the `[dependencies]` and `[dep-replacements]` sections for this
+    /// manifest
+    pub fn dependencies(&self) -> DependencySet<Dependency<Combined>> {
+        self.dependencies.clone()
+    }
+
+    /// The entries from the `[environments]` section
+    pub fn environments(&self) -> BTreeMap<EnvironmentName, EnvironmentID> {
+        self.inner
+            .environments
+            .iter()
+            .map(|(name, id)| (name.as_ref().clone(), id.as_ref().clone()))
+            .collect()
+    }
+
+    /// The name declared in the `[package]` section
+    pub fn package_name(&self) -> &PackageName {
+        self.inner.package.name.as_ref()
+    }
+
+    /// A digest of the file, suitable for detecting changes
+    pub fn digest(&self) -> &Digest {
+        &self.digest
+    }
+
     /// Validate the manifest contents, after deserialization.
     ///
     // TODO: add more validation
-    pub fn validate_manifest(&self, handle: FileHandle) -> ManifestResult<()> {
+    fn validate_manifest(&self, handle: FileHandle) -> ManifestResult<()> {
         // Are there any environments?
         if self.environments().is_empty() {
             return Err(ManifestError::with_file(handle.path())(
@@ -128,58 +157,46 @@ impl<F: MoveFlavor> Manifest<F> {
 
         Ok(())
     }
+}
 
-    /// The combined entries of the `[dependencies]` and `[dep-replacements]` sections for this
-    /// manifest
-    pub fn dependencies(&self) -> DependencySet<Dependency<Combined>> {
-        let mut deps = DependencySet::new();
+// TODO: doc
+fn combine_deps(
+    file: FileHandle,
+    manifest: &ParsedManifest,
+) -> ManifestResult<DependencySet<Dependency<Combined>>> {
+    let mut result = DependencySet::new();
 
-        for env in self.environments().keys() {
-            let mut entries: BTreeMap<
-                PackageName,
-                (Option<DefaultDependency>, Option<ReplacementDependency>),
-            > = BTreeMap::new();
+    for env in manifest.environments.keys() {
+        let mut replacements = manifest
+            .dep_replacements
+            .get(env.as_ref())
+            .cloned()
+            .unwrap_or_default();
 
-            for (pkg, dep) in self.inner.dependencies.iter() {
-                entries.insert(pkg.clone(), (Some(dep.as_ref().clone()), None));
-            }
-
-            if let Some(replacements) = self.inner.dep_replacements.get(env) {
-                for (pkg, dep) in replacements {
-                    entries
-                        .entry(pkg.clone())
-                        .or_default()
-                        .1
-                        .replace(dep.as_ref().clone());
-                }
-            }
-
-            for (pkg, (default, replacements)) in entries.into_iter() {
-                deps.insert(env.clone(), pkg, todo!())
-            }
+        for (pkg, default) in manifest.dependencies.iter() {
+            let combined = if let Some(replacement) = replacements.remove(pkg.as_ref()) {
+                Dependency::from_default_with_replacement(
+                    file,
+                    env.as_ref().clone(),
+                    default.as_ref().clone(),
+                    replacement.into_inner(),
+                )?
+            } else {
+                Dependency::from_default(file, env.as_ref().clone(), default.as_ref().clone())
+            };
+            result.insert(env.as_ref().clone(), pkg.clone(), combined);
         }
 
-        deps
+        for (pkg, dep) in replacements {
+            result.insert(
+                env.as_ref().clone(),
+                pkg.clone(),
+                Dependency::from_replacement(file, env.as_ref().clone(), dep.as_ref().clone())?,
+            );
+        }
     }
 
-    /// The entries from the `[environments]` section
-    pub fn environments(&self) -> BTreeMap<EnvironmentName, EnvironmentID> {
-        self.inner
-            .environments
-            .iter()
-            .map(|(name, id)| (name.as_ref().clone(), id.as_ref().clone()))
-            .collect()
-    }
-
-    /// The name declared in the `[package]` section
-    pub fn package_name(&self) -> &PackageName {
-        self.inner.package.name.as_ref()
-    }
-
-    /// A digest of the file, suitable for detecting changes
-    pub fn digest(&self) -> &Digest {
-        &self.digest
-    }
+    Ok(result)
 }
 
 impl ManifestError {

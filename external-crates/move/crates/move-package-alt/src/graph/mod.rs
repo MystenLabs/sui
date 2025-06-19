@@ -369,7 +369,7 @@ impl<F: MoveFlavor> From<&PackageGraph<F>> for BTreeMap<PackageID, Pin> {
                 node_to_id[&node].to_string(),
                 Pin {
                     source: pkg_node.package.dep_for_self().clone(),
-                    use_environment: todo!(),
+                    use_environment: Some(pkg_node.use_env.clone()),
                     manifest_digest: graph[node].package.manifest().digest().to_string(),
                     deps,
                 },

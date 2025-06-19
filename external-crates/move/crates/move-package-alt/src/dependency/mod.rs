@@ -27,10 +27,11 @@ use crate::{
     errors::{FileHandle, PackageResult},
     flavor::MoveFlavor,
     git::GitTree,
-    package::{EnvironmentName, paths::PackagePath},
+    package::{EnvironmentName, manifest::ManifestResult, paths::PackagePath},
     schema::{
-        Address, EnvironmentID, LocalDepInfo, LockfileDependencyInfo, LockfileGitDepInfo,
-        ManifestDependencyInfo, ManifestGitDependency, OnChainDepInfo, Pin, ResolverDependencyInfo,
+        Address, DefaultDependency, EnvironmentID, LocalDepInfo, LockfileDependencyInfo,
+        LockfileGitDepInfo, ManifestDependencyInfo, ManifestGitDependency, OnChainDepInfo, Pin,
+        ReplacementDependency, ResolverDependencyInfo,
     },
 };
 
@@ -107,6 +108,66 @@ impl<T> Dependency<T> {
 
     pub fn is_override(&self) -> bool {
         self.is_override
+    }
+}
+
+impl Dependency<Combined> {
+    /// Specialize an entry in the `[dependencies]` section, for the environment named
+    /// `source_env_name`
+    pub fn from_default(
+        file: FileHandle,
+        source_env_name: EnvironmentName,
+        default: DefaultDependency,
+    ) -> Self {
+        Dependency {
+            dep_info: default.dependency_info,
+            use_environment: source_env_name,
+            is_override: default.is_override,
+            published_at: None,
+            containing_file: file,
+        }
+    }
+
+    /// Load from an entry in the `[dep-replacements]` section that has no corresponding entry in
+    /// the `[dependencies]` section of the manifest. `source_env_name` refers
+    /// to the environment name and ID in the original manifest; it is used as the default
+    /// environment for the dependency, but will be overridden if `replacement` specifies
+    /// `use-environment` field.
+    pub fn from_replacement(
+        file: FileHandle,
+        source_env_name: EnvironmentName,
+        replacement: ReplacementDependency,
+    ) -> ManifestResult<Self> {
+        let Some(dep) = replacement.dependency else {
+            return Err(todo!());
+        };
+
+        Ok(Dependency {
+            dep_info: dep.dependency_info,
+            use_environment: replacement.use_environment.unwrap_or(source_env_name),
+            is_override: dep.is_override,
+            published_at: replacement.published_at,
+            containing_file: file,
+        })
+    }
+
+    pub fn from_default_with_replacement(
+        file: FileHandle,
+        source_env_name: EnvironmentName,
+        default: DefaultDependency,
+        replacement: ReplacementDependency,
+    ) -> ManifestResult<Self> {
+        let dep = replacement.dependency.unwrap_or(default);
+
+        // TODO: possibly additional compatibility checks here?
+
+        Ok(Dependency {
+            dep_info: dep.dependency_info,
+            use_environment: replacement.use_environment.unwrap_or(source_env_name),
+            is_override: dep.is_override,
+            published_at: replacement.published_at,
+            containing_file: file,
+        })
     }
 }
 
