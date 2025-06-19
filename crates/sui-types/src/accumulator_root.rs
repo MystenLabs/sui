@@ -7,6 +7,7 @@ use crate::{
     error::SuiResult,
     object::Owner,
     storage::ObjectStore,
+    type_input::TypeInput,
     MoveTypeTagTrait, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
 };
 use move_core_types::{
@@ -59,10 +60,13 @@ impl MoveTypeTagTrait for AccumulatorKey {
 // Fix it when we have the Move code.
 pub fn derive_balance_account_object_id(
     owner: SuiAddress,
-    type_tag: TypeTag,
+    balance_type: TypeInput,
 ) -> anyhow::Result<ObjectID> {
     let key = DOFWrapper {
-        name: AccumulatorKey { owner, type_tag },
+        name: AccumulatorKey {
+            owner,
+            type_tag: balance_type.to_type_tag()?,
+        },
     };
     derive_dynamic_field_id(
         SUI_ACCUMULATOR_ROOT_OBJECT_ID,
