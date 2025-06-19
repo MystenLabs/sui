@@ -7,4 +7,4 @@ error: Error while loading `"tests/data/no_path_set_for_dependency/Move.toml"`
 6 │ A = { }
   │     ^^^
   │
-  = dependency has no fields
+  = Invalid dependency; dependencies must have exactly one of the following fields: `git`, `r.<resolver>`, `local`, or `on-chain`.

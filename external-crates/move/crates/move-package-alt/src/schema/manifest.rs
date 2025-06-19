@@ -38,7 +38,7 @@ pub struct ParsedManifest {
 #[derive(Debug, Deserialize, Clone)]
 pub struct PackageMetadata {
     pub name: Spanned<PackageName>,
-    edition: ConstMove2025,
+    edition: String,
 }
 
 /// An entry in the `[dependencies]` section of a manifest
@@ -111,11 +111,6 @@ pub struct ManifestGitDependency {
     pub path: PathBuf,
 }
 
-/// The constant string "move2025"
-#[derive(Debug, Deserialize, Clone)]
-#[serde(try_from = "String")]
-struct ConstMove2025;
-
 /// Convenience type for serializing/deserializing external deps
 #[derive(Deserialize)]
 struct RField {
@@ -145,24 +140,12 @@ impl<'de> Deserialize<'de> for ManifestDependencyInfo {
                 Ok(ManifestDependencyInfo::OnChain(dep))
             } else {
                 Err(de::Error::custom(
-                    "Invalid dependency; dependencies must have a field named either `git`, `local`, `on-chain`, or `r`.",
+                    "Invalid dependency; dependencies must have exactly one of the following fields: `git`, `r.<resolver>`, `local`, or `on-chain`.",
                 ))
             }
         } else {
             Err(de::Error::custom("Dependency must be a table"))
         }
-    }
-}
-
-// TODO: write a macro to generate constants
-impl TryFrom<String> for ConstMove2025 {
-    type Error = &'static str;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        if value != "2025" {
-            return Err("Unsupported move version {value}; expected `Move2025`");
-        }
-        Ok(Self)
     }
 }
 
@@ -172,9 +155,7 @@ impl TryFrom<RField> for ExternalDependency {
     /// Convert from [RField] (`{r.<res> = <data>}`) to [ExternalDependency] (`{ res, data }`)
     fn try_from(value: RField) -> Result<Self, Self::Error> {
         if value.r.len() != 1 {
-            return Err(
-                "Externally resolved dependencies should have the form `{r.<resolver-name> = <resolver-data>}`",
-            );
+            return Err("Externally resolved dependencies may only have one `r.<resolver>` field");
         }
 
         let (resolver, data) = value

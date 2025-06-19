@@ -1,52 +1,50 @@
 ---
 source: crates/move-package-alt/tests/test_runner.rs
 ---
-Manifest {
+ParsedManifest {
     package: PackageMetadata {
-        name: Located {
-            loc: Location {
-                file: "tests/data/basic_external_resolver/Move.toml",
-                span: 17..26,
-            },
+        name: Spanned {
+            span: 17..26,
             value: Identifier(
                 "example",
             ),
         },
-        edition: Located {
-            loc: Location {
-                file: "tests/data/basic_external_resolver/Move.toml",
-                span: 37..48,
-            },
-            value: "2024.beta",
-        },
-        metadata: (),
+        edition: "2025",
     },
     environments: {
-        "mainnet": "35834a8a",
+        Spanned {
+            span: 107..114,
+            value: "mainnet",
+        }: Spanned {
+            span: 117..127,
+            value: "35834a8a",
+        },
     },
     dependencies: {
         Identifier(
             "mock",
-        ): ManifestDependency {
-            dependency_info: External(
-                ExternalDependency {
-                    resolver: "mock-resolver",
-                    data: Table(
-                        {
-                            "resolved": Table(
-                                {
-                                    "local": String(
-                                        ".",
-                                    ),
-                                },
-                            ),
-                        },
-                    ),
-                    containing_file: "tests/data/basic_external_resolver/Move.toml",
-                },
-            ),
-            is_override: false,
-            rename_from: None,
+        ): Spanned {
+            span: 151..202,
+            value: DefaultDependency {
+                dependency_info: External(
+                    ExternalDependency {
+                        resolver: "mock-resolver",
+                        data: Table(
+                            {
+                                "resolved": Table(
+                                    {
+                                        "local": String(
+                                            ".",
+                                        ),
+                                    },
+                                ),
+                            },
+                        ),
+                    },
+                ),
+                is_override: false,
+                rename_from: None,
+            },
         },
     },
     dep_replacements: {},
