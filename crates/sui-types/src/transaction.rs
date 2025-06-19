@@ -77,6 +77,10 @@ const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 0] = [];
 #[path = "unit_tests/messages_tests.rs"]
 mod messages_tests;
 
+#[cfg(test)]
+#[path = "unit_tests/balance_withdraw_tests.rs"]
+mod balance_withdraw_tests;
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum CallArg {
     // contains no structs or objects
@@ -2331,13 +2335,10 @@ impl TransactionDataAPI for TransactionDataV1 {
                     )?;
                     *entry = Reservation::MaxAmount(new_amount);
                 }
-                (Reservation::MaxAmount(_), Reservation::EntireBalance)
-                | (Reservation::EntireBalance, Reservation::MaxAmount(_)) => {
-                    *entry = Reservation::EntireBalance;
-                }
-                (Reservation::EntireBalance, Reservation::EntireBalance) => {
+                _ => {
                     return Err(UserInputError::InvalidWithdrawReservation {
-                        error: "Cannot reserve entire balance twice on the same account"
+                        error: "If there exists a reservation that reserves the entire balance,
+                        no further reservation can be made on the same account."
                             .to_string(),
                     });
                 }
