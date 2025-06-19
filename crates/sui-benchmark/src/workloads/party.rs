@@ -251,7 +251,8 @@ impl Workload<dyn Payload> for PartyWorkload {
             TestTransactionBuilder::new(first_gas.1, first_gas.0, reference_gas_price)
                 .publish(path)
                 .build_and_sign(first_gas.2.as_ref());
-        let effects = proxy.execute_transaction_block(transaction).await.unwrap();
+        let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+        let effects = execution_result.unwrap();
         assert!(effects.is_ok(), "Failed to publish party package");
         let created = effects.created();
         let package_obj = created
@@ -283,7 +284,8 @@ impl Workload<dyn Payload> for PartyWorkload {
             let system_state_observer = system_state_observer.clone();
             let proxy = proxy.clone();
             futures.push(async move {
-                let effects = proxy.execute_transaction_block(transaction).await.unwrap();
+                let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+                let effects = execution_result.unwrap();
                 let (
                     obj_ref,
                     Owner::ConsensusAddressOwner {
@@ -327,7 +329,8 @@ impl Workload<dyn Payload> for PartyWorkload {
             let system_state_observer = system_state_observer.clone();
             let proxy = proxy.clone();
             futures.push(async move {
-                let effects = proxy.execute_transaction_block(transaction).await.unwrap();
+                let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+                let effects = execution_result.unwrap();
                 let (obj_ref, Owner::AddressOwner(owner)) = effects.created()[0] else {
                     panic!("create_fastpath should always create an AddressOwner object");
                 };
