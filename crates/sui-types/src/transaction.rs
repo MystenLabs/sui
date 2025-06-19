@@ -137,6 +137,7 @@ pub struct BalanceWithdrawArg {
 pub enum WithdrawFrom {
     /// Withdraw from the sender of the transaction, with balance type T as T in Balance<T>.
     // TODO(address-balances): Use TypeInput instead of TypeTag.
+    // TODO(address-balances): Consider hoisting the type tag to BalanceWithdrawArg.
     Sender(TypeTag),
     // TODO(address-balances): Add more options here, such as Sponsor, or even multi-party withdraws.
 }
