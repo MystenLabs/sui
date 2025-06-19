@@ -131,7 +131,7 @@ async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String>
     let pinned = dependency::pin::<Vanilla>(deps, &manifest.environments()).await;
 
     let output = match pinned {
-        Ok(ref deps) => format!("{deps:?}"),
+        Ok(ref deps) => format!("{deps:#?}"),
         Err(ref err) => err.to_string(),
     };
 

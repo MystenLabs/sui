@@ -173,7 +173,7 @@ async fn resolve_single(
 
     Ok(result
         .into_iter()
-        .map(|(env, pkg, resp)| (env, pkg, resp.result))
+        .map(|(env, pkg, resp)| (env, pkg, resp.0))
         .collect())
 }
 
@@ -208,10 +208,10 @@ async fn call_resolver(
         child.stdin.take().expect("stdin is available"),
     );
 
-    let resps = endpoint
-        .batch_call("resolve", reqs)
-        .await
-        .map_err(|e| ResolverError::bad_resolver(&resolver, e.to_string()));
+    let resps = endpoint.batch_call("resolve", reqs).await.map_err(|e| {
+        debug!("deserialization error: {e:?}");
+        ResolverError::bad_resolver(&resolver, e.to_string())
+    });
 
     let output = child
         .wait_with_output()
