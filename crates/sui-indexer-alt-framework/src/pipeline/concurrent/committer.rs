@@ -324,7 +324,11 @@ mod tests {
     /// Creates and spawns a committer task with the provided mock store, along with
     /// all necessary channels and configuration. The committer runs in the background
     /// and can be interacted with through the returned channels.
-    async fn setup_test(store: MockStore) -> TestSetup {
+    ///
+    /// # Arguments
+    /// * `store` - The mock store to use for testing
+    /// * `skip_watermark` - Whether to skip sending watermarks to the watermark channel
+    async fn setup_test(store: MockStore, skip_watermark: bool) -> TestSetup {
         let config = CommitterConfig::default();
         let metrics = IndexerMetrics::new(&Default::default());
         let cancel = CancellationToken::new();
@@ -336,7 +340,7 @@ mod tests {
         let committer_handle = tokio::spawn(async move {
             let _ = committer(
                 config,
-                false,
+                skip_watermark,
                 batch_rx,
                 watermark_tx,
                 store_clone,
@@ -360,7 +364,7 @@ mod tests {
             watermarks: Arc::new(Mutex::new(MockWatermark::default())),
             ..Default::default()
         };
-        let mut setup = setup_test(store).await;
+        let mut setup = setup_test(store, false).await;
 
         // Send batches
         let batch1 = BatchedRows {
@@ -449,7 +453,7 @@ mod tests {
             watermarks: Arc::new(Mutex::new(MockWatermark::default())),
             ..Default::default()
         };
-        let mut setup = setup_test(store).await;
+        let mut setup = setup_test(store, false).await;
 
         let batch = BatchedRows {
             values: vec![StoredData {
@@ -515,7 +519,7 @@ mod tests {
             })),
             ..Default::default()
         };
-        let mut setup = setup_test(store).await;
+        let mut setup = setup_test(store, false).await;
 
         let batch = BatchedRows {
             values: vec![StoredData {
@@ -564,6 +568,100 @@ mod tests {
         }
         let watermark = setup.watermark_rx.recv().await.unwrap();
         assert_eq!(watermark.len(), 1);
+
+        // Clean up
+        drop(setup.batch_tx);
+        let _ = setup.committer_handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_empty_batch_handling() {
+        let store = MockStore {
+            watermarks: Arc::new(Mutex::new(MockWatermark::default())),
+            ..Default::default()
+        };
+        let mut setup = setup_test(store, false).await;
+
+        let empty_batch = BatchedRows {
+            values: vec![], // Empty values
+            watermark: vec![WatermarkPart {
+                watermark: CommitterWatermark {
+                    epoch_hi_inclusive: 0,
+                    checkpoint_hi_inclusive: 1,
+                    tx_hi: 0,
+                    timestamp_ms_hi_inclusive: 1000,
+                },
+                batch_rows: 0,
+                total_rows: 0,
+            }],
+        };
+
+        // Send the empty batch
+        setup.batch_tx.send(empty_batch).await.unwrap();
+
+        // Verify watermark is still sent (empty batches should still produce watermarks)
+        let watermark = setup.watermark_rx.recv().await.unwrap();
+        assert_eq!(watermark.len(), 1);
+        assert_eq!(watermark[0].batch_rows, 0);
+        assert_eq!(watermark[0].total_rows, 0);
+
+        // Verify no data was committed (since batch was empty)
+        {
+            let data = setup.store.data.lock().unwrap();
+            assert!(
+                data.is_empty(),
+                "No data should be committed for empty batch"
+            );
+        }
+
+        // Clean up
+        drop(setup.batch_tx);
+        let _ = setup.committer_handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_skip_watermark_mode() {
+        let store = MockStore {
+            watermarks: Arc::new(Mutex::new(MockWatermark::default())),
+            ..Default::default()
+        };
+        let mut setup = setup_test(store, true).await;
+
+        let batch = BatchedRows {
+            values: vec![StoredData {
+                cp_sequence_number: 1,
+                tx_sequence_numbers: vec![1, 2, 3],
+                ..Default::default()
+            }],
+            watermark: vec![WatermarkPart {
+                watermark: CommitterWatermark {
+                    epoch_hi_inclusive: 0,
+                    checkpoint_hi_inclusive: 1,
+                    tx_hi: 3,
+                    timestamp_ms_hi_inclusive: 1000,
+                },
+                batch_rows: 1,
+                total_rows: 1,
+            }],
+        };
+
+        // Send the batch
+        setup.batch_tx.send(batch).await.unwrap();
+
+        // Wait for processing
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // Verify data was committed
+        {
+            let data = setup.store.data.lock().unwrap();
+            assert_eq!(data.get(&1).unwrap(), &vec![1, 2, 3]);
+        }
+
+        // Verify no watermark was sent (skip_watermark mode)
+        assert!(
+            setup.watermark_rx.try_recv().is_err(),
+            "No watermark should be sent in skip_watermark mode"
+        );
 
         // Clean up
         drop(setup.batch_tx);
