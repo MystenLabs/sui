@@ -51,8 +51,12 @@ fun test_message_serialization_sui_to_eth() {
     let sender_address = address::from_u256(100);
     let mut scenario = test_scenario::begin(sender_address);
     let ctx = test_scenario::ctx(&mut scenario);
+
+    // env could provide handy functions for each case, eg, imagine calling this
+    // let coin = runner::usdc(12345) ?
     let coin = coin::mint_for_testing<USDC>(12345, ctx);
 
+    // could there be a builder pattern for token bridge message?
     let token_bridge_message = default_token_bridge_message(
         sender_address,
         &coin,
@@ -61,6 +65,7 @@ fun test_message_serialization_sui_to_eth() {
     );
 
     // Test payload extraction
+    // not a fan of function imports, it's better to always specify module name.
     let token_payload = make_payload(
         address::to_bytes(sender_address),
         chain_ids::eth_sepolia(),
@@ -90,6 +95,7 @@ fun test_message_serialization_sui_to_eth() {
 
 #[test]
 fun test_message_serialization_eth_to_sui() {
+    // if address is insignificant, it's cleaner to use address literal eg `@1`
     let address_1 = address::from_u256(100);
     let mut scenario = test_scenario::begin(address_1);
     let ctx = test_scenario::ctx(&mut scenario);
@@ -109,6 +115,7 @@ fun test_message_serialization_eth_to_sui() {
 
     // Test payload extraction
     let token_payload = make_payload(
+        // hex::decode is driving me crazy
         hex::decode(b"00000000000000000000000000000000000000c8"),
         chain_ids::sui_testnet(),
         address::to_bytes(address_1),
@@ -126,6 +133,8 @@ fun test_message_serialization_eth_to_sui() {
     assert!(token_bridge_message == deserialize_message_test_only(message));
 
     coin::burn_for_testing(coin);
+
+    // was there a need to use test_scenario here?
     test_scenario::end(scenario);
 }
 
@@ -138,9 +147,11 @@ fun test_emergency_op_message_serialization() {
     );
 
     // Test message serialization
+    // could use classic receiver syntax .serialize_message()
     let message = serialize_message(emergency_op_message);
     let expected_msg = hex::decode(b"0201000000000000000a0100");
 
+    // std::unit_test::assert_eq!()
     assert!(message == expected_msg);
     assert!(emergency_op_message == deserialize_message_test_only(message));
 }

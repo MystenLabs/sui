@@ -23,12 +23,18 @@ use sui::test_utils::{assert_eq, destroy};
 
 #[test]
 fun test_24_hours_windows() {
+    // magic function? or should it be `limiter::new_limiter_for_testing()`?
+    // to make it clear where the function is defined
     let mut limiter = make_transfer_limiter();
 
     let route = chain_ids::get_route(chain_ids::sui_custom(), chain_ids::eth_sepolia());
 
+
     let mut scenario = test_scenario::begin(@0x1);
     let ctx = test_scenario::ctx(&mut scenario);
+
+    // I believe there should be a builder pattern for treasury as well. Too many
+    // test-only functions are not a good idea.
     let mut treasury = treasury::mock_for_test(ctx);
 
     // Global transfer limit is 100M USD
@@ -55,6 +61,7 @@ fun test_24_hours_windows() {
     assert!(record.total_amount() == 10000 * 5 * usd_value_multiplier());
 
     // transfer 1000 ETH every hour for 50 hours, the 24 hours totol should be 24000 * 10
+    // Readability: 50u8.do!(|_| { ... });
     let mut i = 0;
     while (i < 50) {
         clock.increment_for_testing(60 * 60 * 1000);
@@ -78,6 +85,7 @@ fun test_24_hours_windows() {
     let mut i = 0;
     // At this point, every hour in past 24 hour has value $5000.
     // In each iteration, the old $5000 gets replaced with (i * 5000)
+    // Readability: 24u8.do!(|_| { ... });
     while (i < 24) {
         clock.increment_for_testing(60 * 60 * 1000);
         assert!(
@@ -93,6 +101,9 @@ fun test_24_hours_windows() {
         let record = limiter.transfer_records().get(&route);
 
         expected_value = expected_value + 1000 * 5 * i * usd_value_multiplier();
+
+        // incorrect assert_eq import, should be:
+        // std::unit_test::assert_eq!() - will point to aborted line
         assert_eq(record.total_amount(), expected_value);
         i = i + 1;
     };
@@ -466,6 +477,8 @@ fun test_limiter_basic_op() {
     let expected_notion_amount_10053 = 1 * usd_value_multiplier();
     assert_eq(record.hour_head(), 10053);
     assert_eq(record.hour_tail(), 10030);
+
+    // assert_eq!
     assert!(
         record.per_hour_amounts() ==
             &vector[
@@ -518,6 +531,11 @@ fun test_limiter_basic_op() {
 #[test]
 fun test_update_route_limit() {
     // default routes, default notion values
+    //
+    // all of a sudden just "new"? Not even the "make_transfer_limiter"?
+    // function naming feels inconsistent, test_only don't make it much better
+    // to make it clear that it's not a local `new` function, should be
+    // `limiter::new()` instead
     let mut limiter = new();
     assert_eq(
         limiter.transfer_limits()[
@@ -591,10 +609,12 @@ fun test_update_route_limit_all_paths() {
         new_limit,
     );
 
+    // surprised that the limiter doesn't have `drop`
     destroy(limiter);
 }
 
 #[test]
+// clearly no use for `test_scenario`, could be replaced with `tx_context::dummy`
 fun test_update_asset_price() {
     // default routes, default notion values
     let mut scenario = test_scenario::begin(@0x1);

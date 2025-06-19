@@ -47,6 +47,8 @@ fun test_limits() {
         sui_address,
         1000,
     );
+
+    // std::unit_test::assert_eq!() !!!
     assert!(
         env.claim_and_transfer_token<ETH>(source_chain, transfer_id1) ==
         limit_exceeded(),
@@ -160,10 +162,15 @@ fun test_bridge_and_claim() {
     );
     let signatures = env.sign_message_with(message, vector[0, 2]);
     let transfer_id = message.seq_num();
+
+
+    // std::unit_test::assert_eq!()
     assert!(env.approve_token_transfer(message, signatures) == approved());
     assert!(env.approve_token_transfer(message, signatures) == already_approved());
     assert!(env.approve_token_transfer(message, signatures) == already_approved());
     let token = env.claim_token<ETH>(sui_address, source_chain, transfer_id);
+
+    // a unnecessary type parameters here and in this function overall
     let send_token_id = env.send_token<ETH>(
         sui_address,
         source_chain,
@@ -212,6 +219,9 @@ fun test_bridge_and_claim() {
 fun test_blocklist() {
     let mut env = create_env(chain_ids::sui_custom());
     let validators = vector[
+        // validator builder? what do these values mean to an uneducated reader?
+        // if they're not important for the test, we shouldn't see them (as in
+        // they would be randomized or provided by the builder)
         create_validator(@0xAAAA, 100, &b"1234567890_1234567890_1234567890"),
         create_validator(@0xBBBB, 100, &b"234567890_1234567890_1234567890_"),
         create_validator(@0xCCCC, 100, &b"34567890_1234567890_1234567890_1"),
