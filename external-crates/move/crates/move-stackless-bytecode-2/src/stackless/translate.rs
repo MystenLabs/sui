@@ -140,14 +140,24 @@ pub(crate) fn bytecode<K: SourceKind>(
 ) -> Instruction {
     use ast::PrimitiveOp as Op;
 
+    // macro_rules! assign {
+    //     ($rhs:expr $(, $lhs:expr)* $(,)?) => {{
+    //         Instruction::Assign {
+    //             lhs: vec![$($lhs),*],
+    //             rhs: $rhs,
+    //         }
+    //     }};
+    // }
+
     macro_rules! assign {
-        ($rhs:expr $(, $lhs:expr)* $(,)?) => {{
-            Instruction::Assign {
-                lhs: vec![$($lhs),*],
-                rhs: $rhs,
-            }
-        }};
-    }
+    ([$($lhs:expr),*] = $rhs:expr) => {{
+        let rhs = $rhs;
+        Instruction::Assign {
+            lhs: vec![$($lhs),*],
+            rhs: rhs,
+        }
+    }};
+}
 
     macro_rules! imm {
         ($val:expr) => {
@@ -201,50 +211,43 @@ pub(crate) fn bytecode<K: SourceKind>(
             inst
         }
 
-        IB::LdU8(value) => assign!(imm!(Value::U8(*value)), ctxt.push_register()),
+        IB::LdU8(value) => assign!([ctxt.push_register()] = imm!(Value::U8(*value))),
 
-        IB::LdU64(value) => assign!(imm!(Value::U64(*value)), ctxt.push_register()),
+        IB::LdU64(value) => assign!([ctxt.push_register()] = imm!(Value::U64(*value))),
 
-        IB::LdU128(bx) => assign!(imm!(Value::U128(*(*bx))), ctxt.push_register()),
+        IB::LdU128(bx) => assign!([ctxt.push_register()] = imm!(Value::U128(*(*bx)))),
 
-        IB::CastU8 => assign!(
-            primitive_op!(Op::CastU8, Var(ctxt.pop_register())),
-            ctxt.push_register()
-        ),
+        IB::CastU8 => {
+            assign!([ctxt.push_register()] = primitive_op!(Op::CastU8, Var(ctxt.pop_register())))
+        }
 
-        IB::CastU64 => assign!(
-            primitive_op!(Op::CastU64, Var(ctxt.pop_register())),
-            ctxt.push_register()
-        ),
+        IB::CastU64 => {
+            assign!([ctxt.push_register()] = primitive_op!(Op::CastU64, Var(ctxt.pop_register())))
+        }
 
-        IB::CastU128 => assign!(
-            primitive_op!(Op::CastU128, Var(ctxt.pop_register())),
-            ctxt.push_register()
-        ),
+        IB::CastU128 => {
+            assign!([ctxt.push_register()] = primitive_op!(Op::CastU128, Var(ctxt.pop_register())))
+        }
 
-        IB::LdConst(const_ref) => assign!(
-            RValue::Operand(Constant(const_ref.data.clone())),
-            ctxt.push_register()
-        ),
+        IB::LdConst(const_ref) => {
+            assign!([ctxt.push_register()] = RValue::Operand(Constant(const_ref.data.clone())))
+        }
 
-        IB::LdTrue => assign!(imm!(Value::True), ctxt.push_register()),
+        IB::LdTrue => assign!([ctxt.push_register()] = imm!(Value::True)),
 
-        IB::LdFalse => assign!(imm!(Value::False), ctxt.push_register()),
+        IB::LdFalse => assign!([ctxt.push_register()] = imm!(Value::False)),
 
-        IB::CopyLoc(loc) => assign!(
-            primitive_op!(Op::CopyLoc, Var(Local(*loc as usize))),
-            ctxt.push_register()
-        ),
+        IB::CopyLoc(loc) => {
+            assign!([ctxt.push_register()] = primitive_op!(Op::CopyLoc, Var(Local(*loc as usize))))
+        }
 
-        IB::MoveLoc(loc) => assign!(
-            primitive_op!(Op::MoveLoc, Var(Local(*loc as usize))),
-            ctxt.push_register()
-        ),
+        IB::MoveLoc(loc) => {
+            assign!([ctxt.push_register()] = primitive_op!(Op::MoveLoc, Var(Local(*loc as usize))))
+        }
 
-        IB::StLoc(loc) => assign!(
-            RValue::Operand(Operand::Var(ctxt.pop_register())),
-            Local(*loc as usize)
-        ),
+        IB::StLoc(loc) => {
+            assign!([Local(*loc as usize)] = RValue::Operand(Var(ctxt.pop_register())))
+        }
 
         IB::Call(bx) => {
             let name = &bx.module.name;
@@ -319,56 +322,52 @@ pub(crate) fn bytecode<K: SourceKind>(
             inst
         }
 
-        IB::ReadRef => assign!(
-            primitive_op!(Op::ReadRef, Var(ctxt.pop_register())),
-            ctxt.push_register()
-        ),
+        IB::ReadRef => {
+            assign!([ctxt.push_register()] = primitive_op!(Op::ReadRef, Var(ctxt.pop_register())))
+        }
 
+        // TODO check if this is ok for the SSA
         IB::WriteRef => assign!(
-            // TODO check if this is ok for the SSA
-            primitive_op!(
+            [] = primitive_op!(
                 Op::WriteRef,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
             )
         ),
 
-        IB::FreezeRef => {
-            let inst = Instruction::Nop;
-            inst
-        }
+        IB::FreezeRef => Instruction::Nop,
 
-        IB::MutBorrowLoc(local_index) => assign!(
-            primitive_op!(Op::MutBorrowLoc, Var(Local(*local_index as usize))),
-            ctxt.push_register()
-        ),
+        IB::MutBorrowLoc(local_index) => assign!([ctxt.push_register()] = primitive_op!(
+            Op::MutBorrowLoc,
+            Var(Local(*local_index as usize))
+        )),
 
         IB::ImmBorrowLoc(local_index) => assign!(
-            primitive_op!(Op::ImmBorrowLoc, Var(Local(*local_index as usize))),
-            ctxt.push_register()
+            [ctxt.push_register()] =
+            primitive_op!(Op::ImmBorrowLoc, Var(Local(*local_index as usize)))
         ),
 
         IB::MutBorrowField(_field_ref) => assign!(
-            primitive_op!(Op::MutBorrowField, Var(ctxt.pop_register())),
-            ctxt.push_register()
+            [ctxt.push_register()] =
+            primitive_op!(Op::MutBorrowField, Var(ctxt.pop_register()))
         ),
 
         IB::ImmBorrowField(_field_ref) => assign!(
-            primitive_op!(Op::ImmBorrowField, Var(ctxt.pop_register())),
-            ctxt.push_register()
+            [ctxt.push_register()] =
+            primitive_op!(Op::ImmBorrowField, Var(ctxt.pop_register()))
         ),
 
         IB::Add => assign!(
-            primitive_op!(Op::Add, Var(ctxt.pop_register()), Var(ctxt.pop_register())),
-            ctxt.push_register()
+            [ctxt.push_register()] =
+            primitive_op!(Op::Add, Var(ctxt.pop_register()), Var(ctxt.pop_register()))
         ),
 
         IB::Sub => {
             let subtraend = ctxt.pop_register();
             let minuend = ctxt.pop_register();
             assign!(
-                primitive_op!(Op::Subtract, Var(minuend), Var(subtraend)),
-                ctxt.push_register()
+                [ctxt.push_register()] =
+                primitive_op!(Op::Subtract, Var(minuend), Var(subtraend))
             )
         }
 
@@ -376,8 +375,8 @@ pub(crate) fn bytecode<K: SourceKind>(
             let multiplier = ctxt.pop_register();
             let multiplicand = ctxt.pop_register();
             assign!(
-                primitive_op!(Op::Multiply, Var(multiplicand), Var(multiplier)),
-                ctxt.push_register()
+                [ctxt.push_register()] =
+                primitive_op!(Op::Multiply, Var(multiplicand), Var(multiplier))
             )
         }
 
@@ -385,8 +384,8 @@ pub(crate) fn bytecode<K: SourceKind>(
             let divisor = ctxt.pop_register();
             let dividend = ctxt.pop_register();
             assign!(
-                primitive_op!(Op::Modulo, Var(dividend), Var(divisor)),
-                ctxt.push_register()
+                [ctxt.push_register()] =
+                primitive_op!(Op::Modulo, Var(dividend), Var(divisor))
             )
         }
 
@@ -394,101 +393,101 @@ pub(crate) fn bytecode<K: SourceKind>(
             let divisor = ctxt.pop_register();
             let dividend = ctxt.pop_register();
             assign!(
-                primitive_op!(Op::Divide, Var(dividend), Var(divisor)),
-                ctxt.push_register()
+                [ctxt.push_register()] =
+                primitive_op!(Op::Divide, Var(dividend), Var(divisor))
             )
         }
 
         IB::BitOr => assign!(
+            [ctxt.push_register()] =
             primitive_op!(
                 Op::BitOr,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
-            ),
-            ctxt.push_register()
+            )
         ),
 
         IB::BitAnd => assign!(
+            [ctxt.push_register()] =
             primitive_op!(
                 Op::BitAnd,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
-            ),
-            ctxt.push_register()
+            )
         ),
 
         IB::Xor => assign!(
-            primitive_op!(Op::Xor, Var(ctxt.pop_register()), Var(ctxt.pop_register())),
-            ctxt.push_register()
+            [ctxt.push_register()] =
+            primitive_op!(Op::Xor, Var(ctxt.pop_register()), Var(ctxt.pop_register()))
         ),
 
         IB::Or => assign!(
-            primitive_op!(Op::Or, Var(ctxt.pop_register()), Var(ctxt.pop_register())),
-            ctxt.push_register()
+            [ctxt.push_register()] =
+            primitive_op!(Op::Or, Var(ctxt.pop_register()), Var(ctxt.pop_register()))
         ),
 
         IB::And => assign!(
-            primitive_op!(Op::And, Var(ctxt.pop_register()), Var(ctxt.pop_register())),
-            ctxt.push_register()
+            [ctxt.push_register()] =
+            primitive_op!(Op::And, Var(ctxt.pop_register()), Var(ctxt.pop_register()))
         ),
 
         IB::Not => assign!(
-            primitive_op!(Op::Not, Var(ctxt.pop_register())),
-            ctxt.push_register()
+            [ctxt.push_register()] =
+            primitive_op!(Op::Not, Var(ctxt.pop_register()))
         ),
 
         IB::Eq => assign!(
+            [ctxt.push_register()] =
             primitive_op!(
                 Op::Equal,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
-            ),
-            ctxt.push_register()
+            )
         ),
 
         IB::Neq => assign!(
+            [ctxt.push_register()] =
             primitive_op!(
                 Op::NotEqual,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
-            ),
-            ctxt.push_register()
+            )
         ),
 
         IB::Lt => assign!(
+            [ctxt.push_register()] =
             primitive_op!(
                 Op::LessThan,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
-            ),
-            ctxt.push_register()
+            )
         ),
 
         IB::Gt => assign!(
+            [ctxt.push_register()] =
             primitive_op!(
                 Op::GreaterThan,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
-            ),
-            ctxt.push_register()
+            )
         ),
 
         IB::Le => assign!(
+            [ctxt.push_register()] =
             primitive_op!(
                 Op::LessThanOrEqual,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
-            ),
-            ctxt.push_register()
+            )
         ),
 
         IB::Ge => assign!(
+            [ctxt.push_register()] =
             primitive_op!(
                 Op::GreaterThanOrEqual,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
-            ),
-            ctxt.push_register()
+            )
         ),
 
         IB::Abort => {
@@ -503,21 +502,21 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::Shl => assign!(
+            [ctxt.push_register()] =
             primitive_op!(
                 Op::ShiftLeft,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
-            ),
-            ctxt.push_register()
+            )
         ),
 
         IB::Shr => assign!(
+            [ctxt.push_register()] =
             primitive_op!(
                 Op::ShiftRight,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
-            ),
-            ctxt.push_register()
+            )
         ),
 
         IB::VecPack(_bx) => {
@@ -526,46 +525,47 @@ pub(crate) fn bytecode<K: SourceKind>(
                 args.push(Var(ctxt.pop_register()));
             }
             assign!(
+                [ctxt.push_register()] =
                 RValue::Primitive {
                     op: Op::VecPack,
                     args,
-                },
-                ctxt.push_register()
+                }
             )
         }
 
         IB::VecLen(_rc) => assign!(
-            primitive_op!(Op::VecLen, Var(ctxt.pop_register())),
-            ctxt.push_register()
+            [ctxt.push_register()] =
+            primitive_op!(Op::VecLen, Var(ctxt.pop_register()))
         ),
 
         IB::VecImmBorrow(_rc) => assign!(
+            [ctxt.push_register()] =
             primitive_op!(
                 Op::VecImmBorrow,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
-            ),
-            ctxt.push_register()
+            )
         ),
 
         IB::VecMutBorrow(_rc) => assign!(
+            [ctxt.push_register()] =
             primitive_op!(
                 Op::VecMutBorrow,
                 Var(ctxt.pop_register()),
                 Var(ctxt.pop_register())
-            ),
-            ctxt.push_register()
+            )
         ),
 
-        IB::VecPushBack(_rc) => assign!(primitive_op!(
+        // TODO check if this is ok for the SSA
+        IB::VecPushBack(_rc) => assign!([] = primitive_op!(
             Op::VecPushBack,
             Var(ctxt.pop_register()),
             Var(ctxt.pop_register())
         )),
 
         IB::VecPopBack(_rc) => assign!(
-            primitive_op!(Op::VecPopBack, Var(ctxt.pop_register())),
-            ctxt.push_register()
+            [ctxt.push_register()] =
+            primitive_op!(Op::VecPopBack, Var(ctxt.pop_register()))
         ),
 
         IB::VecUnpack(bx) => {
@@ -594,25 +594,34 @@ pub(crate) fn bytecode<K: SourceKind>(
             inst
         }
 
-        IB::LdU16(value) => assign!(imm!(Value::U16(*value)), ctxt.push_register()),
+        IB::LdU16(value) => assign!(
+            [ctxt.push_register()] =
+            imm!(Value::U16(*value))
+        ),
 
-        IB::LdU32(value) => assign!(imm!(Value::U32(*value)), ctxt.push_register()),
+        IB::LdU32(value) => assign!(
+            [ctxt.push_register()] =
+            imm!(Value::U32(*value))
+        ),
 
-        IB::LdU256(_bx) => assign!(imm!(Value::U256(*(*_bx))), ctxt.push_register()),
+        IB::LdU256(_bx) => assign!(
+            [ctxt.push_register()] =
+            imm!(Value::U256(*(*_bx)
+        ))),
 
         IB::CastU16 => assign!(
-            primitive_op!(Op::CastU16, Var(ctxt.pop_register())),
-            ctxt.push_register()
+            [ctxt.push_register()] =
+            primitive_op!(Op::CastU16, Var(ctxt.pop_register()))
         ),
 
         IB::CastU32 => assign!(
-            primitive_op!(Op::CastU32, Var(ctxt.pop_register())),
-            ctxt.push_register()
+            [ctxt.push_register()] =
+            primitive_op!(Op::CastU32, Var(ctxt.pop_register()))
         ),
 
         IB::CastU256 => assign!(
-            primitive_op!(Op::CastU256, Var(ctxt.pop_register())),
-            ctxt.push_register()
+            [ctxt.push_register()] =
+            primitive_op!(Op::CastU256, Var(ctxt.pop_register()))
         ),
 
         IB::PackVariant(bx) => {
