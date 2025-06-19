@@ -5,9 +5,7 @@ use serde_spanned::Spanned;
 
 use crate::dependency::DependencySet;
 
-use super::{
-    Address, EnvironmentName, LocalDependency, OnChainDependency, PackageName, ResolverName,
-};
+use super::{Address, EnvironmentName, LocalDepInfo, OnChainDepInfo, PackageName, ResolverName};
 
 // TODO: look at Brandon's serialization code (https://github.com/MystenLabs/sui-rust-sdk/blob/master/crates/sui-sdk-types/src/object.rs)
 
@@ -81,8 +79,8 @@ pub struct ReplacementDependency {
 pub enum ManifestDependencyInfo {
     Git(ManifestGitDependency),
     External(ExternalDependency),
-    Local(LocalDependency),
-    OnChain(OnChainDependency),
+    Local(LocalDepInfo),
+    OnChain(OnChainDepInfo),
 }
 
 /// An external dependency has the form `{ r.<res> = <data> }`. External
@@ -140,10 +138,10 @@ impl<'de> Deserialize<'de> for ManifestDependencyInfo {
                 let dep = ExternalDependency::deserialize(data).map_err(de::Error::custom)?;
                 Ok(ManifestDependencyInfo::External(dep))
             } else if tbl.contains_key("local") {
-                let dep = LocalDependency::deserialize(data).map_err(de::Error::custom)?;
+                let dep = LocalDepInfo::deserialize(data).map_err(de::Error::custom)?;
                 Ok(ManifestDependencyInfo::Local(dep))
             } else if tbl.contains_key("on-chain") {
-                let dep = OnChainDependency::deserialize(data).map_err(de::Error::custom)?;
+                let dep = OnChainDepInfo::deserialize(data).map_err(de::Error::custom)?;
                 Ok(ManifestDependencyInfo::OnChain(dep))
             } else {
                 Err(de::Error::custom(
@@ -161,7 +159,7 @@ impl TryFrom<String> for ConstMove2025 {
     type Error = &'static str;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        if value != "Move2025" {
+        if value != "2025" {
             return Err("Unsupported move version {value}; expected `Move2025`");
         }
         Ok(Self)

@@ -11,14 +11,14 @@ pub type Address = String;
 
 /// A serialized dependency of the form `{ local = <path> }`
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct LocalDependency {
+pub struct LocalDepInfo {
     /// The path on the filesystem, relative to the location of the containing file
     pub local: PathBuf,
 }
 
 /// An on-chain dependency `{on-chain = true}`
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct OnChainDependency {
+pub struct OnChainDepInfo {
     #[serde(rename = "on-chain")]
     on_chain: ConstTrue,
 }
@@ -32,7 +32,7 @@ impl TryFrom<bool> for ConstTrue {
     type Error = &'static str;
 
     fn try_from(value: bool) -> Result<Self, Self::Error> {
-        if value != true {
+        if !value {
             return Err("Expected the constant `true`");
         }
         Ok(Self)

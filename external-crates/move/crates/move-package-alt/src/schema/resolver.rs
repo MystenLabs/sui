@@ -1,15 +1,15 @@
 use serde::{Deserialize, Serialize};
 
-use super::{EnvironmentID, LocalDependency, ManifestGitDependency, OnChainDependency};
+use super::{EnvironmentID, LocalDepInfo, ManifestGitDependency, OnChainDepInfo};
 
 /// The name of an external resolver
 pub type ResolverName = String;
 
 #[derive(Deserialize)]
 pub enum ResolverDependencyInfo {
-    Local(LocalDependency),
+    Local(LocalDepInfo),
     Git(ManifestGitDependency),
-    OnChain(OnChainDependency),
+    OnChain(OnChainDepInfo),
 }
 
 /// Requests from the package mananger to the external resolver

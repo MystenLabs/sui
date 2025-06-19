@@ -122,7 +122,7 @@ async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String>
     debug!("{deps:?}");
 
     add_bindir();
-    let pinned = dependency::pin::<Vanilla>(deps, manifest.environments()).await;
+    let pinned = dependency::pin::<Vanilla>(deps, &manifest.environments()).await;
 
     let output = match pinned {
         Ok(ref deps) => format!("{deps:?}"),

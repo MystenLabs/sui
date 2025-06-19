@@ -1,3 +1,4 @@
+use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
 use toml_edit::{
@@ -5,30 +6,35 @@ use toml_edit::{
     visit_mut::{self, VisitMut},
 };
 
-use crate::git::GitSha;
+use crate::{flavor::MoveFlavor, git::GitSha};
 
-use super::{Address, EnvironmentName, LocalDependency, OnChainDependency, PackageName};
+use super::{Address, EnvironmentName, LocalDepInfo, OnChainDepInfo, PackageName};
 
 /// An identifier for a node in the package graph, used to index into the
 /// `[pinned.<environment>]` table
-type PackageID = String;
+pub type PackageID = String;
 
 /// The serialized lockfile format
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+// TODO: remove Debug and Clone
+#[derive(Debug, Serialize, Deserialize)]
+#[derive_where(Default, Clone)]
 #[serde(bound = "")]
-pub struct Lockfile {
-    pub pinned: BTreeMap<EnvironmentName, BTreeMap<PackageName, Pin>>,
+pub struct ParsedLockfile<F: MoveFlavor> {
+    pub pinned: BTreeMap<EnvironmentName, BTreeMap<PackageID, Pin>>,
 
     #[serde(default)]
-    pub published: BTreeMap<EnvironmentName, Publication>,
+    pub published: BTreeMap<EnvironmentName, Publication<F>>,
 }
 
 /// A serialized entry in the `[published.<environment>]` table of the lockfile
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Publication {
+#[derive(Debug, Serialize, Deserialize)]
+#[derive_where(Clone)]
+pub struct Publication<F: MoveFlavor> {
     pub published_at: Address,
     pub original_id: Address,
-    pub upgrade_cap: Address,
+
+    #[serde(flatten)]
+    pub metadata: F::PublishedMetadata,
 }
 
 /// A serialized entry in the `[pinned.<environment>.<package-id>]` table of the lockfile
@@ -61,14 +67,14 @@ pub struct Pin {
 /// A serialized pinned dependency in a lockfile
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum LockfileDependencyInfo {
-    Local(LocalDependency),
-    OnChain(OnChainDependency),
-    Git(PinnedGitDependency),
+    Local(LocalDepInfo),
+    OnChain(OnChainDepInfo),
+    Git(LockfileGitDepInfo),
 }
 
 /// A serialized lockfile dependency of the form `{git = "...", rev = "...", path = "..."}`
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct PinnedGitDependency {
+pub struct LockfileGitDepInfo {
     /// The repository containing the dependency
     #[serde(rename = "git")]
     pub repo: String,
@@ -80,7 +86,7 @@ pub struct PinnedGitDependency {
     pub path: PathBuf,
 }
 
-impl Lockfile {
+impl<F: MoveFlavor> ParsedLockfile<F> {
     /// Pretty-print `self` as a TOML document
     pub fn render_as_toml(&self) -> String {
         let mut toml = toml_edit::ser::to_document(self).expect("toml serialization succeeds");
@@ -103,7 +109,7 @@ impl Lockfile {
     }
 }
 
-impl Publication {
+impl<F: MoveFlavor> Publication<F> {
     /// Pretty-print `self` as TOML
     pub fn render_as_toml(&self) -> String {
         let mut toml = toml_edit::ser::to_document(self).expect("toml serialization succeeds");

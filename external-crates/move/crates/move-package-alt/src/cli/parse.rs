@@ -3,9 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    errors::PackageResult,
+    errors::{FileHandle, PackageResult},
     flavor::Vanilla,
-    package::{lockfile::Lockfile, manifest::Manifest},
+    package::{lockfile::Lockfiles, manifest::Manifest},
+    schema::ParsedLockfile,
 };
 
 use std::path::PathBuf;
@@ -34,16 +35,27 @@ pub struct Parse {
 
 impl Parse {
     pub fn execute(&self) -> PackageResult<()> {
-        let manifest = &self.manifest;
-        let lockfile = &self.lockfile;
-        let path = &self.path;
-        if manifest.is_none() && lockfile.is_none() {
-            let default_path = PathBuf::from(".");
-            let path = path.as_ref().unwrap_or(&default_path);
-            let manifest_path = path.join("Move.toml");
-            let lockfile_path = path.join("Move.lock");
-            if manifest_path.exists() {
+        let (manifest_path, lockfile_path) = match self {
+            Parse {
+                path,
+                manifest: None,
+                lockfile: None,
+                ..
+            } => (
+                Some(path.clone().unwrap_or_default().join("Move.toml")),
+                Some(path.clone().unwrap_or_default().join("Move.lock")),
+            ),
+            Parse {
+                manifest, lockfile, ..
+            } => (manifest.clone(), lockfile.clone()),
+        };
+
+        if let Some(manifest_path) = manifest_path {
+            if !manifest_path.exists() {
+                eprintln!("No manifest file at {:?}", manifest_path);
+            } else {
                 println!("Manifest file found at: {:?}", manifest_path);
+
                 let manifest = Manifest::<Vanilla>::read_from_file(&manifest_path);
                 match manifest {
                     Ok(manifest) => {
@@ -54,43 +66,20 @@ impl Parse {
                     }
                 }
             }
-            if lockfile_path.exists() {
+        }
+
+        if let Some(lockfile_path) = lockfile_path {
+            if !lockfile_path.exists() {
+                eprintln!("No lockfile at {:?}", lockfile_path);
+            } else {
                 println!("Lockfile found at: {:?}", lockfile_path);
-                let lockfile = Lockfile::<Vanilla>::read_from_dir(&lockfile_path);
-                match lockfile {
-                    Ok(lockfile) => {
-                        println!("{:?}", lockfile);
-                    }
-                    Err(e) => {
-                        eprintln!("Error reading lockfile: {}", e);
-                    }
-                }
+                let file = FileHandle::new(&lockfile_path)?;
+                let lockfile: ParsedLockfile<Vanilla> = toml_edit::de::from_str(file.source())?;
+
+                println!("{:?}", lockfile);
             }
         }
 
-        if let Some(manifest_path) = manifest {
-            let m = Manifest::<Vanilla>::read_from_file(manifest_path);
-            match m {
-                Ok(manifest) => {
-                    println!("{:?}", manifest);
-                }
-                Err(e) => {
-                    eprintln!("Error reading manifest: {}", e);
-                }
-            }
-        }
-
-        if let Some(lockfile_path) = lockfile {
-            let lockfile = Lockfile::<Vanilla>::read_from_dir(lockfile_path);
-            match lockfile {
-                Ok(lockfile) => {
-                    println!("{:?}", lockfile);
-                }
-                Err(e) => {
-                    eprintln!("Error reading lockfile: {}", e);
-                }
-            }
-        }
         Ok(())
     }
 }
