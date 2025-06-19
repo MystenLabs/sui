@@ -233,10 +233,7 @@ impl From<Dependency<Pinned>> for LockfileDependencyInfo {
     }
 }
 
-/// Replace all dependencies with their pinned versions. The returned set may have a different set
-/// of keys than the input, for example if new implicit dependencies are added or if external
-/// resolvers resolve default deps to dep-replacements, or if dep-replacements are identical to the
-/// default deps.
+/// Replace all dependencies with their pinned versions.
 pub async fn pin<F: MoveFlavor>(
     mut deps: DependencySet<Dependency<Combined>>,
     envs: &BTreeMap<EnvironmentName, EnvironmentID>,
@@ -251,7 +248,7 @@ pub async fn pin<F: MoveFlavor>(
     let mut result: DependencySet<Dependency<P>> = DependencySet::new();
     for (env, pkg, dep) in deps.into_iter() {
         let transformed = match &dep.dep_info {
-            ResolverDependencyInfo::Local(loc) => P::Local(todo!()),
+            ResolverDependencyInfo::Local(loc) => P::Local(loc.clone()),
             ResolverDependencyInfo::Git(git) => P::Git(git.pin().await?),
             ResolverDependencyInfo::OnChain(chain) => P::OnChain(todo!()),
         };
