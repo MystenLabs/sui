@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     digests::TransactionDigest,
+    transaction::Reservation,
 };
 
 mod balance_read;
@@ -47,5 +48,5 @@ pub(crate) struct BalanceSettlement {
 #[derive(Clone)]
 pub(crate) struct TxBalanceWithdraw {
     pub tx_digest: TransactionDigest,
-    pub reservations: BTreeMap<ObjectID, u64>,
+    pub reservations: BTreeMap<ObjectID, Reservation>,
 }
