@@ -2287,6 +2287,13 @@ impl TransactionDataAPI for TransactionDataV1 {
 
         let mut withdraw_map = BTreeMap::new();
         for withdraw in withdraws {
+            if let Reservation::MaxAmount(amount) = &withdraw.reservation {
+                if *amount == 0 {
+                    return Err(UserInputError::InvalidWithdrawReservation {
+                        error: "Balance withdraw reservation amount must be non-zero".to_string(),
+                    });
+                }
+            }
             let WithdrawFrom::Sender(type_tag) = withdraw.withdraw_from;
             let account_id =
                 derive_balance_account_object_id(self.sender(), type_tag).map_err(|e| {
