@@ -77,49 +77,49 @@ impl BenchMetrics {
             num_success: register_int_counter_vec_with_registry!(
                 "num_success",
                 "Total number of transaction success",
-                &["workload"],
+                &["workload", "client_type"],
                 registry,
             )
             .unwrap(),
             num_expected_error: register_int_counter_vec_with_registry!(
                 "num_expected_error",
                 "Total number of transaction errors that were expected",
-                &["workload"],
+                &["workload", "client_type"],
                 registry,
             )
             .unwrap(),
             num_success_cmds: register_int_counter_vec_with_registry!(
                 "num_success_cmds",
                 "Total number of commands success",
-                &["workload"],
+                &["workload", "client_type"],
                 registry,
             )
             .unwrap(),
             num_error: register_int_counter_vec_with_registry!(
                 "num_error",
                 "Total number of transaction errors",
-                &["workload", "type"],
+                &["workload", "type", "client_type"],
                 registry,
             )
             .unwrap(),
             num_submitted: register_int_counter_vec_with_registry!(
                 "num_submitted",
                 "Total number of transaction submitted to sui",
-                &["workload"],
+                &["workload", "client_type"],
                 registry,
             )
             .unwrap(),
             num_in_flight: register_gauge_vec_with_registry!(
                 "num_in_flight",
                 "Total number of transaction in flight",
-                &["workload"],
+                &["workload", "client_type"],
                 registry,
             )
             .unwrap(),
             latency_s: register_histogram_vec_with_registry!(
                 "latency_s",
                 "Total time in seconds to return a response",
-                &["workload"],
+                &["workload", "client_type"],
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -127,7 +127,7 @@ impl BenchMetrics {
             latency_squared_s: register_counter_vec_with_registry!(
                 "latency_squared_s",
                 "Square of total time in seconds to return a response",
-                &["workload"],
+                &["workload", "client_type"],
                 registry,
             )
             .unwrap(),
@@ -163,6 +163,22 @@ struct Stats {
     pub num_submitted: u64,
     pub num_in_flight: u64,
     pub bench_stats: BenchmarkStats,
+}
+
+pub enum ClientType {
+    // Used for Mysticeti Fast Path
+    TransactionDriver,
+    // Used for original tx certification then fast path + Mysticeti
+    QuorumDriver,
+}
+
+impl std::fmt::Display for ClientType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ClientType::TransactionDriver => write!(f, "transaction_driver"),
+            ClientType::QuorumDriver => write!(f, "quorum_driver"),
+        }
+    }
 }
 
 type RetryType = Box<(Transaction, Box<dyn Payload>)>;
@@ -734,7 +750,8 @@ async fn run_bench_worker(
                                                start: Arc<Instant>,
                                                transaction: Transaction,
                                                mut payload: Box<dyn Payload>,
-                                               committee: Arc<Committee>|
+                                               committee: Arc<Committee>,
+                                               client_type: ClientType|
      -> NextOp {
         match result {
             Ok(effects) => {
@@ -752,15 +769,15 @@ async fn run_bench_worker(
                 let square_latency_ms = latency.as_secs_f64().powf(2.0);
                 metrics_cloned
                     .latency_s
-                    .with_label_values(&[&payload.to_string()])
+                    .with_label_values(&[&payload.to_string(), &client_type.to_string()])
                     .observe(latency.as_secs_f64());
                 metrics_cloned
                     .latency_squared_s
-                    .with_label_values(&[&payload.to_string()])
+                    .with_label_values(&[&payload.to_string(), &client_type.to_string()])
                     .inc_by(square_latency_ms);
                 metrics_cloned
                     .num_in_flight
-                    .with_label_values(&[&payload.to_string()])
+                    .with_label_values(&[&payload.to_string(), &client_type.to_string()])
                     .dec();
 
                 let num_commands =
@@ -769,16 +786,20 @@ async fn run_bench_worker(
                 if effects.is_ok() {
                     metrics_cloned
                         .num_success
-                        .with_label_values(&[&payload.to_string()])
+                        .with_label_values(&[&payload.to_string(), &client_type.to_string()])
                         .inc();
                     metrics_cloned
                         .num_success_cmds
-                        .with_label_values(&[&payload.to_string()])
+                        .with_label_values(&[&payload.to_string(), &client_type.to_string()])
                         .inc_by(num_commands as u64);
                 } else {
                     metrics_cloned
                         .num_error
-                        .with_label_values(&[&payload.to_string(), "execution"])
+                        .with_label_values(&[
+                            &payload.to_string(),
+                            "execution",
+                            &client_type.to_string(),
+                        ])
                         .inc();
                 }
 
@@ -801,7 +822,7 @@ async fn run_bench_worker(
             }
             Err(err) => {
                 tracing::error!(
-                    "Transaction execution got error: {}. Transaction digest: {:?}",
+                    "Transaction execution got error: {}. Transaction digest: {:?}. Client type: {client_type}",
                     err,
                     transaction.digest()
                 );
@@ -812,7 +833,7 @@ async fn run_bench_worker(
                     Some(_) => {
                         metrics_cloned
                             .num_expected_error
-                            .with_label_values(&[&payload.to_string()])
+                            .with_label_values(&[&payload.to_string(), &client_type.to_string()])
                             .inc();
                         NextOp::Retry(Box::new((transaction, payload)))
                     }
@@ -835,7 +856,11 @@ async fn run_bench_worker(
                         } else {
                             metrics_cloned
                                 .num_error
-                                .with_label_values(&[&payload.to_string(), "rpc"])
+                                .with_label_values(&[
+                                    &payload.to_string(),
+                                    "rpc",
+                                    &client_type.to_string(),
+                                ])
                                 .inc();
                             NextOp::Retry(Box::new((transaction, payload)))
                         }
@@ -934,14 +959,15 @@ async fn run_bench_worker(
                         None => num_error_txes += 1,
                     }
                     num_submitted += 1;
-                    metrics_cloned.num_submitted.with_label_values(&[&payload.to_string()]).inc();
+                    let metrics_cloned_cloned = Arc::clone(&metrics_cloned);
                     // TODO: clone committee for each request is not ideal.
                     let committee = worker.proxy.clone_committee();
                     let start = Arc::new(Instant::now());
                     let res = worker.proxy
                         .execute_transaction_block(tx.clone())
-                        .then(|res| async move  {
-                             handle_execute_transaction_response(res, start, tx, payload, committee)
+                        .then(|(client_type, res)| async move  {
+                            metrics_cloned_cloned.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
+                            handle_execute_transaction_response(res, start, tx, payload, committee, client_type)
                         });
                     futures.push(Box::pin(res));
                     continue
@@ -954,16 +980,17 @@ async fn run_bench_worker(
                     let mut payload = free_pool.pop_front().unwrap();
                     num_in_flight += 1;
                     num_submitted += 1;
-                    metrics_cloned.num_in_flight.with_label_values(&[&payload.to_string()]).inc();
-                    metrics_cloned.num_submitted.with_label_values(&[&payload.to_string()]).inc();
                     let tx = payload.make_transaction();
                     let start = Arc::new(Instant::now());
+                    let metrics_cloned_cloned = Arc::clone(&metrics_cloned);
                     // TODO: clone committee for each request is not ideal.
                     let committee = worker.proxy.clone_committee();
                     let res = worker.proxy
                         .execute_transaction_block(tx.clone())
-                    .then(|res| async move {
-                        handle_execute_transaction_response(res, start, tx, payload, committee)
+                    .then(|(client_type, res)| async move {
+                        metrics_cloned_cloned.num_in_flight.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
+                        metrics_cloned_cloned.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
+                        handle_execute_transaction_response(res, start, tx, payload, committee, client_type)
                     });
                     futures.push(Box::pin(res));
                 }
