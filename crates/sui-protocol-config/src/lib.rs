@@ -3967,6 +3967,10 @@ impl ProtocolConfig {
             allowed_tx_digests,
         });
     }
+    pub fn set_include_epoch_stable_sequence_number_in_effects_for_testing(&mut self, val: bool) {
+        self.feature_flags
+            .include_epoch_stable_sequence_number_in_effects = val;
+    }
 }
 
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;

@@ -10,13 +10,15 @@ use move_core_types::ident_str;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{dbg_addr, ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
 use sui_types::effects::{TransactionEffectsAPI, UnchangedSharedKind};
 use sui_types::object::Object;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{CallArg, ObjectArg, Transaction, TEST_ONLY_GAS_UNIT_FOR_PUBLISH};
-use sui_types::{SUI_DENY_LIST_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
+use sui_types::{Identifier, SUI_DENY_LIST_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 
 const DENY_ADDRESS: SuiAddress = SuiAddress::ZERO;
 
@@ -27,7 +29,7 @@ enum DenyListActivity {
 }
 
 async fn runner(activities: Vec<DenyListActivity>) {
-    let mut env = TestEnv::new_authority_and_publish("coin_deny_list_v2").await;
+    let mut env = TestEnv::new_authority_and_publish("coin_deny_list_v2", None).await;
     let mut epoch_sequence_numbers: BTreeMap<u64, Vec<_>> = BTreeMap::new();
     let mut epoch = 0;
     for activity in activities {
@@ -119,6 +121,84 @@ async fn test_epoch_stable_sequence_numbers_use_then_mutate() {
     .await;
 }
 
+#[tokio::test]
+async fn test_config_use_before_change_not_input_object() {
+    let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+    protocol_config.set_include_epoch_stable_sequence_number_in_effects_for_testing(false);
+    let mut env =
+        TestEnv::new_authority_and_publish("coin_deny_list_v2", Some(protocol_config)).await;
+    let tx = env.create_native_transfer_tx().await;
+    // assert 0x403 is not in the inputs
+    assert!(!tx
+        .shared_input_objects()
+        .any(|obj| { obj.id() == SUI_DENY_LIST_OBJECT_ID }));
+    let effects = send_and_confirm_transaction_(&env.authority, None, tx, true)
+        .await
+        .unwrap()
+        .1;
+    let unchanged_shared_objects = effects.unchanged_shared_objects();
+    assert_eq!(unchanged_shared_objects.len(), 1);
+    assert_eq!(unchanged_shared_objects[0].0, SUI_DENY_LIST_OBJECT_ID);
+    assert_eq!(
+        unchanged_shared_objects[0].1,
+        UnchangedSharedKind::PerEpochConfigDEPRECATED
+    );
+}
+
+#[tokio::test]
+async fn test_config_use_before_change_deny_list_in_input_object() {
+    let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+    protocol_config.set_include_epoch_stable_sequence_number_in_effects_for_testing(false);
+    let mut env =
+        TestEnv::new_authority_and_publish("coin_deny_list_v2", Some(protocol_config)).await;
+    {
+        let add_tx = env.create_deny_list_mutation().await;
+        send_and_confirm_transaction_(&env.authority, None, add_tx, true)
+            .await
+            .unwrap();
+    }
+    let tx = env.transfer_tx_with_deny_list_present().await;
+    // Assert 0x403 is in the inputs
+    assert!(tx
+        .shared_input_objects()
+        .any(|obj| { obj.id() == SUI_DENY_LIST_OBJECT_ID }));
+    let effects = send_and_confirm_transaction_(&env.authority, None, tx, true)
+        .await
+        .unwrap()
+        .1;
+    // 0x403 will not show up in the unchanged shared objects since it was a transaction input
+    let unchanged_shared_objects = effects.unchanged_shared_objects();
+    assert!(unchanged_shared_objects.is_empty());
+}
+
+#[tokio::test]
+async fn test_config_use_after_change_deny_list_in_input_object() {
+    let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+    let mut env =
+        TestEnv::new_authority_and_publish("coin_deny_list_v2", Some(protocol_config)).await;
+    {
+        let add_tx = env.create_deny_list_mutation().await;
+        send_and_confirm_transaction_(&env.authority, None, add_tx, true)
+            .await
+            .unwrap();
+    }
+    let tx = env.transfer_tx_with_deny_list_present().await;
+    // Assert 0x403 is in the inputs
+    assert!(tx
+        .shared_input_objects()
+        .any(|obj| { obj.id() == SUI_DENY_LIST_OBJECT_ID }));
+    let effects = send_and_confirm_transaction_(&env.authority, None, tx, true)
+        .await
+        .unwrap()
+        .1;
+    // 0x403 will not show up in the unchanged shared objects since it was a transaction input
+    let unchanged_shared_objects = effects.unchanged_shared_objects();
+    assert_eq!(unchanged_shared_objects.len(), 1);
+    // It's a different address (the dynamic field address) that we will be adding here. So make
+    // sure it's not the deny list object ID to avoid possible false positives
+    assert_ne!(unchanged_shared_objects[0].0, SUI_DENY_LIST_OBJECT_ID);
+}
+
 struct TestEnv {
     authority: Arc<AuthorityState>,
     sender: SuiAddress,
@@ -172,6 +252,53 @@ impl TestEnv {
         .build_and_sign(&self.keypair)
     }
 
+    async fn transfer_tx_with_deny_list_present(&mut self) -> Transaction {
+        let deny_address = dbg_addr(2);
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder
+                .move_call(
+                    SUI_FRAMEWORK_PACKAGE_ID,
+                    Identifier::new("coin").unwrap(),
+                    Identifier::new("deny_list_v2_contains_current_epoch").unwrap(),
+                    vec![self.regulated_coin_type.clone()],
+                    vec![
+                        CallArg::Object(ObjectArg::SharedObject {
+                            id: SUI_DENY_LIST_OBJECT_ID,
+                            initial_shared_version: self.deny_list_object_init_version,
+                            mutable: true,
+                        }),
+                        CallArg::Pure(bcs::to_bytes(&deny_address).unwrap()),
+                    ],
+                )
+                .unwrap();
+
+            builder
+                .move_call(
+                    SUI_FRAMEWORK_PACKAGE_ID,
+                    Identifier::new("pay").unwrap(),
+                    Identifier::new("split_and_transfer").unwrap(),
+                    vec![self.regulated_coin_type.clone()],
+                    vec![
+                        CallArg::Object(ObjectArg::ImmOrOwnedObject(
+                            self.get_latest_object_ref(&self.regulated_coin_id).await,
+                        )),
+                        CallArg::Pure(bcs::to_bytes(&1u64).unwrap()),
+                        CallArg::Pure(bcs::to_bytes(&DENY_ADDRESS).unwrap()),
+                    ],
+                )
+                .unwrap();
+            builder.finish()
+        };
+        TestTransactionBuilder::new(
+            self.sender,
+            self.get_latest_object_ref(&self.gas_object_id).await,
+            self.authority.reference_gas_price_for_testing().unwrap(),
+        )
+        .programmable(pt)
+        .build_and_sign(&self.keypair)
+    }
+
     async fn create_native_transfer_tx(&mut self) -> Transaction {
         TestTransactionBuilder::new(
             self.sender,
@@ -194,14 +321,19 @@ impl TestEnv {
         .build_and_sign(&self.keypair)
     }
 
-    async fn new_authority_and_publish(path: &str) -> Self {
+    async fn new_authority_and_publish(
+        path: &str,
+        protocol_config: Option<ProtocolConfig>,
+    ) -> Self {
         let (sender, keypair) = get_account_key_pair();
         let gas_object = Object::with_owner_for_testing(sender);
         let gas_object_id = gas_object.id();
-        let authority = TestAuthorityBuilder::new()
-            .with_starting_objects(&[gas_object])
-            .build()
-            .await;
+        let mut authority = TestAuthorityBuilder::new();
+        if let Some(config) = protocol_config {
+            authority = authority.with_protocol_config(config);
+        }
+
+        let authority = authority.with_starting_objects(&[gas_object]).build().await;
         let rgp = authority.reference_gas_price_for_testing().unwrap();
         let (_, effects) = build_and_try_publish_test_package(
             &authority,

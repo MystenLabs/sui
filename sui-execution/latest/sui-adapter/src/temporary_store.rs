@@ -1096,9 +1096,14 @@ impl Storage for TemporaryStore<'_> {
     }
 
     fn save_unsequenced_config_accesses(&mut self, accessed_config_objects: BTreeSet<ObjectID>) {
-        self.loaded_per_epoch_config_objects
-            .write()
-            .extend(accessed_config_objects);
+        if self
+            .protocol_config
+            .include_epoch_stable_sequence_number_in_effects()
+        {
+            self.loaded_per_epoch_config_objects
+                .write()
+                .extend(accessed_config_objects);
+        }
     }
 }
 
