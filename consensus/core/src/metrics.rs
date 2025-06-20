@@ -165,6 +165,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) missing_blocks_after_fetch_total: IntCounter,
     pub(crate) num_of_bad_nodes: IntGauge,
     pub(crate) quorum_receive_latency: Histogram,
+    pub(crate) block_receive_delay: IntCounterVec,
     pub(crate) reputation_scores: IntGaugeVec,
     pub(crate) scope_processing_time: HistogramVec,
     pub(crate) sub_dags_per_commit_count: Histogram,
@@ -592,6 +593,12 @@ impl NodeMetrics {
                 "quorum_receive_latency",
                 "The time it took to receive a new round quorum of blocks",
                 registry
+            ).unwrap(),
+            block_receive_delay: register_int_counter_vec_with_registry!(
+                "block_receive_delay",
+                "Total delay from the start of the round to receiving the block, in milliseconds per authority",
+                &["authority"],
+                registry,
             ).unwrap(),
             reputation_scores: register_int_gauge_vec_with_registry!(
                 "reputation_scores",

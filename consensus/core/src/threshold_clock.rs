@@ -12,19 +12,20 @@ use crate::{
 };
 
 pub(crate) struct ThresholdClock {
+    context: Arc<Context>,
     aggregator: StakeAggregator<QuorumThreshold>,
     round: Round,
+    // Timestamp when the last quorum was form and the current round started.
     quorum_ts: Instant,
-    context: Arc<Context>,
 }
 
 impl ThresholdClock {
     pub(crate) fn new(round: Round, context: Arc<Context>) -> Self {
         Self {
+            context,
             aggregator: StakeAggregator::new(),
             round,
             quorum_ts: Instant::now(),
-            context,
         }
     }
 
@@ -39,18 +40,28 @@ impl ThresholdClock {
                 self.aggregator.clear();
                 self.aggregator.add(block.author, &self.context.committee);
                 self.round = block.round;
+                self.quorum_ts = Instant::now();
             }
             Ordering::Equal => {
+                let now = Instant::now();
                 if self.aggregator.add(block.author, &self.context.committee) {
                     self.aggregator.clear();
                     // We have seen 2f+1 blocks for current round, advance
                     self.round = block.round + 1;
 
-                    // now record the time of receipt from last quorum
-                    self.quorum_ts = Instant::now();
+                    // Record the time of last quorum and new round start.
+                    self.quorum_ts = now;
 
                     return true;
                 }
+                // Record delay from the start of the round.
+                let hostname = &self.context.committee.authority(block.author).hostname;
+                self.context
+                    .metrics
+                    .node_metrics
+                    .block_receive_delay
+                    .with_label_values(&[hostname])
+                    .inc_by(now.duration_since(self.quorum_ts).as_millis() as u64);
             }
         }
 
