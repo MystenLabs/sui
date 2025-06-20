@@ -140,14 +140,13 @@ pub struct BalanceWithdrawArg {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum WithdrawFrom {
-    /// Withdraw from the sender of the transaction, with balance type T as T in Balance<T>.
+    /// Withdraw from the sender of the transaction, with balance type T as T in `Balance<T>`.
     // TODO(address-balances): Consider hoisting the type tag to BalanceWithdrawArg.
     Sender(TypeInput),
     // TODO(address-balances): Add more options here, such as Sponsor, or even multi-party withdraws.
 }
 
 impl BalanceWithdrawArg {
-    #[allow(unused)]
     pub fn new_with_amount(amount: u64, balance_type: TypeInput) -> Self {
         Self {
             reservation: Reservation::MaxAmount(amount),
@@ -155,7 +154,6 @@ impl BalanceWithdrawArg {
         }
     }
 
-    #[allow(unused)]
     pub fn new_with_entire_balance(balance_type: TypeInput) -> Self {
         Self {
             reservation: Reservation::EntireBalance,
