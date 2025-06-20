@@ -143,6 +143,7 @@ impl ExecutionSchedulerWrapper {
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        is_fullnode: bool,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         // If Mysticeti fastpath is enabled, we must use ExecutionScheduler.
@@ -151,7 +152,7 @@ impl ExecutionSchedulerWrapper {
         // was previously executed through fastpaht certification.
         // In tests, we flip a coin to decide whether to use ExecutionScheduler or TransactionManager,
         // so that both can be tested.
-        // In prod, we use ExecutionScheduler only in devnet.
+        // In prod, we use ExecutionScheduler in devnet, and in testnet fullnodes.
         // In other networks, we use TransactionManager by default.
         let enable_execution_scheduler = if epoch_store.protocol_config().mysticeti_fastpath()
             || std::env::var("ENABLE_EXECUTION_SCHEDULER").is_ok()
@@ -162,7 +163,8 @@ impl ExecutionSchedulerWrapper {
         } else if cfg!(test) {
             rand::thread_rng().gen_bool(0.5)
         } else {
-            epoch_store.get_chain_identifier().chain() == Chain::Unknown
+            let chain = epoch_store.get_chain_identifier().chain();
+            chain == Chain::Unknown || (chain == Chain::Testnet && is_fullnode)
         };
         if enable_execution_scheduler {
             Self::ExecutionScheduler(ExecutionScheduler::new(
