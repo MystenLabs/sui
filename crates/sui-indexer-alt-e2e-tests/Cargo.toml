@@ -53,6 +53,7 @@ sui-json-rpc-types.workspace = true
 sui-macros.workspace = true
 sui-move-build.workspace = true
 sui-swarm-config.workspace = true
+sui-test-transaction-builder.workspace = true
 sui-transactional-test-runner.workspace = true
 test-cluster.workspace = true
 tracing.workspace = true
