@@ -14,6 +14,8 @@ use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_macros::sim_test;
 use sui_pg_db::{temp::get_available_port, DbArgs};
 use sui_swarm_config::genesis_config::AccountConfig;
+use sui_test_transaction_builder::make_staking_transaction;
+use sui_types::{base_types::SuiAddress, transaction::TransactionDataAPI};
 use test_cluster::{TestCluster, TestClusterBuilder};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -36,7 +38,7 @@ impl FnDelegationTestCluster {
             .with_accounts(vec![
                 AccountConfig {
                     address: None,
-                    gas_amounts: vec![1_000_000_000_000; 1],
+                    gas_amounts: vec![1_000_000_000_000; 2],
                 };
                 4
             ])
@@ -122,6 +124,19 @@ impl FnDelegationTestCluster {
         let sigs: Vec<_> = sigs.iter().map(|sig| sig.encoded()).collect();
 
         Ok((tx_digest, tx_bytes, sigs))
+    }
+
+    async fn get_validator_address(&self) -> SuiAddress {
+        self.onchain_cluster
+            .sui_client()
+            .governance_api()
+            .get_latest_sui_system_state()
+            .await
+            .unwrap()
+            .active_validators
+            .first()
+            .unwrap()
+            .sui_address
     }
 
     async fn execute_jsonrpc(&self, method: String, params: Value) -> anyhow::Result<Value> {
@@ -421,5 +436,114 @@ async fn test_get_all_balances_with_invalid_address() {
         .unwrap()
         .contains("Deserialization failed"));
 
+    test_cluster.stopped().await;
+}
+
+#[sim_test]
+async fn test_get_stakes_and_by_ids() {
+    let test_cluster = FnDelegationTestCluster::new()
+        .await
+        .expect("Failed to create test cluster");
+
+    let wallet = &test_cluster.onchain_cluster.wallet;
+
+    // Execute a staking transaction so we have a stake to query.
+    let validator_address = test_cluster.get_validator_address().await;
+    let staking_transaction = make_staking_transaction(wallet, validator_address).await;
+    let stake_owner_address = staking_transaction.data().transaction_data().sender();
+
+    wallet
+        .execute_transaction_must_succeed(staking_transaction)
+        .await;
+
+    // Get the stake by owner.
+    let get_stakes_response = test_cluster
+        .execute_jsonrpc(
+            "suix_getStakes".to_string(),
+            json!({ "owner": stake_owner_address }),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        get_stakes_response["result"][0]["validatorAddress"],
+        validator_address.to_string().as_str()
+    );
+    assert!(get_stakes_response["result"][0]["stakes"][0]["stakedSuiId"].is_string());
+    let stake_id = get_stakes_response["result"][0]["stakes"][0]["stakedSuiId"]
+        .as_str()
+        .unwrap();
+
+    // Now get the stake by id.
+    let get_stakes_by_ids_response = test_cluster
+        .execute_jsonrpc(
+            "suix_getStakesByIds".to_string(),
+            json!({ "staked_sui_ids": [stake_id] }),
+        )
+        .await
+        .unwrap();
+
+    // Two responses should match.
+    assert_eq!(get_stakes_response, get_stakes_by_ids_response);
+    test_cluster.stopped().await;
+}
+
+#[sim_test]
+async fn test_get_stakes_invalid_params() {
+    let test_cluster = FnDelegationTestCluster::new()
+        .await
+        .expect("Failed to create test cluster");
+
+    let response = test_cluster
+        .execute_jsonrpc(
+            "suix_getStakes".to_string(),
+            json!({ "owner": "invalid_address" }),
+        )
+        .await
+        .unwrap();
+
+    // Check that we have all the error information in the response.
+    assert_eq!(response["error"]["code"], -32602);
+    assert_eq!(response["error"]["message"], "Invalid params");
+    assert!(response["error"]["data"]
+        .as_str()
+        .unwrap()
+        .contains("Deserialization failed"));
+
+    let response = test_cluster
+        .execute_jsonrpc(
+            "suix_getStakesByIds".to_string(),
+            json!({ "staked_sui_ids": ["invalid_stake_id"] }),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response["error"]["code"], -32602);
+    assert_eq!(response["error"]["message"], "Invalid params");
+    assert!(response["error"]["data"]
+        .as_str()
+        .unwrap()
+        .contains("AccountAddressParseError"));
+
+    test_cluster.stopped().await;
+}
+
+#[sim_test]
+async fn test_get_validators_apy() {
+    let test_cluster = FnDelegationTestCluster::new()
+        .await
+        .expect("Failed to create test cluster");
+
+    let validator_address = test_cluster.get_validator_address().await;
+
+    let response = test_cluster
+        .execute_jsonrpc("suix_getValidatorsApy".to_string(), json!({}))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response["result"]["apys"][0]["address"],
+        validator_address.to_string()
+    );
     test_cluster.stopped().await;
 }
