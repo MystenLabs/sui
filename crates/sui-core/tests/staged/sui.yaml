@@ -1360,7 +1360,7 @@ WithdrawFrom:
     0:
       Sender:
         NEWTYPE:
-          TYPENAME: TypeTag
+          TYPENAME: TypeInput
 ZkLoginAuthenticatorAsBytes:
   NEWTYPESTRUCT:
     SEQ: U8

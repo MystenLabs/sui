@@ -40,6 +40,7 @@ use move_core_types::{identifier::Identifier, language_storage::TypeTag};
 use nonempty::{nonempty, NonEmpty};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
+use std::collections::btree_map::Entry;
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
 use std::iter::once;
@@ -2320,25 +2321,30 @@ impl TransactionDataAPI for TransactionDataV1 {
                 .map_err(|e| UserInputError::InvalidWithdrawReservation {
                     error: e.to_string(),
                 })?;
-            let entry = withdraw_map
-                .entry(account_id)
-                .or_insert(Reservation::MaxAmount(0));
-            match (&*entry, withdraw.reservation) {
-                (Reservation::MaxAmount(cur_reservation), Reservation::MaxAmount(max_amount)) => {
-                    let new_amount = max_amount.checked_add(*cur_reservation).ok_or(
-                        UserInputError::InvalidWithdrawReservation {
-                            error: "Balance withdraw reservation overflow".to_string(),
-                        },
-                    )?;
-                    *entry = Reservation::MaxAmount(new_amount);
+            let entry = withdraw_map.entry(account_id);
+            match entry {
+                Entry::Vacant(vacant) => {
+                    vacant.insert(withdraw.reservation);
                 }
-                _ => {
-                    return Err(UserInputError::InvalidWithdrawReservation {
-                        error: "If there exists a reservation that reserves the entire balance,
-                        no further reservation can be made on the same account."
-                            .to_string(),
-                    });
-                }
+                Entry::Occupied(mut occupied) => match (occupied.get_mut(), withdraw.reservation) {
+                    (
+                        Reservation::MaxAmount(max_amount),
+                        Reservation::MaxAmount(cur_reservation),
+                    ) => {
+                        let new_amount = max_amount.checked_add(cur_reservation).ok_or(
+                            UserInputError::InvalidWithdrawReservation {
+                                error: "Balance withdraw reservation overflow".to_string(),
+                            },
+                        )?;
+                        occupied.insert(Reservation::MaxAmount(new_amount));
+                    }
+                    _ => {
+                        return Err(UserInputError::InvalidWithdrawReservation {
+                            error: "Reserving entire balance on an account is exclusive"
+                                .to_string(),
+                        });
+                    }
+                },
             }
         }
 
