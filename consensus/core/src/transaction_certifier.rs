@@ -509,7 +509,12 @@ impl VoteInfo {
             }
         }
         // The block is certified.
-        let accepted_txn_count = block.transactions().len() - rejected.len();
+        tracing::debug!(
+            "Block tx count: {} & rejected txn count: {}",
+            block.transactions().len(),
+            rejected.len()
+        );
+        let accepted_txn_count = block.transactions().len().saturating_sub(rejected.len());
         context
             .metrics
             .node_metrics
@@ -551,6 +556,7 @@ mod test {
 
     #[tokio::test]
     async fn test_vote_info_basic() {
+        telemetry_subscribers::init_for_testing();
         let (context, _) = Context::new_for_test(7);
         let committee = &context.committee;
 
@@ -619,7 +625,12 @@ mod test {
         // A quorum of accept and reject votes.
         {
             let mut vote_info = VoteInfo::default();
-            let block = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
+            // Create a block with 7 transactions.
+            let block = VerifiedBlock::new_for_test(
+                TestBlock::new(1, 1)
+                    .set_transactions(vec![Transaction::new(vec![4; 8]); 7])
+                    .build(),
+            );
             vote_info.block = Some(block.clone());
             // Add 5 accept votes which form a quorum.
             for i in 0..5 {
@@ -653,7 +664,12 @@ mod test {
         // A transaction in the block is neither rejected nor certified.
         {
             let mut vote_info = VoteInfo::default();
-            let block = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
+            // Create a block with 6 transactions.
+            let block = VerifiedBlock::new_for_test(
+                TestBlock::new(1, 1)
+                    .set_transactions(vec![Transaction::new(vec![4; 8]); 6])
+                    .build(),
+            );
             vote_info.block = Some(block.clone());
             // Add 5 accept votes which form a quorum.
             for i in 0..5 {
@@ -676,11 +692,11 @@ mod test {
                 }
             }
             // For transaction 6, add 4 reject votes which do not form a quorum.
-            vote_info.reject_txn_votes.insert(6, StakeAggregator::new());
+            vote_info.reject_txn_votes.insert(5, StakeAggregator::new());
             for authority_idx in 0..4 {
                 vote_info
                     .reject_txn_votes
-                    .get_mut(&6)
+                    .get_mut(&5)
                     .unwrap()
                     .add_unique(AuthorityIndex::new_for_test(authority_idx), committee);
             }
@@ -691,7 +707,7 @@ mod test {
             // Add 1 more accept vote from a different authority for transaction 6.
             vote_info
                 .reject_txn_votes
-                .get_mut(&6)
+                .get_mut(&5)
                 .unwrap()
                 .add_unique(AuthorityIndex::new_for_test(4), committee);
 
