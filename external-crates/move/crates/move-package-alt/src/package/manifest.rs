@@ -36,29 +36,29 @@ type Digest = String;
 #[serde(deny_unknown_fields)]
 #[serde(bound = "")]
 pub struct Manifest<F: MoveFlavor> {
-    package: PackageMetadata<F>,
+    pub package: PackageMetadata<F>,
 
     // invariant: environments is nonempty
-    environments: BTreeMap<EnvironmentName, F::EnvironmentID>,
+    pub environments: BTreeMap<EnvironmentName, F::EnvironmentID>,
 
     #[serde(default)]
-    dependencies: BTreeMap<PackageName, ManifestDependency>,
+    pub dependencies: BTreeMap<PackageName, ManifestDependency>,
 
     /// Replace dependencies for the given environment.
     /// invariant: all keys have entries in `self.environments`
     #[serde(default)]
-    dep_replacements:
+    pub dep_replacements:
         BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyReplacement>>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(bound = "")]
-struct PackageMetadata<F: MoveFlavor> {
-    name: Located<PackageName>,
-    edition: Located<String>,
+pub struct PackageMetadata<F: MoveFlavor> {
+    pub name: Located<PackageName>,
+    pub edition: Located<String>,
 
     #[serde(flatten)]
-    metadata: F::PackageMetadata,
+    pub metadata: F::PackageMetadata,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -66,13 +66,13 @@ struct PackageMetadata<F: MoveFlavor> {
 #[serde(rename_all = "kebab-case")]
 pub struct ManifestDependency {
     #[serde(flatten)]
-    dependency_info: UnpinnedDependencyInfo,
+    pub dependency_info: UnpinnedDependencyInfo,
 
     #[serde(rename = "override", default)]
-    is_override: bool,
+    pub is_override: bool,
 
     #[serde(default)]
-    rename_from: Option<PackageName>,
+    pub rename_from: Option<PackageName>,
 }
 
 #[derive(Debug, Deserialize)]

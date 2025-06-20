@@ -17,7 +17,6 @@ futures.workspace = true
 itertools.workspace = true
 move-command-line-common.workspace = true
 move-core-types.workspace = true
-move-package.workspace = true
 once_cell.workspace = true
 path-clean.workspace = true
 petgraph.workspace = true
@@ -51,3 +50,7 @@ path = "src/mocks/mock-resolver-2.rs"
 [[test]]
 name = "test_runner"
 harness = false
+
+[[test]]
+name = "test_backwards_compatibility"
+path = "tests/test_backwards_compatibility.rs"

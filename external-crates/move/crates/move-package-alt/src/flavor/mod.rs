@@ -36,7 +36,7 @@ pub trait MoveFlavor: Debug {
 
     /// A [PackageMetadata] encapsulates the additional package information that can be stored in
     /// the `package` section of the manifest
-    type PackageMetadata: Debug + Serialize + DeserializeOwned + Clone;
+    type PackageMetadata: Debug + Serialize + DeserializeOwned + Clone + Default;
 
     /// An [AddressInfo] should give a unique identifier for a compiled package
     type AddressInfo: Debug + Serialize + DeserializeOwned + Clone;

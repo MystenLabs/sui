@@ -14,7 +14,7 @@ use crate::package::paths::PackagePath;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct OnChainDependency {
     #[serde(rename = "on-chain")]
-    on_chain: ConstTrue,
+    pub on_chain: ConstTrue,
 }
 
 impl OnChainDependency {
@@ -27,10 +27,10 @@ impl OnChainDependency {
     }
 }
 
-/// The constant `true`
+/// The constant `true` (TODO: remove once we implement this)
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(try_from = "bool", into = "bool")]
-struct ConstTrue;
+pub struct ConstTrue;
 
 impl TryFrom<bool> for ConstTrue {
     type Error = &'static str;

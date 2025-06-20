@@ -8202,7 +8202,6 @@ dependencies = [
  "itertools 0.10.5",
  "move-command-line-common",
  "move-core-types",
- "move-package",
  "once_cell",
  "path-clean",
  "petgraph 0.8.1",

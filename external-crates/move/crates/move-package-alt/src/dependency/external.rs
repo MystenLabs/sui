@@ -44,10 +44,10 @@ pub struct ExternalDependency {
     pub resolver: ResolverName,
 
     /// The `<data>` in `{ r.<res> = <data> }`
-    data: toml::Value,
+    pub data: toml::Value,
 
     /// The file containing this dependency
-    containing_file: FileHandle,
+    pub containing_file: FileHandle,
 }
 
 #[derive(Error, Debug)]

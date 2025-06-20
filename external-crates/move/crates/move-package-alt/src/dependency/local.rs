@@ -26,12 +26,12 @@ use super::PinnedDependencyInfo;
 pub struct LocalDependency {
     /// The path on the filesystem, relative to the location of the containing file (which is
     /// stored in the `Located` wrapper)
-    local: PathBuf,
+    pub local: PathBuf,
 
     /// This is the directory to which this local dependency is relative to. As this is local
     /// dependency, the directory should be the parent directory that contains this dependency.
     #[serde(skip, default = "TheFile::parent_dir")]
-    relative_to_parent_dir: PathBuf,
+    pub relative_to_parent_dir: PathBuf,
 }
 
 impl LocalDependency {

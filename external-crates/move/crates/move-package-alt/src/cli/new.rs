@@ -9,11 +9,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{errors::PackageResult, package::PackageName};
+use crate::{errors::PackageResult, package::{layout::SourcePackageLayout, PackageName}};
 use anyhow::{Context, ensure};
 use clap::{Command, Parser, Subcommand};
 use move_core_types::identifier::Identifier;
-use move_package::source_package::layout::SourcePackageLayout;
 
 const MAINNET_CHAIN_ID: &str = "35834a8a";
 const TESTNET_CHAIN_ID: &str = "4c78adac";

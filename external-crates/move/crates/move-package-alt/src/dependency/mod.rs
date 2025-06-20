@@ -6,7 +6,7 @@ mod dependency_set;
 pub mod external;
 pub mod git;
 pub mod local;
-mod onchain;
+pub mod onchain;
 
 pub use dependency_set::DependencySet;
 use onchain::OnChainDependency;
