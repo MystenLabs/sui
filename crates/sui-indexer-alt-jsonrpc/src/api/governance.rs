@@ -4,11 +4,14 @@
 use anyhow::Context as _;
 use diesel::{ExpressionMethods, QueryDsl};
 
-use jsonrpsee::{core::RpcResult, proc_macros::rpc};
+use jsonrpsee::{core::RpcResult, http_client::HttpClient, proc_macros::rpc};
 use sui_indexer_alt_schema::schema::kv_epoch_starts;
+use sui_json_rpc_api::GovernanceReadApiClient;
+use sui_json_rpc_types::{DelegatedStake, ValidatorApys};
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_types::{
+    base_types::{ObjectID, SuiAddress},
     dynamic_field::{derive_dynamic_field_id, Field},
     sui_serde::BigInt,
     sui_system_state::{
@@ -21,9 +24,10 @@ use sui_types::{
 };
 
 use crate::{
+    config::NodeConfig,
     context::Context,
     data::load_live_deserialized,
-    error::{rpc_bail, RpcError},
+    error::{client_error_to_error_object, rpc_bail, RpcError},
 };
 
 use super::rpc_module::RpcModule;
@@ -40,7 +44,34 @@ trait GovernanceApi {
     async fn get_latest_sui_system_state(&self) -> RpcResult<SuiSystemStateSummary>;
 }
 
+#[open_rpc(namespace = "suix", tag = "Delegation Governance API")]
+#[rpc(server, namespace = "suix")]
+trait DelegationGovernanceApi {
+    /// Return one or more [DelegatedStake]. If a Stake was withdrawn its status will be Unstaked.
+    #[method(name = "getStakesByIds")]
+    async fn get_stakes_by_ids(
+        &self,
+        staked_sui_ids: Vec<ObjectID>,
+    ) -> RpcResult<Vec<DelegatedStake>>;
+
+    /// Return all [DelegatedStake].
+    #[method(name = "getStakes")]
+    async fn get_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>>;
+
+    /// Return the validator APY
+    #[method(name = "getValidatorsApy")]
+    async fn get_validators_apy(&self) -> RpcResult<ValidatorApys>;
+}
+
 pub(crate) struct Governance(pub Context);
+pub(crate) struct DelegationGovernance(HttpClient);
+
+impl DelegationGovernance {
+    pub fn new(fullnode_rpc_url: url::Url, config: NodeConfig) -> anyhow::Result<Self> {
+        let client = config.client(fullnode_rpc_url)?;
+        Ok(Self(client))
+    }
+}
 
 #[async_trait::async_trait]
 impl GovernanceApiServer for Governance {
@@ -53,9 +84,52 @@ impl GovernanceApiServer for Governance {
     }
 }
 
+#[async_trait::async_trait]
+impl DelegationGovernanceApiServer for DelegationGovernance {
+    async fn get_stakes_by_ids(
+        &self,
+        staked_sui_ids: Vec<ObjectID>,
+    ) -> RpcResult<Vec<DelegatedStake>> {
+        let Self(client) = self;
+
+        client
+            .get_stakes_by_ids(staked_sui_ids)
+            .await
+            .map_err(client_error_to_error_object)
+    }
+
+    async fn get_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>> {
+        let Self(client) = self;
+
+        client
+            .get_stakes(owner)
+            .await
+            .map_err(client_error_to_error_object)
+    }
+
+    async fn get_validators_apy(&self) -> RpcResult<ValidatorApys> {
+        let Self(client) = self;
+
+        client
+            .get_validators_apy()
+            .await
+            .map_err(client_error_to_error_object)
+    }
+}
+
 impl RpcModule for Governance {
     fn schema(&self) -> Module {
         GovernanceApiOpenRpc::module_doc()
+    }
+
+    fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
+        self.into_rpc()
+    }
+}
+
+impl RpcModule for DelegationGovernance {
+    fn schema(&self) -> Module {
+        DelegationGovernanceApiOpenRpc::module_doc()
     }
 
     fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
