@@ -7,7 +7,7 @@ use std::{
     ops::Bound::{Excluded, Included, Unbounded},
     panic,
     sync::Arc,
-    time::{Duration},
+    time::Duration,
     vec,
 };
 
