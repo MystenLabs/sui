@@ -22,49 +22,28 @@ contract BridgeConfigV2 is BridgeConfig, CommitteeUpgradeableV2 {
     /// @param message BridgeMessage containing the update token price payload.
     function updateTokenPriceWithSignatures(
         bytes[] memory signatures,
-        BridgeUtils.Message memory message
+        BridgeUtilsV2.MessageV2 memory message
     )
         public
-        override
         nonReentrant
         verifyMessageAndSignaturesV2(
             message,
             signatures,
-            committeeV2.committeeEpoch(),
             BridgeUtils.UPDATE_TOKEN_PRICE
         )
     {
         updateTokenPriceWithSignatures(signatures, message);
     }
 
-    function addTokensWithSignatures(bytes[] memory signatures, BridgeUtils.Message memory message)
+    function addTokensWithSignatures(bytes[] memory signatures, BridgeUtilsV2.MessageV2 memory message)
         public
-        override
         nonReentrant
         verifyMessageAndSignaturesV2(
             message,
             signatures,
-            committeeV2.committeeEpoch(),
             BridgeUtils.ADD_EVM_TOKENS
         )
     {
         addTokensWithSignatures(signatures, message);
-    }
-
-    /// @notice Enables the upgrade of the inheriting contract by verifying the provided signatures.
-    /// @dev The function will revert if the provided signatures or message is invalid.
-    /// @param signatures The array of signatures to be verified.
-    /// @param message The BridgeUtils to be verified.
-    function upgradeWithSignatures(bytes[] memory signatures, BridgeUtils.Message memory message)
-        public
-        override(CommitteeUpgradeableV2, CommitteeUpgradeable)
-        verifyMessageAndSignaturesV2(
-            message,
-            signatures,
-            committeeV2.committeeEpoch(),
-            BridgeUtils.ADD_EVM_TOKENS
-        )
-    {
-        super.upgradeWithSignatures(signatures, message);
     }
 }

@@ -14,21 +14,20 @@ contract SuiBridgeV2 is SuiBridge, CommitteeUpgradeableV2 {
     /// @param message The BridgeUtils containing the transfer details.
     function transferBridgedTokensWithSignaturesV2(
         bytes[] memory signatures,
-        uint8 epoch,
-        BridgeUtils.Message memory message
+        BridgeUtilsV2.MessageV2 memory message
     )
         external
         nonReentrant
-        verifyMessageAndSignaturesV2(message, signatures, epoch, BridgeUtils.UPDATE_BRIDGE_LIMIT)
-        onlySupportedChain(message.chainID)
+        verifyMessageAndSignaturesV2(message, signatures, BridgeUtils.UPDATE_BRIDGE_LIMIT)
+        onlySupportedChain(message.chainID)  
     {
         // verify that message has not been processed
         require(!isTransferProcessed[message.nonce], "SuiBridge: Message already processed");
 
         IBridgeConfig config = committee.config();
 
-        BridgeUtilsV2.TokenTransferPayloadV2 memory tokenTransferPayload =
-            BridgeUtilsV2.decodeTokenTransferPayloadV2(message.payload);
+        BridgeUtils.TokenTransferPayload memory tokenTransferPayload =
+            BridgeUtils.decodeTokenTransferPayload(message.payload);
 
         // verify target chain ID is this chain ID
         require(
@@ -47,7 +46,7 @@ contract SuiBridgeV2 is SuiBridge, CommitteeUpgradeableV2 {
             tokenTransferPayload.tokenID,
             tokenTransferPayload.recipientAddress,
             erc20AdjustedAmount,
-            tokenTransferPayload.timestamp
+            message.timestamp
         );
 
         // mark message as processed
@@ -92,23 +91,6 @@ contract SuiBridgeV2 is SuiBridge, CommitteeUpgradeableV2 {
             // transfer tokens from vault to target address
             vault.transferERC20(tokenAddress, recipientAddress, amount);
         }
-    }
-
-    /// @notice Enables the upgrade of the inheriting contract by verifying the provided signatures.
-    /// @dev The function will revert if the provided signatures or message is invalid.
-    /// @param signatures The array of signatures to be verified.
-    /// @param message The BridgeUtils to be verified.
-    function upgradeWithSignatures(bytes[] memory signatures, BridgeUtils.Message memory message)
-        public
-        override(CommitteeUpgradeableV2, CommitteeUpgradeable)
-        verifyMessageAndSignaturesV2(
-            message,
-            signatures,
-            committeeV2.committeeEpoch(),
-            BridgeUtils.ADD_EVM_TOKENS
-        )
-    {
-        super.upgradeWithSignatures(signatures, message);
     }
 
     /* ========== MODIFIERS ========== */

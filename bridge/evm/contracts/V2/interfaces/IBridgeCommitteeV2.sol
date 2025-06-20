@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "../../interfaces/IBridgeCommittee.sol";
+import "../utils/BridgeUtilsV2.sol";
 
 /// @title IBridgeCommitteeV2
 /// @notice Interface for the BridgeCommittee contract.
@@ -12,10 +13,17 @@ interface IBridgeCommitteeV2 is IBridgeCommittee {
     /// @param signatures The array of signatures to be verified.
     /// @param message The `BridgeUtils.Message` to be verified.
     function verifySignaturesV2(
-        uint8 epoch,
         bytes[] memory signatures,
-        BridgeUtils.Message memory message
+        BridgeUtilsV2.MessageV2 memory message
     ) external view;
 
-    function committeeEpoch() external view returns (uint8);
+
+    /// @dev (deprecated in favor of BlocklistUpdatedV2)
+    event CommitteeMembersAdded(address[] newMembers, uint16[] stakeAmounts);
+
+    event CommitteeMembersSynced(
+        address[] newMembers,
+        uint16[] stakeAmounts,
+        uint8 committee
+    );
 }

@@ -27,10 +27,9 @@ contract BridgeLimiterV2 is BridgeLimiter, CommitteeUpgradeableV2 {
         public
         override
         nonReentrant
-        verifyMessageAndSignaturesV2(
+        verifyMessageAndSignatures(
             message,
             signatures,
-            committeeV2.committeeEpoch(),
             BridgeUtils.UPDATE_BRIDGE_LIMIT
         )
     {
@@ -47,22 +46,5 @@ contract BridgeLimiterV2 is BridgeLimiter, CommitteeUpgradeableV2 {
         chainLimits[sourceChainID] = newLimit;
 
         emit LimitUpdatedV2(message.nonce, sourceChainID, newLimit);
-    }
-
-    /// @notice Enables the upgrade of the inheriting contract by verifying the provided signatures.
-    /// @dev The function will revert if the provided signatures or message is invalid.
-    /// @param signatures The array of signatures to be verified.
-    /// @param message The BridgeUtils to be verified.
-    function upgradeWithSignatures(bytes[] memory signatures, BridgeUtils.Message memory message)
-        public
-        override(CommitteeUpgradeableV2, CommitteeUpgradeable)
-        verifyMessageAndSignaturesV2(
-            message,
-            signatures,
-            committeeV2.committeeEpoch(),
-            BridgeUtils.ADD_EVM_TOKENS
-        )
-    {
-        super.upgradeWithSignatures(signatures, message);
     }
 }

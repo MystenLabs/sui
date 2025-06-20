@@ -1,26 +1,37 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "../../utils/BridgeUtils.sol";
+
 library BridgeUtilsV2 {
+
+    /* ========== CONSTANTS ========== */
+
+    // message Ids
+    uint8 public constant ADD_COMMITTEE_MEMBERS = 8;
+    uint8 public constant SYNC_COMMITTEE = 9;
+
+    // Message type stake requirements
+    uint32 public constant ADD_COMMITTEE_MEMBERS_STAKE_REQUIRED = 5001;
+    uint32 public constant SYNC_COMMITTEE_STAKE_REQUIRED = 5001;
+
     /* ========== STRUCTS ========== */
-    /// @dev A struct that represents a token transfer payload
-    /// @param senderAddressLength The length of the sender address in bytes
-    /// @param senderAddress The address of the sender on the source chain
-    /// @param targetChain The chain ID of the target chain
-    /// @param recipientAddressLength The length of the target address in bytes
-    /// @param recipientAddress The address of the recipient on the target chain
-    /// @param tokenID The ID of the token to be transferred
-    /// @param amount The amount of the token to be transferred
-    /// @param timestamp The timestamp of the message creation
-    struct TokenTransferPayloadV2 {
-        uint8 senderAddressLength;
-        bytes senderAddress;
-        uint8 targetChain;
-        uint8 recipientAddressLength;
-        address recipientAddress;
-        uint8 tokenID;
-        uint64 amount;
-        uint256 timestamp; // timestamp of the message creation
+    /// @dev A struct that represents a bridge message
+    /// @param messageType The type of the message, such as token transfer, blocklist, etc.
+    /// @param version The version of the message format
+    /// @param nonce The nonce of the message, used to prevent replay attacks
+    /// @param chainID The chain ID of the source chain (for token transfer messages this is the source chain)
+    /// @param committee The committee number that processed the message
+    /// @param timestamp The timestamp when the message was created, used to determine message maturity
+    /// @param payload The payload of the message, which depends on the message type
+    struct MessageV2 {
+        uint8 messageType;
+        uint8 version;
+        uint64 nonce;
+        uint8 chainID;
+        uint8 committee;
+        uint8 timestamp;
+        bytes payload;
     }
 
     /* ========== CONSTANTS ========== */
@@ -40,103 +51,146 @@ library BridgeUtilsV2 {
         return currentTimestamp > messageTimestamp + 24 * 3600;
     }
 
-    /// @notice Decodes a token transfer payload from bytes to a TokenTransferPayload struct.
+        /// @notice returns the required stake for the provided message type.
+    /// @dev The function will revert if the message type is invalid.
+    /// @param _message The bridge message to be used to determine the required stake.
+    /// @return The required stake for the provided message type.
+    function requiredStake(MessageV2 memory _message) internal pure returns (uint32) {
+        if (_message.messageType == BridgeUtils.TOKEN_TRANSFER) {
+            return BridgeUtils.TRANSFER_STAKE_REQUIRED;
+        } else if (_message.messageType == BridgeUtils.BLOCKLIST) {
+            return BridgeUtils.BLOCKLIST_STAKE_REQUIRED;
+        } else if (_message.messageType == BridgeUtils.EMERGENCY_OP) {
+            bool isFreezing = BridgeUtils.decodeEmergencyOpPayload(_message.payload);
+            if (isFreezing) return BridgeUtils.FREEZING_STAKE_REQUIRED;
+            return BridgeUtils.UNFREEZING_STAKE_REQUIRED;
+        } else if (_message.messageType == BridgeUtils.UPDATE_BRIDGE_LIMIT) {
+            return BridgeUtils.BRIDGE_LIMIT_STAKE_REQUIRED;
+        } else if (_message.messageType == BridgeUtils.UPDATE_TOKEN_PRICE) {
+            return BridgeUtils.UPDATE_TOKEN_PRICE_STAKE_REQUIRED;
+        } else if (_message.messageType == BridgeUtils.UPGRADE) {
+            return BridgeUtils.UPGRADE_STAKE_REQUIRED;
+        } else if (_message.messageType == BridgeUtils.ADD_EVM_TOKENS) {
+            return BridgeUtils.ADD_EVM_TOKENS_STAKE_REQUIRED;
+        } else if (_message.messageType == ADD_COMMITTEE_MEMBERS) {
+            return ADD_COMMITTEE_MEMBERS_STAKE_REQUIRED;
+        } else if (_message.messageType == SYNC_COMMITTEE) {
+            return SYNC_COMMITTEE_STAKE_REQUIRED;
+        } else {
+            revert("BridgeUtils: Invalid message type");
+        }
+    }
+
+    /// @notice Computes the hash of a bridge message using keccak256.
+    /// @param _message The bridge message to be hashed.
+    /// @return The hash of the message.
+    function computeHash(MessageV2 memory _message) internal pure returns (bytes32) {
+        return keccak256(encodeMessage(_message));
+    }
+
+    /// @notice Encodes a bridge message into bytes, using abi.encodePacked to concatenate the message fields.
+    /// @param message The bridge message to be encoded.
+    /// @return The encoded message as bytes.
+    function encodeMessage(MessageV2 memory message) internal pure returns (bytes memory) {
+        bytes memory prefixTypeAndVersion =
+            abi.encodePacked(BridgeUtils.MESSAGE_PREFIX, message.messageType, message.version);
+        bytes memory nonce = abi.encodePacked(message.nonce);
+        bytes memory chainID = abi.encodePacked(message.chainID);
+        return bytes.concat(prefixTypeAndVersion, nonce, chainID, message.payload);
+    }
+
+    /// @notice Decodes an add members payload from bytes to an array of addresses 
+    /// and an array of stake integers.
     /// @dev The function will revert if the payload length is invalid.
-    ///     TokenTransfer payload is 64 bytes.
-    ///     byte 0       : sender address length
-    ///     bytes 1-32   : sender address (as we only support Sui now, it has to be 32 bytes long)
-    ///     bytes 33     : target chain id
-    ///     byte 34      : target address length
-    ///     bytes 35-54  : target address
-    ///     byte 55      : token id
-    ///     bytes 56-63  : amount
-    ///     bytes 64-71  : message timestamp
-    /// @param _payload The payload to be decoded.
-    /// @return The decoded token transfer payload as a TokenTransferPayload struct.
-    function decodeTokenTransferPayloadV2(bytes memory _payload)
+    ///     Add members payload is 2 bytes + 20 * n bytes + 2 * m bytes.
+    ///     byte 0       : number of new addresses 
+    ///     bytes 1-n    : addresses
+    ///     byte n+1     : number of stake amounts
+    ///     bytes n+2-m  : stake amounts
+    /// @param _payload the payload to be decoded.
+    /// @return members the array of decoded addresses
+    /// @return stakeAmounts the array of decoded stake amounts
+    function decodeAddMembersPayload(bytes memory _payload)
         internal
         pure
-        returns (TokenTransferPayloadV2 memory)
+        returns (address[] memory members, uint16[] memory stakeAmounts)
     {
-        require(_payload.length == 71, "BridgeUtils: TokenTransferPayload must be 71 bytes");
-
-        uint8 senderAddressLength = uint8(_payload[0]);
-
-        require(
-            senderAddressLength == 32,
-            "BridgeUtils: Invalid sender address length, Sui address must be 32 bytes"
-        );
-
-        // used to offset already read bytes
-        uint8 offset = 1;
-
-        // extract sender address from payload bytes 1-32
-        bytes memory senderAddress = new bytes(senderAddressLength);
-        for (uint256 i; i < senderAddressLength; i++) {
-            senderAddress[i] = _payload[i + offset];
+        uint8 membersLength = uint8(_payload[0]);
+        members = new address[](membersLength);
+        uint8 offset = 1; // Start after the first byte which is the length of the members array
+        // require((_payload.length - offset) % 20 == 0, "BridgeUtils: Invalid payload length");
+        for (uint8 i; i < membersLength; i++) {
+            // Calculate the starting index for each address
+            offset += i * 20;
+            address member;
+            // Extract each address
+            assembly {
+                member := mload(add(add(_payload, 20), offset))
+            }
+            // Store the extracted address
+            members[i] = member;
         }
 
-        // move offset past the sender address length
-        offset += senderAddressLength;
-
-        // target chain is a single byte
-        uint8 targetChain = uint8(_payload[offset++]);
-
-        // target address length is a single byte
-        uint8 recipientAddressLength = uint8(_payload[offset++]);
-        require(
-            recipientAddressLength == 20,
-            "BridgeUtils: Invalid target address length, EVM address must be 20 bytes"
-        );
-
-        // extract target address from payload (35-54)
-        address recipientAddress;
-
-        // why `add(recipientAddressLength, offset)`?
-        // At this point, offset = 35, recipientAddressLength = 20. `mload(add(payload, 55))`
-        // reads the next 32 bytes from bytes 23 in paylod, because the first 32 bytes
-        // of payload stores its length. So in reality, bytes 23 - 54 is loaded. During
-        // casting to address (20 bytes), the least sigificiant bytes are retained, namely
-        // `recipientAddress` is bytes 35-54
-        assembly {
-            recipientAddress := mload(add(_payload, add(recipientAddressLength, offset)))
+        uint8 stakeLength = uint8(_payload[offset++]);
+        stakeAmounts = new uint16[](stakeLength);
+        for (uint8 i; i < stakeLength; i++) {
+            // Calculate the starting index for each stake amount
+            offset += i * 2;
+            uint16 stakeAmount;
+            // Extract each stake amount
+            assembly {
+                stakeAmount := mload(add(add(_payload, 2), offset))
+            }
+            // Store the extracted stake amount
+            stakeAmounts[i] = stakeAmount;
         }
-
-        // move offset past the target address length
-        offset += recipientAddressLength;
-
-        // token id is a single byte
-        uint8 tokenID = uint8(_payload[offset++]);
-
-        // extract amount from payload
-        uint64 amount;
-        uint8 amountLength = 8; // uint64 = 8 bits
-
-        // Why `add(amountLength, offset)`?
-        // At this point, offset = 56, amountLength = 8. `mload(add(payload, 64))`
-        // reads the next 32 bytes from bytes 32 in paylod, because the first 32 bytes
-        // of payload stores its length. So in reality, bytes 32 - 63 is loaded. During
-        // casting to uint64 (8 bytes), the least sigificiant bytes are retained, namely
-        // `recipientAddress` is bytes 56-63
-        assembly {
-            amount := mload(add(_payload, add(amountLength, offset)))
-        }
-
-        uint256 message_timestamp;
-        // Extract timestamp from payload bytes 64-71
-        assembly {
-            message_timestamp := mload(add(_payload, 64))
-        }
-
-        return TokenTransferPayloadV2(
-            senderAddressLength,
-            senderAddress,
-            targetChain,
-            recipientAddressLength,
-            recipientAddress,
-            tokenID,
-            amount,
-            message_timestamp
-        );
     }
+    
+    /// @notice Decodes sync committee payload from bytes to an array of addresses 
+    /// and an array of stake integers.
+    /// @dev The function will revert if the payload length is invalid.
+    ///     Sync committee payload is 2 bytes + 20 * n bytes + 2 * m bytes.
+    ///     byte 0       : number of addresses
+    ///     bytes 1-n    : addresses
+    ///     byte n+1     : number of stake amounts
+    ///     bytes n+2-m  : stake amounts
+    /// @param _payload the payload to be decoded.
+    /// @return members the array of decoded addresses
+    /// @return stakeAmounts the array of decoded stake amounts
+    function decodeSyncCommitteePayload(bytes memory _payload)
+        internal
+        pure
+        returns (address[] memory members, uint16[] memory stakeAmounts)
+    {
+        uint8 membersLength = uint8(_payload[0]);
+        members = new address[](membersLength);
+        uint8 offset = 1; // Start after the first byte which is the length of the members array
+        // require((_payload.length - offset) % 20 == 0, "BridgeUtils: Invalid payload length");
+        for (uint8 i; i < membersLength; i++) {
+            // Calculate the starting index for each address
+            offset += i * 20;
+            address member;
+            // Extract each address
+            assembly {
+                member := mload(add(add(_payload, 20), offset))
+            }
+            // Store the extracted address
+            members[i] = member;
+        }
+
+        uint8 stakeLength = uint8(_payload[offset++]);
+        stakeAmounts = new uint16[](stakeLength);
+        for (uint8 i; i < stakeLength; i++) {
+            // Calculate the starting index for each stake amount
+            offset += i * 2;
+            uint16 stakeAmount;
+            // Extract each stake amount
+            assembly {
+                stakeAmount := mload(add(add(_payload, 2), offset))
+            }
+            // Store the extracted stake amount
+            stakeAmounts[i] = stakeAmount;
+        }
+    }
+
 }

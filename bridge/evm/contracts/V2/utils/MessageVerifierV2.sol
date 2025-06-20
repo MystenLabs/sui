@@ -28,20 +28,19 @@ abstract contract MessageVerifierV2 is MessageVerifier {
     /// @param signatures The array of signatures to be verified.
     /// @param messageType The expected message type of the provided message.
     modifier verifyMessageAndSignaturesV2(
-        BridgeUtils.Message memory message,
+        BridgeUtilsV2.MessageV2 memory message,
         bytes[] memory signatures,
-        uint8 epoch,
         uint8 messageType
     ) {
         // verify message type
         require(message.messageType == messageType, "MessageVerifier: message does not match type");
         // verify signatures
-        committeeV2.verifySignaturesV2(epoch, signatures, message);
+        committeeV2.verifySignaturesV2(signatures, message);
         // increment message type nonce
         if (messageType != BridgeUtils.TOKEN_TRANSFER) {
             // verify chain ID
-            require(
-                message.chainID == committee.config().chainID(), "MessageVerifier: Invalid chain ID"
+            require( 
+                message.chainID == committeeV2.config().chainID(), "MessageVerifier: Invalid chain ID"
             );
             require(message.nonce == nonces[message.messageType], "MessageVerifier: Invalid nonce");
             nonces[message.messageType]++;
