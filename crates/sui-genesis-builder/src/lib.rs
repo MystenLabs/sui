@@ -1185,16 +1185,13 @@ pub fn generate_genesis_system_object(
                     UID::new(SUI_COIN_METADATA_REGISTRY_OBJECT_ID).to_bcs_bytes(),
                 ))
                 .unwrap();
-            // TODO: figure out where to get these hashes from.
-            let regulated_hashes = builder.pure(_regulated_hashes).unwrap();
-            let fixed_supply_hashes = builder.pure(_fixed_supply_hashes).unwrap();
 
             builder.programmable_move_call(
                 SUI_FRAMEWORK_ADDRESS.into(),
                 COIN_METADATA_REGISTRY_MODULE_NAME.to_owned(),
                 COIN_METADATA_REGISTRY_CREATE_FUNCTION_NAME.to_owned(),
                 vec![],
-                vec![registry_uid, regulated_hashes, fixed_supply_hashes],
+                vec![registry_uid],
             );
         }
 

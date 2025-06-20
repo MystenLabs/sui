@@ -161,7 +161,6 @@ fun bridge(): UID {
     }
 }
 
-#[allow(unused_function)]
 /// Create the `UID` for the singleton `` object.
 /// This should only be called once from ``.
 public(package) fun sui_coin_metadata_registry_object_id(): UID {

@@ -450,7 +450,6 @@ impl EndOfEpochTransactionKind {
                     mutable: true,
                 },
             ],
-            // TODO: add create args
             Self::CoinMetadataRegistryCreate => vec![],
             Self::StoreExecutionTimeObservations(_) => {
                 vec![InputObjectKind::SharedMoveObject {
@@ -491,7 +490,6 @@ impl EndOfEpochTransactionKind {
                 ]
                 .into_iter(),
             ),
-            // TODO: add create args
             Self::CoinMetadataRegistryCreate => Either::Right(iter::empty()),
             Self::StoreExecutionTimeObservations(_) => {
                 Either::Left(vec![SharedInputObject::SUI_SYSTEM_OBJ].into_iter())

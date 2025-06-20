@@ -4,15 +4,10 @@
 #[test_only]
 module sui::coin_metadata_registry_tests;
 
-use std::string::String;
-use sui::address;
-use sui::bcs;
 use sui::coin::{Self, TreasuryCap, DenyCapV2, CoinMetadata, RegulatedCoinMetadata};
 use sui::coin_metadata_registry::{Self, CoinMetadataRegistry, MetadataCap, InitMetadata, Metadata};
-use sui::hash;
 use sui::test_scenario;
 use sui::url;
-use sui::vec_set;
 
 public struct COIN_METADATA_REGISTRY_TESTS has drop {}
 
@@ -96,23 +91,8 @@ fun create_test_regulated_coin_v2(
 }
 
 fun initialize_test_registry(scenario: &mut test_scenario::Scenario): CoinMetadataRegistry {
-    // Initialize the coin metadata registry
-    let regulated_hashes = vec_set::from_keys(vector[@8008135, @800813]);
-
-    let fixed_supply_hashes = vec_set::from_keys(vector[@1234567, @7654321]);
     scenario.next_tx(@0x0);
-    coin_metadata_registry::create_metadata_registry_for_testing(
-        regulated_hashes,
-        fixed_supply_hashes,
-        scenario.ctx(),
-    )
-}
-
-fun hash_data(addresses: vector<String>): address {
-    let mut vec = vector::empty<u8>();
-    vec.append(bcs::to_bytes(&addresses));
-
-    address::from_bytes(hash::blake2b256(&vec))
+    coin_metadata_registry::create_metadata_registry_for_testing(scenario.ctx())
 }
 
 #[test]
@@ -326,8 +306,6 @@ fun test_migrate_regulated_metadata_to_registry() {
 
     registry.register_metadata<COIN_METADATA_REGISTRY_TESTS>(metadata);
 
-    assert!(registry.metadata<COIN_METADATA_REGISTRY_TESTS>().is_regulated());
-
     assert!(
         registry.metadata<COIN_METADATA_REGISTRY_TESTS>().deny_cap() == option::some(object::id(&deny_cap)),
     );
@@ -450,7 +428,6 @@ fun test_migrate_regulated_to_registry() {
     assert!(
         registry.metadata<COIN_METADATA_REGISTRY_TESTS>().icon_url() == b"icon_url".to_string(),
     );
-    assert!(registry.metadata<COIN_METADATA_REGISTRY_TESTS>().is_regulated());
     assert!(
         registry.metadata<COIN_METADATA_REGISTRY_TESTS>().deny_cap() == option::some(object::id(&deny_cap)),
     );
@@ -460,47 +437,6 @@ fun test_migrate_regulated_to_registry() {
     transfer::public_transfer(registry, scenario.ctx().sender());
 
     regulated_metadata_v1.freeze_for_testing();
-
-    scenario.end();
-}
-
-#[test]
-fun test_overrides() {
-    let mut scenario = test_scenario::begin(TEST_ADDR);
-
-    let (treasury_cap, metadata) = create_test_coin_v1(
-        &mut scenario,
-    );
-
-    let type_name = std::type_name::get<COIN_METADATA_REGISTRY_TESTS>().get_address().to_string();
-
-    let mut hashes = vec_set::empty<address>();
-
-    hashes.insert(hash_data(vector[type_name]));
-
-    scenario.next_tx(@0x0);
-
-    let mut registry = coin_metadata_registry::create_metadata_registry_for_testing(
-        hashes,
-        hashes,
-        scenario.ctx(),
-    );
-
-    registry.populate_fixed_supply_overrides(vector[type_name]);
-    registry.populate_regulated_overrides(vector[type_name]);
-    scenario.next_tx(@0x20);
-
-    coin::migrate_metadata_to_registry<COIN_METADATA_REGISTRY_TESTS>(
-        &mut registry,
-        metadata,
-        scenario.ctx(),
-    );
-
-    assert!(registry.metadata<COIN_METADATA_REGISTRY_TESTS>().is_fixed_supply());
-    assert!(registry.metadata<COIN_METADATA_REGISTRY_TESTS>().is_regulated());
-
-    transfer::public_transfer(treasury_cap, scenario.ctx().sender());
-    transfer::public_transfer(registry, scenario.ctx().sender());
 
     scenario.end();
 }

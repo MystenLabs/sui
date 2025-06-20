@@ -31,7 +31,7 @@ mod checked {
     };
     use sui_types::{
         BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID, SUI_COIN_METADATA_REGISTRY_ADDRESS,
-        SUI_RANDOMNESS_STATE_OBJECT_ID,
+        SUI_COIN_METADATA_REGISTRY_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
     };
 
     use tracing::{info, instrument, trace, warn};
@@ -1219,15 +1219,19 @@ mod checked {
     fn setup_coin_metadata_registry_create(
         mut builder: ProgrammableTransactionBuilder,
     ) -> ProgrammableTransactionBuilder {
-        builder
-            .move_call(
-                SUI_COIN_METADATA_REGISTRY_ADDRESS.into(),
-                COIN_METADATA_REGISTRY_MODULE_NAME.to_owned(),
-                COIN_METADATA_REGISTRY_CREATE_FUNCTION_NAME.to_owned(),
-                vec![],
-                vec![],
-            )
-            .expect("Unable to generate coin_metadata_registry_create transaction!");
+        let registry_uid = builder
+            .input(CallArg::Pure(
+                UID::new(SUI_COIN_METADATA_REGISTRY_OBJECT_ID).to_bcs_bytes(),
+            ))
+            .expect("Unable to create Bridge object UID!");
+
+        builder.programmable_move_call(
+            SUI_COIN_METADATA_REGISTRY_ADDRESS.into(),
+            COIN_METADATA_REGISTRY_MODULE_NAME.to_owned(),
+            COIN_METADATA_REGISTRY_CREATE_FUNCTION_NAME.to_owned(),
+            vec![],
+            vec![registry_uid],
+        );
         builder
     }
 
