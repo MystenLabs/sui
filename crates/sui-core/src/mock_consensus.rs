@@ -6,7 +6,7 @@ use crate::authority::{AuthorityMetrics, AuthorityState, ExecutionEnv};
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_adapter::{BlockStatusReceiver, ConsensusClient, SubmitToConsensus};
 use crate::consensus_handler::SequencedConsensusTransaction;
-use crate::execution_scheduler::SchedulingSource;
+use crate::execution_scheduler::{ExecutionSchedulerAPI, SchedulingSource};
 use consensus_core::BlockRef;
 use prometheus::Registry;
 use std::sync::{Arc, Weak};
@@ -93,7 +93,7 @@ impl MockConsensusClient {
             match &tx.kind {
                 ConsensusTransactionKind::CertifiedTransaction(tx) => {
                     if tx.contains_shared_object() {
-                        validator.enqueue_transactions_for_execution(
+                        validator.execution_scheduler().enqueue(
                             vec![(
                                 VerifiedExecutableTransaction::new_from_certificate(
                                     VerifiedCertificate::new_unchecked(*tx.clone()),
@@ -107,7 +107,7 @@ impl MockConsensusClient {
                 }
                 ConsensusTransactionKind::UserTransaction(tx) => {
                     if tx.contains_shared_object() {
-                        validator.enqueue_transactions_for_execution(
+                        validator.execution_scheduler().enqueue(
                             vec![(
                                 VerifiedExecutableTransaction::new_from_consensus(
                                     VerifiedTransaction::new_unchecked(*tx.clone()),

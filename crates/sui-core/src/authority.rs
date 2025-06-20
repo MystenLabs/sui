@@ -1291,7 +1291,7 @@ impl AuthorityState {
             // Shared object transactions need to be sequenced by the consensus before enqueueing
             // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
             // For owned object transactions, they can be enqueued for execution immediately.
-            self.enqueue_transactions_for_execution(
+            self.execution_scheduler.enqueue(
                 vec![(
                     Schedulable::Transaction(transaction.clone()),
                     ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
@@ -3238,18 +3238,8 @@ impl AuthorityState {
         .await
     }
 
-    pub(crate) fn execution_scheduler(&self) -> &Arc<ExecutionSchedulerWrapper> {
+    pub fn execution_scheduler(&self) -> &Arc<ExecutionSchedulerWrapper> {
         &self.execution_scheduler
-    }
-
-    /// Adds transactions / certificates to transaction manager for ordered execution.
-    /// TODO: Cleanup this function.
-    pub fn enqueue_transactions_for_execution(
-        &self,
-        txns: Vec<(Schedulable, ExecutionEnv)>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
-        self.execution_scheduler.enqueue(txns, epoch_store)
     }
 
     fn create_owner_index_if_empty(

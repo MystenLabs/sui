@@ -38,6 +38,7 @@ use sui_core::consensus_adapter::ConsensusClient;
 use sui_core::consensus_manager::UpdatableConsensusClient;
 use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::build_execution_cache;
+use sui_core::execution_scheduler::ExecutionSchedulerAPI;
 use sui_core::execution_scheduler::SchedulingSource;
 use sui_core::global_state_hasher::GlobalStateHashMetrics;
 use sui_core::storage::RestReadStore;
@@ -1617,8 +1618,12 @@ impl SuiNode {
             digests
         );
 
-        state.enqueue_transactions_for_execution(pending_consensus_certificates, epoch_store);
-        state.enqueue_transactions_for_execution(additional_certs, epoch_store);
+        state
+            .execution_scheduler()
+            .enqueue(pending_consensus_certificates, epoch_store);
+        state
+            .execution_scheduler()
+            .enqueue(additional_certs, epoch_store);
 
         // If this times out, the validator will still almost certainly start up fine. But, it is
         // possible that it may temporarily "forget" about transactions that it had previously

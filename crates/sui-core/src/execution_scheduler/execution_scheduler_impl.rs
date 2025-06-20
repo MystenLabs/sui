@@ -29,7 +29,7 @@ use tracing::{debug, warn};
 use super::{overload_tracker::OverloadTracker, ExecutionSchedulerAPI, PendingCertificate};
 
 #[derive(Clone)]
-pub(crate) struct ExecutionScheduler {
+pub struct ExecutionScheduler {
     object_cache_read: Arc<dyn ObjectCacheRead>,
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
     overload_tracker: Arc<OverloadTracker>,

@@ -441,13 +441,13 @@ async fn test_execution_with_dependencies() {
 
     // Enqueue certs out of dependency order for executions.
     for (cert, env) in certs.iter().rev() {
-        authorities[3].enqueue_transactions_for_execution(
+        authorities[3].execution_scheduler().enqueue(
             vec![(cert.clone(), env.clone())],
             &authorities[3].epoch_store_for_testing(),
         );
     }
     for cert in executed_owned_certs.iter().rev() {
-        authorities[3].enqueue_transactions_for_execution(
+        authorities[3].execution_scheduler().enqueue(
             vec![(
                 VerifiedExecutableTransaction::new_from_certificate(cert.clone()).into(),
                 ExecutionEnv::new(),

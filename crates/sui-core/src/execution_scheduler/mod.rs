@@ -63,7 +63,7 @@ pub struct ExecutingGuard {
 }
 
 #[enum_dispatch]
-pub(crate) trait ExecutionSchedulerAPI {
+pub trait ExecutionSchedulerAPI {
     fn enqueue_transactions(
         &self,
         certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
@@ -91,7 +91,7 @@ pub(crate) trait ExecutionSchedulerAPI {
 }
 
 #[enum_dispatch(ExecutionSchedulerAPI)]
-pub(crate) enum ExecutionSchedulerWrapper {
+pub enum ExecutionSchedulerWrapper {
     ExecutionScheduler(ExecutionScheduler),
     TransactionManager(TransactionManager),
 }

@@ -8,8 +8,11 @@ use std::{
     time::Duration,
 };
 
-use crate::authority::{test_authority_builder::TestAuthorityBuilder, ExecutionEnv};
 use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
+use crate::{
+    authority::{test_authority_builder::TestAuthorityBuilder, ExecutionEnv},
+    execution_scheduler::ExecutionSchedulerAPI,
+};
 use async_trait::async_trait;
 use consensus_core::BlockRef;
 use mysten_metrics::spawn_monitored_task;
@@ -279,7 +282,7 @@ impl LocalAuthorityClient {
                     .signature_verifier
                     .verify_cert(request.certificate)
                     .await?;
-                state.enqueue_transactions_for_execution(
+                state.execution_scheduler().enqueue(
                     vec![(
                         VerifiedExecutableTransaction::new_from_certificate(certificate.clone())
                             .into(),

@@ -53,7 +53,7 @@ const MIN_HASHMAP_CAPACITY: usize = 1000;
 /// executes them in parallel.
 /// The actual execution logic is inside AuthorityState. After a transaction commits and updates
 /// storage, committed objects and certificates are notified back to TransactionManager.
-pub(crate) struct TransactionManager {
+pub struct TransactionManager {
     object_cache_read: Arc<dyn ObjectCacheRead>,
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,

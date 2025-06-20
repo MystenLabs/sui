@@ -17,7 +17,7 @@ use sui_core::checkpoints::checkpoint_executor::CheckpointExecutor;
 use sui_core::consensus_adapter::{
     ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
 };
-use sui_core::execution_scheduler::SchedulingSource;
+use sui_core::execution_scheduler::{ExecutionSchedulerAPI, SchedulingSource};
 use sui_core::global_state_hasher::GlobalStateHasher;
 use sui_core::mock_consensus::{ConsensusMode, MockConsensusClient};
 use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
@@ -172,7 +172,7 @@ impl SingleValidator {
                 if cert.contains_shared_object() {
                     // For shared objects transactions, `execute_certificate` won't enqueue it because
                     // it expects consensus to do so. However we don't have consensus, hence the manual enqueue.
-                    self.get_validator().enqueue_transactions_for_execution(
+                    self.get_validator().execution_scheduler().enqueue(
                         vec![(
                             VerifiedExecutableTransaction::new_from_certificate(cert.clone())
                                 .into(),

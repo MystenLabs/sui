@@ -383,7 +383,7 @@ pub async fn enqueue_all_and_execute_all(
     authority: &AuthorityState,
     certificates: Vec<(VerifiedCertificate, ExecutionEnv)>,
 ) -> Result<Vec<TransactionEffects>, SuiError> {
-    authority.enqueue_transactions_for_execution(
+    authority.execution_scheduler.enqueue(
         certificates
             .iter()
             .map(|(cert, env)| {
@@ -413,7 +413,7 @@ pub async fn execute_sequenced_certificate_to_effects(
         scheduling_source: SchedulingSource::NonFastPath,
         expected_effects_digest: None,
     };
-    authority.enqueue_transactions_for_execution(
+    authority.execution_scheduler.enqueue(
         vec![(
             VerifiedExecutableTransaction::new_from_certificate(certificate.clone()).into(),
             env.clone(),

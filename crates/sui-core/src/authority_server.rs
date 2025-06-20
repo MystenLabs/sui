@@ -61,7 +61,6 @@ use tokio::time::timeout;
 use tonic::metadata::{Ascii, MetadataValue};
 use tracing::{debug, error, error_span, info, Instrument};
 
-use crate::consensus_adapter::ConnectionMonitorStatusForTests;
 use crate::{
     authority::{
         authority_per_epoch_store::AuthorityPerEpochStore,
@@ -80,6 +79,9 @@ use crate::{
     authority::{consensus_tx_status_cache::ConsensusTxStatus, AuthorityState},
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
     traffic_controller::{parse_ip, policies::TrafficTally, TrafficController},
+};
+use crate::{
+    consensus_adapter::ConnectionMonitorStatusForTests, execution_scheduler::ExecutionSchedulerAPI,
 };
 use nonempty::{nonempty, NonEmpty};
 use sui_config::local_ip_utils::new_local_tcp_address_for_testing;
@@ -871,10 +873,9 @@ impl ValidatorService {
                 .map(|(tx, env)| (Schedulable::Transaction(tx), env))
                 .collect::<Vec<_>>();
             if !certificates_without_shared_objects.is_empty() {
-                self.state.enqueue_transactions_for_execution(
-                    certificates_without_shared_objects,
-                    epoch_store,
-                );
+                self.state
+                    .execution_scheduler()
+                    .enqueue(certificates_without_shared_objects, epoch_store);
             }
             return Ok((None, Weight::zero()));
         }
