@@ -1919,7 +1919,7 @@ impl ProtocolConfig {
     pub fn gc_depth(&self) -> u32 {
         if cfg!(msim) {
             // exercise a very low gc_depth
-            5
+            3
         } else {
             self.consensus_gc_depth.unwrap_or(0)
         }
