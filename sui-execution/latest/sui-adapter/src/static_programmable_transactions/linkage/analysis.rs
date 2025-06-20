@@ -8,7 +8,7 @@ use crate::{
         config::ResolutionConfig,
         legacy_linkage,
         resolution::{ConflictResolution, ResolutionTable, add_and_unify, get_package},
-        resolved_linkage::{ResolvedLinkage, ResolvedLinkage_},
+        resolved_linkage::ResolvedLinkage,
     },
 };
 use sui_protocol_config::ProtocolConfig;
@@ -77,5 +77,5 @@ pub fn type_linkage(
         }
     }
 
-    Ok(ResolvedLinkage_::from_resolution_table(resolution_table))
+    Ok(ResolvedLinkage::from_resolution_table(resolution_table))
 }
