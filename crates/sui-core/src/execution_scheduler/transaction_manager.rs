@@ -9,7 +9,7 @@ use std::{
 };
 
 use lru::LruCache;
-use mysten_common::{fatal, random_util::randomize_cache_capacity_in_tests};
+use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use sui_types::{
@@ -506,34 +506,18 @@ impl ExecutionSchedulerAPI for TransactionManager {
         let mut receiving_objects: HashSet<InputKey> = HashSet::new();
         let certs: Vec<_> = certs
             .into_iter()
-            .filter_map(|(cert, execution_env)| {
+            .map(|(cert, execution_env)| {
                 let input_object_kinds = cert
                     .data()
                     .intent_message()
                     .value
                     .input_objects()
                     .expect("input_objects() cannot fail");
-                let mut input_object_keys = match epoch_store.get_input_object_keys(
+                let mut input_object_keys = epoch_store.get_input_object_keys(
                     &cert.key(),
                     &input_object_kinds,
                     execution_env.assigned_versions.as_ref(),
-                ) {
-                    Ok(keys) => keys,
-                    Err(e) => {
-                        // Because we do not hold the transaction lock during enqueue, it is possible
-                        // that the transaction was executed and the shared version assignments deleted
-                        // since the earlier check. This is a rare race condition, and it is better to
-                        // handle it ad-hoc here than to hold tx locks for every cert for the duration
-                        // of this function in order to remove the race.
-                        if self
-                            .transaction_cache_read
-                            .is_tx_already_executed(cert.digest())
-                        {
-                            return None;
-                        }
-                        fatal!("Failed to get input object keys: {:?}", e);
-                    }
-                };
+                );
 
                 if input_object_kinds.len() != input_object_keys.len() {
                     error!("Duplicated input objects: {:?}", input_object_kinds);
@@ -561,7 +545,7 @@ impl ExecutionSchedulerAPI for TransactionManager {
                     }
                 }
 
-                Some((cert, execution_env, input_object_keys))
+                (cert, execution_env, input_object_keys)
             })
             .collect();
 

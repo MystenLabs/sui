@@ -1752,7 +1752,7 @@ impl AuthorityPerEpochStore {
         key: &TransactionKey,
         objects: &[InputObjectKind],
         assigned_versions: &AssignedVersions,
-    ) -> SuiResult<BTreeSet<InputKey>> {
+    ) -> BTreeSet<InputKey> {
         let assigned_shared_versions = assigned_versions
             .iter()
             .cloned()
@@ -1760,7 +1760,7 @@ impl AuthorityPerEpochStore {
         objects
             .iter()
             .map(|kind| {
-                Ok(match kind {
+                match kind {
                     InputObjectKind::SharedMoveObject {
                         id,
                         initial_shared_version,
@@ -1785,7 +1785,7 @@ impl AuthorityPerEpochStore {
                         id: FullObjectID::new(objref.0, None),
                         version: objref.1,
                     },
-                })
+                }
             })
             .collect()
     }

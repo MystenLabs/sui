@@ -95,28 +95,14 @@ impl ExecutionScheduler {
         let input_object_kinds = tx_data
             .input_objects()
             .expect("input_objects() cannot fail");
-        let input_object_keys: Vec<_> = match epoch_store.get_input_object_keys(
-            &cert.key(),
-            &input_object_kinds,
-            &execution_env.assigned_versions,
-        ) {
-            Ok(keys) => keys,
-            Err(_) => {
-                // This is possible if the transaction is already executed.
-                // TODO: Eventually we could pass assigned shared object versions
-                // to the scheduler so that this call cannot return Err.
-                assert!(self
-                    .transaction_cache_read
-                    .is_tx_already_executed(cert.digest()));
-                self.metrics
-                    .transaction_manager_num_enqueued_certificates
-                    .with_label_values(&["already_executed"])
-                    .inc();
-                return;
-            }
-        }
-        .into_iter()
-        .collect();
+        let input_object_keys: Vec<_> = epoch_store
+            .get_input_object_keys(
+                &cert.key(),
+                &input_object_kinds,
+                &execution_env.assigned_versions,
+            )
+            .into_iter()
+            .collect();
         let receiving_object_keys: HashSet<_> = tx_data
             .receiving_objects()
             .into_iter()
