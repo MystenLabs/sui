@@ -4722,6 +4722,29 @@ impl AuthorityPerEpochStore {
         }
     }
 
+    pub(crate) fn set_local_rejected_transaction(
+        &self,
+        round: u32,
+        tx_digest: TransactionDigest,
+        error: SuiError,
+    ) {
+        if let Some(cache) = self.consensus_tx_status_cache.as_ref() {
+            cache.set_local_rejected_transaction(round, tx_digest, error);
+        }
+    }
+
+    #[allow(unused)]
+    pub(crate) fn get_local_transaction_reject_error(
+        &self,
+        tx_digest: TransactionDigest,
+    ) -> Option<SuiError> {
+        if let Some(cache) = self.consensus_tx_status_cache.as_ref() {
+            cache.get_local_transaction_reject_error(tx_digest)
+        } else {
+            None
+        }
+    }
+
     /// Only used by admin API
     pub async fn get_estimated_tx_cost(&self, tx: &TransactionData) -> Option<u64> {
         self.execution_time_estimator

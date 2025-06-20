@@ -179,7 +179,7 @@ impl BlockVerifier for SignedBlockVerifier {
         self.verify_block(block)?;
         if self.context.protocol_config.mysticeti_fastpath() {
             self.transaction_verifier
-                .verify_and_vote_batch(&block.transactions_data())
+                .verify_and_vote_batch(block.round(), &block.transactions_data())
                 .map_err(|e| ConsensusError::InvalidTransaction(e.to_string()))
         } else {
             self.transaction_verifier
@@ -210,6 +210,7 @@ mod test {
         block::{BlockDigest, BlockRef, TestBlock, Transaction, TransactionIndex},
         context::Context,
         transaction::{TransactionVerifier, ValidationError},
+        Round,
     };
 
     struct TxnSizeVerifier {}
@@ -232,6 +233,7 @@ mod test {
         // Rejects transactions with length [4, 16) bytes.
         fn verify_and_vote_batch(
             &self,
+            _round: Round,
             batch: &[&[u8]],
         ) -> Result<Vec<TransactionIndex>, ValidationError> {
             let mut rejected_indices = vec![];

@@ -361,6 +361,7 @@ pub trait TransactionVerifier: Send + Sync + 'static {
     /// transactions. So if a batch from a peer fails validation, the peer is equivocating.
     fn verify_and_vote_batch(
         &self,
+        round: Round,
         batch: &[&[u8]],
     ) -> Result<Vec<TransactionIndex>, ValidationError>;
 }
@@ -383,6 +384,7 @@ impl TransactionVerifier for NoopTransactionVerifier {
 
     fn verify_and_vote_batch(
         &self,
+        _round: Round,
         _batch: &[&[u8]],
     ) -> Result<Vec<TransactionIndex>, ValidationError> {
         Ok(vec![])

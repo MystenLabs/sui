@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use parking_lot::RwLock;
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::collections::{btree_map::Entry, BTreeMap, HashMap};
 use sui_types::{
+    digests::TransactionDigest,
     error::{SuiError, SuiResult},
     messages_consensus::ConsensusPosition,
 };
@@ -48,6 +49,12 @@ pub(crate) struct ConsensusTxStatusCache {
 struct Inner {
     /// A map of transaction position to its status from consensus.
     transaction_status: BTreeMap<ConsensusPosition, ConsensusTxStatus>,
+
+    /// Maps to cache all locally rejected transactions with their errors.
+    /// This can be used to return to clients and provide hints on why the transaction was rejected.
+    /// Errors are garbage collected when the round is expired.
+    local_reject_errors: HashMap<TransactionDigest, SuiError>,
+    local_rejected_transactions: BTreeMap<u32, Vec<TransactionDigest>>,
 }
 
 impl ConsensusTxStatusCache {
@@ -172,6 +179,16 @@ impl ConsensusTxStatusCache {
                 break;
             }
         }
+        while let Some((round, _)) = inner.local_rejected_transactions.first_key_value() {
+            if *round + CONSENSUS_STATUS_RETENTION_ROUNDS <= leader_round {
+                let transactions = inner.local_rejected_transactions.pop_first().unwrap().1;
+                for tx_digest in transactions {
+                    inner.local_reject_errors.remove(&tx_digest);
+                }
+            } else {
+                break;
+            }
+        }
         // Send update through watch channel
         let _ = self.last_committed_leader_round_tx.send(Some(leader_round));
     }
@@ -189,6 +206,37 @@ impl ConsensusTxStatusCache {
             }
         }
         Ok(())
+    }
+
+    pub fn set_local_rejected_transaction(
+        &self,
+        round: u32,
+        tx_digest: TransactionDigest,
+        error: SuiError,
+    ) {
+        if let Some(last_committed_leader_round) = *self.last_committed_leader_round_rx.borrow() {
+            if round + CONSENSUS_STATUS_RETENTION_ROUNDS < last_committed_leader_round {
+                // Round is too old to be cached.
+                return;
+            }
+        }
+
+        let mut inner = self.inner.write();
+        inner.local_reject_errors.insert(tx_digest, error);
+        inner
+            .local_rejected_transactions
+            .entry(round)
+            .or_default()
+            .push(tx_digest);
+    }
+
+    #[allow(unused)]
+    pub fn get_local_transaction_reject_error(
+        &self,
+        tx_digest: TransactionDigest,
+    ) -> Option<SuiError> {
+        let inner = self.inner.read();
+        inner.local_reject_errors.get(&tx_digest).cloned()
     }
 
     #[cfg(test)]

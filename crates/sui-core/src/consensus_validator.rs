@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use consensus_core::{TransactionIndex, TransactionVerifier, ValidationError};
+use consensus_core::{Round, TransactionIndex, TransactionVerifier, ValidationError};
 use fastcrypto_tbls::dkg_v1;
 use mysten_metrics::monitored_scope;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
@@ -137,7 +137,11 @@ impl SuiTxValidator {
         Ok(())
     }
 
-    fn vote_transactions(&self, txs: Vec<ConsensusTransactionKind>) -> Vec<TransactionIndex> {
+    fn vote_transactions(
+        &self,
+        round: Round,
+        txs: Vec<ConsensusTransactionKind>,
+    ) -> Vec<TransactionIndex> {
         let epoch_store = self.authority_state.load_epoch_store_one_call_per_task();
         if !epoch_store.protocol_config().mysticeti_fastpath() {
             return vec![];
@@ -149,8 +153,10 @@ impl SuiTxValidator {
                 continue;
             };
 
+            let tx_digest = *tx.digest();
             if let Err(e) = self.vote_transaction(&epoch_store, tx) {
                 debug!("Failed to vote transaction: {:?}", e);
+                epoch_store.set_local_rejected_transaction(round, tx_digest, e);
                 result.push(i as TransactionIndex);
             }
         }
@@ -208,6 +214,7 @@ impl TransactionVerifier for SuiTxValidator {
 
     fn verify_and_vote_batch(
         &self,
+        round: Round,
         batch: &[&[u8]],
     ) -> Result<Vec<TransactionIndex>, ValidationError> {
         let _scope = monitored_scope("VerifyAndVoteBatch");
@@ -220,7 +227,7 @@ impl TransactionVerifier for SuiTxValidator {
         self.validate_transactions(&txs)
             .map_err(|e| ValidationError::InvalidTransaction(e.to_string()))?;
 
-        Ok(self.vote_transactions(txs))
+        Ok(self.vote_transactions(round, txs))
     }
 }
 
