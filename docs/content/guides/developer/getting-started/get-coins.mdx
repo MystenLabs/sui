@@ -68,13 +68,13 @@ If you're working with a local network, replace `'https://faucet.devnet.sui.io/v
 
 ## Request test tokens through TypeScript SDK
 
-You can also access the faucet using the Sui TypeScript-SDK.
+You can also access the faucet using the Sui TypeScript SDK.
 
 ```typescript
-import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui/faucet';
+import { getFaucetHost, requestSuiFromFaucetV2 } from '@mysten/sui/faucet';
 
 // get tokens from the Devnet faucet server
-await requestSuiFromFaucetV0({
+await requestSuiFromFaucetV2({
 	// connect to Devnet
 	host: getFaucetHost('devnet'),
 	recipient: '<YOUR SUI ADDRESS>',
