@@ -1641,13 +1641,20 @@ impl AuthorityPerEpochStore {
             .insert(tx_digest, cert_sig)?)
     }
 
+    /// Record that a transaction has been executed in the current epoch.
+    /// Used by checkpoint builder to cull dependencies from previous epochs.
     #[instrument(level = "trace", skip_all)]
     pub fn insert_executed_in_epoch(&self, tx_digest: &TransactionDigest) {
         self.consensus_output_cache
             .insert_executed_in_epoch(*tx_digest);
     }
 
-    pub fn insert_tx_key(&self, tx_key: TransactionKey, tx_digest: TransactionDigest) -> SuiResult {
+    /// Record a mapping from a transaction key (such as TransactionKey::RandomRound) to its digest.
+    pub(crate) fn insert_tx_key(
+        &self,
+        tx_key: TransactionKey,
+        tx_digest: TransactionDigest,
+    ) -> SuiResult {
         let _metrics_scope =
             mysten_metrics::monitored_scope("AuthorityPerEpochStore::insert_tx_key");
 
@@ -2451,7 +2458,7 @@ impl AuthorityPerEpochStore {
 
     // Converts transaction keys to digests, waiting for digests to become available for any
     // non-digest keys.
-    pub async fn notify_read_executed_digests(
+    pub async fn notify_read_tx_key_to_digest(
         &self,
         keys: &[TransactionKey],
     ) -> SuiResult<Vec<TransactionDigest>> {

@@ -234,7 +234,7 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
         let epoch_store = epoch_store.clone();
         spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
             let rest_digests = epoch_store
-                .notify_read_executed_digests(&rest_keys)
+                .notify_read_tx_key_to_digest(&rest_keys)
                 .await
                 .expect("db error");
             let rest_transactions = scheduler

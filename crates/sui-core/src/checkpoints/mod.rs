@@ -1231,7 +1231,7 @@ impl CheckpointBuilder {
 
         let root_digests = self
             .epoch_store
-            .notify_read_executed_digests(&roots)
+            .notify_read_tx_key_to_digest(&roots)
             .in_monitored_scope("CheckpointNotifyDigests")
             .await?;
         let root_effects = self
