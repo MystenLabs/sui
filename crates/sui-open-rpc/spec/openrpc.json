@@ -8830,7 +8830,8 @@
               "RandomnessStateCreate",
               "CoinDenyListStateCreate",
               "StoreExecutionTimeObservations",
-              "AccumulatorRootCreate"
+              "AccumulatorRootCreate",
+              "CoinMetadataRegistryCreate"
             ]
           },
           {

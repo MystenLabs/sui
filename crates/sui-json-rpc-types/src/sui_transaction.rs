@@ -602,6 +602,9 @@ impl SuiTransactionBlockKind {
                             EndOfEpochTransactionKind::AccumulatorRootCreate => {
                                 SuiEndOfEpochTransactionKind::AccumulatorRootCreate
                             }
+                            EndOfEpochTransactionKind::CoinMetadataRegistryCreate => {
+                                SuiEndOfEpochTransactionKind::CoinMetadataRegistryCreate
+                            }
                         })
                         .collect(),
                 })
@@ -1686,6 +1689,7 @@ pub enum SuiEndOfEpochTransactionKind {
     BridgeCommitteeUpdate(SequenceNumber),
     StoreExecutionTimeObservations,
     AccumulatorRootCreate,
+    CoinMetadataRegistryCreate,
 }
 
 #[serde_as]

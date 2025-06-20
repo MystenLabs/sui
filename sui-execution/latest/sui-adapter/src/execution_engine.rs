@@ -758,10 +758,6 @@ mod checked {
                             assert!(protocol_config.random_beacon());
                             builder = setup_randomness_state_create(builder);
                         }
-                        EndOfEpochTransactionKind::CoinMetadataRegistryCreate => {
-                            assert!(protocol_config.enable_coin_metadata_registry());
-                            builder = setup_coin_metadata_registry_create(builder);
-                        }
                         EndOfEpochTransactionKind::DenyListStateCreate => {
                             assert!(protocol_config.enable_coin_deny_list_v1());
                             builder = setup_coin_deny_list_state_create(builder);
@@ -785,6 +781,10 @@ mod checked {
                         EndOfEpochTransactionKind::AccumulatorRootCreate => {
                             assert!(protocol_config.enable_accumulators());
                             builder = setup_accumulator_root_create(builder);
+                        }
+                        EndOfEpochTransactionKind::CoinMetadataRegistryCreate => {
+                            assert!(protocol_config.enable_coin_metadata_registry());
+                            builder = setup_coin_metadata_registry_create(builder);
                         }
                     }
                 }
@@ -1216,25 +1216,6 @@ mod checked {
         builder
     }
 
-    fn setup_coin_metadata_registry_create(
-        mut builder: ProgrammableTransactionBuilder,
-    ) -> ProgrammableTransactionBuilder {
-        let registry_uid = builder
-            .input(CallArg::Pure(
-                UID::new(SUI_COIN_METADATA_REGISTRY_OBJECT_ID).to_bcs_bytes(),
-            ))
-            .expect("Unable to create Bridge object UID!");
-
-        builder.programmable_move_call(
-            SUI_COIN_METADATA_REGISTRY_ADDRESS.into(),
-            COIN_METADATA_REGISTRY_MODULE_NAME.to_owned(),
-            COIN_METADATA_REGISTRY_CREATE_FUNCTION_NAME.to_owned(),
-            vec![],
-            vec![registry_uid],
-        );
-        builder
-    }
-
     fn setup_bridge_create(
         mut builder: ProgrammableTransactionBuilder,
         chain_id: ChainIdentifier,
@@ -1470,6 +1451,25 @@ mod checked {
                 vec![],
             )
             .expect("Unable to generate accumulator_root_create transaction!");
+        builder
+    }
+
+    fn setup_coin_metadata_registry_create(
+        mut builder: ProgrammableTransactionBuilder,
+    ) -> ProgrammableTransactionBuilder {
+        let registry_uid = builder
+            .input(CallArg::Pure(
+                UID::new(SUI_COIN_METADATA_REGISTRY_OBJECT_ID).to_bcs_bytes(),
+            ))
+            .expect("Unable to create Bridge object UID!");
+
+        builder.programmable_move_call(
+            SUI_COIN_METADATA_REGISTRY_ADDRESS.into(),
+            COIN_METADATA_REGISTRY_MODULE_NAME.to_owned(),
+            COIN_METADATA_REGISTRY_CREATE_FUNCTION_NAME.to_owned(),
+            vec![],
+            vec![registry_uid],
+        );
         builder
     }
 }

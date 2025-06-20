@@ -21,6 +21,9 @@ use sui_framework::{BuiltInFramework, SystemPackage};
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::base_types::{ExecutionDigests, ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::bridge::{BridgeChainId, BRIDGE_CREATE_FUNCTION_NAME, BRIDGE_MODULE_NAME};
+use sui_types::coin_metadata_registry::{
+    COIN_METADATA_REGISTRY_CREATE_FUNCTION_NAME, COIN_METADATA_REGISTRY_MODULE_NAME,
+};
 use sui_types::committee::Committee;
 use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignInfoTrait,
@@ -36,6 +39,7 @@ use sui_types::governance::StakedSui;
 use sui_types::id::UID;
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
+use sui_types::is_system_package;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary,
@@ -48,11 +52,7 @@ use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState, SuiSyste
 use sui_types::transaction::{
     CallArg, CheckedInputObjects, Command, InputObjectKind, ObjectReadResult, Transaction,
 };
-use sui_types::{is_system_package, SUI_COIN_METADATA_REGISTRY_OBJECT_ID};
-use sui_types::{
-    BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID, SUI_COIN_METADATA_REGISTRY_ADDRESS,
-    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
-};
+use sui_types::{BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
 use tracing::trace;
 use validator_info::{GenesisValidatorInfo, GenesisValidatorMetadata, ValidatorInfo};
 
@@ -336,7 +336,7 @@ impl Builder {
 
         assert_eq!(
             protocol_config.enable_coin_metadata_registry(),
-            unsigned_genesis.coin_metadata_registry_object(),
+            unsigned_genesis.has_coin_metadata_registry_object(),
         );
 
         assert_eq!(
@@ -1153,6 +1153,16 @@ pub fn generate_genesis_system_object(
             )?;
         }
 
+        if protocol_config.enable_coin_metadata_registry() {
+            builder.programmable_move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                COIN_METADATA_REGISTRY_MODULE_NAME.to_owned(),
+                COIN_METADATA_REGISTRY_CREATE_FUNCTION_NAME.to_owned(),
+                vec![],
+                vec![],
+            );
+        }
+
         if protocol_config.enable_coin_deny_list_v1() {
             builder.move_call(
                 SUI_FRAMEWORK_ADDRESS.into(),
@@ -1176,22 +1186,6 @@ pub fn generate_genesis_system_object(
                 BRIDGE_CREATE_FUNCTION_NAME.to_owned(),
                 vec![],
                 vec![bridge_uid, bridge_chain_id],
-            );
-        }
-
-        if protocol_config.enable_coin_metadata_registry() {
-            let registry_uid = builder
-                .input(CallArg::Pure(
-                    UID::new(SUI_COIN_METADATA_REGISTRY_OBJECT_ID).to_bcs_bytes(),
-                ))
-                .unwrap();
-
-            builder.programmable_move_call(
-                SUI_FRAMEWORK_ADDRESS.into(),
-                COIN_METADATA_REGISTRY_MODULE_NAME.to_owned(),
-                COIN_METADATA_REGISTRY_CREATE_FUNCTION_NAME.to_owned(),
-                vec![],
-                vec![registry_uid],
             );
         }
 

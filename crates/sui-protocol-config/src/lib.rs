@@ -450,10 +450,6 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     bridge: bool,
 
-    // Enable coin metadata registry protocol
-    #[serde(skip_serializing_if = "is_false")]
-    enable_coin_metadata_registry: bool,
-
     #[serde(skip_serializing_if = "is_false")]
     enable_effects_v2: bool,
 
@@ -720,6 +716,10 @@ struct FeatureFlags {
     // Enable accumulators
     #[serde(skip_serializing_if = "is_false")]
     enable_accumulators: bool,
+
+    // Enable coin metadata registry protocol
+    #[serde(skip_serializing_if = "is_false")]
+    enable_coin_metadata_registry: bool,
 
     // Rethrow type layout errors during serialization instead of trying to convert them.
     #[serde(skip_serializing_if = "is_false")]
@@ -1743,10 +1743,6 @@ impl ProtocolConfig {
         ret
     }
 
-    pub fn enable_coin_metadata_registry(&self) -> bool {
-        self.feature_flags.enable_coin_metadata_registry
-    }
-
     pub fn should_try_to_finalize_bridge_committee(&self) -> bool {
         if !self.enable_bridge() {
             return false;
@@ -1821,6 +1817,10 @@ impl ProtocolConfig {
 
     pub fn enable_accumulators(&self) -> bool {
         self.feature_flags.enable_accumulators
+    }
+
+    pub fn enable_coin_metadata_registry(&self) -> bool {
+        self.feature_flags.enable_coin_metadata_registry
     }
 
     pub fn enable_coin_deny_list_v2(&self) -> bool {
