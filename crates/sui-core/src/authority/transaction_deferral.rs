@@ -28,6 +28,11 @@ impl DeferralKey {
     }
 
     pub fn new_for_consensus_round(future_round: Round, deferred_from_round: Round) -> Self {
+        assert!(
+            future_round >= deferred_from_round,
+            "future_round must be greater than or equal to deferred_from_round"
+        );
+        
         Self::ConsensusRound {
             future_round,
             deferred_from_round,
@@ -89,9 +94,9 @@ pub fn transaction_deferral_within_limit(
         deferred_from_round,
     } = deferral_key
     {
-        return (future_round - deferred_from_round) <= max_deferral_rounds_for_congestion_control;
+        let diff = future_round.checked_sub(*deferred_from_round);
+        return diff <= max_deferral_rounds_for_congestion_control;
     }
-
     // TODO: drop transactions at the end of the queue if the queue is too long.
 
     true
