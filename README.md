@@ -3,7 +3,7 @@
 </p>
 
 # Welcome to Sui
-
+Romeo Rosete
 [![Github release](https://img.shields.io/github/v/tag/MystenLabs/sui.svg?sort=semver)](https://github.com/MystenLabs/sui/releases/latest)
 [![License](https://img.shields.io/github/license/MystenLabs/sui)](https://github.com/MystenLabs/sui/blob/main/LICENSE)
 

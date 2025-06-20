@@ -9,7 +9,6 @@ use crate::{
     gas_meter::SuiGasMeter,
     programmable_transactions as legacy_ptb, sp,
     static_programmable_transactions::{
-        better_todo,
         env::Env,
         execution::values::{
             ByteValue, InitialInput, InputObjectMetadata, InputValue, Inputs, Local, Locals, Value,
@@ -409,11 +408,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     > {
         let v = match location {
             T::Location::GasCoin => {
-                let () =
-                    better_todo!("better error here? How do we handle if there is no gas coin?");
                 let gas_locals = unwrap!(self.gas.as_mut(), "Gas coin not provided");
                 let InputValue::Loaded(gas_local) = gas_locals.get(0)? else {
-                    invariant_violation!("Gas coin should be loaded, not bytes");
+                    // TODO maybe give a better error here
+                    invariant_violation!("Gas coin could not be loaded");
                 };
                 LocationValue::Loaded(gas_local)
             }

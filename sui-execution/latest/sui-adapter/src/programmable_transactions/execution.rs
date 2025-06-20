@@ -21,6 +21,7 @@ mod checked {
                 trace_transfer,
             },
         },
+        static_programmable_transactions,
         type_resolver::TypeTagResolver,
     };
     use move_binary_format::file_format::AbilitySet;
@@ -90,12 +91,26 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         vm: &MoveVM,
         state_view: &mut dyn ExecutionState,
-        _package_store: &dyn BackingPackageStore,
+        package_store: &dyn BackingPackageStore,
         tx_context: Rc<RefCell<TxContext>>,
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
+        if protocol_config.enable_ptb_execution_v2() {
+            return static_programmable_transactions::execute::<Mode>(
+                protocol_config,
+                metrics,
+                vm,
+                state_view,
+                package_store,
+                tx_context,
+                gas_charger,
+                pt,
+                trace_builder_opt,
+            );
+        }
+
         let mut timings = vec![];
         let result = execute_inner::<Mode>(
             &mut timings,

@@ -108,6 +108,8 @@ pub enum FakeID {
     Enumerated(u64, u64),
 }
 
+pub static ENABLE_PTB_V2: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+
 const DEFAULT_GAS_PRICE: u64 = 1_000;
 
 const WELL_KNOWN_OBJECTS: &[ObjectID] = &[
@@ -349,7 +351,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
         let AdapterInitConfig {
             additional_mapping,
             account_names,
-            protocol_config,
+            mut protocol_config,
             is_simulator,
             custom_validator_account,
             reference_gas_price,
@@ -360,6 +362,8 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             Some((init_cmd, sui_args)) => AdapterInitConfig::from_args(init_cmd, sui_args),
             None => AdapterInitConfig::default(),
         };
+        protocol_config
+            .set_enable_ptb_execution_v2_for_testing(ENABLE_PTB_V2.get().copied().unwrap_or(false));
 
         let (
             executor,

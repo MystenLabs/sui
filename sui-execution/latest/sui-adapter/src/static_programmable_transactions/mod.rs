@@ -25,17 +25,6 @@ pub mod loading;
 pub mod spanned;
 pub mod typing;
 
-macro_rules! better_todo {
-    ($($arg:tt)+) => {
-        $crate::static_programmable_transactions::better_todo_(format!("{}", std::format_args!($($arg)+)))
-    };
-}
-pub(crate) use better_todo;
-
-pub fn better_todo_<T>(s: String) -> T {
-    todo!("{}", s)
-}
-
 pub fn execute<Mode: ExecutionMode>(
     protocol_config: &ProtocolConfig,
     metrics: Arc<LimitsMetrics>,
