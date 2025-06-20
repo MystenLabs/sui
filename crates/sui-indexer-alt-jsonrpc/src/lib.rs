@@ -537,7 +537,7 @@ mod tests {
         assert_eq!(
             metrics
                 .requests_received
-                .with_label_values(&["<UNKNOWN>"])
+                .with_label_values(&["UNKNOWN:test_baz"])
                 .get(),
             1
         );
@@ -545,7 +545,7 @@ mod tests {
         assert_eq!(
             metrics
                 .requests_succeeded
-                .with_label_values(&["<UNKNOWN>"])
+                .with_label_values(&["UNKNOWN:test_baz"])
                 .get(),
             0
         );
@@ -553,7 +553,7 @@ mod tests {
         assert_eq!(
             metrics
                 .requests_failed
-                .with_label_values(&["<UNKNOWN>", &format!("{METHOD_NOT_FOUND_CODE}")])
+                .with_label_values(&["UNKNOWN:test_baz", &format!("{METHOD_NOT_FOUND_CODE}")])
                 .get(),
             1
         );
