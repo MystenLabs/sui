@@ -53,6 +53,7 @@ pub struct IndexerMetrics {
     pub total_ingested_bytes: IntCounter,
     pub total_ingested_transient_retries: IntCounterVec,
     pub total_ingested_not_found_retries: IntCounter,
+    pub total_ingested_permanent_errors: IntCounterVec,
 
     // Checkpoint lag metrics for the ingestion pipeline.
     pub latest_ingested_checkpoint: IntGauge,
@@ -199,6 +200,12 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            total_ingested_permanent_errors: register_int_counter_vec_with_registry!(
+                "total_ingested_permanent_errors",
+                "Total number of permanent errors while fetching data from the remote store",
+                &["reason"],
+                registry,
+            ).unwrap(),
             latest_ingested_checkpoint: register_int_gauge_with_registry!(
                 "indexer_latest_ingested_checkpoint",
                 "Latest checkpoint sequence number fetched from the remote store",
@@ -603,6 +610,16 @@ impl IndexerMetrics {
             .inc();
 
         backoff::Error::transient(error)
+    }
+
+    /// Register that we're NOT retrying a checkpoint fetch due to a permanent error, logging the
+    /// reason and error.
+    pub fn inc_permanent(&self, reason: &str, error: Error) -> backoff::Error<Error> {
+        self.total_ingested_permanent_errors
+            .with_label_values(&[reason])
+            .inc();
+
+        backoff::Error::permanent(error)
     }
 }
 

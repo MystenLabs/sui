@@ -207,26 +207,13 @@ pub(crate) mod tests {
         assert_eq!(42, checkpoint.checkpoint_summary.sequence_number)
     }
 
-    /// Treat deserialization failure as another kind of transient error -- all checkpoint data
-    /// that is fetched should be valid (deserializable as a `CheckpointData`).
     #[tokio::test]
-    async fn retry_on_deserialization_error() {
+    async fn fail_on_deserialization_error() {
         let server = MockServer::start().await;
-        let times: Mutex<u64> = Mutex::new(0);
-        respond_with(&server, move |_: &Request| {
-            let mut times = times.lock().unwrap();
-            *times += 1;
-            if *times < 3 {
-                status(StatusCode::OK).set_body_bytes(vec![])
-            } else {
-                status(StatusCode::OK).set_body_bytes(test_checkpoint_data(42))
-            }
-        })
-        .await;
+        respond_with(&server, status(StatusCode::OK).set_body_bytes(vec![])).await;
 
         let client = remote_test_client(server.uri());
-        let checkpoint = client.fetch(42).await.unwrap();
-
-        assert_eq!(42, checkpoint.checkpoint_summary.sequence_number)
+        let result = client.fetch(42).await;
+        assert!(matches!(result, Err(Error::DeserializationError(42, _))));
     }
 }
