@@ -24,7 +24,7 @@ const COFFEE_PRICE: u64 = 10_000_000_000;
 public struct COFFEE has drop {}
 
 /// The shop that sells Coffee and allows to buy a Coffee if the customer
-/// has 10 COFFEE points.
+/// has 10 SUI or 4 COFFEE points.
 public struct CoffeeShop has key {
     id: UID,
     /// The treasury cap for the `COFFEE` points.
@@ -61,7 +61,7 @@ fun init(otw: COFFEE, ctx: &mut TxContext) {
 /// shop and the customer gets a free coffee after 4 purchases.
 public fun buy_coffee(app: &mut CoffeeShop, payment: Coin<SUI>, ctx: &mut TxContext) {
     // Check if the customer has enough SUI to pay for the coffee.
-    assert!(coin::value(&payment) > COFFEE_PRICE, EIncorrectAmount);
+    assert!(coin::value(&payment) == COFFEE_PRICE, EIncorrectAmount);
 
     let token = token::mint(&mut app.coffee_points, 1, ctx);
     let request = token::transfer(token, ctx.sender(), ctx);
