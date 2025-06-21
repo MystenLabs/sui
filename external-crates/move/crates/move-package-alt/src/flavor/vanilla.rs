@@ -15,11 +15,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use crate::dependency::{DependencySet, PinnedDependencyInfo};
-use crate::{
-    dependency::{Pinned, Unpinned},
-    errors::PackageResult,
-    package::PackageName,
-};
+use crate::{errors::PackageResult, package::PackageName};
 
 use super::MoveFlavor;
 

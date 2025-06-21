@@ -1,28 +1,24 @@
 ---
 source: crates/move-package-alt/tests/test_runner.rs
 ---
-Manifest {
+ParsedManifest {
     package: PackageMetadata {
-        name: Located {
-            loc: Location {
-                file: "tests/data/invalid_author/Move.toml",
-                span: 17..23,
-            },
+        name: Spanned {
+            span: 17..23,
             value: Identifier(
                 "name",
             ),
         },
-        edition: Located {
-            loc: Location {
-                file: "tests/data/invalid_author/Move.toml",
-                span: 34..45,
-            },
-            value: "2024.beta",
-        },
-        metadata: (),
+        edition: "2025",
     },
     environments: {
-        "mainnet": "35834a8a",
+        Spanned {
+            span: 71..78,
+            value: "mainnet",
+        }: Spanned {
+            span: 81..91,
+            value: "35834a8a",
+        },
     },
     dependencies: {},
     dep_replacements: {},

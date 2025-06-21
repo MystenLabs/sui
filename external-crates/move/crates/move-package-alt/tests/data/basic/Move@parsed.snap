@@ -1,36 +1,41 @@
 ---
 source: crates/move-package-alt/tests/test_runner.rs
 ---
-Manifest {
+ParsedManifest {
     package: PackageMetadata {
-        name: Located {
-            loc: Location {
-                file: "tests/data/basic/Move.toml",
-                span: 17..26,
-            },
+        name: Spanned {
+            span: 17..26,
             value: Identifier(
                 "example",
             ),
         },
-        edition: Located {
-            loc: Location {
-                file: "tests/data/basic/Move.toml",
-                span: 37..48,
-            },
-            value: "2024.beta",
-        },
-        metadata: (),
+        edition: "2025",
     },
     environments: {
-        "mainnet": "35834a8a",
-        "testnet": "4c78adac",
+        Spanned {
+            span: 126..133,
+            value: "mainnet",
+        }: Spanned {
+            span: 136..146,
+            value: "35834a8a",
+        },
+        Spanned {
+            span: 147..154,
+            value: "testnet",
+        }: Spanned {
+            span: 157..167,
+            value: "4c78adac",
+        },
     },
     dependencies: {
-        Identifier(
-            "foo",
-        ): ManifestDependency {
+        Spanned {
+            span: 184..187,
+            value: Identifier(
+                "foo",
+            ),
+        }: DefaultDependency {
             dependency_info: Git(
-                UnpinnedGitDependency {
+                ManifestGitDependency {
                     repo: "https://example.com/foo.git",
                     rev: Some(
                         "releases/v1",
@@ -40,21 +45,21 @@ Manifest {
             ),
             is_override: true,
             rename_from: Some(
-                Identifier(
-                    "Foo",
-                ),
+                "Foo",
             ),
         },
-        Identifier(
-            "qwer",
-        ): ManifestDependency {
+        Spanned {
+            span: 288..292,
+            value: Identifier(
+                "qwer",
+            ),
+        }: DefaultDependency {
             dependency_info: External(
                 ExternalDependency {
                     resolver: "mvr",
                     data: String(
                         "@pkg/qwer",
                     ),
-                    containing_file: "tests/data/basic/Move.toml",
                 },
             ),
             is_override: false,
@@ -65,16 +70,13 @@ Manifest {
         "mainnet": {
             Identifier(
                 "bar",
-            ): Located {
-                loc: Location {
-                    file: "tests/data/basic/Move.toml",
-                    span: 660..927,
-                },
-                value: ManifestDependencyReplacement {
+            ): Spanned {
+                span: 655..922,
+                value: ReplacementDependency {
                     dependency: Some(
-                        ManifestDependency {
+                        DefaultDependency {
                             dependency_info: Git(
-                                UnpinnedGitDependency {
+                                ManifestGitDependency {
                                     repo: "https://example.com/bar.git",
                                     rev: None,
                                     path: "",
@@ -84,7 +86,9 @@ Manifest {
                             rename_from: None,
                         },
                     ),
-                    address_info: None,
+                    published_at: Some(
+                        "0x12ga0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb",
+                    ),
                     use_environment: Some(
                         "mainnet_beta",
                     ),
@@ -92,16 +96,13 @@ Manifest {
             },
             Identifier(
                 "foo",
-            ): Located {
-                loc: Location {
-                    file: "tests/data/basic/Move.toml",
-                    span: 415..658,
-                },
-                value: ManifestDependencyReplacement {
+            ): Spanned {
+                span: 410..653,
+                value: ReplacementDependency {
                     dependency: Some(
-                        ManifestDependency {
+                        DefaultDependency {
                             dependency_info: Git(
-                                UnpinnedGitDependency {
+                                ManifestGitDependency {
                                     repo: "https://example.com/foo.git",
                                     rev: None,
                                     path: "",
@@ -111,7 +112,9 @@ Manifest {
                             rename_from: None,
                         },
                     ),
-                    address_info: None,
+                    published_at: Some(
+                        "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb",
+                    ),
                     use_environment: Some(
                         "mainnet_alpha",
                     ),

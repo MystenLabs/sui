@@ -1,33 +1,32 @@
 ---
 source: crates/move-package-alt/tests/test_runner.rs
 ---
-Manifest {
+ParsedManifest {
     package: PackageMetadata {
-        name: Located {
-            loc: Location {
-                file: "tests/data/basic_external_resolver/Move.toml",
-                span: 17..26,
-            },
+        name: Spanned {
+            span: 17..26,
             value: Identifier(
                 "example",
             ),
         },
-        edition: Located {
-            loc: Location {
-                file: "tests/data/basic_external_resolver/Move.toml",
-                span: 37..48,
-            },
-            value: "2024.beta",
-        },
-        metadata: (),
+        edition: "2025",
     },
     environments: {
-        "mainnet": "35834a8a",
+        Spanned {
+            span: 107..114,
+            value: "mainnet",
+        }: Spanned {
+            span: 117..127,
+            value: "35834a8a",
+        },
     },
     dependencies: {
-        Identifier(
-            "mock",
-        ): ManifestDependency {
+        Spanned {
+            span: 144..148,
+            value: Identifier(
+                "mock",
+            ),
+        }: DefaultDependency {
             dependency_info: External(
                 ExternalDependency {
                     resolver: "mock-resolver",
@@ -42,7 +41,6 @@ Manifest {
                             ),
                         },
                     ),
-                    containing_file: "tests/data/basic_external_resolver/Move.toml",
                 },
             ),
             is_override: false,

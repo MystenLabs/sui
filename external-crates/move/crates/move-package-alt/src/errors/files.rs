@@ -64,11 +64,14 @@ impl<'a> codespan_reporting::files::Files<'a> for Files {
 
 impl FileHandle {
     /// Reads the file located at [path] into the file cache and returns its ID
-    pub fn new(path: PathBuf) -> io::Result<Self> {
-        let name = path.to_string_lossy().to_string();
+    pub fn new(path: impl AsRef<Path>) -> io::Result<Self> {
+        let name = path.as_ref().to_string_lossy().to_string();
         let source = fs::read_to_string(&path)?;
 
-        let id = FILES.push(SimpleFile::new(DisplayPath(path), source));
+        let id = FILES.push(SimpleFile::new(
+            DisplayPath(path.as_ref().to_path_buf()),
+            source,
+        ));
         Ok(Self { id })
     }
 

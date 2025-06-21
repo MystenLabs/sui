@@ -15,7 +15,7 @@ use std::{
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
-    dependency::{DependencySet, Pinned, PinnedDependencyInfo, Unpinned},
+    dependency::{DependencySet, PinnedDependencyInfo},
     errors::PackageResult,
     package::PackageName,
 };

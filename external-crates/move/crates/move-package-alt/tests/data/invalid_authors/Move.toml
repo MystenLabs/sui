@@ -1,8 +1,7 @@
 [package]
 name = "name"
-edition = "2024.beta"
+edition = "2025"
 authors = "nope"
 
 [environments]
 mainnet = "35834a8a"
-

@@ -9,7 +9,7 @@ use crate::{
     errors::{PackageError, PackageResult},
     flavor::Vanilla,
     graph::PackageGraph,
-    package::{Package, RootPackage, lockfile::Lockfile, manifest::Manifest, paths::PackagePath},
+    package::{Package, RootPackage, manifest::Manifest, paths::PackagePath},
 };
 use clap::{Command, Parser, Subcommand};
 
