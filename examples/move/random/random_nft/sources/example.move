@@ -28,7 +28,6 @@ public struct MintingCapability has key {
     id: UID,
 }
 
-#[allow(unused_function)]
 fun init(ctx: &mut TxContext) {
     transfer::transfer(
         MintingCapability { id: object::new(ctx) },
