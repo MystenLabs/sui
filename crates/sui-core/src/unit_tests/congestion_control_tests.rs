@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::shared_object_congestion_tracker::SharedObjectCongestionTracker;
+use crate::authority::ExecutionEnv;
 use crate::{
     authority::{
         authority_tests::{
@@ -346,10 +347,10 @@ async fn test_congestion_control_execution_cancellation() {
     );
 
     // Run the same transaction in `authority_state_2`, but using the above effects for the execution.
-    let cert = certify_shared_obj_transaction_no_execution(&authority_state_2, congested_tx)
+    let (cert, _) = certify_shared_obj_transaction_no_execution(&authority_state_2, congested_tx)
         .await
         .unwrap();
-    authority_state_2
+    let assigned_versions = authority_state_2
         .epoch_store_for_testing()
         .acquire_shared_version_assignments_from_effects(
             &VerifiedExecutableTransaction::new_from_certificate(cert.clone()),
@@ -357,7 +358,11 @@ async fn test_congestion_control_execution_cancellation() {
             authority_state_2.get_object_cache_reader().as_ref(),
         )
         .unwrap();
-    let (effects_2, execution_error) = authority_state_2.try_execute_for_test(&cert).await.unwrap();
+    let execution_env = ExecutionEnv::new().with_assigned_versions(assigned_versions);
+    let (effects_2, execution_error) = authority_state_2
+        .try_execute_for_test(&cert, execution_env)
+        .await
+        .unwrap();
 
     // Should result in the same cancellation.
     assert_eq!(

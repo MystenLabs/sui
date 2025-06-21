@@ -30,7 +30,6 @@ use serde::{Deserialize, Serialize};
 use sui_macros::fail_point;
 use sui_network::default_mysten_network_config;
 use sui_types::base_types::ConciseableName;
-use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::messages_checkpoint::CheckpointCommitment;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
@@ -944,116 +943,6 @@ impl CheckpointStore {
         self.delete_highest_executed_checkpoint_test_only()?;
         Ok(())
     }
-
-    /// TODO: this is only needed while upgrading from non-dataquarantine to
-    /// dataquarantine. After that it can be deleted.
-    ///
-    /// Re-executes all transactions from all local, uncertified checkpoints for crash recovery.
-    /// All transactions thus re-executed are guaranteed to not have any missing dependencies,
-    /// because we start from the highest executed checkpoint, and proceed through checkpoints in
-    /// order.
-    #[instrument(level = "debug", skip_all)]
-    pub async fn reexecute_local_checkpoints(
-        &self,
-        state: &AuthorityState,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
-        let epoch = epoch_store.epoch();
-        let highest_executed = self
-            .get_highest_executed_checkpoint_seq_number()
-            .expect("get_highest_executed_checkpoint_seq_number should not fail")
-            .unwrap_or(0);
-
-        let Ok(Some(highest_built)) = self.get_latest_locally_computed_checkpoint() else {
-            info!("no locally built checkpoints to verify");
-            return;
-        };
-
-        info!(
-            "rexecuting locally computed checkpoints for crash recovery from {} to {}",
-            highest_executed, highest_built
-        );
-
-        for seq in highest_executed + 1..=*highest_built.sequence_number() {
-            info!(?seq, "Re-executing locally computed checkpoint");
-            let Some(checkpoint) = self
-                .get_locally_computed_checkpoint(seq)
-                .expect("get_locally_computed_checkpoint should not fail")
-            else {
-                panic!("locally computed checkpoint {:?} not found", seq);
-            };
-
-            let Some(contents) = self
-                .get_checkpoint_contents(&checkpoint.content_digest)
-                .expect("get_checkpoint_contents should not fail")
-            else {
-                panic!("checkpoint contents not found for locally computed checkpoint {:?} (digest: {:?})", seq, checkpoint.content_digest);
-            };
-
-            let cache = state.get_transaction_cache_reader();
-
-            let tx_digests: Vec<_> = contents.iter().map(|digests| digests.transaction).collect();
-            let fx_digests: Vec<_> = contents.iter().map(|digests| digests.effects).collect();
-            let txns = cache.multi_get_transaction_blocks(&tx_digests);
-
-            let txns: Vec<_> = itertools::izip!(txns, tx_digests, fx_digests)
-                .filter_map(|(tx, digest, fx)| {
-                    if let Some(tx) = tx {
-                        Some((tx, fx))
-                    } else {
-                        info!(
-                            "transaction {:?} not found during checkpoint re-execution",
-                            digest
-                        );
-                        None
-                    }
-                })
-                // end of epoch transaction can only be executed by CheckpointExecutor
-                .filter(|(tx, _)| !tx.data().transaction_data().is_end_of_epoch_tx())
-                .map(|(tx, fx)| {
-                    (
-                        VerifiedExecutableTransaction::new_from_checkpoint(
-                            (*tx).clone(),
-                            epoch,
-                            seq,
-                        ),
-                        fx,
-                    )
-                })
-                .collect();
-
-            let tx_digests: Vec<_> = txns.iter().map(|(tx, _)| *tx.digest()).collect();
-
-            info!(
-                ?seq,
-                ?tx_digests,
-                "Re-executing transactions for locally built checkpoint"
-            );
-            // this will panic if any re-execution diverges from the previously recorded effects digest
-            state.enqueue_with_expected_effects_digest(txns, epoch_store);
-
-            // a task that logs every so often until it is cancelled
-            // This should normally finish very quickly, so seeing this log more than once or twice is
-            // likely a sign of a problem.
-            let waiting_logger = tokio::task::spawn(async move {
-                let mut interval = tokio::time::interval(Duration::from_secs(1));
-                loop {
-                    interval.tick().await;
-                    warn!(?seq, "Still waiting for re-execution to complete");
-                }
-            });
-
-            cache
-                .notify_read_executed_effects_digests(&tx_digests)
-                .await;
-
-            waiting_logger.abort();
-            waiting_logger.await.ok();
-            info!(?seq, "Re-execution completed for locally built checkpoint");
-        }
-
-        info!("Re-execution of locally built checkpoints completed");
-    }
 }
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
@@ -1342,7 +1231,7 @@ impl CheckpointBuilder {
 
         let root_digests = self
             .epoch_store
-            .notify_read_executed_digests(&roots)
+            .notify_read_tx_key_to_digest(&roots)
             .in_monitored_scope("CheckpointNotifyDigests")
             .await?;
         let root_effects = self
@@ -3243,8 +3132,6 @@ mod tests {
         let epoch_store = state.epoch_store_for_testing();
         let effects = e(digest, dependencies, gas_used);
         store.insert(digest, effects.clone());
-        epoch_store
-            .insert_tx_key(&TransactionKey::Digest(digest), &digest)
-            .expect("Inserting cert fx and sigs should not fail");
+        epoch_store.insert_executed_in_epoch(&digest);
     }
 }

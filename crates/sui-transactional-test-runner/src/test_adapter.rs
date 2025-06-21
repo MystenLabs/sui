@@ -49,6 +49,7 @@ use std::{
     path::Path,
     sync::Arc,
 };
+use sui_core::authority::shared_object_version_manager::AssignedVersions;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
@@ -1252,7 +1253,12 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     )
                     .unwrap();
 
-                let objects = self.executor.read_input_objects(tx.clone()).await?;
+                // Note: benchmark does not support shared object version assignment
+                let assigned_versions = AssignedVersions::default();
+                let objects = self
+                    .executor
+                    .read_input_objects(tx.clone(), assigned_versions)
+                    .await?;
 
                 // only run benchmarks in release mode
                 if !cfg!(debug_assertions) {
