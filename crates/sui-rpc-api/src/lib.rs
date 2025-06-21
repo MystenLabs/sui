@@ -124,6 +124,7 @@ impl RpcService {
                     self.clone(),
                 );
             let signature_verification_service = crate::proto::rpc::v2alpha::signature_verification_service_server::SignatureVerificationServiceServer::new(self.clone());
+            let move_package_service = crate::proto::rpc::v2alpha::move_package_service_server::MovePackageServiceServer::new(self.clone());
 
             let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
@@ -170,6 +171,7 @@ impl RpcService {
                 service_name(&transaction_execution_service),
                 service_name(&live_data_service),
                 service_name(&signature_verification_service),
+                service_name(&move_package_service),
                 service_name(&reflection_v1),
                 service_name(&reflection_v1alpha),
             ] {
@@ -184,7 +186,8 @@ impl RpcService {
                 .add_service(ledger_service)
                 .add_service(transaction_execution_service)
                 .add_service(live_data_service)
-                .add_service(signature_verification_service);
+                .add_service(signature_verification_service)
+                .add_service(move_package_service);
 
             if let Some(subscription_service_handle) = self.subscription_service_handle.clone() {
                 let subscription_service =
