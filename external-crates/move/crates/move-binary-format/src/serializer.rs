@@ -1189,6 +1189,8 @@ impl CommonSerializer {
             self.constant_pool.0,
             self.constant_pool.1,
         )?;
+        // TODO: Should this be disabled? We do not support it on-chain, and perhaps should also
+        // disallow it after a certain version.
         if self.major_version >= VERSION_5 {
             // Metadata was not introduced before v5, so do not generate it for lower versions.
             serialize_table_index(

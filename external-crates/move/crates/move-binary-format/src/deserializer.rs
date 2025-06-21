@@ -22,7 +22,7 @@ use std::{
 impl CompiledModule {
     /// Deserialize a &[u8] slice into a `CompiledModule` instance.
     pub fn deserialize_with_defaults(binary: &[u8]) -> BinaryLoaderResult<Self> {
-        Self::deserialize_with_config(binary, &BinaryConfig::with_extraneous_bytes_check(false))
+        Self::deserialize_with_config(binary, &BinaryConfig::with_extraneous_bytes_check(true))
     }
 
     /// Deserialize a &[u8] slice into a `CompiledModule` instance with settings
