@@ -47,7 +47,7 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
                 Owner::ObjectOwner(_)
                 | Owner::Shared { .. }
                 | Owner::ConsensusAddressOwner { .. } => {
-                    invariant_violation!("Unepected owner for ImmOrOwnedObject: {:?}", obj.owner);
+                    invariant_violation!("Unexpected owner for ImmOrOwnedObject: {:?}", obj.owner);
                 }
             };
             (L::InputArg::Object(arg), L::InputType::Fixed(ty))
@@ -71,6 +71,10 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
                 }),
                 L::InputType::Fixed(ty),
             )
+        }
+        CallArg::BalanceWithdraw(_) => {
+            // TODO(address-balances): Add support for balance withdraws.
+            todo!("Load balance withdraw call arg")
         }
     })
 }

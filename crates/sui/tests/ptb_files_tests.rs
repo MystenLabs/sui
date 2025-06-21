@@ -111,6 +111,7 @@ fn stable_call_arg_display(ca: &CallArg) -> String {
             }
             ObjectArg::Receiving(_) => "Receiving".to_string(),
         },
+        CallArg::BalanceWithdraw(_) => "BalanceWithdraw".to_string(),
     }
 }
 

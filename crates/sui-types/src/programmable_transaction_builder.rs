@@ -12,7 +12,9 @@ use serde::Serialize;
 use crate::{
     base_types::{FullObjectID, FullObjectRef, ObjectID, ObjectRef, SuiAddress},
     move_package::PACKAGE_MODULE_NAME,
-    transaction::{Argument, CallArg, Command, ObjectArg, ProgrammableTransaction},
+    transaction::{
+        Argument, BalanceWithdrawArg, CallArg, Command, ObjectArg, ProgrammableTransaction,
+    },
     SUI_FRAMEWORK_PACKAGE_ID,
 };
 
@@ -25,6 +27,7 @@ enum BuilderArg {
     Object(ObjectID),
     Pure(Vec<u8>),
     ForcedNonUniquePure(usize),
+    BalanceWithdraw(usize),
 }
 
 #[derive(Default)]
@@ -75,6 +78,9 @@ impl ProgrammableTransactionBuilder {
             let old_obj_arg = match old_value {
                 CallArg::Pure(_) => anyhow::bail!("invariant violation! object has pure argument"),
                 CallArg::Object(arg) => arg,
+                CallArg::BalanceWithdraw(_) => {
+                    anyhow::bail!("invariant violation! object has balance withdraw argument")
+                }
             };
             match (old_obj_arg, obj_arg) {
                 (
@@ -117,10 +123,19 @@ impl ProgrammableTransactionBuilder {
         Ok(Argument::Input(i as u16))
     }
 
+    pub fn balance_withdraw(&mut self, arg: BalanceWithdrawArg) -> anyhow::Result<Argument> {
+        let (i, _) = self.inputs.insert_full(
+            BuilderArg::BalanceWithdraw(self.inputs.len()),
+            CallArg::BalanceWithdraw(arg),
+        );
+        Ok(Argument::Input(i as u16))
+    }
+
     pub fn input(&mut self, call_arg: CallArg) -> anyhow::Result<Argument> {
         match call_arg {
             CallArg::Pure(bytes) => Ok(self.pure_bytes(bytes, /* force separate */ false)),
             CallArg::Object(obj) => self.obj(obj),
+            CallArg::BalanceWithdraw(arg) => self.balance_withdraw(arg),
         }
     }
 
