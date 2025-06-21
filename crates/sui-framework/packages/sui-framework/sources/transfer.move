@@ -16,6 +16,12 @@ public struct Receiving<phantom T: key> has drop {
     version: u64,
 }
 
+/// Callback enforcing the return of the received `key`-only object back to the parent.
+public struct ReturnPromise {
+    parent_id: ID,
+    object_id: ID,
+}
+
 /// Shared an object that was previously created. Shared objects must currently
 /// be constructed in the transaction they are created.
 const ESharedNonNewObject: u64 = 0;
@@ -152,6 +158,26 @@ public fun receive<T: key>(parent: &mut UID, to_receive: Receiving<T>): T {
 public fun public_receive<T: key + store>(parent: &mut UID, to_receive: Receiving<T>): T {
     let Receiving { id, version } = to_receive;
     receive_impl(parent.to_address(), id, version)
+}
+
+/// Publicly perform a restricted `receive` that, unlike `receive`, forces the
+/// object to be sent back to the parent in the same transaction.
+public fun receive_with_return<T: key>(
+    parent: &mut UID,
+    to_receive: Receiving<T>,
+): (T, ReturnPromise) {
+    let Receiving { id, version } = to_receive;
+    let received = receive_impl(parent.to_address(), id, version);
+    (received, ReturnPromise { parent_id: parent.to_inner(), object_id: id })
+}
+
+/// Return the `key`-only object that was received via `receive_with_return`.
+/// This function might bypass verifier rules for `key`-only objects, allowing
+/// the return of the received object back to the parent.
+public fun return_received<T: key>(received: T, promise: ReturnPromise) {
+    let ReturnPromise { parent_id, object_id } = promise;
+    assert!(object::id(&received) == object_id, EInvalidReturnedObject);
+    transfer::transfer(received, parent_id.to_address())
 }
 
 /// Return the object ID that the given `Receiving` argument references.
