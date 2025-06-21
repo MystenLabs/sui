@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ResolvedLinkage_","RootedLinkage"],"type":["ResolvedLinkage"]};

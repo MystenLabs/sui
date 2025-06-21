@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["KeyIdentity"],"fn":["get_identity_address","get_identity_address_from_keystore"]};

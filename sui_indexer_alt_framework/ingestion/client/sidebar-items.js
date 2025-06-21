@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FetchData","FetchError"],"struct":["IngestionClient"],"type":["FetchResult"]};

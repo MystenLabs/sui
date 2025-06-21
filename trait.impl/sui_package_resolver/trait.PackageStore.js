@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["sui_analytics_indexer",[["impl PackageStore for <a class=\"struct\" href=\"sui_analytics_indexer/package_store/struct.CompositeStore.html\" title=\"struct sui_analytics_indexer::package_store::CompositeStore\">CompositeStore</a>"],["impl PackageStore for <a class=\"struct\" href=\"sui_analytics_indexer/package_store/struct.GlobalArcStore.html\" title=\"struct sui_analytics_indexer::package_store::GlobalArcStore\">GlobalArcStore</a>"],["impl PackageStore for <a class=\"struct\" href=\"sui_analytics_indexer/package_store/struct.LocalDBPackageStore.html\" title=\"struct sui_analytics_indexer::package_store::LocalDBPackageStore\">LocalDBPackageStore</a>"]]],["sui_indexer",[["impl PackageStore for <a class=\"struct\" href=\"sui_indexer/store/package_resolver/struct.IndexerStorePackageResolver.html\" title=\"struct sui_indexer::store::package_resolver::IndexerStorePackageResolver\">IndexerStorePackageResolver</a>"]]],["sui_indexer_alt_reader",[["impl PackageStore for <a class=\"struct\" href=\"sui_indexer_alt_reader/package_resolver/struct.DbPackageStore.html\" title=\"struct sui_indexer_alt_reader::package_resolver::DbPackageStore\">DbPackageStore</a>"]]],["sui_light_client",[["impl PackageStore for <a class=\"struct\" href=\"sui_light_client/package_store/struct.RemotePackageStore.html\" title=\"struct sui_light_client::package_store::RemotePackageStore\">RemotePackageStore</a>"]]],["sui_package_resolver",[]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[663,263,244,232,28]}

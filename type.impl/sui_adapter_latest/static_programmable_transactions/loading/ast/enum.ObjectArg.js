@@ -1,0 +1,9 @@
+(function() {
+    var type_impls = Object.fromEntries([["sui_adapter_latest",[["<details class=\"toggle implementors-toggle\" open><summary><section id=\"impl-ObjectArg\" class=\"impl\"><a class=\"src rightside\" href=\"src/sui_adapter_latest/static_programmable_transactions/loading/ast.rs.html#129-144\">Source</a><a href=\"#impl-ObjectArg\" class=\"anchor\">§</a><h3 class=\"code-header\">impl <a class=\"enum\" href=\"sui_adapter_latest/static_programmable_transactions/loading/ast/enum.ObjectArg.html\" title=\"enum sui_adapter_latest::static_programmable_transactions::loading::ast::ObjectArg\">ObjectArg</a></h3></section></summary><div class=\"impl-items\"><section id=\"method.id\" class=\"method\"><a class=\"src rightside\" href=\"src/sui_adapter_latest/static_programmable_transactions/loading/ast.rs.html#130-135\">Source</a><h4 class=\"code-header\">pub fn <a href=\"sui_adapter_latest/static_programmable_transactions/loading/ast/enum.ObjectArg.html#tymethod.id\" class=\"fn\">id</a>(&amp;self) -&gt; <a class=\"struct\" href=\"sui_types/base_types/struct.ObjectID.html\" title=\"struct sui_types::base_types::ObjectID\">ObjectID</a></h4></section><section id=\"method.is_mutable\" class=\"method\"><a class=\"src rightside\" href=\"src/sui_adapter_latest/static_programmable_transactions/loading/ast.rs.html#137-143\">Source</a><h4 class=\"code-header\">pub fn <a href=\"sui_adapter_latest/static_programmable_transactions/loading/ast/enum.ObjectArg.html#tymethod.is_mutable\" class=\"fn\">is_mutable</a>(&amp;self) -&gt; <a class=\"primitive\" href=\"https://doc.rust-lang.org/1.85.1/std/primitive.bool.html\">bool</a></h4></section></div></details>",0,"sui_adapter_latest::static_programmable_transactions::typing::ast::ObjectArg"]]]]);
+    if (window.register_type_impls) {
+        window.register_type_impls(type_impls);
+    } else {
+        window.pending_type_impls = type_impls;
+    }
+})()
+//{"start":55,"fragment_lengths":[1697]}

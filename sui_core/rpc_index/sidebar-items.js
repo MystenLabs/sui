@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Watermark"],"struct":["BalanceIndexInfo","BalanceKey","CoinIndexInfo","CoinIndexKey","IndexStoreTablesReadOnly","OwnerIndexInfo","OwnerIndexKey","RpcIndexStore"]};

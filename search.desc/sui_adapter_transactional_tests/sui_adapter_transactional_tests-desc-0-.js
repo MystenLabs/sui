@@ -1,0 +1,1 @@
+searchState.loadedDescShard("sui_adapter_transactional_tests", 0, "")
