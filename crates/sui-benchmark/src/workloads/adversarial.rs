@@ -472,7 +472,9 @@ impl Workload<dyn Payload> for AdversarialWorkload {
         let transaction = TestTransactionBuilder::new(gas.1, gas.0, reference_gas_price)
             .publish(path)
             .build_and_sign(gas.2.as_ref());
-        let effects = proxy.execute_transaction_block(transaction).await.unwrap();
+
+        let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+        let effects = execution_result.unwrap();
         let created = effects.created();
         // should only create the package object, upgrade cap, dynamic field top level obj, and NUM_DYNAMIC_FIELDS df objects. otherwise, there are some object initializers running and we will need to disambiguate
         assert_eq!(
@@ -519,7 +521,8 @@ impl Workload<dyn Payload> for AdversarialWorkload {
             reference_gas_price,
         );
 
-        let effects = proxy.execute_transaction_block(transaction).await.unwrap();
+        let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+        let effects = execution_result.unwrap();
 
         let created = effects.created();
         assert_eq!(created.len() as u64, num_shared_objs);

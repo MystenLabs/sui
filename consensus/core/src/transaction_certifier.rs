@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use consensus_config::{Committee, Stake};
+use consensus_config::Stake;
 use mysten_common::debug_fatal;
 use mysten_metrics::monitored_mpsc::UnboundedSender;
 use parking_lot::RwLock;
@@ -336,8 +336,7 @@ impl CertifierState {
             }
             // Check if the target block is now certified after including the reject votes.
             // NOTE: votes can already exist for the target block and its transactions.
-            if let Some(certified_block) = vote_info.take_certified_output(&self.context.committee)
-            {
+            if let Some(certified_block) = vote_info.take_certified_output(&self.context) {
                 certified_blocks.push(certified_block);
             }
         }
@@ -397,8 +396,7 @@ impl CertifierState {
                     .accept_block_votes
                     .add_unique(voting_block.author(), &self.context.committee);
                 // Check if the target block is now certified after including the accept votes.
-                if let Some(certified_block) =
-                    target_vote_info.take_certified_output(&self.context.committee)
+                if let Some(certified_block) = target_vote_info.take_certified_output(&self.context)
                 {
                     certified_blocks.push(certified_block);
                 }
@@ -457,7 +455,8 @@ struct VoteInfo {
 impl VoteInfo {
     // If this block can now be certified, returns the output.
     // Otherwise, returns None.
-    fn take_certified_output(&mut self, committee: &Committee) -> Option<CertifiedBlock> {
+    fn take_certified_output(&mut self, context: &Context) -> Option<CertifiedBlock> {
+        let committee = &context.committee;
         if self.is_certified {
             // Skip if already certified.
             return None;
@@ -466,6 +465,9 @@ impl VoteInfo {
             // Skip if the content of the block has not been received.
             return None;
         };
+
+        let peer_hostname = &committee.authority(block.author()).hostname;
+
         if !self.accept_block_votes.reached_threshold(committee) {
             // Skip if the block is not certified.
             return None;
@@ -474,6 +476,12 @@ impl VoteInfo {
         for (idx, reject_txn_votes) in &self.reject_txn_votes {
             // The transaction is voted to be rejected.
             if reject_txn_votes.reached_threshold(committee) {
+                context
+                    .metrics
+                    .node_metrics
+                    .certifier_rejected_transactions
+                    .with_label_values(&[peer_hostname])
+                    .inc();
                 rejected.push(*idx);
                 continue;
             }
@@ -501,6 +509,18 @@ impl VoteInfo {
             }
         }
         // The block is certified.
+        tracing::debug!(
+            "Block tx count: {} & rejected txn count: {}",
+            block.transactions().len(),
+            rejected.len()
+        );
+        let accepted_txn_count = block.transactions().len().saturating_sub(rejected.len());
+        context
+            .metrics
+            .node_metrics
+            .certifier_accepted_transactions
+            .with_label_values(&[peer_hostname])
+            .inc_by(accepted_txn_count as u64);
         self.is_certified = true;
         Some(CertifiedBlock {
             block: block.clone(),
@@ -536,6 +556,7 @@ mod test {
 
     #[tokio::test]
     async fn test_vote_info_basic() {
+        telemetry_subscribers::init_for_testing();
         let (context, _) = Context::new_for_test(7);
         let committee = &context.committee;
 
@@ -545,7 +566,7 @@ mod test {
             let block = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
             vote_info.block = Some(block.clone());
 
-            assert!(vote_info.take_certified_output(committee).is_none());
+            assert!(vote_info.take_certified_output(&context).is_none());
         }
 
         // Accept votes but not enough.
@@ -559,7 +580,7 @@ mod test {
                     .add_unique(AuthorityIndex::new_for_test(i), committee);
             }
 
-            assert!(vote_info.take_certified_output(committee).is_none());
+            assert!(vote_info.take_certified_output(&context).is_none());
         }
 
         // Enough accept votes but no block.
@@ -571,7 +592,7 @@ mod test {
                     .add_unique(AuthorityIndex::new_for_test(i), committee);
             }
 
-            assert!(vote_info.take_certified_output(committee).is_none());
+            assert!(vote_info.take_certified_output(&context).is_none());
         }
 
         // A quorum of accept votes and block exists.
@@ -586,7 +607,7 @@ mod test {
             }
 
             // The block is not certified.
-            assert!(vote_info.take_certified_output(committee).is_none());
+            assert!(vote_info.take_certified_output(&context).is_none());
 
             // Add 1 more accept vote from a different authority.
             vote_info
@@ -594,17 +615,22 @@ mod test {
                 .add_unique(AuthorityIndex::new_for_test(4), committee);
 
             // The block is now certified.
-            let certified_block = vote_info.take_certified_output(committee).unwrap();
+            let certified_block = vote_info.take_certified_output(&context).unwrap();
             assert_eq!(certified_block.block.reference(), block.reference());
 
             // Certified block cannot be taken again.
-            assert!(vote_info.take_certified_output(committee).is_none());
+            assert!(vote_info.take_certified_output(&context).is_none());
         }
 
         // A quorum of accept and reject votes.
         {
             let mut vote_info = VoteInfo::default();
-            let block = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
+            // Create a block with 7 transactions.
+            let block = VerifiedBlock::new_for_test(
+                TestBlock::new(1, 1)
+                    .set_transactions(vec![Transaction::new(vec![4; 8]); 7])
+                    .build(),
+            );
             vote_info.block = Some(block.clone());
             // Add 5 accept votes which form a quorum.
             for i in 0..5 {
@@ -628,17 +654,22 @@ mod test {
             }
 
             // The block is certified.
-            let certified_block = vote_info.take_certified_output(committee).unwrap();
+            let certified_block = vote_info.take_certified_output(&context).unwrap();
             assert_eq!(certified_block.block.reference(), block.reference());
 
             // Certified block cannot be taken again.
-            assert!(vote_info.take_certified_output(committee).is_none());
+            assert!(vote_info.take_certified_output(&context).is_none());
         }
 
         // A transaction in the block is neither rejected nor certified.
         {
             let mut vote_info = VoteInfo::default();
-            let block = VerifiedBlock::new_for_test(TestBlock::new(1, 1).build());
+            // Create a block with 6 transactions.
+            let block = VerifiedBlock::new_for_test(
+                TestBlock::new(1, 1)
+                    .set_transactions(vec![Transaction::new(vec![4; 8]); 6])
+                    .build(),
+            );
             vote_info.block = Some(block.clone());
             // Add 5 accept votes which form a quorum.
             for i in 0..5 {
@@ -661,31 +692,31 @@ mod test {
                 }
             }
             // For transaction 6, add 4 reject votes which do not form a quorum.
-            vote_info.reject_txn_votes.insert(6, StakeAggregator::new());
+            vote_info.reject_txn_votes.insert(5, StakeAggregator::new());
             for authority_idx in 0..4 {
                 vote_info
                     .reject_txn_votes
-                    .get_mut(&6)
+                    .get_mut(&5)
                     .unwrap()
                     .add_unique(AuthorityIndex::new_for_test(authority_idx), committee);
             }
 
             // The block is not certified.
-            assert!(vote_info.take_certified_output(committee).is_none());
+            assert!(vote_info.take_certified_output(&context).is_none());
 
             // Add 1 more accept vote from a different authority for transaction 6.
             vote_info
                 .reject_txn_votes
-                .get_mut(&6)
+                .get_mut(&5)
                 .unwrap()
                 .add_unique(AuthorityIndex::new_for_test(4), committee);
 
             // The block is now certified.
-            let certified_block = vote_info.take_certified_output(committee).unwrap();
+            let certified_block = vote_info.take_certified_output(&context).unwrap();
             assert_eq!(certified_block.block.reference(), block.reference());
 
             // Certified block cannot be taken again.
-            assert!(vote_info.take_certified_output(committee).is_none());
+            assert!(vote_info.take_certified_output(&context).is_none());
         }
     }
 
