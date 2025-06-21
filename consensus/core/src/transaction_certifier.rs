@@ -342,15 +342,6 @@ impl CertifierState {
             }
         }
 
-        if !certified_blocks.is_empty() {
-            self.context
-                .metrics
-                .node_metrics
-                .certifier_output_blocks
-                .with_label_values(&["proposed"])
-                .inc_by(certified_blocks.len() as u64);
-        }
-
         certified_blocks
     }
 
@@ -412,6 +403,15 @@ impl CertifierState {
                     certified_blocks.push(certified_block);
                 }
             }
+        }
+
+        if !certified_blocks.is_empty() {
+            self.context
+                .metrics
+                .node_metrics
+                .certifier_output_blocks
+                .with_label_values(&["proposed"])
+                .inc_by(certified_blocks.len() as u64);
         }
 
         certified_blocks

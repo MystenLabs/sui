@@ -12,24 +12,26 @@ use crate::{
 };
 
 pub(crate) struct ThresholdClock {
+    context: Arc<Context>,
     aggregator: StakeAggregator<QuorumThreshold>,
     round: Round,
+    // Timestamp when the last quorum was form and the current round started.
     quorum_ts: Instant,
-    context: Arc<Context>,
 }
 
 impl ThresholdClock {
     pub(crate) fn new(round: Round, context: Arc<Context>) -> Self {
         Self {
+            context,
             aggregator: StakeAggregator::new(),
             round,
             quorum_ts: Instant::now(),
-            context,
         }
     }
 
-    /// Add the block reference that have been accepted and advance the round accordingly.
-    pub(crate) fn add_block(&mut self, block: BlockRef) {
+    /// Adds the block reference that have been accepted and advance the round accordingly.
+    /// Returns true when the round has advanced.
+    pub(crate) fn add_block(&mut self, block: BlockRef) -> bool {
         match block.round.cmp(&self.round) {
             // Blocks with round less then what we currently build are irrelevant here
             Ordering::Less => {}
@@ -38,24 +40,32 @@ impl ThresholdClock {
                 self.aggregator.clear();
                 self.aggregator.add(block.author, &self.context.committee);
                 self.round = block.round;
+                self.quorum_ts = Instant::now();
             }
             Ordering::Equal => {
+                let now = Instant::now();
                 if self.aggregator.add(block.author, &self.context.committee) {
                     self.aggregator.clear();
                     // We have seen 2f+1 blocks for current round, advance
                     self.round = block.round + 1;
 
-                    // now record the time of receipt from last quorum
-                    let now = Instant::now();
-                    self.context
-                        .metrics
-                        .node_metrics
-                        .quorum_receive_latency
-                        .observe(now.duration_since(self.quorum_ts).as_secs_f64());
+                    // Record the time of last quorum and new round start.
                     self.quorum_ts = now;
+
+                    return true;
                 }
+                // Record delay from the start of the round.
+                let hostname = &self.context.committee.authority(block.author).hostname;
+                self.context
+                    .metrics
+                    .node_metrics
+                    .block_receive_delay
+                    .with_label_values(&[hostname])
+                    .inc_by(now.duration_since(self.quorum_ts).as_millis() as u64);
             }
         }
+
+        false
     }
 
     /// Add the block references that have been successfully processed and advance the round accordingly. If the round

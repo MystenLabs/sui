@@ -7,6 +7,7 @@ use std::{
     ops::Bound::{Excluded, Included, Unbounded},
     panic,
     sync::Arc,
+    time::Duration,
     vec,
 };
 
@@ -332,7 +333,24 @@ impl DagState {
         self.recent_blocks
             .insert(block_ref, BlockInfo::new(block.clone()));
         self.recent_refs_by_authority[block_ref.author].insert(block_ref);
-        self.threshold_clock.add_block(block_ref);
+
+        if self.threshold_clock.add_block(block_ref) {
+            // Do not measure quorum delay when no local block is proposed in the round.
+            let last_proposed_block = self.get_last_proposed_block();
+            if last_proposed_block.round() == block_ref.round {
+                let quorum_delay_ms = self
+                    .context
+                    .clock
+                    .timestamp_utc_ms()
+                    .saturating_sub(self.get_last_proposed_block().timestamp_ms());
+                self.context
+                    .metrics
+                    .node_metrics
+                    .quorum_receive_latency
+                    .observe(Duration::from_millis(quorum_delay_ms).as_secs_f64());
+            }
+        }
+
         self.highest_accepted_round = max(self.highest_accepted_round, block.round());
         self.context
             .metrics
