@@ -25,7 +25,7 @@ use url::Url;
 mod model;
 
 pub use sui_field_count::FieldCount;
-pub use sui_sql_macro::sql;
+pub use sui_sql_macro::{query as sql_query, sql};
 
 pub mod query;
 pub mod schema;
@@ -188,7 +188,7 @@ pub async fn reset_database(
     migrations: Option<&'static EmbeddedMigrations>,
 ) -> anyhow::Result<()> {
     let db = Db::for_write(database_url, db_config).await?;
-    db.clear_database().await?;
+    // db.clear_database().await?;
     if let Some(migrations) = migrations {
         db.run_migrations(Some(migrations)).await?;
     }
