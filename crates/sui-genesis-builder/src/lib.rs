@@ -21,6 +21,9 @@ use sui_framework::{BuiltInFramework, SystemPackage};
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::base_types::{ExecutionDigests, ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::bridge::{BridgeChainId, BRIDGE_CREATE_FUNCTION_NAME, BRIDGE_MODULE_NAME};
+use sui_types::coin_metadata_registry::{
+    COIN_METADATA_REGISTRY_CREATE_FUNCTION_NAME, COIN_METADATA_REGISTRY_MODULE_NAME,
+};
 use sui_types::committee::Committee;
 use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignInfoTrait,
@@ -329,6 +332,11 @@ impl Builder {
         assert_eq!(
             protocol_config.enable_bridge(),
             unsigned_genesis.has_bridge_object()
+        );
+
+        assert_eq!(
+            protocol_config.enable_coin_metadata_registry(),
+            unsigned_genesis.has_coin_metadata_registry_object(),
         );
 
         assert_eq!(
@@ -1143,6 +1151,16 @@ pub fn generate_genesis_system_object(
                 vec![],
                 vec![],
             )?;
+        }
+
+        if protocol_config.enable_coin_metadata_registry() {
+            builder.programmable_move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                COIN_METADATA_REGISTRY_MODULE_NAME.to_owned(),
+                COIN_METADATA_REGISTRY_CREATE_FUNCTION_NAME.to_owned(),
+                vec![],
+                vec![],
+            );
         }
 
         if protocol_config.enable_coin_deny_list_v1() {

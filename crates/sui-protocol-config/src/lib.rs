@@ -717,6 +717,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_accumulators: bool,
 
+    // Enable coin metadata registry protocol
+    #[serde(skip_serializing_if = "is_false")]
+    enable_coin_metadata_registry: bool,
+
     // Rethrow type layout errors during serialization instead of trying to convert them.
     #[serde(skip_serializing_if = "is_false")]
     include_epoch_stable_sequence_number_in_effects: bool,
@@ -1813,6 +1817,10 @@ impl ProtocolConfig {
 
     pub fn enable_accumulators(&self) -> bool {
         self.feature_flags.enable_accumulators
+    }
+
+    pub fn enable_coin_metadata_registry(&self) -> bool {
+        self.feature_flags.enable_coin_metadata_registry
     }
 
     pub fn enable_coin_deny_list_v2(&self) -> bool {
