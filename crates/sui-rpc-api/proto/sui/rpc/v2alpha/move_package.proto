@@ -35,7 +35,7 @@ message Module {
   optional string name = 1;
 
   // List of DataTypes defined by this module.
-  repeated DatatypeDescriptor data_types = 3;
+  repeated DatatypeDescriptor datatypes = 3;
 
   // List of Functions defined by this module.
   repeated FunctionDescriptor functions = 4;
@@ -103,6 +103,11 @@ enum Ability {
 
   // Allows the type to serve as a key for global storage operations
   KEY = 4;
+}
+
+// A set of abilities for a type parameter
+message AbilitySet {
+  repeated Ability abilities = 1;
 }
 
 // A generic type parameter used in the declaration of a struct or enum.
@@ -187,7 +192,8 @@ message FunctionDescriptor {
   optional bool is_entry = 6;
 
   // Ability constraints for type parameters
-  repeated Ability type_parameters = 7;
+  // Each AbilitySet represents the constraints for one type parameter
+  repeated AbilitySet type_parameters = 7;
 
   // Formal parameter types.
   repeated OpenSignature parameters = 8;

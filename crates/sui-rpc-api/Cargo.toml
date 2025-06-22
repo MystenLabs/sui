@@ -34,6 +34,7 @@ fastcrypto.workspace = true
 sui-types.workspace = true
 mysten-network.workspace = true
 sui-protocol-config.workspace = true
+sui-package-resolver.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
 

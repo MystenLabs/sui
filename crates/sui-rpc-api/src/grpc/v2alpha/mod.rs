@@ -79,10 +79,10 @@ impl SubscriptionService for SubscriptionServiceHandle {
 
 mod get_balance;
 mod get_coin_info;
-mod get_package;
 mod list_balances;
 mod list_dynamic_fields;
 mod list_owned_objects;
+mod move_package;
 mod simulate;
 
 #[tonic::async_trait]
@@ -162,35 +162,35 @@ impl MovePackageService for RpcService {
         &self,
         request: tonic::Request<GetPackageRequest>,
     ) -> Result<tonic::Response<GetPackageResponse>, tonic::Status> {
-        get_package::get_package(self, request.into_inner())
+        move_package::get_package::get_package(self, request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
 
     async fn get_module(
         &self,
-        _request: tonic::Request<GetModuleRequest>,
+        request: tonic::Request<GetModuleRequest>,
     ) -> Result<tonic::Response<GetModuleResponse>, tonic::Status> {
-        Err(tonic::Status::unimplemented(
-            "get_module is not implemented",
-        ))
+        move_package::get_module::get_module(self, request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
     }
 
     async fn get_datatype(
         &self,
-        _request: tonic::Request<GetDatatypeRequest>,
+        request: tonic::Request<GetDatatypeRequest>,
     ) -> Result<tonic::Response<GetDatatypeResponse>, tonic::Status> {
-        Err(tonic::Status::unimplemented(
-            "get_datatype is not implemented",
-        ))
+        move_package::get_datatype::get_datatype(self, request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
     }
 
     async fn get_function(
         &self,
-        _request: tonic::Request<GetFunctionRequest>,
+        request: tonic::Request<GetFunctionRequest>,
     ) -> Result<tonic::Response<GetFunctionResponse>, tonic::Status> {
-        Err(tonic::Status::unimplemented(
-            "get_function is not implemented",
-        ))
+        move_package::get_function::get_function(self, request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
     }
 }
