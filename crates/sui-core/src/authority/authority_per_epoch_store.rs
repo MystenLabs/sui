@@ -1660,6 +1660,7 @@ impl AuthorityPerEpochStore {
 
         if matches!(tx_key, TransactionKey::Digest(_)) {
             debug_fatal!("useless to insert a digest key");
+            return Ok(());
         }
 
         let tables = self.tables()?;
