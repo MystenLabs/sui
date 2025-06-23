@@ -6,15 +6,12 @@ use crate::error::Error;
 use crate::metrics::Metrics;
 use crate::types::chain_identifier::ChainIdentifier;
 use async_graphql::ServerError;
-use diesel::{
-    query_dsl::positional_order_dsl::PositionalOrderDsl, CombineDsl, ExpressionMethods,
-    OptionalExtension, QueryDsl,
-};
+use diesel::{ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use std::mem;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_indexer::schema::checkpoints;
+use sui_indexer::schema::{checkpoints, watermarks};
 use tokio::sync::{watch, RwLock};
 use tokio::time::Interval;
 use tokio_util::sync::CancellationToken;
@@ -43,14 +40,18 @@ pub(crate) type WatermarkLock = Arc<RwLock<Watermark>>;
 /// changes.
 #[derive(Clone, Copy, Default)]
 pub(crate) struct Watermark {
-    /// The inclusive checkpoint upper-bound for the query.
-    pub hi_cp: u64,
-    /// The timestamp of the inclusive upper-bound checkpoint for the query.
-    pub hi_cp_timestamp_ms: u64,
     /// The current epoch.
     pub epoch: u64,
+    /// The timestamp of the inclusive upper-bound checkpoint for the query. This is used for the
+    /// health check.
+    pub hi_cp_timestamp_ms: u64,
+    /// The inclusive checkpoint upper-bound for the query.
+    pub hi_cp: u64,
+    /// The inclusive tx_sequence_number upper-bound for the query.
+    pub hi_tx: u64,
     /// Smallest queryable checkpoint - checkpoints below this value are pruned.
     pub lo_cp: u64,
+    /// Smallest queryable tx_sequence_number - tx_sequence_numbers below this value are pruned.
     pub lo_tx: u64,
 }
 
@@ -89,7 +90,7 @@ impl WatermarkTask {
                     return;
                 },
                 _ = interval.tick() => {
-                    let Watermark { lo_cp, lo_tx, hi_cp, hi_cp_timestamp_ms, epoch } = match Watermark::query(&self.db).await {
+                    let Watermark {epoch, hi_cp_timestamp_ms, hi_cp, hi_tx, lo_cp, lo_tx } = match Watermark::query(&self.db).await {
                         Ok(Some(watermark)) => watermark,
                         Ok(None) => continue,
                         Err(e) => {
@@ -103,6 +104,7 @@ impl WatermarkTask {
                     let prev_epoch = {
                         let mut w = self.watermark.write().await;
                         w.hi_cp = hi_cp;
+                        w.hi_tx = hi_tx;
                         w.hi_cp_timestamp_ms = hi_cp_timestamp_ms;
                         w.lo_cp = lo_cp;
                         w.lo_tx = lo_tx;
@@ -166,41 +168,50 @@ impl Watermark {
         Self {
             hi_cp: w.hi_cp,
             hi_cp_timestamp_ms: w.hi_cp_timestamp_ms,
+            hi_tx: w.hi_tx,
             epoch: w.epoch,
             lo_cp: w.lo_cp,
             lo_tx: w.lo_tx,
         }
     }
 
+    /// Queries the watermarks table for the `checkpoints` pipeline to determine the available range
+    /// of checkpoints and tx_sequence_numbers. We don't query tables directly as pruning may be in
+    /// progress, which means the lower bound of data will constantly change. The watermarks table
+    /// has a `tx_hi` value, but not a `tx_lo` value, so the query also joins on the `checkpoints`
+    /// table to get the `min_tx_sequence_number` for that lower bound.
     #[allow(clippy::type_complexity)]
     pub(crate) async fn query(db: &Db) -> Result<Option<Watermark>, Error> {
-        use checkpoints::dsl;
-        let Some(result): Option<Vec<(i64, i64, i64, Option<i64>)>> = db
+        let (reader_lo_to_tx, cp_hi_to_timestamp) = diesel::alias!(
+            checkpoints as reader_lo_to_tx,
+            checkpoints as cp_hi_to_timestamp
+        );
+
+        let Some(result): Option<(i64, i64, i64, i64, i64, Option<i64>)> = db
             .execute(move |conn| {
-                async {
-                    conn.results(move || {
-                        let min_cp = dsl::checkpoints
+                async move {
+                    conn.result(move || {
+                        watermarks::table
+                            // Join for reader_lo -> checkpoints (as cp_reader) to get min_tx_sequence_number
+                            .inner_join(
+                                reader_lo_to_tx.on(watermarks::reader_lo
+                                    .eq(reader_lo_to_tx.field(checkpoints::sequence_number))),
+                            )
+                            // Join for checkpoint_hi_inclusive -> checkpoints (as cp_hi) to get
+                            // timestamp_ms of cp_hi
+                            .inner_join(
+                                cp_hi_to_timestamp.on(watermarks::checkpoint_hi_inclusive
+                                    .eq(cp_hi_to_timestamp.field(checkpoints::sequence_number))),
+                            )
+                            .filter(watermarks::pipeline.eq("checkpoints"))
                             .select((
-                                dsl::sequence_number,
-                                dsl::timestamp_ms,
-                                dsl::epoch,
-                                dsl::min_tx_sequence_number,
+                                watermarks::epoch_hi_inclusive,
+                                cp_hi_to_timestamp.field(checkpoints::timestamp_ms),
+                                watermarks::checkpoint_hi_inclusive,
+                                watermarks::tx_hi,
+                                watermarks::reader_lo,
+                                reader_lo_to_tx.field(checkpoints::min_tx_sequence_number),
                             ))
-                            .order_by(dsl::sequence_number.asc())
-                            .limit(1);
-
-                        let max_cp = dsl::checkpoints
-                            .select((
-                                dsl::sequence_number,
-                                dsl::timestamp_ms,
-                                dsl::epoch,
-                                dsl::min_tx_sequence_number,
-                            ))
-                            .order_by(dsl::sequence_number.desc())
-                            .limit(1);
-
-                        // Order by sequence_number, which is in the 1st position
-                        min_cp.union_all(max_cp).positional_order_by(1)
                     })
                     .await
                     .optional()
@@ -210,36 +221,26 @@ impl Watermark {
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch watermark data: {e}")))?
         else {
-            // An empty response from the db is valid when indexer has not written any checkpoints
-            // to the db yet.
+            // An empty response from the db is valid when indexer has not committed data to the db
+            // yet.
             return Ok(None);
         };
 
-        let (lo_cp, lo_tx) = if let Some((cp, _, _, Some(tx))) = result.first() {
-            (cp, tx)
+        if let (epoch, hi_cp_timestamp_ms, hi_cp, hi_tx, lo_cp, Some(lo_tx)) = result {
+            Ok(Some(Watermark {
+                hi_cp: hi_cp as u64,
+                hi_cp_timestamp_ms: hi_cp_timestamp_ms as u64,
+                hi_tx: hi_tx as u64,
+                epoch: epoch as u64,
+                lo_cp: lo_cp as u64,
+                lo_tx: lo_tx as u64,
+            }))
         } else {
-            return Err(Error::Internal(
+            Err(Error::Internal(
                 "Expected entry for tx lower bound and min_tx_sequence_number to be non-null"
                     .to_string(),
-            ));
-        };
-
-        let (hi_cp, hi_cp_timestamp_ms, epoch) =
-            if let Some((cp, timestamp_ms, epoch, _)) = result.last() {
-                (cp, timestamp_ms, epoch)
-            } else {
-                return Err(Error::Internal(
-                    "Expected entry for tx upper bound".to_string(),
-                ));
-            };
-
-        Ok(Some(Watermark {
-            hi_cp: *hi_cp as u64,
-            hi_cp_timestamp_ms: *hi_cp_timestamp_ms as u64,
-            epoch: *epoch as u64,
-            lo_cp: *lo_cp as u64,
-            lo_tx: *lo_tx as u64,
-        }))
+            ))
+        }
     }
 }
 
