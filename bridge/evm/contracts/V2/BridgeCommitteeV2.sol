@@ -12,16 +12,23 @@ import "./utils/BridgeUtilsV2.sol";
 /// The contract also provides functions to manage a blocklist of committee members whose signatures are invalid
 /// once they are blocklisted.
 contract BridgeCommitteeV2 is BridgeCommittee, IBridgeCommitteeV2, CommitteeUpgradeableV2 {
+    /* ========== STRUCTS ========== */
+    struct CommitteeMember {
+        uint8 index;
+        uint16 stake;
+    }
+
     /* ========== STATE VARIABLES ========== */
 
     // committeeID => committee member => stake amount
-    mapping(uint16 committeeID => mapping(address committeeMember => uint16 stakeAmount)) public
-        committeeStakeV2;
+    mapping(uint16 committeeID => mapping(address committeeMember => CommitteeMember member)) public
+        committeeMembers;
+
 
     // committeeID => totalStake
     mapping(uint16 committeeID => uint16 totalStake) public totalStake;
 
-    uint8 public totalMembers;
+    mapping(uint16 committeeID => uint8 totalMembers) public totalMembers;
 
     uint16 public committeeID;
 
@@ -33,11 +40,11 @@ contract BridgeCommitteeV2 is BridgeCommittee, IBridgeCommitteeV2, CommitteeUpgr
     /// or equal to the provided minimum stake required.
     /// @param committee addresses of the committee members.
     /// @param stake amounts of the committee members.
-    function initialize(
+    function initialize_V2(
         address[] memory committee,
         uint16[] memory stake,
         uint16 _committeeID
-    ) external override initializer {
+    ) external initializer {
         __CommitteeUpgradeable_init(address(this));
         __UUPSUpgradeable_init();
 
@@ -50,19 +57,20 @@ contract BridgeCommitteeV2 is BridgeCommittee, IBridgeCommitteeV2, CommitteeUpgr
             "BridgeCommitteeV2: Committee and stake arrays must be of the same length"
         );
 
+        _syncCommittee(_committeeID, committee, stake);
+
+
         uint16 _totalStake;
         for (uint16 i; i < _committeeLength; i++) {
-            require(
-                committeeStakeV2[_committeeID][committee[i]] == 0,
-                "BridgeCommitteeV2: Duplicate committee member"
-            );
-            committeeStakeV2[_committeeID][committee[i]] = stake[i];
-            committeeIndex[committee[i]] = uint8(i);
+            committeeMembers[_committeeID][committee[i]] = CommitteeMember({
+                stake: stake[i],
+                index: uint8(i)
+            });
             _totalStake += stake[i];
         }
 
         totalStake[_committeeID] = _totalStake;
-        totalMembers = uint8(_committeeLength);
+        totalMembers[_committeeID] = uint8(_committeeLength);
         committeeID = _committeeID;
     }
 
@@ -92,39 +100,24 @@ contract BridgeCommitteeV2 is BridgeCommittee, IBridgeCommitteeV2, CommitteeUpgr
             (signer,,) = ECDSA.tryRecover(BridgeUtilsV2.computeHash(message), v, r, s);
 
             require(!blocklist[signer], "BridgeCommitteeV2: Signer is blocklisted");
+
+            CommitteeMember memory member = committeeMembers[message.committee][signer];
+
             require(
-                committeeStakeV2[message.committee][signer] > 0, "BridgeCommitteeV2: Signer has no stake"
+                member.stake > 0, "BridgeCommitteeV2: Signer has no stake"
             );
 
-            uint8 index = committeeIndex[signer];
+            uint8 index = member.index;
             uint256 mask = 1 << index;
             require(bitmap & mask == 0, "BridgeCommitteeV2: Duplicate signature provided");
             bitmap |= mask;
 
-            stake += committeeStakeV2[message.committee][signer];
+            stake += member.stake;
         }
 
         uint16 stakePercent = BridgeUtilsV2.convertToPercent(stake, totalStake[message.committee]);
 
         require(stakePercent >= requiredStakePercent, "BridgeCommitteeV2: Insufficient stake amount");
-    }
-
-    function addCommitteeMembersWithSignatures(
-        bytes[] memory signatures,
-        BridgeUtilsV2.MessageV2 memory message
-    )
-        external
-        nonReentrant
-        verifyMessageAndSignaturesV2(message, signatures, BridgeUtilsV2.ADD_COMMITTEE_MEMBERS)
-    {
-        // decode payload
-        (address[] memory newMembers, uint16[] memory newStake) = 
-            BridgeUtilsV2.decodeAddMembersPayload(message.payload);
-
-        _addCommitteeMembers(message.committee, newMembers, newStake);
-
-        // emit event
-        emit CommitteeMembersAdded(newMembers, newStake); 
     }
 
     function syncCommitteeWithSignatures(
@@ -147,45 +140,27 @@ contract BridgeCommitteeV2 is BridgeCommittee, IBridgeCommitteeV2, CommitteeUpgr
 
     /* ========== INTERNAL FUNCTIONS ========== */
 
-    function _addCommitteeMembers(uint8 _committeeID, address[] memory newMembers, uint16[] memory newStake) private {
-        require(
-            newMembers.length == newStake.length,
-            "BridgeCommitteeV2: Members and stake arrays must be of the same length"
-        );
-        require(_committeeID > committeeID, "BridgeCommitteeV2: Committee ID must be greater than current");
-        require(
-            totalMembers + newMembers.length <= 256,
-            "BridgeCommitteeV2: Total committee members must be less than 256"
-        );
-        require(totalStake[_committeeID] > 0, "BridgeCommitteeV2: Committee does not exist");
-
-        uint16 totalNewStake;
-        for (uint16 i; i < newMembers.length; i++) {
-            committeeStakeV2[_committeeID][newMembers[i]] = newStake[i];
-            committeeIndex[newMembers[i]] = uint8(totalMembers + i);
-            totalNewStake += newStake[i];
-        }
-        
-        totalMembers += uint8(newMembers.length);
-        totalStake[_committeeID] = totalStake[committeeID] + totalNewStake;
-    }
-
-    function _syncCommittee(uint8 _committeeID, address[] memory members, uint16[] memory stakes) private {
+    function _syncCommittee(uint16 _committeeID, address[] memory members, uint16[] memory stakes) private {
         require(
             members.length == stakes.length,
             "BridgeCommitteeV2: Members and stake arrays must be of the same length"
         );
-        require(_committeeID == committeeID, "BridgeCommitteeV2: Committee ID must match current");
+        require(_committeeID > committeeID, "BridgeCommitteeV2: Committee ID must be greater than current ID");
 
         uint16 totalNewStake;
         for (uint16 i; i < members.length; i++) {
-            committeeStakeV2[_committeeID][members[i]] = stakes[i];
-            committeeIndex[members[i]] = uint8(i);
+            CommitteeMember storage member = committeeMembers[_committeeID][members[i]];
+            require(
+                member.stake == 0,
+                "BridgeCommitteeV2: Duplicate committee member"
+            );
+            member.stake = stakes[i];
+            member.index = uint8(i);
             totalNewStake += stakes[i];
         }
 
         totalStake[_committeeID] = totalNewStake;
+        totalMembers[_committeeID] = uint8(members.length);
         committeeID = _committeeID;
-        totalMembers = uint8(members.length);
     }
 }

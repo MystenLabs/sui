@@ -8,11 +8,9 @@ library BridgeUtilsV2 {
     /* ========== CONSTANTS ========== */
 
     // message Ids
-    uint8 public constant ADD_COMMITTEE_MEMBERS = 8;
-    uint8 public constant SYNC_COMMITTEE = 9;
+    uint8 public constant SYNC_COMMITTEE = 8;
 
     // Message type stake requirements
-    uint32 public constant ADD_COMMITTEE_MEMBERS_STAKE_REQUIRED = 5001;
     uint32 public constant SYNC_COMMITTEE_STAKE_REQUIRED = 5001;
 
     /* ========== STRUCTS ========== */
@@ -72,8 +70,6 @@ library BridgeUtilsV2 {
             return BridgeUtils.UPGRADE_STAKE_REQUIRED;
         } else if (_message.messageType == BridgeUtils.ADD_EVM_TOKENS) {
             return BridgeUtils.ADD_EVM_TOKENS_STAKE_REQUIRED;
-        } else if (_message.messageType == ADD_COMMITTEE_MEMBERS) {
-            return ADD_COMMITTEE_MEMBERS_STAKE_REQUIRED;
         } else if (_message.messageType == SYNC_COMMITTEE) {
             return SYNC_COMMITTEE_STAKE_REQUIRED;
         } else {
