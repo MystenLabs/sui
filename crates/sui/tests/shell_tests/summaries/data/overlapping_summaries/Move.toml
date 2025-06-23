@@ -7,6 +7,7 @@ edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
 [dependencies]
 child_pkg = { local = "./child_pkg" }
 other_child = { local = "./other_child" }
+Sui = { local = "../../sui-framework" }
 
 # For remote import, use the `{ git = "...", subdir = "...", rev = "..." }`.
 # Revision can be a branch, a tag, and a commit hash.

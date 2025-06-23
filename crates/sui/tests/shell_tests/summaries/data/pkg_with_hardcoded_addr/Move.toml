@@ -2,5 +2,8 @@
 name = "summaries"
 edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
 
+[dependencies]
+Sui = { local = "../../sui-framework" }
+
 [addresses]
 summary_pkg = "0xc0ffee"
