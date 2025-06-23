@@ -4,28 +4,162 @@
 use crate::authority::authority_per_epoch_store::CancelConsensusCertificateReason;
 use crate::authority::AuthorityPerEpochStore;
 use crate::execution_cache::ObjectCacheRead;
+use either::Either;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use sui_types::base_types::ConsensusObjectSequenceKey;
 use sui_types::base_types::TransactionDigest;
+use sui_types::committee::EpochId;
+use sui_types::crypto::RandomnessRound;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::storage::{
     transaction_non_shared_input_object_keys, transaction_receiving_object_keys, ObjectKey,
 };
-use sui_types::transaction::{
-    SenderSignedData, SharedInputObject, TransactionDataAPI, TransactionKey,
-};
+use sui_types::transaction::{SharedInputObject, TransactionDataAPI, TransactionKey};
 use sui_types::{base_types::SequenceNumber, error::SuiResult, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use tracing::trace;
 
+use super::epoch_start_configuration::EpochStartConfigTrait;
+
 pub struct SharedObjVerManager {}
 
-pub type AssignedTxAndVersions = Vec<(
-    TransactionKey,
-    Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
-)>;
+pub type AssignedVersions = Vec<(ConsensusObjectSequenceKey, SequenceNumber)>;
+
+#[derive(Default, Debug)]
+pub struct AssignedTxAndVersions(pub Vec<(TransactionKey, AssignedVersions)>);
+
+impl AssignedTxAndVersions {
+    pub fn new(assigned_versions: Vec<(TransactionKey, AssignedVersions)>) -> Self {
+        Self(assigned_versions)
+    }
+
+    pub fn into_map(self) -> HashMap<TransactionKey, AssignedVersions> {
+        self.0.into_iter().collect()
+    }
+}
+
+/// A wrapper around things that can be scheduled for execution by the assigning of
+/// shared object versions.
+#[derive(Clone)]
+pub enum Schedulable<T = VerifiedExecutableTransaction> {
+    Transaction(T),
+    RandomnessStateUpdate(EpochId, RandomnessRound),
+}
+
+impl From<VerifiedExecutableTransaction> for Schedulable<VerifiedExecutableTransaction> {
+    fn from(tx: VerifiedExecutableTransaction) -> Self {
+        Schedulable::Transaction(tx)
+    }
+}
+
+// AsTx is like Deref, in that it allows us to use either refs or values in Schedulable.
+// Deref does not work because it conflicts with the impl of Deref for VerifiedExecutableTransaction.
+pub trait AsTx {
+    fn as_tx(&self) -> &VerifiedExecutableTransaction;
+}
+
+impl AsTx for VerifiedExecutableTransaction {
+    fn as_tx(&self) -> &VerifiedExecutableTransaction {
+        self
+    }
+}
+
+impl AsTx for &'_ VerifiedExecutableTransaction {
+    fn as_tx(&self) -> &VerifiedExecutableTransaction {
+        self
+    }
+}
+
+impl Schedulable<&'_ VerifiedExecutableTransaction> {
+    // Cannot use the blanket ToOwned trait impl because it just calls clone.
+    pub fn to_owned_schedulable(&self) -> Schedulable<VerifiedExecutableTransaction> {
+        match self {
+            Schedulable::Transaction(tx) => Schedulable::Transaction((*tx).clone()),
+            Schedulable::RandomnessStateUpdate(epoch, round) => {
+                Schedulable::RandomnessStateUpdate(*epoch, *round)
+            }
+        }
+    }
+}
+
+impl<T> Schedulable<T> {
+    pub fn as_tx(&self) -> Option<&VerifiedExecutableTransaction>
+    where
+        T: AsTx,
+    {
+        match self {
+            Schedulable::Transaction(tx) => Some(tx.as_tx()),
+            Schedulable::RandomnessStateUpdate(_, _) => None,
+        }
+    }
+
+    pub fn shared_input_objects(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> impl Iterator<Item = SharedInputObject> + '_
+    where
+        T: AsTx,
+    {
+        match self {
+            Schedulable::Transaction(tx) => Either::Left(tx.as_tx().shared_input_objects()),
+            Schedulable::RandomnessStateUpdate(_, _) => {
+                Either::Right(std::iter::once(SharedInputObject {
+                    id: SUI_RANDOMNESS_STATE_OBJECT_ID,
+                    initial_shared_version: epoch_store
+                        .epoch_start_config()
+                        .randomness_obj_initial_shared_version()
+                        .expect("randomness obj initial shared version should be set"),
+                    mutable: true,
+                }))
+            }
+        }
+    }
+
+    pub fn contains_shared_object(&self) -> bool
+    where
+        T: AsTx,
+    {
+        match self {
+            Schedulable::Transaction(tx) => tx.as_tx().contains_shared_object(),
+            Schedulable::RandomnessStateUpdate(_, _) => true,
+        }
+    }
+
+    pub fn non_shared_input_object_keys(&self) -> Vec<ObjectKey>
+    where
+        T: AsTx,
+    {
+        match self {
+            Schedulable::Transaction(tx) => transaction_non_shared_input_object_keys(tx.as_tx())
+                .expect("Transaction input should have been verified"),
+            Schedulable::RandomnessStateUpdate(_, _) => vec![],
+        }
+    }
+
+    pub fn receiving_object_keys(&self) -> Vec<ObjectKey>
+    where
+        T: AsTx,
+    {
+        match self {
+            Schedulable::Transaction(tx) => transaction_receiving_object_keys(tx.as_tx()),
+            Schedulable::RandomnessStateUpdate(_, _) => vec![],
+        }
+    }
+
+    pub fn key(&self) -> TransactionKey
+    where
+        T: AsTx,
+    {
+        match self {
+            Schedulable::Transaction(tx) => tx.as_tx().key(),
+            Schedulable::RandomnessStateUpdate(epoch, round) => {
+                TransactionKey::RandomnessRound(*epoch, *round)
+            }
+        }
+    }
+}
 
 #[must_use]
 #[derive(Default)]
@@ -35,33 +169,39 @@ pub struct ConsensusSharedObjVerAssignment {
 }
 
 impl SharedObjVerManager {
-    pub fn assign_versions_from_consensus<'a>(
+    pub fn assign_versions_from_consensus<'a, T>(
         epoch_store: &AuthorityPerEpochStore,
         cache_reader: &dyn ObjectCacheRead,
-        certificates: impl Iterator<Item = &'a VerifiedExecutableTransaction> + Clone,
+        assignables: impl Iterator<Item = &'a Schedulable<T>> + Clone,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
-    ) -> SuiResult<ConsensusSharedObjVerAssignment> {
+    ) -> SuiResult<ConsensusSharedObjVerAssignment>
+    where
+        T: AsTx + 'a,
+    {
         let mut shared_input_next_versions = get_or_init_versions(
-            certificates.clone().map(|cert| cert.data()),
+            assignables
+                .clone()
+                .flat_map(|a| a.shared_input_objects(epoch_store)),
             epoch_store,
             cache_reader,
         )?;
         let mut assigned_versions = Vec::new();
-        for cert in certificates {
-            if !cert.contains_shared_object() {
+        for assignable in assignables {
+            if !assignable.contains_shared_object() {
                 continue;
             }
             let cert_assigned_versions = Self::assign_versions_for_certificate(
-                cert,
+                epoch_store,
+                assignable,
                 &mut shared_input_next_versions,
                 cancelled_txns,
             );
-            assigned_versions.push((cert.key(), cert_assigned_versions));
+            assigned_versions.push((assignable.key(), cert_assigned_versions));
         }
 
         Ok(ConsensusSharedObjVerAssignment {
             shared_input_next_versions,
-            assigned_versions,
+            assigned_versions: AssignedTxAndVersions::new(assigned_versions),
         })
     }
 
@@ -78,7 +218,9 @@ impl SharedObjVerManager {
         // This must be done before we mutate it the first time, otherwise we would be initializing
         // it with the wrong version.
         let _ = get_or_init_versions(
-            certs_and_effects.iter().map(|(cert, _)| cert.data()),
+            certs_and_effects
+                .iter()
+                .flat_map(|(cert, _)| cert.transaction_data().shared_input_objects().into_iter()),
             epoch_store,
             cache_reader,
         );
@@ -105,22 +247,25 @@ impl SharedObjVerManager {
             trace!(
                 ?tx_key,
                 ?cert_assigned_versions,
-                "locking shared objects from effects"
+                "assigned shared object versions from effects"
             );
             assigned_versions.push((tx_key, cert_assigned_versions));
         }
-        assigned_versions
+        AssignedTxAndVersions::new(assigned_versions)
     }
 
     pub fn assign_versions_for_certificate(
-        cert: &VerifiedExecutableTransaction,
+        epoch_store: &AuthorityPerEpochStore,
+        assignable: &Schedulable<impl AsTx>,
         shared_input_next_versions: &mut HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
-    ) -> Vec<(ConsensusObjectSequenceKey, SequenceNumber)> {
-        let tx_digest = cert.digest();
+    ) -> AssignedVersions {
+        let tx_key = assignable.key();
 
         // Check if the transaction is cancelled due to congestion.
-        let cancellation_info = cancelled_txns.get(tx_digest);
+        let cancellation_info = tx_key
+            .as_digest()
+            .and_then(|tx_digest| cancelled_txns.get(tx_digest));
         let congested_objects_info: Option<HashSet<_>> =
             if let Some(CancelConsensusCertificateReason::CongestionOnObjects(congested_objects)) =
                 &cancellation_info
@@ -132,14 +277,13 @@ impl SharedObjVerManager {
         let txn_cancelled = cancellation_info.is_some();
 
         // Make an iterator to update the locks of the transaction's shared objects.
-        let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
+        let shared_input_objects: Vec<_> = assignable.shared_input_objects(epoch_store).collect();
 
-        let mut input_object_keys = transaction_non_shared_input_object_keys(cert)
-            .expect("Transaction input should have been verified");
+        let mut input_object_keys = assignable.non_shared_input_object_keys();
         let mut assigned_versions = Vec::with_capacity(shared_input_objects.len());
         let mut is_mutable_input = Vec::with_capacity(shared_input_objects.len());
         // Record receiving object versions towards the shared version computation.
-        let receiving_object_keys = transaction_receiving_object_keys(cert);
+        let receiving_object_keys = assignable.receiving_object_keys();
         input_object_keys.extend(receiving_object_keys);
 
         if txn_cancelled {
@@ -228,7 +372,7 @@ impl SharedObjVerManager {
         }
 
         trace!(
-            ?tx_digest,
+            ?tx_key,
             ?assigned_versions,
             ?next_version,
             ?txn_cancelled,
@@ -240,17 +384,12 @@ impl SharedObjVerManager {
 }
 
 fn get_or_init_versions<'a>(
-    transactions: impl Iterator<Item = &'a SenderSignedData>,
+    shared_input_objects: impl Iterator<Item = SharedInputObject> + 'a,
     epoch_store: &AuthorityPerEpochStore,
     cache_reader: &dyn ObjectCacheRead,
 ) -> SuiResult<HashMap<ConsensusObjectSequenceKey, SequenceNumber>> {
-    let mut shared_input_objects: Vec<_> = transactions
-        .flat_map(|tx| {
-            tx.transaction_data()
-                .shared_input_objects()
-                .into_iter()
-                .map(|so| so.into_id_and_version())
-        })
+    let mut shared_input_objects: Vec<_> = shared_input_objects
+        .map(|so| so.into_id_and_version())
         .collect();
 
     shared_input_objects.sort();
@@ -298,13 +437,17 @@ mod tests {
             generate_shared_objs_tx_with_gas_version(&[(id, init_shared_version, true)], 11),
         ];
         let epoch_store = authority.epoch_store_for_testing();
+        let assignables = certs
+            .iter()
+            .map(Schedulable::Transaction)
+            .collect::<Vec<_>>();
         let ConsensusSharedObjVerAssignment {
             shared_input_next_versions,
             assigned_versions,
         } = SharedObjVerManager::assign_versions_from_consensus(
             &epoch_store,
             authority.get_object_cache_reader().as_ref(),
-            certs.iter(),
+            assignables.iter(),
             &BTreeMap::new(),
         )
         .unwrap();
@@ -326,7 +469,7 @@ mod tests {
         // using lamport version, hence the next transaction will use the same version number.
         // In the following case, certs[2] has the same assignment as certs[1] for this reason.
         assert_eq!(
-            assigned_versions,
+            assigned_versions.0,
             vec![
                 (
                     certs[0].key(),
@@ -384,13 +527,17 @@ mod tests {
                 5,
             ),
         ];
+        let assignables = certs
+            .iter()
+            .map(Schedulable::Transaction)
+            .collect::<Vec<_>>();
         let ConsensusSharedObjVerAssignment {
             shared_input_next_versions,
             assigned_versions,
         } = SharedObjVerManager::assign_versions_from_consensus(
             &epoch_store,
             authority.get_object_cache_reader().as_ref(),
-            certs.iter(),
+            assignables.iter(),
             &BTreeMap::new(),
         )
         .unwrap();
@@ -411,7 +558,7 @@ mod tests {
             )])
         );
         assert_eq!(
-            assigned_versions,
+            assigned_versions.0,
             vec![
                 (
                     certs[0].key(),
@@ -528,6 +675,11 @@ mod tests {
         .into_iter()
         .collect();
 
+        let assignables = certs
+            .iter()
+            .map(Schedulable::Transaction)
+            .collect::<Vec<_>>();
+
         // Run version assignment logic.
         let ConsensusSharedObjVerAssignment {
             shared_input_next_versions,
@@ -535,7 +687,7 @@ mod tests {
         } = SharedObjVerManager::assign_versions_from_consensus(
             &epoch_store,
             authority.get_object_cache_reader().as_ref(),
-            certs.iter(),
+            assignables.iter(),
             &cancelled_txns,
         )
         .unwrap();
@@ -556,7 +708,7 @@ mod tests {
 
         // Check that the version assignment for each transaction is correct.
         assert_eq!(
-            assigned_versions,
+            assigned_versions.0,
             vec![
                 (
                     certs[0].key(),
@@ -642,7 +794,7 @@ mod tests {
             init_shared_version
         );
         assert_eq!(
-            assigned_versions,
+            assigned_versions.0,
             vec![
                 (
                     certs[0].key(),

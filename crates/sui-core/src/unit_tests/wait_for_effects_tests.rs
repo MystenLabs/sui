@@ -21,7 +21,7 @@ use crate::authority::consensus_tx_status_cache::{
     ConsensusTxStatus, CONSENSUS_STATUS_RETENTION_ROUNDS,
 };
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
-use crate::authority::AuthorityState;
+use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::authority_server::AuthorityServer;
 use crate::execution_scheduler::SchedulingSource;
@@ -121,9 +121,8 @@ async fn test_wait_for_effects_position_mismatch() {
         state_clone
             .try_execute_immediately(
                 &transaction,
-                None,
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
                 &epoch_store,
-                SchedulingSource::NonFastPath,
             )
             .await
             .unwrap()
@@ -304,9 +303,8 @@ async fn test_wait_for_effects_fastpath_certified() {
         state_clone
             .try_execute_immediately(
                 &transaction,
-                None,
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
                 &epoch_store,
-                SchedulingSource::NonFastPath,
             )
             .await
             .unwrap()
@@ -368,9 +366,8 @@ async fn test_wait_for_effects_finalized() {
         state_clone
             .try_execute_immediately(
                 &transaction,
-                None,
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
                 &epoch_store,
-                SchedulingSource::NonFastPath,
             )
             .await
             .unwrap()
@@ -432,9 +429,8 @@ async fn test_wait_for_effects_expired() {
         state_clone
             .try_execute_immediately(
                 &transaction,
-                None,
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
                 &epoch_store,
-                SchedulingSource::NonFastPath,
             )
             .await
             .unwrap()

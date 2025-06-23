@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    authority::authority_per_epoch_store::{AuthorityPerEpochStore, CertLockGuard},
+    authority::{
+        authority_per_epoch_store::CertLockGuard, shared_object_version_manager::AssignedVersions,
+    },
     execution_cache::ObjectCacheRead,
 };
 use itertools::izip;
-use mysten_common::fatal;
-use once_cell::unsync::OnceCell;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use sui_types::{
     base_types::{EpochId, FullObjectID, ObjectRef, TransactionDigest},
@@ -141,13 +141,18 @@ impl TransactionInputLoader {
     #[instrument(level = "trace", skip_all)]
     pub fn read_objects_for_execution(
         &self,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_key: &TransactionKey,
         _tx_lock: &CertLockGuard, // see below for why this is needed
         input_object_kinds: &[InputObjectKind],
+        assigned_shared_object_versions: &AssignedVersions,
         epoch_id: EpochId,
     ) -> SuiResult<InputObjects> {
-        let assigned_shared_versions_cell: OnceCell<Option<HashMap<_, _>>> = OnceCell::new();
+        let assigned_shared_versions: BTreeMap<_, _> = assigned_shared_object_versions
+            .iter()
+            .map(|((id, initial_shared_version), version)| {
+                ((*id, *initial_shared_version), *version)
+            })
+            .collect();
 
         let mut results = vec![None; input_object_kinds.len()];
         let mut object_keys = Vec::with_capacity(input_object_kinds.len());
@@ -175,23 +180,6 @@ impl TransactionInputLoader {
                     initial_shared_version,
                     ..
                 } => {
-                    let assigned_shared_versions = assigned_shared_versions_cell
-                        .get_or_init(|| {
-                            epoch_store
-                                .get_assigned_shared_object_versions(tx_key)
-                                .map(|versions| versions.into_iter().collect())
-                        })
-                        .as_ref()
-                        .unwrap_or_else(|| {
-                            // Important to hold the _tx_lock here - otherwise it would be possible
-                            // for a concurrent execution of the same tx to enter this point after
-                            // the first execution has finished and the assigned shared versions
-                            // have been deleted.
-                            fatal!(
-                                "Failed to get assigned shared versions for transaction {tx_key:?}"
-                            );
-                        });
-
                     // If we find a set of assigned versions but one object's version assignments
                     // are missing from the set, it indicates a serious inconsistency:
                     let version = assigned_shared_versions.get(&(*id, *initial_shared_version)).unwrap_or_else(|| {
@@ -223,10 +211,11 @@ impl TransactionInputLoader {
             fetches.into_iter()
         ) {
             results[index] = Some(match (object, input) {
-                (Some(obj), InputObjectKind::SharedMoveObject { .. }) if obj.full_id() == input.full_object_id() => ObjectReadResult {
+                (Some(obj), InputObjectKind::SharedMoveObject { .. }) if obj.full_id() == input.full_object_id() => {
+                    ObjectReadResult {
                     input_object_kind: *input,
                     object: obj.into(),
-                },
+                }},
                 (_, InputObjectKind::SharedMoveObject { .. }) => {
                     assert!(key.1.is_valid());
                     // If the full ID on a shared input doesn't match, check if the object

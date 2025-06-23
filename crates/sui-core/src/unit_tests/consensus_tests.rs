@@ -5,10 +5,12 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use super::*;
+use crate::authority::shared_object_version_manager::AssignedTxAndVersions;
+use crate::authority::ExecutionEnv;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::SequencedConsensusTransaction;
-use crate::execution_scheduler::{ExecutionSchedulerAPI, SchedulingSource};
+use crate::execution_scheduler::ExecutionSchedulerAPI;
 use crate::mock_consensus::with_block_status;
 use consensus_core::{BlockRef, BlockStatus};
 use fastcrypto::traits::KeyPair;
@@ -210,6 +212,7 @@ pub fn make_consensus_adapter_for_test(
 
             let checkpoint_service = Arc::new(CheckpointServiceNoop {});
             let mut transactions = Vec::new();
+            let mut assigned_versions = Vec::new();
             let mut executed_via_checkpoint = 0;
 
             let num_transactions = sequenced_transactions.len();
@@ -221,32 +224,31 @@ pub fn make_consensus_adapter_for_test(
                             .expect("Should not fail");
                         executed_via_checkpoint += 1;
                     } else {
-                        transactions.extend(
-                            epoch_store
-                                .process_consensus_transactions_for_tests(
-                                    vec![tx],
-                                    &checkpoint_service,
-                                    self.state.get_object_cache_reader().as_ref(),
-                                    self.state.get_transaction_cache_reader().as_ref(),
-                                    &self.state.metrics,
-                                    true,
-                                )
-                                .await?,
-                        );
-                    }
-                } else {
-                    transactions.extend(
-                        epoch_store
+                        let (txns, versions) = epoch_store
                             .process_consensus_transactions_for_tests(
                                 vec![tx],
                                 &checkpoint_service,
                                 self.state.get_object_cache_reader().as_ref(),
-                                self.state.get_transaction_cache_reader().as_ref(),
                                 &self.state.metrics,
                                 true,
                             )
-                            .await?,
-                    );
+                            .await?;
+
+                        transactions.extend(txns);
+                        assigned_versions.extend(versions.0);
+                    }
+                } else {
+                    let (txns, versions) = epoch_store
+                        .process_consensus_transactions_for_tests(
+                            vec![tx],
+                            &checkpoint_service,
+                            self.state.get_object_cache_reader().as_ref(),
+                            &self.state.metrics,
+                            true,
+                        )
+                        .await?;
+                    transactions.extend(txns);
+                    assigned_versions.extend(versions.0);
                 }
             }
 
@@ -256,12 +258,25 @@ pub fn make_consensus_adapter_for_test(
                 "Some transactions were not executed via checkpoint"
             );
 
+            let assigned_versions = AssignedTxAndVersions::new(assigned_versions).into_map();
+            let transactions = transactions
+                .into_iter()
+                .map(|tx| {
+                    let assigned_versions = assigned_versions
+                        .get(&tx.key())
+                        .cloned()
+                        .unwrap_or_default();
+                    (
+                        tx,
+                        ExecutionEnv::new().with_assigned_versions(assigned_versions),
+                    )
+                })
+                .collect();
+
             if self.execute {
-                self.state.execution_scheduler().enqueue(
-                    transactions,
-                    epoch_store,
-                    SchedulingSource::NonFastPath,
-                );
+                self.state
+                    .execution_scheduler()
+                    .enqueue(transactions, epoch_store);
             }
 
             assert!(

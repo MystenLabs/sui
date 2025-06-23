@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    authority::{authority_per_epoch_store::AuthorityPerEpochStore, AuthorityMetrics},
+    authority::{
+        authority_per_epoch_store::AuthorityPerEpochStore,
+        shared_object_version_manager::Schedulable, AuthorityMetrics, ExecutionEnv,
+    },
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
 };
 use enum_dispatch::enum_dispatch;
@@ -13,11 +16,8 @@ use std::{collections::BTreeSet, sync::Arc};
 use sui_config::node::AuthorityOverloadConfig;
 use sui_protocol_config::Chain;
 use sui_types::{
-    digests::TransactionEffectsDigest,
-    error::SuiResult,
-    executable_transaction::VerifiedExecutableTransaction,
-    storage::InputKey,
-    transaction::{SenderSignedData, VerifiedCertificate},
+    error::SuiResult, executable_transaction::VerifiedExecutableTransaction, storage::InputKey,
+    transaction::SenderSignedData,
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
@@ -47,16 +47,14 @@ pub enum SchedulingSource {
 pub struct PendingCertificate {
     // Certified transaction to be executed.
     pub certificate: VerifiedExecutableTransaction,
-    // When executing from checkpoint, the certified effects digest is provided, so that forks can
-    // be detected prior to committing the transaction.
-    pub expected_effects_digest: Option<TransactionEffectsDigest>,
+    // Environment in which the transaction will be executed.
+    pub execution_env: ExecutionEnv,
     // The input object this certificate is waiting for to become available in order to be executed.
     // This is only used by TransactionManager.
     pub waiting_input_objects: BTreeSet<InputKey>,
     // Stores stats about this transaction.
     pub stats: PendingCertificateStats,
     pub executing_guard: Option<ExecutingGuard>,
-    pub scheduling_source: SchedulingSource,
 }
 
 #[derive(Debug)]
@@ -65,57 +63,18 @@ pub struct ExecutingGuard {
 }
 
 #[enum_dispatch]
-pub(crate) trait ExecutionSchedulerAPI {
-    fn enqueue_impl(
+pub trait ExecutionSchedulerAPI {
+    fn enqueue_transactions(
         &self,
-        certs: Vec<(
-            VerifiedExecutableTransaction,
-            Option<TransactionEffectsDigest>,
-        )>,
+        certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        scheduling_source: SchedulingSource,
     );
 
     fn enqueue(
         &self,
-        certs: Vec<VerifiedExecutableTransaction>,
+        certs: Vec<(Schedulable, ExecutionEnv)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        scheduling_source: SchedulingSource,
-    ) {
-        let certs = certs.into_iter().map(|cert| (cert, None)).collect();
-        self.enqueue_impl(certs, epoch_store, scheduling_source)
-    }
-
-    fn enqueue_with_expected_effects_digest(
-        &self,
-        certs: Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
-        let certs = certs
-            .into_iter()
-            .map(|(cert, fx)| (cert, Some(fx)))
-            .collect();
-        // If we already have the effects, this cannot be from fastpath.
-        self.enqueue_impl(certs, epoch_store, SchedulingSource::NonFastPath)
-    }
-
-    /// Enqueues certificates / verified transactions into TransactionManager. Once all of the input objects are available
-    /// locally for a certificate, the certified transaction will be sent to execution driver.
-    ///
-    /// REQUIRED: Shared object locks must be taken before calling enqueueing transactions
-    /// with shared objects!
-    /// TODO: Cleanup this API.
-    fn enqueue_certificates(
-        &self,
-        certs: Vec<VerifiedCertificate>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
-        let executable_txns = certs
-            .into_iter()
-            .map(VerifiedExecutableTransaction::new_from_certificate)
-            .collect();
-        self.enqueue(executable_txns, epoch_store, SchedulingSource::NonFastPath)
-    }
+    );
 
     fn check_execution_overload(
         &self,
@@ -132,7 +91,7 @@ pub(crate) trait ExecutionSchedulerAPI {
 }
 
 #[enum_dispatch(ExecutionSchedulerAPI)]
-pub(crate) enum ExecutionSchedulerWrapper {
+pub enum ExecutionSchedulerWrapper {
     ExecutionScheduler(ExecutionScheduler),
     TransactionManager(TransactionManager),
 }

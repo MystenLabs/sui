@@ -31,7 +31,7 @@ use sui_types::{
 use tokio::time::timeout;
 use tracing::{info, warn};
 
-use crate::authority::AuthorityState;
+use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::global_state_hasher::GlobalStateHasher;
 
 const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
@@ -71,7 +71,9 @@ pub async fn send_and_confirm_transaction(
         .simplified_unwrap_then_delete();
     let mut state =
         state_acc.accumulate_cached_live_object_set_for_testing(include_wrapped_tombstone);
-    let (result, _execution_error_opt) = authority.try_execute_for_test(&certificate).await?;
+    let (result, _execution_error_opt) = authority
+        .try_execute_for_test(&certificate, ExecutionEnv::new())
+        .await?;
     let state_after =
         state_acc.accumulate_cached_live_object_set_for_testing(include_wrapped_tombstone);
     let effects_acc = state_acc.accumulate_effects(
@@ -83,7 +85,9 @@ pub async fn send_and_confirm_transaction(
     assert_eq!(state_after.digest(), state.digest());
 
     if let Some(fullnode) = fullnode {
-        fullnode.try_execute_for_test(&certificate).await?;
+        fullnode
+            .try_execute_for_test(&certificate, ExecutionEnv::new())
+            .await?;
     }
     Ok((certificate.into_inner(), result.into_inner()))
 }
