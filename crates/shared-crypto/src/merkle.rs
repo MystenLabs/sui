@@ -18,7 +18,7 @@ const EMPTY_NODE: [u8; DIGEST_LEN] = [0; DIGEST_LEN];
 
 /// Returned if the specified index is out of bounds for a Merkle tree or proof.
 #[derive(Error, Debug, PartialEq, Eq)]
-#[error("index {0} is too large")]
+#[error("Leaf index {0} exceeds tree bounds")]
 pub struct LeafIndexOutOfBounds(usize);
 
 /// A node in the Merkle tree.
@@ -94,6 +94,23 @@ where
             path: path.into(),
         }
     }
+
+    // Check if the proof is for the rightmost leaf in the tree
+    pub fn is_right_most(&self, leaf_index: usize) -> bool {
+        let mut level_index = leaf_index;
+        for sibling in self.path.iter() {
+            // The sibling hash of the current node
+            if level_index % 2 == 0 {
+                // The current node is a left child
+                if sibling.as_ref() != EMPTY_NODE.as_ref() {
+                    return false;
+                }
+            }
+            // Update to the level index one level up in the tree
+            level_index /= 2;
+        }
+        true
+    }
 }
 
 // Cannot be derived as many hash functions don't implement `Clone` and the derive is not smart
@@ -150,6 +167,113 @@ impl<T> PartialEq for MerkleProof<T> {
 }
 
 impl Eq for MerkleProof {}
+
+/// A proof that some data is not in a Merkle tree.
+#[derive(Serialize, Deserialize)]
+pub struct MerkleNonInclusionProof<L, T = Blake2b256>
+where
+    L: Ord + AsRef<[u8]>, // TODO: Also need PartialEq?
+{
+    _hash_type: PhantomData<T>,
+    pub index: usize,
+    pub left_leaf: Option<(L, MerkleProof<T>)>,
+    pub right_leaf: Option<(L, MerkleProof<T>)>,
+}
+
+impl<L, T> core::fmt::Debug for MerkleNonInclusionProof<L, T>
+where
+    L: Debug + Ord + AsRef<[u8]>,
+    T: HashFunction<DIGEST_LEN>,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct(&format!(
+            "MerkleNonInclusionProof<L={}, T={}>",
+            std::any::type_name::<L>(),
+            std::any::type_name::<T>()
+        ))
+        .field("left_leaf", &self.left_leaf)
+        .field("right_leaf", &self.right_leaf)
+        .finish()
+    }
+}
+
+impl<L, T> MerkleNonInclusionProof<L, T>
+where
+    T: HashFunction<DIGEST_LEN>,
+    L: Ord + AsRef<[u8]>,
+{
+    pub fn new(
+        left_leaf: Option<(L, MerkleProof<T>)>,
+        right_leaf: Option<(L, MerkleProof<T>)>,
+        index: usize,
+    ) -> Self {
+        Self {
+            _hash_type: PhantomData,
+            left_leaf,
+            right_leaf,
+            index,
+        }
+    }
+
+    fn is_valid_neighbor(
+        &self,
+        neighbor: &L,
+        proof: &MerkleProof<T>,
+        neighbor_index: usize,
+        root: &Node,
+    ) -> bool {
+        proof.verify_proof(root, neighbor.as_ref(), neighbor_index)
+    }
+
+    // Prove non-inclusion of target_leaf in a Merkle tree assuming that the tree is sorted.
+    // Edge case explanations
+    // - Empty tree: no leaves, automatically valid
+    // - Target leaf smaller than all: no left neighbor, right neighbor must be at position 0
+    // - Target leaf larger than all: left neighbor must be rightmost leaf
+    pub fn verify_proof(&self, root: &Node, target_leaf: &L) -> bool {
+        // Note: For empty trees, we don't need to check anything
+        if root.as_ref() == EMPTY_NODE.as_ref() {
+            return true;
+        }
+
+        let right_leaf_index = self.index;
+
+        if let Some((left_leaf, left_proof)) = &self.left_leaf {
+            let left_leaf_index = self.index - 1;
+            if left_leaf >= target_leaf
+                || !self.is_valid_neighbor(left_leaf, left_proof, left_leaf_index, root)
+            {
+                return false;
+            }
+            // Milestone: If left leaf is present, then left_leaf < target_leaf
+        } else if right_leaf_index != 0 || self.right_leaf.is_none() {
+            return false;
+            // Milestone: If left leaf is not present, then right leaf must be present with index 0.
+        }
+
+        if let Some((right_leaf, right_proof)) = &self.right_leaf {
+            if right_leaf <= target_leaf
+                || !self.is_valid_neighbor(right_leaf, right_proof, right_leaf_index, root)
+            {
+                return false;
+            }
+
+            // Milestone: If right leaf is present, then right_leaf > target_leaf
+        } else {
+            if let Some((_, left_proof)) = &self.left_leaf {
+                let left_leaf_index = self.index - 1;
+                if !left_proof.is_right_most(left_leaf_index) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+            // Milestone: If right leaf is not present, then left leaf must be present and be the rightmost leaf
+        }
+
+        true
+    }
+}
 
 /// Merkle tree using a hash function `T` (default: [`Blake2b256`]) from the [`fastcrypto`] crate.
 ///
@@ -286,6 +410,36 @@ where
             path,
         })
     }
+
+    /// Compute the non-inclusion proof for the target leaf.
+    /// Returns an error if the target leaf is already in the tree.
+    pub fn compute_non_inclusion_proof<L: AsRef<[u8]> + Ord + Clone>(
+        &self,
+        leaves: &[L],
+        target_leaf: &L,
+    ) -> Result<MerkleNonInclusionProof<L, T>, anyhow::Error> {
+        let position = leaves.partition_point(|x| x <= target_leaf);
+        if position > 0 && leaves[position - 1] == *target_leaf {
+            return Err(anyhow::anyhow!("Target leaf is already in the tree"));
+        }
+
+        let left_leaf_proof = if position > 0 {
+            Some((leaves[position - 1].clone(), self.get_proof(position - 1)?))
+        } else {
+            None
+        };
+
+        let right_leaf_proof = if position < leaves.len() {
+            Some((leaves[position].clone(), self.get_proof(position)?))
+        } else {
+            None
+        };
+        Ok(MerkleNonInclusionProof::new(
+            left_leaf_proof,
+            right_leaf_proof,
+            position,
+        ))
+    }
 }
 
 /// Computes the hash of the provided input to be used as a leaf hash of a Merkle tree.
@@ -403,6 +557,77 @@ mod test {
             for (index, leaf_data) in TEST_INPUT[..i].iter().enumerate() {
                 let proof = mt.get_proof(index).unwrap();
                 assert!(!proof.verify_proof(&mt.root(), leaf_data, index + 1));
+            }
+        }
+    }
+
+    #[test]
+    fn test_merkle_proof_is_right_most() {
+        for i in 0..TEST_INPUT.len() {
+            let mt: MerkleTree = MerkleTree::build(&TEST_INPUT[..i]);
+            for j in 0..i {
+                let proof = mt.get_proof(j).unwrap();
+                println!("proof: {:?}", proof);
+                if j == i - 1 {
+                    assert!(proof.is_right_most(j));
+                } else {
+                    assert!(!proof.is_right_most(j));
+                }
+            }
+        }
+    }
+
+    mod non_inclusion_proof {
+        use super::*;
+
+        #[test]
+        fn test_empty_tree() {
+            let mt: MerkleTree = MerkleTree::build::<[&[u8]; 0]>([]);
+            let non_inclusion_proof = mt
+                .compute_non_inclusion_proof(&[], &"foo".as_bytes())
+                .unwrap();
+            assert!(non_inclusion_proof.left_leaf.is_none());
+            assert!(non_inclusion_proof.right_leaf.is_none());
+            assert_eq!(non_inclusion_proof.index, 0);
+            assert!(non_inclusion_proof.verify_proof(&mt.root(), &"foo".as_bytes()));
+            assert!(non_inclusion_proof.verify_proof(&mt.root(), &"bar".as_bytes()));
+        }
+
+        #[test]
+        fn test_single_leaf() {
+            let mt: MerkleTree = MerkleTree::build(&["foo".as_bytes()]);
+            let non_inclusion_proof = mt
+                .compute_non_inclusion_proof(&["foo".as_bytes()], &"bar".as_bytes())
+                .unwrap();
+            assert!(non_inclusion_proof.verify_proof(&mt.root(), &"bar".as_bytes()));
+            assert!(!non_inclusion_proof.verify_proof(&mt.root(), &"foo".as_bytes()));
+
+            let non_inclusion_proof =
+                mt.compute_non_inclusion_proof(&["foo".as_bytes()], &"foo".as_bytes());
+            assert!(non_inclusion_proof.is_err());
+        }
+
+        #[test]
+        fn test_multiple_leaves() {
+            const TEST_INPUT: [&str; 9] = [
+                "foo", "bar", "fizz", "baz", "buzz", "fizz", "foobar", "walrus", "fizz",
+            ];
+            let mut sorted_test_input = TEST_INPUT.to_vec();
+            sorted_test_input.sort();
+            println!("sorted_test_input: {:?}", sorted_test_input);
+            let mt: MerkleTree = MerkleTree::build(&sorted_test_input);
+
+            let test_cases = [["fuzz", "yankee", "aloha"].to_vec(), TEST_INPUT.to_vec()].concat();
+            println!("test_cases: {:?}", test_cases);
+            for item in test_cases {
+                let non_inclusion_proof = mt.compute_non_inclusion_proof(&sorted_test_input, &item);
+                if TEST_INPUT.contains(&item) {
+                    assert!(non_inclusion_proof.is_err());
+                } else {
+                    assert!(non_inclusion_proof.is_ok());
+                    let non_inclusion_proof = non_inclusion_proof.unwrap();
+                    assert!(non_inclusion_proof.verify_proof(&mt.root(), &item));
+                }
             }
         }
     }

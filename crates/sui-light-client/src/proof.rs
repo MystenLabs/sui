@@ -17,6 +17,7 @@ use sui_types::{
 /// Define aspect of Sui state that need to be certified in a proof
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct ProofTarget {
+    /// TODO 1: Add a proof type - "inclusion" or "exclusion"
     /// Objects that need to be certified.
     pub objects: Vec<(ObjectRef, Object)>,
 
@@ -61,6 +62,7 @@ impl ProofTarget {
 /// certify objects and events.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TransactionProof {
+    /// TODO 2: Remove contents and replace with a Merkle proof for the tx artifact
     /// Checkpoint contents including this transaction.
     pub checkpoint_contents: CheckpointContents,
 

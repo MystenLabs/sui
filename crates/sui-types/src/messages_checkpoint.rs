@@ -10,8 +10,8 @@ use crate::crypto::{
     default_hash, get_key_pair, AccountKeyPair, AggregateAuthoritySignature, AuthoritySignInfo,
     AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo, RandomnessRound,
 };
-use crate::digests::Digest;
-use crate::effects::{ObjectChange, TestEffectsBuilder, TransactionEffects, TransactionEffectsAPI};
+use crate::digests::{Digest, TransactionDigest, TransactionEffectsDigest};
+use crate::effects::{IDOperation, ObjectChange, TestEffectsBuilder, TransactionEffects, TransactionEffectsAPI};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
 use crate::global_state_hash::GlobalStateHash;
@@ -132,8 +132,77 @@ pub enum CheckpointArtifact {
     // More things? Events?
 }
 
+impl PartialEq for CheckpointArtifact {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (CheckpointArtifact::AccumulatedObjectChange(a), CheckpointArtifact::AccumulatedObjectChange(b)) => {
+                a.id == b.id
+            }
+            (CheckpointArtifact::ExecutionDigests(a), CheckpointArtifact::ExecutionDigests(b)) => {
+                a.transaction == b.transaction
+            }
+            _ => false,
+        }
+    }
+}
+
+impl Eq for CheckpointArtifact {}
+
+impl PartialOrd for CheckpointArtifact {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for CheckpointArtifact {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match (self, other) {
+            // All AccumulatedObjectChange come before any ExecutionDigests
+            (CheckpointArtifact::AccumulatedObjectChange(_), CheckpointArtifact::ExecutionDigests(_)) => {
+                std::cmp::Ordering::Less
+            }
+            (CheckpointArtifact::ExecutionDigests(_), CheckpointArtifact::AccumulatedObjectChange(_)) => {
+                std::cmp::Ordering::Greater
+            }
+            // Within AccumulatedObjectChange, sort by ObjectID
+            (CheckpointArtifact::AccumulatedObjectChange(a), CheckpointArtifact::AccumulatedObjectChange(b)) => {
+                a.id.cmp(&b.id)
+            }
+            // Within ExecutionDigests, sort by TransactionDigest
+            (CheckpointArtifact::ExecutionDigests(a), CheckpointArtifact::ExecutionDigests(b)) => {
+                a.transaction.cmp(&b.transaction)
+            }
+        }
+    }
+}
+
+impl CheckpointArtifact {
+    // Create a dummy artifact for the given object ID. 
+    // This is used to create a non-inclusion proof for an object that is not in the checkpoint.
+    pub fn dummy_object_change(object_id: ObjectID) -> Self {
+        CheckpointArtifact::AccumulatedObjectChange(ObjectChange {
+            id: object_id,
+            input_version: None,
+            input_digest: Default::default(),
+            output_version: None,
+            output_digest: Default::default(),
+            id_operation: IDOperation::None,
+        })
+    }
+
+    // Create a dummy artifact for the given transaction digest.
+    // This is used to create a non-inclusion proof for a transaction that is not in the checkpoint.
+    pub fn dummy_execution_digest(transaction_digest: TransactionDigest) -> Self {
+        CheckpointArtifact::ExecutionDigests(ExecutionDigests {
+            transaction: transaction_digest,
+            effects: TransactionEffectsDigest::ZERO,
+        })
+    }
+}
+
 #[derive(Debug)]
 pub struct CheckpointArtifacts {
+    // Always stored in a sorted order (see CheckpointArtifact::cmp)
     pub contents: Vec<CheckpointArtifact>,
 }
 
@@ -173,7 +242,8 @@ impl From<&Vec<TransactionEffects>> for CheckpointArtifacts {
             .iter()
             .map(|e| CheckpointArtifact::ExecutionDigests(e.execution_digests()))
             .collect::<Vec<_>>();
-        let artifacts = [object_artifacts, execution_digest_artifacts].concat();
+        let mut artifacts = [object_artifacts, execution_digest_artifacts].concat();
+        artifacts.sort();
 
         Self { contents: artifacts }
     }
@@ -842,6 +912,7 @@ pub struct CheckpointVersionSpecificDataV1 {
 
 #[cfg(test)]
 mod tests {
+    use crate::base_types::SequenceNumber;
     use crate::digests::{ConsensusCommitDigest, TransactionDigest, TransactionEffectsDigest};
     use crate::messages_consensus::ConsensusDeterminedVersionAssignments;
     use crate::transaction::VerifiedTransaction;
@@ -1054,5 +1125,53 @@ mod tests {
             let c2 = generate_test_checkpoint_summary_from_digest(*t2.digest());
             assert_ne!(c1.digest(), c2.digest());
         }
+    }
+
+    #[test]
+    fn test_artifact_ordering() {
+        let object_change_1 = CheckpointArtifact::AccumulatedObjectChange(ObjectChange {
+            id: ObjectID::from_hex_literal("0x1").unwrap(),
+            input_version: None,
+            input_digest: Default::default(),
+            output_version: None,
+            output_digest: Default::default(),
+            id_operation: IDOperation::None,
+        });
+        let object_change_2 = CheckpointArtifact::AccumulatedObjectChange(ObjectChange {
+            id: ObjectID::from_hex_literal("0x1").unwrap(),
+            input_version: Some(SequenceNumber::from(1)),
+            input_digest: Default::default(),
+            output_version: Some(SequenceNumber::from(3)),
+            output_digest: Default::default(),
+            id_operation: IDOperation::Created,
+        });
+        let object_change_3 = CheckpointArtifact::AccumulatedObjectChange(ObjectChange {
+            id: ObjectID::from_hex_literal("0x2").unwrap(),
+            input_version: Some(SequenceNumber::from(1)),
+            input_digest: Default::default(),
+            output_version: Some(SequenceNumber::from(3)),
+            output_digest: Default::default(),
+            id_operation: IDOperation::Created,
+        });
+        // Equality is defined only by the ObjectIDs.
+        assert!(object_change_1 == object_change_2);
+        assert!(object_change_1 < object_change_3);
+        assert!(object_change_2 < object_change_3);
+
+        let execution_digest_1 = CheckpointArtifact::ExecutionDigests(ExecutionDigests::new(
+            TransactionDigest::new([1; 32]),
+            TransactionEffectsDigest::ZERO,
+        ));
+        let execution_digest_2 = CheckpointArtifact::ExecutionDigests(ExecutionDigests::new(
+            TransactionDigest::new([2; 32]),
+            TransactionEffectsDigest::ZERO,
+        ));
+        assert!(object_change_1 < execution_digest_1);
+        assert!(object_change_2 < execution_digest_1);
+        assert!(object_change_3 < execution_digest_1);
+        assert!(object_change_1 < execution_digest_2);
+        assert!(object_change_2 < execution_digest_2);
+        assert!(object_change_3 < execution_digest_2);
+        assert!(execution_digest_1 < execution_digest_2);
     }
 }

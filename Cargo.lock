@@ -12408,6 +12408,7 @@ dependencies = [
 name = "shared-crypto"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
  "bcs",
  "eyre",
  "fastcrypto",

@@ -14,3 +14,4 @@ eyre.workspace = true
 bcs.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+anyhow.workspace = true
