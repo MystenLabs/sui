@@ -15673,6 +15673,7 @@ dependencies = [
  "axum-extra 0.10.1",
  "bcs",
  "clap",
+ "enum_dispatch",
  "eyre",
  "fastcrypto",
  "futures",
