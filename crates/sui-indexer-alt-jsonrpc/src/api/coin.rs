@@ -60,6 +60,16 @@ trait CoinsApi {
         /// type name for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
         coin_type: String,
     ) -> RpcResult<Option<SuiCoinMetadata>>;
+
+    /// Return the total coin balance for one coin type, owned by the address owner.
+    #[method(name = "getBalance")]
+    async fn get_balance(
+        &self,
+        /// the owner's Sui address
+        owner: SuiAddress,
+        /// optional type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.
+        coin_type: Option<String>,
+    ) -> RpcResult<Balance>;
 }
 
 /// Delegation Coin API for endpoints that are delegated to FN RPC
@@ -156,6 +166,40 @@ impl CoinsApiServer for Coins {
         Ok(coin_metadata_response(ctx, &coin_type)
             .await
             .with_internal_context(|| format!("Failed to fetch CoinMetadata for {coin_type:?}"))?)
+    }
+
+    async fn get_balance(
+        &self,
+        owner: SuiAddress,
+        coin_type: Option<String>,
+    ) -> RpcResult<Balance> {
+        let coin_type_tag = if let Some(coin_type) = coin_type {
+            sui_types::parse_sui_type_tag(&coin_type)
+                .map_err(|e| invalid_params(Error::BadType(coin_type, e)))?
+        } else {
+            // Default to SUI if no coin type is specified.
+            GAS::type_tag()
+        };
+
+        let Self(ctx) = self;
+
+        let coin_id_page = filter_coins(ctx, owner, Some(coin_type_tag.clone()), None).await?;
+
+        let coin_futures = coin_id_page.data.iter().map(|id| coin_response(ctx, *id));
+
+        let coins = future::join_all(coin_futures)
+            .await
+            .into_iter()
+            .zip(coin_id_page.data)
+            .map(|(r, id)| r.with_internal_context(|| format!("Failed to get coin object {id}")))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Balance {
+            coin_object_count: coins.len(),
+            coin_type: coin_type_tag.to_string(),
+            total_balance: coins.iter().map(|c| c.balance as u128).sum::<u128>(),
+            locked_balance: std::collections::HashMap::new(),
+        })
     }
 }
 
