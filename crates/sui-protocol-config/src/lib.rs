@@ -1920,7 +1920,9 @@ impl ProtocolConfig {
         if cfg!(msim) {
             // Allow for overriding the gc depth for simtests.
             if let Ok(gc_depth) = std::env::var("SIMTEST_CONSENSUS_GC_DEPTH_OVERRIDE") {
-                return gc_depth.parse::<u32>().expect("Failed to parse SIMTEST_CONSENSUS_GC_DEPTH_OVERRIDE");
+                return gc_depth
+                    .parse::<u32>()
+                    .expect("Failed to parse SIMTEST_CONSENSUS_GC_DEPTH_OVERRIDE");
             }
             // Otherwise exercise a very low gc_depth
             5
