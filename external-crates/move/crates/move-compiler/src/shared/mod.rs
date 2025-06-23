@@ -617,15 +617,6 @@ impl CompilationEnv {
         }
     }
 
-    pub fn save_module_info(
-        &self,
-        module_info: &BTreeMap<ModuleIdent, (ModuleInfo, Option<SuiInfo>)>,
-    ) {
-        for hook in &self.save_hooks {
-            hook.save_module_info(module_info)
-        }
-    }
-
     pub fn save_private_transfers(
         &self,
         private_transfers: &BTreeMap<(ModuleIdent, DatatypeName), TransferKind>,
@@ -1186,16 +1177,6 @@ impl SaveHook {
         let mut r = self.0.lock().unwrap();
         if r.macro_infos.is_none() && r.flags.contains(&SaveFlag::MacroInfos) {
             r.macro_infos = Some(macro_infos.clone());
-        }
-    }
-
-    pub(crate) fn save_module_info(
-        &self,
-        module_info: &BTreeMap<ModuleIdent, (ModuleInfo, Option<SuiInfo>)>,
-    ) {
-        let mut r = self.0.lock().unwrap();
-        if r.module_info.is_none() && r.flags.contains(&SaveFlag::ModuleInfo) {
-            r.module_info = Some(module_info.clone());
         }
     }
 

@@ -85,13 +85,6 @@ pub fn program(
         &modules,
         module_use_funs,
     );
-    let module_infos = program_info
-        .modules
-        .clone()
-        .into_iter()
-        .map(|(mident, minfo)| (mident, (minfo, program_info.sui_flavor_info.clone())))
-        .collect();
-    compilation_env.save_module_info(&module_infos);
     let prog = T::Program {
         modules,
         warning_filters_table,

@@ -85,7 +85,7 @@ pub enum NamedMemberKind {
 }
 
 macro_rules! program_info {
-    ($pre_compiled_module_infos:ident, $prog:ident, $pass:ident, $module_use_funs:ident) => {{
+    ($pre_compiled_module_infos:ident, $prog:ident, $pass_info:ident, $module_use_funs:ident) => {{
         let all_modules = $prog.modules.key_cloned_iter();
         let mut modules = UniqueMap::maybe_from_iter(all_modules.map(|(mident, mdef)| {
             let structs = mdef.structs.clone();
@@ -134,7 +134,9 @@ macro_rules! program_info {
         if let Some(pre_compiled_module_infos) = $pre_compiled_module_infos {
             for (mident, minfo) in pre_compiled_module_infos.iter() {
                 if !modules.contains_key(&mident) {
-                    modules.add(mident.clone(), minfo.info.clone()).unwrap();
+                    modules
+                        .add(mident.clone(), minfo.$pass_info.clone())
+                        .unwrap();
                 }
             }
         }
@@ -158,7 +160,7 @@ impl TypingProgramInfo {
         let mut module_use_funs = Some(&mut module_use_funs);
         let prog = Prog { modules };
         let pcmi = pre_compiled_module_infos.clone();
-        let mut info = program_info!(pcmi, prog, typing, module_use_funs);
+        let mut info = program_info!(pcmi, prog, typing_info, module_use_funs);
         // TODO we should really have an idea of root package flavor here
         // but this feels roughly equivalent
         if env
@@ -182,7 +184,12 @@ impl NamingProgramInfo {
     ) -> Self {
         // use_funs will be populated later
         let mut module_use_funs: Option<&mut BTreeMap<ModuleIdent, ResolvedUseFuns>> = None;
-        program_info!(pre_compiled_module_infos, prog, naming, module_use_funs)
+        program_info!(
+            pre_compiled_module_infos,
+            prog,
+            naming_info,
+            module_use_funs
+        )
     }
 
     pub fn set_use_funs(&mut self, module_use_funs: BTreeMap<ModuleIdent, ResolvedUseFuns>) {

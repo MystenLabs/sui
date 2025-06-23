@@ -41,7 +41,7 @@ pub fn modules(
                 /* allow shadowing */ true,
                 &mut definers,
                 *mident,
-                &module_info.info.attributes,
+                &module_info.naming_info.attributes,
             )
         }
     }
