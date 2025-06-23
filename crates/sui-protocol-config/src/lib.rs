@@ -245,6 +245,7 @@ const MAX_PROTOCOL_VERSION: u64 = 86;
 // Version 86: Use type tags in the object runtime and adapter instead of `Type`s.
 //             Make variant count limit explicit in protocol config.
 //             Enable epoch stable sequence number in effects for unsequenced config reads.
+//             Enable party transfer in testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3765,6 +3766,11 @@ impl ProtocolConfig {
                         );
                     cfg.feature_flags
                         .include_epoch_stable_sequence_number_in_effects = true;
+
+                    // Enable party transfer for testnet.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_party_transfer = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
