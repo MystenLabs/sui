@@ -751,7 +751,7 @@ mod tests {
         };
 
         // Configure failing behavior: range [1,2) should fail once before succeeding
-        let remaining_failures = HashMap::from_iter([((1, 2), 1)]);
+        let remaining_failures = HashMap::from([((1, 2), 1)]);
         let store = MockStore {
             watermarks: Arc::new(Mutex::new(watermark)),
             data: Arc::new(Mutex::new(test_data.clone())),

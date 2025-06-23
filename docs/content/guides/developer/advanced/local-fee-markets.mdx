@@ -19,7 +19,7 @@ Sui's local fee market algorithm runs every time a new batch of sequenced transa
 
 1. Sorts all transactions in order of gas price, from highest to lowest.
 
-1. Estimates each transaction's execution cost using the [`TotalGasBudgetWithCap`](https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/authority/shared_object_congestion_tracker.rs#L143) heuristic.
+1. Estimates each transaction's execution cost using the [`ExecutionTimeEstimate`](https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/authority/execution_time_estimator.rs) heuristic.
 
 1. The [`SharedObjectCongestionTracker`](https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/authority/shared_object_congestion_tracker.rs) keeps a running tally of how much per-object congestion budget is used. If all shared objects used by the transaction have enough budget left, the transaction is scheduled. In that case, it consumes budget for the mutable shared objects that it uses. Keep in mind that immutable shared objects don't consume any budget, because multiple immutable uses of a shared object can execute in parallel. If the transaction cannot be scheduled, it is deferred until the next commit.
 
@@ -31,19 +31,9 @@ Using a gas price that is at least five times the reference gas price also incre
 
 ### Cost estimation of transactions
 
-:::info
+Sui limits the per-commit execution capacity of each shared object. If transactions touching a shared object have a low estimated execution time, more of them can fit. If they have a high estimated execution time, not as many can fit.  
 
-An improved algorithm is in active development for estimating transaction execution cost. This topic will be updated to reflect any future changes.
-
-:::
-
-Sui limits the per-commit execution capacity of each shared object. If transactions touching a shared object have a low estimated cost, more of them can fit. If they have a high estimated cost, not as many can fit.  
-
-The cost of a transaction for local fee market purposes is estimated using the `TotalGasBudgetWithCap` heuristic. 
-
-- A transaction's initial estimated cost is simply its gas budget. (Unfortunately, the final gas cost of a transaction is not known until after execution, which is too late to use in scheduling.)
-
-- For transactions with a very high gas budget, the estimated cost is then lowered to an upper limit that is determined based on the number of `MoveCall`s and the number of Move `Input`s in each call.
+Transaction execution time is estimated separately for each top-level Move function called from a PTB. Measurements of actual execution time are shared between the validators, and the cost estimate used for scheduling is the stake-weighted median of these measurements of past invocations. (For most functions, which are never called with congested inputs, a low default estimate is used.)
 
 ### Transaction deferral
 
@@ -53,7 +43,7 @@ If a transaction is deferred for several commits without successfully being sche
 
 ### Determining total per-object capacity
 
-At the protocol level, Sui is configured with a fixed per-commit limit and burst capacity for each shared object. On average, a shared object's activity cannot exceed the per-commit limit. However, short bursts of traffic might exceed the limit temporarily.
+At the protocol level, Sui is configured with a per-commit target utilization and burst capacity for each shared object. On average, a shared object's activity cannot exceed the per-commit limit. However, short bursts of traffic might exceed the limit temporarily.
 
 There is no way to increase the total execution capacity of a particular shared object. The network sets that limit to ensure that validators, Full nodes, and indexers can all execute checkpoints in a reasonable amount of time.
 
@@ -61,8 +51,6 @@ There is no way to increase the total execution capacity of a particular shared 
 
 - For priority access to a congested shared object, set a higher gas price.
 
-- Set a gas budget that is close to your actual execution cost. You can use dry runs to estimate this. Be aware that some transactions have variable cost.
-
 - When designing Move packages, avoid using a single shared object if possible. For example, a DEX application with a single, main shared object and dynamic fields for each currency pair would suffer much more congestion than one with a separate object per currency pair.
 
-- If your object `O` is congested, optimize the gas usage of the functions that are commonly used to access the object. For example, if all the accesses to your object happen via Move function `f`, halving the gas usage of `f` will effectively double the number of transactions that can touch `O` in a single commit (assuming the gas budget is correspondingly decreased).
+- If your object `O` is congested, optimize the execution time of the functions that are commonly used to access the object. For example, if all the accesses to your object happen via Move function `f`, halving the execution time of `f` will effectively double the number of transactions that can touch `O` in a single commit.
