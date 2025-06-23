@@ -287,6 +287,7 @@ impl From<sui_sdk_types::TransactionKind> for super::TransactionKind {
             EndOfEpoch(transactions) => Kind::EndOfEpoch(super::EndOfEpochTransaction {
                 transactions: transactions.into_iter().map(Into::into).collect(),
             }),
+            ProgrammableSystemTransaction(ptb) => Kind::ProgrammableTransaction(ptb.into()),
             RandomnessStateUpdate(update) => Kind::RandomnessStateUpdate(update.into()),
             ConsensusCommitPrologueV2(prologue) => Kind::ConsensusCommitPrologueV2(prologue.into()),
             ConsensusCommitPrologueV3(prologue) => Kind::ConsensusCommitPrologueV3(prologue.into()),

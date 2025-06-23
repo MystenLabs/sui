@@ -7151,7 +7151,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.0",
 ]
 
 [[package]]
@@ -10480,7 +10480,7 @@ checksum = "0c1318b19085f08681016926435853bbf7858f9c082d0999b80550ff5d9abe15"
 dependencies = [
  "bytes",
  "heck 0.5.0",
- "itertools 0.13.0",
+ "itertools 0.11.0",
  "log",
  "multimap",
  "once_cell",
@@ -10515,7 +10515,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e9552f850d5f0964a4e4d0bf306459ac29323ddfbae05e35a7c0d35cb0803cc5"
 dependencies = [
  "anyhow",
- "itertools 0.13.0",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "syn 2.0.99",
@@ -13805,8 +13805,8 @@ dependencies = [
 
 [[package]]
 name = "sui-crypto"
-version = "0.0.4"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=1eed1b281702de4290a0e492600ce2a1fd45a331#1eed1b281702de4290a0e492600ce2a1fd45a331"
+version = "0.0.5"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=ecd96d6bbdddadb1d5d0bd0b2ba168308e2636c1#ecd96d6bbdddadb1d5d0bd0b2ba168308e2636c1"
 dependencies = [
  "ark-bn254",
  "ark-ff",
@@ -15851,8 +15851,8 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk-types"
-version = "0.0.4"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=1eed1b281702de4290a0e492600ce2a1fd45a331#1eed1b281702de4290a0e492600ce2a1fd45a331"
+version = "0.0.5"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=ecd96d6bbdddadb1d5d0bd0b2ba168308e2636c1#ecd96d6bbdddadb1d5d0bd0b2ba168308e2636c1"
 dependencies = [
  "base64ct",
  "bcs",
@@ -18025,7 +18025,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
