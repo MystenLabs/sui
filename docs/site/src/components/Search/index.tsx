@@ -17,6 +17,63 @@ function getQueryParam(key) {
   return params.get(key) || "";
 }
 
+function TabbedResults({ activeTab, onChange, tabs }) {
+  return (
+    <div className="mb-4 flex justify-center">
+      {tabs.map(({ label, indexName, count }) => (
+        <button
+          key={indexName}
+          className="mx-4"
+          onClick={() => onChange(indexName)}
+          disabled={activeTab === indexName}
+        >
+          {label} | {count}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function IndexStatsCollector({
+  indexName,
+  onUpdate,
+}: {
+  indexName: string;
+  onUpdate: (indexName: string, hits: number) => void;
+}) {
+  const { nbHits } = useStats();
+  React.useEffect(() => {
+    onUpdate(indexName, nbHits);
+  }, [indexName, nbHits, onUpdate]);
+  return null;
+}
+
+function RefinementSection() {
+  const { nbHits } = useStats();
+
+  if (nbHits === 0) return null;
+
+  return (
+    <div className="py-4 border border-solid rounded-lg mb-4">
+      <h2 className="pl-4 text-lg">Filter by category</h2>
+      <RefinementList attribute="source" />
+    </div>
+  );
+}
+
+function TabbedIndex({ indexName }) {
+  const { nbHits } = useStats();
+  console.log(nbHits);
+  if (nbHits === 0) return null;
+  return (
+    <Index indexName={indexName}>
+      <RefinementSection />
+      <CustomHitsContent />
+      <Pagination />
+    </Index>
+  );
+}
+
 export default function Search() {
   const searchClient = algoliasearch(
     "M9JD2UP87M",
