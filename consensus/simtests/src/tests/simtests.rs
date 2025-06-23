@@ -52,9 +52,8 @@ mod test {
 
         const NUM_OF_AUTHORITIES: usize = 10;
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
-        let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-        // TODO: this is a no-op since gc depth in msim is hardcoded to 5. Overriding should be allowed.
-        // protocol_config.set_consensus_gc_depth_for_testing(3);
+        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        std::env::set_var("SIMTEST_CONSENSUS_GC_DEPTH_OVERRIDE", "3");
 
         let mut authorities = Vec::with_capacity(committee.size());
         let mut transaction_clients = Vec::with_capacity(committee.size());
@@ -141,6 +140,7 @@ mod test {
 
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
         let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        std::env::set_var("SIMTEST_CONSENSUS_GC_DEPTH_OVERRIDE", "3");
 
         let mut authorities = Vec::with_capacity(committee.size());
         let mut transaction_clients = Vec::with_capacity(committee.size());
@@ -229,12 +229,12 @@ mod test {
                     transaction_index += 1;
                 }
 
-                let (_block_ref, _indexes, status_waiter) = transaction_clients_clone
-                    [(transaction_index - num_of_transactions as usize)
-                        % transaction_clients_clone.len()]
-                .submit(transactions)
-                .await
-                .unwrap();
+                let index = (transaction_index - num_of_transactions) as usize
+                    % transaction_clients_clone.len();
+                let (_block_ref, _indexes, status_waiter) = transaction_clients_clone[index]
+                    .submit(transactions)
+                    .await
+                    .unwrap();
 
                 let total_sequenced_transactions = total_sequenced_transactions_cloned.clone();
                 let total_garbage_collected_transactions =
