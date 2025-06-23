@@ -133,6 +133,7 @@ services:
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
       - SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
       - TOKIO_WORKER_THREADS=4
+      - TRANSACTION_DRIVER=${TRANSACTION_DRIVER:-0}
     volumes:
       - ./genesis/static/fullnode.yaml:/opt/sui/config/fullnode.yaml:ro
       - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
