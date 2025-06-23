@@ -161,8 +161,8 @@ fun bridge(): UID {
     }
 }
 
-/// Create the `UID` for the singleton `` object.
-/// This should only be called once from ``.
+/// Create the `UID` for the singleton `CoinMetadataObject` object.
+/// This should only be called once from `coin_metadata_registry`.
 public(package) fun sui_coin_metadata_registry_object_id(): UID {
     UID {
         id: ID { bytes: SUI_COIN_METADATA_OBJECT_ID },

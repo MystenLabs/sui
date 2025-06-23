@@ -1154,13 +1154,13 @@ pub fn generate_genesis_system_object(
         }
 
         if protocol_config.enable_coin_metadata_registry() {
-            builder.programmable_move_call(
+            builder.move_call(
                 SUI_FRAMEWORK_ADDRESS.into(),
                 COIN_METADATA_REGISTRY_MODULE_NAME.to_owned(),
                 COIN_METADATA_REGISTRY_CREATE_FUNCTION_NAME.to_owned(),
                 vec![],
                 vec![],
-            );
+            )?;
         }
 
         if protocol_config.enable_coin_deny_list_v1() {
