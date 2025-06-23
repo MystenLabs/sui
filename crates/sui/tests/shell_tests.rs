@@ -101,7 +101,6 @@ fn get_sui_bin_path() -> String {
 fn get_sui_package_dir() -> PathBuf {
     let mut path = PathBuf::from(std::env!("CARGO_MANIFEST_DIR"));
     path.push("../sui-framework/packages");
-    println!("SRC FRAMEWORK PATH: {}", path.display());
     path
 }
 
