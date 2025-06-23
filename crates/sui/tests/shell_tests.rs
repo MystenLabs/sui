@@ -4,7 +4,7 @@
 use fs_extra::dir::CopyOptions;
 use insta_cmd::get_cargo_bin;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use sui_config::SUI_CLIENT_CONFIG;
 use test_cluster::TestClusterBuilder;
@@ -40,7 +40,14 @@ async fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
     let tmpdir = tempfile::tempdir()?;
     let sandbox = tmpdir.path();
 
+    let sui_package_dir_src = get_sui_package_dir();
+
     fs_extra::dir::copy(srcdir, sandbox, &CopyOptions::new().content_only(true))?;
+    fs_extra::dir::copy(
+        sui_package_dir_src,
+        sandbox,
+        &CopyOptions::new().content_only(true),
+    )?;
 
     // set up command
     let mut shell = Command::new("bash");
@@ -88,6 +95,13 @@ fn get_sui_bin_path() -> String {
         .to_str()
         .expect("directory name is valid UTF-8")
         .to_owned()
+}
+
+/// Return the package dir for the Sui framework packages which may be used in some shell tests.
+fn get_sui_package_dir() -> PathBuf {
+    let mut path = PathBuf::from(std::env!("CARGO_MANIFEST_DIR"));
+    path.push("../sui-framework/packages");
+    path
 }
 
 #[cfg(not(msim))]
