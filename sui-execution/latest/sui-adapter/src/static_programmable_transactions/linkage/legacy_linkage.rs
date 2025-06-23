@@ -7,7 +7,7 @@ use crate::{
         analysis::LinkageAnalysis,
         config::{LinkageConfig, ResolutionConfig},
         resolution::{ConflictResolution, ResolutionTable, add_and_unify, get_package},
-        resolved_linkage::{ResolvedLinkage, ResolvedLinkage_},
+        resolved_linkage::ResolvedLinkage,
     },
 };
 use move_binary_format::binary_config::BinaryConfig;
@@ -24,7 +24,7 @@ impl LinkageAnalysis for LegacyLinkage {
         move_call: &P::ProgrammableMoveCall,
         store: &dyn PackageStore,
     ) -> Result<ResolvedLinkage, ExecutionError> {
-        Ok(ResolvedLinkage_::from_resolution_table(
+        Ok(ResolvedLinkage::from_resolution_table(
             self.compute_call_linkage(move_call, store)?,
         ))
     }
@@ -34,7 +34,7 @@ impl LinkageAnalysis for LegacyLinkage {
         deps: &[ObjectID],
         store: &dyn PackageStore,
     ) -> Result<ResolvedLinkage, ExecutionError> {
-        Ok(ResolvedLinkage_::from_resolution_table(
+        Ok(ResolvedLinkage::from_resolution_table(
             self.compute_publication_linkage(deps, store)?,
         ))
     }
@@ -83,6 +83,12 @@ impl LegacyLinkage {
                 ConflictResolution::exact,
             )?;
         }
+        add_and_unify(
+            &move_call.package,
+            store,
+            &mut resolution_table,
+            ConflictResolution::exact,
+        )?;
         Ok(resolution_table)
     }
 

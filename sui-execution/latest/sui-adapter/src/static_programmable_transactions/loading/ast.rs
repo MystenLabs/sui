@@ -21,6 +21,7 @@ use sui_types::{
 // AST Nodes
 //**************************************************************************************************
 
+#[derive(Debug)]
 pub struct Transaction {
     pub inputs: Inputs,
     pub commands: Commands,
@@ -30,12 +31,14 @@ pub type Inputs = Vec<(InputArg, InputType)>;
 
 pub type Commands = Vec<Command>;
 
+#[derive(Debug)]
 pub enum InputArg {
     Pure(Vec<u8>),
     Receiving(ObjectRef),
     Object(ObjectArg),
 }
 
+#[derive(Debug)]
 pub enum ObjectArg {
     ImmObject(ObjectRef),
     OwnedObject(ObjectRef),
@@ -76,12 +79,13 @@ pub struct Datatype {
     pub type_arguments: Vec<Type>,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum InputType {
     Bytes,
     Fixed(Type),
 }
 
+#[derive(Debug)]
 pub enum Command {
     MoveCall(Box<MoveCall>),
     TransferObjects(Vec<Argument>, Argument),
@@ -98,11 +102,13 @@ pub enum Command {
     ),
 }
 
+#[derive(Debug)]
 pub struct LoadedFunctionInstantiation {
     pub parameters: Vec<Type>,
     pub return_: Vec<Type>,
 }
 
+#[derive(Debug)]
 pub struct LoadedFunction {
     pub storage_id: ModuleId,
     pub runtime_id: ModuleId,
@@ -115,6 +121,7 @@ pub struct LoadedFunction {
     pub definition_index: FunctionDefinitionIndex,
 }
 
+#[derive(Debug)]
 pub struct MoveCall {
     pub function: LoadedFunction,
     pub arguments: Vec<Argument>,
