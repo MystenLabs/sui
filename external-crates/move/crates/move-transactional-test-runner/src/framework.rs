@@ -683,7 +683,7 @@ pub fn compile_source_units(
             if let Some(pre_compiled_module_infos) = state.pre_compiled_module_infos_opt.clone() {
                 for (_, module_info) in pre_compiled_module_infos.iter() {
                     files.add(
-                        module_info.info.defined_loc.file_hash(),
+                        module_info.naming_info.defined_loc.file_hash(),
                         module_info.file_name,
                         module_info.file_content.clone(),
                     );
