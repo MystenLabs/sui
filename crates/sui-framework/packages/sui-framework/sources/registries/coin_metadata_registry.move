@@ -67,7 +67,6 @@ public struct Metadata<phantom T> has key, store {
     regulated: RegulatedState,
     treasury_cap_id: Option<ID>,
     metadata_cap_id: Option<ID>,
-    // burn_cap_id: Option<ID>,
     extra_fields: VecMap<String, ExtraField>,
 }
 
