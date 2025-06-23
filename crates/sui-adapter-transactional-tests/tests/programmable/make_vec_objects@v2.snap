@@ -1,0 +1,76 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 8-44:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 7159200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 45-52:
+//# programmable --sender A
+//> 0: test::m1::new();
+//> 1: test::m1::new();
+//> 2: test::m1::new();
+//> 3: MakeMoveVec([Result(0), Result(1), Result(2)]);
+//> test::m1::pubs(Result(3));
+// annotated objects
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 53-60:
+//# programmable --sender A
+//> 0: test::m1::new();
+//> 1: test::m1::new();
+//> 2: test::m1::new();
+//> 3: MakeMoveVec<test::m1::Pub>([Result(0), Result(1), Result(2)]);
+//> test::m1::pubs(Result(3));
+// empty objects
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 61-65:
+//# programmable --sender A
+//> 0: MakeMoveVec<test::m1::Pub>([]);
+//> test::m1::pubs(Result(0));
+// mixed new and old. Send an object to A and mix it in a vector with the newly created ones.
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 66-68:
+//# programmable --sender A --inputs @A
+//> 0: test::m1::new();
+//> TransferObjects([Result(0)], Input(0));
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2280000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 70:
+//# view-object 5,0
+Owner: Account Address ( A )
+Version: 5
+Contents: test::m1::Pub {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,0),
+        },
+    },
+    value: 112u64,
+}
+
+task 7, lines 72-78:
+//# programmable --sender A --inputs object(5,0)
+//> 0: test::m1::new();
+//> 1: test::m1::new();
+//> 2: test::m1::new();
+// use Input and new objects
+//> 3: MakeMoveVec([Result(0), Result(1), Input(0), Result(2)]);
+//> test::m1::pubs(Result(3));
+mutated: object(0,0)
+deleted: object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2257200, non_refundable_storage_fee: 22800

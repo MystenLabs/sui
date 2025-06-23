@@ -1,0 +1,236 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 14 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-117:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 12205600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 119-121:
+//# programmable --sender A --inputs @A
+//> 0: test::m::new();
+//> TransferObjects([Result(0)], Input(0))
+created: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7), object(2,8)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 15640800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 123:
+//# view-object 2,8
+Owner: Account Address ( A )
+Version: 2
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,8),
+        },
+    },
+    other: sui::object::UID {
+        id: sui::object::ID {
+            bytes: _,
+        },
+    },
+    wrapped: test::m::Wrapped {
+        id: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+        other: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+    },
+    many: vector[
+        test::m::Wrapped {
+            id: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+            other: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+        },
+        test::m::Wrapped {
+            id: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+            other: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+        },
+    ],
+}
+
+task 4, lines 125-126:
+//# programmable --sender A --inputs object(2,8) 112
+//> test::m::set(Input(0), Input(1))
+mutated: object(0,0), object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7), object(2,8)
+gas summary: computation_cost: 1000000, storage_cost: 15640800,  storage_rebate: 15484392, non_refundable_storage_fee: 156408
+
+task 5, line 128:
+//# view-object 2,8
+Owner: Account Address ( A )
+Version: 3
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,8),
+        },
+    },
+    other: sui::object::UID {
+        id: sui::object::ID {
+            bytes: _,
+        },
+    },
+    wrapped: test::m::Wrapped {
+        id: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+        other: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+    },
+    many: vector[
+        test::m::Wrapped {
+            id: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+            other: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+        },
+        test::m::Wrapped {
+            id: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+            other: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+        },
+    ],
+}
+
+task 6, lines 130-131:
+//# programmable --sender A --inputs object(2,8) 112
+//> test::m::remove(Input(0))
+mutated: object(0,0), object(2,8)
+deleted: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4), object(2,5), object(2,6), object(2,7)
+gas summary: computation_cost: 1000000, storage_cost: 3906400,  storage_rebate: 15484392, non_refundable_storage_fee: 156408
+
+task 7, lines 133-136:
+//# view-object 2,8
+Owner: Account Address ( A )
+Version: 4
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,8),
+        },
+    },
+    other: sui::object::UID {
+        id: sui::object::ID {
+            bytes: _,
+        },
+    },
+    wrapped: test::m::Wrapped {
+        id: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+        other: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+    },
+    many: vector[
+        test::m::Wrapped {
+            id: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+            other: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+        },
+        test::m::Wrapped {
+            id: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+            other: sui::object::UID {
+                id: sui::object::ID {
+                    bytes: _,
+                },
+            },
+        },
+    ],
+}
+
+task 8, lines 138-139:
+//# programmable --sender A --inputs object(2,8)@2 vector[0] --dev-inspect
+//> test::m::check(Input(0), Input(1))
+mutated: object(_), object(2,8)
+gas summary: computation_cost: 500000, storage_cost: 3906400,  storage_rebate: 2889216, non_refundable_storage_fee: 29184
+
+task 9, lines 141-142:
+//# programmable --sender A --inputs object(2,8)@3 vector[112] --dev-inspect
+//> test::m::check(Input(0), Input(1))
+mutated: object(_), object(2,8)
+gas summary: computation_cost: 500000, storage_cost: 3906400,  storage_rebate: 2889216, non_refundable_storage_fee: 29184
+
+task 10, lines 144-148:
+//# programmable --sender A --inputs object(2,8)@4 vector[] --dev-inspect
+//> test::m::check(Input(0), Input(1))
+// dev-inspect with 'check' and _incorrect_ values
+mutated: object(_), object(2,8)
+gas summary: computation_cost: 500000, storage_cost: 3906400,  storage_rebate: 2889216, non_refundable_storage_fee: 29184
+
+task 11, lines 150-151:
+//# programmable --sender A --inputs object(2,8)@3 vector[0] --dev-inspect
+//> test::m::check(Input(0), Input(1))
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 10, instruction: 12, function_name: Some("check_") }, 0) in command 0
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 10, instruction: 12, function_name: Some("check_") }, 0) in command 0
+
+task 12, lines 153-154:
+//# programmable --sender A --inputs object(2,8)@4 vector[112] --dev-inspect
+//> test::m::check(Input(0), Input(1))
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 11, instruction: 0, function_name: Some("borrow_child_object") }, 1) in command 0
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 11, instruction: 0, function_name: Some("borrow_child_object") }, 1) in command 0
+
+task 13, lines 156-157:
+//# programmable --sender A --inputs object(2,8)@2 vector[] --dev-inspect
+//> test::m::check(Input(0), Input(1))
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 10, instruction: 20, function_name: Some("check_") }, 0) in command 0
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 10, instruction: 20, function_name: Some("check_") }, 0) in command 0

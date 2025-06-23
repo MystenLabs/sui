@@ -1,0 +1,35 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-20:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 10617200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 22-24:
+//# programmable --sender A --inputs object(1,2) 18446744073709551614 @A
+//> 0: sui::coin::mint<test::fake::FAKE>(Input(0), Input(1));
+//> TransferObjects([Result(0)], Input(2))
+created: object(2,0)
+mutated: object(0,0), object(1,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
+
+task 3, lines 26-28:
+//# programmable --sender A --inputs object(1,2) 1 @A
+//> 0: sui::coin::mint<test::fake::FAKE>(Input(0), Input(1));
+//> TransferObjects([Result(0)], Input(2))
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::balance::increase_supply (function index 3) at offset 12, Abort Code: 1
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("balance") }, function: 3, instruction: 12, function_name: Some("increase_supply") }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1), message: Some("sui::balance::increase_supply at offset 12"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("balance") }), indices: [], offsets: [(FunctionDefinitionIndex(3), 12)] }), command: Some(0) } }
+
+task 4, lines 30-31:
+//# programmable --sender A --inputs object(2,0)
+//> MergeCoins(Input(0), [Input(0)]);
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage }, source: None, command: Some(0) } }

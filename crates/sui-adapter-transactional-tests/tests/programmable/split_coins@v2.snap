@@ -1,0 +1,243 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 20 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 9-22:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 5791200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 24-28:
+//# programmable --sender A --inputs 100000 @A
+//> SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+// let's get ourselves a coin worth 1000
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 29:
+//# run sui::pay::split_and_transfer --type-args sui::sui::SUI --args object(2,0) 1000 @A --sender A
+created: object(3,0)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 4, lines 31-33:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 1000u64,
+    },
+}
+
+task 5, lines 34-36:
+//# programmable --sender A --inputs object(3,0) 100 @B
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([NestedResult(0,0)], Input(2));
+created: object(5,0)
+mutated: object(0,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 6, line 38:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 4
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 900u64,
+    },
+}
+
+task 7, lines 40-43:
+//# view-object 5,0
+Owner: Account Address ( B )
+Version: 4
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 100u64,
+    },
+}
+
+task 8, lines 44-46:
+//# programmable --sender A --inputs object(3,0) 100 @B
+//> 0: SplitCoins(Input(0), [Input(1), Input(1)]);
+//> TransferObjects([NestedResult(0,0), NestedResult(0,1)], Input(2));
+created: object(8,0), object(8,1)
+mutated: object(0,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 3952000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 9, line 48:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 5
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 700u64,
+    },
+}
+
+task 10, line 50:
+//# view-object 8,0
+Owner: Account Address ( B )
+Version: 5
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(8,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 100u64,
+    },
+}
+
+task 11, lines 52-54:
+//# view-object 8,1
+Owner: Account Address ( B )
+Version: 5
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(8,1),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 100u64,
+    },
+}
+
+task 12, lines 55-58:
+//# programmable --sender A --inputs object(3,0) 100 @B
+//> 0: test::m1::ret_one_amount();
+//> 1: SplitCoins(Input(0), [Result(0), Input(1)]);
+//> TransferObjects([NestedResult(1,0), NestedResult(1,1)], Input(2));
+created: object(12,0), object(12,1)
+mutated: object(0,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 3952000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 13, line 60:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 6
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 500u64,
+    },
+}
+
+task 14, line 62:
+//# view-object 12,0
+Owner: Account Address ( B )
+Version: 6
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(12,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 100u64,
+    },
+}
+
+task 15, lines 64-67:
+//# view-object 12,1
+Owner: Account Address ( B )
+Version: 6
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(12,1),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 100u64,
+    },
+}
+
+task 16, lines 68-72:
+//# programmable --sender A --inputs object(3,0) 100 @B
+//> 0: test::m1::ret_one_amount();
+//> 1: SplitCoins(Input(0), [Result(0), Input(1)]);
+//> 2: MakeMoveVec<sui::coin::Coin<sui::sui::SUI>>([NestedResult(1,0), NestedResult(1,1)]);
+//> test::m1::transfer_(Result(2), Input(2));
+created: object(16,0), object(16,1)
+mutated: object(0,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 3952000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 17, line 74:
+//# view-object 3,0
+Owner: Account Address ( A )
+Version: 7
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 300u64,
+    },
+}
+
+task 18, line 76:
+//# view-object 16,0
+Owner: Account Address ( B )
+Version: 7
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(16,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 100u64,
+    },
+}
+
+task 19, line 78:
+//# view-object 16,1
+Owner: Account Address ( B )
+Version: 7
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(16,1),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 100u64,
+    },
+}

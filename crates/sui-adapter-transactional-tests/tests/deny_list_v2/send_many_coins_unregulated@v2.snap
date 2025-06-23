@@ -1,0 +1,50 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-52:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2), object(1,3)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 15048000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 54:
+//# view-object 1,1
+Owner: Account Address ( A )
+Version: 2
+Contents: sui::coin::Coin<test::coin::COIN> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(1,1),
+        },
+    },
+    balance: sui::balance::Balance<test::coin::COIN> {
+        value: 100000u64,
+    },
+}
+
+task 3, line 56:
+//# run test::coin::send_1 --args object(1,1) --sender A
+created: object(3,0)
+mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 3632800,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
+
+task 4, line 58:
+//# run test::coin::send_10 --args object(1,1) --sender A
+created: object(4,0), object(4,1), object(4,2), object(4,3), object(4,4), object(4,5), object(4,6), object(4,7), object(4,8), object(4,9)
+mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 2000000, storage_cost: 15534400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
+
+task 5, line 60:
+//# run test::coin::send_100 --args object(1,1) --sender A
+created: object(5,0), object(5,1), object(5,2), object(5,3), object(5,4), object(5,5), object(5,6), object(5,7), object(5,8), object(5,9), object(5,10), object(5,11), object(5,12), object(5,13), object(5,14), object(5,15), object(5,16), object(5,17), object(5,18), object(5,19), object(5,20), object(5,21), object(5,22), object(5,23), object(5,24), object(5,25), object(5,26), object(5,27), object(5,28), object(5,29), object(5,30), object(5,31), object(5,32), object(5,33), object(5,34), object(5,35), object(5,36), object(5,37), object(5,38), object(5,39), object(5,40), object(5,41), object(5,42), object(5,43), object(5,44), object(5,45), object(5,46), object(5,47), object(5,48), object(5,49), object(5,50), object(5,51), object(5,52), object(5,53), object(5,54), object(5,55), object(5,56), object(5,57), object(5,58), object(5,59), object(5,60), object(5,61), object(5,62), object(5,63), object(5,64), object(5,65), object(5,66), object(5,67), object(5,68), object(5,69), object(5,70), object(5,71), object(5,72), object(5,73), object(5,74), object(5,75), object(5,76), object(5,77), object(5,78), object(5,79), object(5,80), object(5,81), object(5,82), object(5,83), object(5,84), object(5,85), object(5,86), object(5,87), object(5,88), object(5,89), object(5,90), object(5,91), object(5,92), object(5,93), object(5,94), object(5,95), object(5,96), object(5,97), object(5,98), object(5,99)
+mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 16000000, storage_cost: 134550400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
