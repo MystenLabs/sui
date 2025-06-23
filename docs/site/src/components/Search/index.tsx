@@ -7,11 +7,10 @@ import {
   InstantSearch,
   SearchBox,
   RefinementList,
-  useInfiniteHits,
-  Index,
-  Stats,
-  Pagination,
+  useHits,
   useStats,
+  Index,
+  Pagination,
 } from "react-instantsearch";
 
 const { decode } = require("he");
@@ -38,10 +37,20 @@ function getDeepestHierarchyLabel(hierarchy) {
   return lastValue || hierarchy.lvl6 || "";
 }
 
-function CustomHits({ label }) {
-  const { items } = useInfiniteHits();
-  const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
-  const { nbHits } = useStats();
+function CustomHitsContent() {
+  const { hits: items } = useHits();
+
+  if (items.length === 0) {
+    return (
+      <>
+        <p>No results found.</p>
+        <p>
+          Try your search again with different keywords or visit such and such
+          site.
+        </p>
+      </>
+    );
+  }
 
   const grouped = items.reduce(
     (acc, hit) => {
@@ -53,59 +62,34 @@ function CustomHits({ label }) {
     {} as Record<string, typeof items>,
   );
 
-  const toggle = (key: string) => {
-    setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  //setTotal(Object.keys(grouped).length);
-
   return (
     <>
-      {nbHits > 0 && (
-        <div>
-          <h2>
-            {label} {nbHits}
-          </h2>
-          <RefinementList attribute="source" />
-          {Object.entries(grouped).map(([key, group], index) => {
-            const isOpen = expanded[key] ?? false;
-            return (
-              <div
-                className="border border-solid p-4 mb-4 rounded-lg"
-                key={index}
-              >
-                <button
-                  className="font-bold text-left w-full"
-                  onClick={() => toggle(key)}
-                >
-                  {group[0].hierarchy?.lvl1 || "[no title]"}
-                </button>
-                {isOpen &&
-                  group.map((hit, i) => {
-                    const level = hit.type;
-                    let sectionTitle = hit.lvl0;
-                    if (level === "content") {
-                      sectionTitle = getDeepestHierarchyLabel(hit.hierarchy);
-                    } else {
-                      sectionTitle = hit.hierarchy?.[level] || level;
-                    }
-                    return (
-                      <div key={i} className="mb-2">
-                        <a
-                          href={hit.url}
-                          className="text-sm text-blue-600 underline"
-                        >
-                          {sectionTitle}
-                        </a>
-                        <p>{hit.content ? truncateAtWord(hit.content) : ""}</p>
-                      </div>
-                    );
-                  })}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {Object.entries(grouped).map(([key, group], index) => {
+        return (
+          <div className="border border-solid p-4 mb-4 rounded-lg" key={index}>
+            <div className="font-bold text-left w-full">
+              {group[0].hierarchy?.lvl1 || "[no title]"}
+            </div>
+            {group.map((hit, i) => {
+              const level = hit.type;
+              let sectionTitle = hit.lvl0;
+              if (level === "content") {
+                sectionTitle = getDeepestHierarchyLabel(hit.hierarchy);
+              } else {
+                sectionTitle = hit.hierarchy?.[level] || level;
+              }
+              return (
+                <div key={i} className="mb-2">
+                  <a href={hit.url} className="text-sm text-blue-600 underline">
+                    {sectionTitle}
+                  </a>
+                  <p>{hit.content ? truncateAtWord(hit.content) : ""}</p>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
     </>
   );
 }
@@ -117,6 +101,63 @@ function getQueryParam(key) {
   return params.get(key) || "";
 }
 
+function TabbedResults({ activeTab, onChange, tabs }) {
+  return (
+    <div className="mb-4 flex justify-center">
+      {tabs.map(({ label, indexName, count }) => (
+        <button
+          key={indexName}
+          className="mx-4"
+          onClick={() => onChange(indexName)}
+          disabled={activeTab === indexName}
+        >
+          {label} | {count}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function IndexStatsCollector({
+  indexName,
+  onUpdate,
+}: {
+  indexName: string;
+  onUpdate: (indexName: string, hits: number) => void;
+}) {
+  const { nbHits } = useStats();
+  React.useEffect(() => {
+    onUpdate(indexName, nbHits);
+  }, [indexName, nbHits, onUpdate]);
+  return null;
+}
+
+function RefinementSection() {
+  const { nbHits } = useStats();
+
+  if (nbHits === 0) return null;
+
+  return (
+    <div className="py-4 border border-solid rounded-lg mb-4">
+      <h2 className="pl-4 text-lg">Filter by category</h2>
+      <RefinementList attribute="source" />
+    </div>
+  );
+}
+
+function TabbedIndex({ indexName }) {
+  const { nbHits } = useStats();
+  console.log(nbHits);
+  if (nbHits === 0) return null;
+  return (
+    <Index indexName={indexName}>
+      <RefinementSection />
+      <CustomHitsContent />
+      <Pagination />
+    </Index>
+  );
+}
+
 export default function Search() {
   const searchClient = algoliasearch(
     "M9JD2UP87M",
@@ -124,6 +165,24 @@ export default function Search() {
   );
 
   const queryParam = getQueryParam("q");
+  const [activeTab, setActiveTab] = React.useState("sui_docs");
+  const [tabCounts, setTabCounts] = React.useState<Record<string, number>>({
+    sui_docs: 0,
+  });
+
+  const tabs = [
+    { label: "Sui docs", indexName: "sui_docs" },
+    { label: "SuiNS docs", indexName: "suins_docs" },
+    { label: "The Move Book and Reference", indexName: "move_book" },
+    { label: "SDK docs", indexName: "dapp_kit" },
+  ];
+
+  const handleVisibility = React.useCallback(
+    (indexName: string, nbHits: number) => {
+      setTabCounts((prev) => ({ ...prev, [indexName]: nbHits }));
+    },
+    [],
+  );
 
   return (
     <InstantSearch
@@ -131,37 +190,47 @@ export default function Search() {
       indexName="Sui Docs"
       future={{ preserveSharedStateOnUnmount: true }}
       initialUiState={{
-        sui_docs: {
-          query: queryParam,
-        },
-        suins_docs: {
-          query: queryParam,
-        },
+        sui_docs: { query: queryParam },
+        suins_docs: { query: queryParam },
+        move_book: { query: queryParam },
+        dapp_kit: { query: queryParam },
       }}
     >
+      {/* Preload tab visibility */}
+      {tabs.map((tab) => (
+        <Index indexName={tab.indexName} key={`stat-${tab.indexName}`}>
+          <IndexStatsCollector
+            indexName={tab.indexName}
+            onUpdate={handleVisibility}
+          />
+        </Index>
+      ))}
+
       <div className="grid grid-cols-12 gap-4 sui-search">
         <div className="col-span-12">
           <SearchBox />
         </div>
-        <div className="col-span-3 border border-solid rounded-lg w-full h-auto self-start">
-          <h1 className="text-lg pl-2 bg-sui-blue-dark rounded-t-lg text-white">
-            Sources
-          </h1>
+        <div className="col-span-12">
+          <TabbedResults
+            activeTab={activeTab}
+            onChange={setActiveTab}
+            tabs={tabs.map((tab) => ({
+              ...tab,
+              count: tabCounts[tab.indexName] || 0,
+            }))}
+          />
         </div>
-        <div className="col-span-9">
-          <Index indexName="sui_docs">
-            <CustomHits label="Sui docs" />
-            <Pagination />
-          </Index>
-          <Index indexName="suins_docs">
-            <CustomHits label="SuiNS docs" />
-          </Index>
-          <Index indexName="move_book">
-            <CustomHits label="The Move Book and Reference" />
-          </Index>
-          <Index indexName="dapp_kit">
-            <CustomHits label="SDK docs" />
-          </Index>
+        <div className="col-span-12">
+          {tabs.map((tab) => (
+            <div
+              key={tab.indexName}
+              style={{
+                display: activeTab === tab.indexName ? "block" : "none",
+              }}
+            >
+              <TabbedIndex indexName={tab.indexName} />
+            </div>
+          ))}
         </div>
       </div>
     </InstantSearch>

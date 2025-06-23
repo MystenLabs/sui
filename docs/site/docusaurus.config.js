@@ -170,7 +170,7 @@ const config = {
         // Public API key: it is safe to commit it
         apiKey: "826134b026a63bb35692f08f1dc85d1c",
 
-        indexName: "Sui Docs",
+        indexName: "sui_docs",
 
         // Optional: see doc section below
         contextualSearch: false,
@@ -188,8 +188,8 @@ const config = {
         //searchParameters: {},
 
         // Optional: path for search page that enabled by default (`false` to disable it)
-        searchPagePath: "search2",
-        
+        searchPagePath: false,
+
         //... other Algolia params
       },
       image: "img/sui-doc-og.png",

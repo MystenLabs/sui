@@ -374,51 +374,59 @@ div[role="tabpanel"] {
 
 /*Full search page*/
 
-.sui-search .ais-SearchBox-form {
+.ais-SearchBox-form {
   @apply my-8 flex flex-row items-center;
 }
 
-.sui-search .ais-SearchBox-form .ais-SearchBox-input {
+.ais-SearchBox-form .ais-SearchBox-input {
   @apply h-12 w-[80%] text-lg rounded-lg p-2;
 }
 
-.sui-search .ais-SearchBox-form .ais-SearchBox-submit {
+.ais-SearchBox-form .ais-SearchBox-submit {
   @apply h-12 w-12 ml-2 rounded-lg;
 }
 
-.sui-search .ais-SearchBox-form .ais-SearchBox-reset {
+.ais-SearchBox-form .ais-SearchBox-reset {
   @apply h-12 w-12 ml-2 rounded-lg;
 }
 
-.sui-search .search-page-wrapper main p {
+.search-page-wrapper main p {
   @apply !not-italic;
 }
-.sui-search .search-page-wrapper main em {
+.search-page-wrapper main em {
   @apply font-bold;
 }
 
-.sui-search .ais-RefinementList-list {
-  @apply list-none pl-2;
+.ais-RefinementList-list {
+  @apply list-none pl-0 columns-3 gap-4;
 }
 
-.sui-search .ais-RefinementList-list {
-  @apply pl-0;
+.ais-RefinementList {
+  
 }
 
-.sui-search .ais-RefinementList-checkbox {
+.ais-RefinementList-checkbox {
   @apply col-span-1;
 }
 
-.sui-search .ais-RefinementList-labelText {
+.ais-RefinementList-labelText {
   @apply col-span-3;
 }
 
-.sui-search .ais-RefinementList-count {
+.ais-RefinementList-count {
   @apply col-span-2 text-xs;
 }
 
-.sui-search .ais-RefinementList-label {
+.ais-RefinementList-label {
   @apply grid grid-cols-6 items-center;
+}
+
+.ais-Pagination-list {
+  @apply pl-0 list-none flex justify-center;
+}
+
+.ais-Pagination-item {
+  @apply p-2 border border-solid p-1 m-2 rounded-lg w-12 flex items-center justify-center;
 }
 
 /** Globals **/
