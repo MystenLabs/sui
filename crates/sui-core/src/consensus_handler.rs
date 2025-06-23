@@ -916,14 +916,11 @@ impl TransactionManagerSender {
                     let key = txn.key();
                     (
                         txn,
-                        ExecutionEnv {
-                            assigned_versions: assigned_versions
-                                .get(&key)
-                                .cloned()
-                                .unwrap_or_default(),
-                            expected_effects_digest: None,
-                            scheduling_source,
-                        },
+                        ExecutionEnv::new()
+                            .with_scheduling_source(scheduling_source)
+                            .with_assigned_versions(
+                                assigned_versions.get(&key).cloned().unwrap_or_default(),
+                            ),
                     )
                 })
                 .collect();

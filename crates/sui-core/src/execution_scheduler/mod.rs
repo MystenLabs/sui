@@ -47,7 +47,7 @@ pub enum SchedulingSource {
 pub struct PendingCertificate {
     // Certified transaction to be executed.
     pub certificate: VerifiedExecutableTransaction,
-    // Assigned shared object versions and expected effects digest.
+    // Environment in which the transaction will be executed.
     pub execution_env: ExecutionEnv,
     // The input object this certificate is waiting for to become available in order to be executed.
     // This is only used by TransactionManager.

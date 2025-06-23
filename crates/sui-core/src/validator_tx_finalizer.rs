@@ -361,7 +361,7 @@ mod tests {
                     &VerifiedExecutableTransaction::new_from_certificate(
                         VerifiedCertificate::new_unchecked(certificate),
                     ),
-                    ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+                    ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
                     &epoch_store,
                 )
                 .await?;

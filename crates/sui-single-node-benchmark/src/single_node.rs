@@ -123,7 +123,7 @@ impl SingleValidator {
             .get_validator()
             .try_execute_immediately(
                 &executable,
-                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
                 &self.epoch_store,
             )
             .await

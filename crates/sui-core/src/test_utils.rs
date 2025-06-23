@@ -72,7 +72,7 @@ pub async fn send_and_confirm_transaction(
     let mut state =
         state_acc.accumulate_cached_live_object_set_for_testing(include_wrapped_tombstone);
     let (result, _execution_error_opt) = authority
-        .try_execute_for_test(&certificate, ExecutionEnv::default())
+        .try_execute_for_test(&certificate, ExecutionEnv::new())
         .await?;
     let state_after =
         state_acc.accumulate_cached_live_object_set_for_testing(include_wrapped_tombstone);
@@ -86,7 +86,7 @@ pub async fn send_and_confirm_transaction(
 
     if let Some(fullnode) = fullnode {
         fullnode
-            .try_execute_for_test(&certificate, ExecutionEnv::default())
+            .try_execute_for_test(&certificate, ExecutionEnv::new())
             .await?;
     }
     Ok((certificate.into_inner(), result.into_inner()))

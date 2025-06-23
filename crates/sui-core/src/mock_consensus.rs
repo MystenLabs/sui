@@ -6,7 +6,7 @@ use crate::authority::{AuthorityMetrics, AuthorityState, ExecutionEnv};
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_adapter::{BlockStatusReceiver, ConsensusClient, SubmitToConsensus};
 use crate::consensus_handler::SequencedConsensusTransaction;
-use crate::execution_scheduler::{ExecutionSchedulerAPI, SchedulingSource};
+use crate::execution_scheduler::ExecutionSchedulerAPI;
 use consensus_core::BlockRef;
 use prometheus::Registry;
 use std::sync::{Arc, Weak};
@@ -65,7 +65,7 @@ impl MockConsensusClient {
             };
             let epoch_store = validator.epoch_store_for_testing();
             let env = match consensus_mode {
-                ConsensusMode::Noop => ExecutionEnv::default(),
+                ConsensusMode::Noop => ExecutionEnv::new(),
                 ConsensusMode::DirectSequencing => {
                     let (_, assigned_versions) = epoch_store
                         .process_consensus_transactions_for_tests(
@@ -83,11 +83,7 @@ impl MockConsensusClient {
                         .next()
                         .map(|(_, v)| v)
                         .unwrap_or_default();
-                    ExecutionEnv {
-                        assigned_versions,
-                        expected_effects_digest: None,
-                        scheduling_source: SchedulingSource::NonFastPath,
-                    }
+                    ExecutionEnv::new().with_assigned_versions(assigned_versions)
                 }
             };
             match &tx.kind {

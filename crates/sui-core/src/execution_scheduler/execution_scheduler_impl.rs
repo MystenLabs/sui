@@ -437,7 +437,7 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 transaction.clone(),
-                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
             )],
             &state.epoch_store_for_testing(),
         );
@@ -469,7 +469,7 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 transaction.clone(),
-                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
             )],
             &state.epoch_store_for_testing(),
         );
@@ -485,7 +485,7 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 transaction.clone(),
-                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
             )],
             &state.epoch_store_for_testing(),
         );
@@ -776,7 +776,7 @@ mod test {
             execution_scheduler.enqueue_transactions(
                 vec![(
                     txn.clone(),
-                    ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+                    ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
                 )],
                 &state.epoch_store_for_testing(),
             );
@@ -860,7 +860,7 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction0.clone(),
-                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
             )],
             &state.epoch_store_for_testing(),
         );
@@ -872,7 +872,7 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction1.clone(),
-                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
             )],
             &state.epoch_store_for_testing(),
         );
@@ -884,7 +884,7 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction0.clone(),
-                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
             )],
             &state.epoch_store_for_testing(),
         );
@@ -968,7 +968,7 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction0.clone(),
-                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
             )],
             &state.epoch_store_for_testing(),
         );
@@ -980,7 +980,7 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction1.clone(),
-                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
             )],
             &state.epoch_store_for_testing(),
         );
@@ -993,7 +993,7 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction01.clone(),
-                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
             )],
             &state.epoch_store_for_testing(),
         );
@@ -1020,7 +1020,7 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 tx1.clone(),
-                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
             )],
             &state.epoch_store_for_testing(),
         );
@@ -1097,21 +1097,21 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction0.clone(),
-                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
             )],
             &state.epoch_store_for_testing(),
         );
         execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction01.clone(),
-                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
             )],
             &state.epoch_store_for_testing(),
         );
         execution_scheduler.enqueue_transactions(
             vec![(
                 receive_object_transaction1.clone(),
-                ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
             )],
             &state.epoch_store_for_testing(),
         );
@@ -1195,11 +1195,7 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 cancelled_transaction.clone(),
-                ExecutionEnv {
-                    assigned_versions,
-                    scheduling_source: SchedulingSource::NonFastPath,
-                    expected_effects_digest: None,
-                },
+                ExecutionEnv::new().with_assigned_versions(assigned_versions),
             )],
             &state.epoch_store_for_testing(),
         );

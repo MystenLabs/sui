@@ -3614,7 +3614,7 @@ async fn create_and_retrieve_df_info(function: &IdentStr) -> (SuiAddress, Vec<Dy
     let add_cert = init_certified_transaction(add_txn, &authority_state);
 
     let add_effects = authority_state
-        .try_execute_for_test(&add_cert, ExecutionEnv::default())
+        .try_execute_for_test(&add_cert, ExecutionEnv::new())
         .await
         .unwrap()
         .0
@@ -4932,7 +4932,7 @@ async fn test_shared_object_transaction_no_shared_version_assignments() {
 
     // Executing the certificate now panics since it has never been assigned shared versions.
     let _ = authority
-        .try_execute_for_test(&certificate, ExecutionEnv::default())
+        .try_execute_for_test(&certificate, ExecutionEnv::new())
         .await;
 }
 

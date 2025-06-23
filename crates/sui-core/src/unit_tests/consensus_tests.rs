@@ -10,7 +10,7 @@ use crate::authority::ExecutionEnv;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::SequencedConsensusTransaction;
-use crate::execution_scheduler::{ExecutionSchedulerAPI, SchedulingSource};
+use crate::execution_scheduler::ExecutionSchedulerAPI;
 use crate::mock_consensus::with_block_status;
 use consensus_core::{BlockRef, BlockStatus};
 use fastcrypto::traits::KeyPair;
@@ -268,11 +268,7 @@ pub fn make_consensus_adapter_for_test(
                         .unwrap_or_default();
                     (
                         tx,
-                        ExecutionEnv {
-                            assigned_versions,
-                            expected_effects_digest: None,
-                            scheduling_source: SchedulingSource::NonFastPath,
-                        },
+                        ExecutionEnv::new().with_assigned_versions(assigned_versions),
                     )
                 })
                 .collect();

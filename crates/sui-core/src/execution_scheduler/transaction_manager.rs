@@ -9,7 +9,7 @@ use std::{
 };
 
 use lru::LruCache;
-use mysten_common::random_util::randomize_cache_capacity_in_tests;
+use mysten_common::{debug_fatal, random_util::randomize_cache_capacity_in_tests};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use sui_types::{
@@ -226,7 +226,8 @@ struct Inner {
     // Transactions that have all input objects available, but have not finished execution.
     executing_certificates: HashSet<TransactionDigest>,
 
-    // Transactions for which we do not have a digest or transaction yet
+    // Pseudo-transactions which have been scheduled, but for which we do not have a
+    // digest or transaction yet
     pending_transaction_keys: HashMap<TransactionKey, ExecutionEnv>,
 }
 
@@ -354,10 +355,10 @@ impl TransactionManager {
         key: TransactionKey,
         digest: TransactionDigest,
     ) {
-        assert!(
-            !matches!(key, TransactionKey::Digest(_)),
-            "useless notify_transaction_key"
-        );
+        if matches!(key, TransactionKey::Digest(_)) {
+            debug_fatal!("useless notify_transaction_key");
+            return;
+        }
 
         let certs = {
             let reconfig_lock = self.inner.read();

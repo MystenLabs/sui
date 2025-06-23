@@ -100,7 +100,7 @@ async fn test_fast_path_execution() {
     let (effects, _) = state
         .try_execute_immediately(
             &cert,
-            ExecutionEnv::default().with_scheduling_source(SchedulingSource::MysticetiFastPath),
+            ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
             &state.epoch_store_for_testing(),
         )
         .await
@@ -157,7 +157,7 @@ async fn test_fast_path_then_consensus_execution() {
     let (effects1, _) = state
         .try_execute_immediately(
             &cert,
-            ExecutionEnv::default().with_scheduling_source(SchedulingSource::MysticetiFastPath),
+            ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
             &state.epoch_store_for_testing(),
         )
         .await
@@ -166,7 +166,7 @@ async fn test_fast_path_then_consensus_execution() {
     let (effects2, _) = state
         .try_execute_immediately(
             &cert,
-            ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+            ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
             &state.epoch_store_for_testing(),
         )
         .await
@@ -207,7 +207,7 @@ async fn test_consensus_then_fast_path_execution() {
     let (effects1, _) = state
         .try_execute_immediately(
             &cert,
-            ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+            ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
             &state.epoch_store_for_testing(),
         )
         .await
@@ -216,7 +216,7 @@ async fn test_consensus_then_fast_path_execution() {
     let (effects2, _) = state
         .try_execute_immediately(
             &cert,
-            ExecutionEnv::default().with_scheduling_source(SchedulingSource::MysticetiFastPath),
+            ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
             &state.epoch_store_for_testing(),
         )
         .await
@@ -260,7 +260,7 @@ async fn test_fast_path_then_consensus_execution_e2e() {
     state.execution_scheduler().enqueue_transactions(
         vec![(
             cert.clone(),
-            ExecutionEnv::default().with_scheduling_source(SchedulingSource::MysticetiFastPath),
+            ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
         )],
         &state.epoch_store_for_testing(),
     );
@@ -287,7 +287,7 @@ async fn test_fast_path_then_consensus_execution_e2e() {
     state.execution_scheduler().enqueue_transactions(
         vec![(
             cert.clone(),
-            ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+            ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
         )],
         &state.epoch_store_for_testing(),
     );
@@ -338,7 +338,7 @@ async fn test_consensus_then_fast_path_execution_e2e() {
     state.execution_scheduler().enqueue_transactions(
         vec![(
             cert.clone(),
-            ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+            ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
         )],
         &state.epoch_store_for_testing(),
     );
@@ -358,7 +358,7 @@ async fn test_consensus_then_fast_path_execution_e2e() {
     state.execution_scheduler().enqueue_transactions(
         vec![(
             cert.clone(),
-            ExecutionEnv::default().with_scheduling_source(SchedulingSource::MysticetiFastPath),
+            ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
         )],
         &state.epoch_store_for_testing(),
     );

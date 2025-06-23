@@ -863,7 +863,7 @@ impl ValidatorService {
                                 VerifiedExecutableTransaction::new_from_certificate(
                                     VerifiedCertificate::new_unchecked(*(certificate.clone())),
                                 ),
-                                ExecutionEnv::default()
+                                ExecutionEnv::new()
                                     .with_scheduling_source(SchedulingSource::NonFastPath),
                             ))
                     } else {

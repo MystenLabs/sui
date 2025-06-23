@@ -820,10 +820,16 @@ impl AuthorityMetrics {
 ///
 pub type StableSyncAuthoritySigner = Pin<Arc<dyn Signer<AuthoritySignature> + Send + Sync>>;
 
+/// Execution env contains the "environment" for the transaction to be executed in, that is,
+/// all the information necessary for execution that is not specified by the transaction itself.
 #[derive(Debug, Clone)]
 pub struct ExecutionEnv {
+    /// The assigned version of each shared object for the transaction.
     pub assigned_versions: AssignedVersions,
+    /// The expected digest of the effects of the transaction, if executing from checkpoint or
+    /// other sources where the effects are known in advance.
     pub expected_effects_digest: Option<TransactionEffectsDigest>,
+    /// The source of the scheduling of the transaction.
     pub scheduling_source: SchedulingSource,
 }
 
@@ -1294,7 +1300,7 @@ impl AuthorityState {
             self.execution_scheduler.enqueue(
                 vec![(
                     Schedulable::Transaction(transaction.clone()),
-                    ExecutionEnv::default().with_scheduling_source(SchedulingSource::NonFastPath),
+                    ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
                 )],
                 epoch_store,
             );

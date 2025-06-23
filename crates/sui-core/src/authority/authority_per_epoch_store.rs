@@ -1658,10 +1658,10 @@ impl AuthorityPerEpochStore {
         let _metrics_scope =
             mysten_metrics::monitored_scope("AuthorityPerEpochStore::insert_tx_key");
 
-        assert!(
-            !matches!(tx_key, TransactionKey::Digest(_)),
-            "useless to insert a digest key"
-        );
+        if matches!(tx_key, TransactionKey::Digest(_)) {
+            debug_fatal!("useless to insert a digest key");
+        }
+
         let tables = self.tables()?;
         tables
             .transaction_key_to_digest
@@ -1673,7 +1673,11 @@ impl AuthorityPerEpochStore {
 
     pub fn tx_key_to_digest(&self, key: &TransactionKey) -> SuiResult<Option<TransactionDigest>> {
         let tables = self.tables()?;
-        Ok(tables.transaction_key_to_digest.get(key).expect("db error"))
+        if let TransactionKey::Digest(digest) = key {
+            Ok(Some(*digest))
+        } else {
+            Ok(tables.transaction_key_to_digest.get(key).expect("db error"))
+        }
     }
 
     pub fn revert_executed_transaction(&self, tx_digest: &TransactionDigest) -> SuiResult {
@@ -1752,8 +1756,8 @@ impl AuthorityPerEpochStore {
         Ok(self.tables()?.transaction_cert_signatures.get(tx_digest)?)
     }
 
-    /// Resolves InputObjectKinds into InputKeys, by consulting the shared object version
-    /// assignment table.
+    /// Resolves InputObjectKinds into InputKeys. `assigned_versions` is used to map shared inputs
+    /// to specific object versions.
     pub(crate) fn get_input_object_keys(
         &self,
         key: &TransactionKey,
@@ -3416,8 +3420,11 @@ impl AuthorityPerEpochStore {
             self.record_end_of_message_quorum_time_metric();
         }
 
-        let mut all_txns = verified_non_randomness_transactions;
-        all_txns.extend(verified_randomness_transactions);
+        let all_txns = [
+            verified_non_randomness_transactions,
+            verified_randomness_transactions,
+        ]
+        .concat();
 
         Ok((all_txns, assigned_versions))
     }
@@ -3497,7 +3504,7 @@ impl AuthorityPerEpochStore {
         Ok(consensus_commit_prologue_root)
     }
 
-    // Assigns shared object versions to transactions and updates the shared object version state.
+    // Assigns shared object versions to transactions and updates the next shared object version state.
     // Shared object versions in cancelled transactions are assigned to special versions that will
     // cause the transactions to be cancelled in execution engine.
     fn process_consensus_transaction_shared_object_versions(
@@ -3508,10 +3515,9 @@ impl AuthorityPerEpochStore {
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
         output: &mut ConsensusCommitOutput,
     ) -> SuiResult<AssignedTxAndVersions> {
-        let all_certs: Vec<_> = non_randomness_transactions
+        let all_certs = non_randomness_transactions
             .iter()
-            .chain(randomness_transactions.iter())
-            .collect();
+            .chain(randomness_transactions.iter());
 
         let ConsensusSharedObjVerAssignment {
             shared_input_next_versions,
@@ -3519,7 +3525,7 @@ impl AuthorityPerEpochStore {
         } = SharedObjVerManager::assign_versions_from_consensus(
             self,
             cache_reader,
-            all_certs.into_iter(),
+            all_certs,
             cancelled_txns,
         )?;
 

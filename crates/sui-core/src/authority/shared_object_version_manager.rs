@@ -40,6 +40,8 @@ impl AssignedTxAndVersions {
     }
 }
 
+/// A wrapper around things that can be scheduled for execution by the assigning of
+/// shared object versions.
 #[derive(Clone)]
 pub enum Schedulable<T = VerifiedExecutableTransaction> {
     Transaction(T),
@@ -245,7 +247,7 @@ impl SharedObjVerManager {
             trace!(
                 ?tx_key,
                 ?cert_assigned_versions,
-                "locking shared objects from effects"
+                "assigned shared object versions from effects"
             );
             assigned_versions.push((tx_key, cert_assigned_versions));
         }

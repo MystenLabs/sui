@@ -408,11 +408,7 @@ pub async fn execute_sequenced_certificate_to_effects(
     certificate: VerifiedCertificate,
     assigned_versions: AssignedVersions,
 ) -> Result<(TransactionEffects, Option<ExecutionError>), SuiError> {
-    let env = ExecutionEnv {
-        assigned_versions,
-        scheduling_source: SchedulingSource::NonFastPath,
-        expected_effects_digest: None,
-    };
+    let env = ExecutionEnv::new().with_assigned_versions(assigned_versions);
     authority.execution_scheduler.enqueue(
         vec![(
             VerifiedExecutableTransaction::new_from_certificate(certificate.clone()).into(),
