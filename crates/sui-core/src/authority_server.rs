@@ -23,7 +23,6 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
-use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
 use sui_types::message_envelope::Message;
 use sui_types::messages_consensus::ConsensusPosition;
@@ -46,6 +45,9 @@ use sui_types::{
     effects::TransactionEffects,
     messages_grpc::{RawSubmitTxRequest, RawWaitForEffectsRequest, RawWaitForEffectsResponse},
 };
+use sui_types::{
+    effects::TransactionEffectsAPI, executable_transaction::VerifiedExecutableTransaction,
+};
 use sui_types::{error::*, transaction::*};
 use sui_types::{
     fp_ensure,
@@ -59,13 +61,14 @@ use tokio::time::timeout;
 use tonic::metadata::{Ascii, MetadataValue};
 use tracing::{debug, error, error_span, info, Instrument};
 
-use crate::consensus_adapter::ConnectionMonitorStatusForTests;
 use crate::{
     authority::{
         authority_per_epoch_store::AuthorityPerEpochStore,
         consensus_tx_status_cache::NotifyReadConsensusTxStatusResult,
+        shared_object_version_manager::Schedulable, ExecutionEnv,
     },
     checkpoints::CheckpointStore,
+    execution_scheduler::SchedulingSource,
     mysticeti_adapter::LazyMysticetiClient,
     transaction_outputs::TransactionOutputs,
     wait_for_effects_request::{
@@ -76,6 +79,9 @@ use crate::{
     authority::{consensus_tx_status_cache::ConsensusTxStatus, AuthorityState},
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
     traffic_controller::{parse_ip, policies::TrafficTally, TrafficController},
+};
+use crate::{
+    consensus_adapter::ConnectionMonitorStatusForTests, execution_scheduler::ExecutionSchedulerAPI,
 };
 use nonempty::{nonempty, NonEmpty};
 use sui_config::local_ip_utils::new_local_tcp_address_for_testing;
@@ -853,17 +859,23 @@ impl ValidatorService {
                     if let ConsensusTransactionKind::CertifiedTransaction(certificate) = &tx.kind {
                         (!certificate.contains_shared_object())
                             // Certificates already verified by callers of this function.
-                            .then_some(VerifiedCertificate::new_unchecked(*(certificate.clone())))
+                            .then_some((
+                                VerifiedExecutableTransaction::new_from_certificate(
+                                    VerifiedCertificate::new_unchecked(*(certificate.clone())),
+                                ),
+                                ExecutionEnv::new()
+                                    .with_scheduling_source(SchedulingSource::NonFastPath),
+                            ))
                     } else {
                         None
                     }
                 })
+                .map(|(tx, env)| (Schedulable::Transaction(tx), env))
                 .collect::<Vec<_>>();
             if !certificates_without_shared_objects.is_empty() {
-                self.state.enqueue_certificates_for_execution(
-                    certificates_without_shared_objects,
-                    epoch_store,
-                );
+                self.state
+                    .execution_scheduler()
+                    .enqueue(certificates_without_shared_objects, epoch_store);
             }
             return Ok((None, Weight::zero()));
         }

@@ -3,6 +3,7 @@
 
 use super::backpressure::BackpressureManager;
 use super::epoch_start_configuration::EpochFlag;
+use super::ExecutionEnv;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_pruner::ObjectsCompactionFilter;
 use crate::authority::authority_store_tables::{
@@ -408,9 +409,8 @@ impl<'a> TestAuthorityBuilder<'a> {
                     genesis.epoch(),
                     genesis.checkpoint().sequence_number,
                 ),
-                None,
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
                 &state.epoch_store_for_testing(),
-                SchedulingSource::NonFastPath,
             )
             .await
             .unwrap();

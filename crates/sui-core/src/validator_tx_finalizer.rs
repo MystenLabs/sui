@@ -274,7 +274,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
-    use crate::authority::AuthorityState;
+    use crate::authority::{AuthorityState, ExecutionEnv};
     use crate::authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder};
     use crate::authority_client::AuthorityAPI;
     use crate::execution_scheduler::SchedulingSource;
@@ -361,9 +361,8 @@ mod tests {
                     &VerifiedExecutableTransaction::new_from_certificate(
                         VerifiedCertificate::new_unchecked(certificate),
                     ),
-                    None,
+                    ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
                     &epoch_store,
-                    SchedulingSource::NonFastPath,
                 )
                 .await?;
             let events = if effects.events_digest().is_some() {
