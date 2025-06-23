@@ -16,7 +16,7 @@ use move_binary_format::{
     errors::{Location, VMError, VMResult},
 };
 use move_command_line_common::files::verify_and_create_named_address_mapping;
-use move_compiler::{FullyCompiledProgram, editions::Edition, shared::PackagePaths};
+use move_compiler::{CompiledModuleInfoMap, editions::Edition, shared::PackagePaths};
 use move_core_types::parsing::address::ParsedAddress;
 use move_core_types::{
     account_address::AccountAddress,
@@ -67,7 +67,7 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
 
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_module_infos_opt: Option<Arc<CompiledModuleInfoMap>>,
         task_opt: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
         _path: &Path,
     ) -> (Self, Option<String>) {
@@ -93,7 +93,7 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
         let mut adapter = Self {
             compiled_state: CompiledState::new(
                 named_address_mapping,
-                pre_compiled_deps,
+                pre_compiled_module_infos_opt,
                 None,
                 Some(compiler_edition),
                 None,
@@ -295,8 +295,8 @@ impl SimpleVMTestAdapter {
     }
 }
 
-pub static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
-    let program_res = move_compiler::construct_pre_compiled_lib(
+pub static PRECOMPILED_MOVE_STDLIB_MODULES_INFO: Lazy<CompiledModuleInfoMap> = Lazy::new(|| {
+    let module_infos = move_compiler::construct_precompiled_module_infos(
         vec![PackagePaths {
             name: None,
             paths: move_stdlib::source_files(),
@@ -307,8 +307,8 @@ pub static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         None,
     )
     .unwrap();
-    match program_res {
-        Ok(stdlib) => stdlib,
+    match module_infos {
+        Ok(modules_info) => modules_info,
         Err((files, errors)) => {
             eprintln!("!!!Standard library failed to compile!!!");
             move_compiler::diagnostics::report_diagnostics(&files, errors)
@@ -350,6 +350,9 @@ fn test_vm_config() -> VMConfig {
 
 #[tokio::main]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    run_test_impl::<SimpleVMTestAdapter>(path, Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())))
-        .await
+    run_test_impl::<SimpleVMTestAdapter>(
+        path,
+        Some(Arc::new(PRECOMPILED_MOVE_STDLIB_MODULES_INFO.clone())),
+    )
+    .await
 }

@@ -19,7 +19,7 @@ function version(path: string, args?: readonly string[]): string | null {
     const versionString = childProcess.spawnSync(
         path, args, { encoding: 'utf8' },
     );
-    return versionString.stdout;
+    return versionString.stdout || null;
 }
 
 function semanticVersion(versionString: string | null): semver.SemVer | null {
