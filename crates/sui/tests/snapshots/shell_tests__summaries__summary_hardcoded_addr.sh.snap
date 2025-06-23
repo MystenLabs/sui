@@ -18,19 +18,15 @@ cat data/pkg_with_hardcoded_addr/package_summaries/address_mapping.json
 success: true
 exit_code: 0
 ----- stdout -----
-INCLUDING DEPENDENCY Bridge
-INCLUDING DEPENDENCY SuiSystem
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING summaries
 
 Summary generation successful. Summaries stored in 'package_summaries'
 address_mapping.json
-bridge
 root_package_metadata.json
 std
 sui
-sui_system
 summary_pkg
 {
   "id": {
@@ -286,10 +282,9 @@ summary_pkg
   },
   "enums": {}
 }{
-  "bridge": "0x000000000000000000000000000000000000000000000000000000000000000b",
   "std": "0x0000000000000000000000000000000000000000000000000000000000000001",
   "sui": "0x0000000000000000000000000000000000000000000000000000000000000002",
-  "sui_system": "0x0000000000000000000000000000000000000000000000000000000000000003",
   "summary_pkg": "0x0000000000000000000000000000000000000000000000000000000000c0ffee"
 }
 ----- stderr -----
+[note] Dependencies on Bridge, MoveStdlib, Sui, and SuiSystem are automatically added, but this feature is disabled for your package because you have explicitly included dependencies on Sui. Consider removing these dependencies from Move.toml.

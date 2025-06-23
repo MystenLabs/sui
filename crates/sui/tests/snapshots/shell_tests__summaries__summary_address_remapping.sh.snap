@@ -20,22 +20,18 @@ exit_code: 0
 ----- stdout -----
 INCLUDING DEPENDENCY child_pkg
 INCLUDING DEPENDENCY other_child
-INCLUDING DEPENDENCY Bridge
-INCLUDING DEPENDENCY SuiSystem
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING overlapping_summaries
 
 Summary generation successful. Summaries stored in 'package_summaries'
 address_mapping.json
-bridge
 child_pkg
 other_child
 overlapping_summaries
 root_package_metadata.json
 std
 sui
-sui_system
 {
   "id": {
     "address": "child_pkg",
@@ -205,12 +201,11 @@ sui_system
   },
   "enums": {}
 }{
-  "bridge": "0x000000000000000000000000000000000000000000000000000000000000000b",
   "child_pkg": "0x0000000000000000000000000000000000000000000000000000000000000000",
   "other_child": "0x000000000000000000000000000000000000000000000000000000000000000c",
   "overlapping_summaries": "0x0000000000000000000000000000000000000000000000000000000000000000",
   "std": "0x0000000000000000000000000000000000000000000000000000000000000001",
-  "sui": "0x0000000000000000000000000000000000000000000000000000000000000002",
-  "sui_system": "0x0000000000000000000000000000000000000000000000000000000000000003"
+  "sui": "0x0000000000000000000000000000000000000000000000000000000000000002"
 }
 ----- stderr -----
+[note] Dependencies on Bridge, MoveStdlib, Sui, and SuiSystem are automatically added, but this feature is disabled for your package because you have explicitly included dependencies on Sui. Consider removing these dependencies from Move.toml.
