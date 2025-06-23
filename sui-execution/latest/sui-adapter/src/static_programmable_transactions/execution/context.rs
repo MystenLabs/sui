@@ -793,7 +793,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         // remove it.
         // The call to `pop_last_package` later is fine because we cannot re-enter and
         // the last package we pushed is the one we are verifying and running the init from
-        let linkage = RootedLinkage::new(*package_id, linkage);
+        let linkage = RootedLinkage::new_for_publication(package_id, runtime_id, linkage);
 
         self.env.linkable_store.push_package(package_id, package)?;
         let res = self
@@ -837,7 +837,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             dependencies.iter().map(|p| p.move_package()),
         )?;
 
-        let linkage = RootedLinkage::new(*storage_id, linkage);
+        let linkage = RootedLinkage::new_for_publication(storage_id, runtime_id, linkage);
         self.publish_and_verify_modules(runtime_id, &modules, &linkage)?;
 
         legacy_ptb::execution::check_compatibility(

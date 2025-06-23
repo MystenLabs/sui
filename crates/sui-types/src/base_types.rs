@@ -1052,7 +1052,7 @@ pub struct TxContext {
     is_native: bool,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TxContextKind {
     // No TxContext
     None,
