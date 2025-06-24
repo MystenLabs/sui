@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::field_mask::FIELD_PATH_WILDCARD;
 use crate::message::MessageField;
 use crate::message::MessageFields;
 
@@ -78,6 +79,9 @@ impl FieldMaskUtil for FieldMask {
         }
 
         for path in &self.paths {
+            if path == FIELD_PATH_WILDCARD {
+                continue;
+            }
             if !is_valid_path(M::FIELDS, path) {
                 return Err(path);
             }
