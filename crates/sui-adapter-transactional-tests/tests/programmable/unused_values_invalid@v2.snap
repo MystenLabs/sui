@@ -1,0 +1,42 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-24:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6604400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 26-31:
+//# programmable --sender A --inputs @A
+//> 0: test::m1::r();
+//> 1: TransferObjects([Result(0)], Input(0));
+//> 2: test::m1::r();
+// unconsumed copyable value, and most recent usage was not by-value
+Error: Transaction Effects Status: Unused result without the drop ability. Command result 2, return value 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: UnusedValueWithoutDrop { result_idx: 2, secondary_idx: 0 }, source: None, command: None } }
+
+task 3, lines 32-40:
+//# programmable --sender A
+//> 0: test::m1::copyable();
+//> 1: test::m1::borrow(Result(0));
+//> 2: test::m1::copy_(Result(0));
+//> 3: test::m1::borrow(Result(0));
+//> 4: test::m1::copy_(Result(0));
+//> 5: test::m1::borrow(Result(0));
+// unconsumed copyable value, and most recent usage was not by-value
+Error: Transaction Effects Status: Unused result without the drop ability. Command result 0, return value 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: UnusedValueWithoutDrop { result_idx: 0, secondary_idx: 0 }, source: Some("The value has copy, but not drop. Its last usage must be by-value so it can be taken."), command: None } }
+
+task 4, lines 41-44:
+//# programmable --sender A
+//> 0: test::m1::copyable();
+//> 1: test::m1::cup<test::m1::Copyable>(Result(0));
+//> 2: test::m1::destroy_cup<test::m1::Copyable>(Result(1));
+Error: Transaction Effects Status: Unused result without the drop ability. Command result 2, return value 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: UnusedValueWithoutDrop { result_idx: 2, secondary_idx: 0 }, source: Some("The value has copy, but not drop. Its last usage must be by-value so it can be taken."), command: None } }

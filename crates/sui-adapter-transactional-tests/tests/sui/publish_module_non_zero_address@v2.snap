@@ -1,0 +1,9 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 1, lines 8-10:
+//# publish
+Error: Transaction Effects Status: Publish Error, Non-zero Address. The modules in the package must have their self-addresses set to zero.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PublishErrorNonZeroAddress, source: Some("Publishing module M with non-zero address is not allowed"), command: Some(0) } }

@@ -1,0 +1,60 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-26:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 6080000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 27-29:
+//# run test::sponsor::is_sponsored --sender A --args false
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 30-32:
+//# run test::sponsor::is_sponsored --sender A --args true
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::sponsor::is_sponsored (function index 0) at offset 10, Abort Code: 100
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("sponsor") }, function: 0, instruction: 10, function_name: Some("is_sponsored") }, 100), source: Some(VMError { major_status: ABORTED, sub_status: Some(100), message: Some("test::sponsor::is_sponsored at offset 10"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("sponsor") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 10)] }), command: Some(0) } }
+
+task 4, lines 33-35:
+//# run test::sponsor::check_sponsor --sender A --args @A
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::sponsor::check_sponsor (function index 1) at offset 8, Abort Code: 100
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("sponsor") }, function: 1, instruction: 8, function_name: Some("check_sponsor") }, 100), source: Some(VMError { major_status: ABORTED, sub_status: Some(100), message: Some("test::sponsor::check_sponsor at offset 8"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("sponsor") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 8)] }), command: Some(0) } }
+
+task 5, lines 36-38:
+//# run test::sponsor::check_sponsor --sender A --args @B
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::sponsor::check_sponsor (function index 1) at offset 8, Abort Code: 100
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("sponsor") }, function: 1, instruction: 8, function_name: Some("check_sponsor") }, 100), source: Some(VMError { major_status: ABORTED, sub_status: Some(100), message: Some("test::sponsor::check_sponsor at offset 8"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("sponsor") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 8)] }), command: Some(0) } }
+
+task 6, lines 39-42:
+//# programmable --sender A --sponsor B --inputs true
+//> test::sponsor::is_sponsored(Input(0))
+// abort(101), sponsored transaction
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 7, lines 43-46:
+//# programmable --sender A --sponsor B --inputs false
+//> test::sponsor::is_sponsored(Input(0))
+// abort(101), wrong sponsor
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::sponsor::is_sponsored (function index 0) at offset 16, Abort Code: 101
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("sponsor") }, function: 0, instruction: 16, function_name: Some("is_sponsored") }, 101), source: Some(VMError { major_status: ABORTED, sub_status: Some(101), message: Some("test::sponsor::is_sponsored at offset 16"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("sponsor") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 16)] }), command: Some(0) } }
+
+task 8, lines 47-50:
+//# programmable --sender A --sponsor B --inputs @A
+//> test::sponsor::check_sponsor(Input(0))
+// success, sponsored transaction with correct sponsor
+Error: Transaction Effects Status: Move Runtime Abort. Location: test::sponsor::check_sponsor (function index 1) at offset 16, Abort Code: 101
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("sponsor") }, function: 1, instruction: 16, function_name: Some("check_sponsor") }, 101), source: Some(VMError { major_status: ABORTED, sub_status: Some(101), message: Some("test::sponsor::check_sponsor at offset 16"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("sponsor") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 16)] }), command: Some(0) } }
+
+task 9, lines 51-52:
+//# programmable --sender A --sponsor B --inputs @B
+//> test::sponsor::check_sponsor(Input(0))
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

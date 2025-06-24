@@ -1,0 +1,47 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+task 1, lines 6-32:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7182000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 34:
+//# run tto::M1::start
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 36:
+//# view-object 2,0
+Owner: Account Address ( _ )
+Version: 3
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 4, lines 38-40:
+//# view-object 2,1
+Owner: Account Address ( fake(2,0) )
+Version: 3
+Contents: tto::M1::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
+
+task 5, lines 41-43:
+//# programmable --inputs object(2,0) receiving(2,1)
+//> tto::M1::pass_through(Input(1));
+//> tto::M1::receiver(Input(0), Input(1));
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage }, source: None, command: Some(1) } }

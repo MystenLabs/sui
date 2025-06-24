@@ -1,0 +1,27 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 1, lines 6-19:
+//# publish
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6642400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 21:
+//# view-object 1,1
+Owner: Account Address ( _ )
+Version: 2
+Contents: Test::M1::Object {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(1,1),
+        },
+    },
+    value: 42u64,
+}
+
+task 3, line 23:
+//# view-object 1,0
+1,0::M1

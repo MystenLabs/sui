@@ -1,0 +1,36 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-12:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 3906400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 14-16:
+//# programmable
+//> 0: test::m1::a();
+//> sui::event::emit<test::m1::A>(Result(0));
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call functions in sui::event"), command: Some(1) } }
+
+task 3, lines 18-21:
+//# programmable
+//> 0: test::m1::a();
+// wrong type annotation doesn't matter
+//> sui::event::emit<bool>(Result(0));
+Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call functions in sui::event"), command: Some(1) } }
+
+task 4, lines 23-26:
+//# programmable
+//> 0: test::m1::a();
+// function doesn't exist
+//> sui::event::does_not_exist<test::m1::A>(Result(0));
+Error: Transaction Effects Status: Function Not Found.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FunctionNotFound, source: Some("Could not resolve function 'does_not_exist' in module sui::event"), command: Some(1) } }
