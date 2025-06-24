@@ -4,6 +4,7 @@
 use std::{sync::Arc, time::Duration};
 
 use consensus_config::AuthorityIndex;
+use consensus_types::block::Round;
 use futures::StreamExt;
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::{Mutex, RwLock};
@@ -16,7 +17,6 @@ use crate::{
     dag_state::DagState,
     error::ConsensusError,
     network::{NetworkClient, NetworkService},
-    Round,
 };
 
 /// Subscriber manages the block stream subscriptions to other peers, taking care of retrying
@@ -243,11 +243,11 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
 mod test {
     use anemo::async_trait;
     use bytes::Bytes;
+    use consensus_types::block::BlockRef;
     use futures::stream;
 
     use super::*;
     use crate::{
-        block::BlockRef,
         commit::CommitRange,
         error::ConsensusResult,
         network::{test_network::TestService, BlockStream, ExtendedSerializedBlock},

@@ -4,11 +4,12 @@
 use std::{collections::VecDeque, sync::Arc};
 
 use consensus_config::AuthorityIndex;
+use consensus_types::block::Round;
 use parking_lot::RwLock;
 
 use crate::{
     base_committer::BaseCommitter,
-    block::{Round, Slot, GENESIS_ROUND},
+    block::{Slot, GENESIS_ROUND},
     commit::{DecidedLeader, Decision},
     context::Context,
     dag_state::DagState,

@@ -8,6 +8,7 @@ use std::{
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
+use consensus_types::block::{BlockRef, Round};
 use futures::{stream::FuturesUnordered, StreamExt as _};
 use itertools::Itertools as _;
 use mysten_common::debug_fatal;
@@ -33,14 +34,14 @@ use crate::{
     transaction_certifier::TransactionCertifier,
 };
 use crate::{
-    block::{BlockRef, SignedBlock, VerifiedBlock},
+    block::{SignedBlock, VerifiedBlock},
     block_verifier::BlockVerifier,
     commit_vote_monitor::CommitVoteMonitor,
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::NetworkClient,
-    BlockAPI, Round,
+    BlockAPI,
 };
 
 /// The number of concurrent fetch blocks requests per authority
@@ -1315,6 +1316,7 @@ mod tests {
     use async_trait::async_trait;
     use bytes::Bytes;
     use consensus_config::{AuthorityIndex, Parameters};
+    use consensus_types::block::{BlockDigest, BlockRef, Round};
     use mysten_metrics::monitored_mpsc;
     use parking_lot::RwLock;
     use tokio::{sync::Mutex, time::sleep};
@@ -1325,7 +1327,7 @@ mod tests {
         transaction_certifier::TransactionCertifier,
     };
     use crate::{
-        block::{BlockDigest, BlockRef, Round, TestBlock, VerifiedBlock},
+        block::{TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
         commit::CommitRange,
         commit_vote_monitor::CommitVoteMonitor,

@@ -12,15 +12,13 @@ use std::{
 };
 
 use consensus_config::AuthorityIndex;
+use consensus_types::block::{BlockDigest, BlockRef, BlockTimestampMs, Round};
 use itertools::Itertools as _;
 use tokio::time::Instant;
 use tracing::{debug, error, info, trace};
 
 use crate::{
-    block::{
-        genesis_blocks, BlockAPI, BlockDigest, BlockRef, BlockTimestampMs, Round, Slot,
-        VerifiedBlock, GENESIS_ROUND,
-    },
+    block::{genesis_blocks, BlockAPI, Slot, VerifiedBlock, GENESIS_ROUND},
     commit::{
         load_committed_subdag_from_store, CommitAPI as _, CommitDigest, CommitIndex, CommitInfo,
         CommitRef, CommitVote, TrustedCommit, GENESIS_COMMIT_INDEX,
@@ -1220,11 +1218,12 @@ impl BlockInfo {
 mod test {
     use std::vec;
 
+    use consensus_types::block::{BlockDigest, BlockRef, BlockTimestampMs};
     use parking_lot::RwLock;
 
     use super::*;
     use crate::{
-        block::{BlockDigest, BlockRef, BlockTimestampMs, TestBlock, VerifiedBlock},
+        block::{TestBlock, VerifiedBlock},
         storage::{mem_store::MemStore, WriteBatch},
         test_dag_builder::DagBuilder,
         test_dag_parser::parse_dag,

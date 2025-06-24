@@ -11,6 +11,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use consensus_types::block::{BlockRef, Round};
 use mysten_metrics::{
     monitored_mpsc::{channel, Receiver, Sender, WeakSender},
     monitored_scope, spawn_logged_monitored_task,
@@ -21,7 +22,7 @@ use tokio::sync::{oneshot, watch};
 use tracing::warn;
 
 use crate::{
-    block::{BlockRef, Round, VerifiedBlock},
+    block::VerifiedBlock,
     commit::CertifiedCommits,
     context::Context,
     core::Core,

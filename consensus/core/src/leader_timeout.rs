@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use std::{sync::Arc, time::Duration};
 
+use consensus_types::block::Round;
 use tokio::{
     sync::{
         oneshot::{Receiver, Sender},
@@ -12,9 +13,7 @@ use tokio::{
 };
 use tracing::{debug, warn};
 
-use crate::{
-    block::Round, context::Context, core::CoreSignalsReceivers, core_thread::CoreThreadDispatcher,
-};
+use crate::{context::Context, core::CoreSignalsReceivers, core_thread::CoreThreadDispatcher};
 
 pub(crate) struct LeaderTimeoutTaskHandle {
     handle: JoinHandle<()>,
@@ -127,11 +126,12 @@ mod tests {
 
     use async_trait::async_trait;
     use consensus_config::Parameters;
+    use consensus_types::block::{BlockRef, Round};
     use parking_lot::Mutex;
     use tokio::time::{sleep, Instant};
 
     use crate::{
-        block::{BlockRef, Round, VerifiedBlock},
+        block::VerifiedBlock,
         commit::CertifiedCommits,
         context::Context,
         core::CoreSignals,

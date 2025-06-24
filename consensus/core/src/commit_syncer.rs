@@ -32,6 +32,7 @@ use std::{
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
+use consensus_types::block::BlockRef;
 use futures::{stream::FuturesOrdered, StreamExt as _};
 use itertools::Itertools as _;
 use mysten_metrics::spawn_logged_monitored_task;
@@ -46,7 +47,7 @@ use tokio::{
 use tracing::{debug, info, warn};
 
 use crate::{
-    block::{BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
+    block::{BlockAPI, SignedBlock, VerifiedBlock},
     block_verifier::BlockVerifier,
     commit::{
         CertifiedCommit, CertifiedCommits, Commit, CommitAPI as _, CommitDigest, CommitRange,
@@ -823,11 +824,12 @@ mod tests {
 
     use bytes::Bytes;
     use consensus_config::{AuthorityIndex, Parameters};
+    use consensus_types::block::{BlockRef, Round};
     use mysten_metrics::monitored_mpsc;
     use parking_lot::RwLock;
 
     use crate::{
-        block::{BlockRef, TestBlock, VerifiedBlock},
+        block::{TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
         commit::CommitRange,
         commit_syncer::CommitSyncer,
@@ -839,7 +841,7 @@ mod tests {
         network::{BlockStream, NetworkClient},
         storage::mem_store::MemStore,
         transaction_certifier::TransactionCertifier,
-        CommitConsumerMonitor, CommitDigest, CommitRef, Round,
+        CommitConsumerMonitor, CommitDigest, CommitRef,
     };
 
     #[derive(Default)]

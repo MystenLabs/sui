@@ -14,7 +14,7 @@ use crate::{
     execution_scheduler::ExecutionSchedulerAPI,
 };
 use async_trait::async_trait;
-use consensus_core::BlockRef;
+use consensus_types::block::BlockRef;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
 use sui_types::{

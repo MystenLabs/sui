@@ -21,14 +21,14 @@ use std::{pin::Pin, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
+use consensus_types::block::{BlockRef, Round};
 use futures::Stream;
 
 use crate::{
-    block::{BlockRef, ExtendedBlock, VerifiedBlock},
+    block::{ExtendedBlock, VerifiedBlock},
     commit::{CommitRange, TrustedCommit},
     context::Context,
     error::ConsensusResult,
-    Round,
 };
 
 // Anemo generated RPC stubs.

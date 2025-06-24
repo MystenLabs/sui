@@ -12,15 +12,15 @@ use std::{
 
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, DefaultHashFunction, DIGEST_LENGTH};
+use consensus_types::block::{BlockRef, BlockTimestampMs, Round, TransactionIndex};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::{Digest, HashFunction as _};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    block::{BlockAPI, BlockRef, BlockTimestampMs, Round, Slot, VerifiedBlock},
+    block::{BlockAPI, Slot, VerifiedBlock},
     leader_scoring::ReputationScores,
     storage::Store,
-    TransactionIndex,
 };
 
 /// Index of a commit among all consensus commits.
