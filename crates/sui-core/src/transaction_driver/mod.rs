@@ -13,6 +13,8 @@ use std::{
 
 use arc_swap::{ArcSwap, Guard};
 pub use error::*;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 pub use message_types::*;
 pub use metrics::*;
 use mysten_metrics::{monitored_future, TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
@@ -199,20 +201,82 @@ where
             futures.push(future);
         }
 
-        // Wait for responses and collect them
-        let mut responses = Vec::new();
-        let mut total_response_weight = 0;
+        // Track responses and weights as they come in
+        let mut executed_responses = Vec::new();
+        let mut executed_weight = 0;
+        let mut rejected_responses = Vec::new();
+        let mut rejected_weight = 0;
+        let mut expired_responses = Vec::new();
+        let mut expired_weight = 0;
         let mut errors = Vec::new();
 
-        // Wait for all futures to complete
-        let results = futures::future::join_all(futures).await;
+        // Use select_all to process responses as they arrive
+        let mut futures = FuturesUnordered::from_iter(futures);
 
-        // Process all results
-        for result in results {
+        while let Some(result) = futures.next().await {
             match result {
                 Ok((name, response)) => {
-                    responses.push((name, response));
-                    total_response_weight += auth_agg.committee.weight(&name);
+                    let weight = auth_agg.committee.weight(&name);
+                    match response {
+                        WaitForEffectsResponse::Executed {
+                            effects_digest: _,
+                            details,
+                        } => {
+                            executed_responses.push((name, details));
+                            executed_weight += weight;
+
+                            // Check if we have quorum for executed responses
+                            if executed_weight >= quorum_threshold {
+                                // All executed responses should have the same details, so we can use the first one
+                                // TODO: verify responses are all identical
+                                let (_, details) = executed_responses.first().unwrap();
+                                if let Some(details) = details {
+                                    return Ok(QuorumSubmitTransactionResponse {
+                                        effects: FinalizedEffects {
+                                            effects: details.effects.clone(),
+                                            finality_info: EffectsFinalityInfo::QuorumExecuted(
+                                                epoch,
+                                            ),
+                                        },
+                                        events: details.events.clone(),
+                                        input_objects: Some(details.input_objects.clone()),
+                                        output_objects: Some(details.output_objects.clone()),
+                                        auxiliary_data: None,
+                                    });
+                                } else {
+                                    return Err(TransactionDriverError::ExecutionDataNotFound(
+                                        transaction.digest().to_string(),
+                                    ));
+                                }
+                            }
+                        }
+                        WaitForEffectsResponse::Rejected { reason } => {
+                            rejected_responses.push((name, reason));
+                            rejected_weight += weight;
+
+                            // Check if we have quorum for rejected responses
+                            if rejected_weight >= quorum_threshold {
+                                // TODO: send back list of aggregated error responses
+                                let (_, reason) = rejected_responses.first().unwrap();
+                                return Err(TransactionDriverError::TransactionRejected(
+                                    reason.to_string(),
+                                ));
+                            }
+                        }
+                        WaitForEffectsResponse::Expired(round) => {
+                            expired_responses.push((name, round));
+                            expired_weight += weight;
+
+                            // Check if we have quorum for expired responses
+                            if expired_weight >= quorum_threshold {
+                                // TODO: send back list of aggregated error responses
+                                let (_, round) = expired_responses.first().unwrap();
+                                return Err(TransactionDriverError::TransactionExpired(
+                                    round.to_string(),
+                                ));
+                            }
+                        }
+                    }
                 }
                 Err(e) => {
                     errors.push(e);
@@ -220,84 +284,7 @@ where
             }
         }
 
-        // Check if we have enough responses for quorum
-        if total_response_weight < quorum_threshold {
-            return Err(TransactionDriverError::InsufficientResponses {
-                received: total_response_weight,
-                required: quorum_threshold,
-                errors: errors.into_iter().map(|e| e.to_string()).collect(),
-            });
-        }
-
-        // Group responses by type and check for quorum
-        let mut executed_responses = Vec::new();
-        let mut executed_weight = 0;
-        let mut rejected_responses = Vec::new();
-        let mut rejected_weight = 0;
-        let mut expired_responses = Vec::new();
-        let mut expired_weight = 0;
-
-        for (name, response) in responses {
-            let weight = auth_agg.committee.weight(&name);
-            match response {
-                WaitForEffectsResponse::Executed {
-                    effects_digest: _,
-                    details,
-                } => {
-                    executed_responses.push((name, details));
-                    executed_weight += weight;
-                }
-                WaitForEffectsResponse::Rejected { reason } => {
-                    rejected_responses.push((name, reason));
-                    rejected_weight += weight;
-                }
-                WaitForEffectsResponse::Expired(round) => {
-                    expired_responses.push((name, round));
-                    expired_weight += weight;
-                }
-            }
-        }
-
-        // Check for quorum of executed responses
-        if executed_weight >= quorum_threshold {
-            // All executed responses should have the same details, so we can use the first one
-            let (_, details) = executed_responses.first().unwrap();
-            if let Some(details) = details {
-                return Ok(QuorumSubmitTransactionResponse {
-                    effects: FinalizedEffects {
-                        effects: details.effects.clone(),
-                        finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
-                    },
-                    events: details.events.clone(),
-                    input_objects: Some(details.input_objects.clone()),
-                    output_objects: Some(details.output_objects.clone()),
-                    auxiliary_data: None,
-                });
-            } else {
-                return Err(TransactionDriverError::ExecutionDataNotFound(
-                    transaction.digest().to_string(),
-                ));
-            }
-        }
-
-        // Check for quorum of rejected responses
-        if rejected_weight >= quorum_threshold {
-            // All rejected responses should have the same reason
-            let (_, reason) = rejected_responses.first().unwrap();
-            return Err(TransactionDriverError::TransactionRejected(
-                reason.to_string(),
-            ));
-        }
-
-        // Check for quorum of expired responses
-        if expired_weight >= quorum_threshold {
-            let (_, round) = expired_responses.first().unwrap();
-            return Err(TransactionDriverError::TransactionExpired(
-                round.to_string(),
-            ));
-        }
-
-        // No quorum reached for any response type
+        // If we get here, we didn't reach quorum for any response type
         Err(TransactionDriverError::InsufficientResponses {
             received: executed_weight + rejected_weight + expired_weight,
             required: quorum_threshold,
