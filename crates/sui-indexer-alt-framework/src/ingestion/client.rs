@@ -149,7 +149,8 @@ impl IngestionClient {
                     FetchData::Raw(bytes) => {
                         self.metrics.total_ingested_bytes.inc_by(bytes.len() as u64);
                         Blob::from_bytes(&bytes).map_err(|e| {
-                            self.metrics.inc_permanent(
+                            self.metrics.inc_retry(
+                                checkpoint,
                                 "deserialization",
                                 IngestionError::DeserializationError(checkpoint, e),
                             )
@@ -217,11 +218,11 @@ impl IngestionClient {
 
 #[cfg(test)]
 mod tests {
+    use dashmap::DashMap;
     use prometheus::Registry;
-    use std::collections::HashMap;
     use std::sync::Arc;
     use std::time::Duration;
-    use tokio::sync::Mutex;
+    use tokio::time::timeout;
     use tokio_util::bytes::Bytes;
 
     use crate::ingestion::test_utils::test_checkpoint_data;
@@ -231,16 +232,16 @@ mod tests {
     /// Mock implementation of IngestionClientTrait for testing
     #[derive(Default)]
     struct MockIngestionClient {
-        checkpoints: Arc<Mutex<HashMap<u64, FetchData>>>,
-        transient_failures: Arc<Mutex<HashMap<u64, usize>>>,
-        not_found_failures: Arc<Mutex<HashMap<u64, usize>>>,
+        checkpoints: DashMap<u64, FetchData>,
+        transient_failures: DashMap<u64, usize>,
+        not_found_failures: DashMap<u64, usize>,
     }
 
     #[async_trait::async_trait]
     impl IngestionClientTrait for MockIngestionClient {
         async fn fetch(&self, checkpoint: u64) -> FetchResult {
             // Check for not found failures
-            if let Some(remaining) = self.not_found_failures.lock().await.get_mut(&checkpoint) {
+            if let Some(mut remaining) = self.not_found_failures.get_mut(&checkpoint) {
                 if *remaining > 0 {
                     *remaining -= 1;
                     return Err(FetchError::NotFound);
@@ -248,7 +249,7 @@ mod tests {
             }
 
             // Check for transient failures
-            if let Some(remaining) = self.transient_failures.lock().await.get_mut(&checkpoint) {
+            if let Some(mut remaining) = self.transient_failures.get_mut(&checkpoint) {
                 if *remaining > 0 {
                     *remaining -= 1;
                     return Err(FetchError::Transient {
@@ -259,11 +260,11 @@ mod tests {
             }
 
             // Return the checkpoint data if it exists
-            if let Some(data) = self.checkpoints.lock().await.get(&checkpoint) {
-                Ok(data.clone())
-            } else {
-                Err(FetchError::NotFound)
-            }
+            self.checkpoints
+                .get(&checkpoint)
+                .as_deref()
+                .cloned()
+                .ok_or(FetchError::NotFound)
         }
     }
 
@@ -281,10 +282,7 @@ mod tests {
 
         // Create test data using test_checkpoint_data
         let bytes = Bytes::from(test_checkpoint_data(1));
-        mock.checkpoints
-            .lock()
-            .await
-            .insert(1, FetchData::Raw(bytes.clone()));
+        mock.checkpoints.insert(1, FetchData::Raw(bytes.clone()));
 
         // Fetch and verify
         let result = client.fetch(1).await.unwrap();
@@ -299,8 +297,6 @@ mod tests {
         let bytes = test_checkpoint_data(1);
         let checkpoint_data: CheckpointData = Blob::from_bytes(&bytes).unwrap();
         mock.checkpoints
-            .lock()
-            .await
             .insert(1, FetchData::CheckpointData(checkpoint_data.clone()));
 
         // Fetch and verify
@@ -327,10 +323,8 @@ mod tests {
 
         // Add checkpoint to mock with 2 transient failures
         mock.checkpoints
-            .lock()
-            .await
             .insert(1, FetchData::CheckpointData(checkpoint_data.clone()));
-        mock.transient_failures.lock().await.insert(1, 2);
+        mock.transient_failures.insert(1, 2);
 
         // Fetch and verify it succeeds after retries
         let result = client.fetch(1).await.unwrap();
@@ -347,10 +341,8 @@ mod tests {
 
         // Add checkpoint to mock with 1 not_found failures
         mock.checkpoints
-            .lock()
-            .await
             .insert(1, FetchData::CheckpointData(checkpoint_data));
-        mock.not_found_failures.lock().await.insert(1, 1);
+        mock.not_found_failures.insert(1, 1);
 
         // Wait for checkpoint with short retry interval
         let result = client.wait_for(1, Duration::from_millis(50)).await.unwrap();
@@ -367,8 +359,6 @@ mod tests {
 
         // Add checkpoint to mock with no failures - data should be available immediately
         mock.checkpoints
-            .lock()
-            .await
             .insert(1, FetchData::CheckpointData(checkpoint_data));
 
         // Wait for checkpoint with short retry interval
@@ -377,20 +367,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_wait_for_fail_on_permanent_deserialization_error() {
+    async fn test_wait_for_permanent_deserialization_error() {
         let (client, mock) = setup_test();
 
         // Add invalid data that will cause a deserialization error
         mock.checkpoints
-            .lock()
-            .await
             .insert(1, FetchData::Raw(Bytes::from("invalid data")));
 
-        // Wait for checkpoint should fail immediately with a permanent error
-        let result = client.wait_for(1, Duration::from_millis(50)).await;
-        assert!(matches!(
-            result,
-            Err(IngestionError::DeserializationError(1, _))
-        ));
+        // wait_for should keep retrying on deserialization errors and timeout
+        timeout(
+            Duration::from_secs(1),
+            client.wait_for(1, Duration::from_millis(50)),
+        )
+        .await
+        .unwrap_err();
     }
 }

@@ -14,6 +14,7 @@ backoff.workspace = true
 bb8 = "0.8.5"
 chrono.workspace = true
 clap = { workspace = true, features = ["env"] }
+dashmap.workspace = true
 diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 diesel_migrations.workspace = true
