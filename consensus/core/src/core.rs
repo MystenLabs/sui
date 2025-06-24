@@ -274,7 +274,7 @@ impl Core {
         let (accepted_blocks, missing_block_refs) = self.block_manager.try_accept_blocks(blocks);
 
         if !accepted_blocks.is_empty() {
-            debug!(
+            trace!(
                 "Accepted blocks: {}",
                 accepted_blocks
                     .iter()

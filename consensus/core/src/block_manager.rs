@@ -10,7 +10,7 @@ use std::{
 use itertools::Itertools as _;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
-use tracing::{debug, warn};
+use tracing::{debug, trace, warn};
 
 use crate::{
     block::{BlockAPI, BlockRef, VerifiedBlock, GENESIS_ROUND},
@@ -113,10 +113,12 @@ impl BlockManager {
         let _s = monitored_scope("BlockManager::try_accept_blocks_internal");
 
         blocks.sort_by_key(|b| b.round());
-        debug!(
-            "Trying to accept blocks: {}",
-            blocks.iter().map(|b| b.reference().to_string()).join(",")
-        );
+        if !blocks.is_empty() {
+            debug!(
+                "Trying to accept blocks: {}",
+                blocks.iter().map(|b| b.reference().to_string()).join(",")
+            );
+        }
 
         let mut accepted_blocks = vec![];
         let mut missing_blocks = BTreeSet::new();
@@ -224,7 +226,7 @@ impl BlockManager {
 
         block_refs.sort_by_key(|b| b.round);
 
-        debug!(
+        trace!(
             "Trying to find blocks: {}",
             block_refs.iter().map(|b| b.to_string()).join(",")
         );
