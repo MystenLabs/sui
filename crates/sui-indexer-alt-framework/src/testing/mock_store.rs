@@ -30,6 +30,8 @@ pub struct ConnectionFailure {
     pub connection_failure_attempts: usize,
     /// Delay in milliseconds for each connection attempt (applied even when connection fails)
     pub connection_delay_ms: u64,
+    /// Counter for tracking total connection attempts
+    pub connection_attempts: usize,
 }
 
 /// A mock store for testing. It maintains a map of checkpoint sequence numbers to transaction
@@ -47,6 +49,8 @@ pub struct MockStore {
     pub prune_failure_attempts: Arc<Mutex<HashMap<(u64, u64), usize>>>,
     /// Configuration for simulating connection failures in tests
     pub connection_failure: Arc<Mutex<ConnectionFailure>>,
+    /// Number of remaining failures for set_reader_watermark operation
+    pub set_reader_watermark_failure_attempts: Arc<Mutex<usize>>,
 }
 
 impl Default for MockStore {
@@ -56,6 +60,7 @@ impl Default for MockStore {
             data: Arc::new(Mutex::new(HashMap::new())),
             prune_failure_attempts: Arc::new(Mutex::new(HashMap::new())),
             connection_failure: Arc::new(Mutex::new(ConnectionFailure::default())),
+            set_reader_watermark_failure_attempts: Arc::new(Mutex::new(0)),
         }
     }
 }
@@ -126,6 +131,21 @@ impl Connection for MockConnection<'_> {
         _pipeline: &'static str,
         reader_lo: u64,
     ) -> anyhow::Result<bool> {
+        // Check for set_reader_watermark failure simulation
+        let should_fail = {
+            let mut attempts = self.0.set_reader_watermark_failure_attempts.lock().unwrap();
+            if *attempts > 0 {
+                *attempts -= 1;
+                true
+            } else {
+                false
+            }
+        };
+
+        if should_fail {
+            return Err(anyhow::anyhow!("set_reader_watermark failed"));
+        }
+
         let mut watermarks = self.0.watermarks.lock().unwrap();
         watermarks.reader_lo = reader_lo;
         watermarks.pruner_timestamp = SystemTime::now()
@@ -151,19 +171,19 @@ impl Store for MockStore {
     type Connection<'c> = MockConnection<'c>;
 
     async fn connect(&self) -> anyhow::Result<Self::Connection<'_>> {
-        // Check for connection failure simulation
-        let should_fail = {
+        // Check for connection failure simulation and increment attempts counter
+        let (should_fail, delay_ms) = {
             let mut failure = self.connection_failure.lock().unwrap();
-            if failure.connection_failure_attempts > 0 {
+            failure.connection_attempts += 1;
+
+            let should_fail = if failure.connection_failure_attempts > 0 {
                 failure.connection_failure_attempts -= 1;
                 true
             } else {
                 false
-            }
-        };
-        let delay_ms = {
-            let failure = self.connection_failure.lock().unwrap();
-            failure.connection_delay_ms
+            };
+
+            (should_fail, failure.connection_delay_ms)
         };
 
         if delay_ms > 0 {
@@ -191,5 +211,24 @@ impl MockStore {
     /// Helper to get the current watermark state for testing
     pub fn get_watermark(&self) -> MockWatermark {
         self.watermarks.lock().unwrap().clone()
+    }
+
+    /// Helper to get the number of connection attempts for testing
+    pub fn get_connection_attempts(&self) -> usize {
+        self.connection_failure.lock().unwrap().connection_attempts
+    }
+
+    /// Helper to wait for a specific number of connection attempts with timeout
+    pub async fn wait_for_connection_attempts(&self, expected: usize, timeout: Duration) {
+        tokio::time::timeout(timeout, async {
+            loop {
+                if self.get_connection_attempts() >= expected {
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
     }
 }
