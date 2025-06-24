@@ -18,7 +18,7 @@ use crate::{
     errors::{FileHandle, Located, TheFile},
     flavor::MoveFlavor,
     package::{
-        PackageName, PublishInformation, PublishedIds,
+        PackageName, PublishInformation, PublishInformationMap, PublishedIds,
         layout::SourcePackageLayout,
         lockfile::DependencyInfo,
         manifest::{Manifest, ManifestDependency, PackageMetadata},
@@ -70,6 +70,70 @@ pub fn parse_legacy_manifest_from_file<F: MoveFlavor>(
         parse_source_manifest(parse_move_manifest_string(file_contents)?, file_handle)?;
 
     Ok((manifest, legacy_info, file_handle))
+}
+
+pub fn parse_legacy_lockfile_addresses(path: PathBuf) -> Result<Option<PublishInformationMap>> {
+    // if the input is a `/Move.toml` path, we need to get back to the root.
+    let root = resolve_root_dir(&path)?;
+    let lockfile_path = root.join(SourcePackageLayout::Lock.path());
+
+    let file_contents = std::fs::read_to_string(&lockfile_path)?;
+    let toml_val = toml::from_str::<TV>(&file_contents)?;
+
+    let Some(lockfile) = toml_val.as_table() else {
+        bail!(
+            "Lockfile is malformed. Expected a table at the top level, but found a {}",
+            file_contents
+        );
+    };
+
+    // Extract the environments as a table.
+    let Some(envs) = lockfile.get("env").map(|v| v.as_table()).flatten() else {
+        return Ok(None);
+    };
+
+    let mut publish_info = BTreeMap::new();
+
+    for (name, data) in envs {
+        let env_name = name.to_string();
+        let env_table = data.as_table().unwrap();
+
+        let chain_id = env_table
+            .get("chain-id")
+            .map(|v| v.as_str().unwrap_or_default().to_string());
+        let original_id = env_table
+            .get("original-published-id")
+            .map(|v| parse_address_literal(v.as_str().unwrap_or_default()).unwrap());
+        let latest_id = env_table
+            .get("latest-published-id")
+            .map(|v| parse_address_literal(v.as_str().unwrap_or_default()).unwrap());
+
+        let published_version = env_table
+            .get("published-version")
+            .map(|v| v.as_str().unwrap_or_default().to_string());
+
+        if let (Some(chain_id), Some(original_id), Some(latest_id), Some(published_version)) =
+            (chain_id, original_id, latest_id, published_version)
+        {
+            publish_info.insert(
+                env_name,
+                PublishInformation {
+                    environment: chain_id,
+                    published_ids: PublishedIds {
+                        original_id,
+                        latest_id,
+                    },
+                    version: published_version,
+                },
+            );
+        }
+    }
+
+    if publish_info.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(publish_info))
+    }
 }
 
 fn resolve_move_manifest_path(path: &Path) -> PathBuf {
@@ -202,8 +266,6 @@ pub fn parse_source_manifest<F: MoveFlavor>(
                     },
                     addresses: addresses.unwrap_or_default(),
                     dev_addresses,
-                    // TODO: Fill these in by reading the `lockfile`.
-                    environments: None,
                     manifest_address_info,
                 },
             ))

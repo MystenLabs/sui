@@ -18,7 +18,8 @@ use super::{
 };
 use crate::{
     compatibility::{
-        legacy::LegacyPackageInformation, legacy_parser::parse_legacy_manifest_from_file,
+        legacy::LegacyPackageInformation,
+        legacy_parser::{parse_legacy_lockfile_addresses, parse_legacy_manifest_from_file},
     },
     dependency::{DependencySet, PinnedDependencyInfo, pin},
     errors::{PackageError, PackageResult},
@@ -104,11 +105,17 @@ impl<F: MoveFlavor> Package<F> {
             let (manifest, legacy_info) =
                 Manifest::<F>::read_legacy_from_file(path.manifest_path())?;
 
+            // Try to parse the addresses from legacy `lock`-file.
+            // We do not need to emit errors if the parsing has failed here, as this is "best-effort".
+            let publish_data = parse_legacy_lockfile_addresses(path.manifest_path())
+                .ok()
+                .flatten();
+
             Ok(Self {
                 manifest,
                 path,
                 legacy_info: Some(legacy_info),
-                publish_data: None,
+                publish_data,
             })
         }
     }

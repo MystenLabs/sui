@@ -38,8 +38,4 @@ pub struct LegacyPackageInformation {
     ///
     /// When we're doing `get_package_ids()` on `Package`, we return this.
     pub manifest_address_info: Option<PublishedIds>,
-
-    /// This is the old environments, we could potentially merge this directly on the
-    /// `Package<F>` constructor, instead of keeping a separate point of info!
-    pub environments: Option<PublishInformationMap>,
 }
