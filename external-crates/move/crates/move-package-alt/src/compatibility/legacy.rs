@@ -8,18 +8,6 @@ use move_core_types::account_address::AccountAddress;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ManagedPackage {
-    #[serde(rename = "chain-id")]
-    pub chain_id: String,
-    #[serde(rename = "original-published-id")]
-    pub original_published_id: String,
-    #[serde(rename = "latest-published-id")]
-    pub latest_published_id: String,
-    #[serde(rename = "published-version")]
-    pub version: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
 pub struct LegacyPackageInformation {
     /// The deprecated incompatible name of this package.
     /// Can be used to fix graph edges (lookup for `hash(incompatible_name) -> new_name`)
