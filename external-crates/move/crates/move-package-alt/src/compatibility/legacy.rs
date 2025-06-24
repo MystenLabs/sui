@@ -1,15 +1,11 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    compatibility::legacy_manifest::{LegacyAddressDeclarations, LegacyDevAddressDeclarations},
-    package::PackageName,
+    compatibility::{LegacyAddressDeclarations, LegacyDevAddressDeclarations},
+    package::{PackageName, PublishInformation, PublishInformationMap, PublishedIds},
 };
 use move_core_types::account_address::AccountAddress;
 use serde::{Deserialize, Serialize};
-
-/// In old `lockfiles`, we had environments specified as `[env.mainnet]`, `[env.testnet]` etc.
-/// It is not far away from the current system, but we keep it as part of the deprecated information.
-pub type LegacyEnvironments = BTreeMap<String, ManagedPackage>;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ManagedPackage {
@@ -36,5 +32,14 @@ pub struct LegacyPackageInformation {
     /// These addresses should store all DEV addresses that were part of the package.
     pub dev_addresses: Option<LegacyDevAddressDeclarations>,
 
-    pub environments: LegacyEnvironments,
+    /// The address information that originates from the manifest file.
+    /// This is optional and is the first way of doing package version management,
+    /// where `published-at="<latest_id>"`, and `[addresses] <xx> = "<original_id>"`
+    ///
+    /// When we're doing `get_package_ids()` on `Package`, we return this.
+    pub manifest_address_info: Option<PublishedIds>,
+
+    /// This is the old environments, we could potentially merge this directly on the
+    /// `Package<F>` constructor, instead of keeping a separate point of info!
+    pub environments: Option<PublishInformationMap>,
 }

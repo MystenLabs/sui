@@ -6,7 +6,7 @@ use std::{
     collections::BTreeMap,
     fmt::{self, Debug, Display, Formatter},
     ops::Range,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use derive_where::derive_where;
@@ -14,6 +14,9 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
 use crate::{
+    compatibility::{
+        legacy::LegacyPackageInformation, legacy_parser::parse_legacy_manifest_from_file,
+    },
     dependency::{DependencySet, UnpinnedDependencyInfo},
     errors::{FileHandle, Located, ManifestError, ManifestErrorKind, PackageResult, TheFile},
     flavor::{MoveFlavor, Vanilla},
@@ -100,6 +103,13 @@ impl<F: MoveFlavor> PackageMetadata<F> {
 }
 
 impl<F: MoveFlavor> Manifest<F> {
+    pub fn read_legacy_from_file(path: PathBuf) -> PackageResult<(Self, LegacyPackageInformation)> {
+        let (manifest, legacy_package_info, handle) = parse_legacy_manifest_from_file::<F>(path)?;
+
+        // manifest.validate_manifest(handle)?;
+        Ok((manifest, legacy_package_info))
+    }
+
     /// Read the manifest file at the given path, returning a [`Manifest`].
     pub fn read_from_file(path: impl AsRef<Path>) -> PackageResult<Self> {
         debug!("Reading manifest from {:?}", path.as_ref());

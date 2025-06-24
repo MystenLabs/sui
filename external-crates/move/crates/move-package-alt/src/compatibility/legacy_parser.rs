@@ -4,12 +4,9 @@
 
 use crate::{
     compatibility::{
-        find_module_name_for_package,
-        legacy::LegacyPackageInformation,
-        legacy_manifest::{
-            LegacyAddressDeclarations, LegacyBuildInfo, LegacyDevAddressDeclarations,
-            LegacySubstOrRename, LegacySubstitution, LegacyVersion, normalize_path,
-        },
+        LegacyAddressDeclarations, LegacyBuildInfo, LegacyDevAddressDeclarations,
+        LegacySubstOrRename, LegacySubstitution, LegacyVersion, find_module_name_for_package,
+        legacy::LegacyPackageInformation, normalize_path,
     },
     dependency::{
         DependencySet, UnpinnedDependencyInfo,
@@ -21,7 +18,7 @@ use crate::{
     errors::{FileHandle, Located, TheFile},
     flavor::MoveFlavor,
     package::{
-        PackageName,
+        PackageName, PublishInformation, PublishedIds,
         layout::SourcePackageLayout,
         lockfile::DependencyInfo,
         manifest::{Manifest, ManifestDependency, PackageMetadata},
@@ -37,6 +34,9 @@ use std::{
 use toml::Value as TV;
 
 const EMPTY_ADDR_STR: &str = "_";
+
+/// TODO: Fill in the valid editions for this.
+const VALID_EDITIONS: &[&str] = &["2024", "2024.beta", "2024.alpha"];
 
 pub const PACKAGE_NAME: &str = "package";
 const BUILD_NAME: &str = "build";
@@ -60,14 +60,16 @@ const KNOWN_NAMES: &[&str] = &[
 const REQUIRED_FIELDS: &[&str] = &[PACKAGE_NAME];
 
 pub fn parse_legacy_manifest_from_file<F: MoveFlavor>(
-    path: &Path,
-) -> Result<(Manifest<F>, LegacyPackageInformation)> {
-    let toml_path = resolve_move_manifest_path(path);
+    toml_path: PathBuf,
+) -> Result<(Manifest<F>, LegacyPackageInformation, FileHandle)> {
     let file_contents = std::fs::read_to_string(&toml_path)
-        .with_context(|| format!("Unable to find package manifest at {:?}", path))?;
+        .with_context(|| format!("Unable to find package manifest at {:?}", toml_path))?;
 
     let file_handle = FileHandle::new(toml_path)?;
-    parse_source_manifest(parse_move_manifest_string(file_contents)?, file_handle)
+    let (manifest, legacy_info) =
+        parse_source_manifest(parse_move_manifest_string(file_contents)?, file_handle)?;
+
+    Ok((manifest, legacy_info, file_handle))
 }
 
 fn resolve_move_manifest_path(path: &Path) -> PathBuf {
@@ -119,7 +121,7 @@ pub fn parse_source_manifest<F: MoveFlavor>(
                 .transpose()
                 .context("Error parsing '[dev-addresses]' section of manifest")?;
 
-            let (legacy_name, edition) = table
+            let (legacy_name, edition, published_at) = table
                 .remove(PACKAGE_NAME)
                 .map(parse_package_info)
                 .transpose()
@@ -146,12 +148,40 @@ pub fn parse_source_manifest<F: MoveFlavor>(
                 .context("Error parsing '[dev-dependencies]' section of manifest")?
                 .unwrap_or_default();
 
-            // TODO: Figure out how to do spans here :melt:
+            if !VALID_EDITIONS.contains(&edition.as_str()) {
+                bail!(
+                    "Not a valid legacy manifest. Edition must be one of [{}]",
+                    VALID_EDITIONS.join(", ")
+                );
+            }
+
+            // TODO: is there a better way to handle spans here..?
             let edition = Located::new(edition, file_handle.clone(), 0..1);
-
             let modern_name = get_modern_name(&addresses, file_handle.path())?;
-
             let new_name = Located::new(modern_name.clone(), file_handle.clone(), 0..1);
+
+            // Gather the original publish information from the manifest, if it's defined on the Toml file.
+            let manifest_address_info = if let Some(published_at) = published_at {
+                let latest_id = parse_address_literal(&published_at);
+                let original_id = addresses
+                    .as_ref()
+                    .map(|a| a.get(modern_name.as_str()))
+                    .flatten()
+                    .map(|x| x.clone())
+                    .flatten();
+
+                // If we have BOTH the original and latest id, we can create the published ids!
+                if let (Ok(latest_id), Some(original_id)) = (latest_id, original_id) {
+                    Some(PublishedIds {
+                        original_id,
+                        latest_id,
+                    })
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
 
             Ok((
                 Manifest {
@@ -165,7 +195,6 @@ pub fn parse_source_manifest<F: MoveFlavor>(
                     dep_replacements: BTreeMap::new(),
                 },
                 LegacyPackageInformation {
-                    // If
                     incompatible_name: if legacy_name != modern_name.as_str() {
                         Some(legacy_name)
                     } else {
@@ -173,7 +202,9 @@ pub fn parse_source_manifest<F: MoveFlavor>(
                     },
                     addresses: addresses.unwrap_or_default(),
                     dev_addresses,
-                    environments: BTreeMap::new(),
+                    // TODO: Fill these in by reading the `lockfile`.
+                    environments: None,
+                    manifest_address_info,
                 },
             ))
         }
@@ -187,11 +218,11 @@ pub fn parse_source_manifest<F: MoveFlavor>(
     }
 }
 
-fn parse_package_info(tval: TV) -> Result<(String, String)> {
+fn parse_package_info(tval: TV) -> Result<(String, String, Option<String>)> {
     match tval {
         TV::Table(mut table) => {
             check_for_required_field_names(&table, &["name"])?;
-            let known_names = ["name", "edition"];
+            let known_names = ["name", "edition", "published-at"];
 
             warn_if_unknown_field_names(&table, known_names.as_slice());
 
@@ -202,6 +233,10 @@ fn parse_package_info(tval: TV) -> Result<(String, String)> {
             let name = name
                 .as_str()
                 .ok_or_else(|| format_err!("Package name must be a string"))?;
+
+            let published_at = table
+                .remove("published-at")
+                .map(|v| v.as_str().unwrap_or_default().to_string());
 
             let name = name.to_string();
 
@@ -233,7 +268,7 @@ fn parse_package_info(tval: TV) -> Result<(String, String)> {
                 .map(|v| v.as_str().unwrap_or_default().to_string())
                 .unwrap_or_default();
 
-            Ok((name, edition))
+            Ok((name, edition, published_at))
         }
         x => bail!(
             "Malformed section in manifest {}. Expected a table, but encountered a {}",
@@ -462,6 +497,7 @@ pub fn parse_dependency(mut tval: TV, handle: FileHandle) -> Result<ManifestDepe
 
             UnpinnedDependencyInfo::Local(LocalDependency {
                 local: normalize_path(local, true /* allow_cwd_parent */).unwrap(),
+                // TODO (manos): this is wrong -- should fix once I realise what's the expected path here.
                 relative_to_parent_dir: handle.path().to_path_buf(),
             })
         }

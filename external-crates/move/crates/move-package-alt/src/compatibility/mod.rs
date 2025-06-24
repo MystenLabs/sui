@@ -1,18 +1,88 @@
-pub mod legacy_manifest_parser;
 pub mod legacy;
-mod legacy_manifest;
+pub mod legacy_parser;
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
+use move_core_types::account_address::AccountAddress;
 use regex::Regex;
 use tokio::spawn;
 
-use crate::package::layout::SourcePackageLayout;
 use crate::package::PackageName;
+use crate::package::layout::SourcePackageLayout;
 
+pub type LegacyAddressDeclarations = BTreeMap<String, Option<AccountAddress>>;
+pub type LegacyDevAddressDeclarations = BTreeMap<String, AccountAddress>;
+pub type LegacyVersion = (u64, u64, u64);
+pub type LegacySubstitution = BTreeMap<String, LegacySubstOrRename>;
+
+#[derive(Default, Debug, Clone, Eq, PartialEq)]
+pub struct LegacyBuildInfo {
+    pub language_version: Option<LegacyVersion>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub enum LegacySubstOrRename {
+    RenameFrom(String),
+    Assign(AccountAddress),
+}
+
+/// Normalize the representation of `path` by eliminating redundant `.` components and applying `..`
+/// component.  Does not access the filesystem (e.g. to resolve symlinks or test for file
+/// existence), unlike `std::fs::canonicalize`.
+///
+/// Fails if the normalized path attempts to access the parent of a root directory or volume prefix,
+/// or is prefixed by accesses to parent directories when `allow_cwd_parent` is false.
+///
+/// Returns the normalized path on success.
+pub fn normalize_path(path: impl AsRef<Path>, allow_cwd_parent: bool) -> Result<PathBuf> {
+    use std::path::Component::*;
+
+    let mut stack = Vec::new();
+    for component in path.as_ref().components() {
+        match component {
+            // Components that contribute to the path as-is.
+            verbatim @ (Prefix(_) | RootDir | Normal(_)) => stack.push(verbatim),
+
+            // Equivalent of a `.` path component -- can be ignored.
+            CurDir => { /* nop */ }
+
+            // Going up in the directory hierarchy, which may fail if that's not possible.
+            ParentDir => match stack.last() {
+                None | Some(ParentDir) => {
+                    stack.push(ParentDir);
+                }
+
+                Some(Normal(_)) => {
+                    stack.pop();
+                }
+
+                Some(CurDir) => {
+                    unreachable!("Component::CurDir never added to the stack");
+                }
+
+                Some(RootDir | Prefix(_)) => bail!(
+                    "Invalid path accessing parent of root directory: {}",
+                    path.as_ref().to_string_lossy(),
+                ),
+            },
+        }
+    }
+
+    let normalized: PathBuf = stack.iter().collect();
+    if !allow_cwd_parent && stack.first() == Some(&ParentDir) {
+        bail!(
+            "Path cannot access parent of current directory: {}",
+            normalized.to_string_lossy()
+        );
+    }
+
+    Ok(normalized)
+}
+
+/// The regex to detect `module <name>::<module_name>` on its different forms.
 const MODULE_REGEX: &str = r"\bmodule\s+([a-zA-Z_][\w]*)::([a-zA-Z_][\w]*)";
 
 /// This is a naive way to detect all module names that are part of the source code
@@ -83,10 +153,7 @@ fn parse_module_names(contents: &str) -> Result<HashSet<String>> {
     // In both cases, the match is the 2nd group (so `match.get(1)`)
     let regex = Regex::new(MODULE_REGEX).unwrap();
 
-    eprintln!("{:?}", contents);
-
     for cap in regex.captures_iter(&contents) {
-        eprintln!("{:?}", cap);
         set.insert(cap[1].to_string());
     }
 
