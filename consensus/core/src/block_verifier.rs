@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use consensus_types::block::{BlockRef, BlockTimestampMs, Round, TransactionIndex};
+use consensus_types::block::{BlockRef, TransactionIndex};
 use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{

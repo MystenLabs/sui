@@ -5,7 +5,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
-use consensus_core::{BlockRef, BlockStatus};
+use consensus_core::BlockStatus;
+use consensus_types::block::BlockRef;
 use fastcrypto::traits::KeyPair;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{random_object_ref, ObjectRef, SuiAddress};

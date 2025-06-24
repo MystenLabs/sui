@@ -13,7 +13,7 @@ use crate::supported_protocol_versions::{
 use crate::transaction::{CertifiedTransaction, Transaction};
 use byteorder::{BigEndian, ReadBytesExt};
 use bytes::Bytes;
-use consensus_core::BlockRef;
+use consensus_types::block::{BlockRef, TransactionIndex};
 use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
 use fastcrypto_tbls::dkg_v1;

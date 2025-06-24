@@ -600,7 +600,7 @@ mod tests {
     use std::{collections::BTreeSet, sync::Arc};
 
     use consensus_config::AuthorityIndex;
-    use consensus_types::block::{BlockDigest, BlockRef, Round, TransactionIndex};
+    use consensus_types::block::{BlockDigest, BlockRef, Round};
     use parking_lot::RwLock;
     use rand::{prelude::StdRng, seq::SliceRandom, SeedableRng};
     use rstest::rstest;

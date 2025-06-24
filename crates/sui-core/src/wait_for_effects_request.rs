@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use consensus_types::block::{BlockRef, TransactionIndex};
 use sui_types::{
     committee::EpochId,
     digests::{TransactionDigest, TransactionEffectsDigest},
