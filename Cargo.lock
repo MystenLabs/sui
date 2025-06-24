@@ -2961,6 +2961,7 @@ dependencies = [
  "arc-swap",
  "consensus-config",
  "consensus-core",
+ "consensus-types",
  "mysten-metrics",
  "mysten-network",
  "parking_lot 0.12.3",
