@@ -284,7 +284,7 @@ mod tests {
     use super::*;
 
     #[derive(Clone, FieldCount)]
-    pub struct StoredData {}
+    pub struct StoredData;
 
     pub struct DataPipeline;
 
@@ -312,40 +312,37 @@ mod tests {
     struct TestSetup {
         store: MockStore,
         watermark_tx: mpsc::Sender<Vec<WatermarkPart>>,
-        cancel: CancellationToken,
         commit_watermark_handle: JoinHandle<()>,
+        cancel: CancellationToken,
     }
 
-    async fn setup_test<H: Handler<Store = MockStore> + 'static>(
+    fn setup_test<H: Handler<Store = MockStore> + 'static>(
         config: CommitterConfig,
         initial_watermark: Option<CommitterWatermark>,
+        store: MockStore,
     ) -> TestSetup {
         let (watermark_tx, watermark_rx) = mpsc::channel(100);
         let metrics = IndexerMetrics::new(&Default::default());
-        let store = MockStore::default();
         let cancel = CancellationToken::new();
 
         let store_clone = store.clone();
         let cancel_clone = cancel.clone();
 
-        let commit_watermark_handle = tokio::spawn(async move {
-            let _ = commit_watermark::<H>(
-                initial_watermark,
-                config,
-                false,
-                watermark_rx,
-                store_clone,
-                metrics,
-                cancel_clone,
-            )
-            .await;
-        });
+        let commit_watermark_handle = commit_watermark::<H>(
+            initial_watermark,
+            config,
+            false,
+            watermark_rx,
+            store_clone,
+            metrics,
+            cancel_clone,
+        );
 
         TestSetup {
             store,
             watermark_tx,
-            cancel,
             commit_watermark_handle,
+            cancel,
         }
     }
 
@@ -367,7 +364,7 @@ mod tests {
             checkpoint_hi_inclusive: 0,
             ..Default::default()
         });
-        let setup = setup_test::<DataPipeline>(config, initial_watermark).await;
+        let setup = setup_test::<DataPipeline>(config, initial_watermark, MockStore::default());
 
         // Send watermark parts in order
         for cp in 1..4 {
@@ -379,10 +376,8 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         // Verify watermark progression
-        {
-            let watermark = setup.store.watermarks.lock().unwrap();
-            assert_eq!(watermark.checkpoint_hi_inclusive, 3);
-        }
+        let watermark = setup.store.get_watermark();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 3);
 
         // Clean up
         setup.cancel.cancel();
@@ -396,7 +391,7 @@ mod tests {
             checkpoint_hi_inclusive: 0,
             ..Default::default()
         });
-        let setup = setup_test::<DataPipeline>(config, initial_watermark).await;
+        let setup = setup_test::<DataPipeline>(config, initial_watermark, MockStore::default());
 
         // Send watermark parts out of order
         let parts = vec![
@@ -410,10 +405,8 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         // Verify watermark hasn't progressed past 2
-        {
-            let watermark = setup.store.watermarks.lock().unwrap();
-            assert_eq!(watermark.checkpoint_hi_inclusive, 2);
-        }
+        let watermark = setup.store.get_watermark();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 2);
 
         // Send checkpoint 3 to fill the gap
         setup
@@ -426,10 +419,8 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
         // Verify watermark has progressed to 4
-        {
-            let watermark = setup.store.watermarks.lock().unwrap();
-            assert_eq!(watermark.checkpoint_hi_inclusive, 4);
-        }
+        let watermark = setup.store.get_watermark();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 4);
 
         // Clean up
         setup.cancel.cancel();
@@ -446,14 +437,8 @@ mod tests {
             checkpoint_hi_inclusive: 0,
             ..Default::default()
         });
-        let setup = setup_test::<DataPipeline>(config, initial_watermark).await;
-        // Configure store to fail connection
-        setup
-            .store
-            .connection_failure
-            .lock()
-            .unwrap()
-            .connection_failure_attempts = 1;
+        let store = MockStore::default().with_connection_failures(1);
+        let setup = setup_test::<DataPipeline>(config, initial_watermark, store);
 
         // Send watermark part
         let part = create_watermark_part_for_checkpoint(1);
@@ -463,19 +448,15 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
         // Verify watermark hasn't progressed
-        {
-            let watermark = setup.store.watermarks.lock().unwrap();
-            assert_eq!(watermark.checkpoint_hi_inclusive, 0);
-        }
+        let watermark = setup.store.get_watermark();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 0);
 
         // Wait for next polling and processing
         tokio::time::sleep(tokio::time::Duration::from_millis(1_200)).await;
 
         // Verify watermark has progressed
-        {
-            let watermark = setup.store.watermarks.lock().unwrap();
-            assert_eq!(watermark.checkpoint_hi_inclusive, 1);
-        }
+        let watermark = setup.store.get_watermark();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 1);
 
         // Clean up
         setup.cancel.cancel();
@@ -492,7 +473,7 @@ mod tests {
             checkpoint_hi_inclusive: 0,
             ..Default::default()
         });
-        let setup = setup_test::<DataPipeline>(config, initial_watermark).await;
+        let setup = setup_test::<DataPipeline>(config, initial_watermark, MockStore::default());
 
         // Send the first incomplete watermark part
         let part = WatermarkPart {
@@ -509,10 +490,8 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
         // Verify watermark hasn't progressed
-        {
-            let watermark = setup.store.watermarks.lock().unwrap();
-            assert_eq!(watermark.checkpoint_hi_inclusive, 0);
-        }
+        let watermark = setup.store.get_watermark();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 0);
 
         // Send the other two parts to complete the watermark
         setup
@@ -525,10 +504,8 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(1_200)).await;
 
         // Verify watermark has progressed
-        {
-            let watermark = setup.store.watermarks.lock().unwrap();
-            assert_eq!(watermark.checkpoint_hi_inclusive, 1);
-        }
+        let watermark = setup.store.get_watermark();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 1);
 
         // Clean up
         setup.cancel.cancel();
@@ -537,12 +514,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_no_initial_watermark() {
-        let config = CommitterConfig {
-            watermark_interval_ms: 1_000, // Long polling interval to test adding missing watermark.
-            ..Default::default()
-        };
+        let config = CommitterConfig::default();
         let initial_watermark = None;
-        let setup = setup_test::<DataPipeline>(config, initial_watermark).await;
+        let setup = setup_test::<DataPipeline>(config, initial_watermark, MockStore::default());
 
         // Send the checkpoint 1 watermark
         setup
@@ -552,13 +526,11 @@ mod tests {
             .unwrap();
 
         // Wait for processing
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
         // Verify watermark hasn't progressed
-        {
-            let watermark = setup.store.watermarks.lock().unwrap();
-            assert_eq!(watermark.checkpoint_hi_inclusive, 0);
-        }
+        let watermark = setup.store.get_watermark();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 0);
 
         // Send the checkpoint 0 watermark to fill the gap.
         setup
@@ -567,14 +539,12 @@ mod tests {
             .await
             .unwrap();
 
-        // Wait for next polling and processing
-        tokio::time::sleep(tokio::time::Duration::from_millis(1_200)).await;
+        // Wait for processing
+        tokio::time::sleep(tokio::time::Duration::from_millis(1200)).await;
 
         // Verify watermark has progressed
-        {
-            let watermark = setup.store.watermarks.lock().unwrap();
-            assert_eq!(watermark.checkpoint_hi_inclusive, 1);
-        }
+        let watermark = setup.store.get_watermark();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 1);
 
         // Clean up
         setup.cancel.cancel();
