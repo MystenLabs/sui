@@ -163,10 +163,10 @@ fun test_setters() {
 
     registry.register_metadata(metadata);
 
-    registry.set_name(b"test".to_string(), &metadata_cap);
-    registry.set_symbol(b"TEST".to_string(), &metadata_cap);
-    registry.set_description(b"test description".to_string(), &metadata_cap);
-    registry.set_icon_url(b"https://example.com/icon.png".to_string(), &metadata_cap);
+    registry.set_name(&metadata_cap, b"test".to_string());
+    registry.set_symbol(&metadata_cap, b"TEST".to_string());
+    registry.set_description(&metadata_cap, b"test description".to_string());
+    registry.set_icon_url(&metadata_cap, b"https://example.com/icon.png".to_string());
 
     assert!(registry.metadata<COIN_METADATA_REGISTRY_TESTS>().name() == b"test".to_string());
     assert!(registry.metadata<COIN_METADATA_REGISTRY_TESTS>().symbol() == b"TEST".to_string());

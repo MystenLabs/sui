@@ -22,14 +22,14 @@ use fun dynamic_object_field::borrow_mut as UID.borrow_dof_mut;
 // Allows calling `.exists_dof(object, name)` on `UID`
 use fun dynamic_object_field::exists_ as UID.exists_dof;
 
-#[error]
-const EMetadataNotFound: vector<u8> = b"No metadata found for this coin type";
-#[error]
-const EAlreadyClaimed: vector<u8> = b"Metadata cap already claimed";
-#[error]
-const ENotSystemAddress: vector<u8> = b"Only the system address can create the registry";
-#[error]
-const EMetadataAlreadyExists: vector<u8> = b"Metadata for this coin type already exists";
+/// No metadata found for this coin type.
+const EMetadataNotFound: u64 = 0;
+/// Metadata cap already claimed
+const EAlreadyClaimed: u64 = 1;
+/// Only the system address can create the registry
+const ENotSystemAddress: u64 = 2;
+/// Metadata for this coin type already exists
+const EMetadataAlreadyExists: u64 = 3;
 
 const REGULATED_COIN_VARIANT: u8 = 0;
 
@@ -121,20 +121,20 @@ public fun migrate_receiving<T>(
 // === Metadata Setters  ===
 
 /// Enables a metadata cap holder to update a coin's name.
-public fun set_name<T>(registry: &mut CoinMetadataRegistry, name: String, _: &MetadataCap<T>) {
+public fun set_name<T>(registry: &mut CoinMetadataRegistry, _: &MetadataCap<T>, name: String) {
     registry.metadata_mut<T>().name = name;
 }
 
 /// Enables a metadata cap holder to update a coin's symbol.
-public fun set_symbol<T>(registry: &mut CoinMetadataRegistry, symbol: String, _: &MetadataCap<T>) {
+public fun set_symbol<T>(registry: &mut CoinMetadataRegistry, _: &MetadataCap<T>, symbol: String) {
     registry.metadata_mut<T>().symbol = symbol;
 }
 
 /// Enables a metadata cap holder to update a coin's description.
 public fun set_description<T>(
     registry: &mut CoinMetadataRegistry,
-    description: String,
     _: &MetadataCap<T>,
+    description: String,
 ) {
     registry.metadata_mut<T>().description = description;
 }
@@ -142,8 +142,8 @@ public fun set_description<T>(
 /// Enables a metadata cap holder to update a coin's icon URL.
 public fun set_icon_url<T>(
     registry: &mut CoinMetadataRegistry,
-    icon_url: String,
     _: &MetadataCap<T>,
+    icon_url: String,
 ) {
     registry.metadata_mut<T>().icon_url = icon_url;
 }
@@ -167,20 +167,18 @@ public fun icon_url<T>(metadata: &Metadata<T>): String { metadata.icon_url }
 
 public fun cap_claimed<T>(metadata: &Metadata<T>): bool { metadata.metadata_cap_id.is_some() }
 
-public fun treasury_cap<T>(metadata: &Metadata<T>): Option<ID> {
-    metadata.treasury_cap_id
-}
+public fun treasury_cap<T>(metadata: &Metadata<T>): Option<ID> { metadata.treasury_cap_id }
 
 public fun deny_cap<T>(metadata: &Metadata<T>): Option<ID> {
     match (metadata.regulated) {
-        RegulatedState::Regulated { cap, variant: _ } => option::some(cap),
+        RegulatedState::Regulated { cap, .. } => option::some(cap),
         RegulatedState::Unknown => option::none(),
     }
 }
 
 public fun is_fixed_supply<T>(metadata: &Metadata<T>): bool {
     match (metadata.supply.borrow()) {
-        SupplyState::Fixed(_supply) => true,
+        SupplyState::Fixed(_) => true,
         SupplyState::Unknown => false,
     }
 }
@@ -189,12 +187,12 @@ public fun exists<T>(registry: &CoinMetadataRegistry): bool {
     registry.id.exists_dof(CoinMetadataKey<T>())
 }
 
-public fun to_inner_mut<T>(init: &mut InitMetadata<T>): &mut Metadata<T> {
-    &mut init.metadata
+public fun inner<T>(init: &InitMetadata<T>): &Metadata<T> {
+    &init.metadata
 }
 
-public fun to_inner<T>(init: &InitMetadata<T>): &Metadata<T> {
-    &init.metadata
+public fun inner_mut<T>(init: &mut InitMetadata<T>): &mut Metadata<T> {
+    &mut init.metadata
 }
 
 // === Internal registration functions  ===
@@ -202,17 +200,18 @@ public fun to_inner<T>(init: &InitMetadata<T>): &Metadata<T> {
 public(package) fun register_supply<T>(registry: &mut CoinMetadataRegistry, supply: Supply<T>) {
     assert!(registry.exists<T>(), EMetadataNotFound);
     match (registry.metadata_mut<T>().supply.swap(SupplyState::Fixed(supply))) {
-        SupplyState::Fixed(_supply) => {
-            abort
-        },
-        SupplyState::Unknown => {},
+        SupplyState::Fixed(_supply) => abort,
+        SupplyState::Unknown => (),
     };
 }
 
 public(package) fun register_regulated<T>(registry: &mut CoinMetadataRegistry, deny_cap_id: ID) {
     assert!(registry.exists<T>(), EMetadataNotFound);
     registry.metadata_mut<T>().regulated =
-        RegulatedState::Regulated { cap: deny_cap_id, variant: REGULATED_COIN_VARIANT };
+        RegulatedState::Regulated {
+            cap: deny_cap_id,
+            variant: REGULATED_COIN_VARIANT,
+        };
 }
 
 public(package) fun set_decimals<T>(metadata: &mut Metadata<T>, decimals: u8) {
@@ -221,25 +220,22 @@ public(package) fun set_decimals<T>(metadata: &mut Metadata<T>, decimals: u8) {
 
 public(package) fun set_supply<T>(metadata: &mut Metadata<T>, supply: Supply<T>) {
     match (metadata.supply.swap(SupplyState::Fixed(supply))) {
-        SupplyState::Fixed(_supply) => {
-            abort
-        },
-        SupplyState::Unknown => {},
+        SupplyState::Fixed(_supply) => abort,
+        SupplyState::Unknown => (),
     };
 }
 
 public(package) fun set_regulated<T>(metadata: &mut Metadata<T>, deny_cap_id: ID) {
     metadata.regulated =
-        RegulatedState::Regulated { cap: deny_cap_id, variant: REGULATED_COIN_VARIANT };
+        RegulatedState::Regulated {
+            cap: deny_cap_id,
+            variant: REGULATED_COIN_VARIANT,
+        };
 }
 
 public(package) fun metadata_mut<T>(registry: &mut CoinMetadataRegistry): &mut Metadata<T> {
     assert!(registry.exists<T>(), EMetadataNotFound);
-    registry
-        .id
-        .borrow_dof_mut(
-            CoinMetadataKey<T>(),
-        )
+    registry.id.borrow_dof_mut(CoinMetadataKey<T>())
 }
 
 public(package) fun register_metadata<T>(
@@ -288,21 +284,16 @@ public(package) fun create_metadata<T>(
     supply: Option<Supply<T>>,
     treasury_cap_id: Option<ID>,
     metadata_cap_id: Option<ID>,
-    mut deny_cap_id: Option<ID>,
+    deny_cap_id: Option<ID>,
     ctx: &mut TxContext,
 ): Metadata<T> {
-    let supply_state = if (supply.is_some()) {
-        SupplyState::Fixed(supply.destroy_some())
-    } else {
-        supply.destroy_none();
-        SupplyState::Unknown
-    };
+    let supply = supply
+        .map!(|supply| SupplyState::Fixed(supply))
+        .or!(option::some(SupplyState::Unknown));
 
-    let regulated_state = if (deny_cap_id.is_some()) {
-        RegulatedState::Regulated { cap: deny_cap_id.extract(), variant: REGULATED_COIN_VARIANT }
-    } else {
-        RegulatedState::Unknown
-    };
+    let regulated_state = deny_cap_id
+        .map!(|cap| RegulatedState::Regulated { cap, variant: REGULATED_COIN_VARIANT })
+        .destroy_or!(RegulatedState::Unknown);
 
     Metadata {
         id: object::new(ctx),
@@ -311,7 +302,7 @@ public(package) fun create_metadata<T>(
         symbol,
         description,
         icon_url,
-        supply: option::some(supply_state),
+        supply,
         regulated: regulated_state,
         treasury_cap_id,
         metadata_cap_id,
@@ -337,13 +328,12 @@ public(package) fun empty<T>(ctx: &mut TxContext): Metadata<T> {
 
 public(package) fun create_cap<T>(metadata: &mut Metadata<T>, ctx: &mut TxContext): MetadataCap<T> {
     assert!(!metadata.cap_claimed(), EAlreadyClaimed);
-    let cap_id = object::new(ctx);
+    let id = object::new(ctx);
+    let metadata_cap_id = id.to_inner();
 
-    metadata.metadata_cap_id = option::some(cap_id.to_inner());
+    metadata.metadata_cap_id.fill(metadata_cap_id);
 
-    MetadataCap {
-        id: cap_id,
-    }
+    MetadataCap { id }
 }
 
 #[allow(unused_function)]
@@ -352,11 +342,9 @@ public(package) fun create_cap<T>(metadata: &mut Metadata<T>, ctx: &mut TxContex
 fun create(ctx: &TxContext) {
     assert!(ctx.sender() == @0x0, ENotSystemAddress);
 
-    let registry = CoinMetadataRegistry {
+    transfer::share_object(CoinMetadataRegistry {
         id: object::sui_coin_metadata_registry_object_id(),
-    };
-
-    transfer::share_object(registry);
+    });
 }
 
 #[test_only]

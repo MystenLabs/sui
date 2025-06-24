@@ -109,6 +109,9 @@ public fun total_supply<T>(cap: &TreasuryCap<T>): u64 {
 }
 
 /// Unwrap `TreasuryCap` getting the `Supply`.
+public use fun treasury_into_supply as TreasuryCap.into_supply;
+
+/// Unwrap `TreasuryCap` getting the `Supply`.
 ///
 /// Operation is irreversible. Supply cannot be converted into a `TreasuryCap` due
 /// to different security guarantees (TreasuryCap can be created only once for a type)
@@ -224,7 +227,7 @@ public fun migrate_metadata_to_registry<T>(
     metadata_v1: CoinMetadata<T>,
     ctx: &mut TxContext,
 ) {
-    if (!registry.exists<T>()) registry.register_metadata(from_metadata_v1(&metadata_v1, ctx));
+    if (!registry.exists<T>()) registry.register_metadata(metadata_v1.to_v2(ctx));
     metadata_v1.destroy_metadata()
 }
 
@@ -234,7 +237,7 @@ public fun migrate_immutable_metadata_to_registry<T>(
     metadata_v1: &CoinMetadata<T>,
     ctx: &mut TxContext,
 ) {
-    registry.register_metadata(from_metadata_v1(metadata_v1, ctx));
+    registry.register_metadata(metadata_v1.to_v2(ctx));
 }
 
 /// migration of regulated metadata to the metadata registry
@@ -308,7 +311,7 @@ public fun create_currency_v2<T: drop>(
         ctx,
     );
 
-    let metadata_cap = claim_metadata_cap(init_metadata.to_inner_mut(), &treasury_cap, ctx);
+    let metadata_cap = claim_metadata_cap(init_metadata.inner_mut(), &treasury_cap, ctx);
 
     (treasury_cap, metadata_cap, init_metadata)
 }
@@ -346,7 +349,7 @@ public fun create_regulated_currency_v3<T: drop>(
         allow_global_pause,
     };
 
-    init_metadata.to_inner_mut().set_regulated(deny_cap.id.to_inner());
+    init_metadata.inner_mut().set_regulated(deny_cap.id.to_inner());
 
     (treasury_cap, metadata_cap, deny_cap, init_metadata)
 }
@@ -369,8 +372,8 @@ public fun freeze_supply<T>(registry: &mut CoinMetadataRegistry, cap: TreasuryCa
 /// Allows the caller to freeze supply on module init before transferring the `InitMetadata`
 /// object to the `CoinMetadataRegistry` object.
 public fun init_freeze_supply<T>(init_metadata: &mut InitMetadata<T>, cap: TreasuryCap<T>) {
-    assert!(init_metadata.to_inner().cap_claimed(), EMetadataCapNotClaimed);
-    init_metadata.to_inner_mut().set_supply(cap.treasury_into_supply());
+    assert!(init_metadata.inner().cap_claimed(), EMetadataCapNotClaimed);
+    init_metadata.inner_mut().set_supply(cap.treasury_into_supply());
 }
 
 /// Claim the metadata cap for the given `TreasuryCap`
@@ -382,8 +385,10 @@ public fun claim_metadata_cap<T>(
     coin_metadata_registry::create_cap(metadata, ctx)
 }
 
+use fun metadata_v1_to_v2 as CoinMetadata.to_v2;
+
 /// Create a new `CoinMetadata` object from the old `CoinMetadata` object.
-fun from_metadata_v1<T>(metadata_v1: &CoinMetadata<T>, ctx: &mut TxContext): Metadata<T> {
+fun metadata_v1_to_v2<T>(metadata_v1: &CoinMetadata<T>, ctx: &mut TxContext): Metadata<T> {
     let icon_url = metadata_v1
         .get_icon_url()
         .map!(|u| u.inner_url().to_string())
@@ -433,7 +438,7 @@ public fun create_currency<T: drop>(
     };
 
     transfer::public_transfer(
-        from_metadata_v1(&metadata, ctx),
+        metadata.to_v2(ctx),
         coin_metadata_registry_id().to_address(),
     );
 
@@ -479,7 +484,7 @@ public fun create_regulated_currency_v2<T: drop>(
         deny_cap_object: object::id(&deny_cap),
     });
 
-    let mut metadata_v2 = from_metadata_v1(&metadata, ctx);
+    let mut metadata_v2 = metadata.to_v2(ctx);
     metadata_v2.set_regulated(deny_cap.id.to_inner());
 
     transfer::public_transfer(
