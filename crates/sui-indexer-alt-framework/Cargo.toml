@@ -14,7 +14,6 @@ backoff.workspace = true
 bb8 = "0.8.5"
 chrono.workspace = true
 clap = { workspace = true, features = ["env"] }
-dashmap.workspace = true
 diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 diesel_migrations.workspace = true
@@ -47,6 +46,7 @@ rand.workspace = true
 telemetry-subscribers.workspace = true
 wiremock.workspace = true
 sui-pg-db.workspace = true
+dashmap.workspace = true
 
 sui-synthetic-ingestion.workspace = true
 

@@ -329,6 +329,14 @@ mod tests {
         // Fetch and verify it succeeds after retries
         let result = client.fetch(1).await.unwrap();
         assert_eq!(*result.checkpoint_summary.sequence_number(), 1);
+
+        // Verify that exactly 2 retries were recorded
+        let retries = client
+            .metrics
+            .total_ingested_transient_retries
+            .with_label_values(&["mock_transient_error"])
+            .get();
+        assert_eq!(retries, 2);
     }
 
     #[tokio::test]
@@ -347,6 +355,10 @@ mod tests {
         // Wait for checkpoint with short retry interval
         let result = client.wait_for(1, Duration::from_millis(50)).await.unwrap();
         assert_eq!(result.checkpoint_summary.sequence_number(), &1);
+
+        // Verify that exactly 1 retry was recorded
+        let retries = client.metrics.total_ingested_not_found_retries.get();
+        assert_eq!(retries, 1);
     }
 
     #[tokio::test]
