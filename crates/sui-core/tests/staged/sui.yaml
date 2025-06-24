@@ -87,6 +87,8 @@ BalanceWithdrawArg:
   STRUCT:
     - reservation:
         TYPENAME: Reservation
+    - type_param:
+        TYPENAME: WithdrawTypeParam
     - withdraw_from:
         TYPENAME: WithdrawFrom
 CallArg:
@@ -987,7 +989,7 @@ Reservation:
     0:
       EntireBalance: UNIT
     1:
-      MaxAmount:
+      MaxAmountU64:
         NEWTYPE: U64
 SenderSignedData:
   NEWTYPESTRUCT:
@@ -1358,7 +1360,11 @@ UpgradeInfo:
 WithdrawFrom:
   ENUM:
     0:
-      Sender:
+      Sender: UNIT
+WithdrawTypeParam:
+  ENUM:
+    0:
+      Balance:
         NEWTYPE:
           TYPENAME: TypeInput
 ZkLoginAuthenticatorAsBytes:
