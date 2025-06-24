@@ -4,6 +4,7 @@
 use super::is_valid_path;
 use super::FieldMaskUtil;
 use super::FIELD_PATH_SEPARATOR;
+use super::FIELD_PATH_WILDCARD;
 use super::FIELD_SEPARATOR;
 
 use prost_types::FieldMask;
@@ -22,7 +23,13 @@ struct Node {
 
 impl FieldMaskTree {
     pub fn add_field_path(&mut self, path: &str) -> &mut Self {
-        if !is_valid_path(path) {
+        if self.wildcard || !is_valid_path(path) {
+            return self;
+        }
+
+        if path == FIELD_PATH_WILDCARD {
+            self.wildcard = true;
+            self.root.children.clear();
             return self;
         }
 
