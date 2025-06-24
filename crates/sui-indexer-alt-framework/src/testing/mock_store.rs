@@ -12,7 +12,7 @@ use tokio::time::Duration;
 
 use crate::store::{CommitterWatermark, Connection, PrunerWatermark, ReaderWatermark, Store};
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct MockWatermark {
     pub epoch_hi_inclusive: u64,
     pub checkpoint_hi_inclusive: u64,
@@ -175,5 +175,21 @@ impl Store for MockStore {
         }
 
         Ok(MockConnection(self))
+    }
+}
+
+impl MockStore {
+    /// Helper to configure connection failure simulation
+    pub fn with_connection_failures(self, attempts: usize) -> Self {
+        self.connection_failure
+            .lock()
+            .unwrap()
+            .connection_failure_attempts = attempts;
+        self
+    }
+
+    /// Helper to get the current watermark state for testing
+    pub fn get_watermark(&self) -> MockWatermark {
+        self.watermarks.lock().unwrap().clone()
     }
 }
