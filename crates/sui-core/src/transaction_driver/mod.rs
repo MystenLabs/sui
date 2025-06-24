@@ -76,7 +76,7 @@ where
         options: SubmitTransactionOptions,
     ) -> Result<QuorumSubmitTransactionResponse, TransactionDriverError> {
         let tx_digest = request.transaction.digest();
-        let is_single_writer_tx = !request.transaction.contains_shared_object();
+        let is_single_writer_tx = !request.transaction.is_consensus_tx();
         let timer = Instant::now();
         loop {
             match self.submit_transaction_once(&request, &options).await {

@@ -638,13 +638,11 @@ impl ValidatorService {
             SuiError::FullNodeCantHandleCertificate.into()
         );
 
-        let shared_object_tx = certificates
-            .iter()
-            .any(|cert| cert.contains_shared_object());
+        let is_consensus_tx = certificates.iter().any(|cert| cert.is_consensus_tx());
 
         let metrics = if certificates.len() == 1 {
             if wait_for_effects {
-                if shared_object_tx {
+                if is_consensus_tx {
                     &self.metrics.handle_certificate_consensus_latency
                 } else {
                     &self.metrics.handle_certificate_non_consensus_latency
@@ -853,11 +851,11 @@ impl ValidatorService {
         if !wait_for_effects {
             // It is useful to enqueue owned object transaction for execution locally,
             // even when we are not returning effects to user
-            let certificates_without_shared_objects = consensus_transactions
+            let fast_path_certificates = consensus_transactions
                 .iter()
                 .filter_map(|tx| {
                     if let ConsensusTransactionKind::CertifiedTransaction(certificate) = &tx.kind {
-                        (!certificate.contains_shared_object())
+                        (!certificate.is_consensus_tx())
                             // Certificates already verified by callers of this function.
                             .then_some((
                                 VerifiedExecutableTransaction::new_from_certificate(
@@ -872,10 +870,10 @@ impl ValidatorService {
                 })
                 .map(|(tx, env)| (Schedulable::Transaction(tx), env))
                 .collect::<Vec<_>>();
-            if !certificates_without_shared_objects.is_empty() {
+            if !fast_path_certificates.is_empty() {
                 self.state
                     .execution_scheduler()
-                    .enqueue(certificates_without_shared_objects, epoch_store);
+                    .enqueue(fast_path_certificates, epoch_store);
             }
             return Ok((None, Weight::zero()));
         }
@@ -1300,7 +1298,7 @@ impl ValidatorService {
         for certificate in certificates {
             let tx_digest = *certificate.digest();
             fp_ensure!(
-                certificate.contains_shared_object(),
+                certificate.is_consensus_tx(),
                 SuiError::UserInputError {
                     error: UserInputError::NoSharedObjectError { digest: tx_digest }
                 }

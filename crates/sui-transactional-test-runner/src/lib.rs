@@ -46,7 +46,6 @@ use sui_types::storage::ReadStore;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::transaction::Transaction;
-use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction::TransactionKind;
 use sui_types::transaction::{InputObjects, TransactionData};
 use test_adapter::{SuiTestAdapter, PRE_COMPILED};
@@ -155,16 +154,12 @@ impl TransactionalAdapter for ValidatorWithFullnode {
         &mut self,
         transaction: Transaction,
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
-        let with_shared = transaction
-            .data()
-            .intent_message()
-            .value
-            .contains_shared_object();
+        let is_consensus_tx = transaction.is_consensus_tx();
         let (_, effects, execution_error) = send_and_confirm_transaction_with_execution_error(
             &self.validator,
             Some(&self.fullnode),
             transaction,
-            with_shared,
+            is_consensus_tx,
             false,
         )
         .await?;

@@ -169,7 +169,7 @@ impl SingleValidator {
             }
             Component::WithTxManager => {
                 let cert = VerifiedCertificate::new_unchecked(cert);
-                if cert.contains_shared_object() {
+                if cert.is_consensus_tx() {
                     // For shared objects transactions, `execute_certificate` won't enqueue it because
                     // it expects consensus to do so. However we don't have consensus, hence the manual enqueue.
                     self.get_validator().execution_scheduler().enqueue(
