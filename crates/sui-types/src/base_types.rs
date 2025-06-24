@@ -958,8 +958,8 @@ pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("tx_context");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = ident_str!("TxContext");
 pub const RESOLVED_TX_CONTEXT: (&AccountAddress, &IdentStr, &IdentStr) = (
     &SUI_FRAMEWORK_ADDRESS,
-    STD_UTF8_MODULE_NAME,
-    STD_UTF8_STRUCT_NAME,
+    TX_CONTEXT_MODULE_NAME,
+    TX_CONTEXT_STRUCT_NAME,
 );
 
 pub fn move_ascii_str_layout() -> A::MoveStructLayout {
@@ -1120,12 +1120,7 @@ impl TxContext {
             return TxContextKind::None;
         };
 
-        let (module_addr, module_name, struct_name) = resolve_struct(view, *idx);
-        let is_tx_context_type = module_name == TX_CONTEXT_MODULE_NAME
-            && module_addr == &SUI_FRAMEWORK_ADDRESS
-            && struct_name == TX_CONTEXT_STRUCT_NAME;
-
-        if is_tx_context_type {
+        if resolve_struct(view, *idx) == RESOLVED_TX_CONTEXT {
             kind
         } else {
             TxContextKind::None
