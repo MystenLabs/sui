@@ -245,6 +245,7 @@ impl CommitObserver {
 #[cfg(test)]
 mod tests {
     use consensus_config::AuthorityIndex;
+    use consensus_types::block::BlockRef;
     use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver};
     use parking_lot::RwLock;
     use rstest::rstest;
@@ -252,9 +253,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        block::BlockRef, context::Context, dag_state::DagState,
-        linearizer::median_timestamp_by_stake, storage::mem_store::MemStore,
-        test_dag_builder::DagBuilder,
+        context::Context, dag_state::DagState, linearizer::median_timestamp_by_stake,
+        storage::mem_store::MemStore, test_dag_builder::DagBuilder,
     };
 
     #[rstest]

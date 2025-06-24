@@ -3,7 +3,8 @@
 
 use std::sync::Arc;
 
-use consensus_core::{TransactionIndex, TransactionVerifier, ValidationError};
+use consensus_core::{TransactionVerifier, ValidationError};
+use consensus_types::block::TransactionIndex;
 use fastcrypto_tbls::dkg_v1;
 use mysten_metrics::monitored_scope;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};

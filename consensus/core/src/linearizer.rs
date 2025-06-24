@@ -4,15 +4,15 @@
 use std::sync::Arc;
 
 use consensus_config::Stake;
+use consensus_types::block::{BlockRef, BlockTimestampMs, Round};
 use itertools::Itertools;
 use parking_lot::RwLock;
 
 use crate::{
-    block::{BlockAPI, BlockRef, BlockTimestampMs, VerifiedBlock},
+    block::{BlockAPI, VerifiedBlock},
     commit::{sort_sub_dag_blocks, Commit, CommittedSubDag, TrustedCommit},
     context::Context,
     dag_state::DagState,
-    Round,
 };
 
 /// The `StorageAPI` trait provides an interface for the block store and has been

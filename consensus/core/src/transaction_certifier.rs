@@ -4,6 +4,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use consensus_config::{Committee, Stake};
+use consensus_types::block::{BlockRef, Round, TransactionIndex};
 use mysten_common::debug_fatal;
 use mysten_metrics::monitored_mpsc::UnboundedSender;
 use parking_lot::RwLock;
@@ -15,8 +16,7 @@ use crate::{
     context::Context,
     dag_state::DagState,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
-    BlockAPI as _, BlockRef, CertifiedBlock, CertifiedBlocksOutput, CommitIndex, Round,
-    TransactionIndex, VerifiedBlock,
+    BlockAPI as _, CertifiedBlock, CertifiedBlocksOutput, CommitIndex, VerifiedBlock,
 };
 
 /// TransactionCertifier has the following purposes:

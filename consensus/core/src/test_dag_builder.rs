@@ -8,14 +8,12 @@ use std::{
 };
 
 use consensus_config::AuthorityIndex;
+use consensus_types::block::{BlockDigest, BlockRef, BlockTimestampMs, Round};
 use parking_lot::RwLock;
 use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
 
 use crate::{
-    block::{
-        genesis_blocks, BlockAPI, BlockDigest, BlockRef, BlockTimestampMs, Round, Slot, TestBlock,
-        VerifiedBlock,
-    },
+    block::{genesis_blocks, BlockAPI, Slot, TestBlock, VerifiedBlock},
     commit::{CertifiedCommit, CommitDigest, TrustedCommit, DEFAULT_WAVE_LENGTH},
     context::Context,
     dag_state::DagState,

@@ -4,11 +4,12 @@
 use std::{collections::HashMap, fmt::Display, sync::Arc};
 
 use consensus_config::{AuthorityIndex, Stake};
+use consensus_types::block::{BlockRef, Round};
 use parking_lot::RwLock;
 use tracing::warn;
 
 use crate::{
-    block::{BlockAPI, BlockRef, Round, Slot, VerifiedBlock},
+    block::{BlockAPI, Slot, VerifiedBlock},
     commit::{LeaderStatus, WaveNumber, DEFAULT_WAVE_LENGTH},
     context::Context,
     dag_state::DagState,

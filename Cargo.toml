@@ -78,6 +78,7 @@ members = [
   "consensus/config",
   "consensus/core",
   "consensus/simtests",
+  "consensus/types",
   "crates/anemo-benchmark",
   "crates/bin-version",
   "crates/mysten-common",
@@ -765,6 +766,7 @@ x = { path = "crates/x" }
 
 consensus-config = { path = "consensus/config" }
 consensus-core = { path = "consensus/core" }
+consensus-types = { path = "consensus/types" }
 consensus-simtests = { path = "consensus/simtests" }
 
 sui-execution = { path = "sui-execution" }
