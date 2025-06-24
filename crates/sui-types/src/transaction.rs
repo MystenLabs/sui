@@ -89,6 +89,7 @@ pub enum CallArg {
     // an object
     Object(ObjectArg),
     // Reservation to withdraw balance. This will be converted into a Withdrawal struct and passed into Move.
+    // It is allowed to have multiple withdraw arguments even for the same balance type.
     BalanceWithdraw(BalanceWithdrawArg),
 }
 
@@ -123,10 +124,10 @@ pub enum ObjectArg {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Reservation {
-    // Reserve the entire balance.
-    EntireBalance,
     // Reserve a specific amount of the balance.
     MaxAmount(u64),
+    // Reserve the entire balance.
+    EntireBalance,
 }
 
 // TODO(address-balances): Rename the structs and enums.
@@ -2176,7 +2177,9 @@ pub trait TransactionDataAPI {
 
     fn receiving_objects(&self) -> Vec<ObjectRef>;
 
-    /// Returns a map from balance account object ID to the reservation of the balance to withdraw.
+    /// Returns a map from each balance account object ID to the total reservation of the balance to withdraw.
+    /// Note that this does not return the raw withdraw arguments. Instead,
+    /// it processes all withdraws and put them toggether in a map.
     fn balance_withdraws(&self) -> UserInputResult<BTreeMap<ObjectID, Reservation>>;
 
     // A cheap way to quickly check if the transaction has balance withdraws.
@@ -2290,6 +2293,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         // we add gas reservations here.
         // TODO(address-balances): Use a protocol config parameter for max_withdraws.
         let max_withdraws = 10;
+        // First get all withdraw arguments.
         if let TransactionKind::ProgrammableTransaction(pt) = &self.kind {
             for input in &pt.inputs {
                 if let CallArg::BalanceWithdraw(withdraw) = input {
@@ -2305,9 +2309,12 @@ impl TransactionDataAPI for TransactionDataV1 {
             }
         }
 
+        // Accumulate all withdraws per account.
         let mut withdraw_map = BTreeMap::new();
         for withdraw in withdraws {
             if let Reservation::MaxAmount(amount) = &withdraw.reservation {
+                // Reserving an amount of 0 is meaningless, and potentially
+                // add various edge cases, which is error prone.
                 if *amount == 0 {
                     return Err(UserInputError::InvalidWithdrawReservation {
                         error: "Balance withdraw reservation amount must be non-zero".to_string(),
@@ -2337,6 +2344,8 @@ impl TransactionDataAPI for TransactionDataV1 {
                         occupied.insert(Reservation::MaxAmount(new_amount));
                     }
                     _ => {
+                        // For each account, if there is ever a reservation that reserves the entire balance,
+                        // then we cannot have any other reservation for that account.
                         return Err(UserInputError::InvalidWithdrawReservation {
                             error: "Reserving entire balance on an account is exclusive"
                                 .to_string(),
@@ -2748,8 +2757,8 @@ impl<S> Envelope<SenderSignedData, S> {
     }
 
     pub fn is_consensus_tx(&self) -> bool {
-        // TODO(address-balances): Once we support withdrawls, add the check here.
-        self.shared_input_objects().next().is_some()
+        self.transaction_data().has_balance_withdraws()
+            || self.shared_input_objects().next().is_some()
     }
 
     pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {

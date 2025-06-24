@@ -33,10 +33,13 @@ pub fn get_accumulator_root_obj_initial_shared_version(
         }))
 }
 
+/// Rust type for the Move type AccumulatorKey used to derive the dynamic field id for the
+/// balance account object.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct AccumulatorKey {
     owner: SuiAddress,
-    type_tag: TypeTag,
+    /// Raw bytes of the balance type name string.
+    type_tag: Vec<u8>,
 }
 
 impl AccumulatorKey {
@@ -56,8 +59,6 @@ impl MoveTypeTagTrait for AccumulatorKey {
     }
 }
 
-// TODO(address-balances): This may not be the actual way of organizing balance accounts.
-// Fix it when we have the Move code.
 pub fn derive_balance_account_object_id(
     owner: SuiAddress,
     balance_type: TypeInput,
@@ -65,7 +66,7 @@ pub fn derive_balance_account_object_id(
     let key = DOFWrapper {
         name: AccumulatorKey {
             owner,
-            type_tag: balance_type.to_type_tag()?,
+            type_tag: balance_type.to_canonical_string(false).into_bytes(),
         },
     };
     derive_dynamic_field_id(
