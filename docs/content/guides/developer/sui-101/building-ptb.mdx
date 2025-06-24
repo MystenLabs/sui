@@ -18,10 +18,10 @@ Using this, you can then add transactions to this PTB.
 ```ts
 // Create a new coin with balance 100, based on the coins used as gas payment.
 // You can define any balance here.
-const [coin] = tx.splitCoins(tx.gas, [tx.pure(100)]);
+const [coin] = tx.splitCoins(tx.gas, [tx.pure('u64', 100)]);
 
 // Transfer the split coin to a specific address.
-tx.transferObjects([coin], tx.pure('0xSomeSuiAddress'));
+tx.transferObjects([coin], tx.pure('address', '0xSomeSuiAddress'));
 ```
 
 You can attach multiple transaction commands of the same type to a PTB as well. For example, to get a list of transfers, and iterate over them to transfer coins to each of them:
@@ -40,12 +40,12 @@ const tx = new Transaction();
 // First, split the gas coin into multiple coins:
 const coins = tx.splitCoins(
 	tx.gas,
-	transfers.map((transfer) => tx.pure(transfer.amount)),
+	transfers.map((transfer) => tx.pure('u64', transfer.amount)),
 );
 
 // Next, create a transfer transaction for each coin:
 transfers.forEach((transfer, index) => {
-	tx.transferObjects([coins[index]], tx.pure(transfer.to));
+	tx.transferObjects([coins[index]], tx.pure('address', transfer.to));
 });
 ```
 
@@ -62,22 +62,23 @@ Inputs are how you provide external values to PTBs. For example, defining an amo
 There are currently two ways to define inputs:
 
 - For objects: the `tx.object(objectId)` function is used to construct an input that contains an object reference.
-- For pure values: the `tx.pure(value, type?)` function is used to construct an input for a non-object input.
-  - If value is a `Uint8Array`, then the value is assumed to be raw bytes and is used directly.
-  - If type is provided, it's used to generate the BCS serialization layout for the value. If not provided, the type is automatically determined based on the value.
+- For pure values: the `tx.pure(type, value)` function is used to construct an input for a non-object input.
+  - If value is a `Uint8Array`, then the value is assumed to be raw bytes and is used directly: `tx.pure(SomeUint8Array)`.
+  - Otherwise, it's used to generate the BCS serialization layout for the value.
+  - In the new version, a more intuitive way of writing is provided, for example: `tx.pure.u64(100)`, `tx.pure.string('SomeString')`, `tx.pure.address('0xSomeSuiAddress')`, `tx.pure.vector('bool', [true, false])`...
 
 ## Available transactions
 
 Sui supports following transaction commands:
 
 - `tx.splitCoins(coin, amounts)`: Creates new coins with the defined amounts, split from the provided coin. Returns the coins so that it can be used in subsequent transactions.
-  - Example: `tx.splitCoins(tx.gas, [tx.pure(100), tx.pure(200)])`
+  - Example: `tx.splitCoins(tx.gas, [tx.pure.u64(100), tx.pure.u64(200)])`
 - `tx.mergeCoins(destinationCoin, sourceCoins)`: Merges the sourceCoins into the destinationCoin.
   - Example: `tx.mergeCoins(tx.object(coin1), [tx.object(coin2), tx.object(coin3)])`
 - `tx.transferObjects(objects, address)`: Transfers a list of objects to the specified address.
-  - Example: `tx.transferObjects([tx.object(thing1), tx.object(thing2)], tx.pure(myAddress))`
+  - Example: `tx.transferObjects([tx.object(thing1), tx.object(thing2)], tx.pure.address(myAddress))`
 - `tx.moveCall({ target, arguments, typeArguments })`: Executes a Move call. Returns whatever the Sui Move call returns.
-  - Example: `tx.moveCall({ target: '0x2::devnet_nft::mint', arguments: [tx.pure(name), tx.pure(description), tx.pure(image)] })`
+  - Example: `tx.moveCall({ target: '0x2::devnet_nft::mint', arguments: [tx.pure.string(name), tx.pure.string(description), tx.pure.string(image)] })`
 - `tx.makeMoveVec({ type, elements })`: Constructs a vector of objects that can be passed into a moveCall. This is required as there's no other way to define a vector as an input.
   - Example: `tx.makeMoveVec({ elements: [tx.object(id1), tx.object(id2)] })`
 - `tx.publish(modules, dependencies)`: Publishes a Move package. Returns the upgrade capability object.
@@ -88,9 +89,9 @@ You can use the result of a transaction command as an argument in subsequent tra
 
 ```ts
 // Split a coin object off of the gas object:
-const [coin] = tx.splitCoins(tx.gas, [tx.pure(100)]);
+const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(100)]);
 // Transfer the resulting coin object:
-tx.transferObjects([coin], tx.pure(address));
+tx.transferObjects([coin], tx.pure.address(address));
 ```
 
 When a transaction command returns multiple results, you can access the result at a specific index either using destructuring, or array indexes.
@@ -98,11 +99,11 @@ When a transaction command returns multiple results, you can access the result a
 ```ts
 // Destructuring (preferred, as it gives you logical local names):
 const [nft1, nft2] = tx.moveCall({ target: '0x2::nft::mint_many' });
-tx.transferObjects([nft1, nft2], tx.pure(address));
+tx.transferObjects([nft1, nft2], tx.pure.address(address));
 
 // Array indexes:
 const mintMany = tx.moveCall({ target: '0x2::nft::mint_many' });
-tx.transferObjects([mintMany[0], mintMany[1]], tx.pure(address));
+tx.transferObjects([mintMany[0], mintMany[1]], tx.pure.address(address));
 ```
 
 ## Use the gas coin
@@ -115,8 +116,8 @@ Of course, you can also transfer other coins in your wallet using their `Object 
 
 ```ts
 const otherCoin = tx.object('0xCoinObjectId');
-const coin = tx.splitCoins(otherCoin, [tx.pure(100)]);
-tx.transferObjects([coin], tx.pure(address));
+const coin = tx.splitCoins(otherCoin, [tx.pure.u64(100)]);
+tx.transferObjects([coin], tx.pure.address(address));
 ```
 
 ## Get PTB bytes
