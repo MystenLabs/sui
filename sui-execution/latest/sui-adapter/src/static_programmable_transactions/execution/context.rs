@@ -91,6 +91,7 @@ macro_rules! charge_gas {
 }
 
 /// Type wrapper around Value to ensure safe usage
+#[derive(Debug)]
 pub struct CtxValue(Value);
 
 enum LocationValue<'a> {
