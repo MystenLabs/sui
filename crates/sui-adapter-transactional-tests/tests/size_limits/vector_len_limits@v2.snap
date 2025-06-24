@@ -1,0 +1,30 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+task 1, lines 8-31:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4316800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 32-34:
+//# run Test::M1::push_n_items --args 1 --gas-budget 100000000000000
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 35-37:
+//# run Test::M1::push_n_items --args 256 --gas-budget 100000000000000
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 38-40:
+//# run Test::M1::push_n_items --args 262144 --gas-budget 100000000000000
+mutated: object(0,0)
+gas summary: computation_cost: 4088000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 41:
+//# run Test::M1::push_n_items --args 262145 --gas-budget 100000000000000
+Error: Transaction Effects Status: Move Primitive Runtime Error. Location: Test::M1::push_n_items (function index 0) at offset 11. Arithmetic error, stack overflow, max value depth, etc.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: Test, name: Identifier("M1") }, function: 0, instruction: 11, function_name: Some("push_n_items") }))), source: Some(VMError { major_status: VECTOR_OPERATION_ERROR, sub_status: Some(4), message: Some("vector size limit is 262144"), exec_state: None, location: Module(ModuleId { address: Test, name: Identifier("M1") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 11)] }), command: Some(0) } }

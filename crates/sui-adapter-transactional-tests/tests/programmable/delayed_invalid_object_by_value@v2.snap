@@ -1,0 +1,51 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-28:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5760800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 30-31:
+//# programmable
+//> test::m1::share_r();
+created: object(2,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 33-34:
+//# programmable --inputs object(2,0)
+//> test::m1::imm(Input(0), Input(0));
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Debug of error: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage } at command Some(0)
+
+task 4, lines 36-37:
+//# programmable --inputs object(2,0)
+//> test::m1::mut_(Input(0), Input(0));
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Debug of error: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage } at command Some(0)
+
+task 5, lines 39-40:
+//# programmable
+//> test::m1::freeze_r();
+created: object(5,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 42-43:
+//# programmable --inputs object(5,0)
+//> test::m1::imm(Input(0), Input(0));
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Debug of error: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage } at command Some(0)
+
+task 7, lines 45-46:
+//# programmable --inputs object(5,0)
+//> test::m1::mut_(Input(0), Input(0));
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Debug of error: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage } at command Some(0)

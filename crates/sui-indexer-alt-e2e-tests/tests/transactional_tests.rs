@@ -189,7 +189,7 @@ async fn run_test(path: &Path) -> Result<(), Box<dyn Error>> {
     adapter.with_offchain_reader(Box::new(OffchainReader::new(c.clone())));
 
     // run the tasks in the test
-    run_tasks_with_adapter(path, adapter, output).await?;
+    run_tasks_with_adapter(path, adapter, output, None).await?;
 
     // clean-up the off-chain cluster
     Arc::try_unwrap(c)
