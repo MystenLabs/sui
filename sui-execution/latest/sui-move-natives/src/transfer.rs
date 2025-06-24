@@ -341,5 +341,5 @@ fn object_runtime_transfer(
     };
 
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
-    obj_runtime.transfer(owner, object_type, obj)
+    obj_runtime.transfer(owner, object_type, obj, /* end of transaction */ false)
 }

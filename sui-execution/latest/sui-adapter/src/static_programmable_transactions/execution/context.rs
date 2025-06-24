@@ -226,7 +226,12 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 },
             );
             if let Some(object) = value {
-                self.transfer_object(owner, type_, CtxValue(object))?;
+                self.transfer_object_(
+                    owner,
+                    type_,
+                    CtxValue(object),
+                    /* end of transaction */ true,
+                )?;
             } else if owner.is_shared() {
                 by_value_shared_objects.insert(id);
             } else if matches!(owner, Owner::ConsensusAddressOwner { .. }) {
@@ -864,6 +869,16 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         ty: Type,
         object: CtxValue,
     ) -> Result<(), ExecutionError> {
+        self.transfer_object_(recipient, ty, object, /* end of transaction */ false)
+    }
+
+    fn transfer_object_(
+        &mut self,
+        recipient: Owner,
+        ty: Type,
+        object: CtxValue,
+        end_of_transaction: bool,
+    ) -> Result<(), ExecutionError> {
         let tag = TypeTag::try_from(ty)
             .map_err(|_| make_invariant_violation!("Unable to convert Type to TypeTag"))?;
         let TypeTag::Struct(tag) = tag else {
@@ -871,7 +886,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         };
         let ty = MoveObjectType::from(*tag);
         object_runtime_mut!(self)?
-            .transfer(recipient, ty, object.0.into())
+            .transfer(recipient, ty, object.0.into(), end_of_transaction)
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
         Ok(())
     }
