@@ -516,7 +516,7 @@ fn constrained_argument_<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     if let Some(ty) = constrained_type(env, context, location, is_valid)? {
         Ok((T::Argument__::Use(T::Usage::Move(location)), ty))
     } else {
-        Err(err.into())
+        Err(err_case.into())
     }
 }
 
