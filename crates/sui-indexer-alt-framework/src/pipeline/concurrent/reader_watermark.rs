@@ -120,9 +120,11 @@ mod tests {
 
     // Fixed retention value used across all tests
     const TEST_RETENTION: u64 = 5;
+    // Default timeout for test operations
+    const TEST_TIMEOUT: Duration = Duration::from_secs(20);
 
     #[derive(Clone, FieldCount)]
-    pub struct StoredData {}
+    pub struct StoredData;
 
     pub struct DataPipeline;
 
@@ -149,7 +151,7 @@ mod tests {
 
     struct TestSetup {
         store: MockStore,
-        handle: tokio::task::JoinHandle<std::result::Result<(), tokio::task::JoinError>>,
+        handle: JoinHandle<()>,
         cancel: CancellationToken,
     }
 
@@ -184,9 +186,8 @@ mod tests {
 
         let store_clone = store.clone();
         let cancel_clone = cancel.clone();
-        let handle = tokio::spawn(async move {
-            reader_watermark::<DataPipeline>(Some(config), store_clone, metrics, cancel_clone).await
-        });
+        let handle =
+            reader_watermark::<DataPipeline>(Some(config), store_clone, metrics, cancel_clone);
 
         TestSetup {
             store,
@@ -293,29 +294,34 @@ mod tests {
         )
         .await;
 
-        // Wait for first failed attempt
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        // Wait for first connection attempt (which should fail)
+        setup
+            .store
+            .wait_for_connection_attempts(1, TEST_TIMEOUT)
+            .await;
 
         // Verify state before retry succeeds
-        {
-            let watermarks = setup.store.watermarks.lock().unwrap();
-            assert_eq!(
-                watermarks.reader_lo, 0,
-                "Reader watermark should not be updated due to DB connection failure"
-            );
-        }
+        let watermark = setup.store.get_watermark();
+        assert_eq!(
+            watermark.reader_lo, 0,
+            "Reader watermark should not be updated due to DB connection failure"
+        );
 
-        // Wait for next polling for second attempt
-        tokio::time::sleep(Duration::from_millis(1200)).await;
+        // Wait for second connection attempt (which should succeed)
+        setup
+            .store
+            .wait_for_connection_attempts(2, TEST_TIMEOUT)
+            .await;
+
+        // Wait a bit more for the watermark update to complete
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Verify state after retry succeeds
-        {
-            let watermarks = setup.store.watermarks.lock().unwrap();
-            assert_eq!(
-                watermarks.reader_lo, 6,
-                "Reader watermark should be updated after retry succeeds"
-            );
-        }
+        let watermark = setup.store.get_watermark();
+        assert_eq!(
+            watermark.reader_lo, 6,
+            "Reader watermark should be updated after retry succeeds"
+        );
 
         // Clean up
         setup.cancel.cancel();
