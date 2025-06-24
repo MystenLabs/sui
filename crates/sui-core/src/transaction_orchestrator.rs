@@ -236,7 +236,7 @@ where
         let tx_digest = *transaction.digest();
         debug!(?tx_digest, "TO Received transaction execution request.");
 
-        let (_e2e_latency_timer, _txn_finality_timer) = if transaction.contains_shared_object() {
+        let (_e2e_latency_timer, _txn_finality_timer) = if transaction.is_consensus_tx() {
             (
                 self.metrics.request_latency_shared_obj.start_timer(),
                 self.metrics
@@ -354,7 +354,7 @@ where
                 in_flight.dec();
             });
 
-        let _guard = if transaction.contains_shared_object() {
+        let _guard = if transaction.is_consensus_tx() {
             metrics.local_execution_latency_shared_obj.start_timer()
         } else {
             metrics.local_execution_latency_single_writer.start_timer()
@@ -446,7 +446,7 @@ where
         &'_ self,
         transaction: &VerifiedTransaction,
     ) -> (impl Drop, &'_ GenericCounter<AtomicU64>) {
-        let (in_flight, good_response) = if transaction.contains_shared_object() {
+        let (in_flight, good_response) = if transaction.is_consensus_tx() {
             self.metrics.total_req_received_shared_object.inc();
             (
                 self.metrics.req_in_flight_shared_object.clone(),

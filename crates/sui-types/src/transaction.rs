@@ -1312,10 +1312,6 @@ impl TransactionKind {
         Some((e.computation_charge + e.storage_charge, e.storage_rebate))
     }
 
-    pub fn contains_shared_object(&self) -> bool {
-        self.shared_input_objects().next().is_some()
-    }
-
     /// Returns an iterator of all shared input objects used by this transaction.
     /// It covers both Call and ChangeEpoch transaction kind, because both makes Move calls.
     pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
@@ -2116,8 +2112,6 @@ pub trait TransactionDataAPI {
 
     fn expiration(&self) -> &TransactionExpiration;
 
-    fn contains_shared_object(&self) -> bool;
-
     fn shared_input_objects(&self) -> Vec<SharedInputObject>;
 
     fn move_calls(&self) -> Vec<(&ObjectID, &str, &str)>;
@@ -2201,10 +2195,6 @@ impl TransactionDataAPI for TransactionDataV1 {
 
     fn expiration(&self) -> &TransactionExpiration {
         &self.expiration
-    }
-
-    fn contains_shared_object(&self) -> bool {
-        self.kind.shared_input_objects().next().is_some()
     }
 
     fn shared_input_objects(&self) -> Vec<SharedInputObject> {
@@ -2602,7 +2592,8 @@ impl<S> Envelope<SenderSignedData, S> {
         self.data().intent_message().value.gas()
     }
 
-    pub fn contains_shared_object(&self) -> bool {
+    pub fn is_consensus_tx(&self) -> bool {
+        // TODO(address-balances): Once we support withdrawls, add the check here.
         self.shared_input_objects().next().is_some()
     }
 

@@ -293,8 +293,8 @@ impl BenchmarkContext {
             transactions.len()
         );
 
-        let has_shared_object = transactions.iter().any(|tx| tx.contains_shared_object());
-        if has_shared_object {
+        let is_consensus_tx = transactions.iter().any(|tx| tx.is_consensus_tx());
+        if is_consensus_tx {
             // With shared objects, we must execute each transaction in order.
             for transaction in transactions {
                 let key = transaction.key();
@@ -487,9 +487,9 @@ impl BenchmarkContext {
         transactions: Vec<CertifiedTransaction>,
         assigned_versions: AssignedTxAndVersions,
     ) -> Vec<TransactionEffects> {
-        let has_shared_object = transactions.iter().any(|tx| tx.contains_shared_object());
+        let is_consensus_tx = transactions.iter().any(|tx| tx.is_consensus_tx());
         let assigned_versions = assigned_versions.into_map();
-        if has_shared_object {
+        if is_consensus_tx {
             // With shared objects, we must execute each transaction in order.
             let mut effects = Vec::new();
             for transaction in transactions {

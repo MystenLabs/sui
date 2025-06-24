@@ -4230,7 +4230,7 @@ impl AuthorityPerEpochStore {
         }
 
         // If needed we can support owned object system transactions as well...
-        assert!(system_transaction.contains_shared_object());
+        assert!(system_transaction.is_consensus_tx());
         ConsensusCertificateResult::SuiTransaction(system_transaction.clone())
     }
 
@@ -4345,10 +4345,8 @@ impl AuthorityPerEpochStore {
         }
 
         // This certificate will be scheduled. Update object execution cost.
-        if transaction.contains_shared_object() {
-            shared_object_congestion_tracker
-                .bump_object_execution_cost(execution_time_estimator, &transaction);
-        }
+        shared_object_congestion_tracker
+            .bump_object_execution_cost(execution_time_estimator, &transaction);
 
         Ok(ConsensusCertificateResult::SuiTransaction(transaction))
     }

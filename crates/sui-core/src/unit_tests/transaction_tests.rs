@@ -550,7 +550,7 @@ async fn do_transaction_test_impl(
             err_check(&err);
 
             // Additionally, if the tx contains access to shared objects, check if Soft Bundle handler returns the same error.
-            if ct.contains_shared_object() {
+            if ct.is_consensus_tx() {
                 epoch_store.clear_signature_cache();
                 let err = client
                     .handle_soft_bundle_certificates_v3(

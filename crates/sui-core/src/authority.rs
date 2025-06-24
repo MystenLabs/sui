@@ -1281,7 +1281,7 @@ impl AuthorityState {
         transaction: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<TransactionEffects> {
-        let _metrics_guard = if transaction.contains_shared_object() {
+        let _metrics_guard = if transaction.is_consensus_tx() {
             self.metrics
                 .execute_certificate_latency_shared_object
                 .start_timer()
@@ -1294,8 +1294,7 @@ impl AuthorityState {
 
         self.metrics.total_cert_attempts.inc();
 
-        // TODO(fastpath): use a separate function to check if a transaction should be executed in fastpath.
-        if !transaction.contains_shared_object() {
+        if !transaction.is_consensus_tx() {
             // Shared object transactions need to be sequenced by the consensus before enqueueing
             // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
             // For owned object transactions, they can be enqueued for execution immediately.
@@ -1367,7 +1366,7 @@ impl AuthorityState {
 
         let tx_cache_reader = self.get_transaction_cache_reader();
         if epoch_store.protocol_config().mysticeti_fastpath()
-            && !certificate.contains_shared_object()
+            && !certificate.is_consensus_tx()
             && execution_env.scheduling_source == SchedulingSource::NonFastPath
         {
             // If this transaction is not scheduled from fastpath, it must be either

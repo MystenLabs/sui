@@ -1005,7 +1005,7 @@ impl<C> ConsensusHandler<C> {
 pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
     match &transaction.kind {
         ConsensusTransactionKind::CertifiedTransaction(certificate) => {
-            if certificate.contains_shared_object() {
+            if certificate.is_consensus_tx() {
                 "shared_certificate"
             } else {
                 "owned_certificate"
@@ -1020,7 +1020,7 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
         ConsensusTransactionKind::RandomnessDkgMessage(_, _) => "randomness_dkg_message",
         ConsensusTransactionKind::RandomnessDkgConfirmation(_, _) => "randomness_dkg_confirmation",
         ConsensusTransactionKind::UserTransaction(tx) => {
-            if tx.contains_shared_object() {
+            if tx.is_consensus_tx() {
                 "shared_user_transaction"
             } else {
                 "owned_user_transaction"
@@ -1202,17 +1202,17 @@ impl SequencedConsensusTransaction {
         }
     }
 
-    pub fn as_shared_object_txn(&self) -> Option<&SenderSignedData> {
+    pub fn as_consensus_txn(&self) -> Option<&SenderSignedData> {
         match &self.transaction {
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind: ConsensusTransactionKind::CertifiedTransaction(certificate),
                 ..
-            }) if certificate.contains_shared_object() => Some(certificate.data()),
+            }) if certificate.is_consensus_tx() => Some(certificate.data()),
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind: ConsensusTransactionKind::UserTransaction(txn),
                 ..
-            }) if txn.contains_shared_object() => Some(txn.data()),
-            SequencedConsensusTransactionKind::System(txn) if txn.contains_shared_object() => {
+            }) if txn.is_consensus_tx() => Some(txn.data()),
+            SequencedConsensusTransactionKind::System(txn) if txn.is_consensus_tx() => {
                 Some(txn.data())
             }
             _ => None,
@@ -1317,8 +1317,7 @@ impl ConsensusBlockHandler {
                     .with_label_values(&["certified"])
                     .inc();
                 if let ConsensusTransactionKind::UserTransaction(tx) = parsed.transaction.kind {
-                    // TODO(fastpath): use a separate function to check if a transaction should be executed in fastpath.
-                    if tx.contains_shared_object() {
+                    if tx.is_consensus_tx() {
                         continue;
                     }
                     let tx = VerifiedTransaction::new_unchecked(*tx);
