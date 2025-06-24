@@ -105,3 +105,274 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
         info!(pipeline = H::NAME, "Stopping reader watermark task");
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex};
+    use sui_pg_db::FieldCount;
+    use sui_types::full_checkpoint_content::CheckpointData;
+    use tokio::time::Duration;
+    use tokio_util::sync::CancellationToken;
+
+    use crate::{metrics::IndexerMetrics, pipeline::Processor, testing::mock_store::*};
+
+    use super::*;
+
+    // Fixed retention value used across all tests
+    const TEST_RETENTION: u64 = 5;
+    // Default timeout for test operations
+    const TEST_TIMEOUT: Duration = Duration::from_secs(20);
+
+    #[derive(Clone, FieldCount)]
+    pub struct StoredData;
+
+    pub struct DataPipeline;
+
+    impl Processor for DataPipeline {
+        const NAME: &'static str = "data";
+        type Value = StoredData;
+
+        fn process(&self, _checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+            Ok(vec![])
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl Handler for DataPipeline {
+        type Store = MockStore;
+
+        async fn commit<'a>(
+            _values: &[Self::Value],
+            _conn: &mut MockConnection<'a>,
+        ) -> anyhow::Result<usize> {
+            Ok(0)
+        }
+    }
+
+    struct TestSetup {
+        store: MockStore,
+        handle: JoinHandle<()>,
+        cancel: CancellationToken,
+    }
+
+    async fn setup_test(
+        watermark: MockWatermark,
+        interval_ms: u64,
+        connection_failure_attempts: usize,
+        set_reader_watermark_failure_attempts: usize,
+    ) -> TestSetup {
+        let store = MockStore {
+            watermarks: Arc::new(Mutex::new(watermark)),
+            set_reader_watermark_failure_attempts: Arc::new(Mutex::new(
+                set_reader_watermark_failure_attempts,
+            )),
+            connection_failure: Arc::new(Mutex::new(ConnectionFailure {
+                connection_failure_attempts,
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+
+        let config = PrunerConfig {
+            interval_ms,
+            delay_ms: 100,
+            retention: TEST_RETENTION,
+            max_chunk_size: 100,
+            prune_concurrency: 1,
+        };
+
+        let metrics = IndexerMetrics::new(&Default::default());
+        let cancel = CancellationToken::new();
+
+        let store_clone = store.clone();
+        let cancel_clone = cancel.clone();
+        let handle =
+            reader_watermark::<DataPipeline>(Some(config), store_clone, metrics, cancel_clone);
+
+        TestSetup {
+            store,
+            handle,
+            cancel,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_reader_watermark_updates() {
+        let watermark = MockWatermark {
+            epoch_hi_inclusive: 0,
+            checkpoint_hi_inclusive: 10, // Current high watermark
+            tx_hi: 100,
+            timestamp_ms_hi_inclusive: 1000,
+            reader_lo: 0, // Initial reader_lo
+            pruner_timestamp: 0,
+            pruner_hi: 0,
+        };
+        let polling_interval_ms = 100;
+        let connection_failure_attempts = 0;
+        let set_reader_watermark_failure_attempts = 0;
+        let setup = setup_test(
+            watermark,
+            polling_interval_ms,
+            connection_failure_attempts,
+            set_reader_watermark_failure_attempts,
+        )
+        .await;
+
+        // Wait for a few intervals to allow the task to update the watermark
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // new reader_lo = checkpoint_hi_inclusive (10) - retention (5) + 1 = 6
+        {
+            let watermarks = setup.store.watermarks.lock().unwrap();
+            assert_eq!(watermarks.reader_lo, 6);
+        }
+
+        // Clean up
+        setup.cancel.cancel();
+        let _ = setup.handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_reader_watermark_does_not_update_smaller_reader_lo() {
+        let watermark = MockWatermark {
+            epoch_hi_inclusive: 0,
+            checkpoint_hi_inclusive: 10, // Current high watermark
+            tx_hi: 100,
+            timestamp_ms_hi_inclusive: 1000,
+            reader_lo: 7, // Initial reader_lo
+            pruner_timestamp: 0,
+            pruner_hi: 0,
+        };
+        let polling_interval_ms = 100;
+        let connection_failure_attempts = 0;
+        let set_reader_watermark_failure_attempts = 0;
+        let setup = setup_test(
+            watermark,
+            polling_interval_ms,
+            connection_failure_attempts,
+            set_reader_watermark_failure_attempts,
+        )
+        .await;
+
+        // Wait for a few intervals to allow the task to update the watermark
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // new reader_lo = checkpoint_hi_inclusive (10) - retention (5) + 1 = 6,
+        // which is smaller than current reader_lo (7). Therefore, the reader_lo was not updated.
+        {
+            let watermarks = setup.store.watermarks.lock().unwrap();
+            assert_eq!(
+                watermarks.reader_lo, 7,
+                "Reader watermark should not be updated when new value is smaller"
+            );
+        }
+
+        // Clean up
+        setup.cancel.cancel();
+        let _ = setup.handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_reader_watermark_retry_update_after_connection_failure() {
+        let watermark = MockWatermark {
+            epoch_hi_inclusive: 0,
+            checkpoint_hi_inclusive: 10, // Current high watermark
+            tx_hi: 100,
+            timestamp_ms_hi_inclusive: 1000,
+            reader_lo: 0, // Initial reader_lo
+            pruner_timestamp: 0,
+            pruner_hi: 0,
+        };
+        let polling_interval_ms = 1_000; // Long interval for testing retry
+        let connection_failure_attempts = 1;
+        let set_reader_watermark_failure_attempts = 0;
+        let setup = setup_test(
+            watermark,
+            polling_interval_ms,
+            connection_failure_attempts,
+            set_reader_watermark_failure_attempts,
+        )
+        .await;
+
+        // Wait for first connection attempt (which should fail)
+        setup
+            .store
+            .wait_for_connection_attempts(1, TEST_TIMEOUT)
+            .await;
+
+        // Verify state before retry succeeds
+        let watermark = setup.store.get_watermark();
+        assert_eq!(
+            watermark.reader_lo, 0,
+            "Reader watermark should not be updated due to DB connection failure"
+        );
+
+        // Wait for second connection attempt (which should succeed)
+        setup
+            .store
+            .wait_for_connection_attempts(2, TEST_TIMEOUT)
+            .await;
+
+        // Wait a bit more for the watermark update to complete
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Verify state after retry succeeds
+        let watermark = setup.store.get_watermark();
+        assert_eq!(
+            watermark.reader_lo, 6,
+            "Reader watermark should be updated after retry succeeds"
+        );
+
+        // Clean up
+        setup.cancel.cancel();
+        let _ = setup.handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_reader_watermark_retry_update_after_set_watermark_failure() {
+        let watermark = MockWatermark {
+            epoch_hi_inclusive: 0,
+            checkpoint_hi_inclusive: 10, // Current high watermark
+            tx_hi: 100,
+            timestamp_ms_hi_inclusive: 1000,
+            reader_lo: 0, // Initial reader_lo
+            pruner_timestamp: 0,
+            pruner_hi: 0,
+        };
+        let polling_interval_ms = 1_000; // Long interval for testing retry
+        let connection_failure_attempts = 0;
+        let set_reader_watermark_failure_attempts = 1;
+        let setup = setup_test(
+            watermark,
+            polling_interval_ms,
+            connection_failure_attempts,
+            set_reader_watermark_failure_attempts,
+        )
+        .await;
+
+        // Wait for first failed attempt
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // Verify state before retry succeeds
+        {
+            let watermarks = setup.store.watermarks.lock().unwrap();
+            assert_eq!(
+                watermarks.reader_lo, 0,
+                "Reader watermark should not be updated due to set_reader_watermark failure"
+            );
+        }
+
+        // Wait for next polling for second attempt
+        tokio::time::sleep(Duration::from_millis(1200)).await;
+
+        // Verify state after retry succeeds
+        {
+            let watermarks = setup.store.watermarks.lock().unwrap();
+            assert_eq!(watermarks.reader_lo, 6);
+        }
+
+        // Clean up
+        setup.cancel.cancel();
+        let _ = setup.handle.await;
+    }
+}
