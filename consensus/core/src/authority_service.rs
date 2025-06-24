@@ -19,7 +19,7 @@ use sui_macros::fail_point_async;
 use tap::TapFallible;
 use tokio::sync::broadcast;
 use tokio_util::sync::ReusableBoxFuture;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::{
     block::{BlockAPI as _, BlockRef, ExtendedBlock, SignedBlock, VerifiedBlock, GENESIS_ROUND},
@@ -195,7 +195,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             })?;
         let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block.block);
         let block_ref = verified_block.reference();
-        debug!("Received block {} via send block.", block_ref);
+        trace!("Received block {} via send block.", block_ref);
 
         let now = self.context.clock.timestamp_utc_ms();
         let forward_time_drift =

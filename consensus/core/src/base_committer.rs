@@ -373,7 +373,7 @@ impl BaseCommitter {
             .map(|b| self.context.committee.stake(b.author()))
             .sum();
         if !self.context.committee.reached_quorum(total_stake) {
-            tracing::debug!(
+            tracing::trace!(
                 "Not enough support for {leader_block}. Stake not enough: {total_stake} < {}",
                 self.context.committee.quorum_threshold()
             );
