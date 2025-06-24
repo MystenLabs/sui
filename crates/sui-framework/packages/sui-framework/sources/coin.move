@@ -252,12 +252,12 @@ public fun migrate_regulated_metadata_to_registry<T>(
 /// function can be used to circumvent the migration functions if desired.
 public fun create_and_register_metadata<T>(
     registry: &mut CoinMetadataRegistry,
+    cap: &TreasuryCap<T>,
     decimals: u8,
     symbol: String,
     name: String,
     description: String,
     icon_url: String,
-    cap: &TreasuryCap<T>,
     ctx: &mut TxContext,
 ) {
     let metadata: Metadata<T> = coin_metadata_registry::create_metadata(
@@ -311,7 +311,7 @@ public fun create_currency_v2<T: drop>(
         ctx,
     );
 
-    let metadata_cap = claim_metadata_cap(init_metadata.inner_mut(), &treasury_cap, ctx);
+    let metadata_cap = coin_metadata_registry::create_cap(init_metadata.inner_mut(), ctx);
 
     (treasury_cap, metadata_cap, init_metadata)
 }
@@ -354,7 +354,7 @@ public fun create_regulated_currency_v3<T: drop>(
     (treasury_cap, metadata_cap, deny_cap, init_metadata)
 }
 
-// === CoinMetadataRegistry Entry Functions  ===
+// === CoinMetadataRegistry Functions  ===
 
 /// Allows the treasury cap holder to freeze the currency supply by
 /// storing the `Supply` object in the `CoinMetadataRegistry` object
@@ -362,27 +362,16 @@ public fun create_regulated_currency_v3<T: drop>(
 /// claimed before calling this function.
 public fun freeze_supply<T>(registry: &mut CoinMetadataRegistry, cap: TreasuryCap<T>) {
     assert!(registry.exists<T>(), EMetadataNotFound);
+    assert!(registry.metadata<T>().cap_claimed(), EMetadataCapNotClaimed);
 
-    let metadata = registry.metadata<T>();
-
-    assert!(metadata.cap_claimed(), EMetadataCapNotClaimed);
-    registry.register_supply(cap.treasury_into_supply());
+    registry.register_supply(cap.into_supply());
 }
 
 /// Allows the caller to freeze supply on module init before transferring the `InitMetadata`
 /// object to the `CoinMetadataRegistry` object.
 public fun init_freeze_supply<T>(init_metadata: &mut InitMetadata<T>, cap: TreasuryCap<T>) {
     assert!(init_metadata.inner().cap_claimed(), EMetadataCapNotClaimed);
-    init_metadata.inner_mut().set_supply(cap.treasury_into_supply());
-}
-
-/// Claim the metadata cap for the given `TreasuryCap`
-public fun claim_metadata_cap<T>(
-    metadata: &mut Metadata<T>,
-    _: &TreasuryCap<T>,
-    ctx: &mut TxContext,
-): MetadataCap<T> {
-    coin_metadata_registry::create_cap(metadata, ctx)
+    init_metadata.inner_mut().set_supply(cap.into_supply());
 }
 
 use fun metadata_v1_to_v2 as CoinMetadata.to_v2;
