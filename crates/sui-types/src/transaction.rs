@@ -2835,7 +2835,7 @@ impl VerifiedTransaction {
         TransactionKind::EndOfEpochTransaction(txns).pipe(Self::new_system_transaction)
     }
 
-    fn new_system_transaction(system_transaction: TransactionKind) -> Self {
+    pub fn new_system_transaction(system_transaction: TransactionKind) -> Self {
         system_transaction
             .pipe(TransactionData::new_system_transaction)
             .pipe(|data| {
@@ -3581,6 +3581,7 @@ impl Display for CertifiedTransaction {
 pub enum TransactionKey {
     Digest(TransactionDigest),
     RandomnessRound(EpochId, RandomnessRound),
+    AccumulatorSettlement(EpochId, u64 /* checkpoint height */),
 }
 
 impl TransactionKey {
