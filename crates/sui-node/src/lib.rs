@@ -1571,9 +1571,7 @@ impl SuiNode {
             match tx.kind {
                 // Shared object txns cannot be re-executed at this point, because we must wait for
                 // consensus replay to assign shared object versions.
-                ConsensusTransactionKind::CertifiedTransaction(tx)
-                    if !tx.contains_shared_object() =>
-                {
+                ConsensusTransactionKind::CertifiedTransaction(tx) if !tx.is_consensus_tx() => {
                     let tx = *tx;
                     // new_unchecked is safe because we never submit a transaction to consensus
                     // without verifying it

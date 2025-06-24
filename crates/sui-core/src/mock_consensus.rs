@@ -88,7 +88,7 @@ impl MockConsensusClient {
             };
             match &tx.kind {
                 ConsensusTransactionKind::CertifiedTransaction(tx) => {
-                    if tx.contains_shared_object() {
+                    if tx.is_consensus_tx() {
                         validator.execution_scheduler().enqueue(
                             vec![(
                                 VerifiedExecutableTransaction::new_from_certificate(
@@ -102,7 +102,7 @@ impl MockConsensusClient {
                     }
                 }
                 ConsensusTransactionKind::UserTransaction(tx) => {
-                    if tx.contains_shared_object() {
+                    if tx.is_consensus_tx() {
                         validator.execution_scheduler().enqueue(
                             vec![(
                                 VerifiedExecutableTransaction::new_from_consensus(
