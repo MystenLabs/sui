@@ -191,7 +191,7 @@ pub async fn setup_indexer(
     }
 
     // Consistent pipelines
-    add_consistent!(CoinBalanceBuckets::default(), coin_balance_buckets);
+    add_consistent!(CoinBalanceBuckets, coin_balance_buckets);
     add_consistent!(ObjInfo, obj_info);
 
     // Summary tables (without write-ahead log)

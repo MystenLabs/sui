@@ -25,11 +25,13 @@ pub(crate) struct ObjInfo;
 /// Enum to encapsulate different types of updates to be written to the main `obj_info` and
 /// reference tables.
 pub(crate) enum ProcessedObjInfoUpdate {
-    /// Represents both object creation and unwrapping.
+    /// Represents both object creation and unwrapping. An entry is created on the main table only.
     Created(Object),
-    /// Any mutation that isn't a wrap or delete.
+    /// Any mutation that isn't a wrap or delete. An entry is created on both the main and reference tables.
     Mutated(Object),
-    /// Represents object wrap or deletion.
+    /// Represents object wrap or deletion. An entry is created on the main table, and two entries
+    /// are added to the reference table, one to delete the previous version, and one to delete the
+    /// sentinel row itself.
     Delete(ObjectID),
 }
 
@@ -111,10 +113,14 @@ impl Handler for ObjInfo {
             .map(|v| v.try_into())
             .collect::<Result<Vec<StoredObjInfo>>>()?;
 
+        // Entries to commit to the reference table for pruning.
         let mut references = Vec::new();
         for value in values {
             match &value.update {
-                ProcessedObjInfoUpdate::Created(_) => { /* Ignore */ }
+                // Created objects don't have a previous entry in the main table. Unwrapped objects
+                // must have been previously wrapped, and the deletion record for that wrap will
+                // have handled itself. Thus we don't emit an entry to the reference table.
+                ProcessedObjInfoUpdate::Created(_) => {}
                 // Store a record to delete previous version
                 ProcessedObjInfoUpdate::Mutated(object) => {
                     references.push(StoredObjInfoDeletionReference {
@@ -165,6 +171,9 @@ impl Handler for ObjInfo {
         Ok(obj_info_count)
     }
 
+    /// To prune `obj_info`, entries between `[from, to_exclusive)` are read from the reference
+    /// table, and the previous versions of the objects are deleted from the main table. Finally,
+    /// the reference entries themselves are deleted.
     async fn prune<'a>(
         &self,
         from: u64,
@@ -200,7 +209,6 @@ impl Handler for ObjInfo {
             deleted_refs AS (
                 DELETE FROM obj_info_deletion_reference
                 WHERE cp_sequence_number >= {} AND cp_sequence_number < {}
-                RETURNING 0
             )
             SELECT count(*) FROM deleted_objects
             ",

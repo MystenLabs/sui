@@ -11,7 +11,8 @@ use sui_field_count::FieldCount;
 use sui_types::object::{Object, Owner};
 
 use crate::schema::{
-    coin_balance_buckets, kv_objects, obj_info, obj_info_deletion_reference, obj_versions,
+    coin_balance_buckets, coin_balance_buckets_deletion_reference, kv_objects, obj_info,
+    obj_info_deletion_reference, obj_versions,
 };
 
 #[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
@@ -84,6 +85,14 @@ pub struct StoredCoinBalanceBucket {
     pub owner_id: Option<Vec<u8>>,
     pub coin_type: Option<Vec<u8>>,
     pub coin_balance_bucket: Option<i16>,
+}
+
+#[derive(Insertable, Queryable, Debug, Clone, FieldCount, Eq, PartialEq)]
+#[diesel(table_name = coin_balance_buckets_deletion_reference, primary_key(cp_sequence_number, object_id))]
+#[diesel(treat_none_as_default_value = false)]
+pub struct StoredCoinBalanceBucketDeletionReference {
+    pub object_id: Vec<u8>,
+    pub cp_sequence_number: i64,
 }
 
 impl StoredObjInfo {
