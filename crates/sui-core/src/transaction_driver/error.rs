@@ -27,4 +27,10 @@ pub enum TransactionDriverError {
     TransactionRejected(String),
     #[error("Transaction expired at round: {0}")]
     TransactionExpired(String),
+    #[error("Insufficient responses for quorum: received {received}, required {required}. Errors: {errors:?}")]
+    InsufficientResponses {
+        received: u64,
+        required: u64,
+        errors: Vec<String>,
+    },
 }

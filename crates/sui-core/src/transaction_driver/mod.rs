@@ -11,7 +11,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use arc_swap::ArcSwap;
+use arc_swap::{ArcSwap, Guard};
 pub use error::*;
 pub use message_types::*;
 pub use metrics::*;
@@ -20,9 +20,11 @@ use parking_lot::Mutex;
 use rand::seq::SliceRandom as _;
 use sui_types::{
     base_types::ConciseableName,
-    committee::EpochId,
-    messages_grpc::RawWaitForEffectsRequest,
+    committee::{CommitteeTrait, EpochId},
+    messages_consensus::ConsensusPosition,
+    messages_grpc::{RawSubmitTxRequest, RawWaitForEffectsRequest},
     quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
+    transaction::Transaction,
 };
 use tokio::{
     task::JoinSet,
@@ -115,14 +117,33 @@ where
             .into_raw()
             .map_err(TransactionDriverError::SerializationError)?;
 
-        // TODO(fastpath): Use validator performance metrics to choose who to submit with
-        // Send the transaction to a random validator.
+        // Step 1: Try to get a consensus position from a random validator
+        let consensus_position = self
+            .get_consensus_position(&auth_agg, &raw_request, options)
+            .await?;
+
+        debug!(
+            "Transaction {} submitted to consensus at position: {consensus_position:?}",
+            transaction.digest()
+        );
+
+        // Step 2: Wait for quorum of effects responses
+        self.wait_for_quorum_effects(&auth_agg, &transaction, consensus_position, epoch, options)
+            .await
+    }
+
+    async fn get_consensus_position(
+        &self,
+        auth_agg: &Guard<Arc<AuthorityAggregator<A>>>,
+        raw_request: &RawSubmitTxRequest,
+        options: &SubmitTransactionOptions,
+    ) -> Result<ConsensusPosition, TransactionDriverError> {
         let clients = auth_agg.authority_clients.iter().collect::<Vec<_>>();
         let (name, client) = clients.choose(&mut rand::thread_rng()).unwrap();
 
         let consensus_position = timeout(
             Duration::from_secs(2),
-            client.submit_transaction(raw_request, options.forwarded_client_addr),
+            client.submit_transaction(raw_request.clone(), options.forwarded_client_addr),
         )
         .await
         .map_err(|_| TransactionDriverError::TimeoutGettingConsensusPosition)?
@@ -130,72 +151,158 @@ where
             TransactionDriverError::RpcFailure(name.concise().to_string(), e.to_string())
         })?;
 
-        debug!(
-            "Transaction {} submitted to consensus at position: {consensus_position:?}",
-            transaction.digest()
-        );
+        Ok(consensus_position)
+    }
 
-        let response = match timeout(
-            // TODO(fastpath): This will be removed when we change this to wait for effects from a quorum
-            Duration::from_secs(20),
-            client.wait_for_effects(
-                RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
+    async fn wait_for_quorum_effects(
+        &self,
+        auth_agg: &Guard<Arc<AuthorityAggregator<A>>>,
+        transaction: &Transaction,
+        consensus_position: ConsensusPosition,
+        epoch: EpochId,
+        options: &SubmitTransactionOptions,
+    ) -> Result<QuorumSubmitTransactionResponse, TransactionDriverError> {
+        let clients = auth_agg.authority_clients.iter().collect::<Vec<_>>();
+        let quorum_threshold = auth_agg.committee.quorum_threshold();
+
+        // Create futures for all validators
+        let mut futures = Vec::new();
+        for (name, client) in clients {
+            let client_clone = client.clone();
+            let name_clone = name.clone();
+            let transaction_digest = *transaction.digest();
+
+            let future = async move {
+                let raw_request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
                     epoch,
-                    transaction_digest: *transaction.digest(),
+                    transaction_digest,
                     transaction_position: consensus_position,
                     include_details: true,
                 })
-                .map_err(TransactionDriverError::SerializationError)?,
-                options.forwarded_client_addr,
-            ),
-        )
-        .await
-        {
-            Ok(Ok(response)) => response,
-            Ok(Err(e)) => {
-                return Err(TransactionDriverError::RpcFailure(
-                    name.concise().to_string(),
-                    e.to_string(),
-                ));
-            }
-            Err(_) => {
-                return Err(TransactionDriverError::TimeoutWaitingForEffects);
-            }
-        };
+                .map_err(|e| TransactionDriverError::SerializationError(e))?;
 
-        match response {
-            WaitForEffectsResponse::Executed {
-                details,
-                effects_digest: _,
-            } => {
-                if let Some(details) = details {
-                    return Ok(QuorumSubmitTransactionResponse {
-                        effects: FinalizedEffects {
-                            effects: details.effects,
-                            finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
-                        },
-                        events: details.events,
-                        input_objects: Some(details.input_objects),
-                        output_objects: Some(details.output_objects),
-                        auxiliary_data: None,
-                    });
-                } else {
-                    return Err(TransactionDriverError::ExecutionDataNotFound(
-                        transaction.digest().to_string(),
-                    ));
+                match timeout(
+                    Duration::from_secs(2),
+                    client_clone.wait_for_effects(raw_request, options.forwarded_client_addr),
+                )
+                .await
+                {
+                    Ok(Ok(response)) => Ok((name_clone, response)),
+                    Ok(Err(e)) => Err(TransactionDriverError::RpcFailure(
+                        name_clone.concise().to_string(),
+                        e.to_string(),
+                    )),
+                    Err(_) => Err(TransactionDriverError::TimeoutWaitingForEffects),
+                }
+            };
+
+            futures.push(future);
+        }
+
+        // Wait for responses and collect them
+        let mut responses = Vec::new();
+        let mut total_response_weight = 0;
+        let mut errors = Vec::new();
+
+        // Wait for all futures to complete
+        let results = futures::future::join_all(futures).await;
+
+        // Process all results
+        for result in results {
+            match result {
+                Ok((name, response)) => {
+                    responses.push((name, response));
+                    total_response_weight += auth_agg.committee.weight(&name);
+                }
+                Err(e) => {
+                    errors.push(e);
                 }
             }
-            WaitForEffectsResponse::Rejected { reason } => {
-                return Err(TransactionDriverError::TransactionRejected(
-                    reason.to_string(),
+        }
+
+        // Check if we have enough responses for quorum
+        if total_response_weight < quorum_threshold {
+            return Err(TransactionDriverError::InsufficientResponses {
+                received: total_response_weight,
+                required: quorum_threshold,
+                errors: errors.into_iter().map(|e| e.to_string()).collect(),
+            });
+        }
+
+        // Group responses by type and check for quorum
+        let mut executed_responses = Vec::new();
+        let mut executed_weight = 0;
+        let mut rejected_responses = Vec::new();
+        let mut rejected_weight = 0;
+        let mut expired_responses = Vec::new();
+        let mut expired_weight = 0;
+
+        for (name, response) in responses {
+            let weight = auth_agg.committee.weight(&name);
+            match response {
+                WaitForEffectsResponse::Executed {
+                    effects_digest: _,
+                    details,
+                } => {
+                    executed_responses.push((name, details));
+                    executed_weight += weight;
+                }
+                WaitForEffectsResponse::Rejected { reason } => {
+                    rejected_responses.push((name, reason));
+                    rejected_weight += weight;
+                }
+                WaitForEffectsResponse::Expired(round) => {
+                    expired_responses.push((name, round));
+                    expired_weight += weight;
+                }
+            }
+        }
+
+        // Check for quorum of executed responses
+        if executed_weight >= quorum_threshold {
+            // All executed responses should have the same details, so we can use the first one
+            let (_, details) = executed_responses.first().unwrap();
+            if let Some(details) = details {
+                return Ok(QuorumSubmitTransactionResponse {
+                    effects: FinalizedEffects {
+                        effects: details.effects.clone(),
+                        finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
+                    },
+                    events: details.events.clone(),
+                    input_objects: Some(details.input_objects.clone()),
+                    output_objects: Some(details.output_objects.clone()),
+                    auxiliary_data: None,
+                });
+            } else {
+                return Err(TransactionDriverError::ExecutionDataNotFound(
+                    transaction.digest().to_string(),
                 ));
             }
-            WaitForEffectsResponse::Expired(round) => {
-                return Err(TransactionDriverError::TransactionExpired(
-                    round.to_string(),
-                ));
-            }
-        };
+        }
+
+        // Check for quorum of rejected responses
+        if rejected_weight >= quorum_threshold {
+            // All rejected responses should have the same reason
+            let (_, reason) = rejected_responses.first().unwrap();
+            return Err(TransactionDriverError::TransactionRejected(
+                reason.to_string(),
+            ));
+        }
+
+        // Check for quorum of expired responses
+        if expired_weight >= quorum_threshold {
+            let (_, round) = expired_responses.first().unwrap();
+            return Err(TransactionDriverError::TransactionExpired(
+                round.to_string(),
+            ));
+        }
+
+        // No quorum reached for any response type
+        Err(TransactionDriverError::InsufficientResponses {
+            received: executed_weight + rejected_weight + expired_weight,
+            required: quorum_threshold,
+            errors: errors.into_iter().map(|e| e.to_string()).collect(),
+        })
     }
 
     fn enable_reconfig(
