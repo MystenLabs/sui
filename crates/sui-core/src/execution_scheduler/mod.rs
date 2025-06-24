@@ -10,6 +10,7 @@ use crate::{
 };
 use enum_dispatch::enum_dispatch;
 use execution_scheduler_impl::ExecutionScheduler;
+use mysten_common::in_test_configuration;
 use prometheus::IntGauge;
 use rand::Rng;
 use std::{collections::BTreeSet, sync::Arc};
@@ -119,7 +120,7 @@ impl ExecutionSchedulerWrapper {
             true
         } else if std::env::var("ENABLE_TRANSACTION_MANAGER").is_ok() {
             false
-        } else if cfg!(test) {
+        } else if in_test_configuration() {
             rand::thread_rng().gen_bool(0.5)
         } else {
             let chain = epoch_store.get_chain_identifier().chain();
