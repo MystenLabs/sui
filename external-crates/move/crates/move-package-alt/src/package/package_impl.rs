@@ -41,6 +41,7 @@ pub struct PublishInformation {
     /// This is usually the `chain_id`. We need to decide if we really want to abstract the concept of "environments".
     pub environment: EnvironmentID,
     /// The IDs (original, published_at) for the package.
+    #[serde(flatten)]
     pub published_ids: PublishedIds,
     /// The current version of the package -- this info is not needed in the package graphs, maybe
     /// helps with conflict errors handling.
