@@ -89,9 +89,7 @@ async fn batch_call(
 }
 
 /// Read a line from [output] and compare it to [expected]
-async fn get_request(
-    mut output: impl AsyncBufRead + Unpin + Send + 'static,
-) -> serde_json::Value {
+async fn get_request(mut output: impl AsyncBufRead + Unpin + Send + 'static) -> serde_json::Value {
     debug!("reading");
     let mut line = String::new();
     output.read_line(&mut line).await.unwrap();
@@ -99,10 +97,7 @@ async fn get_request(
 }
 
 /// Send [value] on [input]
-async fn respond(
-    mut input: impl AsyncWrite + Unpin + Send + 'static,
-    value: serde_json::Value,
-) {
+async fn respond(mut input: impl AsyncWrite + Unpin + Send + 'static, value: serde_json::Value) {
     let mut output = value.to_string();
     output.push('\n');
 
