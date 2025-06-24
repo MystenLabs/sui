@@ -8,7 +8,7 @@ use crate::{
     base_types::{random_object_ref, SuiAddress},
     gas_coin::GAS,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{BalanceWithdrawArg, TransactionData, TransactionDataAPI},
+    transaction::{BalanceWithdrawArg, TransactionData, TransactionDataAPI, WithdrawTypeParam},
     type_input::TypeInput,
 };
 
@@ -22,8 +22,11 @@ fn test_withdraw_max_amount() {
         TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
     assert!(tx.has_balance_withdraws());
     let withdraws = tx.balance_withdraws().unwrap();
-    let account_id =
-        derive_balance_account_object_id(sender, TypeInput::from(GAS::type_tag())).unwrap();
+    let account_id = derive_balance_account_object_id(
+        sender,
+        WithdrawTypeParam::Balance(GAS::type_tag().into()),
+    )
+    .unwrap();
     assert_eq!(withdraws, BTreeMap::from([(account_id, arg.reservation)]));
 }
 
@@ -37,8 +40,11 @@ fn test_withdraw_entire_balance() {
         TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
     assert!(tx.has_balance_withdraws());
     let withdraws = tx.balance_withdraws().unwrap();
-    let account_id =
-        derive_balance_account_object_id(sender, TypeInput::from(GAS::type_tag())).unwrap();
+    let account_id = derive_balance_account_object_id(
+        sender,
+        WithdrawTypeParam::Balance(GAS::type_tag().into()),
+    )
+    .unwrap();
     assert_eq!(withdraws, BTreeMap::from([(account_id, arg.reservation)]));
 }
 
@@ -54,9 +60,14 @@ fn test_multiple_withdraws() {
         TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
     assert!(tx.has_balance_withdraws());
     let withdraws = tx.balance_withdraws().unwrap();
-    let account_id1 =
-        derive_balance_account_object_id(sender, TypeInput::from(GAS::type_tag())).unwrap();
-    let account_id2 = derive_balance_account_object_id(sender, TypeInput::Bool).unwrap();
+    let account_id1 = derive_balance_account_object_id(
+        sender,
+        WithdrawTypeParam::Balance(GAS::type_tag().into()),
+    )
+    .unwrap();
+    let account_id2 =
+        derive_balance_account_object_id(sender, WithdrawTypeParam::Balance(TypeInput::Bool))
+            .unwrap();
     assert_eq!(
         withdraws,
         BTreeMap::from([
@@ -114,9 +125,14 @@ fn test_withdraw_entire_balance_multiple_times_different_types() {
     let tx =
         TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
     let withdraws = tx.balance_withdraws().unwrap();
-    let account_id1 =
-        derive_balance_account_object_id(sender, TypeInput::from(GAS::type_tag())).unwrap();
-    let account_id2 = derive_balance_account_object_id(sender, TypeInput::Bool).unwrap();
+    let account_id1 = derive_balance_account_object_id(
+        sender,
+        WithdrawTypeParam::Balance(GAS::type_tag().into()),
+    )
+    .unwrap();
+    let account_id2 =
+        derive_balance_account_object_id(sender, WithdrawTypeParam::Balance(TypeInput::Bool))
+            .unwrap();
     assert_eq!(
         withdraws,
         BTreeMap::from([

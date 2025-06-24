@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    balance::Balance,
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     dynamic_field::{derive_dynamic_field_id, DOFWrapper},
     error::SuiResult,
     object::Owner,
     storage::ObjectStore,
-    type_input::TypeInput,
+    transaction::WithdrawTypeParam,
     MoveTypeTagTrait, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
 };
 use move_core_types::{
@@ -39,7 +40,7 @@ pub fn get_accumulator_root_obj_initial_shared_version(
 struct AccumulatorKey {
     owner: SuiAddress,
     /// Raw bytes of the balance type name string.
-    type_tag: Vec<u8>,
+    type_param: Vec<u8>,
 }
 
 impl AccumulatorKey {
@@ -61,12 +62,14 @@ impl MoveTypeTagTrait for AccumulatorKey {
 
 pub fn derive_balance_account_object_id(
     owner: SuiAddress,
-    balance_type: TypeInput,
+    type_param: WithdrawTypeParam,
 ) -> anyhow::Result<ObjectID> {
+    let WithdrawTypeParam::Balance(type_param) = type_param;
+    let full_type = TypeTag::Struct(Box::new(Balance::type_(type_param.to_type_tag()?)));
     let key = DOFWrapper {
         name: AccumulatorKey {
             owner,
-            type_tag: balance_type.to_canonical_string(false).into_bytes(),
+            type_param: full_type.to_canonical_string(false).into_bytes(),
         },
     };
     derive_dynamic_field_id(

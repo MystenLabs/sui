@@ -124,41 +124,49 @@ pub enum ObjectArg {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Reservation {
-    // Reserve a specific amount of the balance.
-    MaxAmount(u64),
     // Reserve the entire balance.
     EntireBalance,
+    // Reserve a specific amount of the balance.
+    MaxAmountU64(u64),
 }
 
-// TODO(address-balances): Rename the structs and enums.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum WithdrawTypeParam {
+    Balance(TypeInput),
+}
+
+// TODO(address-balances): Rename all the related structs and enums.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct BalanceWithdrawArg {
     /// The reservation of the balance to withdraw.
     pub reservation: Reservation,
+    /// The type parameter of the balance to withdraw, e.g. `Balance<_>`.
+    pub type_param: WithdrawTypeParam,
     /// The source of the balance to withdraw.
     pub withdraw_from: WithdrawFrom,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum WithdrawFrom {
-    /// Withdraw from the sender of the transaction, with balance type T as T in `Balance<T>`.
-    // TODO(address-balances): Consider hoisting the type tag to BalanceWithdrawArg.
-    Sender(TypeInput),
+    /// Withdraw from the sender of the transaction.
+    Sender,
     // TODO(address-balances): Add more options here, such as Sponsor, or even multi-party withdraws.
 }
 
 impl BalanceWithdrawArg {
     pub fn new_with_amount(amount: u64, balance_type: TypeInput) -> Self {
         Self {
-            reservation: Reservation::MaxAmount(amount),
-            withdraw_from: WithdrawFrom::Sender(balance_type),
+            reservation: Reservation::MaxAmountU64(amount),
+            type_param: WithdrawTypeParam::Balance(balance_type),
+            withdraw_from: WithdrawFrom::Sender,
         }
     }
 
     pub fn new_with_entire_balance(balance_type: TypeInput) -> Self {
         Self {
             reservation: Reservation::EntireBalance,
-            withdraw_from: WithdrawFrom::Sender(balance_type),
+            type_param: WithdrawTypeParam::Balance(balance_type),
+            withdraw_from: WithdrawFrom::Sender,
         }
     }
 }
@@ -2312,7 +2320,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         // Accumulate all withdraws per account.
         let mut withdraw_map = BTreeMap::new();
         for withdraw in withdraws {
-            if let Reservation::MaxAmount(amount) = &withdraw.reservation {
+            if let Reservation::MaxAmountU64(amount) = &withdraw.reservation {
                 // Reserving an amount of 0 is meaningless, and potentially
                 // add various edge cases, which is error prone.
                 if *amount == 0 {
@@ -2321,11 +2329,11 @@ impl TransactionDataAPI for TransactionDataV1 {
                     });
                 }
             }
-            let WithdrawFrom::Sender(balance_type) = withdraw.withdraw_from;
-            let account_id = derive_balance_account_object_id(self.sender(), balance_type)
+            let WithdrawFrom::Sender = withdraw.withdraw_from;
+            let account_id = derive_balance_account_object_id(self.sender(), withdraw.type_param)
                 .map_err(|e| UserInputError::InvalidWithdrawReservation {
-                    error: e.to_string(),
-                })?;
+                error: e.to_string(),
+            })?;
             let entry = withdraw_map.entry(account_id);
             match entry {
                 Entry::Vacant(vacant) => {
@@ -2333,15 +2341,15 @@ impl TransactionDataAPI for TransactionDataV1 {
                 }
                 Entry::Occupied(mut occupied) => match (occupied.get_mut(), withdraw.reservation) {
                     (
-                        Reservation::MaxAmount(max_amount),
-                        Reservation::MaxAmount(cur_reservation),
+                        Reservation::MaxAmountU64(max_amount),
+                        Reservation::MaxAmountU64(cur_reservation),
                     ) => {
                         let new_amount = max_amount.checked_add(cur_reservation).ok_or(
                             UserInputError::InvalidWithdrawReservation {
                                 error: "Balance withdraw reservation overflow".to_string(),
                             },
                         )?;
-                        occupied.insert(Reservation::MaxAmount(new_amount));
+                        occupied.insert(Reservation::MaxAmountU64(new_amount));
                     }
                     _ => {
                         // For each account, if there is ever a reservation that reserves the entire balance,
