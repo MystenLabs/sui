@@ -351,6 +351,7 @@ mod tests {
         time::{SystemTime, UNIX_EPOCH},
     };
 
+    use anyhow::ensure;
     use async_trait::async_trait;
     use prometheus::Registry;
     use sui_types::full_checkpoint_content::CheckpointData;
@@ -362,7 +363,7 @@ mod tests {
     use super::*;
 
     #[derive(Clone, FieldCount)]
-    pub struct StoredData {}
+    pub struct StoredData;
 
     pub struct DataPipeline;
 
@@ -408,9 +409,7 @@ mod tests {
                     }
                 });
 
-            if should_fail {
-                return Err(anyhow::anyhow!("Pruning failed"));
-            }
+            ensure!(!should_fail, "Pruning failed");
 
             let mut data = conn.0.data.lock().unwrap();
             for cp_sequence_number in from..to_exclusive {
@@ -633,7 +632,7 @@ mod tests {
 
         // Clean up
         cancel.cancel();
-        let _ = tokio::time::timeout(Duration::from_millis(1000), pruner_handle).await;
+        let _ = pruner_handle.await;
     }
 
     #[tokio::test]
@@ -711,7 +710,7 @@ mod tests {
 
         // Clean up
         cancel.cancel();
-        let _ = tokio::time::timeout(Duration::from_millis(1000), pruner_handle).await;
+        let _ = pruner_handle.await;
     }
 
     #[tokio::test]
@@ -752,12 +751,11 @@ mod tests {
         };
 
         // Configure failing behavior: range [1,2) should fail once before succeeding
-        let mut prune_failure_attempts = HashMap::new();
-        prune_failure_attempts.insert((1, 2), 1);
+        let remaining_failures = HashMap::from([((1, 2), 1)]);
         let store = MockStore {
             watermarks: Arc::new(Mutex::new(watermark)),
             data: Arc::new(Mutex::new(test_data.clone())),
-            prune_failure_attempts: Arc::new(Mutex::new(prune_failure_attempts)),
+            prune_failure_attempts: Arc::new(Mutex::new(remaining_failures)),
             ..Default::default()
         };
 
@@ -811,6 +809,6 @@ mod tests {
 
         // Clean up
         cancel.cancel();
-        let _ = tokio::time::timeout(Duration::from_millis(1000), pruner_handle).await;
+        let _ = pruner_handle.await;
     }
 }
