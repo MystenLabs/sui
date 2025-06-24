@@ -1,20 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    fmt,
-    hash::{Hash, Hasher},
-    ops::Deref,
-    sync::Arc,
-};
+use std::{fmt, hash::Hash, ops::Deref, sync::Arc};
 
 use bytes::Bytes;
 use consensus_config::{
     AuthorityIndex, DefaultHashFunction, Epoch, ProtocolKeyPair, ProtocolKeySignature,
-    ProtocolPublicKey, DIGEST_LENGTH,
+    ProtocolPublicKey,
 };
+use consensus_types::block::{BlockDigest, BlockRef, BlockTimestampMs, Round, TransactionIndex};
 use enum_dispatch::enum_dispatch;
-use fastcrypto::hash::{Digest, HashFunction};
+use fastcrypto::hash::HashFunction;
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 
@@ -25,13 +21,7 @@ use crate::{
     error::{ConsensusError, ConsensusResult},
 };
 
-/// Round number of a block.
-pub type Round = u32;
-
 pub(crate) const GENESIS_ROUND: Round = 0;
-
-/// Block proposal timestamp in milliseconds.
-pub type BlockTimestampMs = u64;
 
 /// Sui transaction in serialised bytes
 #[derive(Clone, Eq, PartialEq, Serialize, Deserialize, Default, Debug)]
@@ -52,10 +42,6 @@ impl Transaction {
         self.data
     }
 }
-
-/// Index of a transaction in a block.
-pub type TransactionIndex = u16;
-
 /// Votes on transactions in a specific block.
 /// Reject votes are explicit. The rest of transactions in the block receive implicit accept votes.
 // TODO: look into making fields `pub`.
@@ -301,110 +287,6 @@ impl BlockAPI for BlockV2 {
 
     fn misbehavior_reports(&self) -> &[MisbehaviorReport] {
         &self.misbehavior_reports
-    }
-}
-
-/// `BlockRef` uniquely identifies a `VerifiedBlock` via `digest`. It also contains the slot
-/// info (round and author) so it can be used in logic such as aggregating stakes for a round.
-#[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, PartialOrd, Ord)]
-pub struct BlockRef {
-    pub round: Round,
-    pub author: AuthorityIndex,
-    pub digest: BlockDigest,
-}
-
-impl BlockRef {
-    pub const MIN: Self = Self {
-        round: 0,
-        author: AuthorityIndex::MIN,
-        digest: BlockDigest::MIN,
-    };
-
-    pub const MAX: Self = Self {
-        round: u32::MAX,
-        author: AuthorityIndex::MAX,
-        digest: BlockDigest::MAX,
-    };
-
-    pub fn new(round: Round, author: AuthorityIndex, digest: BlockDigest) -> Self {
-        Self {
-            round,
-            author,
-            digest,
-        }
-    }
-}
-
-// TODO: re-evaluate formats for production debugging.
-impl fmt::Display for BlockRef {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "B{}({},{})", self.round, self.author, self.digest)
-    }
-}
-
-impl fmt::Debug for BlockRef {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "B{}({},{:?})", self.round, self.author, self.digest)
-    }
-}
-
-impl Hash for BlockRef {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write(&self.digest.0[..8]);
-    }
-}
-
-/// Digest of a `VerifiedBlock` or verified `SignedBlock`, which covers the `Block` and its
-/// signature.
-///
-/// Note: the signature algorithm is assumed to be non-malleable, so it is impossible for another
-/// party to create an altered but valid signature, producing an equivocating `BlockDigest`.
-#[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, PartialOrd, Ord)]
-pub struct BlockDigest([u8; consensus_config::DIGEST_LENGTH]);
-
-impl BlockDigest {
-    /// Lexicographic min & max digest.
-    pub const MIN: Self = Self([u8::MIN; consensus_config::DIGEST_LENGTH]);
-    pub const MAX: Self = Self([u8::MAX; consensus_config::DIGEST_LENGTH]);
-}
-
-impl Hash for BlockDigest {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write(&self.0[..8]);
-    }
-}
-
-impl From<BlockDigest> for Digest<{ DIGEST_LENGTH }> {
-    fn from(hd: BlockDigest) -> Self {
-        Digest::new(hd.0)
-    }
-}
-
-impl fmt::Display for BlockDigest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(
-            f,
-            "{}",
-            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.0)
-                .get(0..4)
-                .ok_or(fmt::Error)?
-        )
-    }
-}
-
-impl fmt::Debug for BlockDigest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(
-            f,
-            "{}",
-            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.0)
-        )
-    }
-}
-
-impl AsRef<[u8]> for BlockDigest {
-    fn as_ref(&self) -> &[u8] {
-        &self.0
     }
 }
 
@@ -810,10 +692,9 @@ mod tests {
     use fastcrypto::error::FastCryptoError;
 
     use crate::{
-        block::{genesis_blocks, SignedBlock, TestBlock},
+        block::{genesis_blocks, BlockAPI, SignedBlock, TestBlock},
         context::Context,
         error::ConsensusError,
-        BlockAPI,
     };
 
     #[tokio::test]

@@ -20,6 +20,7 @@ bcs.workspace = true
 bytes.workspace = true
 cfg-if.workspace = true
 consensus-config.workspace = true
+consensus-types.workspace = true
 dashmap.workspace = true
 enum_dispatch.workspace = true
 eyre.workspace = true

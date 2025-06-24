@@ -3,7 +3,8 @@
 
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::mock_consensus::with_block_status;
-use consensus_core::{BlockRef, BlockStatus};
+use consensus_core::BlockStatus;
+use consensus_types::block::BlockRef;
 use fastcrypto::{ed25519::Ed25519KeyPair, traits::KeyPair};
 use fastcrypto_zkp::bn254::zk_login::{parse_jwks, OIDCProvider, ZkLoginInputs};
 use move_core_types::ident_str;

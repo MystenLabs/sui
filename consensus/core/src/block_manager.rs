@@ -7,16 +7,16 @@ use std::{
     time::Instant,
 };
 
+use consensus_types::block::{BlockRef, Round};
 use itertools::Itertools as _;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use tracing::{debug, trace, warn};
 
 use crate::{
-    block::{BlockAPI, BlockRef, VerifiedBlock, GENESIS_ROUND},
+    block::{BlockAPI, VerifiedBlock, GENESIS_ROUND},
     context::Context,
     dag_state::DagState,
-    Round,
 };
 
 struct SuspendedBlock {
@@ -602,12 +602,13 @@ mod tests {
     use std::{collections::BTreeSet, sync::Arc};
 
     use consensus_config::AuthorityIndex;
+    use consensus_types::block::{BlockDigest, BlockRef, Round};
     use parking_lot::RwLock;
     use rand::{prelude::StdRng, seq::SliceRandom, SeedableRng};
     use rstest::rstest;
 
     use crate::{
-        block::{BlockAPI, BlockDigest, BlockRef, VerifiedBlock},
+        block::{BlockAPI, VerifiedBlock},
         block_manager::BlockManager,
         commit::TrustedCommit,
         context::Context,
@@ -615,7 +616,7 @@ mod tests {
         storage::mem_store::MemStore,
         test_dag_builder::DagBuilder,
         test_dag_parser::parse_dag,
-        CommitDigest, Round,
+        CommitDigest,
     };
 
     #[tokio::test]

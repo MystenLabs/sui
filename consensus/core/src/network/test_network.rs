@@ -4,15 +4,15 @@
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
+use consensus_types::block::{BlockRef, Round};
 use futures::stream;
 use parking_lot::Mutex;
 
 use crate::{
-    block::{BlockRef, VerifiedBlock},
+    block::VerifiedBlock,
     commit::{CommitRange, TrustedCommit},
     error::ConsensusResult,
     network::{BlockStream, NetworkService},
-    Round,
 };
 
 use super::ExtendedSerializedBlock;

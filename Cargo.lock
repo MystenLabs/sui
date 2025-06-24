@@ -2910,6 +2910,7 @@ dependencies = [
  "bytes",
  "cfg-if",
  "consensus-config",
+ "consensus-types",
  "dashmap",
  "enum_dispatch",
  "eyre",
@@ -2960,6 +2961,7 @@ dependencies = [
  "arc-swap",
  "consensus-config",
  "consensus-core",
+ "consensus-types",
  "mysten-metrics",
  "mysten-network",
  "parking_lot 0.12.3",
@@ -2976,6 +2978,16 @@ dependencies = [
  "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "typed-store",
+]
+
+[[package]]
+name = "consensus-types"
+version = "0.1.0"
+dependencies = [
+ "base64 0.21.7",
+ "consensus-config",
+ "fastcrypto",
+ "serde",
 ]
 
 [[package]]
@@ -13697,6 +13709,7 @@ dependencies = [
  "clap",
  "consensus-config",
  "consensus-core",
+ "consensus-types",
  "count-min-sketch",
  "criterion",
  "dashmap",
@@ -16405,7 +16418,7 @@ dependencies = [
  "chrono",
  "ciborium",
  "consensus-config",
- "consensus-core",
+ "consensus-types",
  "coset",
  "criterion",
  "derive_more 1.0.0",

@@ -12,6 +12,7 @@ use std::{
 use arc_swap::ArcSwap;
 use consensus_config::Committee as ConsensusCommittee;
 use consensus_core::{CertifiedBlocksOutput, CommitConsumerMonitor, CommitIndex};
+use consensus_types::block::TransactionIndex;
 use lru::LruCache;
 use mysten_common::{debug_fatal, random_util::randomize_cache_capacity_in_tests};
 use mysten_metrics::{
@@ -32,7 +33,7 @@ use sui_types::{
     messages_consensus::{
         AuthorityIndex, ConsensusDeterminedVersionAssignments, ConsensusPosition,
         ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
-        ExecutionTimeObservation, TransactionIndex,
+        ExecutionTimeObservation,
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{SenderSignedData, VerifiedTransaction},
@@ -421,7 +422,9 @@ mod additional_consensus_state {
             }
 
             /// Returns all accepted and rejected transactions per block in the commit in deterministic order.
-            fn transactions(&self) -> Vec<(consensus_core::BlockRef, Vec<ParsedTransaction>)> {
+            fn transactions(
+                &self,
+            ) -> Vec<(consensus_types::block::BlockRef, Vec<ParsedTransaction>)> {
                 vec![]
             }
 
@@ -1385,6 +1388,7 @@ mod tests {
         BlockAPI, CertifiedBlock, CommitDigest, CommitRef, CommittedSubDag, TestBlock, Transaction,
         VerifiedBlock,
     };
+    use consensus_types::block::TransactionIndex;
     use futures::pin_mut;
     use prometheus::Registry;
     use sui_protocol_config::{
@@ -1396,7 +1400,6 @@ mod tests {
         crypto::deterministic_random_account_key,
         messages_consensus::{
             AuthorityCapabilitiesV1, ConsensusTransaction, ConsensusTransactionKind,
-            TransactionIndex,
         },
         object::Object,
         supported_protocol_versions::SupportedProtocolVersions,
