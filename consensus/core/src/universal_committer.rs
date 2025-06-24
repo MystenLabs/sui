@@ -67,7 +67,7 @@ impl UniversalCommitter {
             for committer in self.committers.iter().rev() {
                 // Skip committers that don't have a leader for this round.
                 let Some(slot) = committer.elect_leader(round) else {
-                    tracing::trace!("No leader for round {round}, skipping");
+                    tracing::debug!("No leader for round {round}, skipping");
                     continue;
                 };
 

@@ -113,10 +113,12 @@ impl BlockManager {
         let _s = monitored_scope("BlockManager::try_accept_blocks_internal");
 
         blocks.sort_by_key(|b| b.round());
-        trace!(
-            "Trying to accept blocks: {}",
-            blocks.iter().map(|b| b.reference().to_string()).join(",")
-        );
+        if !blocks.is_empty() {
+            debug!(
+                "Trying to accept blocks: {}",
+                blocks.iter().map(|b| b.reference().to_string()).join(",")
+            );
+        }
 
         let mut accepted_blocks = vec![];
         let mut missing_blocks = BTreeSet::new();
