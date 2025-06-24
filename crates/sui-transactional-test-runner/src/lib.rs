@@ -69,7 +69,7 @@ pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
 #[cfg_attr(msim, msim::main)]
 pub async fn run_ptb_v2_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     // check if the test is enabled
-    const ENABLED_DIRECTORIES: &[&str] = &[];
+    const ENABLED_DIRECTORIES: &[&str] = &["transfer_object"];
     let mut components = path.parent().unwrap().components();
     let enabled = components.any(|c| {
         let string = c.as_os_str().to_string_lossy().to_string();

@@ -163,10 +163,17 @@ fn command<Mode: ExecutionMode>(
         L::Command::TransferObjects(lobjects, laddress) => {
             let object_locs = locations(context, 0, lobjects)?;
             let address_loc = one_location(context, object_locs.len(), laddress)?;
-            let objects = constrained_arguments(env, context, 0, object_locs, |ty| {
-                let abilities = ty.abilities();
-                Ok(abilities.has_store() && abilities.has_key())
-            })?;
+            let objects = constrained_arguments(
+                env,
+                context,
+                0,
+                object_locs,
+                |ty| {
+                    let abilities = ty.abilities();
+                    Ok(abilities.has_store() && abilities.has_key())
+                },
+                CommandArgumentError::InvalidTransferObject,
+            )?;
             let address = argument(env, context, objects.len(), address_loc, Type::Address)?;
             (T::Command_::TransferObjects(objects, address), vec![])
         }
@@ -474,12 +481,15 @@ fn constrained_arguments<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     start_idx: usize,
     locations: Vec<T::Location>,
     mut is_valid: P,
+    err_case: CommandArgumentError,
 ) -> Result<Vec<T::Argument>, ExecutionError> {
     let is_valid = &mut is_valid;
     locations
         .into_iter()
         .enumerate()
-        .map(|(i, location)| constrained_argument(env, context, start_idx + i, location, is_valid))
+        .map(|(i, location)| {
+            constrained_argument(env, context, start_idx + i, location, is_valid, err_case)
+        })
         .collect()
 }
 
@@ -489,8 +499,9 @@ fn constrained_argument<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     command_arg_idx: usize,
     location: T::Location,
     is_valid: &mut P,
+    err_case: CommandArgumentError,
 ) -> Result<T::Argument, ExecutionError> {
-    let arg_ = constrained_argument_(env, context, location, is_valid)
+    let arg_ = constrained_argument_(env, context, location, is_valid, err_case)
         .map_err(|e| e.into_execution_error(command_arg_idx))?;
     Ok(sp(command_arg_idx as u16, arg_))
 }
@@ -500,11 +511,12 @@ fn constrained_argument_<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     context: &mut Context,
     location: T::Location,
     is_valid: &mut P,
+    err_case: CommandArgumentError,
 ) -> Result<T::Argument_, EitherError> {
     if let Some(ty) = constrained_type(env, context, location, is_valid)? {
         Ok((T::Argument__::Use(T::Usage::Move(location)), ty))
     } else {
-        Err(CommandArgumentError::TypeMismatch.into())
+        Err(err.into())
     }
 }
 
