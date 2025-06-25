@@ -30,7 +30,6 @@ exclude = [
   "external-crates/move/crates/move-compiler-transactional-tests",
   "external-crates/move/crates/move-core-types",
   "external-crates/move/crates/move-coverage",
-  "external-crates/move/crates/move-stackless-2",
   "external-crates/move/crates/move-disassembler",
   "external-crates/move/crates/move-docgen",
   "external-crates/move/crates/move-ir-compiler",
@@ -45,6 +44,7 @@ exclude = [
   "external-crates/move/crates/move-proc-macros",
   "external-crates/move/crates/move-regex-borrow-graph",
   "external-crates/move/crates/move-stackless-bytecode",
+  "external-crates/move/crates/move-stackless-bytecode-2",
   "external-crates/move/crates/move-stdlib",
   "external-crates/move/crates/move-stdlib-natives",
   "external-crates/move/crates/move-symbol-pool",
@@ -607,7 +607,6 @@ move-bytecode-verifier-meter = { path = "external-crates/move/crates/move-byteco
 move-cli = { path = "external-crates/move/crates/move-cli" }
 move-compiler = { path = "external-crates/move/crates/move-compiler" }
 move-core-types = { path = "external-crates/move/crates/move-core-types" }
-move-stackless-2 = { path = "external-crates/move/crates/move-stackless-2" }
 move-disassembler = { path = "external-crates/move/crates/move-disassembler" }
 move-package = { path = "external-crates/move/crates/move-package" }
 move-package-alt = { path = "external-crates/move/crates/move-package-alt" }
@@ -621,6 +620,7 @@ move-command-line-common = { path = "external-crates/move/crates/move-command-li
 move-transactional-test-runner = { path = "external-crates/move/crates/move-transactional-test-runner" }
 move-ir-types = { path = "external-crates/move/crates/move-ir-types" }
 move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-bytecode" }
+move-stackless-bytecode-2 = { path = "external-crates/move/crates/move-stackless-bytecode-2" }
 move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
 move-abstract-interpreter = { path = "external-crates/move/crates/move-abstract-interpreter" }
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }

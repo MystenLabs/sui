@@ -151,7 +151,7 @@ pub(crate) fn bytecode<K: SourceKind>(
             let rhs = $rhs;
             Instruction::AssignReg {
                 lhs: vec![$($lhs),*],
-                rhs: rhs,
+                rhs,
             }
         }};
     }
@@ -202,32 +202,22 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::Ret => {
             // TODO: check if this needs to be reversed?
             let returned_vars = make_vec!(function.return_.len(), Register(pop!()));
-            let inst = Instruction::Return(returned_vars);
-            inst
+            Instruction::Return(returned_vars)
         }
 
-        IB::BrTrue(code_offset) => {
-            let inst = Instruction::JumpIf {
-                condition: Register(pop!()),
-                then_label: *code_offset as usize,
-                else_label: pc + 1,
-            };
-            inst
-        }
+        IB::BrTrue(code_offset) => Instruction::JumpIf {
+            condition: Register(pop!()),
+            then_label: *code_offset as usize,
+            else_label: pc + 1,
+        },
 
-        IB::BrFalse(code_offset) => {
-            let inst = Instruction::JumpIf {
-                condition: Register(pop!()),
-                then_label: pc + 1,
-                else_label: *code_offset as usize,
-            };
-            inst
-        }
+        IB::BrFalse(code_offset) => Instruction::JumpIf {
+            condition: Register(pop!()),
+            then_label: pc + 1,
+            else_label: *code_offset as usize,
+        },
 
-        IB::Branch(code_offset) => {
-            let inst = Instruction::Jump(*code_offset as usize);
-            inst
-        }
+        IB::Branch(code_offset) => Instruction::Jump(*code_offset as usize),
 
         IB::LdU8(value) => assign_reg!([push!()] = imm!(Value::U8(*value))),
 
@@ -327,8 +317,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                 args: vec![Register(pop!())],
             };
             let lhs = make_vec!(bx.struct_.fields.0.len(), push!());
-            let inst = Instruction::AssignReg { rhs, lhs };
-            inst
+            Instruction::AssignReg { rhs, lhs }
         }
 
         IB::ReadRef => {
@@ -522,21 +511,19 @@ pub(crate) fn bytecode<K: SourceKind>(
             for _i in 0..bx.1 {
                 lhs.push(push!());
             }
-            let inst = Instruction::AssignReg { rhs, lhs };
-            inst
+            Instruction::AssignReg { rhs, lhs }
         }
 
         IB::VecSwap(_rc) => {
             let args = make_vec!(3, Register(pop!()));
-            let inst = Instruction::AssignReg {
+            Instruction::AssignReg {
                 rhs: RValue::Data {
                     op: DataOp::VecSwap,
                     args,
                 },
                 // TODO check if this is ok for the SSA
                 lhs: vec![],
-            };
-            inst
+            }
         }
 
         IB::LdU16(value) => assign_reg!([push!()] = imm!(Value::U16(*value))),
@@ -559,14 +546,13 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::PackVariant(bx) => {
             let args = make_vec!(bx.variant.fields.0.len(), Register(pop!()));
-            let inst = Instruction::AssignReg {
+            Instruction::AssignReg {
                 lhs: vec![push!()],
                 rhs: RValue::Data {
                     op: DataOp::PackVariant,
                     args,
                 },
-            };
-            inst
+            }
         }
         IB::UnpackVariant(bx) => {
             let rhs = RValue::Data {
@@ -574,8 +560,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                 args: vec![Register(pop!())],
             };
             let lhs = make_vec!(bx.variant.fields.0.len(), push!());
-            let inst = Instruction::AssignReg { lhs, rhs };
-            inst
+            Instruction::AssignReg { lhs, rhs }
         }
 
         IB::UnpackVariantImmRef(bx) => {
@@ -584,8 +569,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                 args: vec![Register(pop!())],
             };
             let lhs = make_vec!(bx.variant.fields.0.len(), push!());
-            let inst = Instruction::AssignReg { lhs, rhs };
-            inst
+            Instruction::AssignReg { lhs, rhs }
         }
 
         IB::UnpackVariantMutRef(bx) => {
@@ -594,19 +578,17 @@ pub(crate) fn bytecode<K: SourceKind>(
                 args: vec![Register(pop!())],
             };
             let lhs = make_vec!(bx.variant.fields.0.len(), push!());
-            let inst = Instruction::AssignReg { lhs, rhs };
-            inst
+            Instruction::AssignReg { lhs, rhs }
         }
 
         IB::VariantSwitch(jt) => {
             let JumpTableInner::Full(offsets) = &jt.jump_table;
-            let inst = Instruction::VariantSwitch {
+            Instruction::VariantSwitch {
                 cases: offsets
                     .iter()
                     .map(|offset| *offset as usize)
                     .collect::<Vec<_>>(),
-            };
-            inst
+            }
         }
 
         // ******** DEPRECATED BYTECODES ********

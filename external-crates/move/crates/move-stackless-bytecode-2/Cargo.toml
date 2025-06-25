@@ -2,6 +2,7 @@
 name = "move-stackless-bytecode-2"
 version = "0.1.0"
 edition = "2024"
+license = "Apache-2.0"
 
 [dependencies]
 anyhow.workspace = true
