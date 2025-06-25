@@ -12,7 +12,7 @@ Move programs use `let` to bind variable names to values:
 
 ```move
 let x = 1;
-let y = x + x:
+let y = x + x;
 ```
 
 `let` can also be used without binding a value to the local.
@@ -37,13 +37,12 @@ provided.
 
 ```move
 let x;
-let cond = true;
-let i = 0;
+let mut i = 0;
 loop {
     let (res, cond) = foo(i);
     if (!cond) {
         x = res;
-        break;
+        break
     };
     i = i + 1;
 }
@@ -244,10 +243,13 @@ module 0x42::example {
 
     fun example() {
         let Y { x1: X(f), x2 } = Y { x1: new_x(), x2: new_x() };
-        assert!(f + x2.f == 2, 42);
+        assert!(f + x2.0 == 2, 42);
 
         let Y { x1: X(f1), x2: X(f2) } = Y { x1: new_x(), x2: new_x() };
         assert!(f1 + f2 == 2, 42);
+
+        // `struct X` without `drop` ability and needs to be destroyed manually
+        let X(_) = x2;
     }
 }
 ```
@@ -335,12 +337,15 @@ module 0x42::example {
         let mut y = Y { x1: new_x(), x2: new_x() };
 
         let Y { x1: X(f), x2 } = &y;
-        assert!(*f + x2.f == 2, 42);
+        assert!(*f + x2.0 == 2, 42);
 
         let Y { x1: X(f1), x2: X(f2) } = &mut y;
         *f1 = *f1 + 1;
         *f2 = *f2 + 1;
         assert!(*f1 + *f2 == 4, 42);
+
+        // `struct X and struct Y` without `drop` ability and needs to be destroyed manually
+        let Y { x1: X(_), x2: X(_) } = y;
     }
 }
 ```
