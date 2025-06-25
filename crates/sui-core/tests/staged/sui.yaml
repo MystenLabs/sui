@@ -83,6 +83,14 @@ AuthorityQuorumSignInfo:
           CONTENT: U8
           SIZE: 48
     - signers_map: BYTES
+BalanceWithdrawArg:
+  STRUCT:
+    - reservation:
+        TYPENAME: Reservation
+    - type_param:
+        TYPENAME: WithdrawTypeParam
+    - withdraw_from:
+        TYPENAME: WithdrawFrom
 CallArg:
   ENUM:
     0:
@@ -93,6 +101,10 @@ CallArg:
       Object:
         NEWTYPE:
           TYPENAME: ObjectArg
+    2:
+      BalanceWithdraw:
+        NEWTYPE:
+          TYPENAME: BalanceWithdrawArg
 ChainIdentifier:
   NEWTYPESTRUCT:
     TYPENAME: CheckpointDigest
@@ -972,6 +984,13 @@ RandomnessStateUpdate:
         SEQ: U8
     - randomness_obj_initial_shared_version:
         TYPENAME: SequenceNumber
+Reservation:
+  ENUM:
+    0:
+      EntireBalance: UNIT
+    1:
+      MaxAmountU64:
+        NEWTYPE: U64
 SenderSignedData:
   NEWTYPESTRUCT:
     SEQ:
@@ -1334,6 +1353,16 @@ UpgradeInfo:
         TYPENAME: ObjectID
     - upgraded_version:
         TYPENAME: SequenceNumber
+WithdrawFrom:
+  ENUM:
+    0:
+      Sender: UNIT
+WithdrawTypeParam:
+  ENUM:
+    0:
+      Balance:
+        NEWTYPE:
+          TYPENAME: TypeInput
 ZkLoginAuthenticatorAsBytes:
   NEWTYPESTRUCT:
     SEQ: U8
