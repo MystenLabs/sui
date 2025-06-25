@@ -53,7 +53,7 @@ pub async fn certify_transaction(
     // Make the initial request
     let epoch_store = authority.load_epoch_store_one_call_per_task();
     // TODO: Move this check to a more appropriate place.
-    transaction.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
+    transaction.validity_check(&epoch_store.tx_validity_check_context())?;
     let transaction = epoch_store.verify_transaction(transaction).unwrap();
 
     let response = authority

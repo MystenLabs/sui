@@ -166,7 +166,7 @@ impl SuiTxValidator {
     ) -> SuiResult<()> {
         // Currently validity_check() and verify_transaction() are not required to be consistent across validators,
         // so they do not run in validate_transactions(). They can run there once we confirm it is safe.
-        tx.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
+        tx.validity_check(&epoch_store.tx_validity_check_context())?;
 
         self.authority_state.check_system_overload(
             &*self.consensus_overload_checker,

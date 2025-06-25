@@ -1141,6 +1141,10 @@ impl From<crate::transaction::CallArg> for Input {
                     ObjectReference::new(id.into(), version.value(), digest.into()),
                 ),
             },
+            crate::transaction::CallArg::BalanceWithdraw(_) => {
+                // TODO(address-balances): Add support for balance withdraws.
+                todo!("Convert balance withdraw reservation to sdk Input")
+            }
         }
     }
 }

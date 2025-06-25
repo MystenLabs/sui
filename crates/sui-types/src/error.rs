@@ -297,6 +297,9 @@ pub enum UserInputError {
 
     #[error("Object used as owned is not owned")]
     NotOwnedObjectError,
+
+    #[error("Invalid withdraw reservation: {error}")]
+    InvalidWithdrawReservation { error: String },
 }
 
 #[derive(
