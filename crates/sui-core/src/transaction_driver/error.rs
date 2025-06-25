@@ -27,10 +27,17 @@ pub enum TransactionDriverError {
     TransactionRejected(String),
     #[error("Transaction expired at round: {0}")]
     TransactionExpired(String),
-    #[error("Insufficient responses for quorum: received {received}, required {required}. Errors: {errors:?}")]
+    #[error("Insufficient responses from quorum: total_responses_weight {total_responses_weight}, executed_weight {executed_weight}, executed_weight {executed_weight}. Errors: {errors:?}")]
     InsufficientResponses {
-        received: u64,
-        required: u64,
+        total_responses_weight: u64,
+        executed_weight: u64,
+        rejected_weight: u64,
+        expired_weight: u64,
         errors: Vec<String>,
+    },
+    #[error("Effects digest mismatch: quorum_expected {quorum_expected}, got {actual}")]
+    EffectsDigestMismatch {
+        quorum_expected: String,
+        actual: String,
     },
 }
