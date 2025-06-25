@@ -801,36 +801,10 @@ impl AuthorityStore {
         )?;
 
         // Add batched writes for objects and locks.
-
-        // Get the already-written markers for configs this epoch.
-        // This is safe and race free since all mutated config objects must occur as mutable shared
-        // object inputs in the transaction. Therefore there can be no other simultaneous writes to the
-        // datastore for these objects.
-        let (config_update_markers, all_other_markers): (Vec<_>, Vec<_>) = markers
-            .iter()
-            .partition::<Vec<&(FullObjectKey, MarkerValue)>, _>(|(_, marker_value)| {
-                matches!(marker_value, MarkerValue::ConfigUpdate(_))
-            });
-        let already_written_config_updates = self
-            .perpetual_tables
-            .object_per_epoch_marker_table_v2
-            .multi_contains_keys(config_update_markers.iter().map(|(k, _)| (epoch_id, *k)))?;
-        assert_eq!(
-            already_written_config_updates.len(),
-            config_update_markers.len(),
-            "Already written config update information should have the same length as the config updates"
-        );
-        let config_update_markers_to_write = config_update_markers
-            .into_iter()
-            .zip(already_written_config_updates)
-            .filter(|(_, already_written)| !*already_written)
-            .map(|(marker_key, _)| marker_key);
-
         write_batch.insert_batch(
             &self.perpetual_tables.object_per_epoch_marker_table_v2,
-            all_other_markers
-                .into_iter()
-                .chain(config_update_markers_to_write)
+            markers
+                .iter()
                 .map(|(key, marker_value)| ((epoch_id, *key), *marker_value)),
         )?;
         write_batch.insert_batch(

@@ -1,25 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use itertools::Itertools;
 use move_core_types::ident_str;
 use move_core_types::language_storage::TypeTag;
 use rand::random;
-use std::collections::BTreeMap;
 use std::future::Future;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_json_rpc_types::{
-    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
-};
+use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
-use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SuiAddress};
-use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, UnchangedSharedKind};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{CallArg, ObjectArg, Transaction, TransactionData};
+use sui_types::transaction::{CallArg, ObjectArg, TransactionData};
 use sui_types::{SUI_DENY_LIST_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 use test_cluster::{TestCluster, TestClusterBuilder};
 
@@ -69,46 +63,21 @@ async fn run_thread<F, Fut>(
 {
     let mut num_tx_succeeded = 0;
     let mut num_tx_failed = 0;
-    let mut epoch_map: BTreeMap<u64, Vec<_>> = BTreeMap::new();
     loop {
         let gas = test_env.get_latest_object_ref(&gas_id).await;
         let tx_data = tx_creation_func(test_env.clone(), gas).await;
         let tx = test_env.test_cluster.sign_transaction(&tx_data);
-        let Ok((effects, raw_effects)) =
-            execute_transaction_may_fail_with_raw_effects(&test_env.test_cluster.wallet, tx)
-                .await
-                .map(|r| (r.effects.unwrap(), r.raw_effects))
+        let Ok(effects) = test_env
+            .test_cluster
+            .wallet
+            .execute_transaction_may_fail(tx)
+            .await
+            .map(|r| r.effects.unwrap())
         else {
             // When epochs are short, it is possible that some transactions
             // keep getting sent at epoch boundaries and timeout eventually.
             continue;
         };
-
-        // make sure we have the raw effects
-        assert!(!raw_effects.is_empty());
-
-        let TransactionEffects::V2(v2_effects) =
-            bcs::from_bytes::<TransactionEffects>(&raw_effects).unwrap()
-        else {
-            panic!("Expected TransactionEffects::V2 but got a different version of effects");
-        };
-
-        // Get the unchanged shared objecs (if any) and record their sequence numbers. The only one
-        // we should have is the deny list at the moment.
-        let mut unchanged_shared_objects = v2_effects.unchanged_shared_objects();
-        assert!(unchanged_shared_objects.len() <= 1);
-        if unchanged_shared_objects.len() == 1 {
-            let (object_id, seqno) = unchanged_shared_objects.pop().unwrap();
-            assert_eq!(object_id, SUI_DENY_LIST_OBJECT_ID);
-            let UnchangedSharedKind::PerEpochConfigWithSeqno(seqno) = seqno else {
-                panic!("Expected PerEpochConfigWithSeqno");
-            };
-            epoch_map
-                .entry(effects.executed_epoch())
-                .or_default()
-                .push(seqno);
-        }
-
         if effects.status().is_ok() {
             num_tx_succeeded += 1;
         } else {
@@ -122,36 +91,7 @@ async fn run_thread<F, Fut>(
     if !tx_may_fail {
         assert_eq!(num_tx_failed, 0);
     }
-
-    // all of the epoch stable sequence numbers for each epoch should be the same
-    for (_, seqnos) in epoch_map {
-        assert!(seqnos.iter().all_equal());
-    }
-
     assert!(num_tx_succeeded + num_tx_failed > 5);
-}
-
-// Execute the transaction and also fetch the raw effects -- this way we can validate the
-// `unchanged_shared_objects` sequence numbers are what we expect.
-async fn execute_transaction_may_fail_with_raw_effects(
-    ctx: &WalletContext,
-    tx: Transaction,
-) -> anyhow::Result<SuiTransactionBlockResponse> {
-    let client = ctx.get_client().await?;
-    Ok(client
-        .quorum_driver_api()
-        .execute_transaction_block(
-            tx,
-            SuiTransactionBlockResponseOptions::new()
-                .with_effects()
-                .with_input()
-                .with_events()
-                .with_object_changes()
-                .with_balance_changes()
-                .with_raw_effects(),
-            Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForEffectsCert),
-        )
-        .await?)
 }
 
 async fn create_deny_tx(test_env: Arc<TestEnv>, gas: ObjectRef) -> TransactionData {

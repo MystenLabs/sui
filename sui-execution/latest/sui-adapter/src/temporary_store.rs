@@ -214,39 +214,6 @@ impl<'backing> TemporaryStore<'backing> {
             .collect()
     }
 
-    // Compute the set of config objects and their epoch-stable sequence numbers that have been
-    // accessed in the transaction.
-    fn compute_unsequenced_config_accesses(
-        &self,
-        loaded_per_epoch_config_objects: &BTreeSet<ObjectID>,
-    ) -> BTreeMap<ObjectID, Option<SequenceNumber>> {
-        if !self
-            .protocol_config
-            .include_epoch_stable_sequence_number_in_effects()
-        {
-            return loaded_per_epoch_config_objects
-                .iter()
-                .map(|id| (*id, None))
-                .collect();
-        }
-
-        loaded_per_epoch_config_objects
-            .iter()
-            .map(|id| {
-                // Note the `expect`s here. These are safe since:
-                // 1. We should panic on a storage error and not raise any other type of error.
-                // 2. The config (or deny list) can never be deleted, and therefore the object must always exist.
-                let seqno = self
-                    .store
-                    .get_current_epoch_stable_sequence_number(id, self.cur_epoch)
-                    .expect(
-                        "Config object already loaded during execution. Must exist and be able to be loaded.",
-                    );
-                (*id, Some(seqno))
-            })
-            .collect()
-    }
-
     pub fn into_effects(
         mut self,
         shared_object_refs: Vec<SharedInput>,
@@ -289,8 +256,8 @@ impl<'backing> TemporaryStore<'backing> {
         let object_changes = self.get_object_changes();
 
         let lamport_version = self.lamport_timestamp;
-        let unsequenced_loaded_config_objects =
-            self.compute_unsequenced_config_accesses(&self.loaded_per_epoch_config_objects.read());
+        // TODO: Cleanup this clone. Potentially add unchanged_shraed_objects directly to InnerTempStore.
+        let loaded_per_epoch_config_objects = self.loaded_per_epoch_config_objects.read().clone();
         let inner = self.into_inner();
 
         let effects = TransactionEffects::new_from_execution_v2(
@@ -299,7 +266,7 @@ impl<'backing> TemporaryStore<'backing> {
             gas_cost_summary,
             // TODO: Provide the list of read-only shared objects directly.
             shared_object_refs,
-            unsequenced_loaded_config_objects,
+            loaded_per_epoch_config_objects,
             *transaction_digest,
             lamport_version,
             object_changes,
@@ -1093,17 +1060,6 @@ impl Storage for TemporaryStore<'_> {
                 .insert(SUI_DENY_LIST_OBJECT_ID);
         }
         result
-    }
-
-    fn save_unsequenced_config_accesses(&mut self, accessed_config_objects: BTreeSet<ObjectID>) {
-        if self
-            .protocol_config
-            .include_epoch_stable_sequence_number_in_effects()
-        {
-            self.loaded_per_epoch_config_objects
-                .write()
-                .extend(accessed_config_objects);
-        }
     }
 }
 

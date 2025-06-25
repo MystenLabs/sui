@@ -34,7 +34,7 @@ use sui_types::{
     gas::SuiGasStatus,
     metrics::LimitsMetrics,
     object::Object,
-    storage::{BackingPackageStore, ChildObjectResolver, ConfigStore, PackageObject, ParentSync},
+    storage::{BackingPackageStore, ChildObjectResolver, PackageObject, ParentSync},
     supported_protocol_versions::ProtocolConfig,
     transaction::{CheckedInputObjects, TransactionDataAPI},
 };
@@ -195,33 +195,6 @@ impl ReplayStore<'_> {
         }
 
         object
-    }
-}
-
-impl ConfigStore for ReplayStore<'_> {
-    fn get_current_epoch_stable_sequence_number(
-        &self,
-        object_id: &ObjectID,
-        _epoch_id: EpochId,
-    ) -> Option<VersionNumber> {
-        let object_key = ObjectKey {
-            object_id: *object_id,
-            // we could have used `VersionQuery::ImmutableOrLatest`
-            // but we would have to track system packages separetly
-            // which we may want to consider
-            version_query: VersionQuery::AtCheckpoint(self.checkpoint),
-        };
-
-        let object = self
-            .store
-            .get_objects(&[object_key])
-            .expect("Storage error");
-        debug_assert!(object.len() == 1, "Expected one object for {}", object_id);
-        let object = object.into_iter().next().unwrap().unwrap();
-        // Return the version of the object as the stable sequence number -- this is fine as we
-        // just need a sequence number in the in order to fetch a workable version of the object
-        // for replay and not necessarily the actual epoch-stable sequence number.
-        Some(object.version())
     }
 }
 
